@@ -1,15 +1,23 @@
 'use strict';
-// "모두 받기" bundle: one ZIP of every account workspace, each file in its
+// "모두 받기" bundle: one ZIP of the account's workspaces, each file in its
 // existing format, restored only as new workspace copies.
 const test = require('node:test'), assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path');
 const { owner, memoryIdb, Core, Photo } = require('./helpers/blog-sync-cloud.cjs');
 const { createStorage } = require('../assets/life/storage.js');
 const Reference = require('../assets/life/source-reference.js');
 const Folders = require('../assets/life/source-folders.js');
-const Workbench = require('../assets/life/workbench.js');
+require('../assets/life/workbench.js');
 const Collection = require('../assets/life/collection.js');
 const Nine = require('../assets/life/nine-board.js');
 const Settings = require('../assets/life/discovery-settings.js');
+const Series = require('../assets/life/blog-series.js');
+const Material = require('../assets/life/material-writing.js');
+const Writing = require('../assets/life/writing.js');
+const Media = require('../assets/life/naver-media.js');
+const Originals = require('../assets/life/original-attachments.js');
+const NaverFixture = require('./fixtures/naver-media.cjs');
+const OriginalsFixture = require('./fixtures/original-attachments.cjs');
 const PlatformData = require('../assets/platform-data.js');
 const Z = require('../vendor/fflate/fflate.js');
 const Full = require('../assets/life/full-backup.js');
@@ -18,6 +26,15 @@ const { createHash } = require('node:crypto');
 const other = { projectUrl: owner.projectUrl, userId: '99999999-2222-4333-8444-555555555555' };
 const hex = async blob => Buffer.from(await blob.arrayBuffer()).toString('hex');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const zipNames = async blob => {
+  const bytes = Buffer.from(await blob.arrayBuffer()), names = [];
+  let at = bytes.readUInt32LE(bytes.length - 6);
+  while (bytes.readUInt32LE(at) === 0x02014b50) {
+    const length = bytes.readUInt16LE(at + 28); names.push(bytes.subarray(at + 46, at + 46 + length).toString());
+    at += 46 + length + bytes.readUInt16LE(at + 30) + bytes.readUInt16LE(at + 32);
+  }
+  return names;
+};
 
 async function heicPhoto() {
   const original = new Blob([Buffer.from('000000186674797068656963000000006d69663168656963', 'hex'), new Uint8Array([1, 2, 3, 250, 251])], { type: 'image/heic' });
@@ -36,27 +53,34 @@ function postDoc({ title, status, photos = [] }) {
 }
 async function addSource(storage, workspaceId, title, text, extra = null) {
   let bundle = await storage.read(workspaceId);
-  const prepared = await Core.prepareImport({ origin: 'obsidian', title, text }, bundle);
+  const prepared = await Core.prepareImport({ origin: 'obsidian', title, text, authorRelation: 'self' }, bundle);
   const changes = Core.buildImportChanges(bundle, prepared, [{ start: 0, end: 2, topic: '검증', note: '비공개 메모' }]);
   assert.equal((await storage.commitLocal({ workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes })).status, 'stored');
   if (extra) {
     bundle = await storage.read(workspaceId);
-    const next = await Core.prepareImport({ origin: 'obsidian', title, text: extra, existingSourceId: prepared.source.id }, bundle);
+    const next = await Core.prepareImport({ origin: 'obsidian', title, text: extra, existingSourceId: prepared.source.id, authorRelation: 'self' }, bundle);
     assert.equal((await storage.commitLocal({ workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, next) })).status, 'stored');
   }
   return prepared;
 }
+// A stand-in for the account's originals service with the real part reader.
+function fakeOriginals() {
+  const rows = new Map(), tickets = new Map();
+  return { rows,
+    async list() { return [...rows.values()].map(row => ({ id: row.id, part: row.part.part, partCount: row.part.partCount, count: row.part.entries.length })); },
+    async archive(id) { return { blob: rows.get(id).blob }; },
+    async prepare(blob) { const part = await Originals.readPart(blob), ticket = { id: Core.id() }; tickets.set(ticket.id, { part, blob }); return { ticket, count: part.entries.length }; },
+    async install(ticket) { const id = Core.id(); rows.set(id, { id, ...tickets.get(ticket.id) }); return { id }; } };
+}
 
-async function seed() {
+async function seed({ naver = false } = {}) {
   const memory = memoryIdb(), storage = createStorage({ idb: memory.idb, core: Core, channelFactory: null, account: owner });
   const first = (await storage.createWorkspace('첫 자료공간')).workspaceId;
   const second = (await storage.createWorkspace('두 번째 자료공간')).workspaceId;
   // An old exact version and a newer version of the same source.
   const old = await addSource(storage, first, '산책 원문', '옛 문장 그대로 남긴다.', '새로 고친 문장.');
-  let bundle = await storage.read(first);
-  const quote = { start: 0, end: 5 };
-  const ref = await Reference.build({ bundle, sourceId: old.source.id, versionId: old.version.id, locator: quote });
-  // Composition and folders reference the exact old version.
+  const bundle = await storage.read(first);
+  const ref = await Reference.build({ bundle, sourceId: old.source.id, versionId: old.version.id, locator: { start: 0, end: 5 } });
   const wb = await storage.readWorkbench(first);
   wb.groups.push({ id: Core.id(), title: '묶음', versionIds: [old.version.id] });
   await storage.saveWorkbench(first, wb, wb.revision);
@@ -71,11 +95,30 @@ async function seed() {
   await storage.saveNineBoard(first, { format: 'life-nine-board-v2', workspaceId: first, revision: 0, boards: [board] }, 0);
   const heic = await heicPhoto(), jpeg = await jpegPhoto();
   const saved = await storage.savePhotoPostWithEvidence(first, postDoc({ title: '저장한 사진 글', status: 'saved', photos: [heic, jpeg] }), 0, [ref], 0);
+  // A blog series of one saved post, a writing preparation and an unsaved writing draft.
+  const seriesPost = await storage.savePhotoPost(first, postDoc({ title: '연재 첫 글', status: 'saved' }), 0);
+  const series = Series.create(Core.id); series.title = '익명 연재'; series.items = [Series.item(seriesPost, Core.id)];
+  await storage.saveBlogSeries(first, { ...Series.empty(first), series: [series] }, 0);
+  const plan = Material.create(Core.id, '2026-11-01T09:00:00.000Z'); plan.title = '준비한 글'; plan.question = '무엇을 남길까';
+  const material = Material.material(await storage.read(first), old.source.id, old.version.id, Core.id); material.note = '자료 메모';
+  plan.materials = [material];
+  plan.blocks = [{ id: Core.id(), kind: 'paragraph', text: '개요 문단' }, { id: Core.id(), kind: 'quote', materialId: material.id, reference: ref }];
+  await storage.saveMaterialWriting(first, { ...Material.empty(first), plans: [plan] }, 0);
+  await storage.saveStage({ ...Writing.createDraft(await storage.read(first)), title: '쓰는 중', text: '아직 저장하지 않은 초안' });
   const draft = await storage.savePhotoPost(second, postDoc({ title: '두 번째 공간 초안', status: 'draft' }), 0);
   await addSource(storage, second, '두 번째 원문', '두 번째 공간의 원문.');
   const settings = await storage.readDiscoverySettings(first);
   await storage.saveDiscoverySettings(first, Settings.update(settings, { autoRefresh: true }, { expectedRevision: settings.revision }), settings.revision);
-  return { memory, storage, first, second, old, ref, saved, draft, heic, jpeg };
+  let naverWs = null;
+  if (naver) {
+    const data = await NaverFixture.fixture(), complete = Core.applyChanges(data.bundle, data.changes);
+    const copy = await Media.copy(await Media.read(await Media.pack({ bundle: complete, attachment: data.attachment })));
+    naverWs = (await storage.installNaverCaptureCopy(copy)).bundle.workspaceId;
+  }
+  await storage.setActive(first);
+  const originals = fakeOriginals(), part = OriginalsFixture.fixture();
+  const prepared = await originals.prepare(new Blob([part.zip], { type: 'application/zip' })); await originals.install(prepared.ticket);
+  return { memory, storage, first, second, old, ref, saved, draft, heic, jpeg, naverWs, originals, partZip: part.zip };
 }
 function fakeLocal(uid) {
   const data = new Map(), keys = PlatformData.keys(uid);
@@ -84,11 +127,14 @@ function fakeLocal(uid) {
   data.set(keys.items, JSON.stringify([{ id: 'g1', kind: 'goal', data: { title: '목표' } }, { id: 'h1', kind: 'habit', data: { title: '습관' } }]));
   return { getItem: key => data.has(key) ? data.get(key) : null };
 }
-async function fullBundle(storage, options = {}) {
+function memoryLocal() { const data = new Map(); return { getItem: key => data.has(key) ? data.get(key) : null, setItem: (key, value) => data.set(key, String(value)) }; }
+async function fullBundle(storage, { originals = null, limit, partial = false } = {}) {
   const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
-  const planned = await Full.plan({ storage, timeline });
-  const results = await Full.collect(planned, { storage, timeline, ...options.context });
-  return { planned, results, built: await Full.build(planned, results, { appVersion: 'haedo-v171', ...options.build }) };
+  const context = { storage, timeline, originals };
+  const planned = await Full.plan(context);
+  const writer = Full.writer(planned, context, { appVersion: 'haedo-v171', ...(limit ? { limit } : {}) });
+  const failed = await writer.collect();
+  return { planned, writer, failed, built: failed.length && !partial ? null : writer.finish({ partial }) };
 }
 async function snapshotAll(storage) {
   const rows = [];
@@ -99,38 +145,50 @@ async function snapshotAll(storage) {
       posts.push({ ...doc, photos: await Promise.all(doc.photos.map(async p => ({ ...p, blob: await hex(p.blob), view: p.view ? { ...p.view, blob: await hex(p.view.blob) } : undefined }))) });
     }
     rows.push({ ws, bundle: await storage.read(ws.workspaceId), workbench: await storage.readWorkbench(ws.workspaceId), collection: await storage.readCollection(ws.workspaceId),
-      nine: await storage.readNineBoard(ws.workspaceId), posts });
+      nine: await storage.readNineBoard(ws.workspaceId), series: await storage.readBlogSeries(ws.workspaceId), material: await storage.readMaterialWriting(ws.workspaceId), posts });
   }
   return JSON.stringify(rows);
 }
+const RESTORABLE = new Set(['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals']);
 
-test('모두 받기: every workspace in one ZIP, each file in its existing format with manifest hashes', async () => {
-  const seeded = await seed();
-  const { built } = await fullBundle(seeded.storage);
-  assert.equal(built.manifest.format, 'haedo-full-backup-v1'); assert.equal(built.manifest.complete, true); assert.equal(built.manifest.appVersion, 'haedo-v171');
+test('모두 받기: every account workspace and kind in one ZIP, existing formats, lists written last with hashes and what is not included', async t => {
+  const restore = NaverFixture.installDecoder(); t.after(restore);
+  const seeded = await seed({ naver: true });
+  const { built } = await fullBundle(seeded.storage, { originals: seeded.originals });
+  assert.equal(built.manifest.format, 'haedo-full-backup-v1'); assert.equal(built.manifest.version, 2);
+  assert.equal(built.manifest.complete, true); assert.equal(built.manifest.appVersion, 'haedo-v171');
   assert.match(built.fileName, /^haedo-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+  // Single pass: manifest/README are the last entries, after every data file.
+  const names = await zipNames(built.blob);
+  assert.deepEqual(names.slice(-2), ['README.txt', 'manifest.json']);
   const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
   assert.deepEqual(Object.keys(files).sort(), ['README.txt', 'manifest.json', ...built.manifest.files.map(file => file.path)].sort());
-  assert.equal(built.manifest.workspaces.length, 2);
+  assert.equal(built.manifest.workspaces.length, 3);
   for (const file of built.manifest.files) {
     assert.equal(sha(files[file.path]), file.sha256, file.path); assert.equal(files[file.path].byteLength, file.bytes);
     assert.ok(Number.isSafeInteger(file.formatVersion) && file.formatVersion >= 1);
   }
   const byKind = kind => built.manifest.files.filter(file => file.kind === kind);
-  // Existing formats unchanged: the material-library JSON restores through its own module.
+  // Existing formats unchanged, compact JSON: each restores through its own module.
   const library = JSON.parse(Buffer.from(files['workspaces/01/library.json']).toString());
-  assert.equal(library.format, Folders.BACKUP_FORMAT);
-  const restored = await Folders.restoreBackup(library);
-  assert.equal(restored.bundle.sourceVersions.length, 2);
+  assert.equal(library.format, Folders.BACKUP_FORMAT); assert.equal(Buffer.from(files['workspaces/01/library.json']).includes('\n  '), false);
+  assert.equal((await Folders.restoreBackup(library)).bundle.sourceVersions.length, 2);
   assert.equal(byKind('library')[1].format, 'life-workbench-backup-v1'); // no folders: the same choice as the 자료·구성 screen
   assert.equal(JSON.parse(Buffer.from(files['workspaces/01/nine-boards.json']).toString()).format, 'life-nine-board-backup-v2');
-  assert.equal(byKind('photoPosts').length, 2);
+  assert.equal(byKind('photoPosts').length, 3);
   const postFile = byKind('photoPosts').find(file => file.postId === seeded.saved.id);
   assert.equal(postFile.status, 'saved'); assert.deepEqual(postFile.counts, { posts: 1, photos: 2, views: 1, attachments: 0 });
   const inner = Z.unzipSync(files[postFile.path]);
   assert.equal(Buffer.from(inner['photos/' + seeded.heic.id]).toString('hex'), await hex(seeded.heic.blob));
   assert.equal(Buffer.from(inner['views/' + seeded.heic.id]).toString('hex'), await hex(seeded.heic.view.blob));
-  assert.equal(JSON.parse(Buffer.from(inner['manifest.json']).toString()).format, 'life-photo-post-backup-v2');
+  // M1: blog series, preparation, Naver capture and original parts in their existing formats.
+  const [series] = byKind('blogSeries'); assert.equal(series.format, 'life-blog-series-package-v1'); assert.deepEqual(series.counts, { series: 1, seriesPosts: 1, photos: 0 });
+  assert.match(series.path, /^workspaces\/01\/blog-series\/[A-Za-z0-9_-]+\.zip$/);
+  const [material] = byKind('materialWriting').filter(file => file.workspace === 1);
+  assert.equal(material.format, 'life-material-writing-v1'); assert.deepEqual(material.counts, { plans: 1 });
+  const [capture] = byKind('naverCaptures'); assert.equal(capture.format, 'haedo.naver.capture.v1'); assert.deepEqual(capture.counts, { captures: 1, photos: 1 });
+  assert.equal((await Media.read(new Blob([files[capture.path]]))).attachment.photos.length, 1);
+  const [part] = byKind('originals'); assert.equal(part.format, 'haedo-private-originals-part-v1'); assert.equal(sha(files[part.path]), sha(seeded.partZip));
   const docs = JSON.parse(Buffer.from(files['account-documents.json']).toString());
   assert.equal(docs.format, 'haedo-account-documents-v1');
   assert.ok(docs.documents.some(doc => doc.prefix === 'discoverySettings' && doc.value.autoRefresh === true));
@@ -138,28 +196,40 @@ test('모두 받기: every workspace in one ZIP, each file in its existing forma
   assert.ok(!JSON.stringify(docs).includes(owner.userId), 'account keys are not written into the file');
   const timeline = JSON.parse(Buffer.from(files['timeline-goals-habits.json']).toString());
   assert.equal(timeline.format, 'haedo-platform-backup-v1'); assert.deepEqual(byKind('timeline')[0].counts, { timelines: 1, goals: 1, habits: 1 });
+  // Kinds without a format are listed, with the draft count; nothing claims "all".
+  const excluded = Object.fromEntries(built.manifest.notIncluded.map(row => [row.kind, row]));
+  assert.deepEqual(Object.keys(excluded).sort(), ['importDrafts', 'publication', 'sourceEditDrafts', 'writingDrafts']);
+  assert.equal(excluded.writingDrafts.count, 1); assert.ok(excluded.writingDrafts.whereToSave);
   const readme = Buffer.from(files['README.txt']).toString();
-  assert.match(readme, /하나의 형식이 아닙니다/); for (const file of built.manifest.files) assert.ok(readme.includes(file.sha256));
+  assert.match(readme, /하나의 형식이 아닙니다/); assert.match(readme, /담지 않은 것/); assert.match(readme, /글쓰기 초안 1개/);
+  assert.doesNotMatch(readme, /모든 항목/);
+  for (const file of built.manifest.files) assert.ok(readme.includes(file.sha256));
+  // Without an originals service the kind is listed as not included, not silently absent.
+  const withoutOriginals = await fullBundle(seeded.storage);
+  assert.ok(withoutOriginals.built.manifest.notIncluded.some(row => row.kind === 'originals'));
+  assert.equal(withoutOriginals.built.manifest.files.some(file => file.kind === 'originals'), false);
 });
 
-test('restore into another account: new copies only, exact versions, byte-identical HEIC/JPEG, account docs; existing data untouched', async () => {
-  const seeded = await seed();
-  const { built } = await fullBundle(seeded.storage);
+test('restore into another account: new copies only, exact versions, byte-identical HEIC/JPEG, every kind; existing data untouched', async t => {
+  const decoder = NaverFixture.installDecoder(); t.after(decoder);
+  const seeded = await seed({ naver: true });
+  const { built } = await fullBundle(seeded.storage, { originals: seeded.originals });
   const memory = memoryIdb(), target = createStorage({ idb: memory.idb, core: Core, channelFactory: null, account: other });
   const existing = (await target.createWorkspace('원래 있던 공간')).workspaceId;
   await addSource(target, existing, '원래 원문', '그대로 있어야 하는 원문.');
-  const before = await snapshotAll(target);
+  const before = await snapshotAll(target), originals = fakeOriginals();
   const opened = await Full.open(new Blob([await built.blob.arrayBuffer()]));
-  assert.equal(opened.type, 'bundle');
+  assert.equal(opened.type, 'bundle'); assert.match(opened.fingerprint, /^[0-9a-f]{64}$/);
   const summary = Full.summarize(opened);
-  assert.deepEqual(summary.map(row => row.kind), ['library', 'collection', 'photoPosts', 'nineBoards', 'accountDocuments', 'timeline']);
+  assert.deepEqual(summary.map(row => row.kind), ['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals', 'timeline']);
   assert.equal(summary.find(row => row.kind === 'timeline').restorable, false);
-  const report = await Full.restore(opened, { storage: target, kinds: new Set(['library', 'collection', 'photoPosts', 'nineBoards', 'accountDocuments']), verifyPhoto: null });
+  const report = await Full.restore(opened, { storage: target, kinds: RESTORABLE, verifyPhoto: null, originals });
   assert.equal(report.items.filter(item => item.status !== 'restored').length, 0, JSON.stringify(report.items.filter(item => item.status !== 'restored')));
   assert.equal(await target.getActive(), existing, 'the workspace in use stays active');
   const after = JSON.parse(await snapshotAll(target)), old = JSON.parse(before)[0];
   assert.deepEqual(after.find(row => row.ws.workspaceId === existing), old, 'existing workspace unchanged');
-  assert.equal(after.length, 3);
+  // Three workspace copies plus the capture's own new workspace (existing capture restore).
+  assert.equal(after.length, 5); assert.equal(report.extraCopies.length, 1);
   const copy = after.find(row => row.ws.title === '첫 자료공간');
   assert.ok(copy && copy.ws.workspaceId !== seeded.first);
   const source = await seeded.storage.read(seeded.first);
@@ -176,84 +246,192 @@ test('restore into another account: new copies only, exact versions, byte-identi
   assert.equal(post.photos[1].blob, await hex(seeded.jpeg.blob));
   const evidence = await target.readPostEvidence(copy.ws.workspaceId, post.id);
   assert.equal(evidence.refs[0].sourceVersionId, oldCopy.id); assert.equal(evidence.refs[0].quote, seeded.ref.quote);
-  const settings = await target.readDiscoverySettings(copy.ws.workspaceId);
-  assert.equal(settings.autoRefresh, true);
+  assert.equal((await target.readDiscoverySettings(copy.ws.workspaceId)).autoRefresh, true);
+  // M1 kinds restored through their existing install functions.
+  assert.equal(copy.series.series.length, 1); assert.equal(copy.series.series[0].title, '익명 연재');
+  assert.equal(copy.material.plans.length, 1); assert.equal(copy.material.plans[0].output, null);
+  assert.equal(copy.material.plans[0].materials[0].sourceVersionId, oldCopy.id);
+  const captureCopy = after.find(row => row.ws.workspaceId === report.extraCopies[0].workspaceId);
+  assert.equal(captureCopy.bundle.sources[0].origin, 'naver_blog');
+  assert.ok(await target.readNaverCapture(captureCopy.ws.workspaceId, captureCopy.bundle.sourceVersions[0].id));
+  assert.equal(originals.rows.size, 1); assert.equal(sha(Buffer.from(await [...originals.rows.values()][0].blob.arrayBuffer())), sha(seeded.partZip));
   const second = after.find(row => row.ws.title === '두 번째 자료공간');
   assert.equal(second.posts[0].status, 'draft'); assert.equal(second.bundle.sources.length, 1);
-  // The source account is untouched by restore elsewhere.
-  assert.equal((await seeded.storage.listWorkspaces()).length, 2);
+  assert.equal((await seeded.storage.listWorkspaces()).length, 3, 'the source account is untouched');
+});
+
+test('first-version bundles (manifest first, no notIncluded) still open and restore', async () => {
+  const blob = new Blob([fs.readFileSync(path.join(__dirname, 'fixtures/full-backup/first-version-bundle.zip'))]);
+  const names = await zipNames(blob); assert.deepEqual(names.slice(0, 2), ['README.txt', 'manifest.json']);
+  const opened = await Full.open(blob);
+  assert.equal(opened.manifest.version, 1); assert.equal(opened.workspaces.length, 2);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const report = await Full.restore(opened, { storage: target, kinds: RESTORABLE, verifyPhoto: null });
+  assert.deepEqual(report.items.filter(item => item.status !== 'restored'), []);
+  const workspaces = await target.listWorkspaces();
+  assert.equal(workspaces.length, 2); // two new copies
+  const withPhotos = [];
+  for (const ws of workspaces) for (const row of await target.listPhotoPosts(ws.workspaceId)) withPhotos.push(await target.readPhotoPost(ws.workspaceId, row.id));
+  assert.equal(withPhotos.find(doc => doc.title === '저장한 사진 글').photos[0].type, 'image/heic');
 });
 
 test('tampered, unknown-version and oversized files are rejected before anything is written', async () => {
   const { storage } = await seed();
   const { built } = await fullBundle(storage);
   const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
-  // Same sizes, one byte changed in a photo ZIP.
-  const path = built.manifest.files.find(file => file.kind === 'photoPosts').path;
-  const changed = { ...files, [path]: Uint8Array.from(files[path], (byte, i) => i === 40 ? byte ^ 1 : byte) };
+  const path0 = built.manifest.files.find(file => file.kind === 'photoPosts').path;
+  const changed = { ...files, [path0]: Uint8Array.from(files[path0], (byte, i) => i === 40 ? byte ^ 1 : byte) };
   await assert.rejects(Full.open(new Blob([Z.zipSync(changed, { level: 0 })])), error => error.code === 'tampered');
-  // An extra file not listed in the manifest.
   await assert.rejects(Full.open(new Blob([Z.zipSync({ ...files, 'extra.txt': new Uint8Array([1]) }, { level: 0 })])), error => error.code === 'tampered');
-  // Unknown bundle version.
   const manifest = JSON.parse(Buffer.from(files['manifest.json']).toString());
-  const future = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, format: 'haedo-full-backup-v2', version: 2 })) };
+  const future = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, format: 'haedo-full-backup-v2', version: 3 })) };
   await assert.rejects(Full.open(new Blob([Z.zipSync(future, { level: 0 })])), error => error.code === 'unsupported_version');
   const sameName = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, version: 3 })) };
   await assert.rejects(Full.open(new Blob([Z.zipSync(sameName, { level: 0 })])), error => error.code === 'unsupported_version');
-  // Compressed entries are not a Haedo bundle.
+  // Claiming completeness while a read failed is rejected.
+  const lying = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, missing: [{ kind: 'photoPosts', workspace: 1, reason: 'read_failed', error: 'x' }] })) };
+  await assert.rejects(Full.open(new Blob([Z.zipSync(lying, { level: 0 })])), error => error.code === 'invalid_backup');
   await assert.rejects(Full.open(new Blob([Z.zipSync(files, { level: 6 })])), error => error.code === 'invalid_zip');
-  // Oversized: checked from the size before reading.
   const huge = { size: Full.LIMITS.bundle + 1, slice: () => new Blob([Uint8Array.from([80, 75, 3, 4])]) };
   await assert.rejects(Full.open(huge), error => error.code === 'backup_too_large');
   await assert.rejects(Full.open(new Blob([JSON.stringify({ format: 'something-else' })])), error => error.code === 'unsupported_backup');
 });
 
-test('partial failure: no complete ZIP; retry only the failed part or explicitly build a labelled partial ZIP', async () => {
-  const { storage, saved } = await seed();
-  let fail = true;
-  const flaky = Object.create(storage, { readPhotoPost: { value: async (...args) => { if (fail && args[1] === saved.id) throw new Error('합성 읽기 실패'); return storage.readPhotoPost(...args); } } });
-  const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
-  const planned = await Full.plan({ storage: flaky, timeline });
-  const results = await Full.collect(planned, { storage: flaky, timeline });
-  const failed = planned.tasks.filter(task => results.get(task.id).status === 'failed');
-  assert.deepEqual(failed.map(task => task.postId), [saved.id]);
-  await assert.rejects(Full.build(planned, results), error => error.code === 'backup_incomplete');
-  const partial = await Full.build(planned, results, { partial: true });
-  assert.equal(partial.manifest.complete, false); assert.match(partial.fileName, /-partial\.zip$/);
-  assert.equal(partial.manifest.missing[0].postId, saved.id); assert.match(partial.manifest.missing[0].error, /합성 읽기 실패/);
-  const files = Z.unzipSync(new Uint8Array(await partial.blob.arrayBuffer()));
-  assert.match(Buffer.from(files['README.txt']).toString(), /빠진 항목/);
-  const reopened = await Full.open(partial.blob);
-  assert.equal(reopened.manifest.complete, false);
-  // Retry only the failed part.
-  fail = false;
-  await Full.collect(planned, { storage: flaky, timeline }, { only: new Set(failed.map(task => task.id)), results });
-  const complete = await Full.build(planned, results);
-  assert.equal(complete.manifest.complete, true);
+test('size limit: the writer measures the whole file the reader measures, so any ZIP it makes can be opened', async () => {
+  const { storage } = await seed();
+  const full = await fullBundle(storage);
+  const exact = full.built.blob.size;
+  // A limit exactly at the produced size succeeds and the reader accepts the file at that limit.
+  const fits = await fullBundle(storage, { limit: exact + 64 });
+  assert.ok(fits.built.blob.size <= exact + 64);
+  assert.equal((await Full.open(fits.built.blob, { limit: fits.built.blob.size })).type, 'bundle');
+  await assert.rejects(Full.open(fits.built.blob, { limit: fits.built.blob.size - 1 }), error => error.code === 'backup_too_large');
+  // Below the size the writer refuses before producing a file the reader would refuse.
+  await assert.rejects(fullBundle(storage, { limit: exact - 200 }), error => error.code === 'backup_too_large');
 });
 
-test('single existing files open with their format and restore as new copies', async () => {
+test('partial failure keeps the ZIP open: retry reads and appends only the failed part; or a labelled partial ZIP', async () => {
+  const { storage, saved } = await seed();
+  let fail = true, reads = 0;
+  const flaky = Object.create(storage, { readPhotoPost: { value: async (...args) => { reads++; if (fail && args[1] === saved.id) throw new Error('합성 읽기 실패'); return storage.readPhotoPost(...args); } } });
+  const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
+  const context = { storage: flaky, timeline };
+  const planned = await Full.plan(context);
+  const writer = Full.writer(planned, context);
+  const failed = await writer.collect();
+  assert.deepEqual(failed.map(task => task.postId), [saved.id]);
+  // Results keep only metadata: no Blob of any item stays referenced.
+  for (const result of writer.results.values()) assert.equal(Object.values(result).some(value => value instanceof Blob), false);
+  assert.throws(() => writer.finish(), error => error.code === 'backup_incomplete');
+  fail = false; reads = 0;
+  assert.deepEqual(await writer.collect({ only: new Set(failed.map(task => task.id)) }), []);
+  assert.equal(reads, 1, 'retry reads only the failed item');
+  const complete = writer.finish();
+  assert.equal(complete.manifest.complete, true);
+  const names = await zipNames(complete.blob);
+  assert.equal(names.at(-3), failed[0].path, 'the retried item is appended before the lists');
+  assert.ok((await Full.open(complete.blob)).entries.some(entry => entry.postId === saved.id));
+  // A second run that stays failed finishes as an explicit partial ZIP.
+  fail = true;
+  const again = Full.writer(planned, context); await again.collect();
+  const partial = again.finish({ partial: true });
+  assert.equal(partial.manifest.complete, false); assert.match(partial.fileName, /-partial\.zip$/);
+  assert.equal(partial.manifest.missing[0].postId, saved.id); assert.equal(partial.manifest.missing[0].reason, 'read_failed');
+  const files = Z.unzipSync(new Uint8Array(await partial.blob.arrayBuffer()));
+  assert.match(Buffer.from(files['README.txt']).toString(), /\[읽기 실패\]/);
+  assert.equal((await Full.open(partial.blob)).manifest.complete, false);
+});
+
+test('skipped items are recorded in missing: a post ID outside the path rule and account documents of unlisted workspaces', async () => {
+  const { storage, second } = await seed();
+  const odd = Object.create(storage, {
+    listPhotoPosts: { value: async workspaceId => (await storage.listPhotoPosts(workspaceId)).concat(workspaceId === second ? [] : [{ id: '경로에 못 쓰는 id', title: '이상한 글', status: 'saved' }]) },
+    listAccountLibraries: { value: async () => (await storage.listAccountLibraries()).filter(row => row.workspaceId !== second) }
+  });
+  const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
+  // The second workspace has account documents (a reading of its settings).
+  const s2 = await storage.readDiscoverySettings(second);
+  await storage.saveDiscoverySettings(second, Settings.update(s2, { autoRefresh: true }, { expectedRevision: s2.revision }), s2.revision);
+  const context = { storage: odd, timeline }, planned = await Full.plan(context), writer = Full.writer(planned, context);
+  assert.deepEqual(await writer.collect(), []);
+  const built = writer.finish();
+  assert.equal(built.manifest.complete, true, 'skipped items are not read failures');
+  const skipped = built.manifest.missing.filter(row => row.reason === 'skipped');
+  assert.deepEqual(skipped.map(row => row.kind).sort(), ['accountDocuments', 'photoPosts']);
+  assert.match(skipped.find(row => row.kind === 'photoPosts').error, /경로 규칙/);
+  assert.match(skipped.find(row => row.kind === 'accountDocuments').error, /문서 1개/);
+  const readme = Buffer.from(Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()))['README.txt']).toString();
+  assert.match(readme, /\[담지 않음\]/);
+  assert.equal((await Full.open(built.blob)).manifest.missing.length, 2);
+});
+
+test('a nine-slot board restored without its library drops evidence that points at the old sources, and says so', async () => {
+  const { storage } = await seed();
+  const { built } = await fullBundle(storage);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const opened = await Full.open(built.blob);
+  const report = await Full.restore(opened, { storage: target, kinds: new Set(['nineBoards', 'photoPosts']), verifyPhoto: null });
+  const nine = report.items.find(item => item.kind === 'nineBoards' && item.workspace === 1);
+  assert.equal(nine.status, 'restored'); assert.match(nine.message, /근거 1개는 연결하지 않았습니다/);
+  const board = (await target.readNineBoard(nine.targetId)).boards[0];
+  assert.equal(Object.hasOwn(board.areas[0].items[0], 'reference'), false);
+  assert.equal(board.areas[0].items[0].reason, '이유'); assert.equal(board.title, '아홉 칸');
+  const post = report.items.find(item => item.kind === 'photoPosts' && item.title === '저장한 사진 글');
+  assert.match(post.message, /인용 근거 1개를 연결하지 않았습니다/);
+  // The preparation needs its exact sources and is skipped, not half-restored.
+  const prep = await Full.restore(opened, { storage: target, kinds: new Set(['materialWriting']), verifyPhoto: null });
+  assert.equal(prep.items.find(item => item.workspace === 1).status, 'skipped');
+});
+
+test('restore receipts: this account remembers a restored backup by its manifest hash', async () => {
+  const { storage } = await seed();
+  const { built } = await fullBundle(storage);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const local = memoryLocal(), book = Full.receipts(target, local);
+  const first = await Full.open(built.blob), again = await Full.open(new Blob([await built.blob.arrayBuffer()]));
+  assert.equal(first.fingerprint, again.fingerprint);
+  assert.equal(book.find(first.fingerprint), null);
+  book.record({ fingerprint: first.fingerprint, createdAt: first.manifest.createdAt, copies: 2 });
+  const seen = book.find(again.fingerprint);
+  assert.equal(seen.createdAt, first.manifest.createdAt); assert.equal(seen.copies, 2); assert.ok(Date.parse(seen.restoredAt));
+  // Scoped to the account.
+  assert.equal(Full.receipts(storage, local).find(first.fingerprint), null);
+});
+
+test('single existing files open with their format and restore as new copies; partly rejected documents stay retryable', async () => {
   const { storage, first, saved } = await seed();
   const snapshot = await storage.readLibraryBackupSnapshot(first);
-  const libraryFile = new Blob([JSON.stringify(Folders.makeBackup(snapshot.bundle, snapshot.workbench, snapshot.sourceFolders))]);
-  const opened = await Full.open(libraryFile);
+  const opened = await Full.open(new Blob([JSON.stringify(Folders.makeBackup(snapshot.bundle, snapshot.workbench, snapshot.sourceFolders))]));
   assert.equal(opened.type, 'single'); assert.equal(opened.entries[0].kind, 'library'); assert.equal(opened.workspaces[0].title, '첫 자료공간');
-  const photoZip = await Photo.backup(await storage.readPhotoPost(first, saved.id));
-  const photo = await Full.open(photoZip);
-  assert.equal(photo.entries[0].kind, 'photoPosts'); assert.equal(photo.entries[0].counts.views, 1);
+  const photo = await Full.open(await Photo.backup(await storage.readPhotoPost(first, saved.id)));
+  assert.equal(photo.entries[0].kind, 'photoPosts'); assert.equal(photo.entries[0].counts.views, 1); assert.match(photo.fingerprint, /^[0-9a-f]{64}$/);
   const transfer = await Full.open(new Blob([JSON.stringify(Core.makeBackup(snapshot.bundle))]));
   assert.equal(transfer.entries[0].format, 'life-tools-backup-v1');
+  const series = (await storage.readBlogSeries(first)).series[0];
+  const seriesFile = await Full.open(await require('../assets/life/blog-series-package.js').pack(await storage.readBlogSeriesSnapshot(first, series.id)));
+  assert.equal(seriesFile.entries[0].kind, 'blogSeries');
   const timeline = await Full.open(new Blob([JSON.stringify({ format: 'haedo-platform-backup-v1', exportedAt: '2026-11-01T00:00:00.000Z', docs: [], items: [] })]));
   assert.equal(timeline.type, 'external'); assert.equal(timeline.kind, 'timeline');
   const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
   const kept = (await target.createWorkspace('기존')).workspaceId;
   const report = await Full.restore(photo, { storage: target, kinds: new Set(['photoPosts']), verifyPhoto: null });
-  assert.equal(report.items[0].status, 'restored'); assert.equal(report.items[0].status, 'restored');
+  assert.equal(report.items[0].status, 'restored');
   const copies = (await target.listWorkspaces()).filter(row => row.workspaceId !== kept);
   assert.equal(copies.length, 1);
   const [restoredPost] = await target.listPhotoPosts(copies[0].workspaceId);
   assert.equal(restoredPost.status, 'draft', 'a bare photo ZIP restores as a draft, as in the editor');
   assert.deepEqual(await target.listPhotoPosts(kept), []);
-  const t2 = await Full.restore(transfer, { storage: target, kinds: new Set(['library']), verifyPhoto: null });
-  assert.equal(t2.items[0].counts.sourceVersions, 2);
+  assert.equal((await Full.restore(transfer, { storage: target, kinds: new Set(['library']), verifyPhoto: null })).items[0].counts.sourceVersions, 2);
+  // One valid and one invalid document: the set is 'failed' so a retry runs; the retry applies only the rest.
+  const docs = { format: 'haedo-account-documents-v1', exportedAt: '2026-11-01T00:00:00.000Z', documents: [
+    { prefix: 'discoverySettings', workspaceId: 'ws_original', value: { ...Settings.update(Settings.empty('ws_original'), { autoRefresh: true }, { expectedRevision: 0 }) } },
+    { prefix: 'discoveryLanguageSettings', workspaceId: 'ws_original', value: { broken: true } }] };
+  const docFile = await Full.open(new Blob([JSON.stringify(docs)]));
+  const targets = new Map();
+  const partly = await Full.restore(docFile, { storage: target, kinds: new Set(['accountDocuments']), targets, verifyPhoto: null });
+  const row = partly.items[0];
+  assert.equal(row.status, 'failed'); assert.equal(row.counts.documents, 1); assert.equal(row.rejected, 1);
+  const retry = await Full.restore(docFile, { storage: target, kinds: new Set(['accountDocuments']), targets, verifyPhoto: null });
+  assert.equal(retry.items[0].counts.documents, 0); assert.equal(retry.items[0].rejected, 1, 'only the rejected document runs again');
+  assert.equal((await target.readDiscoverySettings(row.targetId)).autoRefresh, true);
 });

@@ -135,7 +135,7 @@
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
     let naverCaptureUI = null, naverCaptureService = null, naverReaderService = null, naverPhotoView = null, naverCaptureTarget = null;
-    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null;
+    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null, backupInterruption = '', backupOriginals = null;
     let sourceFoldersUI = null, sourceFoldersWorkspace = null, sourceFoldersMount = null, sourceFoldersUpdate = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
@@ -1255,7 +1255,7 @@
       await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
       if (mode === 'external-discovery' && currentExternalImport() && externalImportContext.committed) await refreshData();
-      await preservationUI?.flush();
+      await preservationUI?.flush(); fullBackupUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
@@ -1545,7 +1545,7 @@
       if (dirty()) await persistStage();
       await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
-      await preservationUI?.flush();
+      await preservationUI?.flush(); fullBackupUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
@@ -1736,7 +1736,7 @@
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
-          await preservationUI?.flush();
+          await preservationUI?.flush(); fullBackupUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
@@ -2343,6 +2343,8 @@
       const platformData = global.HaedoPlatformData, userId = storage.account?.userId;
       const timeline = platformData && userId ? () => global.HaedoLife.FullBackup.timelineSnapshot({ platformData, localStorage: global.localStorage, uid: userId }) : null;
       const instance = global.HaedoLife.FullBackupUI.create({ storage, timeline, isCurrent, onError: failure,
+        originals: originalsForBackup(), notice: backupInterruption,
+        onInterrupted: text => { backupInterruption = text; announce(text); },
         announce: text => announce(text, { quiet: true }),
         async onRestored() {
           const listSequence = ++workspaceListRefresh;
@@ -2354,6 +2356,15 @@
       });
       fullBackupUI = instance;
       instance.mount({ host: main, downloadHost, restoreHost });
+    }
+
+    // The account library's originals service, or a local one for this account.
+    function originalsForBackup() {
+      if (global.HaedoLife.Shell?.originals) return global.HaedoLife.Shell.originals;
+      try {
+        if (!backupOriginals && global.HaedoLife.OriginalAttachments && auth?.getAccount?.()) backupOriginals = global.HaedoLife.OriginalAttachments.create({ auth, account: auth.getAccount() });
+      } catch (_) { backupOriginals = null; }
+      return backupOriginals;
     }
 
     async function openWorkspaceCopy(id) {
@@ -5200,7 +5211,7 @@
       await interestUI?.flush();
       await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
-      await preservationUI?.flush();
+      await preservationUI?.flush(); fullBackupUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
@@ -5265,7 +5276,7 @@
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
-      fullBackupUI?.dispose(); fullBackupUI = null;
+      fullBackupUI?.dispose(); fullBackupUI = null; backupOriginals?.dispose(); backupOriginals = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       compositionSync?.dispose();

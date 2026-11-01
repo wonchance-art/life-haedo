@@ -1,28 +1,36 @@
-/* One ZIP for every account workspace. Each file inside keeps its existing
+/* One ZIP for the account's workspaces. Each file inside keeps its existing
  * backup format; the bundle adds only README.txt and manifest.json (path,
- * format/version, counts, bytes, SHA-256). Restore always creates new
- * workspace copies through the existing single-transaction install functions
- * and never writes to an existing workspace. No network, no publication. */
+ * format/version, counts, bytes, SHA-256, what is missing and what is not
+ * included). Restore always creates new workspace copies through the existing
+ * single-transaction install functions and never writes to an existing
+ * workspace. No network except reading the account's own original
+ * attachments through their existing service; no publication. */
 (function (root, factory) {
   const api = factory(root);
   (root.HaedoLife ||= {}).FullBackup = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const FORMAT = 'haedo-full-backup-v1', VERSION = 1, DOCS_FORMAT = 'haedo-account-documents-v1';
+  // Version 1: first release (manifest/README first, no notIncluded).
+  // Version 2: adds blog series, preparations, Naver captures, originals,
+  // `notIncluded`, missing reasons; manifest/README are written last.
+  const FORMAT = 'haedo-full-backup-v1', VERSION = 2, DOCS_FORMAT = 'haedo-account-documents-v1';
   const MiB = 1024 * 1024, GiB = 1024 * MiB;
-  // ZIP32 without ZIP64: every offset must stay below 4 GiB. Large photo sets are
-  // streamed into Blob parts; the warning is about device memory, not a guarantee.
-  const LIMITS = Object.freeze({ bundle: 3.5 * GiB, warn: 1 * GiB, files: 20000, manifest: 16 * MiB, json: 64 * MiB, chunk: 8 * MiB });
+  // ZIP32 without ZIP64: every offset must stay below 4 GiB. The same limit
+  // applies to the whole file when it is written and when it is opened.
+  const LIMITS = Object.freeze({ bundle: 3.5 * GiB, warn: 1 * GiB, files: 20000, manifest: 16 * MiB, json: 512 * MiB, chunk: 8 * MiB, receipts: 50 });
   const paths = { Core: './core.js', Workbench: './workbench.js', SourceFolders: './source-folders.js', Collection: './collection.js',
-    NineBoard: './nine-board.js', PhotoPost: './photo-post.js' };
+    NineBoard: './nine-board.js', PhotoPost: './photo-post.js', BlogSeriesPackage: './blog-series-package.js', MaterialWriting: './material-writing.js',
+    NaverMedia: './naver-media.js' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require(paths[name]));
   const zip = () => root.fflate || (typeof require === 'function' && require('../../vendor/fflate/fflate.js'));
   const fault = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra });
   const clone = value => structuredClone(value);
   const plain = value => !!value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const encoder = new TextEncoder();
-  const json = value => encoder.encode(JSON.stringify(value, null, 2));
+  // Compact JSON: every existing restore parser reads it (JSON.parse); indentation only grows large libraries.
+  const json = value => encoder.encode(JSON.stringify(value));
+  const pretty = value => encoder.encode(JSON.stringify(value, null, 2));
 
   // Labels are functional names shown in the UI, README and restore report.
   const KINDS = Object.freeze({
@@ -30,12 +38,25 @@
     collection: Object.freeze({ label: '컬렉션', detail: '컬렉션 항목·비공개 메모·보관 상태' }),
     photoPosts: Object.freeze({ label: '사진 글', detail: '글별 ZIP · 원본 사진 바이트와 HEIC 보기용 JPEG' }),
     nineBoards: Object.freeze({ label: '9칸 구성', detail: '구성·영역·선택 이유·직접 담은 근거' }),
+    blogSeries: Object.freeze({ label: '연재 모음', detail: '모음별 ZIP · 고정한 글과 원본 사진' }),
+    materialWriting: Object.freeze({ label: '자료로 글쓰기 준비', detail: '질문·자료 메모·개요' }),
+    naverCaptures: Object.freeze({ label: '네이버 원문 사진', detail: '원문 판별 ZIP · 원문과 사진 사본' }),
     accountDocuments: Object.freeze({ label: '계정 설정·기록 문서', detail: '뉴스 설정·관심·연간 계획·읽던 위치·페이지 초안·인용 근거' }),
+    originals: Object.freeze({ label: '원본 첨부', detail: '원본 파트 ZIP' }),
     timeline: Object.freeze({ label: '연표·목표·습관', detail: '이 기기에 내려받은 사본 · 연표 목록 화면에서 복원' }),
     preservation: Object.freeze({ label: '보관 범위·근거 파일', detail: '선택한 글·9칸과 정확한 원문 근거' }),
     annualPlan: Object.freeze({ label: '연간 계획 파일', detail: '연간 계획 화면에서 복원' })
   });
-  const ORDER = Object.freeze(['library', 'collection', 'photoPosts', 'nineBoards', 'accountDocuments', 'timeline']);
+  const ORDER = Object.freeze(['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals', 'timeline']);
+  const ACCOUNT_KINDS = Object.freeze(['accountDocuments', 'originals', 'timeline']);
+  // Kinds without a file format, listed in the manifest, README and screen.
+  const NOT_INCLUDED = Object.freeze({
+    writingDrafts: { label: '글쓰기 초안', reason: '초안 전용 백업 형식이 없습니다.', whereToSave: '같은 계정으로 로그인한 기기에 자동 동기화됩니다. 파일이 필요하면 글쓰기 화면에서 TXT로 받으세요.' },
+    importDrafts: { label: '가져오기 검토 초안', reason: '검토 중인 가져오기는 백업 형식이 없습니다.', whereToSave: '검토를 마쳐 자료로 저장하면 자료·구성 파일에 들어갑니다.' },
+    sourceEditDrafts: { label: '자료 수정 초안', reason: '저장하지 않은 수정은 백업 형식이 없습니다.', whereToSave: '수정을 저장하면 새 원문 버전으로 자료·구성 파일에 들어갑니다.' },
+    publication: { label: '공개 상태·서버 연결', reason: '새 사본은 공개하지 않고 원래 서버 연결을 옮기지 않습니다.', whereToSave: '공개본은 원래 공개 페이지에 그대로 있습니다. 필요하면 복원한 글을 다시 공개하세요.' },
+    originals: { label: '원본 첨부', reason: '원본 첨부 보관함을 열 수 없습니다.', whereToSave: '자료 메뉴의 원본 첨부에서 파트 ZIP을 받으세요.' }
+  });
   // Account documents mirror storage.js ACCOUNT_DOC_*_PREFIXES. Keys of the
   // first group embed the account; the rest belong to an owned workspace.
   const ACCOUNT_PREFIXES = Object.freeze(['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings',
@@ -45,10 +66,16 @@
   // pair two workspaces with one public page. It stays in the file, unrestored.
   const NOT_RESTORED = Object.freeze({ 'public-cover': '공개 표지 설정은 공개 상태와 연결돼 있어 새 사본에 복원하지 않습니다.' });
   const ID = /^[A-Za-z0-9_-]{1,128}$/;
-  const BUNDLE_PATH = /^(?:workspaces\/\d{2,4}\/(?:library|collection|nine-boards)\.json|workspaces\/\d{2,4}\/photo-posts\/[A-Za-z0-9_-]{1,128}\.zip|account-documents\.json|timeline-goals-habits\.json)$/;
+  const WS = 'workspaces\\/\\d{2,4}\\/', IDP = '[A-Za-z0-9_-]{1,128}';
+  const PATH_KIND = Object.freeze({
+    library: new RegExp('^' + WS + 'library\\.json$'), collection: new RegExp('^' + WS + 'collection\\.json$'),
+    nineBoards: new RegExp('^' + WS + 'nine-boards\\.json$'), photoPosts: new RegExp('^' + WS + 'photo-posts\\/' + IDP + '\\.zip$'),
+    blogSeries: new RegExp('^' + WS + 'blog-series\\/' + IDP + '\\.zip$'), materialWriting: new RegExp('^' + WS + 'material-writing\\.json$'),
+    naverCaptures: new RegExp('^' + WS + 'naver-captures\\/' + IDP + '\\.zip$'), accountDocuments: /^account-documents\.json$/,
+    originals: new RegExp('^original-attachments\\/' + IDP + '\\.zip$'), timeline: /^timeline-goals-habits\.json$/ });
   const PHOTO_FORMATS = ['life-photo-post-backup-v1', 'life-photo-post-backup-v2'];
-  const PATH_KIND = Object.freeze({ library: /\/library\.json$/, collection: /\/collection\.json$/, nineBoards: /\/nine-boards\.json$/,
-    photoPosts: /\/photo-posts\/[A-Za-z0-9_-]+\.zip$/, accountDocuments: /^account-documents\.json$/, timeline: /^timeline-goals-habits\.json$/ });
+  const ZIP_FORMATS = Object.freeze({ photoPosts: PHOTO_FORMATS, blogSeries: ['life-blog-series-package-v1'], naverCaptures: ['haedo.naver.capture.v1'],
+    originals: ['haedo-private-originals-part-v1'] });
 
   function versionOf(format, data) {
     if (plain(data) && Number.isSafeInteger(data.schemaVersion)) return data.schemaVersion;
@@ -62,6 +89,7 @@
   async function blobBytes(blob) { return new Uint8Array(await blob.arrayBuffer()); }
   const pause = () => new Promise(resolve => (root.setTimeout || setTimeout)(resolve, 0));
   const pad = index => String(index).padStart(2, '0');
+  const message = error => (error && typeof error.message === 'string' && error.message) || '읽지 못했습니다.';
 
   // ---- Counts per existing format (shown before download and in the manifest) ----
   function libraryParts(data) {
@@ -79,16 +107,21 @@
     },
     collection: data => ({ items: data.items.length, archived: data.items.filter(item => item.archived).length }),
     nineBoards: data => ({ boards: data.boards.length, items: data.boards.reduce((sum, board) => sum + board.areas.reduce((n, area) => n + area.items.length, 0), 0) }),
-    photoPosts: manifest => ({ posts: 1, photos: manifest.photos.length, views: manifest.photos.filter(photo => photo.view).length, attachments: (manifest.attachments || []).length }),
+    photoPosts: doc => ({ posts: 1, photos: doc.photos.length, views: doc.photos.filter(photo => photo.view).length, attachments: (doc.attachments || []).length }),
+    blogSeries: snapshot => ({ series: 1, seriesPosts: snapshot.posts.length, photos: snapshot.posts.reduce((n, row) => n + row.doc.photos.length, 0) }),
+    materialWriting: data => ({ plans: data.plans.length }),
+    naverCaptures: attachment => ({ captures: 1, photos: attachment.photos.length }),
     accountDocuments: data => ({ documents: data.documents.length }),
+    originals: part => ({ parts: 1, files: part.count || 0 }),
     timeline: data => ({ timelines: (data.docs || []).length, goals: (data.items || []).filter(item => item?.kind === 'goal').length,
       habits: (data.items || []).filter(item => item?.kind === 'habit').length })
   };
   const COUNT_LABELS = { sources: '자료', sourceVersions: '원문 버전', records: '발췌', groups: '묶음', pageEntries: '페이지 항목', books: '책', folders: '폴더',
     items: '항목', archived: '보관', boards: '구성', posts: '글', photos: '사진', views: 'HEIC 보기용', attachments: '첨부', documents: '문서',
-    timelines: '연표', goals: '목표', habits: '습관', workspaces: '자료공간' };
+    series: '모음', seriesPosts: '모음 글', plans: '준비', captures: '원문', parts: '파트', files: '파일',
+    timelines: '연표', goals: '목표', habits: '습관', workspaces: '자료공간', drafts: '초안' };
   function countText(counts) {
-    return Object.entries(counts || {}).filter(([key, value]) => value || ['sources', 'items', 'boards', 'posts', 'documents', 'timelines'].includes(key))
+    return Object.entries(counts || {}).filter(([key, value]) => value || ['sources', 'items', 'boards', 'posts', 'documents', 'timelines', 'plans'].includes(key))
       .map(([key, value]) => (COUNT_LABELS[key] || key) + ' ' + value).join(' · ');
   }
   function addCounts(target, counts) { for (const [key, value] of Object.entries(counts || {})) target[key] = (target[key] || 0) + value; return target; }
@@ -106,64 +139,145 @@
       docs: reg.docs.map(doc => ({ id: doc.id, name: doc.name, data: JSON.parse(localStorage.getItem(keys.docs + doc.id)) })),
       items: clone(platformData.read(localStorage, keys.items, [])) };
   }
-  async function plan({ storage, timeline = null }) {
+  function notIncluded(kind, count = null) { return { kind, ...NOT_INCLUDED[kind], ...(count === null ? {} : { count }) }; }
+  async function plan({ storage, timeline = null, originals = null, isCurrent = () => true }) {
     if (!storage?.isAccountScoped || !storage.account) throw fault('auth_scope_required', '로그인한 계정에서 백업을 만들어 주세요.');
-    const libraries = await storage.listAccountLibraries();
+    const stop = () => { if (!isCurrent()) throw fault('backup_cancelled', '화면이 바뀌어 백업 준비를 멈췄습니다. 자료는 바뀌지 않았습니다.'); };
+    const libraries = await storage.listAccountLibraries(); stop();
     const workspaces = libraries.map((row, i) => ({ index: i + 1, workspaceId: row.workspaceId, title: row.title || '제목 없는 자료공간', recovery: row.eligible === false }));
-    const tasks = [];
+    const tasks = [], skipped = [], drafts = { writingDrafts: 0, importDrafts: 0, sourceEditDrafts: 0 };
+    const listFailure = (kind, ws, error) => tasks.push({ id: kind + ':' + ws.index + ':list', kind, workspace: ws.index, path: null, listError: error });
     for (const ws of workspaces) {
       const base = 'workspaces/' + pad(ws.index) + '/';
       tasks.push({ id: 'library:' + ws.index, kind: 'library', workspace: ws.index, path: base + 'library.json' },
         { id: 'collection:' + ws.index, kind: 'collection', workspace: ws.index, path: base + 'collection.json' },
         { id: 'nineBoards:' + ws.index, kind: 'nineBoards', workspace: ws.index, path: base + 'nine-boards.json' });
-      let posts;
-      try { posts = await storage.listPhotoPosts(ws.workspaceId); }
-      catch (error) { tasks.push({ id: 'photoPosts:' + ws.index, kind: 'photoPosts', workspace: ws.index, path: null, listError: error }); continue; }
-      for (const row of posts) if (ID.test(row.id)) tasks.push({ id: 'photoPosts:' + ws.index + ':' + row.id, kind: 'photoPosts', workspace: ws.index, postId: row.id,
-        title: row.title || '', status: row.status, archived: row.archived === true, path: base + 'photo-posts/' + row.id + '.zip' });
+      try {
+        for (const row of await storage.listPhotoPosts(ws.workspaceId)) {
+          if (ID.test(row.id)) tasks.push({ id: 'photoPosts:' + ws.index + ':' + row.id, kind: 'photoPosts', workspace: ws.index, postId: row.id,
+            title: row.title || '', status: row.status, archived: row.archived === true, path: base + 'photo-posts/' + row.id + '.zip' });
+          else skipped.push({ kind: 'photoPosts', workspace: ws.index, title: row.title || '', error: '글 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+        }
+      } catch (error) { listFailure('photoPosts', ws, error); }
+      if (storage.readBlogSeries) try {
+        for (const series of (await storage.readBlogSeries(ws.workspaceId)).series) {
+          if (!ID.test(series.id)) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '모음 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+          else if (!series.items.length) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '글이 없는 모음은 모음 ZIP 형식으로 담을 수 없습니다.' });
+          else tasks.push({ id: 'blogSeries:' + ws.index + ':' + series.id, kind: 'blogSeries', workspace: ws.index, seriesId: series.id, title: series.title || '',
+            path: base + 'blog-series/' + series.id + '.zip' });
+        }
+      } catch (error) { listFailure('blogSeries', ws, error); }
+      if (storage.readMaterialWriting) tasks.push({ id: 'materialWriting:' + ws.index, kind: 'materialWriting', workspace: ws.index, path: base + 'material-writing.json' });
+      if (storage.readNaverCapture) try {
+        const bundle = await storage.read(ws.workspaceId), naver = new Set(bundle.sources.filter(source => source.origin === 'naver_blog').map(source => source.id));
+        for (const version of bundle.sourceVersions.filter(row => naver.has(row.sourceId))) {
+          const attachment = await storage.readNaverCapture(ws.workspaceId, version.id);
+          if (!attachment) continue;
+          // Counted here once; the photos are read again only when the ZIP is written.
+          if (ID.test(version.id)) tasks.push({ id: 'naverCaptures:' + ws.index + ':' + version.id, kind: 'naverCaptures', workspace: ws.index, versionId: version.id,
+            title: bundle.sources.find(source => source.id === version.sourceId)?.title || '', path: base + 'naver-captures/' + version.id + '.zip',
+            counts: COUNT.naverCaptures(attachment), estimate: attachment.photos.reduce((sum, photo) => sum + photo.blob.size, 65536) });
+          else skipped.push({ kind: 'naverCaptures', workspace: ws.index, error: '원문 버전 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+        }
+      } catch (error) { listFailure('naverCaptures', ws, error); }
+      if (storage.listStages) try {
+        for (const stage of await storage.listStages(ws.workspaceId)) {
+          if (stage.state && stage.state !== 'draft') continue;
+          drafts[stage.kind === 'writing' ? 'writingDrafts' : stage.kind === 'source-edit' ? 'sourceEditDrafts' : 'importDrafts']++;
+        }
+      } catch (_) { /* Counts only; the kinds stay listed as not included. */ }
+      stop();
     }
     tasks.push({ id: 'accountDocuments', kind: 'accountDocuments', workspace: null, path: 'account-documents.json' });
+    const excluded = Object.entries(drafts).map(([kind, count]) => notIncluded(kind, count));
+    if (originals) {
+      try {
+        for (const part of await originals.list({ cached: true })) { // Rows kept for this account; no catalog request.
+          if (ID.test(part.id)) tasks.push({ id: 'originals:' + part.id, kind: 'originals', workspace: null, partId: part.id, count: part.count || 0,
+            title: '파트 ' + part.part + '/' + part.partCount, path: 'original-attachments/' + part.id + '.zip' });
+          else skipped.push({ kind: 'originals', workspace: null, error: '원본 파트 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+        }
+      } catch (error) { tasks.push({ id: 'originals:list', kind: 'originals', workspace: null, path: null, listError: error }); }
+    } else excluded.push(notIncluded('originals'));
     if (timeline) tasks.push({ id: 'timeline', kind: 'timeline', workspace: null, path: 'timeline-goals-habits.json' });
-    return { workspaces, tasks };
+    excluded.push(notIncluded('publication'));
+    stop();
+    return { workspaces, tasks, skipped, notIncluded: excluded };
   }
-  async function readPart(task, { storage, workspaces, timeline }) {
+  async function readPart(task, { storage, workspaces, timeline, originals }) {
     const ws = workspaces.find(row => row.index === task.workspace);
     if (task.listError) throw task.listError;
     if (task.kind === 'library') {
       const snapshot = await (storage.readLibraryBackupSnapshot ? storage.readLibraryBackupSnapshot(ws.workspaceId) : storage.readWorkbenchSnapshot(ws.workspaceId));
       const folders = snapshot.sourceFolders, nonempty = folders && (folders.folders.length || folders.assignments.length);
       // Same choice as the 자료·구성 screen: folders only when there is something to keep.
-      return nonempty ? dep('SourceFolders').makeBackup(snapshot.bundle, snapshot.workbench, folders) : dep('Workbench').makeBackup(snapshot.bundle, snapshot.workbench);
+      return { value: nonempty ? dep('SourceFolders').makeBackup(snapshot.bundle, snapshot.workbench, folders) : dep('Workbench').makeBackup(snapshot.bundle, snapshot.workbench) };
     }
-    if (task.kind === 'collection') return dep('Collection').makeBackup(await storage.readCollection(ws.workspaceId));
-    if (task.kind === 'nineBoards') return dep('NineBoard').backup((await storage.readNineBoard(ws.workspaceId)).boards);
-    if (task.kind === 'photoPosts') return storage.readPhotoPost(ws.workspaceId, task.postId);
+    if (task.kind === 'collection') return { value: dep('Collection').makeBackup(await storage.readCollection(ws.workspaceId)) };
+    if (task.kind === 'nineBoards') return { value: dep('NineBoard').backup((await storage.readNineBoard(ws.workspaceId)).boards) };
+    if (task.kind === 'materialWriting') return { value: await storage.readMaterialWriting(ws.workspaceId) };
+    if (task.kind === 'photoPosts') {
+      const doc = await storage.readPhotoPost(ws.workspaceId, task.postId);
+      return { blob: await dep('PhotoPost').backup(doc), format: doc.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2',
+        counts: COUNT.photoPosts(doc), meta: { postId: task.postId, title: doc.title || '', status: doc.status, archived: doc.archived === true } };
+    }
+    if (task.kind === 'blogSeries') {
+      const snapshot = await storage.readBlogSeriesSnapshot(ws.workspaceId, task.seriesId);
+      return { blob: await dep('BlogSeriesPackage').pack(snapshot), format: dep('BlogSeriesPackage').FORMAT, counts: COUNT.blogSeries(snapshot),
+        meta: { seriesId: task.seriesId, title: snapshot.series.title || '' } };
+    }
+    if (task.kind === 'naverCaptures') {
+      const bundle = await storage.read(ws.workspaceId), attachment = await storage.readNaverCapture(ws.workspaceId, task.versionId);
+      if (!attachment) throw fault('naver_capture_missing', '원문 사진 사본을 찾지 못했습니다.');
+      return { blob: await dep('NaverMedia').pack({ bundle, attachment }), format: dep('NaverMedia').FORMAT, counts: COUNT.naverCaptures(attachment),
+        meta: { versionId: task.versionId, title: task.title } };
+    }
+    if (task.kind === 'originals') {
+      const part = await originals.archive(task.partId);
+      return { blob: part.blob, format: 'haedo-private-originals-part-v1', counts: COUNT.originals({ count: task.count }), meta: { partId: task.partId, title: task.title } };
+    }
     if (task.kind === 'accountDocuments') {
-      const known = new Set(workspaces.map(row => row.workspaceId)), documents = [];
+      const known = new Set(workspaces.map(row => row.workspaceId)), documents = [], others = new Map();
       for (const row of await storage.listAccountDocs()) {
-        if (!known.has(row.workspaceId)) continue;
+        if (!known.has(row.workspaceId)) { others.set(row.workspaceId, (others.get(row.workspaceId) || 0) + 1); continue; }
         const record = await storage.readAccountDocRecord(row.key);
         if (!record.exists) continue;
         const postId = row.prefix === 'post-evidence' ? row.key.split(':')[2] : null;
         documents.push({ prefix: row.prefix, workspaceId: row.workspaceId, ...(postId ? { postId } : {}), value: record.value });
       }
       documents.sort((a, b) => (a.workspaceId + a.prefix + (a.postId || '')).localeCompare(b.workspaceId + b.prefix + (b.postId || '')));
-      return { format: DOCS_FORMAT, exportedAt: new Date().toISOString(), documents };
+      const count = [...others.values()].reduce((sum, n) => sum + n, 0);
+      return { value: { format: DOCS_FORMAT, exportedAt: new Date().toISOString(), documents },
+        skipped: count ? [{ kind: 'accountDocuments', workspace: null, error: '계정 자료공간 목록에 없는 공간(' + others.size + '개)의 문서 ' + count + '개는 복원할 곳이 없어 담지 않았습니다.' }] : [] };
     }
-    if (task.kind === 'timeline') return timeline();
+    if (task.kind === 'timeline') return { value: timeline() };
     throw fault('unknown_part', '알 수 없는 백업 항목입니다.');
   }
   // Light count pass shown before download. Photo bytes are summed from the
-  // stored Blob sizes without reading them.
-  async function inventory(planned, context) {
-    const rows = [];
+  // stored Blob sizes without reading them; ZIP kinds are not packed here.
+  async function inventory(planned, context, { isCurrent = () => true } = {}) {
+    const rows = [], { storage } = context;
     for (const task of planned.tasks) {
+      if (!isCurrent()) throw fault('backup_cancelled', '화면이 바뀌어 목록 확인을 멈췄습니다.');
       try {
-        const value = await readPart(task, { ...context, workspaces: planned.workspaces });
+        const ws = planned.workspaces.find(row => row.index === task.workspace);
+        if (task.listError) throw task.listError;
         if (task.kind === 'photoPosts') {
-          const bytes = value.photos.reduce((sum, photo) => sum + photo.blob.size + (photo.view?.blob?.size || 0), 0);
-          rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: { posts: 1, photos: value.photos.length }, estimate: bytes + 4096 });
-        } else rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: COUNT[task.kind](value), estimate: JSON.stringify(value).length });
+          const doc = await storage.readPhotoPost(ws.workspaceId, task.postId);
+          rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: { posts: 1, photos: doc.photos.length },
+            estimate: doc.photos.reduce((sum, photo) => sum + photo.blob.size + (photo.view?.blob?.size || 0), 4096) });
+        } else if (task.kind === 'blogSeries') {
+          const snapshot = await storage.readBlogSeriesSnapshot(ws.workspaceId, task.seriesId);
+          rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: COUNT.blogSeries(snapshot),
+            estimate: snapshot.posts.reduce((sum, row) => sum + row.doc.photos.reduce((n, photo) => n + photo.blob.size + (photo.view?.blob?.size || 0), 4096), 0) });
+        } else if (task.kind === 'naverCaptures') {
+          rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: task.counts, estimate: task.estimate });
+        } else if (task.kind === 'originals') {
+          rows.push({ id: task.id, kind: task.kind, workspace: null, status: 'ready', counts: COUNT.originals({ count: task.count }), estimate: 0 });
+        } else {
+          const { value } = await readPart(task, { ...context, workspaces: planned.workspaces });
+          rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: COUNT[task.kind](value), estimate: JSON.stringify(value).length });
+        }
       } catch (error) { rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'failed', error: message(error) }); }
       await pause();
     }
@@ -178,96 +292,110 @@
       if (row.workspace) entry.workspaces.add(row.workspace);
     }
     const list = ORDER.filter(kind => kinds[kind]).map(kind => ({ ...kinds[kind], workspaces: kinds[kind].workspaces.size }));
-    return { workspaces: planned.workspaces.length, kinds: list, rows, estimate: list.reduce((sum, row) => sum + row.estimate, 0) };
+    return { workspaces: planned.workspaces.length, kinds: list, rows, skipped: planned.skipped, notIncluded: planned.notIncluded,
+      estimate: list.reduce((sum, row) => sum + row.estimate, 0) };
   }
-  const message = error => (error && typeof error.message === 'string' && error.message) || '읽지 못했습니다.';
 
-  async function runTask(task, context) {
-    const value = await readPart(task, context);
-    if (task.kind === 'photoPosts') {
-      const P = dep('PhotoPost'), blob = await P.backup(value), bytes = await blobBytes(blob);
-      const format = value.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2';
-      const counts = { posts: 1, photos: value.photos.length, views: value.photos.filter(photo => photo.view).length, attachments: (value.attachments || []).length };
-      return { blob, size: bytes.byteLength, sha256: await sha256(bytes), format, formatVersion: versionOf(format), counts,
-        meta: { postId: task.postId, title: value.title || '', status: value.status, archived: value.archived === true } };
-    }
-    const bytes = json(value);
-    if (bytes.byteLength > LIMITS.json) throw fault('part_too_large', KINDS[task.kind].label + ' 파일이 64 MiB를 넘습니다.');
-    return { blob: new Blob([bytes], { type: 'application/json' }), size: bytes.byteLength, sha256: await sha256(bytes), format: value.format || 'haedo-backup-v1',
-      formatVersion: versionOf(value.format, value), counts: COUNT[task.kind](value) };
-  }
-  // Runs (or re-runs) tasks. Each failure stays per part; nothing is retried silently.
-  async function collect(planned, context, { only = null, results = new Map(), onProgress = () => {}, isCurrent = () => true } = {}) {
-    const tasks = planned.tasks.filter(task => !only || only.has(task.id));
-    let done = 0;
-    for (const task of tasks) {
-      if (!isCurrent()) throw fault('backup_cancelled', '계정이나 화면이 바뀌어 백업을 멈췄습니다. 자료는 바뀌지 않았습니다.');
-      onProgress({ phase: 'read', done, total: tasks.length, task });
-      try { results.set(task.id, { status: 'ok', ...(await runTask(task, { ...context, workspaces: planned.workspaces })) }); }
-      catch (error) { results.set(task.id, { status: 'failed', error: message(error) }); }
-      done++; await pause();
-    }
-    onProgress({ phase: 'read', done, total: tasks.length });
-    return results;
-  }
   function readme(manifest) {
-    const lines = ['해도 전체 백업', '', '만든 시각: ' + manifest.createdAt, '앱 버전: ' + (manifest.appVersion || '확인 불가'),
-      '상태: ' + (manifest.complete ? '모든 항목 포함' : '일부 항목 빠짐 · 아래 "빠진 항목"을 확인하세요'), '',
+    const failures = manifest.missing.filter(item => item.reason !== 'skipped');
+    const lines = ['해도 백업 ZIP', '', '만든 시각: ' + manifest.createdAt, '앱 버전: ' + (manifest.appVersion || '확인 불가'),
+      '읽기 실패: ' + (failures.length ? failures.length + '개 · 아래 "빠진 항목"을 확인하세요' : '없음'),
+      '이 ZIP에 넣지 않은 종류: ' + (manifest.notIncluded.length ? manifest.notIncluded.length + '개 · 아래 "담지 않은 것"을 확인하세요' : '없음'), '',
       '이 ZIP은 하나의 형식이 아닙니다. 아래 파일마다 기존 백업 형식을 그대로 담았습니다.',
       '복원: 해도 → 설정 → 백업·복원 → 복원에서 이 ZIP을 고르면 새 자료공간 사본으로 복원합니다. 기존 자료는 바뀌지 않습니다.',
-      '각 파일은 원래 화면(자료·구성 백업, 컬렉션, 9칸, 사진 글, 연표 목록)에서도 따로 복원할 수 있습니다.', '', '자료공간'];
+      '각 파일은 원래 화면(자료·구성 백업, 컬렉션, 9칸, 사진 글, 연재 모음, 네이버 원문, 원본 첨부, 연표 목록)에서도 따로 복원할 수 있습니다.', '', '자료공간'];
     for (const ws of manifest.workspaces) lines.push('  ' + pad(ws.index) + ' ' + ws.title + (ws.recovery ? ' (복구 사본)' : ''));
     lines.push('', '파일 (경로 · 종류 · 형식/버전 · 개수 · 바이트 · SHA-256)');
     for (const file of manifest.files) lines.push('  ' + file.path, '    ' + KINDS[file.kind].label + ' · ' + file.format + ' v' + file.formatVersion + ' · ' + countText(file.counts) + ' · ' + file.bytes + ' · ' + file.sha256);
     if (manifest.missing.length) {
       lines.push('', '빠진 항목');
-      for (const item of manifest.missing) lines.push('  ' + KINDS[item.kind].label + (item.workspace ? ' · 자료공간 ' + pad(item.workspace) : '') + (item.title ? ' · ' + item.title : '') + ' · ' + item.error);
+      for (const item of manifest.missing) lines.push('  ' + (item.reason === 'skipped' ? '[담지 않음] ' : '[읽기 실패] ') + KINDS[item.kind].label +
+        (item.workspace ? ' · 자료공간 ' + pad(item.workspace) : '') + (item.title ? ' · ' + item.title : '') + ' · ' + item.error);
+    }
+    if (manifest.notIncluded.length) {
+      lines.push('', '담지 않은 것 (종류 · 이유 · 보관 방법)');
+      for (const item of manifest.notIncluded) lines.push('  ' + item.label + (Number.isSafeInteger(item.count) ? ' ' + item.count + '개' : '') + ' · ' + item.reason + ' · ' + item.whereToSave);
     }
     return lines.join('\n') + '\n';
   }
-  // Builds the ZIP from collected parts. A part that failed blocks a complete
-  // ZIP; `partial: true` writes the rest with complete=false and lists what is missing.
-  async function build(planned, results, { appVersion = null, partial = false, now = () => new Date().toISOString(), onProgress = () => {} } = {}) {
-    const failed = planned.tasks.filter(task => results.get(task.id)?.status !== 'ok');
-    if (failed.length && !partial) throw fault('backup_incomplete', '일부 항목을 읽지 못해 전체 백업을 만들지 않았습니다.', { failed: failed.map(task => task.id) });
-    const ok = planned.tasks.filter(task => results.get(task.id)?.status === 'ok');
-    if (!ok.length) throw fault('backup_empty', '담을 수 있는 항목이 없습니다.');
-    const files = ok.map(task => {
-      const result = results.get(task.id);
-      return { path: task.path, kind: task.kind, workspace: task.workspace, ...(result.meta || {}), format: result.format, formatVersion: result.formatVersion,
-        counts: result.counts, bytes: result.size, sha256: result.sha256 };
-    });
-    const manifest = { format: FORMAT, version: VERSION, createdAt: now(), appVersion, complete: !failed.length,
-      workspaces: planned.workspaces.map(ws => ({ index: ws.index, workspaceId: ws.workspaceId, title: ws.title, recovery: ws.recovery })),
-      files, missing: failed.map(task => ({ kind: task.kind, workspace: task.workspace, ...(task.postId ? { postId: task.postId, title: task.title } : {}),
-        error: results.get(task.id)?.error || '읽지 못했습니다.' })) };
-    const total = files.reduce((sum, file) => sum + file.bytes, 0);
-    if (total > LIMITS.bundle) throw fault('backup_too_large', '백업이 3.5 GiB를 넘어 ZIP 하나로 만들 수 없습니다. 형식별로 나눠 받아 주세요.');
-    const F = zip(), parts = [];
-    let pending = [], pendingBytes = 0, written = 0, error = null;
+
+  // Single pass: each item is read, hashed and written into the open ZIP, and
+  // its Blob is dropped before the next one. Output stays in 8 MiB Blob parts
+  // until the file is finished. Failed items keep the ZIP open: `collect` can
+  // retry only them and append; `finish({ partial: true })` records them as missing.
+  function writer(planned, context, { appVersion = null, now = () => new Date().toISOString(), limit = LIMITS.bundle } = {}) {
+    const F = zip(), parts = [], results = new Map(), skipped = [...planned.skipped];
+    let pending = [], pendingBytes = 0, written = 0, error = null, finished = false;
     const flush = () => { if (pending.length) { parts.push(new Blob(pending)); pending = []; pendingBytes = 0; } };
     const archive = new F.Zip((cause, chunk) => {
       if (cause) { error = cause; return; }
       pending.push(chunk); pendingBytes += chunk.byteLength; written += chunk.byteLength;
       if (pendingBytes >= LIMITS.chunk) flush();
     });
-    const add = (name, bytes) => { const entry = new F.ZipPassThrough(name); archive.add(entry); entry.push(bytes, true); if (error) throw error; };
-    add('README.txt', encoder.encode(readme(manifest)));
-    add('manifest.json', json(manifest));
-    let index = 0;
-    for (const task of ok) {
-      onProgress({ phase: 'zip', done: index, total: ok.length, task });
-      // Each part was hashed once when read; a Blob cannot change afterwards.
-      const result = results.get(task.id), bytes = await blobBytes(result.blob);
-      if (bytes.byteLength !== result.size) throw fault('backup_changed', '백업 중 파일 크기가 바뀌었습니다. 다시 받아 주세요.');
-      add(task.path, bytes); index++;
-      await pause();
+    // Whole-file size as the reader sees it: local header (30 + name) + data +
+    // descriptor (16), then every central entry (46 + name) and the 22-byte end record.
+    let central = 0;
+    function add(name, bytes) {
+      const nameBytes = encoder.encode(name).byteLength;
+      if (written + 30 + nameBytes + bytes.byteLength + 16 + central + 46 + nameBytes + 22 > limit) throw fault('backup_too_large', '백업이 3.5 GiB를 넘어 ZIP 하나로 만들 수 없습니다. 형식별로 나눠 받아 주세요.');
+      central += 46 + nameBytes;
+      const entry = new F.ZipPassThrough(name); archive.add(entry); entry.push(bytes, true); if (error) throw error;
     }
-    archive.end(); if (error) throw error; flush();
-    onProgress({ phase: 'zip', done: ok.length, total: ok.length });
-    const stamp = manifest.createdAt.slice(0, 10);
-    return { blob: new Blob(parts, { type: 'application/zip' }), manifest, bytes: written,
-      fileName: 'haedo-backup-' + stamp + (manifest.complete ? '' : '-partial') + '.zip' };
+    async function collect({ only = null, onProgress = () => {}, isCurrent = () => true } = {}) {
+      if (finished) throw fault('backup_finished', '이미 마친 백업입니다. 다시 받아 주세요.');
+      const tasks = planned.tasks.filter(task => only ? only.has(task.id) : !results.has(task.id));
+      let done = 0;
+      for (const task of tasks) {
+        if (!isCurrent()) throw fault('backup_cancelled', '계정이나 화면이 바뀌어 백업을 멈췄습니다. 자료는 바뀌지 않았습니다.');
+        onProgress({ phase: 'read', done, total: tasks.length, task });
+        let item = null;
+        try {
+          item = await readPart(task, { ...context, workspaces: planned.workspaces });
+          const bytes = item.blob ? await blobBytes(item.blob) : json(item.value);
+          if (!item.blob && bytes.byteLength > LIMITS.json) throw fault('part_too_large', KINDS[task.kind].label + ' 파일이 512 MiB를 넘습니다.');
+          const format = item.format || item.value.format || 'haedo-backup-v1', hash = await sha256(bytes);
+          add(task.path, bytes);
+          results.set(task.id, { status: 'ok', size: bytes.byteLength, sha256: hash, format, formatVersion: versionOf(format, item.value),
+            counts: item.counts || COUNT[task.kind](item.value), meta: item.meta || null });
+          for (const row of item.skipped || []) skipped.push(row);
+        } catch (cause) {
+          if (cause?.code === 'backup_too_large' || cause === error) throw cause;
+          results.set(task.id, { status: 'failed', error: message(cause) });
+        }
+        item = null; // Drop the Blob before reading the next item.
+        done++; await pause();
+      }
+      onProgress({ phase: 'read', done, total: tasks.length });
+      return failed();
+    }
+    const failed = () => planned.tasks.filter(task => results.get(task.id)?.status !== 'ok');
+    function finish({ partial = false } = {}) {
+      if (finished) throw fault('backup_finished', '이미 마친 백업입니다. 다시 받아 주세요.');
+      const missingTasks = failed();
+      if (missingTasks.length && !partial) throw fault('backup_incomplete', '일부 항목을 읽지 못해 ZIP을 마치지 않았습니다.', { failed: missingTasks.map(task => task.id) });
+      const ok = planned.tasks.filter(task => results.get(task.id)?.status === 'ok');
+      if (!ok.length) throw fault('backup_empty', '담을 수 있는 항목이 없습니다.');
+      const files = ok.map(task => {
+        const result = results.get(task.id);
+        return { path: task.path, kind: task.kind, workspace: task.workspace, ...(result.meta || {}), format: result.format, formatVersion: result.formatVersion,
+          counts: result.counts, bytes: result.size, sha256: result.sha256 };
+      });
+      const missing = missingTasks.map(task => ({ kind: task.kind, workspace: task.workspace, reason: 'read_failed',
+        ...(task.postId ? { postId: task.postId } : {}), ...(task.title ? { title: task.title } : {}), error: results.get(task.id)?.error || '읽지 못했습니다.' }))
+        .concat(skipped.map(row => ({ reason: 'skipped', ...row })));
+      const manifest = { format: FORMAT, version: VERSION, createdAt: now(), appVersion, complete: !missingTasks.length,
+        workspaces: planned.workspaces.map(ws => ({ index: ws.index, workspaceId: ws.workspaceId, title: ws.title, recovery: ws.recovery })),
+        files, missing, notIncluded: planned.notIncluded };
+      // The lists go last: they describe what was actually written. Readers use the central directory.
+      add('README.txt', encoder.encode(readme(manifest)));
+      add('manifest.json', pretty(manifest));
+      archive.end(); if (error) throw error; flush(); finished = true;
+      if (written > limit) throw fault('backup_too_large', '백업이 3.5 GiB를 넘어 ZIP 하나로 만들 수 없습니다. 형식별로 나눠 받아 주세요.');
+      const stamp = manifest.createdAt.slice(0, 10);
+      return { blob: new Blob(parts, { type: 'application/zip' }), manifest, bytes: written,
+        fileName: 'haedo-backup-' + stamp + (missingTasks.length ? '-partial' : '') + '.zip' };
+    }
+    return { collect, finish, failed, results, get bytes() { return written; } };
   }
 
   // ---- Reading a ZIP lazily from its central directory (stored entries only) ----
@@ -322,7 +450,7 @@
     return entries;
   }
   async function entryText(entry, limit) {
-    if (entry.size > limit) throw fault('part_too_large', '백업 안의 목록 파일이 너무 큽니다.');
+    if (entry.size > limit) throw fault('part_too_large', '백업 안의 파일이 너무 큽니다.');
     const bytes = await blobBytes(entry.blob);
     if (bytes.byteLength !== entry.size) throw fault('invalid_zip', 'ZIP 파일 크기가 기록과 다릅니다.');
     try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (_) { throw fault('invalid_backup', 'UTF-8 파일을 읽지 못했습니다.'); }
@@ -338,6 +466,7 @@
     if (['life-tools-backup-v1', 'life-workbench-backup-v1', dep('SourceFolders').BACKUP_FORMAT].includes(format)) return 'library';
     if (format === 'life-collection-backup-v1') return 'collection';
     if (['life-nine-board-backup-v1', 'life-nine-board-backup-v2'].includes(format)) return 'nineBoards';
+    if (format === 'life-material-writing-v1') return 'materialWriting';
     if (format === DOCS_FORMAT) return 'accountDocuments';
     if (['haedo-platform-backup-v1', 'haedo-backup-v1'].includes(format) || format === undefined && Array.isArray(data.docs)) return 'timeline';
     if (format === 'haedo-annual-plan') return 'annualPlan';
@@ -354,30 +483,36 @@
     return data;
   }
   function libraryTitle(data) { return libraryParts(data)?.bundle?.title || null; }
-  async function open(file, { onProgress = () => {} } = {}) {
+  async function open(file, { onProgress = () => {}, limit = LIMITS.bundle } = {}) {
     if (!file || !Number.isSafeInteger(file.size) || file.size < 2) throw fault('invalid_backup', '백업 파일을 골라 주세요.');
     const head = await blobBytes(file.slice(0, 4));
     if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 3 && head[3] === 4) {
-      if (file.size > LIMITS.bundle) throw fault('backup_too_large', '3.5 GiB 이하의 백업 ZIP을 골라 주세요.');
-      const entries = await zipEntries(file), list = entries.get('manifest.json');
+      if (file.size > limit) throw fault('backup_too_large', '3.5 GiB 이하의 백업 ZIP을 골라 주세요.');
+      const entries = await zipEntries(file), list = entries.get('manifest.json') || entries.get('series.json');
       if (!list) throw fault('unsupported_backup', '해도 백업 ZIP이 아닙니다. 목록 파일(manifest.json)이 없습니다.');
       const text = await entryText(list, LIMITS.manifest);
-      if (crc32(encoder.encode(text)) !== list.crc) throw fault('tampered', 'manifest.json이 손상됐습니다. 이 파일은 복원하지 않았습니다.');
-      const manifest = parseJson(text, '목록');
-      if (manifest?.format === FORMAT) return verifyBundle(manifest, entries, onProgress);
+      const raw = encoder.encode(text);
+      if (crc32(raw) !== list.crc) throw fault('tampered', '목록 파일이 손상됐습니다. 이 파일은 복원하지 않았습니다.');
+      const manifest = parseJson(text, '목록'), fingerprint = await sha256(raw);
+      if (manifest?.format === FORMAT) return { ...await verifyBundle(manifest, entries, onProgress), fingerprint, fileName: file.name || '' };
       if (typeof manifest?.format === 'string' && manifest.format.startsWith('haedo-full-backup-'))
         throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다(' + manifest.format + '). 앱을 새로 고친 뒤 다시 시도해 주세요.');
+      const single = (kind, title, counts, extra = {}) => ({ type: 'single', fileName: file.name || '', fingerprint, file,
+        workspaces: [{ index: 1, workspaceId: null, title: title || '복원한 ' + KINDS[kind].label }],
+        entries: [{ kind, workspace: 1, format: manifest.format, formatVersion: versionOf(manifest.format), blob: file, counts, title: title || '', ...extra }] });
       if (PHOTO_FORMATS.includes(manifest?.format)) {
         const photos = Array.isArray(manifest.photos) ? manifest.photos : [];
-        return { type: 'single', fileName: file.name || '', workspaces: [{ index: 1, workspaceId: null, title: manifest.title || '복원한 사진 글' }],
-          entries: [{ kind: 'photoPosts', workspace: 1, format: manifest.format, formatVersion: versionOf(manifest.format), blob: file,
-            counts: { posts: 1, photos: photos.length, views: photos.filter(photo => photo?.view).length }, title: manifest.title || '' }] };
+        return single('photoPosts', manifest.title, { posts: 1, photos: photos.length, views: photos.filter(photo => photo?.view).length });
       }
-      if (manifest?.format === 'life-preservation-package-v1') return { type: 'preservation', fileName: file.name || '', file, format: manifest.format, formatVersion: 1,
+      if (manifest?.format === 'life-blog-series-package-v1')
+        return single('blogSeries', manifest.series?.title, { series: 1, seriesPosts: Array.isArray(manifest.posts) ? manifest.posts.length : 0 });
+      if (manifest?.format === 'haedo.naver.capture.v1') return single('naverCaptures', manifest.bundle?.sources?.[0]?.title,
+        { captures: 1, photos: Array.isArray(manifest.attachment?.photos) ? manifest.attachment.photos.length : 0 });
+      if (manifest?.format === 'life-preservation-package-v1') return { type: 'preservation', fileName: file.name || '', fingerprint, file, format: manifest.format, formatVersion: 1,
         counts: { posts: Array.isArray(manifest.posts) ? manifest.posts.length : 0, sources: manifest.bundle?.sources?.length || 0 } };
-      throw fault('unsupported_backup', '지원하지 않는 ZIP 형식입니다. Obsidian ZIP은 내보내기·사본 복원 화면에서 복원해 주세요.');
+      throw fault('unsupported_backup', '지원하지 않는 ZIP 형식입니다. Obsidian ZIP은 내보내기·사본 복원, 원본 파트 ZIP은 원본 첨부 화면에서 복원해 주세요.');
     }
-    if (file.size > LIMITS.json) throw fault('backup_too_large', '64 MiB 이하의 JSON 백업을 골라 주세요.');
+    if (file.size > LIMITS.json) throw fault('backup_too_large', '512 MiB 이하의 JSON 백업을 골라 주세요.');
     let text;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(await blobBytes(file)); } catch (_) { throw fault('invalid_backup', 'UTF-8 JSON 백업을 읽지 못했습니다.'); }
     const data = parseJson(text, '백업');
@@ -389,35 +524,42 @@
     if (kind === 'accountDocuments') validateDocuments(data);
     const workspaces = kind === 'accountDocuments'
       ? [...new Set(data.documents.map(doc => doc.workspaceId))].map((workspaceId, i) => ({ index: i + 1, workspaceId, title: '복원한 설정 · ' + (i + 1) }))
-      : [{ index: 1, workspaceId: libraryParts(data)?.bundle?.workspaceId || null, title: libraryTitle(data) || '복원한 ' + KINDS[kind].label }];
+      : [{ index: 1, workspaceId: libraryParts(data)?.bundle?.workspaceId || (kind === 'materialWriting' ? data.workspaceId : null), title: libraryTitle(data) || '복원한 ' + KINDS[kind].label }];
     let counts;
     try { counts = COUNT[kind](data); } catch (_) { throw fault('invalid_backup', KINDS[kind].label + ' 파일의 형식을 확인해 주세요.'); }
-    return { type: 'single', fileName: file.name || '', workspaces,
+    return { type: 'single', fileName: file.name || '', fingerprint: await sha256(encoder.encode(text)), workspaces,
       entries: [{ kind, workspace: kind === 'accountDocuments' ? null : 1, format, formatVersion: versionOf(format, data), counts, data }] };
   }
   async function verifyBundle(manifest, entries, onProgress) {
     const invalid = text => fault('invalid_backup', text);
-    if (!plain(manifest) || manifest.version !== VERSION) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
-    const keys = ['format', 'version', 'createdAt', 'appVersion', 'complete', 'workspaces', 'files', 'missing'];
+    if (!plain(manifest) || ![1, 2].includes(manifest.version)) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
+    const v1 = manifest.version === 1;
+    const keys = ['format', 'version', 'createdAt', 'appVersion', 'complete', 'workspaces', 'files', 'missing', ...(v1 ? [] : ['notIncluded'])];
     if (Object.keys(manifest).some(key => !keys.includes(key)) || keys.some(key => !Object.hasOwn(manifest, key))) throw invalid('전체 백업 목록의 항목을 확인해 주세요.');
     if (!Array.isArray(manifest.workspaces) || !Array.isArray(manifest.files) || !Array.isArray(manifest.missing) || typeof manifest.complete !== 'boolean' ||
-      manifest.complete !== !manifest.missing.length || !Number.isFinite(Date.parse(manifest.createdAt))) throw invalid('전체 백업 목록의 항목을 확인해 주세요.');
+      !Number.isFinite(Date.parse(manifest.createdAt)) || !v1 && !Array.isArray(manifest.notIncluded)) throw invalid('전체 백업 목록의 항목을 확인해 주세요.');
+    // complete = no read failure. Version 1 had no skipped entries.
+    const readFailures = manifest.missing.filter(item => v1 || item?.reason !== 'skipped');
+    if (manifest.missing.some(item => !plain(item) || !KINDS[item.kind] || !v1 && !['read_failed', 'skipped'].includes(item.reason)) || manifest.complete !== !readFailures.length)
+      throw invalid('빠진 항목 목록을 확인해 주세요.');
+    if (!v1 && manifest.notIncluded.some(item => !plain(item) || typeof item.kind !== 'string' || typeof item.label !== 'string' || typeof item.reason !== 'string' || typeof item.whereToSave !== 'string'))
+      throw invalid('담지 않은 종류 목록을 확인해 주세요.');
     const indexes = new Set();
     for (const ws of manifest.workspaces) {
       if (!plain(ws) || !Number.isSafeInteger(ws.index) || ws.index < 1 || indexes.has(ws.index) || typeof ws.title !== 'string' || !ID.test(ws.workspaceId || '')) throw invalid('자료공간 목록을 확인해 주세요.');
       indexes.add(ws.index);
     }
+    const allowed = v1 ? ['library', 'collection', 'photoPosts', 'nineBoards', 'accountDocuments', 'timeline'] : ORDER;
     const expected = new Set(['README.txt', 'manifest.json']);
     for (const file of manifest.files) {
-      if (!plain(file) || !KINDS[file.kind] || !ORDER.includes(file.kind) || typeof file.path !== 'string' || !BUNDLE_PATH.test(file.path) || expected.has(file.path) ||
+      if (!plain(file) || !allowed.includes(file.kind) || typeof file.path !== 'string' || !PATH_KIND[file.kind].test(file.path) || expected.has(file.path) ||
         !Number.isSafeInteger(file.bytes) || file.bytes < 0 || !/^[0-9a-f]{64}$/.test(file.sha256 || '') || typeof file.format !== 'string' ||
-        (file.workspace !== null && !indexes.has(file.workspace)) || (file.workspace === null) !== ['accountDocuments', 'timeline'].includes(file.kind))
+        (file.workspace !== null && !indexes.has(file.workspace)) || (file.workspace === null) !== ACCOUNT_KINDS.includes(file.kind))
         throw invalid('파일 목록의 항목을 확인해 주세요.');
-      const prefix = file.workspace ? 'workspaces/' + pad(file.workspace) + '/' : null;
-      if ((prefix ? !file.path.startsWith(prefix) : file.path.startsWith('workspaces/')) || !PATH_KIND[file.kind].test(file.path))
-        throw invalid('파일 경로와 자료공간·종류가 맞지 않습니다.');
+      if (file.workspace && !file.path.startsWith('workspaces/' + pad(file.workspace) + '/')) throw invalid('파일 경로와 자료공간이 맞지 않습니다.');
       if (file.kind === 'photoPosts' && (!ID.test(file.postId || '') || !['saved', 'draft'].includes(file.status) || typeof file.archived !== 'boolean' ||
         !file.path.endsWith('/' + file.postId + '.zip'))) throw invalid('사진 글 항목을 확인해 주세요.');
+      if (ZIP_FORMATS[file.kind] && !ZIP_FORMATS[file.kind].includes(file.format)) throw invalid(file.path + '의 형식이 목록과 다릅니다.');
       expected.add(file.path);
     }
     if (entries.size !== expected.size || [...entries.keys()].some(name => !expected.has(name)))
@@ -435,7 +577,7 @@
         if ((data.format || 'haedo-backup-v1') !== file.format || detectJson(data) !== file.kind) throw invalid(file.path + '의 형식이 목록과 다릅니다.');
         if (file.kind === 'accountDocuments') validateDocuments(data);
         item.data = data;
-      } else if (!PHOTO_FORMATS.includes(file.format)) throw invalid(file.path + '의 형식이 목록과 다릅니다.');
+      }
       result.push(item); done++;
       await pause();
     }
@@ -455,6 +597,20 @@
       }
     }
     return ORDER.filter(kind => kinds[kind]).map(kind => ({ ...kinds[kind], workspaces: kinds[kind].workspaces.size, formats: [...kinds[kind].formats] }));
+  }
+
+  // ---- Local receipts: which backups this account already restored ----
+  function receipts(storage, localStorage) {
+    const key = 'haedo-full-backup-restored:' + accountKeyOf(storage);
+    const read = () => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; } };
+    return Object.freeze({
+      find(fingerprint) { return fingerprint ? read().filter(row => row.fingerprint === fingerprint).at(-1) || null : null; },
+      record(row) {
+        if (!row.fingerprint) return;
+        const rows = read().concat({ fingerprint: row.fingerprint, createdAt: row.createdAt || null, fileName: row.fileName || '', restoredAt: new Date().toISOString(), copies: row.copies || 0 });
+        try { localStorage.setItem(key, JSON.stringify(rows.slice(-LIMITS.receipts))); } catch (_) { /* The warning is a convenience; restore already committed. */ }
+      }
+    });
   }
 
   // ---- Restore: one new workspace copy per original workspace ----
@@ -503,9 +659,17 @@
     if (entry.data !== undefined) return entry.data;
     return parseJson(await entryText(entry, LIMITS.json), KINDS[entry.kind].label);
   }
+  // A reference survives only when its exact target came along into this copy.
+  function keepReference(reference, target) {
+    const value = reference?.value;
+    if (!value || value.workspaceId !== target.workspaceId) return false;
+    if (reference.kind === 'source') return target.library;
+    if (reference.kind === 'post') return [...target.posts.values()].includes(value.postId);
+    return false;
+  }
   // `select(kind, workspaceIndex, entry)` decides what to restore; `targets`
   // carries copies made by an earlier run so a retry fills the same new copy.
-  async function restore(opened, { storage, kinds, select = null, targets = new Map(), makeId = () => dep('Core').id(),
+  async function restore(opened, { storage, kinds, select = null, targets = new Map(), makeId = () => dep('Core').id(), originals = null,
     verifyPhoto = defaultVerifyPhoto(), onProgress = () => {}, isCurrent = () => true } = {}) {
     if (!storage?.isAccountScoped || !storage.account) throw fault('auth_scope_required', '로그인한 계정에서 복원해 주세요.');
     if (opened.type !== 'bundle' && opened.type !== 'single') throw fault('unsupported_backup', '이 화면에서 복원할 수 없는 파일입니다.');
@@ -514,20 +678,21 @@
     const docsEntry = opened.entries.find(entry => entry.kind === 'accountDocuments');
     const documents = docsEntry ? (await entryData(docsEntry)).documents : [];
     const previousActive = await storage.getActive().catch(() => null);
-    const report = { workspaces: [], items: [] };
+    const report = { workspaces: [], items: [], extraCopies: [] };
     const record = (kind, ws, status, details = {}) => { const item = { kind, label: KINDS[kind].label, workspace: ws.index, workspaceTitle: ws.title, status, ...details }; report.items.push(item); return item; };
     const work = opened.workspaces.map(ws => {
       const own = opened.entries.filter(entry => entry.workspace === ws.index && wanted(entry.kind, ws.index, entry));
       const docs = wanted('accountDocuments', ws.index, null) ? documents.filter(doc => doc.workspaceId === ws.workspaceId && doc.prefix !== 'post-evidence') : [];
       return { ws, own, docs };
     }).filter(item => item.own.length || item.docs.length);
-    const total = work.reduce((sum, item) => sum + item.own.length + (item.docs.length ? 1 : 0), 0);
+    const accountParts = opened.entries.filter(entry => entry.kind === 'originals' && wanted('originals', null, entry));
+    const total = work.reduce((sum, item) => sum + item.own.length + (item.docs.length ? 1 : 0), 0) + accountParts.length;
     let done = 0;
     const step = label => onProgress({ phase: 'restore', done: done++, total, label });
     try {
       for (const { ws, own, docs } of work) {
         guard();
-        const target = targets.get(ws.index) || { workspaceId: null, title: ws.title, map: new Map(), posts: new Map(), library: false };
+        const target = targets.get(ws.index) || { workspaceId: null, title: ws.title, map: new Map(), posts: new Map(), library: false, appliedDocs: new Set() };
         targets.set(ws.index, target);
         const summary = { index: ws.index, title: ws.title, targetId: target.workspaceId, targetTitle: target.title };
         report.workspaces.push(summary);
@@ -543,6 +708,7 @@
             if (ws.workspaceId) target.map.set(ws.workspaceId, target.workspaceId);
             record('library', ws, 'restored', { targetId: target.workspaceId, counts: COUNT.library(data) });
           } catch (error) {
+            if (error?.code === 'restore_cancelled') throw error;
             record('library', ws, 'failed', { message: message(error) });
             // Without the library, references of the other parts would point nowhere.
             for (const entry of own.filter(item => item !== library)) record(entry.kind, ws, 'skipped', { postId: entry.postId, title: entry.title,
@@ -552,7 +718,8 @@
             continue;
           }
         }
-        if (!target.workspaceId) {
+        const nonCopy = own.every(entry => entry.kind === 'naverCaptures') && !docs.length;
+        if (!target.workspaceId && !nonCopy) {
           const created = await storage.createWorkspace(ws.title);
           target.workspaceId = created.workspaceId; target.title = created.title;
           if (ws.workspaceId) target.map.set(ws.workspaceId, target.workspaceId);
@@ -566,7 +733,7 @@
             const next = C.appendBackup(state, data, makeId);
             await storage.saveCollection(id, next, state.revision);
             record('collection', ws, 'restored', { targetId: id, counts: COUNT.collection(data) });
-          } catch (error) { record('collection', ws, 'failed', { message: message(error) }); }
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('collection', ws, 'failed', { message: message(error) }); }
         }
         for (const entry of own.filter(item => item.kind === 'photoPosts')) {
           step(KINDS.photoPosts.label); guard();
@@ -587,36 +754,92 @@
             if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); }
             record('photoPosts', ws, 'restored', { targetId: id, postId: entry.postId, newPostId: saved.id, title: saved.title, postStatus: saved.status,
               counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
-          } catch (error) { record('photoPosts', ws, 'failed', { postId: entry.postId, title: entry.title, message: message(error) }); }
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('photoPosts', ws, 'failed', { postId: entry.postId, title: entry.title, message: message(error) }); }
         }
         for (const entry of own.filter(item => item.kind === 'nineBoards')) {
           step(KINDS.nineBoards.label); guard();
           try {
-            const N = dep('NineBoard'), incoming = N.readBackup(await entryData(entry));
-            // Exact source versions point to their copies in this new workspace when they came along.
-            const added = N.copies(remap(incoming, target.map), makeId), state = await storage.readNineBoard(id);
+            const N = dep('NineBoard'), incoming = remap(N.readBackup(await entryData(entry)), target.map);
+            // Exact source versions point to their copies when they came along; otherwise the reference is dropped.
+            let dropped = 0;
+            for (const board of incoming) for (const area of board.areas) for (const item of area.items) {
+              if (Object.hasOwn(item, 'reference') && !keepReference(item.reference, target)) { delete item.reference; dropped++; }
+            }
+            const added = N.copies(incoming, makeId), state = await storage.readNineBoard(id);
             const next = { ...state, format: N.hasReferences(state.boards.concat(added)) ? 'life-nine-board-v2' : state.format, boards: state.boards.concat(added) };
             N.validate(next);
             if (added.length) await storage.saveNineBoardCopy(id, next, next.revision);
-            record('nineBoards', ws, 'restored', { targetId: id, counts: COUNT.nineBoards({ boards: added }) });
-          } catch (error) { record('nineBoards', ws, 'failed', { message: message(error) }); }
+            record('nineBoards', ws, 'restored', { targetId: id, counts: COUNT.nineBoards({ boards: added }),
+              ...(dropped ? { message: '함께 복원하지 않은 원문·글을 가리키던 근거 ' + dropped + '개는 연결하지 않았습니다. 선택 이유와 제목은 남겼습니다.' } : {}) });
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('nineBoards', ws, 'failed', { message: message(error) }); }
+        }
+        for (const entry of own.filter(item => item.kind === 'blogSeries')) {
+          step(KINDS.blogSeries.label); guard();
+          try {
+            const candidate = await dep('BlogSeriesPackage').read(entry.blob);
+            await storage.installBlogSeriesCopy(id, candidate);
+            record('blogSeries', ws, 'restored', { targetId: id, title: candidate.series.title, counts: entry.counts });
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('blogSeries', ws, 'failed', { title: entry.title, message: message(error) }); }
+        }
+        for (const entry of own.filter(item => item.kind === 'materialWriting')) {
+          step(KINDS.materialWriting.label); guard();
+          try {
+            const M = dep('MaterialWriting'), data = M.validate(clone(await entryData(entry)));
+            if (!data.plans.length) { record('materialWriting', ws, 'restored', { targetId: id, counts: { plans: 0 } }); continue; }
+            if (!target.library) { record('materialWriting', ws, 'skipped', { message: '준비는 정확한 원문 버전을 가리키므로 자료·구성을 함께 복원할 때만 복원합니다.' }); continue; }
+            // Exact versions move to their copies; each plan gets a new identity and no post link.
+            const linked = data.plans.filter(plan => plan.output !== null).length;
+            const plans = remap(data.plans, target.map).map(plan => ({ ...plan, id: makeId(), output: null }));
+            const state = await storage.readMaterialWriting(id), next = { ...state, plans: state.plans.concat(plans) };
+            M.validate(next);
+            await storage.saveMaterialWriting(id, next, state.revision);
+            record('materialWriting', ws, 'restored', { targetId: id, counts: { plans: plans.length },
+              ...(linked ? { message: '글과 연결돼 있던 준비 ' + linked + '개는 연결 없이 복원했습니다. 글은 사진 글로 따로 복원됩니다.' } : {}) });
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('materialWriting', ws, 'failed', { message: message(error) }); }
+        }
+        for (const entry of own.filter(item => item.kind === 'naverCaptures')) {
+          step(KINDS.naverCaptures.label); guard();
+          try {
+            // The existing capture restore: each capture becomes its own new workspace with its source version and photos.
+            const Media = dep('NaverMedia'), copy = await Media.copy(await Media.read(entry.blob));
+            const installed = await storage.installNaverCaptureCopy(copy, { isCurrent });
+            report.extraCopies.push({ workspaceId: installed.bundle.workspaceId, title: installed.bundle.title });
+            record('naverCaptures', ws, 'restored', { targetId: installed.bundle.workspaceId, title: installed.bundle.title, counts: entry.counts,
+              message: '원문과 사진을 새 자료공간 "' + installed.bundle.title + '"으로 복원했습니다.' });
+          } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('naverCaptures', ws, 'failed', { title: entry.title, message: message(error) }); }
         }
         if (docs.length) {
           step(KINDS.accountDocuments.label); guard();
           let applied = 0, skipped = 0, rejected = 0; const notes = new Set();
           for (const doc of docs) {
+            const docId = doc.prefix + ':' + (doc.postId || '');
+            if (target.appliedDocs.has(docId)) continue; // Applied by an earlier run of this restore.
             if (NOT_RESTORED[doc.prefix]) { skipped++; notes.add(NOT_RESTORED[doc.prefix]); continue; }
             try {
               const result = await storage.applyAccountDoc(docKey(storage, doc.prefix, id), { value: remap(doc.value, target.map), expectedHash: null });
-              if (result.status === 'applied') applied++;
+              if (result.status === 'applied') { applied++; target.appliedDocs.add(docId); }
               else if (result.status === 'changed') { skipped++; notes.add('새 사본에 이미 있던 문서는 덮어쓰지 않았습니다.'); }
               else { rejected++; notes.add(result.error?.message || '형식을 확인하지 못한 문서가 있습니다.'); }
             } catch (error) { rejected++; notes.add(message(error)); }
           }
-          record('accountDocuments', ws, rejected && !applied ? 'failed' : 'restored', { targetId: id, counts: { documents: applied }, skipped, rejected,
-            ...(notes.size ? { message: [...notes].join(' ') } : {}) });
+          // A partly rejected set stays retryable: only the rejected ones run again.
+          record('accountDocuments', ws, rejected ? 'failed' : 'restored', { targetId: id, counts: { documents: applied }, skipped, rejected,
+            ...(notes.size ? { message: (rejected ? '복원하지 못한 문서 ' + rejected + '개. ' : '') + [...notes].join(' ') } : {}) });
         }
       }
+      for (const entry of accountParts) {
+        step(KINDS.originals.label); guard();
+        const account = { index: 0, title: '계정' };
+        try {
+          if (!originals) throw fault('originals_unavailable', '원본 첨부 보관함을 열 수 없어 복원하지 않았습니다.');
+          const prepared = await originals.prepare(entry.blob);
+          await originals.install(prepared.ticket);
+          record('originals', account, 'restored', { title: entry.title, partId: entry.partId, counts: entry.counts });
+        } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('originals', account, 'failed', { title: entry.title, partId: entry.partId, message: message(error) }); }
+      }
+    } catch (error) {
+      // Cancelled: what was already created stays; the caller lists it.
+      error.report = report; throw error;
     } finally {
       // Installing a copy marks it active; keep the workspace the person was using.
       if (previousActive) await storage.setActive(previousActive).catch(() => {});
@@ -631,6 +854,6 @@
       return versions.length ? 'haedo-v' + Math.max(...versions) : null;
     } catch (_) { return null; }
   }
-  return Object.freeze({ FORMAT, VERSION, DOCS_FORMAT, LIMITS, KINDS, ORDER, plan, inventory, collect, build, open, summarize, restore,
-    timelineSnapshot, countText, appVersion, zipEntries, docKey });
+  return Object.freeze({ FORMAT, VERSION, DOCS_FORMAT, LIMITS, KINDS, ORDER, NOT_INCLUDED, plan, inventory, writer, open, summarize, restore, receipts,
+    timelineSnapshot, countText, appVersion, zipEntries, docKey, sha256 });
 });
