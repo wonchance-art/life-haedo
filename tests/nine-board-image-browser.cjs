@@ -1,6 +1,6 @@
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{createHash}=require('node:crypto'),Z=require('../vendor/fflate/fflate.js');
 const {playwright,ready,makeContext}=require('./unified-home-browser.cjs');
 const {FakeCloud,accounts,base,cloud}=require('./life-sync-browser.cjs');
@@ -9,7 +9,7 @@ async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});report.browser=browser.version();
  const server=new FakeCloud(),publicWrites=[];
  const context=await makeContext(browser,server,'nine-board-image',accounts.a,{viewport:{width:1440,height:1000}});
- context.on('request',request=>{const u=new URL(request.url());if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(u.pathname); else if(isLegacyLibraryCapabilityRead(request,{cloud,server}))report.libraryCapabilityReads.push({owner:server.libraryOwner(request),method:request.method(),path:u.pathname,parameterCount:0});else if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
+ context.on('request',request=>{const u=new URL(request.url());if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if(isLegacyLibraryCapabilityRead(request,{cloud,server}))report.libraryCapabilityReads.push({owner:server.libraryOwner(request),method:request.method(),path:u.pathname,parameterCount:0});else if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.getByRole('button',{name:'9칸 구성',exact:true}).click();await page.locator('.nb-status').waitFor();};
