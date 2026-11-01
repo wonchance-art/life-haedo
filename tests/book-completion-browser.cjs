@@ -7,7 +7,7 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW_MODULE_PATH = process.env.PLAYWRIGHT_MODULE;
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, password, cloud, base, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
 const { current, save, details, download, openBook, createBook } = require('./book-projects-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
@@ -17,7 +17,7 @@ const fixturePath = path.resolve('docs/design-review/evidence/book-edition/reade
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Book completion::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
 async function restore(page) {
   await page.goto(base + '/index.html'); await ready(page); await settle(page); const original = await current(page);
-  await nav(page, 'manage'); await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click();
+  await openBackupCenter(page); await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click();
   await page.getByLabel('통합 구성 JSON으로 새 사본 복원', { exact: true }).setInputFiles(fixturePath);
   await page.getByRole('heading', { name: '복원 전 확인', exact: true }).waitFor();
   assert.match(await page.locator('#wbRestoreBookSummary').textContent(), /책 1권 · 활성 장 4개 · 보관한 책 0권 · 보관한 장 0개 · 개정본 1개/);

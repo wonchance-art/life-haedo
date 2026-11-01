@@ -9,7 +9,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, password, cloud, base, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
 const { current, save, download } = require('./book-projects-browser.cjs');
 const { chapterFrom, openLibrary } = require('./book-completion-browser.cjs');
@@ -63,7 +63,7 @@ async function instrument(context) {
 async function prepare(page, data) {
   await page.goto(base + '/index.html'); await ready(page); await settle(page);
   const previous = await current(page);
-  await nav(page, 'manage'); await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click();
+  await openBackupCenter(page); await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click();
   await page.locator('#wbRestoreFile').setInputFiles({ name: '익명-독자용-책-백업.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
   await page.getByRole('heading', { name: '복원 전 확인', exact: true }).waitFor();
   return previous;

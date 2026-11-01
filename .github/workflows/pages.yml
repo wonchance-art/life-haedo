@@ -405,6 +405,9 @@ jobs:
         run: |
           node tests/management-clarity-browser.cjs
           node tests/life-management-browser.cjs
+      - name: Verify one-file backup of every workspace and new-copy restore
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/full-backup-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -606,6 +609,7 @@ jobs:
             .local/subview-navigation/
             .local/feature-flow/
             .local/management-clarity/
+            .local/full-backup/
             .local/life-management/
             .local/quality-audit/after/
             .local/composition-sync/

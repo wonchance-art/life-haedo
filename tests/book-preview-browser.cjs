@@ -5,7 +5,7 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { FakeCloud, accounts, cloud, base, password, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, password, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const { abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { go, current, save, details, download, openBook, createBook, createChapter, switchAccount, oldBody, latestBody, legacyNote, manuscript } = require('./book-projects-browser.cjs');
@@ -94,7 +94,7 @@ async function main() {
       await authenticate(page, accounts.a); await go(page); await openBook(page, f.books[0].id); assert.equal(await page.locator('#wbChapterNote').inputValue(), revised); await openPreview(page); assert((await chapter(page, f.books[0].chapters[0].id).textContent()).includes(revised));
     }, { saveGate: true });
     await check('reading settings and manuscript content stay isolated between workspaces and accounts', 820, async ({ page, server, device }) => {
-      const f = await fixture(page); await openPreview(page); await openPreviewOptions(page); await page.locator('#wbBookPreviewIncludeSources').check(); await openManagement(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('미리보기를 따로 확인하는 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); const other = (await current(page)).bundle.workspaceId; assert.notEqual(other, f.workspaceId); await go(page);
+      const f = await fixture(page); await openPreview(page); await openPreviewOptions(page); await page.locator('#wbBookPreviewIncludeSources').check(); await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('미리보기를 따로 확인하는 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); const other = (await current(page)).bundle.workspaceId; assert.notEqual(other, f.workspaceId); await go(page);
       await createBook(page, '다른 공간의 빈 책'); await openPreview(page); assert.match(await page.locator('#wbBookPreview').textContent(), /아직 구성한 장이 없습니다/); assert.equal(await page.locator('#wbBookPreviewIncludeSources').isChecked(), false); assert(!(await page.locator('#wbBookPreview').textContent()).includes(longNote)); await capture(page, report, 'empty', 820);
       await page.locator('#wbBookPreviewBack').click(); await createChapter(page, '다른 공간의 첫 장'); await page.locator('#wbChapterNote').fill('다른 공간의 독립 원고.'); await save(page); await openPreview(page); assert((await page.locator('#wbBookPreview').textContent()).includes('다른 공간의 독립 원고.'));
       await openManagement(page); await page.locator('#lifeWorkspace').selectOption(f.workspaceId); await settle(page); await go(page); await openBook(page, f.books[0].id); await openPreview(page); assert((await page.locator('#wbBookPreview').textContent()).includes(longNote)); assert(!(await page.locator('#wbBookPreview').textContent()).includes('다른 공간의 독립 원고.'));

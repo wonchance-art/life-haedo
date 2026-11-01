@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
-const { FakeCloud, platformContext, accounts, cloud, base, openManagement, openAccount } = require('./life-sync-browser.cjs');
+const { FakeCloud, platformContext, accounts, cloud, base, openManagement, openAccount, openBackupCenter } = require('./life-sync-browser.cjs');
 function playwright() {
   for (const name of [process.env.PW_MODULE_PATH, 'playwright', 'playwright-core', '/opt/codex/cua_node/lib/node_modules/playwright'].filter(Boolean)) {
     try { return require(name); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
@@ -199,7 +199,7 @@ async function main() {
       await page.locator('#lifeSearchReturn').click(); await settle(page);
       assert.equal(await page.locator('#lifeSearch').inputValue(), '출처를 기억할');
       await page.waitForFunction(value => document.activeElement?.dataset.focusKey === value, key);
-      await openManagement(page); await button(page, '내보내기·사본 복원');
+      await openBackupCenter(page); await button(page, '내보내기·사본 복원');
       await page.locator('#lifeTransferScope summary').focus(); await page.keyboard.press('Enter');
       const scope = await page.locator('#lifeTransferScope').innerText();
       assert.match(scope, /연표·목표·습관.*포함하지 않습니다/);

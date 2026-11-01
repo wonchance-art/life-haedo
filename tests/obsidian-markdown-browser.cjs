@@ -10,7 +10,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const Module = require('node:module');
-const { FakeCloud, accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext } = require('./unified-home-browser.cjs');
 const output = path.resolve(process.env.OBSIDIAN_MARKDOWN_OUTPUT || '.local/obsidian-markdown');
 const title = '익명 속성 분리 검수 자료';
@@ -66,7 +66,7 @@ async function openSource(page, sourceId) {
 async function sourceOptions(page) { const toggle = page.locator('#lifeSourceInfoToggle'); if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click(); await page.locator('#lifeSourceDetails').waitFor({ state: 'visible' }); }
 async function beginEdit(page) { await sourceOptions(page); await click(page, '#lifeSourceEdit'); await page.locator('#lifeSourceEditText').waitFor(); }
 async function backup(page) {
-  await openManagement(page); await byName(page, '내보내기·사본 복원'); const pending = page.waitForEvent('download'); await byName(page, 'JSON 백업'); const download = await pending, chunks = [];
+  await openBackupCenter(page); await byName(page, '내보내기·사본 복원'); const pending = page.waitForEvent('download'); await byName(page, 'JSON 백업'); const download = await pending, chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }

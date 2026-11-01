@@ -7,7 +7,7 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4187';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { FakeCloud, accounts, base, cloud, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, base, cloud, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.SEARCH_PHASE || 'after';
@@ -167,7 +167,7 @@ async function scopes(page, server, device) {
   await measureInput(page, '');
   await page.locator('#lifeSelectionToggle').click(); await page.locator('.life-source-select').first().click(); await page.locator('#lifeSearchMore').click();
   await filters(page); await page.locator('#lifeSearchSpacing').check();
-  await openManagement(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('익명 빈 작업공간');
+  await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('익명 빈 작업공간');
   await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); await page.locator('#lifeSearch').waitFor();
   assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original);
   assert.equal(await cards(page).count(), 0); assert.equal(await page.locator('#lifeSearch').inputValue(), ''); assert.equal(await page.locator('#lifeSearchSpacing').isChecked(), false); assert.equal(await page.locator('#lifeSelectionBar').isHidden(), true);

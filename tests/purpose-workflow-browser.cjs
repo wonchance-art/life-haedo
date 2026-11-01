@@ -165,7 +165,12 @@ async function main() {
       await nav(page, 'news'); await mode(page, 'external-discovery'); await page.locator('#discoveryReview').waitFor(); await page.locator('#discoveryNewsSettings').click(); await page.locator('#discoveryNewsSettingsPanel').waitFor({ state: 'visible' }); await capture(page, 'news-settings', size);
       await nav(page, 'tools'); await mode(page, 'tools'); await capture(page, 'planning', size);
       await nav(page, 'manage'); await mode(page, 'manage'); await capture(page, 'settings', size);
-      const backup = page.locator('button[aria-label="자료·구성 백업"]'); await reveal(backup); await capture(page, 'settings-files', size);
+      if (baseline) { const backup = page.locator('button[aria-label="자료·구성 백업"]'); await reveal(backup); await capture(page, 'settings-files', size); }
+      else {
+        // 2026-11-01: every file format sits on 설정 → 백업·복원.
+        await page.locator('#lifeBackupOpen').click(); await mode(page, 'backup'); await page.locator('#fbInventory [data-kind]').first().waitFor();
+        await reveal(page.locator('button[aria-label="자료·구성 백업"]')); await capture(page, 'settings-files', size);
+      }
       assert.deepEqual(await exact(page), before, 'Navigation leaves source versions, saved composition and folders exact');
       if (!baseline) { assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="tools"]').getAttribute('aria-label'), '계획'); assert.equal(report.visual.find(row => row.scene === 'records' && row.width === size.width).auxiliaryRowVisible, false); }
     }, size);
@@ -186,13 +191,14 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '학습'); assert.deepEqual(await exact(page), before);
     });
 
-    if (!baseline) await check('six file destinations open their actual controls and return to settings', async ({ page, drainStatic }) => {
+    if (!baseline) await check('six file destinations open their actual controls and return to 백업·복원', async ({ page, drainStatic }) => {
       const before = await exact(page); await nav(page, 'manage'); await mode(page, 'manage');
+      await page.locator('#lifeBackupOpen').click(); await mode(page, 'backup');
       const cases = [['자료·구성 백업', 'workbench-backup', '#wbBackupDownload'], ['내보내기·사본 복원', 'transfer', 'button[aria-label="JSON 백업"]'], ['컬렉션 백업·복구', 'collection', '.cl-files[open]'], ['보관 범위·근거 파일', 'preservation', '#lifePreservation'], ['연간 계획 파일', 'annual-plan', '#apSettings[open]']];
       for (const [label, destination, actualControl] of cases) {
-        const button = page.locator('button[aria-label="' + label + '"]'); await reveal(button); await button.click(); await mode(page, destination); await page.locator(actualControl).waitFor({ state: 'visible' }); await back(page, 'manage'); await focused(page, label);
+        const button = page.locator('button[aria-label="' + label + '"]'); await reveal(button); await button.click(); await mode(page, destination); await page.locator(actualControl).waitFor({ state: 'visible' }); await back(page, 'backup'); await focused(page, label);
       }
-      const platform = page.locator('a[href="workspace.html?section=manage#backupAll"]'); await reveal(platform); await drainStatic(); await platform.click(); await page.waitForURL(url => url.pathname.endsWith('/workspace.html') && url.hash === '#backupAll'); await page.locator('#backupAll').waitFor({ state: 'visible' }); await drainStatic(); await page.goBack(); await ready(page); await mode(page, 'manage');
+      const platform = page.locator('a[href="workspace.html?section=manage#backupAll"]'); await reveal(platform); await drainStatic(); await platform.click(); await page.waitForURL(url => url.pathname.endsWith('/workspace.html') && url.hash === '#backupAll'); await page.locator('#backupAll').waitFor({ state: 'visible' }); await drainStatic(); await page.goBack(); await ready(page); await mode(page, 'backup');
       assert.deepEqual(await exact(page), before);
       report.observations.push({ name: 'six-file-destinations', controlsOpened: cases.map(row => row[2]).concat('#backupAll'), browserBackFromExternalPage: true });
     });

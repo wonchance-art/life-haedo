@@ -530,3 +530,24 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
 .life-library-metadata { min-width:0; }
 .life-library-metadata .life-note { white-space:pre-wrap; overflow-wrap:anywhere; }
 .life-library-metadata h5,.life-library-metadata h6 { margin-block:20px 8px; }
+/* 설정 → 백업·복원: per-format lists, progress and results. */
+.fb-section > h2,.fb-formats > h2 { margin: 0 0 6px; font-size: 18px; }
+.fb-kinds { list-style: none; margin: 14px 0; padding: 0; border-top: 1px solid var(--line); }
+.fb-kind { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; word-break: keep-all; }
+.fb-kind-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fb-kind strong { font-size: 16px; }
+.fb-kind > .life-help { margin: 6px 0 0; }
+.fb-kind > .life-actions { margin-top: 8px; }
+.fb-failed strong { color: var(--color-error); }
+.fb-warning { margin: 8px 0; color: var(--color-error); overflow-wrap: anywhere; }
+.fb-choices { min-width: 0; margin: 14px 0; padding: 0; border: 0; border-top: 1px solid var(--line); }
+.fb-choices > legend { padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 550; }
+.fb-check { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; cursor: pointer; }
+.fb-check > input { flex: none; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--color-primary); }
+.fb-progress { display: block; width: 100%; height: 4px; margin: 12px 0 4px; accent-color: var(--color-primary); border: 0; border-radius: 2px; overflow: hidden; background: var(--line); }
+.fb-progress::-webkit-progress-bar { background: var(--line); }
+.fb-progress::-webkit-progress-value { background: var(--color-primary); }
+.fb-progress::-moz-progress-bar { background: var(--color-primary); }
+.fb-result > h3,.fb-preview > h3 { margin: 18px 0 4px; font-size: 17px; overflow-wrap: anywhere; }
+.fb-result > .life-actions,.fb-preview > .life-actions { margin-top: 12px; }
+.fb-formats { margin-top: 26px; }

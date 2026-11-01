@@ -54,6 +54,7 @@ async function main() {
       await page.getByRole('button',{name:'현재 자료공간',exact:true}).focus();await page.keyboard.press('Enter');
       assert.equal(await page.locator('#lifeWorkspace').inputValue(),before.bundle.workspaceId);
       await button(page,'자료공간 닫기');
+      await button(page,'백업·복원');await page.locator('#lifeMain[data-mode="backup"]').waitFor();
       const integrated=page.getByRole('button',{name:'자료·구성 백업',exact:true});
       if(width===1440){await integrated.focus();await page.keyboard.press('Enter');}else await integrated.tap();
       await page.locator('#wbBackupScope summary').click();
