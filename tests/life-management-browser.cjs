@@ -26,7 +26,7 @@ async function waitSyncState(page, predicate, { storage = false, timeout = 15000
   throw new Error('Timed out waiting for sync state; last status: ' + (latest?.status || 'unbound'));
 }
 async function transfer(page) { await openManagement(page); await button(page, '내보내기·사본 복원'); }
-async function syncing(page) { await openManagement(page); await button(page, '기기 간 동기화'); }
+async function syncing(page) { await openManagement(page); await button(page, '동기화'); }
 async function choose(page, backup, name = backupName) {
   await page.locator('#lifeRestoreFile').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(typeof backup === 'string' ? backup : JSON.stringify(backup)) }); await settle(page);
 }

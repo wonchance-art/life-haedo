@@ -5,6 +5,7 @@
 'use strict';
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -157,7 +158,7 @@ async function main() {
     const fake = new FakeCloud(), context = await makeContext(browser, fake, 'local-finder-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } }); active = context;
     context.on('request', request => {
       const url = new URL(request.url());
-      if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isAccountDocumentSync(request, { cloud, server: fake })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
           url.pathname !== '/rest/v1/rpc/life_blog_list') report.remoteWrites++;
     });

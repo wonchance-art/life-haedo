@@ -223,6 +223,9 @@
             notify({ type: 'material_writing_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
           if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
+          if (data?.sender !== sender && data?.type === 'account_doc_applied' && typeof data.workspaceId === 'string' && parseAccountDocKey(data.key)?.workspaceId === data.workspaceId) {
+            notify({ type: 'account_doc_applied', key: data.key, workspaceId: data.workspaceId });
+          }
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -631,7 +634,7 @@
         await meta.put({ key: readingPositionKey(workspaceId), value: saved });
         return { status: 'stored', state: readingPositionState(saved, bundle) };
       });
-      if (result.status === 'stored') readingPositionChanged(workspaceId, result.state.revision);
+      if (result.status === 'stored') { readingPositionChanged(workspaceId, result.state.revision); accountDocChanged(readingPositionKey(workspaceId)); }
       return result;
     }
     async function saveReadingPosition(workspaceId, input, baseRevision) {
@@ -761,6 +764,7 @@
         return { status: 'stored', profile: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(annualPlanKey(workspaceId));
         const event = { type: 'annual_plan_changed', workspaceId, revision: result.profile.revision };
         notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
@@ -815,6 +819,7 @@
         return { status: 'stored', profile: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(interestProfileKey(workspaceId));
         const event = { type: 'interest_profile_changed', workspaceId, revision: result.profile.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
@@ -853,6 +858,7 @@
         return { status: 'stored', profile: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(discoveryProfileKey(workspaceId));
         const event = { type: 'discovery_profile_changed', workspaceId, revision: result.profile.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
@@ -895,6 +901,7 @@
         return { status: 'stored', settings: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(discoverySettingsKey(workspaceId));
         const event = { type: 'discovery_settings_changed', workspaceId, revision: result.settings.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
@@ -935,6 +942,7 @@
         return { status: 'stored', settings: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(discoveryLanguageSettingsKey(workspaceId));
         const event = { type: 'discovery_language_settings_changed', workspaceId, revision: result.settings.revision };
         notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
@@ -975,6 +983,7 @@
         return { status: 'stored', profile: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(discoveryActionsKey(workspaceId));
         const event = { type: 'discovery_actions_changed', workspaceId, revision: result.profile.revision };
         // Only this storage facade observes its own committed action write.
         // Other facades/tabs receive the minimal event and must revalidate.
@@ -1014,6 +1023,7 @@
         return { status: 'stored', profile: clone(value) };
       });
       if (result.status === 'stored') {
+        accountDocChanged(discoveryReadingKey(workspaceId));
         const event = { type: 'discovery_reading_changed', workspaceId, revision: result.profile.revision };
         notify({ ...event, local: true });
         try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
@@ -1132,6 +1142,7 @@
         if (previous.revision !== baseRevision) throw fault('public_cover_conflict', '다른 탭에서 표지가 바뀌었습니다. 내 입력은 새 사본으로 보관해 주세요.');
         value.revision++; publicCover().validateState(value); await meta.put({ key: `public-cover:${workspaceId}`, value }); return clone(value);
       });
+      accountDocChanged(`public-cover:${workspaceId}`);
       const event = { type: 'public_cover_changed', workspaceId, revision: saved.revision }; notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed draft remains authoritative. */ }
       return saved;
@@ -1458,7 +1469,7 @@
         if (previous.revision !== baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 원문 근거가 바뀌었습니다.');
         assertNewEvidenceActive(bundle, refs, previous.refs || []);
         const value = { revision: baseRevision + 1, refs }; await meta.put({ key, value }); return clone(value);
-      });
+      }).then(saved => { accountDocChanged(`post-evidence:${workspaceId}:${postId}`); return saved; });
     }
     function savePhotoPostWithEvidence(workspaceId, input, baseRevision, refs, evidenceBaseRevision) {
       return savePhotoPost(workspaceId, input, baseRevision, { refs, baseRevision: evidenceBaseRevision });
@@ -1983,6 +1994,61 @@
       changed(installed.workspaceId, installed.bundle.revision); materialWritingChanged(installed.workspaceId, installed.planRevision);
       return installed;
     }
+    // Automatic receive of a preparation that another device of the same account created
+    // in a workspace this device already holds: the plan keeps its own ID in the same
+    // workspace (no remapping, no new workspace). Exact source versions are appended
+    // only when absent and must be byte-identical when present; existing local source
+    // metadata and every other plan stay untouched.
+    async function adoptMaterialContinuity(inputRow, options = {}) {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에 준비를 받아 주세요.');
+      onlyFields(options, ['post', 'blogRow'], 'invalid_material_continuity');
+      const row = materialRemoteRow(inputRow), settings = clone(options), model = materialContinuity();
+      await model.verify(row.data); scopeGuard();
+      const workspaceId = row.data.bundle.workspaceId, planId = row.data.plan.id;
+      let original = settings.post || null;
+      if (original) {
+        photoPost().validate(original);
+        if (row.data.output?.state !== 'saved' || original.id !== row.data.output.postId || original.status !== 'saved' || original.replaces !== null) throw fault('invalid_material_continuity', '서버 준비와 완성 글의 연결이 다릅니다.');
+        const blog = root.HaedoLife?.Blog || require('./blog.js'); original = await blog.hydrate(blog.pack(original), new Map(original.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
+        if (settings.blogRow && (settings.blogRow.id !== row.data.output.postId || settings.blogRow.revision !== row.data.output.revision || typeof settings.blogRow.workspace_id !== 'string' || stablePayload(settings.blogRow.data) !== stablePayload(blog.pack(original)))) throw fault('invalid_material_continuity', '서버 완성 글의 버전·본문·연결이 다릅니다.');
+      }
+      if (row.data.output?.state === 'saved' && !original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundles = tx.objectStore('bundles');
+        if ((await meta.get(materialInstallKey(row.id)))?.value) throw fault('material_continuity_exists', '이미 받은 준비입니다.');
+        const bundle = clone(await checkedBundle(bundles, workspaceId, meta));
+        const wrapper = clone(await materialWritingValue(meta, workspaceId));
+        if (wrapper.plans.some(plan => plan.id === planId)) throw fault('material_continuity_exists', '같은 준비가 이미 있습니다. 양쪽 내용을 비교합니다.');
+        if (await meta.get(materialContinuityKey(workspaceId, planId))) throw fault('material_continuity_exists', '같은 준비 연결이 이미 있습니다.');
+        const mapped = materialRemapped(row.data, workspaceId, null, true);
+        immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        let appended = false;
+        for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
+        if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await bundles.put(bundle); }
+        const plan = mapped.data.plan, output = mapped.data.output;
+        // The ordinary blog sync may already hold the same server post. Reuse that exact
+        // revision instead of installing a second local copy bound to the same post.
+        const held = output?.state === 'saved' ? (await blogCopies(meta, workspaceId, output.postId)) : [];
+        if (held.length) {
+          const copy = held.find(value => value.remoteRevision === output.revision && value.status === 'received');
+          if (!copy) throw fault('material_output_pending', '완성 글의 같은 판을 먼저 받아 주세요. 준비는 다음 동기화에서 받습니다.');
+          const refs = checkedEvidence(output.refs, workspaceId), key = `post-evidence:${workspaceId}:${copy.localPostId}`, evidence = (await meta.get(key))?.value;
+          if (evidence && stablePayload(evidence.refs) !== stablePayload(refs)) throw fault('material_output_changed', '완성 글의 인용 근거가 다릅니다. 기존 글을 바꾸지 않았습니다.');
+          if (!evidence) await meta.put({ key, value: { revision: 1, refs: clone(refs) } });
+          plan.output = { postId: copy.localPostId };
+        } else plan.output = await installMaterialPost(tx, workspaceId, mapped, original, workspaceId, null, false, settings.blogRow || null);
+        wrapper.plans.push(plan); wrapper.revision++; materialWriting().validate(wrapper);
+        await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper });
+        if (plan.output) await meta.put({ key: materialOutputKey(workspaceId, plan.id), value: clone(plan.output) });
+        const state = freshMaterialState(row.id, row, null); validateMaterialContinuityState(state, workspaceId);
+        await meta.put({ key: materialContinuityKey(workspaceId, plan.id), value: state });
+        await meta.put({ key: materialInstallKey(row.id), value: { workspaceId, planId: plan.id } });
+        return { workspaceId, planId: plan.id, postId: plan.output?.postId || null, existing: false, adopted: true, bundle: clone(bundle), planRevision: wrapper.revision, appended };
+      });
+      if (installed.appended) changed(workspaceId, installed.bundle.revision);
+      materialWritingChanged(workspaceId, installed.planRevision);
+      delete installed.appended; return installed;
+    }
     const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
     const seriesPostKey = (workspaceId, seriesId, itemId) => `blog-series-post:${workspaceId}:${seriesId}:${itemId}`;
     async function blogSeriesValue(meta, workspaceId) {
@@ -2492,7 +2558,7 @@
         const previous = await pageDraftsValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 파일로 보관한 뒤 다시 열어 주세요.');
         value.revision++; validatePageDrafts(value); await meta.put({ key: `page-drafts:${workspaceId}`, value }); return clone(value);
-      });
+      }).then(saved => { accountDocChanged(`page-drafts:${workspaceId}`); return saved; });
     }
     async function savePagePost(workspaceId, draftId, draftRevision, baseRevision, options = {}) {
       collectionScope(workspaceId); requireRevision(draftRevision, 'draftRevision'); requireRevision(baseRevision, 'baseRevision');
@@ -2507,11 +2573,12 @@
         const composition = await readCompositionState(meta, workspaceId, previous);
         drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
         if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
         return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
       });
-      workbenchChanged(result.workbench); return result;
+      workbenchChanged(result.workbench); accountDocChanged(`page-drafts:${workspaceId}`); return result;
     }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
@@ -2529,6 +2596,16 @@
       });
     }
     async function readWorkbench(workspaceId) { return (await readWorkbenchSnapshot(workspaceId)).workbench; }
+    // Local edit time for latest-wins composition conflicts. Not part of the composition payload.
+    const workbenchEditedKey = workspaceId => `workbenchEditedAt:${workspaceId}`;
+    async function readWorkbenchEditedAt(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        const value = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value;
+        return typeof value === 'string' ? value : null;
+      });
+    }
     async function saveWorkbench(workspaceId, input, baseRevision) {
       requireId(workspaceId, '작업공간'); requireRevision(baseRevision, 'baseRevision');
       workbench().validate(input);
@@ -2545,6 +2622,7 @@
         state.revision = baseRevision + 1;
         workbench().validate(state);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         if (composition) {
           composition.error = null; composition.status = compositionStatus(composition, state);
           await writeCompositionState(meta, composition);
@@ -4384,9 +4462,18 @@
         return result;
       });
     }
-    async function importUnownedWorkspace(workspaceId) {
+    // Stamp of an account-less workspace as it was copied. A later change to the original
+    // (made without signing in) is adopted again as another copy; nothing is overwritten.
+    const unownedAdoptionKey = workspaceId => `unownedAdoption:${accountKey}:${workspaceId}`;
+    function unownedStamp(bundle, stages) {
+      return stablePayload({ revision: bundle.revision, updatedAt: bundle.updatedAt,
+        stages: stages.map(stage => [stage.stageId, stage.revision]).sort((a, b) => a[0].localeCompare(b[0])) });
+    }
+    async function importUnownedWorkspace(workspaceId, options = {}) {
       if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 사본으로 가져와 주세요.');
       requireId(workspaceId, '이전 작업공간');
+      onlyFields(options, ['activate'], 'invalid_request');
+      const activate = options.activate !== false;
       const source = await transaction(['bundles', 'staging'], 'readonly', async tx => {
         if (await workspaceOwner(tx.objectStore('meta'), workspaceId)) throw fault('workspace_access_denied', '계정에 연결된 자료는 이 경로로 가져올 수 없습니다.');
         const bundle = await tx.objectStore('bundles').get(workspaceId);
@@ -4461,10 +4548,250 @@
         await tx.objectStore('bundles').add(copy);
         await saveOwner(tx.objectStore('meta'), copy.workspaceId);
         for (const stage of copiedStages) await tx.objectStore('staging').add(stage);
-        await tx.objectStore('meta').put({ key: activeKey, value: copy.workspaceId });
+        await tx.objectStore('meta').put({ key: unownedAdoptionKey(workspaceId), value: { copyWorkspaceId: copy.workspaceId, stamp: unownedStamp(source.bundle, source.stages) } });
+        if (activate) await tx.objectStore('meta').put({ key: activeKey, value: copy.workspaceId });
       });
       changed(copy.workspaceId, copy.revision);
       return clone(copy);
+    }
+    // Automatic account documents (owner directive 2026-11-01). Small JSON meta
+    // rows of the signed-in account replicate to every device of that account
+    // through AccountDocsSync. Keys stay exactly as stored locally: account
+    // keys embed this account, workspace keys belong to workspaces this
+    // account owns. Another account's rows are never listed, read or applied.
+    // Excluded: blog-series (its items depend on blog-series-post rows holding
+    // photo Blobs), material-writing/-output and workbench/composition/writing
+    // rows (their own sync paths), photo posts and blog state (BlogSync).
+    // Publication state and remote bindings are never synced here.
+    const ACCOUNT_DOC_ACCOUNT_PREFIXES = Object.freeze({
+      readingPosition: { read: (meta, ws) => readingPositionValue(meta, ws), event: 'reading_position_changed', recovery: false },
+      interestProfile: { read: (meta, ws) => interestProfileValue(meta, ws), event: 'interest_profile_changed', recovery: true },
+      annualPlan: { read: (meta, ws) => annualPlanValue(meta, ws), event: 'annual_plan_changed', recovery: true },
+      discoveryProfile: { read: (meta, ws) => discoveryProfileValue(meta, ws), event: 'discovery_profile_changed', recovery: true },
+      discoverySettings: { read: (meta, ws) => discoverySettingsValue(meta, ws), event: 'discovery_settings_changed', recovery: false },
+      discoveryLanguageSettings: { read: (meta, ws) => discoveryLanguageSettingsValue(meta, ws), event: 'discovery_language_settings_changed', recovery: false },
+      discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true },
+      discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true }
+    });
+    const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
+      'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
+      'page-drafts': { read: (meta, ws) => pageDraftsValue(meta, ws), event: null, recovery: true },
+      'post-evidence': { read: (meta, ws, key) => postEvidenceRow(meta, ws, key), event: null, recovery: true, post: true }
+    });
+    const ACCOUNT_DOC_ID = /^[A-Za-z0-9_-]{1,128}$/;
+    function parseAccountDocKey(key) {
+      if (typeof key !== 'string' || !accountKey || key.length > 512) return null;
+      const at = key.indexOf(':'); if (at < 1) return null;
+      const prefix = key.slice(0, at), rest = key.slice(at + 1);
+      if (Object.hasOwn(ACCOUNT_DOC_ACCOUNT_PREFIXES, prefix)) {
+        if (!rest.startsWith(accountKey + ':')) return null;
+        const workspaceId = rest.slice(accountKey.length + 1);
+        return ACCOUNT_DOC_ID.test(workspaceId) ? { key, prefix, workspaceId, spec: ACCOUNT_DOC_ACCOUNT_PREFIXES[prefix], scoped: 'account' } : null;
+      }
+      if (!Object.hasOwn(ACCOUNT_DOC_WORKSPACE_PREFIXES, prefix)) return null;
+      const spec = ACCOUNT_DOC_WORKSPACE_PREFIXES[prefix], parts = rest.split(':');
+      if (parts.length !== (spec.post ? 2 : 1) || !parts.every(part => ACCOUNT_DOC_ID.test(part))) return null;
+      return { key, prefix, workspaceId: parts[0], postId: parts[1], spec, scoped: 'workspace' };
+    }
+    // Synchronous 2x53-bit content hash of the canonical JSON. It runs inside
+    // IndexedDB transactions (Web Crypto would let them auto-commit).
+    function accountDocHash(value) {
+      if (value === undefined) return null;
+      const text = stablePayload(value);
+      const round = seed => {
+        let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text.charCodeAt(i);
+          h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
+      };
+      return round(0x9e3779b9) + round(0x7f4a7c15) + ':' + text.length.toString(16);
+    }
+    async function postEvidenceRow(meta, workspaceId, key) {
+      const row = await meta.get(key);
+      if (row === undefined) return undefined;
+      onlyFields(row.value, ['revision', 'refs'], 'invalid_post_evidence'); requireRevision(row.value.revision);
+      checkedEvidence(row.value.refs, workspaceId); return row.value;
+    }
+    async function accountDocLocal(meta, parsed) { return (await meta.get(parsed.key))?.value; }
+    async function accountDocAllowed(meta, parsed) {
+      if (parsed.scoped === 'account') return true;
+      const owner = await workspaceOwner(meta, parsed.workspaceId);
+      return owner === null ? null : sameAccount(owner, account);
+    }
+    function accountDocScope(key) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      const parsed = parseAccountDocKey(key);
+      if (!parsed) throw fault('account_doc_invalid_key', '자동 저장 대상이 아닌 항목입니다.');
+      return parsed;
+    }
+    const accountDocSyncKey = key => `accountDoc:${key}`;
+    const accountDocCursorKey = () => `accountDocCursor:${accountKey}`;
+    function accountDocSyncValue(value, key) {
+      if (value === undefined) return null;
+      onlyFields(value, ['docKey', 'revision', 'seq', 'hash', 'remoteHash', 'pendingHash', 'changedAt', 'operationId', 'operationExpected', 'operationHash', 'error', 'deferred'], 'invalid_account_doc_sync');
+      if (value.docKey !== key || !Number.isSafeInteger(value.revision) || value.revision < 0) throw fault('invalid_account_doc_sync', '자동 저장 상태를 확인할 수 없습니다. 내용은 보존했습니다.');
+      return value;
+    }
+    function accountDocChanged(...keys) {
+      for (const key of keys) notify({ type: 'account_doc_changed', key });
+    }
+    function accountDocApplied(parsed, value) {
+      const revision = value?.revision;
+      const event = { type: 'account_doc_applied', key: parsed.key, workspaceId: parsed.workspaceId };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Durable row remains authoritative. */ }
+      if (parsed.spec.event && Number.isSafeInteger(revision) && revision >= 1) {
+        const domain = { type: parsed.spec.event, workspaceId: parsed.workspaceId, revision };
+        notify(domain); try { channel?.postMessage({ ...domain, sender }); } catch (_) { /* Advisory. */ }
+      }
+    }
+    async function listAccountDocs() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      return transaction(['meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), result = [], owners = new Map();
+        for (const key of await meta.getAllKeys()) {
+          const parsed = parseAccountDocKey(key); if (!parsed) continue;
+          if (parsed.scoped === 'workspace') {
+            if (!owners.has(parsed.workspaceId)) owners.set(parsed.workspaceId, await accountDocAllowed(meta, parsed));
+            if (owners.get(parsed.workspaceId) !== true) continue;
+          }
+          let hash;
+          try { hash = accountDocHash(await accountDocLocal(meta, parsed)); } catch (_) { continue; /* Not JSON: never synced. */ }
+          let sync = null;
+          try { sync = accountDocSyncValue((await meta.get(accountDocSyncKey(key)))?.value, key); } catch (_) { sync = null; }
+          result.push({ key, workspaceId: parsed.workspaceId, prefix: parsed.prefix, recovery: parsed.spec.recovery, hash, sync: sync && clone(sync) });
+        }
+        return result;
+      });
+    }
+    async function listAccountDocKeys() { return (await listAccountDocs()).map(item => item.key); }
+    async function readAccountDocRecord(key) {
+      const parsed = accountDocScope(key);
+      return transaction(['meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), allowed = await accountDocAllowed(meta, parsed);
+        if (allowed === false) throw fault('workspace_access_denied', '현재 계정에서 이 작업공간에 접근할 수 없습니다.');
+        const value = await accountDocLocal(meta, parsed);
+        const sync = accountDocSyncValue((await meta.get(accountDocSyncKey(key)))?.value, key);
+        return { key, workspaceId: parsed.workspaceId, prefix: parsed.prefix, recovery: parsed.spec.recovery,
+          exists: value !== undefined, value: value === undefined ? null : clone(value), hash: accountDocHash(value), sync: sync && clone(sync) };
+      });
+    }
+    async function writeAccountDocSync(key, state) {
+      accountDocScope(key);
+      const value = accountDocSyncValue(clone(state), key);
+      await transaction(['meta'], 'readwrite', async tx => { await tx.objectStore('meta').put({ key: accountDocSyncKey(key), value }); });
+      return clone(value);
+    }
+    async function readAccountDocCursor() {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      return transaction(['meta'], 'readonly', async tx => {
+        const value = (await tx.objectStore('meta').get(accountDocCursorKey()))?.value;
+        return Number.isSafeInteger(value) && value >= 0 ? value : null; // null: this account never synced here yet
+      });
+    }
+    async function writeAccountDocCursor(seq) {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      requireRevision(seq, 'seq');
+      return transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), previous = (await meta.get(accountDocCursorKey()))?.value;
+        const next = Math.max(Number.isSafeInteger(previous) ? previous : 0, seq);
+        await meta.put({ key: accountDocCursorKey(), value: next }); return next;
+      });
+    }
+    function accountDocRecoveryRow(key, value, reason) {
+      return { key: `accountDocRecovery:${key}:${new Date().toISOString()}:${Math.random().toString(36).slice(2, 10)}`,
+        value: { docKey: key, reason, savedAt: new Date().toISOString(), value: clone(value) } };
+    }
+    async function saveAccountDocRecovery(key, value, reason = 'conflict') {
+      accountDocScope(key);
+      if (value === undefined || value === null) return null;
+      const row = accountDocRecoveryRow(key, value, reason);
+      await transaction(['meta'], 'readwrite', async tx => { await tx.objectStore('meta').add(row); });
+      return row.key;
+    }
+    async function listAccountDocRecoveries(key) {
+      accountDocScope(key);
+      return transaction(['meta'], 'readonly', async tx => {
+        const prefix = `accountDocRecovery:${key}:`, meta = tx.objectStore('meta'), result = [];
+        for (const item of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '￿')))
+          if (typeof item === 'string' && item.startsWith(prefix)) result.push({ id: item, ...clone((await meta.get(item)).value) });
+        return result;
+      });
+    }
+    // Local CAS: the remote value is written only while the local value still
+    // has the hash the engine compared. A concurrent local save wins the race
+    // and the engine reconciles it on its next pass. The applied domain
+    // revision is moved past the local one so an open stale editor conflicts.
+    async function applyAccountDoc(key, input) {
+      const parsed = accountDocScope(key);
+      onlyFields(input, ['value', 'expectedHash', 'sync', 'recoveryReason'], 'invalid_request');
+      const { expectedHash, recoveryReason = null } = input;
+      if (expectedHash !== null && typeof expectedHash !== 'string') throw fault('invalid_request', '자동 저장 기준을 확인해 주세요.');
+      const incoming = clone(input.value);
+      let rejected = null;
+      const result = await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), allowed = await accountDocAllowed(meta, parsed);
+        if (allowed === false) throw fault('workspace_access_denied', '다른 계정의 작업공간에는 적용하지 않았습니다.');
+        const local = await accountDocLocal(meta, parsed), localHash = accountDocHash(local);
+        if (localHash !== expectedHash) return { status: 'changed', hash: localHash };
+        const value = clone(incoming);
+        if (plain(value) && plain(local) && Number.isSafeInteger(value.revision) && Number.isSafeInteger(local.revision) &&
+            local.revision >= value.revision && local.revision < Number.MAX_SAFE_INTEGER) value.revision = local.revision + 1;
+        try {
+          await meta.put({ key: parsed.key, value });
+          await parsed.spec.read(meta, parsed.workspaceId, parsed.key);
+        } catch (error) {
+          // Browser storage failures propagate; only validation refusals become 'rejected'.
+          if (typeof error?.code !== 'string' && ['QuotaExceededError', 'AbortError', 'InvalidStateError', 'TransactionInactiveError',
+            'UnknownError', 'VersionError', 'DataError', 'ConstraintError'].includes(error?.name)) throw error;
+          rejected = { code: error?.code || 'account_doc_rejected', message: error?.message || '받은 내용의 형식을 확인하지 못했습니다.' };
+          throw fault('account_doc_rejected', rejected.message);
+        }
+        const applied = await accountDocLocal(meta, parsed), hash = accountDocHash(applied);
+        if (recoveryReason && local !== undefined && (parsed.spec.recovery || recoveryReason === 'first_sync')) {
+          const row = accountDocRecoveryRow(parsed.key, local, recoveryReason); await meta.add(row);
+        }
+        if (input.sync) {
+          const sync = accountDocSyncValue({ ...clone(input.sync), docKey: parsed.key, hash }, parsed.key);
+          await meta.put({ key: accountDocSyncKey(parsed.key), value: sync });
+        }
+        return { status: 'applied', hash, value: clone(applied) };
+      }).catch(error => {
+        if (rejected && error?.code === 'account_doc_rejected') return { status: 'rejected', error: rejected };
+        throw error;
+      });
+      if (result.status === 'applied') { accountDocApplied(parsed, result.value); delete result.value; }
+      return result;
+    }
+    // Sign-in adoption: every account-less workspace on this device becomes a new copy owned
+    // by the signed-in account (the owner is the only user), so ordinary workspace sync
+    // uploads it. Originals are never deleted or changed; recovery copies are skipped;
+    // a workspace already adopted unchanged is not copied twice.
+    async function adoptUnownedWorkspaces() {
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 가져와 주세요.');
+      const candidates = await transaction(['bundles', 'staging', 'meta', 'recovery'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), recoveryIds = new Set((await tx.objectStore('recovery').getAll()).map(item => item.copyWorkspaceId)), result = [];
+        for (const bundle of await tx.objectStore('bundles').getAll()) {
+          if (await workspaceOwner(meta, bundle.workspaceId) || recoveryIds.has(bundle.workspaceId)) continue;
+          if ((await meta.get(`libraryRole:${bundle.workspaceId}`))?.value?.kind === 'recovery') continue;
+          const stages = await tx.objectStore('staging').index('workspaceId').getAll(bundle.workspaceId);
+          const done = (await meta.get(unownedAdoptionKey(bundle.workspaceId)))?.value;
+          if (done && done.stamp === unownedStamp(bundle, stages)) continue;
+          result.push({ workspaceId: bundle.workspaceId, title: bundle.title });
+        }
+        return result;
+      });
+      const adopted = [], failed = [];
+      for (const candidate of candidates) {
+        try { const copy = await importUnownedWorkspace(candidate.workspaceId, { activate: false }); adopted.push({ from: candidate.workspaceId, workspaceId: copy.workspaceId, title: copy.title }); }
+        catch (error) { scopeGuard(); failed.push({ workspaceId: candidate.workspaceId, code: error?.code || 'unknown' }); }
+      }
+      return { adopted, failed };
     }
     function subscribeAll(listener) {
       scopeGuard();
@@ -4498,9 +4825,9 @@
       readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
-      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
-      readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
+      readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
       listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
@@ -4514,7 +4841,9 @@
       listLibraryMetaRecoveries, readLibraryMetaRecovery,
       getWritingSyncState, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
-      listUnownedWorkspaces, importUnownedWorkspace };
+      listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces,
+      listAccountDocs, listAccountDocKeys, readAccountDocRecord, applyAccountDoc, writeAccountDocSync,
+      readAccountDocCursor, writeAccountDocCursor, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

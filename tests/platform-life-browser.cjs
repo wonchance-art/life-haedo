@@ -83,7 +83,7 @@ async function main(){
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
   async function click(page,name){
     if(['모아보기','기록 검색','가져오기','시간 보기'].includes(name))await openSection(page,'records');
-    if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(['동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
     if(name==='기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);
@@ -147,7 +147,7 @@ async function main(){
       const restored=await stored(page);assert.notEqual(restored.workspaceId,accountAId);accountAId=restored.workspaceId;
       assert.equal(restored.records[0].text,backup.workspace.records[0].text);
       assert.equal(server.writes().length,0,'local import/restore uploaded without consent');
-      await click(page,'기기 간 동기화');await click(page,'이 작업공간 동기화 시작');
+      await click(page,'동기화');await click(page,'이 작업공간 동기화 시작');
       await page.evaluate(async()=>HaedoLife.Shell.sync.syncNow(await HaedoLife.Shell.storage.getActive()));
       assert.equal(server.row(accounts.a.id,accountAId).data.records.length,1);
     });

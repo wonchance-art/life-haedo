@@ -1,4 +1,4 @@
-/* Selected writing drafts; two isolated Chromium contexts, bundled SDK and real
+/* Automatic writing-draft sync; two isolated Chromium contexts, bundled SDK and real
  * IndexedDB with anonymous HTTP only. No operating DB or Apple hardware claims.
  * BASE_URL=http://127.0.0.1:4184 node tests/writing-sync-browser.cjs */
 'use strict';
@@ -22,9 +22,14 @@ class WritingCloud extends FakeCloud {
   draftWrites(device) { return this.requests.filter(value => value.kind === 'writing-put' && (!device || value.device === device)); }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url()), kind = url.pathname.split('/').at(-1).replace('life_writing_draft_', '');
-    if (!['/rest/v1/rpc/life_writing_draft_get', '/rest/v1/rpc/life_writing_draft_put', '/rest/v1/rpc/life_writing_draft_list'].includes(url.pathname)) return super.handle(route, device);
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-type': 'application/json' };
     const send = (value, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(value) });
+    if (url.pathname.startsWith('/rest/v1/rpc/life_material_')) {
+      // The preparation loop shares this background start; its schema is outside this simulator.
+      if (request.method() === 'OPTIONS') return send(null, 204);
+      this.expectedFailures++; return send({ code: 'PGRST202', message: 'Anonymous material schema missing' }, 404);
+    }
+    if (!['/rest/v1/rpc/life_writing_draft_get', '/rest/v1/rpc/life_writing_draft_put', '/rest/v1/rpc/life_writing_draft_list'].includes(url.pathname)) return super.handle(route, device);
     if (request.method() === 'OPTIONS') return send(null, 204);
     if (this.offline.has(device) || this.writingOffline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }
     let account;
@@ -74,6 +79,8 @@ const stage = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.getStage
 const stages = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.listStages(id), id);
 const bundle = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.read(id), id);
 const metadata = (page, ws, id) => page.evaluate(({ ws, id }) => HaedoLife.Shell.writingSync.getState(ws, id), { ws, id });
+// One automatic pass (the same function the 30 s / online / focus / visibility loop runs).
+async function auto(page) { await page.evaluate(() => HaedoLife.Shell.writingSync.refresh()); await settle(page); }
 async function sync(page, ws, id) { return page.evaluate(async ({ ws, id }) => { try { await HaedoLife.Shell.writingSync.syncNow(ws, id); return null; } catch (error) { return error.code; } }, { ws, id }); }
 async function fill(page, text = body, name = title) {
   await page.locator('#lifeWritingTitle').fill(name); await page.locator('#lifeWritingBody').fill(text);
@@ -114,119 +121,118 @@ async function main() {
       assert.equal(metrics.horizontalOverflow, false, scene + ' overflow'); assert.deepEqual(metrics.contrastFailures, [], scene + ' contrast'); assert.deepEqual(metrics.smallTargets, [], scene + ' 44px targets'); assert.deepEqual(metrics.unnamed, [], scene + ' accessible names'); assert.deepEqual(metrics.smallInputs, [], scene + ' 16px inputs');
     }
   }
-  // UI selectors are deliberately centralized: assertions still enter through the
-  // actual controls; helper storage writes only arrange competing-device input.
+  // The panel is a compact status; every assertion about transfer goes through the same
+  // automatic pass the background loop runs. Helper storage writes only arrange competing input.
   async function panel(page) { const details = page.locator('#lifeWritingSync'); if (!(await details.evaluate(value => value.open))) await details.locator('summary').first().click(); }
-  async function enable(page) { await panel(page); await page.locator('#writingEnable').click(); await page.waitForFunction(() => document.querySelector('#lifeWritingSync')?.getAttribute('aria-busy') !== 'true'); }
   async function status(page, value) { await page.locator('#writingSyncStatus[data-state="' + value + '"]').waitFor(); }
-  async function receive(page, id) { await panel(page); await page.locator('#writingRemoteListButton').click(); await page.locator('#writingRemoteList [data-draft-id="' + id + '"]').click(); await page.waitForFunction(id => document.querySelector('#lifeWritingSync')?.dataset.draftId === id, id); }
+  const removed = ['#writingEnable', '#writingPause', '#writingRemoteListButton', '#writingCompare', '#writingUseLocal', '#writingUseRemote', '#writingFork'];
   const paired = async ({ device }) => {
-    const a = await device('a'), b = await device('b'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); await enable(a.page); await status(a.page, 'synced');
-    await receiveSources(b.page, ws); await receive(b.page, draft.stageId); return { a, b, ws, id: draft.stageId, draft };
+    const a = await device('a'), b = await device('b'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); await auto(a.page);
+    await receiveSources(b.page, ws); await auto(b.page); assert.equal((await stage(b.page, draft.stageId)).text, body);
+    return { a, b, ws, id: draft.stageId, draft };
   };
   try {
-    await check('only explicitly selected draft crosses devices; new and import drafts stay private and record save stays explicit', async ({ server, device }) => {
-      const a = await device('a'), b = await device('b'); await panel(a.page); await capture(a.page, 'empty'); const draft = await fill(a.page), ws = await active(a.page); assert.ok(draft); assert.equal(server.draftWrites().length, 0); assert.equal(server.writes().length, 0);
-      await enable(a.page); await a.page.locator('#writingSyncError').waitFor(); assert.equal(server.draftWrites().length, 0);
-      await sourceOn(a.page, ws); assert.equal(server.draftWrites().length, 0); await enable(a.page); await status(a.page, 'synced');
+    await check('every draft crosses devices automatically; import drafts stay private and record save stays explicit', async ({ server, device }) => {
+      const a = await device('a'), b = await device('b'); await panel(a.page); await capture(a.page, 'empty');
+      for (const selector of removed) assert.equal(await a.page.locator(selector).count(), 0, selector);
+      const draft = await fill(a.page), ws = await active(a.page); assert.ok(draft);
+      await auto(a.page); assert.equal(server.draftWrites().length, 0, 'no draft leaves before its originals sync');
+      await sourceOn(a.page, ws); await auto(a.page); await openDraft(a.page, draft.stageId); await panel(a.page); await status(a.page, 'synced');
       assert.equal(server.draft(accounts.a.id, ws, draft.stageId).data.text, body); assert.equal(server.row(accounts.a.id, ws).data.sourceVersions.length, 0);
-      await a.page.locator('#lifeWritingNew').click(); const local = await fill(a.page, '이 글은 선택하지 않았으므로 기기 A에만 남긴다.', '새로 쓴 개인 초안');
-      await a.page.evaluate(() => HaedoLife.Shell.writingSync.start()); await a.page.waitForTimeout(400); assert.equal(server.draft(accounts.a.id, ws, local.stageId), undefined);
+      await a.page.locator('#lifeWritingNew').click(); const second = await fill(a.page, '새로 쓴 초안도 따로 켜지 않고 다른 기기로 간다.', '새로 쓴 초안');
+      await auto(a.page); assert.equal(server.draft(accounts.a.id, ws, second.stageId).data.text, '새로 쓴 초안도 따로 켜지 않고 다른 기기로 간다.');
       await a.page.locator('#lifeWritingClose').click(); await a.page.getByRole('button', { name: '가져오기', exact: true }).click();
       await a.page.locator('#lifeImportTitle').fill('외부 가져오기 전용 초안'); await a.page.locator('#lifeImportText').fill('가져오기 검토 중인 별도 본문'); await a.page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(a.page);
-      const imported = (await stages(a.page, ws)).find(value => value.kind !== 'writing'); assert.ok(imported); assert.equal(server.draft(accounts.a.id, ws, imported.stageId), undefined);
-      await receiveSources(b.page, ws); assert.deepEqual(await stages(b.page, ws), []); await receive(b.page, draft.stageId);
-      assert.equal(await b.page.locator('#lifeWritingBody').inputValue(), body); assert.equal((await bundle(b.page, ws)).sources.length, 0); assert.equal((await stages(b.page, ws)).some(value => value.stageId === local.stageId), false);
-      assert.equal((await stages(b.page, ws)).some(value => value.stageId === imported.stageId), false); assert.deepEqual((await stages(a.page, ws)).find(value => value.stageId === imported.stageId), imported);
+      const imported = (await stages(a.page, ws)).find(value => value.kind !== 'writing'); assert.ok(imported); await auto(a.page); assert.equal(server.draft(accounts.a.id, ws, imported.stageId), undefined);
+      await receiveSources(b.page, ws); await auto(b.page);
+      const received = await stages(b.page, ws);
+      assert.deepEqual(received.filter(value => value.kind === 'writing').map(value => value.stageId).sort(), [draft.stageId, second.stageId].sort());
+      assert.equal(received.some(value => value.stageId === imported.stageId), false); assert.equal((await bundle(b.page, ws)).sources.length, 0);
+      await openDraft(b.page, draft.stageId); assert.equal(await b.page.locator('#lifeWritingBody').inputValue(), body);
       assert.equal(await b.page.locator('#lifeWritingBody img').count(), 0); assert.equal(await b.page.evaluate(() => window.__writingInjected), undefined);
-      assert.equal(server.requests.some(value => value.kind.startsWith('public') || value.kind.startsWith('composition')), false); await capture(b.page, 'selected');
+      await panel(b.page); await status(b.page, 'synced'); for (const selector of removed) assert.equal(await b.page.locator(selector).count(), 0, selector);
+      assert.equal(server.requests.some(value => value.kind.startsWith('public')), false); await capture(b.page, 'synced');
     });
-    await check('offline competing drafts compare both texts and preserve the loser as an ordinary draft with TXT export', async context => {
+    await check('competing offline edits keep the newest text and the other as a recoverable draft with one notice', async context => {
       const { server } = context, { a, b, ws, id } = await paired(context); server.writingOffline.add('a'); server.writingOffline.add('b');
-      await editStored(a.page, id, '첫 기기의 이어 쓴 문장🌱'); await editStored(b.page, id, '두 번째 기기에 남긴 문장🌿'); await sync(a.page, ws, id); await sync(b.page, ws, id);
-      server.writingOffline.delete('a'); await sync(a.page, ws, id); server.writingOffline.delete('b'); await sync(b.page, ws, id); await openDraft(b.page, id); await panel(b.page); await status(b.page, 'conflict');
-      await b.page.locator('#writingCompare').click(); await b.page.locator('#writingComparison').waitFor(); await b.page.locator('#writingBody-local').click(); await b.page.locator('#writingBody-remote').click(); const compare = await b.page.locator('#writingComparison').innerText(); assert.match(compare, /첫 기기의 이어/); assert.match(compare, /두 번째 기기에/); await capture(b.page, 'conflict');
-      await b.page.locator('#writingUseRemote').focus(); await b.page.keyboard.press('Enter'); await b.page.waitForFunction(() => document.querySelector('#lifeWritingSync')?.getAttribute('aria-busy') !== 'true'); await panel(b.page); await status(b.page, 'synced');
-      assert.equal((await stage(b.page, id)).text, '첫 기기의 이어 쓴 문장🌱'); const recovery = (await stages(b.page, ws)).find(value => value.stageId !== id && value.text === '두 번째 기기에 남긴 문장🌿'); assert.ok(recovery); assert.equal(recovery.state, 'draft'); assert.equal((await metadata(b.page, ws, recovery.stageId)).enabled, false);
-      await openDraft(b.page, recovery.stageId); const waiting = b.page.waitForEvent('download'); await b.page.locator('#lifeWritingDownload').click(); const downloaded = await waiting, text = await fs.readFile(await downloaded.path(), 'utf8'); assert.match(text, /두 번째 기기에 남긴 문장🌿/); assert.equal((await bundle(b.page, ws)).sources.length, 0);
+      await editStored(a.page, id, '첫 기기의 이어 쓴 문장🌱'); await b.page.waitForTimeout(20); await editStored(b.page, id, '두 번째 기기에 나중에 남긴 문장🌿');
+      server.writingOffline.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal(server.draft(accounts.a.id, ws, id).data.text, '첫 기기의 이어 쓴 문장🌱');
+      // The notice is a short in-session message: keep the draft open while the conflict settles.
+      await openDraft(b.page, id); await panel(b.page);
+      server.writingOffline.delete('b'); assert.equal(await sync(b.page, ws, id), null);
+      assert.equal((await stage(b.page, id)).text, '두 번째 기기에 나중에 남긴 문장🌿'); assert.equal(server.draft(accounts.a.id, ws, id).data.text, '두 번째 기기에 나중에 남긴 문장🌿');
+      const recovery = (await stages(b.page, ws)).find(value => value.stageId !== id && value.text === '첫 기기의 이어 쓴 문장🌱'); assert.ok(recovery); assert.equal(recovery.state, 'draft');
+      await b.page.locator('#writingSyncNotice').waitFor();
+      assert.match(await b.page.locator('#lifeWritingSync').innerText(), /다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다/); await capture(b.page, 'resolved-notice');
+      await b.page.locator('#writingSyncRecovery').focus(); await b.page.keyboard.press('Enter');
+      await b.page.waitForFunction(id => document.querySelector('#lifeWritingSync')?.dataset.draftId === id, recovery.stageId);
+      const waiting = b.page.waitForEvent('download'); await b.page.locator('#lifeWritingDownload').click(); const downloaded = await waiting, text = await fs.readFile(await downloaded.path(), 'utf8'); assert.match(text, /첫 기기의 이어 쓴 문장🌱/);
+      await auto(b.page); assert.equal(server.draft(accounts.a.id, ws, recovery.stageId).data.text, '첫 기기의 이어 쓴 문장🌱');
+      await auto(a.page); assert.equal((await stage(a.page, id)).text, '두 번째 기기에 나중에 남긴 문장🌿'); assert.equal((await stage(a.page, recovery.stageId)).text, '첫 기기의 이어 쓴 문장🌱');
     });
     await check('lost acknowledgement survives reload and retries the same operation exactly once on the server', async context => {
       const { server } = context, { a, ws, id } = await paired(context); server.loseWriting.add('a'); await editStored(a.page, id, '응답을 놓쳐도 남아 있는 문장'); await sync(a.page, ws, id);
       const pending = await metadata(a.page, ws, id), revision = server.draft(accounts.a.id, ws, id).revision; assert.ok(pending.outbox); const operation = pending.outbox.operationId;
-      await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, ws, id)).outbox.operationId, operation); server.loseWriting.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal((await metadata(a.page, ws, id)).outbox, null); assert.equal(server.draft(accounts.a.id, ws, id).revision, revision); assert.ok(server.draftWrites('a').filter(value => value.operation === operation).length >= 2);
+      await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, ws, id)).outbox.operationId, operation); server.loseWriting.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal((await metadata(a.page, ws, id)).outbox, null); assert.equal(server.draft(accounts.a.id, ws, id).revision, revision);
     });
-    await check('source pause and missing SQL preserve local input and never create a remote draft', async ({ server, device }) => {
-      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); server.writingMissing = true; await enable(a.page); await a.page.locator('#writingSyncError').waitFor();
-      assert.equal((await metadata(a.page, ws, draft.stageId)).enabled, false); assert.equal((await stage(a.page, draft.stageId)).text, body); await capture(a.page, 'missing-installation');
-      server.writingMissing = false; await enable(a.page); await status(a.page, 'synced'); await a.page.evaluate(ws => HaedoLife.Shell.sync.pause(ws), ws); const writes = server.draftWrites().length; await editStored(a.page, draft.stageId, '원문 연결을 멈춘 뒤 작성한 문장'); assert.equal(await sync(a.page, ws, draft.stageId), 'writing_source_pending'); assert.equal(server.draftWrites().length, writes);
-      await a.page.locator('#writingPause').click(); await status(a.page, 'paused'); assert.equal(await sync(a.page, ws, draft.stageId), 'sync_paused'); await capture(a.page, 'paused');
-    });
-    await check('pause cancels held first enable and active read while reconnect completes before late replies', async ({ server, device }) => {
-      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); await panel(a.page);
-      for (const first of [true, false]) {
-        const held = { device: 'a', kind: 'get', entered: deferred(), release: deferred() }; server.heldWriting = held;
-        await a.page.locator(first ? '#writingEnable' : '#writingSyncNow').click(); await held.entered.promise;
-        try { assert.equal(await a.page.locator('#writingPause').isEnabled(), true); if (first) await capture(a.page, 'loading'); await a.page.locator('#writingPause').focus(); await a.page.keyboard.press('Enter'); await status(a.page, first ? 'not_enabled' : 'paused'); await enable(a.page); await status(a.page, 'synced'); const before = await metadata(a.page, ws, draft.stageId); held.release.resolve(); await a.page.waitForLoadState('networkidle'); assert.deepEqual(await metadata(a.page, ws, draft.stageId), before); }
-        finally { held.release.resolve(); }
-      }
+    await check('missing SQL keeps local input and never creates a remote draft; the next pass connects once it exists', async ({ server, device }) => {
+      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); server.writingMissing = true; await auto(a.page);
+      assert.equal((await metadata(a.page, ws, draft.stageId)).enabled, false); assert.equal((await stage(a.page, draft.stageId)).text, body); assert.equal(server.draft(accounts.a.id, ws, draft.stageId), undefined);
+      await go(a.page); await panel(a.page); await status(a.page, 'not_enabled'); await capture(a.page, 'missing-installation');
+      server.writingMissing = false; await auto(a.page); await go(a.page); await panel(a.page); await status(a.page, 'synced');
+      assert.equal(server.draft(accounts.a.id, ws, draft.stageId).data.text, body);
+      await a.page.evaluate(ws => HaedoLife.Shell.sync.pause(ws), ws); const writes = server.draftWrites().length; await editStored(a.page, draft.stageId, '원문 연결을 멈춘 뒤 작성한 문장');
+      assert.notEqual(await sync(a.page, ws, draft.stageId), null); assert.equal(server.draftWrites().length, writes); assert.equal((await stage(a.page, draft.stageId)).text, '원문 연결을 멈춘 뒤 작성한 문장');
     });
     await check('account switch rejects held draft response and opens a separate private store', async context => {
       const { server } = context, { a, b, ws, id } = await paired(context); await editStored(a.page, id, '이전 계정의 비공개 문장'); await sync(a.page, ws, id);
       const held = { device: 'b', kind: 'get', entered: deferred(), release: deferred() }; server.heldWriting = held; const pending = sync(b.page, ws, id); await held.entered.promise;
-      try { server.oauthAccounts.set('b', accounts.b); await b.page.evaluate(() => HaedoAuth.signOut()); held.release.resolve(); await pending.catch(() => {}); await b.page.goto(base + '/login.html?next=index.html'); await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page); assert.equal(await b.page.evaluate(() => HaedoAuth.user.id), accounts.b.id); assert.equal((await b.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).some(value => value.workspaceId === ws), false); assert.equal(server.draftWrites('b').some(value => value.owner === accounts.b.id), false); assert.doesNotMatch(await b.page.locator('body').innerText(), /이전 계정의 비공개 문장/); }
+      try { server.oauthAccounts.set('b', accounts.b); await b.page.evaluate(() => HaedoAuth.signOut()); held.release.resolve(); await pending.catch(() => {}); await b.page.goto(base + '/login.html?next=index.html'); await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page); assert.equal(await b.page.evaluate(() => HaedoAuth.user.id), accounts.b.id); assert.equal((await b.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).some(value => value.workspaceId === ws), false); await auto(b.page); assert.equal(server.draftWrites('b').some(value => value.owner === accounts.b.id), false); assert.doesNotMatch(await b.page.locator('body').innerText(), /이전 계정의 비공개 문장/); }
       finally { held.release.resolve(); }
     });
     await check('server updates never replace an active Korean composition; applied terminal preserves exact source pair and pending input', async context => {
-      const { server } = context, { a, b, ws, id } = await paired(context);
-      await b.page.locator('#lifeWritingBody').focus(); await b.page.locator('#lifeWritingBody').evaluate(element => { window.__writingInput = element; element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })); element.value += '\n한글 입력 중'; element.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data: '한글 입력 중', inputType: 'insertCompositionText' })); });
-      const input = await b.page.locator('#lifeWritingBody').inputValue(); await editStored(a.page, id, '다른 기기에서 먼저 완성한 글'); await sync(a.page, ws, id); await sync(b.page, ws, id);
+      const { server } = context, { a, b, ws, id } = await paired(context); await openDraft(b.page, id);
+      await b.page.locator('#lifeWritingBody').focus(); await b.page.locator('#lifeWritingBody').evaluate(element => { window.__writingInput = element; element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })); element.value += '\n한글 입력 중'; element.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data: '한글 입력 중' })); });
+      const input = await b.page.locator('#lifeWritingBody').inputValue(); await editStored(a.page, id, '다른 기기에서 먼저 완성한 글'); await sync(a.page, ws, id); await auto(b.page);
       assert.equal(await b.page.locator('#lifeWritingBody').inputValue(), input); assert.equal(await b.page.locator('#lifeWritingBody').evaluate(element => element === window.__writingInput), true);
       await b.page.locator('#lifeWritingBody').evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '한글 입력 중' })));
       await b.page.locator('#lifeWritingError').waitFor(); await b.page.locator('#lifeWritingRescue').click(); await b.page.waitForFunction(() => document.querySelector('#lifeWritingStatus')?.dataset.state === 'draft'); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input));
       await openDraft(a.page, id); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor(); await sync(a.page, ws, id);
       const published = await stage(a.page, id), source = await bundle(a.page, ws), remote = server.draft(accounts.a.id, ws, id); assert.equal(published.state, 'applied'); assert.equal(remote.data.state, 'applied'); assert.ok(source.sourceVersions.some(value => value.id === published.appliedResult.sourceVersionId && value.sourceId === published.appliedResult.sourceId));
-      await sync(b.page, ws, id); assert.equal((await stage(b.page, id)).state, 'applied'); assert.deepEqual((await stage(b.page, id)).appliedResult, published.appliedResult); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input)); assert.equal((await bundle(b.page, ws)).sourceVersions.length, 1); assert.equal(server.draft(accounts.a.id, ws, id).data.state, 'applied');
+      await b.page.evaluate(ws => HaedoLife.Shell.sync.syncNow(ws), ws); await sync(b.page, ws, id); assert.equal((await stage(b.page, id)).state, 'applied'); assert.deepEqual((await stage(b.page, id)).appliedResult, published.appliedResult); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input));
     });
-    await check('a saved remote draft closes its identity while the unsaved local alternative becomes an unlinked recoverable draft', async context => {
+    await check('a remote saved record closes the draft identity and the unsaved local alternative becomes a recoverable draft automatically', async context => {
       const { server } = context, { a, b, ws, id } = await paired(context); server.writingOffline.add('b');
       await editStored(b.page, id, '기기 B가 오프라인에서 이어 쓴 미완성 생각'); await sync(b.page, ws, id);
       await openDraft(a.page, id); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor(); await sync(a.page, ws, id);
       const committed = server.draft(accounts.a.id, ws, id), record = copy(server.row(accounts.a.id, ws).data); assert.equal(committed.data.state, 'applied');
-      server.writingOffline.delete('b'); await sync(b.page, ws, id); await openDraft(b.page, id); await panel(b.page); await status(b.page, 'conflict'); await b.page.locator('#writingCompare').click();
-      assert.equal(await b.page.locator('#writingUseLocal').count(), 0); assert.equal(await b.page.locator('#writingUseRemote').count(), 0);
-      await b.page.locator('#writingFork').click(); await b.page.waitForFunction(id => document.querySelector('#lifeWritingSync')?.dataset.draftId !== id && !!document.querySelector('#lifeWritingBody'), id);
+      server.writingOffline.delete('b'); await b.page.evaluate(ws => HaedoLife.Shell.sync.syncNow(ws), ws); assert.equal(await sync(b.page, ws, id), null);
       const closed = await stage(b.page, id), recovery = (await stages(b.page, ws)).find(value => value.stageId !== id && value.text === '기기 B가 오프라인에서 이어 쓴 미완성 생각');
-      assert.equal(closed.state, 'applied'); assert.deepEqual(closed.appliedResult, committed.data.appliedResult); assert.ok(recovery); assert.equal(recovery.state, 'draft'); assert.equal(recovery.sourceId, null); assert.equal(recovery.baseSourceRevision, null); assert.equal(recovery.baseSourceVersionId, null); assert.equal(recovery.appliedResult, undefined);
-      assert.equal((await metadata(b.page, ws, recovery.stageId)).enabled, false); assert.equal(server.draft(accounts.a.id, ws, id).revision, committed.revision); assert.deepEqual(server.row(accounts.a.id, ws).data.sourceVersions, record.sourceVersions); assert.deepEqual((await bundle(b.page, ws)).sourceVersions, record.sourceVersions);
+      assert.equal(closed.state, 'applied'); assert.deepEqual(closed.appliedResult, committed.data.appliedResult); assert.ok(recovery); assert.equal(recovery.state, 'draft'); assert.equal(recovery.sourceId, null); assert.equal(recovery.baseSourceRevision, null); assert.equal(recovery.baseSourceVersionId, null);
+      assert.equal(server.draft(accounts.a.id, ws, id).revision, committed.revision); assert.deepEqual(server.row(accounts.a.id, ws).data.sourceVersions, record.sourceVersions); assert.deepEqual((await bundle(b.page, ws)).sourceVersions, record.sourceVersions);
+      await auto(b.page); assert.equal(server.draft(accounts.a.id, ws, recovery.stageId).data.text, recovery.text);
       await openDraft(b.page, recovery.stageId); assert.equal(await b.page.locator('#lifeWritingBody').inputValue(), recovery.text); assert.equal((await bundle(b.page, ws)).sources.length, 1);
     });
-    await check('a paused selected draft saved as a record stays discoverable and explicitly resumes its completion marker', async ({ server, device }) => {
-      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page), id = draft.stageId;
-      await sourceOn(a.page, ws); await enable(a.page); await status(a.page, 'synced'); await a.page.locator('#writingPause').click(); await status(a.page, 'paused');
-      const oldRemote = copy(server.draft(accounts.a.id, ws, id)); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor();
-      const saved = await stage(a.page, id); assert.equal(saved.state, 'applied'); assert.deepEqual(server.draft(accounts.a.id, ws, id), oldRemote);
-      await go(a.page); const unselected = await fill(a.page, '이어쓰기를 선택하지 않고 기록으로만 저장한 글', '전송을 선택하지 않은 글'); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor();
-      await go(a.page); await panel(a.page); await a.page.locator('#writingPendingSaved [data-pending-draft-id="' + id + '"]').waitFor();
-      assert.equal(await a.page.locator('#writingPendingSaved [data-pending-draft-id]').count(), 1); assert.equal(await a.page.locator('#writingPendingSaved [data-pending-draft-id="' + unselected.stageId + '"]').count(), 0);
-      assert.equal((await metadata(a.page, ws, id)).enabled, false); assert.equal(server.draft(accounts.a.id, ws, id).data.state, 'draft'); await capture(a.page, 'pending-completion');
-      await a.page.locator('#writingPendingSaved [data-pending-draft-id="' + id + '"]').click(); await a.page.waitForFunction(id => document.querySelector('#lifeWritingSync')?.dataset.draftId === id, id); await panel(a.page);
-      await a.page.getByRole('button', { name: '저장 완료 상태 이어쓰기', exact: true }).waitFor(); assert.equal(await a.page.locator('#lifeWritingBody').isDisabled(), true);
-      await a.page.locator('#writingEnable').focus(); await a.page.keyboard.press('Enter'); await status(a.page, 'closed');
-      const remote = server.draft(accounts.a.id, ws, id), source = server.row(accounts.a.id, ws).data;
-      assert.equal(remote.data.state, 'applied'); assert.deepEqual(remote.data.appliedResult, saved.appliedResult); assert.ok(source.sourceVersions.some(value => value.id === saved.appliedResult.sourceVersionId && value.sourceId === saved.appliedResult.sourceId));
-      assert.equal(server.draft(accounts.a.id, ws, unselected.stageId), undefined); assert.equal((await metadata(a.page, ws, id)).status, 'closed'); assert.equal((await bundle(a.page, ws)).sources.length, 2);
-      await go(a.page); await panel(a.page); assert.equal(await a.page.locator('#writingPendingSaved [data-pending-draft-id]').count(), 0);
+    await check('a draft saved as a record closes on the server and is not reinstalled as a draft elsewhere', async ({ server, device }) => {
+      const a = await device('a'), b = await device('b'), draft = await fill(a.page), ws = await active(a.page), id = draft.stageId;
+      await sourceOn(a.page, ws); await auto(a.page); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor();
+      const saved = await stage(a.page, id); assert.equal(saved.state, 'applied'); await auto(a.page);
+      const remote = server.draft(accounts.a.id, ws, id); assert.equal(remote.data.state, 'applied'); assert.deepEqual(remote.data.appliedResult, saved.appliedResult);
+      assert.equal((await metadata(a.page, ws, id)).status, 'closed'); await go(a.page); await panel(a.page);
+      await receiveSources(b.page, ws); await auto(b.page); assert.equal(await stage(b.page, id), null);
+      assert.ok((await bundle(b.page, ws)).sourceVersions.some(value => value.id === saved.appliedResult.sourceVersionId));
     });
-    await check('explicit paginated server list never downloads hidden entries or overwrites a duplicate local draft', async context => {
-      const { server } = context, { a, b, ws, id } = await paired(context), original = server.draft(accounts.a.id, ws, id);
-      for (let index = 0; index < 102; index++) { const draftId = '00000000-0000-4000-8000-' + String(index).padStart(12, '0'), value = copy(original); value.draft_id = draftId; value.data.stageId = draftId; value.data.title = '다른 기기의 글 ' + index; server.drafts.set(server.draftKey(accounts.a.id, ws, draftId), value); }
-      const before = await stage(b.page, id); await panel(b.page); await b.page.locator('#writingRemoteListButton').click(); await b.page.locator('#writingRemoteMore').waitFor(); assert.equal(await b.page.locator('#writingRemoteList [data-draft-id]').count(), 100); await b.page.locator('#writingRemoteMore').click(); await b.page.waitForFunction(() => document.querySelectorAll('#writingRemoteList [data-draft-id]').length === 103); assert.equal(await b.page.locator('#writingRemoteList [data-draft-id]').count(), 103); assert.deepEqual(await stage(b.page, id), before); await capture(b.page, 'many-drafts');
-      const beforeCount = (await stages(b.page, ws)).length; await b.page.locator('#writingRemoteList [data-draft-id="' + id + '"]').click(); await b.page.waitForFunction(() => !document.querySelector('#writingRemoteList')); assert.equal((await stages(b.page, ws)).length, beforeCount); assert.deepEqual(await stage(b.page, id), before); assert.equal(server.draftWrites('b').length, 0);
-      const requests = server.requests.filter(value => value.kind === 'writing-list' && value.device === 'b'); assert.ok(requests.some(value => value.after)); assert.equal(server.draftWrites('a').filter(value => value.id !== id).length, 0);
+    await check('server-only drafts beyond one page install automatically without overwriting a local draft', async context => {
+      const { server } = context, { b, ws, id } = await paired(context), original = server.draft(accounts.a.id, ws, id);
+      for (let index = 0; index < 101; index++) { const draftId = '00000000-0000-4000-8000-' + String(index).padStart(12, '0'), value = copy(original); value.draft_id = draftId; value.data.stageId = draftId; value.data.title = '다른 기기의 글 ' + index; server.drafts.set(server.draftKey(accounts.a.id, ws, draftId), value); }
+      const before = await stage(b.page, id); await auto(b.page);
+      assert.equal((await stages(b.page, ws)).filter(value => value.kind === 'writing').length, 102); assert.deepEqual(await stage(b.page, id), before);
+      const requests = server.requests.filter(value => value.kind === 'writing-list' && value.device === 'b'); assert.ok(requests.some(value => value.after));
+      assert.equal(server.draftWrites('b').length, 0);
     });
   } finally { await browser.close(); await fs.writeFile(path.join(out, 'selected-drafts-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   assert.deepEqual(report.consoleErrors, [], 'unexpected console errors'); assert.deepEqual(report.pageErrors, [], 'unexpected page errors'); assert.deepEqual(report.external, [], 'unexpected external requests');
-  console.log(`Writing selected-draft browser: ${report.checks.filter(value => value.pass).length}/${report.checks.length} scenarios; ${report.captures.length} viewport captures. Anonymous HTTP, not operating SQL or Apple hardware.`);
+  console.log(`Writing automatic-draft browser: ${report.checks.filter(value => value.pass).length}/${report.checks.length} scenarios; ${report.captures.length} viewport captures. Anonymous HTTP, not operating SQL or Apple hardware.`);
   if (report.checks.some(value => !value.pass)) process.exitCode = 1;
 }
 module.exports = { WritingCloud };

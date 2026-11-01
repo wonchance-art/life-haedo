@@ -75,7 +75,7 @@ async function installed(page, previous, mode = 'books') {
   const result = await current(page); assert.notEqual(result.bundle.workspaceId, previous.bundle.workspaceId);
   assert.equal(await page.locator('#wbRestoreInstall').count(), 0);
   assert.match(await page.locator('#lifeRestoreResult').textContent(), /이전 작업공간은 그대로/);
-  assert.match(await page.locator('#lifeRestoreResult').textContent(), /자동 동기화는 연결하지 않았/);
+  assert.doesNotMatch(await page.locator('#lifeRestoreResult').textContent(), /자동 동기화는 연결하지 않/);
   return result;
 }
 async function apply(page, previous, mode = 'books') {

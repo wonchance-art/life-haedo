@@ -1,4 +1,5 @@
-/* Opt-in composition replication. Source sync and public publication stay separate. */
+/* Account composition replication. Source sync and public publication stay separate.
+ * An optional autoResolve keeps the newest side and stores the other as a recovery copy. */
 (function (root, factory) {
   'use strict';
   const api = factory(root); root.HaedoLife ||= {}; root.HaedoLife.CompositionSync = api;
@@ -6,26 +7,37 @@
 })(globalThis, function (root) {
   'use strict';
   const messages = {
-    composition_source_pending: '원문 동기화를 먼저 완료해 주세요. 구성은 이 브라우저에 보존됩니다.',
+    composition_source_pending: '원문 동기화를 먼저 완료해 주세요. 구성은 이 기기에 보존됩니다.',
     composition_conflict: '두 기기의 구성이 다릅니다. 양쪽 내용을 비교해 주세요.',
     composition_conflict_changed: '비교한 뒤 구성이 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.',
     remote_revision_mismatch: '같은 서버 버전의 내용이 달라 적용하지 않았습니다.',
     stale_sync_result: '서버 버전이 이전보다 낮거나 현재 요청과 달라 적용하지 않았습니다.',
     remote_missing: '연결된 서버 구성이 없습니다. 자동으로 다시 만들지 않았습니다.',
-    sync_paused: '구성 이어쓰기가 중지되어 있습니다.',
-    not_enabled: '구성 이어쓰기를 먼저 시작해 주세요.',
+    sync_paused: '구성 동기화를 다시 시작하는 중입니다.',
+    not_enabled: '구성 동기화를 준비하는 중입니다.',
     account_mismatch: '현재 계정의 구성 연결을 확인해 주세요.',
     request_cancelled: '계정 또는 연결이 바뀌어 이전 요청을 적용하지 않았습니다.',
     storage_quota: '저장 공간이 부족합니다. 현재 구성과 복구 사본을 보존한 뒤 다시 시도해 주세요.',
     network_error: '연결을 확인한 뒤 다시 시도해 주세요. 구성과 전송 대기 내용은 보존됩니다.'
   };
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+  const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
+  // Latest edit wins. The local edit time is recorded with each composition save;
+  // the server row carries its own write time. Unknown local time yields to the server.
+  function latest({ remote, editedAt }) {
+    const local = time(editedAt), server = time(remote?.updated_at);
+    if (local === null) return 'remote';
+    return server !== null && server >= local ? 'remote' : 'local';
+  }
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   function create({ storage, sourceSync, auth = root.HaedoAuth,
     remote = root.HaedoLife?.CompositionRemote?.create({ auth }), errorCleaner = null,
     resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true,
-    initialReceive = null } = {}) {
+    initialReceive = null, autoResolve = undefined } = {}) {
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
+    // Compositions (whose storage records local edit times) default to latest-wins.
+    // Other domains on this engine keep their own explicit choice unless they pass one.
+    if (autoResolve === undefined) autoResolve = typeof storage.readWorkbenchEditedAt === 'function' ? latest : null;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -35,7 +47,7 @@
     }
     const context = workspaceId => { guard(); return { workspaceId, generation: generations.get(workspaceId) || 0, authEpoch: auth.epoch }; };
     const binding = workspaceId => ({ projectUrl: owner.projectUrl, userId: owner.userId, remoteId: workspaceId });
-    function emit(workspaceId) { if (!disposed) for (const listener of [...listeners]) { try { listener({ workspaceId }); } catch (_) {} } }
+    function emit(workspaceId, extra = null) { if (!disposed) for (const listener of [...listeners]) { try { listener({ workspaceId, ...(extra || {}) }); } catch (_) {} } }
     function clean(error) {
       if (errorCleaner) return errorCleaner(error);
       if (messages[error?.code]) return fault(error.code);
@@ -75,6 +87,26 @@
       guard(ctx); await storage.setCompositionConflict(ctx.workspaceId, binding(ctx.workspaceId), row); guard(ctx);
       emit(ctx.workspaceId); return getState(ctx.workspaceId);
     }
+    // Record the conflict first. With autoResolve the domain picks the newer side
+    // and resolve* stores the other side as a recovery copy in the same transaction.
+    async function settle(ctx, row) {
+      await conflict(ctx, row);
+      if (!autoResolve || !row) return false;
+      const snapshot = await storage.readWorkbenchSnapshot(ctx.workspaceId); guard(ctx);
+      const editedAt = typeof storage.readWorkbenchEditedAt === 'function' ? await storage.readWorkbenchEditedAt(ctx.workspaceId) : null; guard(ctx);
+      const choice = await autoResolve({ workspaceId: ctx.workspaceId, local: clone(snapshot.workbench), remote: clone(row), editedAt }); guard(ctx);
+      if (!resolutionChoices.includes(choice)) return false;
+      try {
+        const result = await storage.resolveCompositionSync(ctx.workspaceId, binding(ctx.workspaceId), {
+          choice, expectedLocalRevision: snapshot.workbench.revision, remoteRow: row }); guard(ctx);
+        emit(ctx.workspaceId, { autoResolved: true, choice, recoveryId: result?.recoveryId || result?.recoveryStageId || null });
+        return true;
+      } catch (error) {
+        // A newer local edit or remote head arrived; the next pass reads both again.
+        if (/conflict_changed$/.test(error?.code || '')) { guard(ctx); return true; }
+        throw error;
+      }
+    }
     async function send(ctx, outbox) {
       guard(ctx);
       const request = { workspaceId: ctx.workspaceId, ...clone(outbox) }, operationId = request.operationId;
@@ -100,9 +132,9 @@
         await checkedState(ctx); await sources(ctx);
         for (let pass = 0; pass < 8; pass++) {
           const state = await checkedState(ctx);
-          if (state.conflict) { const row = await remote.read(ctx.workspaceId); guard(ctx); return conflict(ctx, row); }
+          if (state.conflict) { const row = await remote.read(ctx.workspaceId); guard(ctx); if (await settle(ctx, row)) continue; return getState(ctx.workspaceId); }
           // A lost response is resolved by replaying the same durable operation before reads.
-          if (state.outbox) { if (await send(ctx, state.outbox)) continue; return getState(ctx.workspaceId); }
+          if (state.outbox) { if (await send(ctx, state.outbox) || autoResolve) continue; return getState(ctx.workspaceId); }
           const row = await remote.read(ctx.workspaceId); guard(ctx);
           if (!row && state.remoteRevision > 0) return conflict(ctx, null);
           if (row) {
@@ -112,13 +144,14 @@
                 const received = await initialReceive(ctx.workspaceId, binding(ctx.workspaceId), clone(row)); guard(ctx);
                 if (received?.status === 'stored') continue;
               }
-              return conflict(ctx, row);
+              if (await settle(ctx, row)) continue;
+              return getState(ctx.workspaceId);
             }
             const applied = await storage.applyCompositionRemote(ctx.workspaceId, binding(ctx.workspaceId), row); guard(ctx);
-            if (applied.status === 'conflict') return conflict(ctx, row);
+            if (applied.status === 'conflict') { if (await settle(ctx, row)) continue; return getState(ctx.workspaceId); }
           }
           const outbox = await storage.prepareCompositionUpload(ctx.workspaceId, binding(ctx.workspaceId)); guard(ctx);
-          if (outbox) { if (await send(ctx, outbox)) continue; return getState(ctx.workspaceId); }
+          if (outbox) { if (await send(ctx, outbox) || autoResolve) continue; return getState(ctx.workspaceId); }
           await storage.setCompositionError(ctx.workspaceId, binding(ctx.workspaceId), null); guard(ctx);
           emit(ctx.workspaceId); return getState(ctx.workspaceId);
         }
@@ -232,5 +265,5 @@
     function subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     return Object.freeze({ start, getState, enable, pause, syncNow, compare, resolve, subscribe, dispose });
   }
-  return Object.freeze({ create });
+  return Object.freeze({ create, latest });
 });

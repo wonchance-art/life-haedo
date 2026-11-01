@@ -144,7 +144,7 @@ async function main() {
         const u = new URL(request.url()), method = request.method(); if (u.origin !== cloud || ['GET', 'OPTIONS'].includes(method) || u.pathname.startsWith('/auth/')) return;
         const owner = server.libraryOwner(request); let body; try { body = request.postDataJSON(); } catch (_) {}
         const compositionRead = method === 'POST' && u.pathname === '/rest/v1/rpc/life_composition_get' && owner === value.owner && body && Object.keys(body).length === 1 && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.p_workspace_id);
-        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && ['life_sync_put', 'life_composition_put', 'life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put'].includes(rpc);
+        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && ['life_sync_put', 'life_composition_put', 'life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put', 'life_account_document_put', 'life_account_document_changes'].includes(rpc); // Account documents sync automatically (2026-11-01).
         const chunk = method === 'POST' && u.pathname.startsWith('/storage/v1/object/life-library-originals/' + owner + '/');
         if (!(compositionRead || owner === value.owner && (allowedRpc || chunk))) report.forbiddenWrites.push({ name, method, path: u.pathname, owner });
       });
