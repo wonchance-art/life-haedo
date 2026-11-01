@@ -7,7 +7,7 @@
     const M = life.MaterialWriting, fresh = () => life.Core.id(), clone = value => structuredClone(value);
     let state = null, selected = null, host = null, surface = null, status = null, error = null, selector = null, blocks = null, copies = null, output = null;
     let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
-    let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null;
+    let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
     const valid = token => !disposed && isCurrent() && (token == null || epoch === token);
     const mounted = token => valid(token) && !!host?.isConnected;
@@ -25,8 +25,34 @@
       }
       const recovery = surface.querySelector('.mw-recovery');
       if (recovery) { recovery.hidden = !failure; recovery.querySelector('#mwRecover').hidden = !conflict(); }
+      const arrived = surface.querySelector('#mwIncoming'); if (arrived) arrived.hidden = !incoming;
       onDirty();
     }
+    // Another device (account sync) or tab changed the stored preparations. Reload at once when
+    // nothing is unsaved here; otherwise keep the input and offer the change explicitly.
+    function remoteChanged(event) {
+      if (disposed || event?.type !== 'material_writing_changed' || event.workspaceId !== workspaceId) return;
+      // Own saves announce their revision before this screen records it; check after they settle.
+      setTimeout(() => {
+        if (!mounted() || !state || !(event.revision > state.revision)) return;
+        if (!dirty() && !navigating && !failure) { reload({ planId: selected }).catch(() => { incoming = true; message(); }); return; }
+        incoming = true; message();
+      }, 0);
+    }
+    async function loadIncoming() {
+      guard(); const original = selected;
+      // Unsaved input is first kept as its own preparation copy; nothing typed here is dropped.
+      if (dirty() || conflict()) { await recover(); if (!mounted()) return; }
+      else {
+        const token = epoch, version = tick, next = await storage.readMaterialWriting(workspaceId);
+        if (!mounted(token)) return; guard(); if (tick !== version) throw fault('material_input_pending', '불러오는 동안 입력이 바뀌었습니다. 다시 눌러 주세요.');
+        M.validate(next); state = clone(next); stored = tick;
+      }
+      // recover() already read the latest stored preparations; show the changed one.
+      incoming = false; selected = state.plans.some(value => value.id === original) ? original : state.plans[0]?.id || null;
+      sourceView = null; view = null; clear(); await render();
+    }
+    const unsubscribe = typeof storage.subscribe === 'function' ? (() => { try { return storage.subscribe(workspaceId, remoteChanged); } catch (_) { return null; } })() : null;
     const transient = cause => ['material_source_pending', 'material_input_in_progress', 'material_input_pending', 'material_busy'].includes(cause?.code);
     function report(cause) {
       // A temporary movement guard must not replace a real save/CAS failure.
@@ -271,7 +297,9 @@
       status = el('p', '', 'life-meta mw-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       error = el('p', '', 'life-error mw-error'); error.setAttribute('role', 'alert'); error.hidden = true;
       const recovery = el('div', null, 'life-actions mw-recovery'); recovery.append(button('다시 저장', async () => { await flushInternal(); clear(); }, { id: 'mwRetry' }), button('내 변경을 새 준비 사본으로 보관', recover, { id: 'mwRecover' }));
-      surface.append(toolbar, status, error, recovery); updateSelector(); const owner = plan(); if (!owner) { surface.append(el('p', '새 작성 준비에 자료와 내 생각을 모아 한 편의 글로 이어 써 보세요.', 'life-help')); message(); return; }
+      const arrived = el('div', null, 'life-actions mw-incoming'); arrived.id = 'mwIncoming'; arrived.hidden = !incoming;
+      arrived.append(button('다른 기기에서 바뀜 · 불러오기', loadIncoming, { id: 'mwLoadIncoming' }));
+      surface.append(toolbar, status, error, recovery, arrived); updateSelector(); const owner = plan(); if (!owner) { surface.append(el('p', '새 작성 준비에 자료와 내 생각을 모아 한 편의 글로 이어 써 보세요.', 'life-help')); message(); return; }
       surface.append(field('글 제목', owner, 'title', { id: 'mwTitle', max: 500, multiline: false }), field('비공개 질문', owner, 'question', { id: 'mwQuestion' }),
         el('p', '질문과 자료 메모는 준비에만 보관합니다. 글에 넣을 생각은 아래 문단에 쓰거나 자료 메모를 명시적으로 복사해 주세요.', 'life-help'));
       output = el('section', null, 'mw-output'); surface.append(output); renderOutput();
@@ -341,7 +369,7 @@
       if (!mounted(token)) return;
       guard();
       if (tick !== version || selected !== previous || acting || navigating) throw fault('material_input_pending', '조회하는 동안 입력이 바뀌었습니다. 현재 입력을 보관한 뒤 다시 불러와 주세요.');
-      M.validate(next); rememberView(); state = clone(next); stored = tick;
+      M.validate(next); rememberView(); state = clone(next); stored = tick; incoming = false;
       selected = planId || selected; if (!plan()) selected = state.plans[0]?.id || null;
       if (selected !== previous) { sourceView = null; view = null; }
       clear(); await render(); if (mounted(token)) restoreView();
@@ -350,7 +378,7 @@
       rememberView(); epoch++; clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
       host = surface = status = error = selector = blocks = copies = output = null; composing.clear(); pendingFields.clear();
     }
-    function dispose() { detach(); disposed = true; state = null; sourceView = view = null; }
+    function dispose() { detach(); disposed = true; unsubscribe?.(); state = null; sourceView = view = null; }
     return { mount, reload, flush, dirty, detach, dispose, getView: () => ({ planId: selected }) };
   }
   life.MaterialWritingUI = Object.freeze({ create });
