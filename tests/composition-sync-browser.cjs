@@ -171,12 +171,12 @@ async function main() {
       const source = await b.page.evaluate(id => HaedoLife.Shell.storage.read(id), id); assert.deepEqual(semantic(source), semantic(server.row(accounts.a.id, id).data));
       assert.equal(server.requests.some(value => value.kind.startsWith('public')), false);
     });
-    await check('offline competing page edits keep the newer upload; the other side downloads and restores as a new copy', async context => {
+    await check('offline competing page edits keep the newer edit; the other side downloads and restores as a new copy', async context => {
       const { server } = context, { a, b, id } = await paired(context);
       server.compositionOffline.add('a'); server.compositionOffline.add('b');
-      await change(a.page, id, '첫 기기의 수정'); await change(b.page, id, '두 번째 기기의 수정');
+      await change(b.page, id, '두 번째 기기의 수정'); await a.page.waitForTimeout(20); await change(a.page, id, '첫 기기의 수정'); // A's edit is the newer one
       await sync(a.page, id); await sync(b.page, id); server.compositionOffline.delete('a'); await sync(a.page, id); server.compositionOffline.delete('b');
-      // A's change reached the server after B's offline edit: the server side is newer and B's side becomes the recovery copy.
+      // A's edit is newer than B's offline edit (edit times, not upload order): B's side becomes the recovery copy.
       const loser = copy((await composition(b.page, id)).books); assert.equal((await composition(b.page, id)).page.title, '두 번째 기기의 수정');
       assert.equal(await sync(b.page, id), null); await go(b.page); await waitStatus(b.page, 'synced'); await noManualChoice(b.page);
       await b.page.locator('#compositionNotice').waitFor(); assert.match(await b.page.locator('#lifeCompositionSync').innerText(), /다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다/);
