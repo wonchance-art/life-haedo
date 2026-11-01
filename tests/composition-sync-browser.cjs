@@ -14,52 +14,8 @@ const out = process.env.COMPOSITION_REPORT_DIR ? path.resolve(process.env.COMPOS
 const copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 
-class CompositionCloud extends FakeCloud {
-  constructor() { super(); this.compositions = new Map(); this.compositionReceipts = new Map(); this.compositionMissing = false; this.compositionOffline = new Set(); this.loseComposition = new Set(); this.heldComposition = null; }
-  composition(owner, id) { return this.compositions.get(this.key(owner, id)); }
-  compositionWrites(device) { return this.requests.filter(value => value.kind === 'composition-write' && (!device || value.device === device)); }
-  async handle(route, device) {
-    const request = route.request(), url = new URL(request.url());
-    if (!['/rest/v1/rpc/life_composition_get', '/rest/v1/rpc/life_composition_put'].includes(url.pathname)) return super.handle(route, device);
-    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-type': 'application/json' };
-    const send = (body, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(body) });
-    if (request.method() === 'OPTIONS') return send(null, 204);
-    if (this.offline.has(device) || this.compositionOffline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }
-    let account;
-    try { const token = request.headers().authorization.replace(/^Bearer /i, ''), payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')); account = Object.values(accounts).find(value => value.id === payload.sub); } catch (_) {}
-    if (!account) return send({ code: 'PGRST301', message: 'Anonymous account required' }, 401);
-    const body = request.postDataJSON(), id = body.p_workspace_id, owner = account.id, key = this.key(owner, id), write = url.pathname.endsWith('_put');
-    this.requests.push({ kind: write ? 'composition-write' : 'composition-read', owner, id, device, operation: body.p_operation_id, expected: body.p_expected_revision });
-    if (this.compositionMissing) { this.expectedFailures++; return send({ code: 'PGRST202', message: 'Anonymous composition schema missing' }, 404); }
-    const hold = this.heldComposition?.device === device && this.heldComposition.write === write ? this.heldComposition : null;
-    if (hold) this.heldComposition = null;
-    if (!write) {
-      const result = copy(this.compositions.get(key) || null);
-      if (hold) { hold.entered.resolve(); await hold.release.promise; }
-      return send(result);
-    }
-    const { p_expected_revision: expected, p_operation_id: operation, p_source_revision: sourceRevision, p_data: data } = body;
-    const payload = JSON.stringify({ expected, sourceRevision, data }), receiptKey = key + ':' + operation;
-    const receipt = this.compositionReceipts.get(receiptKey); let result;
-    if (receipt) {
-      if (receipt.payload !== payload) return send({ code: '22023', message: 'life_composition_operation_mismatch' }, 400);
-      result = receipt.result;
-    } else {
-      const source = this.row(owner, id), old = this.compositions.get(key);
-      if (!source || sourceRevision > source.revision) return send({ code: '22023', message: 'life_composition_source_not_ready' }, 400);
-      if (!old && expected !== 0) result = { status: 'missing' };
-      else if (old && old.revision !== expected) result = { status: 'conflict', revision: old.revision };
-      else {
-        result = { status: 'stored', revision: (old?.revision || 0) + 1 };
-        this.compositions.set(key, { workspace_id: id, revision: result.revision, source_revision: sourceRevision, data: copy(data), updated_at: new Date().toISOString() });
-        this.compositionReceipts.set(receiptKey, { payload, result });
-      }
-    }
-    if (hold) { hold.entered.resolve(); await hold.release.promise; }
-    if (this.loseComposition.has(device)) { this.expectedFailures++; return route.abort('failed'); }
-    return send(result);
-  }
-}
+// Composition RPCs live in tests/helpers/composition-cloud.cjs, composed into the shared FakeCloud.
+class CompositionCloud extends FakeCloud {}
 async function go(page, view = 'sync') {
   await page.goto(base + '/index.html?section=manage&view=' + view); await ready(page); await settle(page);
   await page.waitForFunction(() => !!HaedoLife.Shell.compositionSync);
@@ -136,9 +92,26 @@ async function receiveSources(page, id) {
   await page.locator('#lifeRemoteList').getByRole('button', { name: '이 작업공간 받기', exact: true }).click();
   await waitForState(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), id); await settle(page); await go(page);
 }
-async function enable(page) { await page.locator('#compositionEnable').click(); await page.waitForFunction(() => document.querySelector('#lifeCompositionSync')?.getAttribute('aria-busy') === 'false'); }
+// No opt-in button: opening the panel starts composition sync once (legacy, non-account mode).
+// After a reload the originals re-verify first; until then the panel shows the source-pending
+// message and its one retry control (the background pass also enrols it once originals sync).
+async function enable(page, { untilSourceReady = true } = {}) {
+  await go(page);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await page.waitForFunction(() => { const state = document.querySelector('#compositionStatus')?.dataset.state, error = document.querySelector('#compositionError');
+      return document.querySelector('#lifeCompositionSync')?.getAttribute('aria-busy') !== 'true' && (state && !['not_enabled', 'paused'].includes(state) || error && !error.hidden); });
+    const sourcePending = await page.evaluate(() => { const error = document.querySelector('#compositionError'); return !!error && !error.hidden && /원문 동기화/.test(error.textContent); });
+    if (!sourcePending || !untilSourceReady) return;
+    // Originals never connected: the source-pending error is the expected, final state.
+    if (!await page.evaluate(async () => (await HaedoLife.Shell.sync.getState(await HaedoLife.Shell.storage.getActive())).enabled)) return;
+    await page.waitForTimeout(300); if (await page.locator('#compositionSyncNow').count()) await page.locator('#compositionSyncNow').click();
+  }
+}
+const REMOVED = ['#compositionEnable', '#compositionPause', '#compositionCompare', '#compositionUseLocal', '#compositionUseRemote'];
+async function noManualChoice(page) { for (const selector of REMOVED) assert.equal(await page.locator(selector).count(), 0, selector); }
 async function waitStatus(page, value) { await page.locator('#compositionStatus[data-state="' + value + '"]').waitFor(); }
-async function receiveComposition(page) { await enable(page); await waitStatus(page, 'conflict'); await page.locator('#compositionCompare').click(); await page.locator('#compositionUseRemote').click(); await waitStatus(page, 'synced'); }
+// A device that never edited its composition takes the server copy automatically.
+async function receiveComposition(page) { await enable(page); await waitStatus(page, 'synced'); }
 function semantic(value) { const result = copy(value); delete result.revision; return result; }
 
 function annotation(error) {
@@ -183,49 +156,31 @@ async function main() {
     }
   }
   try {
-    await check('explicit source and composition opt-in; second device receives exact references through UI', async ({ server, device }) => {
+    await check('composition sync starts by itself once originals sync; the second device receives exact references without a choice', async ({ server, device }) => {
       const a = await device('a'), b = await device('b'), { id } = await seed(a.page), before = await composition(a.page, id);
       assert.equal(server.compositionWrites().length, 0); assert.equal(server.writes().length, 0);
-      assert.match(await a.page.locator('#lifeCompositionSync').innerText(), /글쓰기 초안과 공개 사본은 포함하지 않습니다/);
+      await noManualChoice(a.page);
       await enable(a.page); await a.page.locator('#compositionError').waitFor(); assert.equal(server.compositionWrites().length, 0); assert.equal((await metadata(a.page, id)).enabled, false);
       await sourcesOn(a.page, id); assert.equal(server.compositionWrites().length, 0); await enable(a.page); await waitStatus(a.page, 'synced');
       assert.deepEqual(semantic(server.composition(accounts.a.id, id).data), semantic(before));
-      await receiveSources(b.page, id); assert.equal((await composition(b.page, id)).page.entries.length, 0); assert.equal(server.compositionWrites('b').length, 0);
-      await receiveComposition(b.page); assert.deepEqual(semantic(await composition(b.page, id)), semantic(before)); assert.equal(server.compositionWrites('b').length, 0);
+      await receiveSources(b.page, id); assert.equal(server.compositionWrites('b').length, 0);
+      await receiveComposition(b.page); await noManualChoice(b.page); assert.deepEqual(semantic(await composition(b.page, id)), semantic(before)); assert.equal(server.compositionWrites('b').length, 0);
       await b.page.goto(base + '/index.html?section=records&view=page'); await ready(b.page); await b.page.locator('.wb-page-entry').waitFor();
       assert.match(await b.page.locator('#lifeMain').innerText(), /다음 산책에서는 같은 나무/);
       await b.page.reload(); await ready(b.page); assert.deepEqual(semantic(await composition(b.page, id)), semantic(before));
       const source = await b.page.evaluate(id => HaedoLife.Shell.storage.read(id), id); assert.deepEqual(semantic(source), semantic(server.row(accounts.a.id, id).data));
       assert.equal(server.requests.some(value => value.kind.startsWith('public')), false);
     });
-    await check('offline competing page edits require comparison; discarded side downloads and restores as a new copy', async context => {
+    await check('offline competing page edits keep the newer upload; the other side downloads and restores as a new copy', async context => {
       const { server } = context, { a, b, id } = await paired(context);
       server.compositionOffline.add('a'); server.compositionOffline.add('b');
       await change(a.page, id, '첫 기기의 수정'); await change(b.page, id, '두 번째 기기의 수정');
       await sync(a.page, id); await sync(b.page, id); server.compositionOffline.delete('a'); await sync(a.page, id); server.compositionOffline.delete('b');
-      await sync(b.page, id); await waitStatus(b.page, 'conflict'); assert.equal((await composition(b.page, id)).page.title, '두 번째 기기의 수정');
-      await b.page.locator('#compositionCompare').click(); await b.page.locator('#compositionComparison').waitFor();
-      assert.match(await b.page.locator('#compositionComparison').innerText(), /첫 기기의 수정/); assert.match(await b.page.locator('#compositionComparison').innerText(), /두 번째 기기의 수정/);
-      for (const key of ['local', 'remote']) await b.page.locator('#compositionDetails-' + key).click();
-      assert.match(await b.page.locator('.composition-side').nth(0).locator('.composition-book').innerText(), /두 번째 기기의 수정의 장 원고/);
-      assert.match(await b.page.locator('.composition-side').nth(1).locator('.composition-book').innerText(), /첫 기기의 수정의 장 원고/);
-      for (const [index, label] of [[0, '두 번째 기기의 수정'], [1, '첫 기기의 수정']]) {
-        const text = await b.page.locator('.composition-side').nth(index).locator('.composition-book').innerText();
-        for (const value of [label + '의 현재 해석', label + '에서 아직 모르는 점', label + '의 제외한 해석', label + '의 제외한 불확실성',
-          '현재 해석 · 원고에서 제외', '뒷받침하는 글', '다른 관점의 글', '보관한 장 · 현재 원고에서 제외',
-          label + '의 보관한 개정본', label + '의 당시 책 제목', label + '의 당시 질문', label + '의 개정본 원고',
-          label + '의 개정본 해석', label + '의 개정본 제외 해석', '2026-10-08T00:00:00.000Z', 'missing_edition_version']) assert(text.includes(value), 'Conflict comparison omitted ' + value);
-      }
-      assert.match(await b.page.locator('.composition-side').nth(0).locator('.composition-book').innerText(), /보관한 책/);
-      assert.match(await b.page.locator('.composition-side').nth(1).locator('.composition-book').innerText(), /작업 중인 책/);
-      const loser = copy((await composition(b.page, id)).books);
-      await capture(b.page, 'comparison');
-      await b.page.locator('.composition-side > details').evaluateAll(elements => elements.forEach(details => {
-        const edition = details.querySelector('.composition-edition');
-        details.scrollTop += edition.getBoundingClientRect().top - details.getBoundingClientRect().top - details.querySelector('summary').getBoundingClientRect().height - 16;
-      }));
-      await capture(b.page, 'edition-comparison');
-      await b.page.locator('#compositionUseRemote').focus(); await b.page.keyboard.press('Enter'); await waitStatus(b.page, 'synced');
+      // A's change reached the server after B's offline edit: the server side is newer and B's side becomes the recovery copy.
+      const loser = copy((await composition(b.page, id)).books); assert.equal((await composition(b.page, id)).page.title, '두 번째 기기의 수정');
+      assert.equal(await sync(b.page, id), null); await go(b.page); await waitStatus(b.page, 'synced'); await noManualChoice(b.page);
+      await b.page.locator('#compositionNotice').waitFor(); assert.match(await b.page.locator('#lifeCompositionSync').innerText(), /다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다/);
+      await capture(b.page, 'resolved-notice');
       assert.equal((await composition(b.page, id)).page.title, '첫 기기의 수정');
       assert.match((await composition(b.page, id)).books[0].chapters[0].note, /첫 기기의 수정의 장 원고/);
       assert.equal((await composition(b.page, id)).books[0].chapters[0].insights[0].statement, '첫 기기의 수정의 현재 해석');
@@ -305,24 +260,23 @@ async function main() {
       assert.deepEqual((await composition(a.page, id)).books, durableBooks);
       assert.equal(server.composition(accounts.a.id, id).revision, revision); assert.ok(server.compositionWrites('a').filter(value => value.operation === operation).length >= 2);
     });
-    await check('paused source or composition cannot upload; missing SQL stays an actionable preserved-local error', async ({ server, device }) => {
+    await check('paused originals stop composition upload; missing SQL stays an actionable preserved-local error', async ({ server, device }) => {
       const a = await device('a'), { id } = await seed(a.page), before = await composition(a.page, id); await sourcesOn(a.page, id);
       server.compositionMissing = true; await enable(a.page); await a.page.locator('#compositionError').waitFor();
       assert.match(await a.page.locator('#compositionError').innerText(), /준비/); assert.equal((await metadata(a.page, id)).enabled, false); assert.deepEqual(await composition(a.page, id), before);
       await capture(a.page, 'missing-installation'); server.compositionMissing = false; await enable(a.page); await waitStatus(a.page, 'synced');
       await a.page.evaluate(id => HaedoLife.Shell.sync.pause(id), id); const writes = server.compositionWrites().length;
       await change(a.page, id, '원문 연결 중지 후 로컬 수정'); assert.equal(await sync(a.page, id), 'composition_source_pending'); assert.equal(server.compositionWrites().length, writes);
-      await a.page.locator('#compositionPause').click(); await waitStatus(a.page, 'paused'); assert.equal((await metadata(a.page, id)).enabled, false); assert.equal(await sync(a.page, id), 'sync_paused'); assert.equal(server.compositionWrites().length, writes);
-      await capture(a.page, 'paused');
+      await noManualChoice(a.page); await capture(a.page, 'source-paused');
     });
-    await check('local choice retains server loser; stale comparison cannot overwrite newer local edits', async context => {
-      const { server } = context, { a, b, id } = await paired(context); server.compositionOffline.add('b');
-      await change(b.page, id, '현재 기기 선택'); await change(a.page, id, '서버 쪽 이전 구성'); await sync(a.page, id); server.compositionOffline.delete('b'); await sync(b.page, id);
-      await b.page.locator('#compositionCompare').click(); await b.page.locator('#compositionComparison').waitFor();
-      await change(b.page, id, '비교 뒤 더 쓴 구성'); await b.page.locator('#compositionUseLocal').click();
-      await b.page.locator('#compositionError').waitFor(); assert.equal((await composition(b.page, id)).page.title, '비교 뒤 더 쓴 구성'); assert.equal(server.composition(accounts.a.id, id).data.page.title, '서버 쪽 이전 구성');
-      await b.page.locator('#compositionCompare').click(); await b.page.locator('#compositionUseLocal').click(); await waitStatus(b.page, 'synced');
-      assert.equal(server.composition(accounts.a.id, id).data.page.title, '비교 뒤 더 쓴 구성');
+    await check('a newer local edit wins and keeps the earlier server composition as a recovery copy', async context => {
+      const { server } = context, { a, b, id } = await paired(context);
+      await change(a.page, id, '서버 쪽 이전 구성'); await sync(a.page, id); await b.page.waitForTimeout(20);
+      server.compositionOffline.add('b'); await change(b.page, id, '현재 기기 선택'); await sync(b.page, id); server.compositionOffline.delete('b');
+      assert.equal(await sync(b.page, id), null); await go(b.page); await waitStatus(b.page, 'synced'); await noManualChoice(b.page);
+      assert.equal((await composition(b.page, id)).page.title, '현재 기기 선택'); assert.equal(server.composition(accounts.a.id, id).data.page.title, '현재 기기 선택');
+      await b.page.locator('#compositionNotice').waitFor(); await b.page.locator('#compositionNoticeDone').click(); await b.page.locator('#compositionNotice').waitFor({ state: 'detached' });
+      await b.page.reload(); await ready(b.page); await go(b.page); assert.equal(await b.page.locator('#compositionNotice').count(), 0, 'a dismissed notice stays dismissed');
       const recovery = await b.page.evaluate(async id => { const s = HaedoLife.Shell.storage, rows = await s.listCompositionRecoveries(id); return s.readCompositionRecovery(id, rows[0].id); }, id);
       assert.equal(recovery.workbench.page.title, '서버 쪽 이전 구성');
       assert.match(recovery.workbench.books[0].chapters[0].note, /서버 쪽 이전 구성의 장 원고/);
@@ -338,34 +292,16 @@ async function main() {
       try {
         await b.page.evaluate(async () => HaedoAuth.signOut());
         held.release.resolve(); await pending.catch(() => {});
-        await b.page.goto(base + '/login.html?next=index.html'); await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page);
+        // Sign-out may already be redirecting this page; wait for it, then open the login page.
+        await b.page.goto(base + '/login.html?next=index.html').catch(async () => { await b.page.waitForLoadState('load'); await b.page.goto(base + '/login.html?next=index.html'); });
+        await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page);
         assert.equal(await b.page.evaluate(() => HaedoAuth.user.id), accounts.b.id);
         assert.equal((await b.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).some(value => value.workspaceId === id), false);
         assert.equal(server.compositionWrites('b').some(value => value.owner === accounts.b.id), false);
         assert.equal(await b.page.locator('body').innerText().then(value => value.includes('이전 계정의 비공개 구성')), false);
       } finally { held.release.resolve(); }
     });
-    await check('UI pause cancels pending first enable and active read; re-enable completes before either late response', async ({ server, device }) => {
-      const a = await device('a'), { id } = await seed(a.page); await sourcesOn(a.page, id);
-      for (const first of [true, false]) {
-        const held = { device: 'a', write: false, entered: deferred(), release: deferred() }; server.heldComposition = held;
-        await a.page.locator(first ? '#compositionEnable' : '#compositionSyncNow').click(); await held.entered.promise;
-        try {
-          assert.equal(await a.page.locator('#lifeCompositionSync').getAttribute('aria-busy'), 'true');
-          assert.equal(await a.page.locator('#compositionPause').isEnabled(), true);
-          await a.page.locator('#compositionPause').focus(); await a.page.keyboard.press('Enter');
-          await waitStatus(a.page, first ? 'not_enabled' : 'paused'); assert.equal((await metadata(a.page, id)).enabled, false);
-          // Keep the earlier HTTP response held while a new generation completes.
-          await enable(a.page); await waitStatus(a.page, 'synced');
-          const settled = await metadata(a.page, id), value = await composition(a.page, id), writes = server.compositionWrites().length;
-          held.release.resolve(); await a.page.waitForLoadState('networkidle');
-          assert.deepEqual(await metadata(a.page, id), settled); assert.deepEqual(await composition(a.page, id), value);
-          assert.equal(server.compositionWrites().length, writes); assert.equal(await a.page.locator('#compositionError').isVisible(), false);
-          assert.equal(await a.page.locator('#lifeCompositionSync').getAttribute('aria-busy'), 'false');
-        } finally { held.release.resolve(); }
-      }
-    });
-    await check('equal-count comparison identifies different exact source versions; expanded detail and keyboard focus survive refresh', async ({ server, device }) => {
+    await check('a newer server edit replaces different exact source versions only with the exact other side kept as recovery', async ({ server, device }) => {
       const a = await device('a'), b = await device('b'), { id, refs } = await seed(a.page);
       const newer = await a.page.evaluate(async ({ id, sourceId }) => {
         const s = HaedoLife.Shell.storage, c = HaedoLife.Core, bundle = await s.read(id), source = bundle.sources.find(value => value.id === sourceId);
@@ -384,33 +320,21 @@ async function main() {
         await s.saveWorkbench(id, state, state.revision);
       }, { id, newer });
       await a.page.evaluate(async id => { const s = HaedoLife.Shell.storage, state = await s.readWorkbench(id); state.page.intro = '처음 보관한 원문 버전으로 다시 읽는다.'; await s.saveWorkbench(id, state, state.revision); }, id);
-      await sync(a.page, id); server.compositionOffline.delete('b'); await sync(b.page, id); await waitStatus(b.page, 'conflict');
-      await b.page.locator('#compositionCompare').click(); await b.page.locator('#compositionComparison').waitFor();
-      const sides = b.page.locator('.composition-side'); assert.equal(await sides.count(), 2);
-      assert.equal(await sides.nth(0).locator(':scope > .life-meta').innerText(), await sides.nth(1).locator(':scope > .life-meta').innerText());
-      for (const key of ['local', 'remote']) { await b.page.locator('#compositionDetails-' + key).focus(); await b.page.keyboard.press('Enter'); }
-      assert.match(await sides.nth(0).innerText(), /버전 2 · 표시/); assert.match(await sides.nth(0).innerText(), /두 번째 버전에서는 비 온 뒤의 정원/);
-      assert.match(await sides.nth(1).innerText(), /버전 1 · 표시/); assert.match(await sides.nth(1).innerText(), /정원 산책을 마치고 앉았다/);
-      assert.equal((await sides.nth(1).innerText()).includes('두 번째 버전에서는'), false);
-      await b.page.locator('#compositionDetails-local').focus();
-      const positions = await b.page.locator('.composition-side details').evaluateAll(elements => elements.map(el => { el.scrollTop = 120; el.dataset.qaRefresh = 'before'; return el.scrollTop; }));
-      assert.ok(positions.every(value => value > 0), 'long comparison details did not scroll');
-      await sync(b.page, id);
-      await b.page.waitForFunction(() => document.activeElement?.id === 'compositionDetails-local' && [...document.querySelectorAll('.composition-side details')].every(value => value.open && value.dataset.qaRefresh !== 'before'));
-      assert.deepEqual(await b.page.locator('.composition-side details').evaluateAll(elements => elements.map(el => el.scrollTop)), positions, 'refresh reset the reading position inside comparison details');
-      await capture(b.page, 'exact-version-comparison');
-      assert.equal((await composition(b.page, id)).page.entries[0].parts[0].versionId, newer);
+      await sync(a.page, id); server.compositionOffline.delete('b'); assert.equal(await sync(b.page, id), null);
+      await go(b.page); await waitStatus(b.page, 'synced'); await noManualChoice(b.page);
+      const kept = await composition(b.page, id); assert.equal(kept.page.intro, '처음 보관한 원문 버전으로 다시 읽는다.');
+      assert.equal(kept.page.entries[0].parts[0].versionId, refs[0].versionId, 'the exact older version stays exact');
+      const recovery = await b.page.evaluate(async id => { const s = HaedoLife.Shell.storage, rows = await s.listCompositionRecoveries(id); return s.readCompositionRecovery(id, rows[0].id); }, id);
+      assert.equal(recovery.workbench.page.entries[0].parts[0].versionId, newer, 'the newer exact version is kept, not replaced');
+      assert.deepEqual(recovery.workbench.groups[0].versionIds, [newer]); assert.ok(recovery.bundle.sourceVersions.some(value => value.id === newer));
+      await b.page.locator('details[data-section="recovery"]').waitFor(); await capture(b.page, 'exact-version-recovery');
       assert.equal(server.composition(accounts.a.id, id).data.page.entries[0].parts[0].versionId, refs[0].versionId);
     });
-    await check('loading and empty composition management remain keyboard accessible in three widths', async ({ server, device }) => {
-      const a = await device('a', 390); await capture(a.page, 'not-enabled');
-      const id = await a.page.evaluate(() => HaedoLife.Shell.storage.getActive()); await sourcesOn(a.page, id);
-      const held = { device: 'a', write: false, entered: deferred(), release: deferred() }; server.heldComposition = held;
-      const enabling = a.page.locator('#compositionEnable').click(); await held.entered.promise;
-      try { assert.equal(await a.page.locator('#lifeCompositionSync').getAttribute('aria-busy'), 'true'); assert.equal(await a.page.locator('#compositionEnable').isDisabled(), true); await capture(a.page, 'loading'); }
-      finally { held.release.resolve(); await enabling; }
-      await waitStatus(a.page, 'synced'); await a.page.locator('#compositionPause').focus(); await a.page.keyboard.press('Enter'); await waitStatus(a.page, 'paused');
-      await a.page.locator('#compositionEnable').focus(); await a.page.keyboard.press('Enter'); await waitStatus(a.page, 'synced'); await capture(a.page, 'empty-synced');
+    await check('the compact composition status stays readable and keyboard reachable in three widths without opt-in controls', async ({ server, device }) => {
+      const a = await device('a', 390); const id = await a.page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      await enable(a.page); await a.page.locator('#compositionError').waitFor(); await noManualChoice(a.page); await capture(a.page, 'source-pending');
+      await a.page.locator('#compositionSyncNow').focus(); assert.equal(await a.page.evaluate(() => document.activeElement?.id), 'compositionSyncNow');
+      await sourcesOn(a.page, id); await enable(a.page); await waitStatus(a.page, 'synced'); await noManualChoice(a.page); await capture(a.page, 'empty-synced');
     });
   } finally { await browser.close(); await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); }
   assert.deepEqual(report.consoleErrors, [], 'unexpected console errors'); assert.deepEqual(report.pageErrors, [], 'unexpected page errors');
