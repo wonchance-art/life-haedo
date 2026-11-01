@@ -4735,81 +4735,35 @@
       if (!libraryMetaSync) return;
       const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration;
       const host = node('section', null, 'life-library-metadata'); host.id = 'lifeLibraryMetadata'; main.append(host);
-      let active = true, sequence = 0, working = false, view = null, current = null, copies = [], message = '';
+      let active = true, sequence = 0, working = false, current = null, copies = [], message = '';
       const live = () => active && !disposed && state.mode === 'sync' && workspace === workspaceGeneration && state.bundle?.workspaceId === workspaceId && host.isConnected;
       const control = (label, id, action) => {
         const result = button(label, async () => {
           if (!live() || working) return;
           working = true; host.setAttribute('aria-busy', 'true'); host.querySelectorAll('button').forEach(value => { value.disabled = true; });
           try { await persistDrafts(); if (!live()) return; await action(); }
-          catch (cause) { if (live()) { message = cause.message || '분류 변경을 처리하지 못했습니다. 기존 내용은 유지했습니다.'; view = null; } }
+          catch (cause) { if (live()) message = cause.message || '분류 변경을 처리하지 못했습니다. 기존 내용은 유지했습니다.'; }
           finally { working = false; if (live()) { await refresh(); host.querySelector('#' + id)?.focus({ preventScroll: true }); } }
         }); result.id = id; return result;
       };
-      function side(label, metadata, bundle) {
-        const section = node('section', null, 'composition-side'); section.append(node('h4', label));
-        const detail = node('details', null, 'life-details'); detail.open = true;
-        detail.append(node('summary', '폴더·컬렉션·9칸 내용'));
-        const folders = global.HaedoLife.SourceFolders.list(metadata.sourceFolders);
-        const sourceNames = new Map(bundle.sources.map(source => [source.id, source.title]));
-        const folderNames = new Map(folders.map(value => [value.id, value.label]));
-        detail.append(node('h5', '폴더'));
-        folders.forEach(value => detail.append(node('p', value.label, 'life-note')));
-        metadata.sourceFolders.assignments.forEach(value => {
-          detail.append(node('p', (sourceNames.get(value.sourceId) || '확인되지 않은 자료') + ' → ' + folderNames.get(value.folderId), 'life-meta'));
-        });
-        detail.append(node('h5', '컬렉션'));
-        metadata.collection.items.forEach(value => {
-          detail.append(node('h6', value.title), node('p', [value.creator, value.url, ...(value.tags || [])].filter(Boolean).join(' · '), 'life-meta'));
-          if (value.archived) detail.append(node('p', '보관함', 'life-meta'));
-          if (value.note) detail.append(node('p', value.note, 'life-note'));
-          Object.values(value.details || {}).filter(Boolean).forEach(text => detail.append(node('p', text, 'life-note')));
-        });
-        detail.append(node('h5', '9칸'));
-        metadata.nineBoard.boards.forEach(board => {
-          detail.append(node('h6', board.title), node('p', board.intro, 'life-note'));
-          board.areas.forEach(area => {
-            detail.append(node('h6', area.title), node('p', area.note, 'life-note'));
-            area.items.forEach(item => {
-              detail.append(node('p', [item.attachment.title, item.attachment.creator, item.attachment.url].filter(Boolean).join(' · '), 'life-note'), node('p', item.reason, 'life-note'));
-              if (item.reference) {
-                const reference = node('details', null, 'life-details');
-                reference.append(node('summary', '연결한 정확한 근거'), node('pre', JSON.stringify(item.reference.value, null, 2), 'life-conflict-content'));
-                detail.append(reference);
-              }
-            });
-          });
-        });
-        section.append(detail); return section;
-      }
       function draw() {
         if (!live()) return;
         const focusId = host.contains(document.activeElement) ? document.activeElement.id : '';
         host.replaceChildren(); host.setAttribute('aria-busy', 'false');
-        host.hidden = !current?.conflict && !current?.error && !copies.length && !message;
+        host.hidden = !current?.conflict && !current?.error && !copies.length && !message && !current?.noticeAt;
         if (host.hidden) return;
         host.append(node('h3', '폴더·컬렉션·9칸'));
         if (message || current?.error) host.append(node('p', message || current.error.message, 'life-error'));
-        if (current?.conflict?.missing) host.append(node('p', '서버의 분류를 찾을 수 없습니다. 기존 내용과 복구 사본은 유지했습니다.', 'life-help'));
-        else if (current?.conflict) host.append(control('양쪽 분류 비교', 'lifeLibraryMetaCompare', async () => { view = await libraryMetaSync.compare(workspaceId); }));
-        else if (current?.error) host.append(control('다시 시도', 'lifeLibraryMetaRetry', async () => { await accountLibrary.retry(workspaceId); message = ''; }));
-        if (view?.remote && current?.conflict) {
-          const comparison = node('section', null, 'composition-comparison'); comparison.id = 'lifeLibraryMetaComparison';
-          comparison.append(side('이 기기', view.local, view.bundle), side('계정 보관본', view.remote.data, view.bundle));
-          comparison.append(node('p', '선택하지 않은 분류도 정확한 원문과 함께 복구 사본으로 남깁니다.', 'life-help'));
-          for (const [choice, label, id] of [['local', '이 기기 분류 유지', 'lifeLibraryMetaUseLocal'], ['remote', '계정 보관본 사용', 'lifeLibraryMetaUseRemote']]) {
-            comparison.append(control(label, id, async () => {
-              const reviewed = view;
-              const result = await libraryMetaSync.resolve(workspaceId, choice, reviewed);
-              if (!live()) return;
-              view = null; message = result.syncError?.message || '선택하지 않은 분류를 복구 사본으로 보관했습니다.';
-              await refreshLibrary();
-            }));
-          }
-          host.append(comparison);
+        // Conflicts resolve automatically (latest edit wins); the other side is a recovery copy below.
+        if (current?.noticeAt) {
+          const notice = node('p', '다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다.', 'life-help'); notice.id = 'lifeLibraryMetaNotice';
+          host.append(notice, control('확인', 'lifeLibraryMetaNoticeDone', () => libraryMetaSync.dismissNotice(workspaceId)));
         }
+        if (current?.conflict?.missing) host.append(node('p', '서버의 분류를 찾을 수 없습니다. 기존 내용과 복구 사본은 유지했습니다.', 'life-help'));
+        else if (current?.conflict) host.append(control('다시 시도', 'lifeLibraryMetaRetry', async () => { await libraryMetaSync.syncNow(workspaceId); message = ''; }));
+        else if (current?.error) host.append(control('다시 시도', 'lifeLibraryMetaRetry', async () => { await accountLibrary.retry(workspaceId); message = ''; }));
         if (copies.length) {
-          const recovery = node('details', null, 'life-details'); recovery.id = 'lifeLibraryMetaRecoveries';
+          const recovery = node('details', null, 'life-details'); recovery.id = 'lifeLibraryMetaRecoveries'; recovery.open = !!current?.noticeAt;
           recovery.append(node('summary', '분류 복구 사본 ' + copies.length + '개'));
           copies.forEach(copy => {
             recovery.append(node('p', copy.title || dateLabel(copy.createdAt), 'life-note'), control('복구 자료 내려받기', 'lifeLibraryMetaRecovery-' + copy.id, async () => {
