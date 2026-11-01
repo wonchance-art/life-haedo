@@ -1647,7 +1647,11 @@
       if (!changedPlans) return null;
       state.revision++; materialWriting().validate(state); await meta.put({ key: `material-writing:${workspaceId}`, value: state }); return state.revision;
     }
-    const materialContinuity = () => root.HaedoLife?.MaterialContinuity || (typeof require === 'function' && require('./material-continuity.js'));
+    const materialContinuity = () => options.materialContinuity || root.HaedoLife?.MaterialContinuity || (typeof require === 'function' && require('./material-continuity.js'));
+    // Verified fingerprints of unchanged preparations: (plan list revision, workspace revision,
+    // link revision, output override) fully determine the snapshot, so a background pass does
+    // not re-hash every exact original (up to 16 MiB) on every cycle. Per storage, bounded.
+    const materialFingerprints = new Map(), MATERIAL_FINGERPRINT_LIMIT = 64;
     const materialContinuityKey = (workspaceId, planId) => `material-continuity:${workspaceId}:${planId}`;
     const materialInstallKey = remoteId => `material-continuity-install:${accountKey}:${remoteId}`;
     function materialBinding(value) {
@@ -1852,9 +1856,19 @@
     async function readMaterialContinuitySnapshot(workspaceId, planId, options = {}) {
       collectionScope(workspaceId); requireId(planId, '글 준비');
       onlyFields(options, ['output'], 'invalid_material_continuity'); const override = options.output === undefined ? undefined : clone(options.output);
-      const value = await transaction(['bundles', 'meta'], 'readonly', tx => materialSnapshot(tx, workspaceId, planId, override));
+      let bundleRevision = null;
+      const value = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const snapshot = await materialSnapshot(tx, workspaceId, planId, override);
+        bundleRevision = (await tx.objectStore('bundles').get(workspaceId)).revision; return snapshot;
+      });
+      const cacheKey = [accountKey, workspaceId, planId, value.localRevision, bundleRevision, value.state?.revision || 0, override === undefined ? '-' : stablePayload(override)].join('|');
+      const cached = materialFingerprints.get(cacheKey);
+      if (cached) { value.fingerprint = cached; return value; }
       await materialContinuity().verify(value.data); scopeGuard();
-      value.fingerprint = await materialContinuity().fingerprint(value.data); scopeGuard(); return value;
+      value.fingerprint = await materialContinuity().fingerprint(value.data); scopeGuard();
+      materialFingerprints.set(cacheKey, value.fingerprint);
+      if (materialFingerprints.size > MATERIAL_FINGERPRINT_LIMIT) materialFingerprints.delete(materialFingerprints.keys().next().value);
+      return value;
     }
     function materialSnapshotGuard(value) {
       return stablePayload({ data: value.data, output: value.plan.output, review: materialReviewPayload(value), stateRevision: value.state?.revision || 0 });

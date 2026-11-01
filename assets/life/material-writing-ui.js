@@ -60,6 +60,8 @@
       if (mounted() && error) { error.textContent = [failure.message, failure !== cause ? cause.message : ''].filter(Boolean).join(' ') || '저장하지 못했습니다. 현재 입력을 유지했으니 다시 시도해 주세요.'; error.hidden = false; }
       message();
     }
+    // A refused move while sources were loading or source input was open ends with that condition.
+    function settleSourcePending() { if (failure?.code === 'material_source_pending' && !sourceLoading && !sources?.pending()) clear(); else message(); }
     function clear() { failure = null; if (error) { error.hidden = true; error.textContent = ''; } message(); }
     function clearReview() { review = null; surface?.querySelector('.mw-preview')?.remove(); }
     function guardLocal() {
@@ -237,7 +239,7 @@
       const token = epoch, owner = plan(), active = () => mounted(token) && plan()?.id === owner.id && target.isConnected;
       sourcePlanId = owner.id;
       sources = life.MaterialWritingSources.create({ host: target, view: sourceView, getBundle, getPlan: () => owner, isCurrent: active,
-        onPendingChange: pending => { if (active()) { message(); if (!pending) schedule(); } },
+        onPendingChange: pending => { if (active()) { settleSourcePending(); if (!pending) schedule(); } },
         onAdd: async material => {
           guardLocal(); if (conflict()) throw failure; owner.materials.push(clone(material));
           try { M.validate(state); } catch (cause) { owner.materials.pop(); throw cause; }
@@ -277,7 +279,7 @@
           await navigate(onOpenSource, { ...context, planId: owner.id });
         } });
       sourceLoading = true; message();
-      sourcesTask = Promise.resolve().then(() => sources.mount()).finally(() => { if (active()) { sourceLoading = false; message(); } }); return sourcesTask;
+      sourcesTask = Promise.resolve().then(() => sources.mount()).finally(() => { if (active()) { sourceLoading = false; settleSourcePending(); } }); return sourcesTask;
     }
     async function render() {
       if (!mounted()) return;
@@ -286,7 +288,12 @@
       onPlanChange({ planId: selected });
       const toolbar = el('div', null, 'life-actions mw-toolbar'); selector = el('select'); selector.id = 'mwPlanSelect'; selector.setAttribute('aria-label', '작성 준비 선택');
       selector.addEventListener('change', async () => {
-        const next = selector.value; try { await flush(); if (!mounted()) return; selected = next; sourceView = null; view = null; clear(); await render(); } catch (cause) { selector.value = selected || ''; report(cause); }
+        const next = selector.value; if (next === selected) return;
+        try {
+          // Loading the current preparation's sources is read-only; wait for it instead of refusing the choice.
+          if (sourceLoading && sourcesTask) { const token = epoch; await sourcesTask.catch(() => {}); if (!mounted(token) || selector.value !== next || next === selected) return; }
+          await flush(); if (!mounted()) return; selected = next; sourceView = null; view = null; clear(); await render();
+        } catch (cause) { selector.value = selected || ''; report(cause); }
       });
       toolbar.append(selector, button('새 작성 준비', async () => {
         await flushInternal(); guard(); const value = M.create(fresh); state.plans.push(value);
