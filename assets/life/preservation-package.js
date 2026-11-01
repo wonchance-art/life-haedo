@@ -30,7 +30,8 @@
       if (!packed) api('Blog').pack(doc);
       if (doc.status !== 'saved' || doc.revision < 1 || ids.has(doc.id)) fail('중복되지 않은 저장 글을 선택해 주세요. 초안은 이 파일에 포함하지 않습니다.');
       ids.add(doc.id); photos += doc.photos.length;
-      for (const photo of doc.photos) photoBytes += photo.size;
+      // HEIC originals travel with their derived JPEG; both count toward the byte limit.
+      for (const photo of doc.photos) { photoBytes += photo.size + (photo.view ? photo.view.size : 0); }
     }
     if (photos > LIMITS.photos || photoBytes > LIMITS.bytes) fail('사진은 합계 200장·256 MiB까지 담을 수 있습니다. 원본은 줄이지 않았습니다.');
     return { posts: snapshot.posts.length, photos, photoBytes, sources: snapshot.bundle.sources.length,
@@ -45,6 +46,7 @@
     return bytes;
   }
   const photoPath = (doc, photo) => 'photos/' + doc.id + '/' + photo.id;
+  const viewPath = (doc, photo) => photoPath(doc, photo) + '.view';
   let crcTable;
   function crc32(bytes) {
     if (!crcTable) crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
@@ -63,7 +65,7 @@
     if (view.getUint32(end, true) !== 0x06054b50 || view.getUint16(end + 20, true) !== 0 ||
       view.getUint16(end + 4, true) !== 0 || view.getUint16(end + 6, true) !== 0) fail('해도의 근거 포함 ZIP 파일을 선택해 주세요.');
     const count = view.getUint16(end + 10, true), start = view.getUint32(end + 16, true);
-    if (count < 1 || count > LIMITS.photos + 1 || count !== view.getUint16(end + 8, true) || start + view.getUint32(end + 12, true) !== end) fail('ZIP의 파일 목록과 크기가 일치하지 않습니다.');
+    if (count < 1 || count > 2 * LIMITS.photos + 1 || count !== view.getUint16(end + 8, true) || start + view.getUint32(end + 12, true) !== end) fail('ZIP의 파일 목록과 크기가 일치하지 않습니다.');
     const entries = new Map(); let at = start, local = 0, total = 0;
     const decoder = new TextDecoder('utf-8', { fatal: true });
     for (let index = 0; index < count; index++) {
@@ -74,7 +76,7 @@
       if (flags & ~0x0800 || view.getUint16(at + 30, true) || view.getUint16(at + 32, true) || view.getUint16(at + 34, true) ||
         view.getUint32(at + 38, true) || at + 46 + length > end) fail('지원하지 않는 ZIP 파일 정보가 있습니다.');
       const nameBytes = bytes.subarray(at + 46, at + 46 + length), name = decoder.decode(nameBytes);
-      if ((name !== 'manifest.json' && !/^photos\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,128}$/.test(name)) || entries.has(name)) fail('중복되거나 지원하지 않는 ZIP 경로입니다.');
+      if ((name !== 'manifest.json' && !/^photos\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,128}(\.view)?$/.test(name)) || entries.has(name)) fail('중복되거나 지원하지 않는 ZIP 경로입니다.');
       const limit = name === 'manifest.json' ? LIMITS.json : 64 * 1024 * 1024;
       total += size;
       if (compressed !== size || size > limit || total > LIMITS.bytes || view.getUint32(at + 42, true) !== local || local + 30 > start ||
@@ -104,6 +106,11 @@
       size += photo.size;
       if (size > LIMITS.bytes) fail('ZIP을 펼친 크기는 256 MiB까지 담을 수 있습니다.');
       files[photoPath(doc, photo)] = new Uint8Array(await photo.blob.arrayBuffer());
+      if (photo.view) {
+        size += photo.view.size;
+        if (size > LIMITS.bytes) fail('ZIP을 펼친 크기는 256 MiB까지 담을 수 있습니다.');
+        files[viewPath(doc, photo)] = new Uint8Array(await photo.view.blob.arrayBuffer());
+      }
     }
     // Reuse the existing uncompressed original-photo format. This is an in-memory
     // archive, not a streaming/mobile-memory guarantee at the maximum limit.
@@ -134,12 +141,16 @@
     if (value.format !== FORMAT) fail('근거 포함 ZIP 파일을 선택해 주세요. 기존 사진 글 ZIP과 다릅니다.');
     const snapshot = { bundle: value.bundle, posts: value.posts, nineBoard: value.nineBoard };
     const info = structure(snapshot, true);
-    if (sizes.size !== info.photos + 1) fail('목록에 없는 파일이나 누락된 사진 원본이 있습니다.');
+    const views = snapshot.posts.reduce((total, entry) => total + entry.doc.photos.filter(photo => photo.view).length, 0);
+    if (sizes.size !== info.photos + views + 1) fail('목록에 없는 파일이나 누락된 사진 원본이 있습니다.');
     for (const entry of snapshot.posts) {
       const photos = entry.doc.photos.map(photo => {
         const path = photoPath(entry.doc, photo), bytes = files[path];
         if (!bytes || bytes.byteLength !== photo.size) fail('목록에 있는 사진 원본이 없거나 크기가 다릅니다.');
-        return { id: photo.id, blob: new Blob([bytes], { type: photo.type }) };
+        if (!photo.view) return { id: photo.id, blob: new Blob([bytes], { type: photo.type }) };
+        const view = files[viewPath(entry.doc, photo)];
+        if (!view || view.byteLength !== photo.view.size) fail('HEIC 사진의 보기용 사본이 없거나 크기가 다릅니다.');
+        return { id: photo.id, blob: new Blob([bytes], { type: photo.type }), view: new Blob([view], { type: photo.view.type }) };
       });
       entry.doc = await api('Blog').hydrate(entry.doc, photos);
     }

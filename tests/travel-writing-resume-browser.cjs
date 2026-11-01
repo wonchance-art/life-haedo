@@ -64,7 +64,7 @@ async function main() {
     (expected ? report.expectedAuthErrors : report.consoleErrors).push(event.text());
   });
   const check = async (name, run) => { await run(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); };
-  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
+  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '자동 저장됨');
   const read = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return { ws, docs: await Promise.all((await s.listPhotoPosts(ws)).map(row => s.readPhotoPost(ws, row.id))) }; });
   const doc = async () => (await read()).docs.find(value => value.id === postId);
   const hide = async () => {

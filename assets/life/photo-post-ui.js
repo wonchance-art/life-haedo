@@ -141,6 +141,8 @@
       urls.add(u);
       return u;
     };
+    // HEIC/HEIF originals are kept unchanged; screens show the derived JPEG.
+    const shown = (photo) => photo.view?.blob ?? photo.blob;
     function retireImageURL(value) {
       // show() may assign another src in this task. Let the final queued image
       // update cancel the previous request before retiring its URL.
@@ -179,11 +181,11 @@
           (composing
             ? "한글 입력 중…"
             : dirtyTick !== storedTick
-            ? "브라우저에 자동 임시저장 중…"
+            ? "자동 저장 중…"
             : mode === "read" && committed
               ? "비공개 글을 저장했어요"
               : doc?.revision
-                ? "브라우저에 자동 임시저장됨"
+                ? "자동 저장됨"
                 : "사진 없이도 바로 쓸 수 있어요");
         const state = e instanceof Error ? "error" : e ? "notice" :
           composing || dirtyTick !== storedTick ? "pending" :
@@ -382,6 +384,7 @@
           if (!valid() || doc !== target) return;
           target.revision = saved.revision;
           storedTick = tick;
+          if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
           if (current(token)) onSaved();
         })
@@ -818,7 +821,7 @@
         const item = items[at],
           photo = item.photo;
         release();
-        source = url(photo.blob);
+        source = url(shown(photo));
         img.src = source;
         img.alt = item.alt || item.caption || photo.name;
         title.textContent = item.caption || photo.name;
@@ -831,7 +834,7 @@
           photo.width +
           " × " +
           photo.height +
-          " · 원본";
+          (photo.view ? " · 원본 HEIC · 보기용 JPEG로 표시" : " · 원본");
         previous.disabled = at === 0;
         next.disabled = at === items.length - 1;
         stage.scrollTo(0, 0);
@@ -956,11 +959,11 @@
               "aria-label",
               (op.insert.photo.caption || p.name) + " · 사진 크게 보기",
             );
-          if (!portable) image.src = url(p.blob);
+          if (!portable) image.src = url(shown(p));
           else image.dataset.photoId = p.id;
           image.alt = op.insert.photo.alt || op.insert.photo.caption || p.name;
-          image.width = p.width;
-          image.height = p.height;
+          image.width = (p.view || p).width;
+          image.height = (p.view || p).height;
           image.loading = portable ? "eager" : "lazy";
           b.append(image);
           figure.append(b);
@@ -1044,7 +1047,9 @@
               reject(
                 new Error("원본 사진을 읽지 못했습니다. 글은 유지됩니다."),
               );
-            reader.readAsDataURL(photo.blob);
+            // A standalone HTML file must open anywhere, so HEIC originals
+            // are embedded as their derived JPEG. Originals stay in the ZIP.
+            reader.readAsDataURL(shown(photo));
           });
           if (!current(token)) return;
           article.querySelector('img[data-photo-id="' + photo.id + '"]').src =
@@ -1069,7 +1074,7 @@
       }
     }
     function imageValue(p, info = {}) {
-      if (!photoUrls.has(p.id)) photoUrls.set(p.id, url(p.blob));
+      if (!photoUrls.has(p.id)) photoUrls.set(p.id, url(shown(p)));
       const src = photoUrls.get(p.id);
       photoSources.set(p.id, src);
       return {
@@ -1086,8 +1091,18 @@
         position = editor.getSelection(true)?.index ?? editor.getLength() - 1;
       setBusy(true);
       try {
-        const incoming = await Promise.all(
-          [...files].map((f) => M.readPhoto(f, life.Core.id)),
+        // At most two files at a time; HEIC conversions are further
+        // serialized inside PhotoPost so a 48 MP bitmap is decoded alone.
+        const list = [...files],
+          incoming = new Array(list.length);
+        let nextFile = 0;
+        await Promise.all(
+          Array.from({ length: Math.min(2, list.length) }, async () => {
+            while (nextFile < list.length) {
+              const index = nextFile++;
+              incoming[index] = await M.readPhoto(list[index], life.Core.id);
+            }
+          }),
         );
         if (!current(token)) return;
         const next = structuredClone(doc);
@@ -1228,7 +1243,10 @@
       const more = el("details", null, "photo-more life-details");
       const menu = el("div", null, "photo-more-menu");
       more.append(iconControl(el("summary"), "more", "더 보기"), menu);
+      // The draft/save scope is reference text, not a header line. It lives in
+      // this menu so the sticky command bar stays one compact row on phones.
       menu.append(
+        el("p", "초안은 계정에 자동 저장되어 모든 기기에서 이어 쓸 수 있습니다. 공개는 따로 선택합니다.", "life-help photo-server-scope"),
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
         button("사본으로 이어 쓰기", duplicate),
@@ -1238,14 +1256,17 @@
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
       const commandState = el("div", null, "photo-command-state"),
         save = button("글 저장", () => finish());
-      commandState.append(el("span", "비공개 · 저장 시 서버 보관", "photo-command-scope"), status);
+      const scope = el("span", "비공개 · 저장 시 서버 보관", "photo-command-scope");
+      scope.id = "photoCommandScope";
+      commandState.append(scope, status);
       if (doc.replaces)
         commandState.prepend(el("span", "기존 글 수정 중", "photo-editing-label"));
       save.classList.add("photo-save");
       save.title = "이 브라우저에 저장한 뒤 내 계정 서버에 비공개로 보관";
+      // Narrow screens hide the scope line; the button still describes it.
+      save.setAttribute("aria-describedby", scope.id);
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
       sticky.append(commands);
-      sticky.append(el("p", "초안은 이 브라우저에 자동 임시저장합니다. 글 저장 시 전체 본문과 사진 원본·내장 정보를 내 계정 서버에 비공개로 보관하며 공개는 따로 선택합니다.", "life-help photo-server-scope"));
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
       recoveryActions.append(
@@ -1305,7 +1326,8 @@
       const photoInput = el("input");
       photoInput.type = "file";
       photoInput.multiple = true;
-      photoInput.accept = "image/jpeg,image/png,image/webp";
+      // Listing HEIC keeps iOS from converting the original on selection.
+      photoInput.accept = "image/jpeg,image/png,image/webp,image/heic,image/heif";
       photoInput.hidden = true;
       photoInput.id = "photoFiles";
       photoInput.setAttribute("aria-label", "원본 사진 선택");
@@ -1597,11 +1619,14 @@
             try {
               const candidate = await M.readBackup(input, life.Core.id);
               for (const p of candidate.photos) {
+                // HEIC originals are verified by signature and digest in
+                // readBackup; their derived JPEG must decode at its size.
+                const shownPhoto = p.view || p;
                 const checked = await M.readPhoto(
-                  new File([p.blob], p.name, { type: p.type }),
+                  new File([shown(p)], p.name, { type: shownPhoto.type }),
                   () => p.id,
                 );
-                if (checked.width !== p.width || checked.height !== p.height)
+                if (checked.width !== shownPhoto.width || checked.height !== shownPhoto.height)
                   throw new Error("사진 해상도 정보가 실제 원본과 다릅니다.");
               }
               if (!current(t)) return;
@@ -1747,7 +1772,7 @@
                           const photo = value.photos.find(
                             (p) => p.id === first,
                           );
-                          if (photo) entry.target.src = url(photo.blob);
+                          if (photo) entry.target.src = url(shown(photo));
                         })
                         .catch(() => {
                           if (current(token)) entry.target.remove();
