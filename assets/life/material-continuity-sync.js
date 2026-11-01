@@ -16,6 +16,7 @@
     material_output_elsewhere: '다른 기기에서 이 준비의 글을 작성 중입니다. 그 기기에서 글을 저장하면 여기에도 반영됩니다.',
     material_output_not_saved: '작성기에서 글을 저장하면 완성 글과 사진 원본이 자동으로 보관됩니다.',
     material_output_changed: '보관된 글의 버전이 달라졌습니다. 다음 동기화에서 다시 확인합니다.',
+    material_remote_deleted: '다른 기기에서 이 준비를 삭제했습니다.',
     material_receive_changed: '서버 준비가 바뀌었습니다. 다음 동기화에서 최신 내용을 다시 확인합니다.',
     request_cancelled: '계정이나 동기화 상태가 바뀌어 이전 요청을 중단했습니다.',
     material_busy: '처리 중인 동기화 결과를 확인한 뒤 다시 시도해 주세요.'
@@ -50,7 +51,7 @@
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
-    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(), notices = new Map(); let disposed = false;
+    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
     function guard(c) {
@@ -73,6 +74,7 @@
     }
     async function checkedRow(c, id) {
       const row = await remote.read(id); guard(c); if (!row) throw fault('material_remote_missing');
+      if (row.deleted) throw fault('material_remote_deleted');
       row.data = await model.verify(row.data); guard(c); return row;
     }
     async function stateFor(c) {
@@ -290,14 +292,45 @@
     async function settle(ws, id) {
       const view = await compare(ws, id), choice = latest(view.local.data, view.remote.data);
       const result = await resolve(ws, id, choice, view.expected);
-      notices.set(key(ws, id), { choice, at: new Date().toISOString(), recoveryWorkspaceId: result?.recoveryWorkspaceId || null });
-      emit(context(ws, id));
+      // Persist the short notice with the link so it survives reloads until dismissed.
+      await serial(ws, id, async c => { const state = await read(c); if (state) await write(c, state, { notice: { choice, at: new Date().toISOString(), recoveryWorkspaceId: result?.recoveryWorkspaceId || null } }); });
       return { ...await stateFor(context(ws, id)), resolved: choice, received: choice === 'remote' ? result : null };
     }
     // One automatic step for a preparation: upload local changes (the full review is
     // generated here, so no consent toggle exists), receive server changes, settle conflicts,
     // and store a completed post's exact revision once it is saved.
     async function autoSync(ws, id) {
+      try { return await autoStep(ws, id); }
+      catch (error) { if (error?.code !== 'material_remote_deleted') throw error; return deletedElsewhere(ws, id); }
+    }
+    // The server copy was deleted on another device. An unchanged preparation is removed here
+    // too (its sources and posts stay); one with changes not yet sent is kept and recreated
+    // on the server under a new link, so the edit is never dropped.
+    async function deletedElsewhere(ws, id) {
+      const removed = await serial(ws, id, async c => {
+        await verified(c); const state = await read(c); if (!state) return false;
+        const local = await snapshot(c), unchanged = !!state.head && !state.pending && !local.editingDrafts?.length &&
+          local.fingerprint === await model.fingerprint(state.head.data); guard(c);
+        await storage.forgetMaterialContinuity(ws, id, unchanged ? { expectedRevision: state.revision, removePlan: true, expectedFingerprint: local.fingerprint } : { expectedRevision: state.revision }); guard(c);
+        emit(c); return unchanged;
+      });
+      if (removed) return { workspaceId: ws, planId: id, deleted: true, received: { workspaceId: ws, planId: id, deleted: true } };
+      return { ...await autoStep(ws, id), recreated: true };
+    }
+    // A preparation deleted on this device: delete the server head it was linked to, then drop
+    // the link. A server head that changed meanwhile is not deleted; the next receive pass
+    // installs that newer preparation again, so another device's edit is not dropped.
+    async function propagateDelete(ws, id) {
+      return serial(ws, id, async c => {
+        await verified(c); const orphan = (await storage.listMaterialContinuityOrphans(ws)).find(value => value.planId === id); guard(c);
+        if (!orphan) return null;
+        let status = 'missing';
+        if (orphan.remoteRevision > 0) { status = (await remote.remove({ remoteId: orphan.remoteId, operationId: makeId(), expectedRevision: orphan.remoteRevision })).status; guard(c); }
+        await storage.forgetMaterialContinuity(ws, id, { expectedRevision: orphan.revision }); guard(c);
+        emit(c); return { workspaceId: ws, planId: id, status };
+      });
+    }
+    async function autoStep(ws, id) {
       let state = await stateFor(context(ws, id));
       if (state.status === 'conflict' && state.conflict?.row) return settle(ws, id);
       let received = null;
@@ -339,9 +372,9 @@
       emit(context(ws, planId)); return result;
     }
     function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); listeners.clear(); }
-    return Object.freeze({ getState: async (ws, id) => ({ ...await stateFor(context(ws, id)), notice: notices.get(key(ws, id)) || null }),
-      preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle,
-      dismissNotice: (ws, id) => { notices.delete(key(ws, id)); },
+    return Object.freeze({ getState: (ws, id) => stateFor(context(ws, id)),
+      preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle, propagateDelete,
+      dismissNotice: (ws, id) => serial(ws, id, async c => { const state = await read(c); if (state?.notice) await write(c, state, { notice: null }); }),
       handoff, shareOutput, compare, resolve, inspect, receive,
       async list(after = null) { const c = context(); await verified(c); const result = await remote.list(after); guard(c); return result; },
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, dispose });
@@ -363,38 +396,57 @@
       running = passes().finally(() => { running = null; });
       return running;
     }
+    // A server without the preparation schema (or any probe failure) is recorded as
+    // 'unavailable' and retried with growing back-off instead of on every cycle.
+    let availability = { status: 'unknown', until: 0, backoff: 0 };
+    const UNAVAILABLE = new Set(['schema_missing', 'permission_denied']);
     async function passes() {
+      if (Date.now() < availability.until) return;
+      let first;
+      try { first = await instance.list(null); }
+      catch (error) {
+        if (UNAVAILABLE.has(error?.code)) {
+          const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
+          availability = { status: 'unavailable', until: Date.now() + backoff, backoff };
+        }
+        return;
+      }
+      availability = { status: 'available', until: 0, backoff: 0 };
       try {
         do {
           again = false;
           for (const ws of await workspaces()) {
             if (disposed) return;
             if (held(ws)) continue;
-            let wrapper; try { wrapper = await storage.readMaterialWriting(ws); } catch (_) { continue; }
             let changed = false;
+            try { for (const orphan of await storage.listMaterialContinuityOrphans(ws)) { try { await instance.propagateDelete(ws, orphan.planId); } catch (_) { /* Retry next pass. */ } } }
+            catch (_) { /* The workspace may be unavailable; others continue. */ }
+            let wrapper; try { wrapper = await storage.readMaterialWriting(ws); } catch (_) { continue; }
             for (const plan of wrapper.plans) {
               if (disposed || held(ws)) break;
               try { const result = await instance.autoSync(ws, plan.id); if (result?.received || result?.resolved) changed = true; } catch (_) { /* Durable error stays; next pass retries. */ }
             }
             if (changed && !held(ws)) await reloadHeld(ws);
           }
-          let cursor = null;
-          for (let page = 0; page < 50 && !disposed; page++) {
-            const result = await instance.list(cursor);
-            for (const item of result.items || []) {
+          let page = first; first = null;
+          for (let index = 0; index < 50 && !disposed; index++) {
+            page ||= await instance.list(null);
+            for (const item of page.items || []) {
               try { const adopted = await instance.adopt(item); if (adopted && !held(adopted.workspaceId)) await reloadHeld(adopted.workspaceId, adopted); } catch (_) { /* Retry next pass. */ }
             }
-            if (!result.next) break; cursor = result.next;
+            if (!page.next) break;
+            page = await instance.list(page.next);
           }
         } while (again && !disposed);
       } catch (_) { /* Network or account changes: local preparations stay as they are. */ }
     }
     const nudge = event => {
-      if (disposed || event?.type !== 'material_writing_changed' || soon) return;
+      // Writes made by a running pass also announce changes; they never schedule another pass.
+      if (disposed || running || event?.type !== 'material_writing_changed' || soon) return;
       soon = root.setTimeout(() => { soon = null; pass(); }, 2000); soon?.unref?.();
     };
     return Object.freeze({
-      manager: instance, refresh: pass,
+      manager: instance, refresh: pass, availability: () => ({ status: availability.status, until: availability.until }),
       start() {
         if (disposed || timer) return;
         timer = root.setInterval(pass, every); timer?.unref?.();

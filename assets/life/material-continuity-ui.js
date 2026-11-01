@@ -41,7 +41,7 @@
       detail.replaceChildren(); if (!selected || !state) return;
       if (state.notice) {
         detail.append(el('p', NOTICE, 'life-help mc-notice'));
-        detail.append(button('확인', 'mcNoticeDone', async planId => { manager.dismissNotice?.(workspaceId, planId); }));
+        detail.append(button('확인', 'mcNoticeDone', async planId => { await manager.dismissNotice?.(workspaceId, planId); }));
       }
       if (state.output?.state === 'writing' && !state.ownClaim) detail.append(el('p', '다른 기기에서 이 준비의 글을 쓰고 있습니다. 그 기기에서 글을 저장하면 여기에도 반영됩니다.', 'life-help'));
       if (state.status === 'error' || failure) {

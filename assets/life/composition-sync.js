@@ -37,7 +37,11 @@
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
     // Compositions (whose storage records local edit times) default to latest-wins.
     // Other domains on this engine keep their own explicit choice unless they pass one.
-    if (autoResolve === undefined) autoResolve = typeof storage.readWorkbenchEditedAt === 'function' ? latest : null;
+    const compositionDomain = typeof storage.readWorkbenchEditedAt === 'function';
+    if (autoResolve === undefined) autoResolve = compositionDomain ? latest : null;
+    // Without the account library nothing else enrols a workspace: start its composition sync
+    // as soon as its originals sync for this account (no per-workspace opt-in).
+    const autoEnable = compositionDomain;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -241,6 +245,10 @@
         for (const row of rows) {
           const state = await getState(row.workspaceId);
           if (state.enabled) { watch(row.workspaceId); schedule(row.workspaceId); }
+          else if (autoEnable) {
+            const source = await sourceSync.getState(row.workspaceId); guard();
+            if (source?.enabled && source.status === 'synced' && sameAccount(source.binding)) await enable(row.workspaceId).catch(() => {});
+          }
         }
       } catch (_) { /* State stays durable; an explicit retry gives the current error. */ }
       finally { refreshing = false; }
@@ -250,7 +258,11 @@
       root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
       root.document?.addEventListener('visibilitychange', automatic);
       if (polling) { interval = root.setInterval(automatic, 30000); interval?.unref?.(); }
-      unlistenSources = sourceSync.subscribe(event => { if (event.workspaceId && watches.has(event.workspaceId) && ![...locks.keys()].some(key => key.startsWith(event.workspaceId + '|'))) schedule(event.workspaceId); });
+      unlistenSources = sourceSync.subscribe(event => {
+        if (!event.workspaceId) return;
+        if (watches.has(event.workspaceId)) { if (![...locks.keys()].some(key => key.startsWith(event.workspaceId + '|'))) schedule(event.workspaceId); }
+        else if (autoEnable) automatic();
+      });
       automatic();
     }
     function dispose() {
@@ -263,7 +275,13 @@
       root.document?.removeEventListener('visibilitychange', automatic); remote.dispose?.();
     }
     function subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
-    return Object.freeze({ start, getState, enable, pause, syncNow, compare, resolve, subscribe, dispose });
+    // The automatic-resolution notice persists in the state record until acknowledged.
+    async function dismissNotice(workspaceId) {
+      const ctx = context(workspaceId);
+      if (typeof storage.dismissCompositionNotice === 'function') { await storage.dismissCompositionNotice(workspaceId); guard(ctx); }
+      emit(workspaceId); return getState(workspaceId);
+    }
+    return Object.freeze({ start, getState, enable, pause, syncNow, compare, resolve, dismissNotice, subscribe, dispose });
   }
   return Object.freeze({ create, latest });
 });

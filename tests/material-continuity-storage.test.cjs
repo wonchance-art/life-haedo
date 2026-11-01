@@ -362,3 +362,28 @@ test('automatic receive never replaces a local preparation with the same ID or a
   assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []);
   f.close();
 });
+
+test('a preparation deleted on this device stays listed as an orphan link until its deletion reaches the server', async () => {
+  const f = await fixture(), linked = await connect(f);
+  const wrapper = await f.a.readMaterialWriting(f.ws);
+  await f.a.saveMaterialWriting(f.ws, { ...wrapper, plans: [] }, wrapper.revision);
+  assert.deepEqual(await f.a.listMaterialContinuityOrphans(f.ws), [{ planId: f.plan.id, remoteId: linked.row.id, revision: linked.state.revision, remoteRevision: 1 }]);
+  await assert.rejects(f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision + 1 }), { code: 'material_continuity_conflict' });
+  await f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision });
+  assert.deepEqual(await f.a.listMaterialContinuityOrphans(f.ws), []); assert.equal(await f.a.findMaterialContinuity(linked.row.id), null);
+  f.close();
+});
+
+test('a server-side deletion removes an unchanged preparation but never one edited since the last exchange', async () => {
+  const f = await fixture(), linked = await connect(f), before = await f.a.read(f.ws);
+  const snapshot = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  const wrapper = await f.a.readMaterialWriting(f.ws), edited = copy(wrapper); edited.plans[0].question = '삭제 소식 전에 고친 질문';
+  await f.a.saveMaterialWriting(f.ws, edited, wrapper.revision);
+  await assert.rejects(f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision, removePlan: true, expectedFingerprint: snapshot.fingerprint }), { code: 'material_continuity_changed' });
+  assert.equal((await f.a.readMaterialWriting(f.ws)).plans.length, 1);
+  const current = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  await f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision, removePlan: true, expectedFingerprint: current.fingerprint });
+  assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []); assert.equal(await f.a.readMaterialContinuityState(f.ws, f.plan.id), null);
+  assert.deepEqual((await f.a.read(f.ws)).sourceVersions, before.sourceVersions);
+  f.close();
+});

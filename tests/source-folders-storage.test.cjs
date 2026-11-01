@@ -89,7 +89,9 @@ test("read-only snapshots and folder saves preserve bundles, Workbench and exact
   assert.deepEqual(f.rows.get("bundles"), before.get("bundles"));
   const oldMeta = before.get("meta"), meta = f.rows.get("meta");
   for (const [k, v] of oldMeta) assert.deepEqual(meta.get(k), v);
-  assert.equal(meta.size, oldMeta.size + 1);
+  // The folder document plus the local-only edit time used for latest-wins conflicts.
+  assert.equal(meta.size, oldMeta.size + 2);
+  assert.ok(Number.isFinite(Date.parse(meta.get(key('libraryMetaEditedAt:' + f.w)).value)));
   assert.deepEqual(meta.get(key(rowKey(f.w))).value, saved);
   const binding = { ...account, remoteId: f.w };
   await f.a.bindSync(f.w, binding);

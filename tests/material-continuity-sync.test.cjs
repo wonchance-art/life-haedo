@@ -43,6 +43,8 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
       return result;
     },
     async findMaterialContinuity() { return stats.unlinked ? null : { workspaceId: bundle.workspaceId, planId: plan.id }; },
+    async forgetMaterialContinuity(ws, id, options) { stats.forgot = copy(options); assert.equal(options.expectedRevision, state.revision); state = null; stats.onForget?.(); return { removed: !!options.removePlan }; },
+    async listMaterialContinuityOrphans() { return stats.orphan ? [copy(stats.orphan)] : []; },
     async readMaterialWriting() { return { ...M.empty(bundle.workspaceId), revision: 1, plans: stats.planAbsent ? [] : [copy(plan)] }; },
     async adoptMaterialContinuity(value, options) { stats.adopted = { row: copy(value), options: copy(options) }; return { workspaceId: value.data.bundle.workspaceId, planId: value.data.plan.id, adopted: true }; },
     async readBlogSyncState() { return copy(stats.existingBlogState || null); },
@@ -59,7 +61,8 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
     }
   };
   const remote = {
-    async read() { stats.reads++; if (stats.holdRead) { const hold = stats.holdRead; stats.holdRead = null; hold.started.resolve(); await hold.release.promise; } return copy(row); },
+    async remove(request) { stats.removed = copy(request); return { status: stats.removeStatus || 'deleted', revision: request.expectedRevision + 1 }; },
+    async read() { stats.reads++; if (stats.deletedRemote) return { id: row.id, revision: row.revision + 1, deleted: true, data: null, updated_at: row.updated_at }; if (stats.holdRead) { const hold = stats.holdRead; stats.holdRead = null; hold.started.resolve(); await hold.release.promise; } return copy(row); },
     async write(request) {
       stats.writes.push(copy(request));
       if (stats.historicalAck) return copy(stats.historicalAck);
@@ -194,4 +197,34 @@ test('latest plan edit wins and an unknown local time yields to the server copy'
   assert.equal(Service.latest({ plan: { updatedAt: '2099-01-02T00:00:00.000Z' } }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'local');
   assert.equal(Service.latest({ plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'remote');
   assert.equal(Service.latest({ plan: {} }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'remote');
+});
+
+test('a preparation deleted on another device is removed here when this device has nothing unsent', async () => {
+  const f = await fixture(); f.stats.deletedRemote = true;
+  const result = await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  assert.equal(result.deleted, true); assert.equal(f.stats.forgot.removePlan, true); assert.ok(f.stats.forgot.expectedFingerprint);
+  assert.deepEqual(f.stats.writes, []); f.manager.dispose();
+});
+test('a preparation deleted elsewhere but edited here is kept and recreated on the server under a new link', async () => {
+  const f = await fixture(); f.stats.deletedRemote = true; f.plan.question = '삭제 전에 이 기기에서 고친 질문';
+  // The single-row fake server: the recreated preparation is a new, empty server id.
+  f.stats.onForget = () => { f.stats.deletedRemote = false; f.setRow(null); };
+  const result = await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  assert.equal(result.recreated, true); assert.equal(f.stats.forgot.removePlan, undefined);
+  const sent = f.stats.writes.find(write => write.data.plan.question === '삭제 전에 이 기기에서 고친 질문');
+  assert.ok(sent); assert.equal(sent.expectedRevision, 0); f.manager.dispose();
+});
+test('a preparation deleted on this device deletes its server head with compare-and-delete and drops only the link', async () => {
+  const f = await fixture(); f.stats.orphan = { planId: f.plan.id, remoteId: f.row().id, revision: 1, remoteRevision: 1 };
+  const result = await f.manager.propagateDelete(f.bundle.workspaceId, f.plan.id);
+  assert.equal(result.status, 'deleted'); assert.equal(f.stats.removed.remoteId, f.row().id); assert.equal(f.stats.removed.expectedRevision, 1);
+  assert.deepEqual(f.stats.forgot, { expectedRevision: 1 }); f.manager.dispose();
+});
+test('a missing server schema is recorded as unavailable and not retried every cycle', async () => {
+  let lists = 0; const manager = { list: async () => { lists++; throw Object.assign(Error('missing'), { code: 'schema_missing' }); }, autoSync: async () => { throw Error('must not run'); }, dispose() {} };
+  const storage = { account: { userId: 'u', projectUrl: 'p' }, readMaterialWriting: async () => ({ plans: [{ id: 'p1' }] }), adoptMaterialContinuity() {}, listAccountLibraries: async () => [{ workspaceId: 'w', eligible: true }] };
+  const loop = Service.automatic({ storage, auth: {}, manager, every: 3600000 });
+  await loop.refresh(); await loop.refresh(); await loop.refresh();
+  assert.equal(lists, 1); assert.equal(loop.availability().status, 'unavailable'); assert.ok(loop.availability().until > Date.now());
+  loop.dispose();
 });

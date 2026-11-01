@@ -64,6 +64,12 @@
       if (!id(remoteId)) throw fault('invalid_request'); const captured = context();
       const row = await rpc('life_material_get', { p_id: remoteId }, captured);
       if (row === null) return null;
+      // A deleted preparation keeps its revision as a tombstone so devices can tell
+      // "deleted elsewhere" from "never stored"; it carries no preparation data.
+      if (fields(row, ['id', 'revision', 'deleted', 'updated_at'])) {
+        if (row.id !== remoteId || row.deleted !== true || !revision(row.revision, 1) || !timestamp(row.updated_at)) throw fault('invalid_remote_data');
+        return { id: row.id, revision: row.revision, deleted: true, data: null, updated_at: row.updated_at };
+      }
       if (!fields(row, ['id', 'revision', 'data', 'updated_at']) || row.id !== remoteId || !revision(row.revision, 1) || !timestamp(row.updated_at)) throw fault('invalid_remote_data');
       const data = await verified(row.data); alive(captured); return { id: row.id, revision: row.revision, data, updated_at: row.updated_at };
     }
@@ -78,6 +84,15 @@
       }
       const result = await rpc('life_material_put', { p_id: owned.remoteId, p_operation_id: owned.operationId, p_expected_revision: owned.expectedRevision, p_data: data }, captured);
       if (!fields(result, ['status', 'revision']) || !['stored', 'conflict'].includes(result.status) || !revision(result.revision, 1) || result.status === 'stored' && result.revision !== owned.expectedRevision + 1) throw fault('invalid_remote_data');
+      return { status: result.status, revision: result.revision };
+    }
+    // Compare-and-delete of one preparation head. 'missing' means it never reached the server.
+    async function remove(request) {
+      const captured = context(), owned = structuredClone(request);
+      if (!fields(owned, ['remoteId', 'operationId', 'expectedRevision']) || !id(owned.remoteId) || !id(owned.operationId) || !revision(owned.expectedRevision, 1) || owned.expectedRevision === MAX_REVISION) throw fault('invalid_request');
+      const result = await rpc('life_material_delete', { p_id: owned.remoteId, p_operation_id: owned.operationId, p_expected_revision: owned.expectedRevision }, captured);
+      if (!fields(result, ['status', 'revision']) || !['deleted', 'conflict', 'missing'].includes(result.status) || !revision(result.revision) ||
+        result.status === 'deleted' && result.revision !== owned.expectedRevision + 1) throw fault('invalid_remote_data');
       return { status: result.status, revision: result.revision };
     }
     async function list(after = null) {
@@ -95,7 +110,7 @@
       if (result.next !== null && (!fields(result.next, ['updated_at', 'id']) || items.length !== 20 || result.next.id !== prior?.id || result.next.updated_at !== prior?.updated_at)) throw fault('invalid_remote_data');
       return { items, next: result.next === null ? null : { updated_at: result.next.updated_at, id: result.next.id } };
     }
-    return Object.freeze({ read, write, list, dispose() { if (disposed) return; disposed = true; client.auth.dispose(); } });
+    return Object.freeze({ read, write, remove, list, dispose() { if (disposed) return; disposed = true; client.auth.dispose(); } });
   }
   return Object.freeze({ create, clean, MAX_BYTES });
 });

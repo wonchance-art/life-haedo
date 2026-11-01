@@ -45,6 +45,8 @@ jobs:
         run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
       - name: Verify account library ownership, default races and immutable original manifests
         run: node tests/run-account-library-postgres.cjs
+      - name: Verify account documents ownership, CAS, idempotency and change cursor
+        run: node tests/run-account-docs-postgres.cjs
       - name: Verify immutable exact Naver photo receipts and owner boundaries
         run: node tests/run-naver-media-postgres.cjs
       - name: Retain anonymous Naver database checks

@@ -137,8 +137,9 @@ class WorkspaceCloud {
   }
 }
 
-// Account documents sync automatically for every signed-in account (2026-11-01).
-const FakeCloud = require('./helpers/account-docs-cloud.cjs').withAccountDocsCloud(require('./helpers/library-cloud.cjs').withLibraryCloud(require('./helpers/blog-cloud.cjs').withBlogCloud(WorkspaceCloud, accounts), accounts));
+// Account documents and preparations sync in the background of every signed-in
+// page (2026-11-01); their RPCs are modelled here and all other requests stay guarded.
+const FakeCloud = require('./helpers/composition-cloud.cjs').withCompositionCloud(require('./helpers/writing-cloud.cjs').withWritingCloud(require('./helpers/material-cloud.cjs').withMaterialCloud(require('./helpers/account-docs-cloud.cjs').withAccountDocsCloud(require('./helpers/library-cloud.cjs').withLibraryCloud(require('./helpers/blog-cloud.cjs').withBlogCloud(WorkspaceCloud, accounts), accounts)), accounts), accounts), accounts);
 
 async function platformContext(context,server,device,seed=accounts.a) {
   await server.attach(context,device);
