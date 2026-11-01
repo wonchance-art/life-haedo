@@ -8,10 +8,7 @@
   const errorText = e => e?.code === 'schema_missing' ? '서버 글 보관 기능이 아직 준비되지 않았습니다. 글은 이 브라우저에 그대로 있습니다.' : e?.message || '처리하지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.';
   function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, onOpenAccountBlog = null, blogSync, isCurrent = () => true }) {
     let host, surface, list, status, query, filter, detail, evidenceHost, evidence, rows = [], busy = null, disposed = false, epoch = 0, preview = null;
-    let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null, expectedInitialRevision = null, copyHost = null;
-    let localFind = null, localStatus = null, localResults = null, localPreview = null, localSearch = null, localUnowned = null;
-    let localGeneration = 0, localRows = [], localShown = 40, localSelected = null, localScan = null;
-    const localUrls = new Set(), localDownloads = new Map();
+    let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null, expectedInitialRevision = null, syncStates = {};
     const valid = token => !disposed && isCurrent() && (token == null || token === epoch) && !!host?.isConnected;
     const announce = message => { if (valid()) status.textContent = message; };
     async function navigate(fn) { navigating = true; try { return await fn(); } finally { navigating = false; } }
@@ -70,6 +67,8 @@
         expectedInitialRevision = null;
       }
       rows.sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0) || (a.kind + a.id).localeCompare(b.kind + b.id));
+      try { syncStates = blogSync?.statuses ? await blogSync.statuses(workspaceId) : {}; } catch (_) { syncStates = {}; }
+      if (!valid(token)) return;
       list.dataset.state = failed.length ? 'partial' : 'ready'; await renderRows();
       if (!valid(token)) return;
       announce(failed.length ? `${failed.join(' · ')} 목록을 읽지 못했습니다. 이미 표시한 글과 검색은 유지했습니다. 다시 불러와 주세요.` : focusedPostId ? '선택한 글의 공개·보관 상태를 확인했습니다.' : `${rows.length}개 글과 초안을 확인했습니다. 공개는 글마다 따로 선택합니다.`);
@@ -105,15 +104,9 @@
             await storage.savePhotoPost(workspaceId, doc, doc.revision);
             if (!valid()) return; clearPreview(); await load();
           }));
-          if (row.status === 'draft') actions.append(meta('초안은 이 브라우저에 보관합니다. 기본 글쓰기에서 글을 저장하면 본문과 사진 원본을 내 계정 서버에도 비공개로 보관합니다.'));
-          else {
-            const server = el('details', null, 'blog-manager-server'); server.append(el('summary', '서버 보관·다른 기기'));
-            const syncMessage = meta('이 글의 전체 본문과 모든 사진 원본·파일 안의 메타데이터를 내 계정 서버에 비공개로 보관합니다. 다른 글은 전송하지 않습니다. 인용 본문과 출처 URL은 함께 옮기지만 정확한 원문 연결 정보는 이 브라우저에 별도로 보관하며 원문 자료 백업과도 구분합니다.'); server.append(syncMessage);
-            const state = el('p', '', 'life-meta'); state.dataset.syncPost = row.id; server.append(state); void showSyncState(row.id, state);
-            server.append(button('이 글 서버에 보관', () => syncPost(row, state, 'connect')), button('서버와 변경 확인', () => syncPost(row, state, 'sync')));
-            if (blogSync?.pause) server.append(button('이 글 서버 연결 중지', async () => { await blogSync.pause(workspaceId, row.id); await showSyncState(row.id, state); }));
-            actions.append(server);
-          }
+          actions.append(button('삭제', () => deletePost(row)));
+          const state = el('p', '', 'life-meta blog-manager-sync'); state.dataset.syncPost = row.id; showSyncState(row.id, state);
+          actions.append(state);
           article.append(actions);
         }
         list.append(article);
@@ -153,49 +146,25 @@
         area.replaceChildren(meta(errorText(e)), button('인용한 원문 목록 다시 확인', async () => showEvidence(row, area)));
       }
     }
-    function requireSync(method) { if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 글 보관 기능이 아직 준비되지 않았습니다. 이 브라우저의 글과 파일 백업을 이용해 주세요.'), { code: 'schema_missing' }); }
-    async function showSyncState(id, node) {
+    function requireSync(method) { if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 동기화를 준비하지 못했습니다. 글은 이 기기에 그대로 있습니다.'), { code: 'schema_missing' }); }
+    const syncLabels = { synced: '모든 기기에 저장됨', pending: '저장 대기', error: '오류 · 다시 시도' };
+    function showSyncState(id, node) {
+      const value = syncStates[id] || 'pending';
+      node.dataset.state = value; node.replaceChildren(document.createTextNode(syncLabels[value] || syncLabels.pending));
+      if (value === 'error' && blogSync?.syncNow) node.append(document.createTextNode(' '), button('다시 시도', async () => { await blogSync.syncNow(); if (valid()) await refreshSync(); }));
+    }
+    async function refreshSync() {
       const token = epoch;
-      try {
-        requireSync('getState');
-        const value = focusedPostId === id && typeof blogSync.inspectRemote === 'function'
-          ? await blogSync.inspectRemote(workspaceId, id, { isCurrent: () => valid(token) && node.isConnected })
-          : await blogSync.getState(workspaceId, id);
-        if (!valid(token) || !node.isConnected) return;
-        const labels = { not_enabled: '이 브라우저에 보관', pending: '서버 보관 대기', synced: '서버 보관 확인', paused: '서버 연결 중지', conflict: '서버와 이 브라우저의 내용이 달라 선택이 필요합니다. 이 글은 유지했습니다.', error: '서버 보관을 확인하지 못했습니다.' };
-        node.replaceChildren(document.createTextNode((labels[value?.status] || '서버 보관 상태를 확인해 주세요.') + (value?.publication?.active ? ' · 공개 게시 중' : '')));
-        if (value?.error) node.append(document.createTextNode(' ' + errorText(typeof value.error === 'string' ? life.BlogRemote?.clean?.({ code: value.error }) || { code: value.error } : value.error)));
-        if (value?.status === 'conflict' && value.remoteId) node.append(button('서버 글을 새 사본으로 받기', async () => {
-          requireSync('receive'); const result = await blogSync.receive(workspaceId, value.remoteId);
-          if (!valid()) return; await load(); announce('서버 글을 새 사본으로 받았습니다. 기존 글도 유지했습니다.');
-          if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
-        }));
-        if (value?.status === 'conflict' && blogSync?.resolve) {
-          const reviewed = { localRevision: value.conflict?.localRevision, remoteRevision: value.conflict?.remoteRevision };
-          node.append(meta(`이 브라우저 ${value.conflict?.localRevision ?? value.localRevision ?? '?'}판 · 서버 ${value.conflict?.remoteRevision ?? value.remoteRevision ?? '?'}판${value.conflict?.remoteTitle ? ' · ' + value.conflict.remoteTitle : ''}`));
-          node.append(button('양쪽 사본을 남기고 내 글로 보관', async () => {
-            const result = await resolveReviewed(id, 'local', reviewed);
-            if (!valid()) return; await load();
-            announce(result.status === 'synced' ? '서버의 이전 글도 새 사본으로 남기고 내 글의 서버 보관을 확인했습니다.' : '양쪽 글을 유지했습니다. 서버 처리 상태를 다시 확인해 주세요.');
-          }), button('기존 글을 남기고 서버 글로 이어쓰기', async () => {
-            const result = await resolveReviewed(id, 'remote', reviewed);
-            if (!valid()) return; await load(); announce(result.syncError ? '서버 글을 새 사본으로 받았습니다. 연결 상태는 다시 확인해 주세요.' : '기존 글을 유지하고 서버 글을 새 사본으로 받았습니다.');
-            if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
-          }));
-        }
-      } catch (e) { if (valid(token) && node.isConnected) node.textContent = errorText(e); }
+      try { syncStates = blogSync?.statuses ? await blogSync.statuses(workspaceId) : {}; } catch (_) { return; }
+      if (!valid(token)) return;
+      list?.querySelectorAll('[data-sync-post]').forEach(node => showSyncState(node.dataset.syncPost, node));
     }
-    async function resolveReviewed(id, choice, reviewed) {
-      try { return await blogSync.resolve(workspaceId, id, choice, reviewed); }
-      catch (e) {
-        if (e?.code === 'local_changed' && valid()) await load();
-        throw e;
-      }
-    }
-    async function syncPost(row, node, method) {
-      requireSync(method); await blogSync[method](workspaceId, row.id);
-      if (!valid()) return; await showSyncState(row.id, node);
-      announce('서버 처리 결과를 글 아래에서 확인해 주세요.');
+    async function deletePost(row) {
+      const label = row.title?.trim() || '제목 없는 글';
+      if (typeof root.confirm === 'function' && !root.confirm(`“${label}”을 삭제할까요? 로그인한 모든 기기에서 함께 삭제됩니다.`)) return;
+      if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, row.id, { expectedRevision: row.revision });
+      else await storage.deletePhotoPost(workspaceId, row.id, row.revision);
+      if (!valid()) return; clearPreview(); await load(); announce('글을 삭제했습니다. 다른 기기에서도 삭제됩니다.');
     }
     async function preparePreview(row) {
       const doc = await storage.readPhotoPost(workspaceId, row.id);
@@ -243,7 +212,7 @@
         if (!valid() || preview?.doc.id !== doc.id) return;
         urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
         const included = doc.photos.filter(p => photoIds.includes(p.id)), photoUrls = new Map();
-        snapshot.photos.forEach((p, index) => { const url = URL.createObjectURL(included[index].blob); urls.push(url); photoUrls.set(p.id, url); });
+        snapshot.photos.forEach((p, index) => { const url = URL.createObjectURL(included[index].view?.blob ?? included[index].blob); urls.push(url); photoUrls.set(p.id, url); });
         result.replaceChildren(life.BlogPublicUI.render(snapshot, { document, photoUrl: p => photoUrls.get(p.id) || null, allowOriginal: true }));
         preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, author: { name: author.value, intro: intro.value } }; changed = false; consent.checked = false;
         announce('이 미리보기와 같은 본문·선택 사진으로 공개합니다.');
@@ -278,168 +247,6 @@
       panel.append(button('공개 철회', async () => { requireSync('unpublish'); await blogSync.unpublish(workspaceId, doc.id, { expectedPublicRevision: preview.publicRevision }); if (!valid()) return; result.replaceChildren(meta('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.')); consent.checked = false; announce('공개 철회를 확인했습니다.'); }));
       panel.append(button('공개 검토 닫기', async () => clearPreview())); detail.append(panel); panel.querySelector('input')?.focus({ preventScroll: true });
     }
-    async function listRemote() {
-      requireSync('list'); const token = epoch, entries = await blogSync.list(workspaceId);
-      if (!valid(token)) return;
-      const area = el('section', null, 'blog-manager-remote'); area.append(el('h3', '서버에 보관한 글'));
-      for (const remote of entries) {
-        const id = remote.id || remote.remoteId;
-        const line = el('div'); line.append(meta(remote.title || '제목 없는 서버 글'));
-        line.append(button('이 글을 새 사본으로 받기', async () => {
-          requireSync('receive'); const result = await blogSync.receive(workspaceId, id);
-          if (!valid()) return; await load(); announce(result.syncError ? '새 사본은 보관했습니다. 서버 연결 상태는 다시 확인해 주세요.' : '이 브라우저에 새 사본으로 받았습니다. 기존 글은 유지했습니다.');
-          if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
-        })); area.append(line);
-      }
-      if (!entries.length) area.append(meta('서버에 보관한 글이 없습니다.'));
-      copyHost?.querySelector('.blog-manager-remote')?.remove(); copyHost?.append(area);
-    }
-    function clearLocalPreview() {
-      localSelected = null;
-      localPreview?.querySelectorAll('img').forEach(image => image.removeAttribute('src'));
-      localPreview?.replaceChildren();
-      if (localPreview) { localPreview.hidden = true; localPreview.dataset.state = 'idle'; }
-      localUrls.forEach(url => URL.revokeObjectURL(url)); localUrls.clear();
-    }
-    function clearLocalFind(releaseDownloads = false) {
-      localGeneration++; clearLocalPreview(); localRows = []; localScan = null; localShown = 40;
-      localResults?.replaceChildren();
-      if (releaseDownloads) {
-        localDownloads.forEach((timer, url) => { clearTimeout(timer); URL.revokeObjectURL(url); }); localDownloads.clear();
-      }
-    }
-    const localValid = token => valid() && localFind?.isConnected && localFind.open && token === localGeneration;
-    function localMessage(text, state = 'ready') {
-      if (!localStatus) return;
-      localStatus.textContent = text; localStatus.dataset.state = state;
-      localStatus.setAttribute('role', state === 'error' ? 'alert' : 'status');
-    }
-    const localRef = row => ({ workspaceId: row.workspaceId, kind: row.kind, id: row.id, revision: row.revision,
-      unowned: row.unowned, ...(row.versionId === undefined ? {} : { versionId: row.versionId }) });
-    function localDescription(row) {
-      const state = row.archived ? '보관한 글' : row.status === 'applied' ? '글에 반영된 초안' : stateLabels[row.status] || '상태 확인 필요';
-      return [row.workspaceTitle || '이름 없는 공간', kindLabels[row.kind] || '글', state,
-        row.unowned ? '로그인 전 자료' : '현재 계정 자료', row.indexState === 'missing' ? '목록 미등록' : row.indexState === 'mismatch' ? '목록 정보와 본문이 다름' : ''].filter(Boolean).join(' · ');
-    }
-    function renderLocalRows() {
-      if (!valid() || !localResults) return;
-      const term = localSearch.value.trim().toLocaleLowerCase('ko-KR');
-      const matching = localRows.filter(row => !term || String(row.title || '').toLocaleLowerCase('ko-KR').includes(term));
-      localResults.replaceChildren(meta(`${matching.length}개 글 확인`));
-      matching.slice(0, localShown).forEach(row => {
-        const article = el('article', null, 'blog-post'); article.dataset.localPostId = row.id; article.dataset.localKind = row.kind; article.dataset.workspaceId = row.workspaceId;
-        article.dataset.indexState = row.indexState; article.dataset.status = row.archived ? 'archived' : row.status;
-        article.append(el('h3', row.title?.trim() || '제목 없는 글'), meta(localDescription(row)),
-          button('내용 확인', () => inspectLocal(row)));
-        localResults.append(article);
-      });
-      if (matching.length > localShown) { const more = button('찾은 글 40개 더 보기', () => { localShown += 40; renderLocalRows(); }); more.id = 'blogLocalMore'; localResults.append(more); }
-      if (!matching.length) localResults.append(meta(term ? '제목이 일치하는 글이 없습니다. 검색어를 지워 확인해 주세요.' : localScan?.complete === true ?
-        '확인한 범위에서 글을 찾지 못했습니다. 다른 주소나 이미 삭제된 자료는 확인할 수 없습니다.' : '일부 자료를 확인하지 못했습니다. 아래 확인 상태를 참고해 주세요.'));
-      if (localScan && (!localScan.complete || localScan.issues?.length)) {
-        const issues = el('details', null, 'blog-local-issues'); issues.append(el('summary', '확인하지 못한 항목'));
-        const workspaces = new Map((localScan.workspaces || []).map(row => [row.workspaceId, row.title]));
-        const list = el('ul');
-        for (const issue of localScan.issues || []) {
-          const label = issue.code === 'photo_index_missing' ? '목록 미등록 글' : issue.code === 'photo_index_mismatch' ? '목록과 본문 불일치' : '읽기 또는 형식 확인 실패';
-          list.append(el('li', [workspaces.get(issue.workspaceId) || '공간 확인 필요', kindLabels[issue.kind] || '자료', label].join(' · ')));
-        }
-        if (!list.childNodes.length) list.append(el('li', '확인하지 못한 자료가 있습니다. 글 찾기를 다시 실행해 주세요.'));
-        issues.append(list); localResults.append(issues);
-      }
-    }
-    async function scanLocal() {
-      clearLocalFind(); const token = localGeneration, includeUnowned = localUnowned.checked;
-      localMessage('이 브라우저의 글을 확인하고 있습니다.', 'loading');
-      try {
-        if (typeof storage.scanLocalPosts !== 'function') throw new Error('이 브라우저의 글 찾기를 준비하지 못했습니다. 다시 열어 주세요.');
-        const result = await storage.scanLocalPosts({ includeUnowned });
-        if (!localValid(token) || localUnowned.checked !== includeUnowned) return;
-        if (!Array.isArray(result?.posts) || !Array.isArray(result?.workspaces) || !Array.isArray(result?.issues)) throw new Error('글 찾기 결과를 확인하지 못했습니다. 다시 실행해 주세요.');
-        localScan = result; localRows = result.posts;
-        renderLocalRows();
-        localMessage(!result.complete || result.issues.length ? '일부 자료를 확인하지 못했습니다. 확인된 글을 표시합니다.' : `${result.workspaces.length}개 공간에서 ${result.posts.length}개 글을 확인했습니다. 원래 자료는 변경하지 않았습니다.`, !result.complete || result.issues.length ? 'partial' : 'ready');
-      } catch (cause) { if (localValid(token)) localMessage(cause?.message || '글을 확인하지 못했습니다. 원래 자료는 변경하지 않았습니다. 다시 실행해 주세요.', 'error'); }
-    }
-    async function inspectLocal(row) {
-      clearLocalPreview(); const token = ++localGeneration, ref = localRef(row);
-      localMessage('선택한 글의 내용을 확인하고 있습니다.', 'loading');
-      try {
-        if (typeof storage.readLocalPostCandidate !== 'function') throw new Error('선택한 글 읽기를 준비하지 못했습니다. 다시 열어 주세요.');
-        const value = await storage.readLocalPostCandidate(ref);
-        if (!localValid(token)) return;
-        if (value?.kind !== row.kind) throw new Error('선택한 글의 종류가 달라졌습니다. 글 찾기를 다시 실행해 주세요.');
-        if (row.kind === 'photo') {
-          if (!life.Blog?.hydrate || !life.PhotoPost?.backup || !life.BlogPublicUI?.render) throw new Error('사진 글 읽기를 준비하지 못했습니다. 다시 열어 주세요.');
-          value.doc = await life.Blog.hydrate(life.Blog.pack(value.doc), value.doc.photos);
-          if (!localValid(token)) return;
-        } else if (typeof value.body !== 'string') throw new Error('글 본문을 확인하지 못했습니다. 원래 자료는 변경하지 않았습니다.');
-        localSelected = { row, ref, value, token };
-        const heading = el('h3', value.title?.trim() || '제목 없는 글'); heading.tabIndex = -1;
-        localPreview.append(heading, meta(localDescription(row)), meta('읽기 전용 사본입니다. 원래 글과 목록은 변경하지 않았습니다.'));
-        if (row.kind === 'photo') {
-          const display = life.PhotoPost.upgrade(value.doc), used = new Set(display.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
-          const originals = display.photos.filter(photo => used.has(photo.id)); display.status = 'saved'; display.archived = false;
-          if (!display.title.trim() && !life.PhotoPost.plainText(display).trim() && !originals.length && !display.attachments.length) localPreview.append(meta('본문이 비어 있는 초안입니다.'));
-          else {
-            const snapshot = life.Blog.publicSnapshot(display, { photoIds: originals.map(photo => photo.id) });
-            const photoUrls = new Map(snapshot.photos.map((photo, index) => { const url = URL.createObjectURL(originals[index].blob); localUrls.add(url); return [photo.id, url]; }));
-            localPreview.append(life.BlogPublicUI.render(snapshot, { photoUrl: photo => photoUrls.get(photo.id), privateView: true, allowOriginal: true }));
-          }
-          const unused = value.doc.photos.length - originals.length;
-          localPreview.append(meta(unused ? `본문에 사용된 사진만 ZIP에 포함합니다. 본문에 없는 사진 ${unused}장은 제외됩니다.` : '이 글의 본문과 본문에 사용된 사진 원본을 ZIP으로 저장합니다.'));
-        } else {
-          localPreview.append(el('div', value.body || '본문이 비어 있습니다.', 'blog-manager-excerpt'));
-          for (const item of value.doc?.attachments || []) localPreview.append(meta([item.title, item.creator, item.url].filter(Boolean).join(' · ')));
-        }
-        localPreview.append(button(row.kind === 'photo' ? '글·사진 ZIP 저장' : '본문 사본 저장', exportLocal), button('내용 닫기', () => { ++localGeneration; clearLocalPreview(); localMessage('내용 확인을 닫았습니다. 원래 자료는 변경하지 않았습니다.'); }));
-        localPreview.hidden = false; localPreview.dataset.state = 'ready';
-        localMessage('선택한 글을 읽기 전용으로 확인했습니다. 필요한 경우 이 사본을 파일로 저장할 수 있습니다.'); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
-      } catch (cause) { if (localValid(token)) { clearLocalPreview(); localMessage(cause?.message || '글을 읽지 못했습니다. 글 찾기를 다시 실행해 주세요.', 'error'); } }
-    }
-    async function exportLocal() {
-      const selected = localSelected;
-      if (!selected || !localValid(selected.token)) return;
-      try {
-        // Recheck the selected revision/owner before a file is prepared. Never
-        // repair its index or install the read-only document into an editor.
-        const value = await storage.readLocalPostCandidate(selected.ref);
-        if (!localValid(selected.token) || localSelected !== selected) return;
-        let blob;
-        if (selected.row.kind === 'photo') {
-          const doc = await life.Blog.hydrate(life.Blog.pack(value.doc), value.doc.photos);
-          if (!localValid(selected.token) || localSelected !== selected) return;
-          blob = await life.PhotoPost.backup(doc);
-        } else { if (typeof value.body !== 'string') throw new Error('글 본문을 확인하지 못했습니다.'); blob = new Blob([value.body], { type: 'text/plain;charset=utf-8' }); }
-        if (!localValid(selected.token) || localSelected !== selected) return;
-        const url = URL.createObjectURL(blob), link = el('a');
-        link.href = url; link.download = selected.row.kind === 'photo' ? 'haedo-found-photo-post.zip' : 'haedo-found-post.txt'; link.click();
-        const timer = setTimeout(() => { URL.revokeObjectURL(url); localDownloads.delete(url); }, 30000); localDownloads.set(url, timer);
-        localMessage('사본 파일 저장을 요청했습니다. 다운로드한 파일을 확인해 주세요. 원래 자료는 변경하지 않았습니다.');
-      } catch (cause) { if (localValid(selected.token) && localSelected === selected) localMessage(cause?.message || '파일을 준비하지 못했습니다. 원래 자료는 변경하지 않았습니다.', 'error'); }
-    }
-    function mountLocalFind() {
-      localFind = el('details', null, 'blog-manager-local'); localFind.id = 'blogLocalFind'; localFind.append(el('summary', '이 브라우저에서 글 찾기'));
-      localFind.append(meta('현재 로그인한 계정의 이 브라우저 모든 공간에서 글·초안·보관한 글과 목록에 등록되지 않은 글을 확인합니다. 서버나 다른 주소는 확인하지 않습니다.'));
-      const label = el('label', null, 'blog-manager-check'); localUnowned = el('input'); localUnowned.type = 'checkbox'; localUnowned.id = 'blogLocalIncludeUnowned';
-      label.append(localUnowned, document.createTextNode('로그인 전 자료도 확인')); localFind.append(label);
-      localFind.append(meta('선택하면 계정과 연결되지 않은 이 브라우저 자료도 함께 확인합니다. 다른 계정의 자료는 확인하지 않습니다.'));
-      const scan = button('글 찾기', scanLocal); scan.id = 'blogLocalScan'; localFind.append(scan);
-      const search = el('label', null, 'life-field'); search.append(el('span', '찾은 글 제목 검색')); localSearch = el('input'); localSearch.type = 'search'; localSearch.maxLength = 1000; localSearch.id = 'blogLocalSearch'; search.append(localSearch); localFind.append(search);
-      localStatus = meta('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.'); localStatus.id = 'blogLocalStatus'; localStatus.dataset.state = 'idle'; localStatus.setAttribute('role', 'status'); localStatus.setAttribute('aria-live', 'polite');
-      localResults = el('div', null, 'blog-local-results'); localResults.id = 'blogLocalResults';
-      localPreview = el('section', null, 'blog-local-preview blog-manager-public-preview'); localPreview.id = 'blogLocalPreview'; localPreview.hidden = true; localPreview.dataset.state = 'idle'; localPreview.setAttribute('aria-label', '찾은 글 내용 확인');
-      localFind.append(localStatus, localResults, localPreview);
-      const section = localFind, ownerEpoch = epoch;
-      const currentSection = () => valid(ownerEpoch) && localFind === section;
-      // Native toggle events are queued. Clear before a user closes the details
-      // so a rapid close/reopen cannot keep an old body or adopt its late read.
-      section.querySelector(':scope > summary').addEventListener('click', () => { if (currentSection() && section.open) { clearLocalFind(); localMessage('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.', 'idle'); } });
-      localSearch.addEventListener('input', () => { if (!currentSection()) return; localShown = 40; ++localGeneration; clearLocalPreview(); if (localScan) renderLocalRows(); });
-      localUnowned.addEventListener('change', () => { if (!currentSection()) return; clearLocalFind(); localMessage('확인 범위가 바뀌었습니다. 글 찾기를 다시 눌러 주세요.', 'idle'); });
-      section.addEventListener('toggle', () => { if (currentSection() && !section.open) { clearLocalFind(); localMessage('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.', 'idle'); } });
-      return localFind;
-    }
     async function chooseEvidence(seed = {}) {
       if (!life.BlogEvidence?.create || !storage.savePhotoPostWithEvidence) throw new Error('근거를 연결할 준비가 되지 않았습니다. 원문과 글은 그대로 있습니다.');
       if (evidence?.dirty?.()) await evidence.flush();
@@ -468,7 +275,7 @@
     }
     async function mount(target, { evidenceSeed = null, viewState = null, postId = null, expectedRevision = null } = {}) {
       if (disposed) throw new Error('종료한 글 관리 화면입니다.');
-      if (host) { await flush(); clearPreview(); clearLocalFind(true); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
+      if (host) { await flush(); clearPreview(); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
       focusedPostId = typeof postId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(postId) ? postId : null;
       if (postId !== null && !focusedPostId) throw new Error('관리할 글의 식별자를 확인해 주세요.');
       if (expectedRevision !== null && (!focusedPostId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1)) throw new Error('관리할 글의 정확한 판을 확인해 주세요.');
@@ -488,23 +295,18 @@
       detail = el('div'); evidenceHost = el('div'); list = el('div', null, 'blog-manager-list'); list.setAttribute('aria-label', '내 글 목록');
       surface.append(header, status);
       if (!focusedPostId && typeof onOpenAccountBlog === 'function') {
-        const account = button('서버에 보관한 글 확인', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
+        const account = button('글 동기화 상태', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
         account.dataset.focusKey = 'blog:account-list'; account.id = 'blogAccountList'; surface.append(account);
       }
-      copyHost = null;
-      if (!focusedPostId) {
-        surface.append(button('자료 인용으로 새 글 쓰기', () => chooseEvidence()), mountLocalFind());
-        copyHost = el('details', null, 'blog-manager-copy-tools life-details');
-        copyHost.append(el('summary', '별도 사본 만들기'), meta('서버의 글을 새 사본으로 받습니다. 기존 글은 유지됩니다.'), button('서버 글에서 새 사본 선택', listRemote));
-      }
+      if (!focusedPostId) surface.append(button('자료 인용으로 새 글 쓰기', () => chooseEvidence()));
       surface.append(detail, evidenceHost, list);
-      if (copyHost) surface.append(copyHost);
       host.replaceChildren(surface);
+      if (blogSync?.subscribe) subscriptions.push(blogSync.subscribe(event => { if (event?.type === 'status' && !event.status?.running && valid()) void refreshSync(); }));
       if (storage.subscribe) subscriptions.push(storage.subscribe(workspaceId, event => { if (valid() && event.workspaceId === workspaceId && ['photo_posts_changed', 'workbench_changed'].includes(event.type)) announce('저장한 글이 바뀌었습니다. 글 목록을 다시 불러와 확인해 주세요.'); }));
       await load();
       if (evidenceSeed && valid()) await chooseEvidence(evidenceSeed);
     }
-    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.(), dispose() { disposed = true; epoch++; clearPreview(); clearLocalFind(true); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
+    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.(), dispose() { disposed = true; epoch++; clearPreview(); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
   }
   life.BlogManager = Object.freeze({ create });
 })(globalThis);

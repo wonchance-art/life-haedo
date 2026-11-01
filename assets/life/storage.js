@@ -1379,8 +1379,13 @@
             await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: 1, refs: clone(inheritedEvidence.refs) } });
           }
           const priorBlog = (await meta.get(`blog-sync:${workspaceId}:${target.id}`))?.value;
-          if (priorBlog && !(await meta.get(`blog-sync:${workspaceId}:${value.id}`))) {
-            const binding = { ...clone(priorBlog), revision: 1, localRevision: 0, publishPending: null, unpublishPending: null, status: priorBlog.enabled ? 'pending' : 'paused' };
+          const ownBlog = (await meta.get(`blog-sync:${workspaceId}:${value.id}`))?.value;
+          if (priorBlog && ownBlog?.remoteId !== priorBlog.remoteId) {
+            // The saved post keeps its established server identity. An editing
+            // draft that was synced on its own is retired on every device.
+            if (ownBlog && typeof ownBlog.remoteId === 'string' && (ownBlog.remoteRevision > 0 || ownBlog.pending))
+              await meta.put({ key: blogDeleteKey(workspaceId, ownBlog.remoteId), value: { remoteId: ownBlog.remoteId, remoteWorkspaceId: ownBlog.remoteWorkspaceId || workspaceId, reason: 'replaced' } });
+            const binding = { ...clone(priorBlog), revision: (Number.isSafeInteger(ownBlog?.revision) ? ownBlog.revision : 0) + 1, localRevision: 0, publishPending: null, unpublishPending: null, status: 'pending' };
             if (binding.pending) binding.pending.localRevision = 0;
             await meta.put({ key: `blog-sync:${workspaceId}:${value.id}`, value: binding });
             await meta.delete(`blog-sync:${workspaceId}:${target.id}`);
@@ -2344,6 +2349,119 @@
         assertCurrent();
         if ((prior?.revision || 0) !== baseRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
         await meta.put({ key, value }); assertCurrent(); return clone(value);
+      });
+    }
+    // Account-wide blog sync (2026-11-01). Every saved post and draft of the
+    // account is mirrored on all of its devices by BlogSync. These helpers keep
+    // the local document, its index row, its sync binding and deletion records
+    // in one transaction; they never send anything themselves.
+    const blogDeleteKey = (workspaceId, remoteId) => `blog-delete:${workspaceId}:${remoteId}`;
+    function blogBindingShape(state) {
+      return plain(state) && typeof state.remoteId === 'string' && !!state.remoteId && typeof state.enabled === 'boolean' &&
+        Number.isSafeInteger(state.revision) && state.revision >= 1 && Number.isSafeInteger(state.remoteRevision) && state.remoteRevision >= 0 &&
+        Number.isSafeInteger(state.localRevision) && state.localRevision >= 0;
+    }
+    async function listBlogSyncStates(workspaceId) {
+      blogAccountScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `blog-sync:${workspaceId}:`, deleted = `blog-delete:${workspaceId}:`, states = [], tombstones = [], issues = [];
+        // Keys first: no other workspace's private documents are read.
+        for (const key of await meta.getAllKeys()) {
+          if (typeof key !== 'string') continue;
+          if (key.startsWith(prefix)) {
+            const value = (await meta.get(key))?.value;
+            if (blogBindingShape(value)) states.push({ localPostId: key.slice(prefix.length), state: clone(value) });
+            else issues.push({ localPostId: key.slice(prefix.length), code: 'invalid_blog_state' });
+          } else if (key.startsWith(deleted)) {
+            const value = (await meta.get(key))?.value;
+            if (plain(value) && value.remoteId === key.slice(deleted.length)) tombstones.push(clone(value));
+            else issues.push({ remoteId: key.slice(deleted.length), code: 'invalid_blog_tombstone' });
+          }
+        }
+        const posts = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        return { posts: clone(Array.isArray(posts) ? posts : []), states, tombstones, issues };
+      });
+    }
+    async function commitBlogSync(workspaceId, input, options = {}) {
+      blogAccountScope(workspaceId);
+      if (options.isCurrent !== undefined && typeof options.isCurrent !== 'function') throw fault('invalid_request', '글을 확인할 화면을 확인해 주세요.');
+      const assertCurrent = () => { scopeGuard(); if (options.isCurrent && options.isCurrent() === false) throw fault('request_cancelled', '계정이나 연결이 바뀌어 글 동기화를 중단했습니다.'); };
+      assertCurrent();
+      if (!plain(input)) throw fault('invalid_request', '동기화할 글을 확인해 주세요.');
+      onlyFields(input, ['postId', 'post', 'baseRevision', 'binding', 'bindingRevision', 'copy', 'remove'], 'invalid_blog_state');
+      const { postId, baseRevision, bindingRevision } = input, remove = input.remove === true;
+      requireId(postId, '글'); requireRevision(baseRevision); requireRevision(bindingRevision);
+      if (remove && (input.post || input.binding || input.copy)) throw fault('invalid_blog_state', '삭제와 갱신을 함께 처리하지 않습니다.');
+      const post = input.post ? photoPost().compact(input.post) : null, copy = input.copy ? photoPost().compact(input.copy) : null;
+      if (post) { photoPost().validate(post); if (post.id !== postId) throw fault('invalid_blog_state', '글과 연결 식별자가 다릅니다.'); }
+      if (copy) { photoPost().validate(copy); if (copy.id === postId || copy.revision !== 0 || copy.status !== 'draft' || copy.replaces) throw fault('invalid_blog_state', '충돌 보관 사본은 새 초안이어야 합니다.'); }
+      let binding = null;
+      if (input.binding) {
+        binding = clone(input.binding);
+        if (!plain(binding) || typeof binding.remoteId !== 'string' || !binding.remoteId) throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.');
+        if (new TextEncoder().encode(JSON.stringify(binding)).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
+      }
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        const bindingKey = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(bindingKey))?.value;
+        if ((prior?.revision || 0) !== bindingRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
+        const remoteId = binding?.remoteId || prior?.remoteId;
+        // A post deleted here is never re-received from a stale server list.
+        if (!remove && remoteId && await meta.get(blogDeleteKey(workspaceId, remoteId))) throw fault('blog_post_deleted', '이 기기에서 삭제한 글이라 다시 받지 않았습니다.');
+        const key = `photo-post:${workspaceId}:${postId}`, current = (await meta.get(key))?.value;
+        if ((current?.revision || 0) !== baseRevision || !current && baseRevision !== 0) throw fault('photo_post_conflict', '확인하는 동안 글이 바뀌었습니다. 입력은 그대로 남아 있습니다.');
+        let saved = null;
+        if (remove) {
+          if (!current || !prior) throw fault('photo_post_missing', '삭제할 글을 확인하지 못했습니다.');
+          await meta.delete(key); await meta.delete(bindingKey); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
+          const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+          await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
+        } else {
+          if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects); assertCurrent(); }
+          if (binding) {
+            const value = { ...binding, revision: bindingRevision + 1, localRevision: saved ? saved.revision : binding.localRevision };
+            if (!blogBindingShape(value)) throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.');
+            await meta.put({ key: bindingKey, value });
+          }
+        }
+        let copied = null;
+        if (copy) { copied = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects); assertCurrent(); }
+        return { postId, revision: remove ? 0 : saved ? saved.revision : current?.revision || 0, copyId: copied?.id || null, removed: remove };
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      return result;
+    }
+    async function deletePhotoPost(workspaceId, postId, baseRevision) {
+      collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const key = `photo-post:${workspaceId}:${postId}`, current = (await meta.get(key))?.value;
+        if (!current) throw fault('photo_post_missing', '삭제할 글을 찾지 못했습니다. 목록을 다시 확인해 주세요.');
+        photoPost().validate(current);
+        if (current.revision !== baseRevision) throw fault('photo_post_conflict', '다른 탭이나 기기에서 글이 바뀌었습니다. 삭제하지 않았습니다.');
+        const bindingKey = `blog-sync:${workspaceId}:${postId}`, binding = (await meta.get(bindingKey))?.value;
+        if (binding?.publication?.active) throw fault('blog_post_published', '공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.');
+        await meta.delete(key); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
+        if (binding) {
+          await meta.delete(bindingKey);
+          if (blogBindingShape(binding) && (binding.remoteRevision > 0 || binding.pending))
+            await meta.put({ key: blogDeleteKey(workspaceId, binding.remoteId), value: { remoteId: binding.remoteId, remoteWorkspaceId: binding.remoteWorkspaceId || workspaceId, reason: 'deleted' } });
+        }
+        const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
+        return { postId, remoteId: binding?.remoteId || null };
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      return result;
+    }
+    async function clearBlogTombstone(workspaceId, remoteId) {
+      blogAccountScope(workspaceId); requireId(remoteId, '서버 글');
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await meta.delete(blogDeleteKey(workspaceId, remoteId)); return true;
       });
     }
     // Page composer drafts stay local, outside composition sync and public copies.
@@ -4377,7 +4495,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
