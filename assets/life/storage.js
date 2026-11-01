@@ -4750,6 +4750,9 @@
       return parsed;
     }
     const accountDocSyncKey = key => `accountDoc:${key}`;
+    const accountDocBaseKey = key => `accountDocBase:${key}`;
+    const ACCOUNT_DOC_RECOVERY_LIMIT = 5;
+    let accountDocRecoverySeq = 0;
     const accountDocCursorKey = () => `accountDocCursor:${accountKey}`;
     function accountDocSyncValue(value, key) {
       if (value === undefined) return null;
@@ -4797,14 +4800,21 @@
         if (allowed === false) throw fault('workspace_access_denied', '현재 계정에서 이 작업공간에 접근할 수 없습니다.');
         const value = await accountDocLocal(meta, parsed);
         const sync = accountDocSyncValue((await meta.get(accountDocSyncKey(key)))?.value, key);
+        const base = (await meta.get(accountDocBaseKey(key)))?.value;
         return { key, workspaceId: parsed.workspaceId, prefix: parsed.prefix, recovery: parsed.spec.recovery,
-          exists: value !== undefined, value: value === undefined ? null : clone(value), hash: accountDocHash(value), sync: sync && clone(sync) };
+          exists: value !== undefined, value: value === undefined ? null : clone(value), hash: accountDocHash(value), sync: sync && clone(sync),
+          base: base === undefined ? null : clone(base) };
       });
     }
-    async function writeAccountDocSync(key, state) {
+    // `base` is the last value both this device and the server agreed on; the
+    // engine merges list documents item by item against it. Omit to keep it.
+    async function writeAccountDocSync(key, state, base) {
       accountDocScope(key);
       const value = accountDocSyncValue(clone(state), key);
-      await transaction(['meta'], 'readwrite', async tx => { await tx.objectStore('meta').put({ key: accountDocSyncKey(key), value }); });
+      await transaction(['meta'], 'readwrite', async tx => {
+        await tx.objectStore('meta').put({ key: accountDocSyncKey(key), value });
+        if (base !== undefined && base !== null) await tx.objectStore('meta').put({ key: accountDocBaseKey(key), value: clone(base) });
+      });
       return clone(value);
     }
     async function readAccountDocCursor() {
@@ -4824,15 +4834,22 @@
       });
     }
     function accountDocRecoveryRow(key, value, reason) {
-      return { key: `accountDocRecovery:${key}:${new Date().toISOString()}:${Math.random().toString(36).slice(2, 10)}`,
+      // ISO time + per-scope counter keep keys in creation order for pruning.
+      return { key: `accountDocRecovery:${key}:${new Date().toISOString()}:${String(accountDocRecoverySeq++).padStart(8, '0')}:${Math.random().toString(36).slice(2, 10)}`,
         value: { docKey: key, reason, savedAt: new Date().toISOString(), value: clone(value) } };
+    }
+    // Recovery copies are bounded: only the newest few per document are kept.
+    async function addAccountDocRecovery(meta, key, value, reason) {
+      const row = accountDocRecoveryRow(key, value, reason); await meta.add(row);
+      const prefix = `accountDocRecovery:${key}:`;
+      const keys = (await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff'))).filter(item => typeof item === 'string' && item.startsWith(prefix)).sort();
+      for (const old of keys.slice(0, Math.max(0, keys.length - ACCOUNT_DOC_RECOVERY_LIMIT))) await meta.delete(old);
+      return row.key;
     }
     async function saveAccountDocRecovery(key, value, reason = 'conflict') {
       accountDocScope(key);
       if (value === undefined || value === null) return null;
-      const row = accountDocRecoveryRow(key, value, reason);
-      await transaction(['meta'], 'readwrite', async tx => { await tx.objectStore('meta').add(row); });
-      return row.key;
+      return transaction(['meta'], 'readwrite', async tx => addAccountDocRecovery(tx.objectStore('meta'), key, value, reason));
     }
     async function listAccountDocRecoveries(key) {
       accountDocScope(key);
@@ -4849,7 +4866,7 @@
     // revision is moved past the local one so an open stale editor conflicts.
     async function applyAccountDoc(key, input) {
       const parsed = accountDocScope(key);
-      onlyFields(input, ['value', 'expectedHash', 'sync', 'recoveryReason'], 'invalid_request');
+      onlyFields(input, ['value', 'expectedHash', 'sync', 'recoveryReason', 'base', 'pending'], 'invalid_request');
       const { expectedHash, recoveryReason = null } = input;
       if (expectedHash !== null && typeof expectedHash !== 'string') throw fault('invalid_request', '자동 저장 기준을 확인해 주세요.');
       const incoming = clone(input.value);
@@ -4874,11 +4891,14 @@
         }
         const applied = await accountDocLocal(meta, parsed), hash = accountDocHash(applied);
         if (recoveryReason && local !== undefined && (parsed.spec.recovery || recoveryReason === 'first_sync')) {
-          const row = accountDocRecoveryRow(parsed.key, local, recoveryReason); await meta.add(row);
+          await addAccountDocRecovery(meta, parsed.key, local, recoveryReason);
         }
         if (input.sync) {
-          const sync = accountDocSyncValue({ ...clone(input.sync), docKey: parsed.key, hash }, parsed.key);
+          // A merged value differs from the server copy: it stays pending (hash
+          // null) and the server copy becomes the merge base until it is sent.
+          const sync = accountDocSyncValue({ ...clone(input.sync), docKey: parsed.key, hash: input.pending ? null : hash }, parsed.key);
           await meta.put({ key: accountDocSyncKey(parsed.key), value: sync });
+          await meta.put({ key: accountDocBaseKey(parsed.key), value: input.base === undefined ? clone(applied) : clone(input.base) });
         }
         return { status: 'applied', hash, value: clone(applied) };
       }).catch(error => {

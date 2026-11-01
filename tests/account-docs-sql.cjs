@@ -5,6 +5,7 @@
 'use strict';
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), { randomUUID } = require('node:crypto');
 const migration = path.join(__dirname, '../supabase/migrations/20261101090000_life_account_documents.sql');
+const ownerLock = path.join(__dirname, '../supabase/migrations/20261101150000_life_account_documents_owner_lock.sql');
 
 async function main() {
   const { Client } = require(process.env.PG_MODULE_PATH || 'pg');
@@ -32,8 +33,9 @@ async function main() {
       create or replace function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema auth to anon, authenticated; grant usage on schema public to anon, authenticated;`);
     const sql = fs.readFileSync(migration, 'utf8');
-    await q(sql);
-    await check('migration is idempotent when applied twice', async () => { await q(sql); });
+    const lockSql = fs.readFileSync(ownerLock, 'utf8');
+    await q(sql); await q(lockSql);
+    await check('migrations are idempotent when applied twice', async () => { await q(sql); await q(lockSql); });
     const A = randomUUID(), B = randomUUID();
     await q('insert into auth.users(id) values ($1),($2)', [A, B]);
     const key = 'discoverySettings:["https://example.supabase.co","' + A + '"]:ws-1';
@@ -107,6 +109,33 @@ async function main() {
       await rejected(() => as('anon', '', () => q('select * from public.life_account_documents')), '42501');
       await rejected(() => as('authenticated', '', () => q("select public.life_account_document_put('k',0,$1,'{}'::jsonb,false,null)", [randomUUID()])), '42501');
       await rejected(() => as('authenticated', '', () => q('select * from public.life_account_document_changes(0,10)')), '42501');
+    });
+    await check('per owner, seq order equals commit order: a cursor never skips a later-committing lower seq', async () => {
+      const owner = randomUUID(); await q('insert into auth.users(id) values ($1)', [owner]);
+      const [first, second, reader] = [new Client(config), new Client(config), new Client(config)];
+      try {
+        await Promise.all([first, second, reader].map(c => c.connect()));
+        for (const c of [first, second, reader]) { await c.query("select set_config('request.jwt.claim.sub',$1,false)", [owner]); await c.query('set role authenticated'); }
+        const pid = Number((await second.query('select pg_backend_pid() pid')).rows[0].pid);
+        await first.query('begin');
+        const a = (await first.query("select public.life_account_document_put('order-a',0,$1,'{\"n\":1}'::jsonb,false,null) result", [randomUUID()])).rows[0].result;
+        // A different key of the same owner must wait for the open put instead of committing past it.
+        let finished = false;
+        const pending = second.query("select public.life_account_document_put('order-b',0,$1,'{\"n\":2}'::jsonb,false,null) result", [randomUUID()]);
+        pending.then(() => { finished = true; }, () => { finished = true; });
+        let waited = false;
+        while (!finished && !waited) {
+          waited = (await q("select wait_event_type from pg_stat_activity where pid=$1", [pid])).rows[0]?.wait_event_type === 'Lock';
+          await new Promise(resolve => setImmediate(resolve));
+        }
+        assert.equal(waited, true, 'the second key must wait for the owner lock instead of committing a higher seq first');
+        assert.deepEqual((await reader.query('select doc_key from public.life_account_document_changes(0,100)')).rows, []);
+        await first.query('commit');
+        const b = (await pending).rows[0].result;
+        assert(Number(a.seq) < Number(b.seq));
+        const rows = (await reader.query('select doc_key, seq from public.life_account_document_changes(0,100)')).rows;
+        assert.deepEqual(rows.map(row => row.doc_key), ['order-a', 'order-b']);
+      } finally { await first.query('rollback').catch(() => {}); await Promise.all([first, second, reader].map(c => c.end())); }
     });
     await check('two real sessions racing the same CAS store one winner and one conflict', async () => {
       const clients = [new Client(config), new Client(config)];

@@ -175,7 +175,8 @@ test('CAS conflict: the later edit wins on both devices and the losing content i
   await ipadSync.sync.syncNow();
   assert.equal(server.docs(accountA.userId).get(`page-drafts:${w}`).data.posts[0].body, '아이패드에서 나중에 고친 초안');
   const kept = await b.listAccountDocRecoveries(`page-drafts:${w}`);
-  assert.equal(kept.length, 1); assert.equal(kept[0].value.posts[0].body, '맥에서 먼저 고친 초안'); assert.equal(kept[0].reason, 'conflict_remote');
+  // Both changed the same draft: only that losing draft version is kept, not a whole-document copy.
+  assert.equal(kept.length, 1); assert.deepEqual(kept[0].value.items.map(item => item.body), ['맥에서 먼저 고친 초안']); assert.equal(kept[0].reason, 'merge_conflict');
   await macSync.sync.syncNow();
   assert.equal((await a.readPageDrafts(w)).posts[0].body, '아이패드에서 나중에 고친 초안');
 
@@ -185,7 +186,7 @@ test('CAS conflict: the later edit wins on both devices and the losing content i
   await ipadSync.sync.syncNow(); await macSync.sync.syncNow();
   assert.equal((await a.readPageDrafts(w)).posts[0].body, '아이패드의 최신 수정');
   const macRecovery = await a.listAccountDocRecoveries(`page-drafts:${w}`);
-  assert(macRecovery.some(item => item.value.posts[0].body === '맥의 오래된 수정' && item.reason === 'conflict'));
+  assert(macRecovery.some(item => item.value.items?.[0]?.body === '맥의 오래된 수정' && item.reason === 'merge_conflict'));
   // The applied revision moved past the local one: an editor holding the old base conflicts instead of overwriting.
   const current = await a.readPageDrafts(w), stale = structuredClone(current); stale.revision = current.revision - 1;
   await assert.rejects(a.savePageDrafts(w, stale, stale.revision), { code: 'page_draft_conflict' });
@@ -256,7 +257,7 @@ test('a remote apply never overwrites a concurrent local save', async t => {
   assert.equal((await a.readPageDrafts(w)).posts[0].body, '맥에서 지금 입력해 저장한 초안', 'the newer local save wins');
   assert.equal(server.docs(accountA.userId).get(`page-drafts:${w}`).data.posts[0].body, '맥에서 지금 입력해 저장한 초안');
   const kept = await a.listAccountDocRecoveries(`page-drafts:${w}`);
-  assert(kept.some(item => item.value.posts[0].body === '다른 기기에서 바뀐 초안'));
+  assert(kept.some(item => item.value.items?.[0]?.body === '다른 기기에서 바뀐 초안'));
 });
 
 test('account isolation: another account on the same device never lists, reads or applies these documents', async t => {
@@ -300,7 +301,7 @@ test('remote content this version cannot validate is deferred and the local docu
 
 test('the remote client sends exact RPC arguments and refuses non-JSON data', async () => {
   const calls = [];
-  const auth = { ready: true, config: { url: 'https://x.supabase.co', key: 'k' } };
+  const auth = { ready: true, config: { url: 'https://x.supabase.co', key: 'k' }, user: { id: 'u' } };
   const clientFactory = (_auth, options) => { assert.deepEqual(options, { scope: 'account-docs' }); return () => ({
     auth: { async getUser() { return { data: { user: { id: 'u' } }, error: null }; }, dispose() {} },
     async rpc(name, params) { calls.push({ name, params }); return name === 'life_account_document_put'
@@ -315,6 +316,10 @@ test('the remote client sends exact RPC arguments and refuses non-JSON data', as
   await assert.rejects(remote.put({ docKey: 'k\n', expectedRevision: 0, operationId: op, data: {} }), { code: 'invalid_request' });
   assert.equal(Remote.clean({ message: 'life_account_document_operation_mismatch', code: '22023' }).code, 'operation_mismatch');
   assert.equal(Remote.clean({ code: 'PGRST202' }).code, 'schema_missing');
+  // The owner is fixed at creation: after another user signs in nothing is sent for them.
+  const owned = Remote.create({ auth, clientFactory, ownerId: 'u' }); auth.user = { id: 'other' }; const sent = calls.length;
+  await assert.rejects(owned.changes(0), { code: 'request_cancelled' }); await assert.rejects(owned.put({ docKey: 'k', expectedRevision: 0, operationId: op, data: {} }), { code: 'request_cancelled' });
+  assert.equal(calls.length, sent);
 });
 
 test('a server without the account-document RPCs is unavailable and is not asked again every pass', async t => {
@@ -369,4 +374,77 @@ test('a page in the back/forward cache flushes nothing; the hidden flush still r
   // Only the visibility handler can send this: the debounce never fires in tests.
   visibility('hidden'); for (let n = 0; n < 200 && body() !== '탭 전환 전 초안'; n++) await new Promise(done => setTimeout(done, 5));
   assert.equal(body(), '탭 전환 전 초안'); assert(puts() > flushed);
+});
+
+async function editDrafts(store, w, change) {
+  const current = await store.readPageDrafts(w), next = structuredClone(current); change(next.posts);
+  return store.savePageDrafts(w, next, current.revision);
+}
+const newDraft = (body, at) => { const value = PagePosts.draft([], Core.id(), at); value.body = body; return value; };
+async function pair(t) {
+  const server = fakeServer(), mac = device(), ipad = device(), now = clock();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), bundle = await workspaceOn(a), w = bundle.workspaceId;
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, bundle);
+  return { server, a, b, w, now, macSync: engine(a, server, accountA, { now }), ipadSync: engine(b, server, accountA, { now }) };
+}
+const bodies = async (store, w) => (await store.readPageDrafts(w)).posts.map(post => post.body).sort();
+
+test('list merge: drafts added concurrently on two devices both survive everywhere, with no recovery copies', async t => {
+  const { server, a, b, w, now, macSync, ipadSync } = await pair(t);
+  await editDrafts(a, w, posts => posts.push(newDraft('공통 초안', '2026-11-01T00:00:00.000Z')));
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow();
+  now.advance(); await editDrafts(a, w, posts => posts.push(newDraft('맥에서 추가한 초안', '2026-11-01T00:01:00.000Z')));
+  now.advance(); await editDrafts(b, w, posts => posts.push(newDraft('아이패드에서 추가한 초안', '2026-11-01T00:02:00.000Z')));
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow(); await macSync.sync.syncNow();
+  const expected = ['공통 초안', '맥에서 추가한 초안', '아이패드에서 추가한 초안'].sort();
+  assert.deepEqual(await bodies(a, w), expected); assert.deepEqual(await bodies(b, w), expected);
+  assert.deepEqual(server.docs(accountA.userId).get(`page-drafts:${w}`).data.posts.map(post => post.body).sort(), expected);
+  assert.deepEqual(await a.listAccountDocRecoveries(`page-drafts:${w}`), []); assert.deepEqual(await b.listAccountDocRecoveries(`page-drafts:${w}`), []);
+  for (const store of [a, b]) { const [doc] = (await store.listAccountDocs()).filter(item => item.key === `page-drafts:${w}`); assert.equal(doc.hash, doc.sync.hash); }
+});
+
+test('list merge: the same draft edited on both devices keeps the later item edit and copies only the other version', async t => {
+  const { a, b, w, now, macSync, ipadSync } = await pair(t);
+  const shared = newDraft('원래 초안', '2026-11-01T00:00:00.000Z'), other = newDraft('손대지 않은 초안', '2026-11-01T00:00:00.000Z');
+  await editDrafts(a, w, posts => posts.push(shared, other));
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow();
+  // The iPad edit is pushed first but is the older item edit.
+  now.advance(); await editDrafts(b, w, posts => { const item = posts.find(post => post.id === shared.id); item.body = '아이패드의 이전 수정'; item.updatedAt = '2026-11-01T00:05:00.000Z'; });
+  now.advance(); await editDrafts(a, w, posts => { const item = posts.find(post => post.id === shared.id); item.body = '맥의 나중 수정'; item.updatedAt = '2026-11-01T00:09:00.000Z'; });
+  await ipadSync.sync.syncNow(); await macSync.sync.syncNow(); await ipadSync.sync.syncNow();
+  for (const store of [a, b]) assert.deepEqual(await bodies(store, w), ['맥의 나중 수정', '손대지 않은 초안'].sort());
+  const kept = await a.listAccountDocRecoveries(`page-drafts:${w}`);
+  assert.equal(kept.length, 1); assert.deepEqual(kept[0].value.items.map(item => item.body), ['아이패드의 이전 수정']);
+});
+
+test('list merge: a deletion is not resurrected, and an edit wins over a concurrent delete of the same draft', async t => {
+  const { a, b, w, now, macSync, ipadSync } = await pair(t);
+  const gone = newDraft('지울 초안', '2026-11-01T00:00:00.000Z'), kept = newDraft('남길 초안', '2026-11-01T00:00:00.000Z'), disputed = newDraft('다툼 초안', '2026-11-01T00:00:00.000Z');
+  await editDrafts(a, w, posts => posts.push(gone, kept, disputed));
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow();
+  // Mac deletes two drafts; the iPad meanwhile edits a different draft and the disputed one.
+  now.advance(); await editDrafts(a, w, posts => posts.splice(0, posts.length, ...posts.filter(post => ![gone.id, disputed.id].includes(post.id))));
+  now.advance(); await editDrafts(b, w, posts => { posts.find(post => post.id === kept.id).body = '아이패드가 고친 남길 초안'; posts.find(post => post.id === disputed.id).body = '아이패드가 고친 다툼 초안'; });
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow(); await macSync.sync.syncNow();
+  const expected = ['아이패드가 고친 남길 초안', '아이패드가 고친 다툼 초안'].sort();
+  assert.deepEqual(await bodies(a, w), expected); assert.deepEqual(await bodies(b, w), expected);
+  // A device that never touched a deleted draft does not bring it back.
+  now.advance(); await editDrafts(a, w, posts => posts.splice(0, posts.length, ...posts.filter(post => post.id !== disputed.id)));
+  await macSync.sync.syncNow(); await ipadSync.sync.syncNow(); await macSync.sync.syncNow();
+  assert.deepEqual(await bodies(a, w), ['아이패드가 고친 남길 초안']); assert.deepEqual(await bodies(b, w), ['아이패드가 고친 남길 초안']);
+});
+
+test('recovery copies are bounded per document', async t => {
+  const mac = device(); t.after(() => mac.base.close());
+  const a = mac.base.forAccount(accountA), bundle = await workspaceOn(a), w = bundle.workspaceId;
+  await editDrafts(a, w, posts => posts.push(newDraft('초안', '2026-11-01T00:00:00.000Z')));
+  for (let i = 0; i < 9; i++) await a.saveAccountDocRecovery(`page-drafts:${w}`, { items: [{ i }] }, 'merge_conflict');
+  const kept = await a.listAccountDocRecoveries(`page-drafts:${w}`);
+  assert.equal(kept.length, 5); assert.deepEqual(kept.map(item => item.value.items[0].i).sort((x, y) => x - y), [4, 5, 6, 7, 8]);
+});
+
+test('mergeDocument keeps single-value documents out of item merging', () => {
+  assert.equal(Sync.mergeDocument('discoverySettings', null, { revision: 1 }, { revision: 2 }, true), null);
+  assert.equal(Sync.mergeDocument('readingPosition', null, { revision: 1 }, { revision: 2 }, true), null);
 });

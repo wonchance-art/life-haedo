@@ -27,7 +27,10 @@ async function databaseSnapshot(page) {
       const reads = names.map(name => {
         const store = tx.objectStore(name), keys = store.getAllKeys(), values = store.getAll();
         const read = request => new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-        return Promise.all([read(keys), read(values)]).then(([keys, values]) => ({ name, rows: keys.map((key, index) => [key, values[index]]) }));
+        // Account-document sync bookkeeping (accountDoc:/accountDocBase:/accountDocCursor:/accountDocRecovery:)
+        // is written by the background engine, not by the finder under test; it is excluded by name.
+        return Promise.all([read(keys), read(values)]).then(([keys, values]) => ({ name, rows: keys.map((key, index) => [key, values[index]])
+          .filter(([key]) => !(name === 'meta' && typeof key === 'string' && /^accountDoc(?:Base|Cursor|Recovery)?:/.test(key))) }));
       });
       const rows = await Promise.all(reads);
       const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join('');
