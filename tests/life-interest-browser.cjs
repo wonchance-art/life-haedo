@@ -130,7 +130,10 @@ async function main() {
       await fixture(page); const second = await context.newPage(); observe(second, report, 'regression latest manual second tab'); await open(second);
       assert.equal(await second.locator('#interestManual').inputValue(), '');
       await page.locator('#interestManual').fill('다른 탭이 새로 보관한 최신 관심'); await page.locator('#interestSaveManual').click(); await idle(page);
-      await second.locator('#interestReload').waitFor({ state: 'visible' }); await second.locator('#interestReload').click(); await idle(second);
+      // Account-sync behavior (2026-11-01): an untouched, unfocused view adopts another
+      // tab's or device's saved interests directly; the reload action is for unsaved input.
+      await second.waitForFunction(() => document.querySelector('#interestManual')?.value === '다른 탭이 새로 보관한 최신 관심'); await idle(second);
+      assert.equal(await second.locator('#interestReload').isVisible(), false);
       assert.equal(await second.locator('#interestManual').inputValue(), '다른 탭이 새로 보관한 최신 관심');
       await second.locator('#interestSaveManual').click(); await idle(second);
       assert.deepEqual((await stored(second)).profile.manual.map(x => x.label), ['다른 탭이 새로 보관한 최신 관심']);

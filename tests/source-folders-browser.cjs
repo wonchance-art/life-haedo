@@ -4,7 +4,7 @@
 'use strict';
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -106,7 +106,7 @@ async function main() {
   async function check(name, run) {
     if (process.env.SOURCE_FOLDERS_MATCH && !new RegExp(process.env.SOURCE_FOLDERS_MATCH).test(name)) return;
     const server = new FakeCloud(), context = await makeContext(browser, server, 'source-folders-' + report.checks.length, accounts.a, { viewport: { width: 820, height: 1000 }, hasTouch: true, reducedMotion: 'reduce' });
-    context.on('request', request => { const u = new URL(request.url()), body = request.postData() || ''; if ([titleA, titleB, note, raw, parentName, renamedChild].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname }); if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 }); else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname }); });
+    context.on('request', request => { const u = new URL(request.url()), body = request.postData() || ''; if ([titleA, titleB, note, raw, parentName, renamedChild].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname }); if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 }); else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname }); });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ check: name, destination: u.origin + u.pathname }); return route.abort('blockedbyclient'); });
     context.on('page', page => { page.setDefaultTimeout(15000); page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); }); page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message })); });
     const page = await context.newPage(); console.log('RUN ' + name);

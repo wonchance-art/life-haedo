@@ -10,6 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { CompositionCloud } = require('./composition-sync-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const Core = require('../assets/life/core.js');
 const Workbench = require('../assets/life/workbench.js');
@@ -82,8 +83,8 @@ async function main() {
   context.on('request', request => {
     const url = new URL(request.url()), body = request.postData() || '';
     // Owner directive 2026-11-01: private settings follow the signed-in account through
-    // the owner-only account document RPC. Any other destination is still a leak.
-    const accountSync = url.origin === cloud && url.pathname === '/rest/v1/rpc/life_account_document_put' && request.method() === 'POST' && /^Bearer \S+$/.test(request.headers().authorization || '');
+    // owner-scoped background sync calls. Any other destination is still a leak.
+    const accountSync = url.origin === cloud && isBackgroundSync(request.url());
     if (!accountSync && [privateTopic, encodeURIComponent(privateTopic), JSON.stringify(privateTopic).slice(1, -1)].some(value => request.url().includes(value) || body.includes(value))) report.privateLeaks.push(url.origin + url.pathname);
     if (url.origin === new URL(base).origin && url.pathname === '/assets/life/discovery-feed.json') report.feedRequests.push({ method: request.method(), query: url.search, body: request.postData(), auth: request.headers().authorization || null });
   });

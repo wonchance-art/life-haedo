@@ -9,18 +9,6 @@ const assert = require('node:assert/strict');
 const copy = value => structuredClone(value);
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const RPCS = new Set(['life_account_document_put', 'life_account_document_changes']);
-// Owner directive 2026-11-01: private settings, plans and drafts follow the
-// signed-in account. Older privacy/zero-write audits record exactly this
-// traffic separately: configured origin, exact RPC path, POST, no query and a
-// known synthetic authenticated owner. Every other request keeps its audit.
-function isAccountDocumentSync(request, { cloud, server } = {}) {
-  try {
-    const url = new URL(request.url());
-    if (url.origin !== cloud || url.search || url.hash || url.username || url.password || request.method() !== 'POST') return false;
-    if (!RPCS.has(url.pathname.replace(/^\/rest\/v1\/rpc\//, '')) || !url.pathname.startsWith('/rest/v1/rpc/')) return false;
-    return /^Bearer \S+$/i.test(request.headers().authorization || '') && !!server?.libraryOwner?.(request);
-  } catch (_) { return false; }
-}
 function withAccountDocsCloud(BaseCloud) {
   return class AccountDocsCloud extends BaseCloud {
     constructor(...args) {
@@ -71,4 +59,4 @@ function withAccountDocsCloud(BaseCloud) {
     }
   };
 }
-module.exports = { withAccountDocsCloud, isAccountDocumentSync };
+module.exports = { withAccountDocsCloud };

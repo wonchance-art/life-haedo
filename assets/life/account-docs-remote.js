@@ -59,10 +59,12 @@
     const client = clientFactory(auth, { scope: 'account-docs' })(auth.config.url, auth.config.key);
     let disposed = false;
     const alive = () => { if (disposed) throw fault('request_cancelled'); };
-    async function authorize() {
-      alive(); const result = await client.auth.getUser(); alive();
-      if (result.error || !result.data?.user) throw fault('auth_required');
-    }
+    // Background passes do not add a /auth/v1/user round trip per call. The
+    // borrowed client sends only with the shell-verified account's current token
+    // (uid/epoch captured, cancelled on any account change, auth_required when
+    // signed out), and the server checks that token and auth.uid() on every RPC.
+    // No completed verification result is cached or shared here.
+    function authorize() { alive(); }
     async function put(request) {
       const { docKey, expectedRevision, operationId, deleted = false, clientUpdatedAt = null } = request || {};
       if (!validKey(docKey) || !validRevision(expectedRevision) || typeof operationId !== 'string' || !UUID.test(operationId) ||

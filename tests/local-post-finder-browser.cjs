@@ -8,7 +8,7 @@
 'use strict';
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -172,7 +172,7 @@ async function main() {
     });
     context.on('request', request => {
       const url = new URL(request.url());
-      if (isAccountDocumentSync(request, { cloud, server: fake })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
           !/^\/rest\/v1\/rpc\/life_(?:blog|blog_sync|material)_list$/.test(url.pathname)) { // read-only list RPCs are POSTs
           report.remoteWrites++; (report.remoteWritePaths ||= []).push(url.pathname); }
