@@ -84,8 +84,11 @@ async function main() {
       const geometry = await page.evaluate(() => {
         const bar = document.querySelector('.photo-commandbar')?.getBoundingClientRect();
         const scope = document.querySelector('.photo-server-scope')?.getBoundingClientRect();
-        return { commandbarHeight: bar?.height || 0, commandbarBottom: bar?.bottom || 0, scopeHeight: scope?.height || 0 };
+        const save = document.querySelector('.photo-save')?.getBoundingClientRect();
+        return { commandbarHeight: bar?.height || 0, commandbarBottom: bar?.bottom || 0, scopeHeight: scope?.height || 0, scopeVisible: !!document.querySelector('.photo-server-scope')?.checkVisibility(), saveHeight: save?.height || 0 };
       });
+      // The scope note lives in the closed more menu; narrow screens keep one compact row.
+      if (scene === 'writing') { assert.equal(geometry.scopeVisible, false, 'scope note is not a header line'); if (width <= 760) assert(geometry.commandbarHeight <= 56 && geometry.saveHeight >= 44, JSON.stringify(geometry)); }
       report.visual.push({ scene, width, metrics, geometry });
       assert.equal(metrics.horizontalOverflow, false, scene + ' ' + width);
       await page.screenshot({ path: path.join(output, scene + '-' + width + '.png') });
