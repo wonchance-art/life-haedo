@@ -48,6 +48,23 @@
       error = null;
     const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
+    // Account sync (2026-11-01): drafts from another device arrive as
+    // account_doc_applied. A clean, unfocused composer shows them; otherwise the
+    // existing comparison ("최신 초안과 비교") keeps this input.
+    const unsubscribe = storage.subscribe?.(workspaceId, (event) => {
+      if (event.type !== "account_doc_applied" || event.key !== `page-drafts:${workspaceId}` || !valid() || !state) return;
+      const focused = !!host?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+      const unsaved = () => !!saving || busy || edit !== stored || !!attachmentReview || composing || !!dialogClose;
+      if (unsaved() || focused) { message(Object.assign(new Error("draft changed elsewhere"), { code: "page_draft_conflict" })); return; }
+      const token = epoch;
+      storage.readPageDrafts(workspaceId).then((latest) => {
+        if (!valid() || token !== epoch || unsaved()) return;
+        adopt(latest);
+        if (active && !latest.posts.some((d) => d.id === active)) active = null;
+        if (host) render();
+        onDirty();
+      }).catch(message);
+    });
     const valid = () => !disposed && isCurrent();
     function message(value) {
       error = value;
@@ -55,7 +72,7 @@
       if (host) {
         const n = host.querySelector(".pp-status");
         if (n) {
-          n.textContent = value?.code === "page_draft_conflict" ? "다른 탭에서 초안이 바뀌었습니다. 내 입력을 유지했으니 최신 초안과 비교해 주세요." : value?.message || value || "";
+          n.textContent = value?.code === "page_draft_conflict" ? "다른 탭이나 기기에서 초안이 바뀌었습니다. 내 입력을 유지했으니 최신 초안과 비교해 주세요." : value?.message || value || "";
           n.setAttribute("role", value && typeof value !== "string" ? "alert" : "status");
           if (draftConflict)
             n.append(button("최신 초안과 비교", openDraftRecovery));
@@ -485,7 +502,7 @@
         if (e.code === 'collection_conflict') throw new Error('다른 탭에서 컬렉션이 바뀌었습니다. 다시 누르면 최신 항목을 확인합니다.');
         throw e;
       }
-      return valid() && token === epoch ? '컬렉션에 보관했습니다. 글과 별도로 이 브라우저에 저장됩니다.' : '';
+      return valid() && token === epoch ? '컬렉션에 보관했습니다. 글과 별도로 저장됩니다.' : '';
     }
     function editor(d) {
       const form = node("section", null, "pp-composer");
@@ -723,7 +740,7 @@
       });
       const hint = node(
         "p",
-        "초안은 이 브라우저에 보관합니다. 공개 후보도 공개 사본을 갱신하기 전에는 공개되지 않습니다.",
+        "초안은 계정에 자동 저장됩니다. 공개 후보도 공개 사본을 갱신하기 전에는 공개되지 않습니다.",
         "life-help",
       );
       async function finish(asNew = false) {
@@ -859,6 +876,7 @@
       dirty: () => !!saving || busy || edit !== stored || !!attachmentReview,
       dispose() {
         disposed = true;
+        unsubscribe?.();
         media.dispose();
         clearTimeout(timer);
         detach();

@@ -396,7 +396,7 @@
         current.languageSettings = result.settings;
         for (const key of Object.keys(patch)) if (JSON.stringify(current.languagePatch[key]) === JSON.stringify(patch[key])) delete current.languagePatch[key];
         current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
-        message('언어 설정을 이 브라우저에 저장했습니다.');
+        message('언어 설정을 계정에 자동 저장했습니다.');
       } catch (_) { if (valid(token)) current.languageError = '언어 설정을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
       finally {
         languageWrite = null;
@@ -591,7 +591,7 @@
         for (const group of ['interests', 'sources']) for (const [id, value] of Object.entries(changes[group])) if (current.settingChanges[group][id] === value) delete current.settingChanges[group][id];
         current.autoBlocked = !desiredSettings().autoRefresh;
         if (!wasAuto && result.settings.autoRefresh) current.nextDue = Date.now() + INTERVAL;
-        current.settingsError = ''; current.status = !current.catalog?.feed && !desiredSettings().autoRefresh ? '옵션을 저장했습니다. 목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.' : '주제·출처 옵션을 이 브라우저에 저장했습니다.';
+        current.settingsError = ''; current.status = !current.catalog?.feed && !desiredSettings().autoRefresh ? '옵션을 저장했습니다. 목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.' : '주제·출처 옵션을 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.settingsError = '옵션을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 취소해 주세요.'; }
       finally {
         settingsWrite = null;
@@ -637,7 +637,7 @@
         if (result.status !== 'stored') { current.topicConflict = true; current.topicError = '다른 탭에서 주제가 바뀌었습니다. 최신 주제를 확인한 뒤 입력을 다시 저장해 주세요.'; return; }
         current.profile = result.profile; dropPersonal(true);
         if (current.topicText === submitted) { current.topicText = ''; current.topicInput.value = ''; }
-        current.topicError = ''; current.topicSaved = true; current.status = '주제를 이 브라우저에 저장했습니다.';
+        current.topicError = ''; current.topicSaved = true; current.status = '주제를 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.topicError = '주제를 저장하지 못했습니다. 입력은 남아 있습니다. 다시 저장하거나 입력을 지워 주세요.'; }
       finally { topicWrite = null; if (valid(token)) { draw(); focusTopicControl(); } }
     }
@@ -899,7 +899,7 @@
       current.managementBody.prepend(button('반응 해제 기록 ' + cancelledCount, 'discoveryCancelled', () => selectCollection('cancelled'), 'discovery-quiet'),
         node('p', '좋아요·담기를 모두 해제한 글을 다시 찾습니다. 부정 평가가 아니며 여기서 반응을 복구할 수 있습니다.', 'life-meta'));
       current.managementBody.append(portableControls());
-      current.managementBody.append(node('p', '설정과 반응은 이 브라우저에 보관합니다.', 'discovery-privacy'));
+      current.managementBody.append(node('p', '설정과 반응은 계정에 비공개로 자동 저장됩니다.', 'discovery-privacy'));
       current.body.replaceChildren(...body.childNodes);
       readingUI?.refreshLinks();
       if (settingsFocus && !settingsFocus.element.isConnected) {
@@ -923,7 +923,7 @@
             if (!event.local) current.remoteLanguageRevision = Math.max(current.remoteLanguageRevision, event.revision);
             current.languageReadEpoch++; stopTranslation(); invalidateLanguageResults();
             if (current.initialReading) return;
-            if (languageWrite || languageDirty()) { current.languageConflict = true; current.languageError = '다른 탭에서 언어 설정이 바뀌었습니다. 최신 언어 설정을 확인해 주세요.'; draw(); }
+            if (languageWrite || languageDirty()) { current.languageConflict = true; current.languageError = '다른 탭이나 기기에서 언어 설정이 바뀌었습니다. 최신 언어 설정을 확인해 주세요.'; draw(); }
             else { draw(); reloadLanguages().catch(error => report(error)); }
           }
           if (event.type === 'discovery_actions_changed' && current.actions && event.revision > current.actions.revision) {
@@ -931,19 +931,19 @@
             if (!event.local) current.remoteActionRevision = Math.max(current.remoteActionRevision, event.revision);
             current.personalBlocked = true; current.mode = current.baselineMode; dropPersonal();
             if (actionWrite) { draw(); return; }
-            if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
+            if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭이나 기기에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
             else { draw(); reloadActions().catch(error => report(error)); }
           }
           if (event.type === 'discovery_profile_changed' && current.feedback && event.revision > current.feedback.revision && !pendingWrite) {
             capture();
-            current.conflict = !!current.pending; current.error = '다른 탭에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
+            current.conflict = !!current.pending; current.error = '다른 탭이나 기기에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
             if (!current.pending) reloadFeedback().catch(error => report(error));
           }
           if (event.type === 'discovery_settings_changed' && current.settings && event.revision > current.settings.revision) {
             dropPersonal(true); surface?.querySelectorAll('.discovery-personal-evidence').forEach(el => el.remove());
             current.autoBlocked = true; stopTimer(); cancelFetch();
             if (settingsWrite) return;
-            if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
+            if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭이나 기기에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
             else reloadSettings().catch(error => report(error));
           }
           if (event.type === 'interest_profile_changed' && current.profile && event.revision > current.profile.revision && !topicWrite) {

@@ -4,7 +4,7 @@
   const life = root.HaedoLife = root.HaedoLife || {};
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
-  let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
+  let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, accountDocsSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   let retained = false, resumePoint = null, suspension = 0;
   let workerScheduled = false;
   function scheduleWorker() {
@@ -97,6 +97,7 @@
     libraryMetaSync?.dispose?.(); libraryMetaSync = null;
     compositionSync?.dispose?.(); compositionSync = null;
     writingSync?.dispose?.(); writingSync = null;
+    accountDocsSync?.dispose?.(); accountDocsSync = null;
     sync?.dispose?.(); sync = null;
     life.Storage?.clearAccount?.(); scopedStorage = null;
     container.replaceChildren();
@@ -180,10 +181,15 @@
       }
       if (bootstrap?.legacy) sync.setAutomatic?.(true);
       if (!automatic || bootstrap?.legacy) sync.start().catch(() => {
-        if (token === generation && !signal.aborted) notice('자료는 이 브라우저에 보관돼 있습니다. 기기 간 동기화에서 서버 연결 상태를 확인해 주세요.');
+        if (token === generation && !signal.aborted) notice('서버에 연결하지 못했습니다. 바뀐 자료는 보존되고 연결되면 계정에 자동 저장됩니다.');
       });
       if (!automatic || bootstrap?.legacy) compositionSync.start();
       writingSync.start();
+      // Account documents (owner directive 2026-11-01): settings, reading
+      // position, plans and drafts follow the verified account to every signed-in
+      // device automatically. One engine per account; hide() disposes it.
+      try { accountDocsSync = life.AccountDocsSync?.create({ storage, auth }) || null; accountDocsSync?.start(); }
+      catch (_) { accountDocsSync = null; /* Local saves stay intact; the next open retries. */ }
       scheduleWorker();
       return mounted;
     } catch (error) {
@@ -314,7 +320,7 @@
       root.document.getElementById('lifeLogout')?.focus({ preventScroll: true });
     } finally { leaving = false; }
   });
-  life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get libraryMetaSync() { return libraryMetaSync; }, get accountLibrary() { return accountLibrary; }, get originals() { return accountLibrary?.originals || null; }, get writingSync() { return writingSync; }, get storage() { return scopedStorage; } };
+  life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get libraryMetaSync() { return libraryMetaSync; }, get accountLibrary() { return accountLibrary; }, get originals() { return accountLibrary?.originals || null; }, get writingSync() { return writingSync; }, get accountDocsSync() { return accountDocsSync; }, get storage() { return scopedStorage; } };
   life.Shell.ready = start();
   if (publicHome) life.Shell.ready.finally(scheduleWorker).catch(() => {});
 })(globalThis);

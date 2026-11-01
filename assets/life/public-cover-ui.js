@@ -32,7 +32,7 @@
     function renderErrors() { if (!alive()) return; error.textContent = [saveFailure?.message, actionFailure?.message].filter(Boolean).join(' '); error.hidden = !error.textContent; recovery.hidden = !saveFailure; const copy = recovery.querySelector('#pcRecover'); if (copy) copy.hidden = !conflict(); }
     function notice() {
       if (!alive()) return;
-      saveStatus.textContent = saveFailure ? '이 브라우저에 저장하지 못함 · 입력 유지' : loading ? '표지를 불러오는 중…' : composing.size ? '입력 중' : pending.size ? '문자·길이 확인 필요 · 입력 유지' : saving ? '이 브라우저에 보관 중…' : tick !== stored ? '보관 전 변경 있음' : '이 브라우저에 비공개로 보관됨';
+      saveStatus.textContent = saveFailure ? '저장하지 못함 · 입력 유지' : loading ? '표지를 불러오는 중…' : composing.size ? '입력 중' : pending.size ? '문자·길이 확인 필요 · 입력 유지' : saving ? '보관 중…' : tick !== stored ? '보관 전 변경 있음' : '계정에 비공개로 자동 저장됨';
       saveStatus.dataset.state = saveFailure || pending.size ? 'error' : dirty() ? 'dirty' : 'saved'; surface.setAttribute('aria-busy', String(loading || acting || !!saving));
       renderErrors(); onDirty();
     }
@@ -196,6 +196,17 @@
       selected = value.id; metadata = null; uncertain = false; mark(); renderForm(); await flushInternal(); await loadState(); nextFocus = title;
     }, { full: true }));
     select.addEventListener('change', async () => { const value = select.value; if (acting || loading) { select.value = selected || ''; return; } await run(async () => { await flushInternal(); selected = value; metadata = null; uncertain = false; actionFailure = null; renderForm(); await loadState(); }, { full: true }); if (alive()) select.value = selected || ''; });
+    // Account sync (2026-11-01): another device's covers arrive as account_doc_applied.
+    // A clean, unfocused editor reloads; otherwise the small action below waits
+    // and the next autosave keeps this input through the existing conflict copy.
+    const remoteReload = button('다른 기기에서 바뀜 · 불러오기', 'pcRemoteReload', async () => { remoteReload.hidden = true; if (dirty()) throw fault('public_cover_conflict', '입력 중인 내용이 있습니다. 보관한 뒤 최신 표지를 확인해 주세요.'); await reloadInitial(); }, { input: false });
+    remoteReload.hidden = true; toolbar.append(remoteReload);
+    const unsubscribe = storage.subscribe?.(workspaceId, event => {
+      if (event.type !== 'account_doc_applied' || event.key !== `public-cover:${workspaceId}` || !alive() || !state) return;
+      const focused = surface.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+      if (dirty() || focused) { remoteReload.hidden = false; return; }
+      run(reloadInitial, { input: false });
+    });
     recovery.append(button('다시 보관', 'pcSaveRetry', async () => { if (!state) await reloadInitial(); else await flushInternal(); saveFailure = null; }), button('내 입력을 새 표지 사본으로 보관', 'pcRecover', recover, { full: true })); recovery.hidden = true;
     actions.append(prepare, publish); management.append(refresh, retry, revoke);
     surface.append(toolbar, saveStatus, error, recovery, form, el('h3', '표지에 담을 순서'), items, catalog,
@@ -210,7 +221,7 @@
       } catch (cause) { if (alive(token)) { saveFailure = cause; actionFailure = null; form.append(button('표지 다시 불러오기', 'pcReload', reloadInitial)); } }
       finally { loading = false; unlock(); if (alive(token)) { availability(); notice(); } }
     })();
-    return { ready, flush, dirty, dispose() { disposed = true; epoch++; stateRequest++; clearTimeout(timer); remote.dispose?.(); invalidate(); surface.remove(); composing.clear(); pending.clear(); locks.clear(); state = null; } };
+    return { ready, flush, dirty, dispose() { disposed = true; unsubscribe?.(); epoch++; stateRequest++; clearTimeout(timer); remote.dispose?.(); invalidate(); surface.remove(); composing.clear(); pending.clear(); locks.clear(); state = null; } };
   }
   life.PublicCoverUI = Object.freeze({ create });
 })(globalThis);
