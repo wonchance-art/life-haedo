@@ -194,12 +194,12 @@
       if (remoteWins) {
         await storage.commitBlogSync(c.ws, { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision,
           binding: synced(state, row), bindingRevision: state.revision, copy: conflictCopy(post) }, { isCurrent: () => current(c) });
-        guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
+        guard(c); emit(c.ws, c.id); kick(1000); // the kept draft reaches the other devices promptly retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
       }
       await storage.commitBlogSync(c.ws, { postId: c.id, baseRevision: post.revision,
         binding: synced(state, row, { localRevision: state.localRevision, status: 'pending' }), bindingRevision: state.revision,
         copy: conflictCopy({ ...remoteDoc, id: c.id, revision: post.revision, replaces: null }) }, { isCurrent: () => current(c) });
-      guard(c); emit(c.ws, c.id);
+      guard(c); emit(c.ws, c.id); kick(1000);
       return pushLocked(c, { attempt: attempt + 1, byRemote: map });
     }
     async function rememberError(c, error) {
@@ -528,6 +528,13 @@
       return serial(ws, id, async () => {
         let state = await readState(c); const latest = await readPost(c);
         if (latest.revision !== choices.expectedLocalRevision || state.localRevision !== latest.revision || state.pending) throw fault('local_changed');
+        // Compare the reviewed preview with the current server publication
+        // before any publication request (another device may have published).
+        if (!state.publishPending) {
+          const head = await remote.read(state.remoteId); guard(c);
+          if (!head || head.revision !== state.remoteRevision) throw fault('local_changed');
+          if (canonical(head.publication ?? null) !== canonical(state.publication ?? null)) state = await writeState(c, state, { publication: head.publication ?? null });
+        }
         if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
         if (state.publishPending && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
         if (!state.publishPending) state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection } });

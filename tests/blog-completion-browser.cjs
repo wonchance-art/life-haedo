@@ -93,6 +93,8 @@ class LocalSQLBlogCloud extends ShareCloud {
   }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url()), rpc = url.pathname.split('/').at(-1), owner = this.owner(request);
+    // A device taken offline reaches neither the synthetic Auth nor the SQL/Storage transport.
+    if (this.offlineDevices?.has(device) && request.method() !== 'OPTIONS') { this.expectedFailures++; return route.abort('failed'); }
     if (!url.pathname.startsWith('/rest/v1/rpc/life_blog_') && !url.pathname.startsWith('/storage/v1/object/') && url.pathname !== '/functions/v1/haedo-blog-media') return super.handle(route, device);
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store, max-age=0' };
     const send = (value, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(value) });
@@ -199,7 +201,7 @@ async function main() {
   const manager = async p => { await openBlogMenu(p); await p.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
   const serverState = async (p, id, state = 'synced') => {
-    await p.locator('#photoServerStatus[data-post-id="' + id + '"][data-state="' + state + '"]').waitFor();
+    await p.locator([].concat(state).map(value => '#photoServerStatus[data-post-id="' + id + '"][data-state="' + value + '"]').join(',')).waitFor();
   };
   const savedPost = async (p, title, images = [], { beforeSave, expectedServerState = 'synced' } = {}) => {
     await nav(p, 'home'); await p.locator('[data-home-destination="write"]:visible').click(); await p.locator('#photoTitle').fill(title);
@@ -406,14 +408,16 @@ async function main() {
 
       // Both devices change the post while A is offline: the later edit stays
       // and the earlier one is kept as a separate draft on every device.
-      await owner.context.setOffline(true);
-      const editedA = await editPhotoPost(page, atA, 'A가 오프라인에서 먼저 쓴 글 ' + suffix, 'A의 오프라인 문장\n', { expectedServerState: 'error' });
+      (server.offlineDevices ||= new Set()).add(owner.name);
+      const editedA = await editPhotoPost(page, atA, 'A가 오프라인에서 먼저 쓴 글 ' + suffix, 'A의 오프라인 문장\n', { expectedServerState: ['error', 'pending'] });
+      assert.equal(readRemote().data.title, editedB.title, 'nothing left the offline device');
       await new Promise(done => setTimeout(done, 1100));
       const laterB = await editPhotoPost(second.page, await currentOf(second.page), 'B가 나중에 다듬은 글 ' + suffix, 'B의 나중 문장\n');
-      await owner.context.setOffline(false); await kick(page);
+      server.offlineDevices.delete(owner.name); await kick(page);
       const keptA = await until(async () => (await data(page)).docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · ' + editedA.title), Boolean, 'A keeps its earlier edit as a draft');
       assert((await data(page)).docs.some(doc => doc.status === 'saved' && doc.title === laterB.title), 'the later B edit is in place on A');
-      assert.equal(readRemote().data.title, laterB.title); assert.deepEqual(keptA.ops.slice(0, 1), [{ insert: 'A의 오프라인 문장\n' }]);
+      assert.equal(readRemote().data.title, laterB.title); assert(keptA.ops[0].insert.startsWith('A의 오프라인 문장\n'));
+      await until(async () => server.sql("select count(*) from haedo_blog_private.posts where data->>'status'='draft' and data->>'title'=" + literal(keptA.title) + ';'), count => count === 1, 'the kept draft reaches the account');
       await kick(second.page);
       await until(async () => (await data(second.page)).docs.some(doc => doc.status === 'draft' && doc.title === keptA.title), Boolean, 'the kept draft reaches B');
       phase('A two-device conflict keeps both versions on both devices');
@@ -471,6 +475,8 @@ async function main() {
       await kick(second.page);
       await until(async () => !(await data(second.page)).docs.some(doc => doc.id === remotePostId), Boolean, 'B removes the deleted post');
       assert((await data(second.page)).docs.some(doc => doc.title === keptA.title), 'the separately kept draft is not affected');
+      await nav(second.page, 'home'); await second.page.locator('#homePosts[aria-busy="false"]').waitFor();
+      assert.equal(await second.page.locator('#homePosts [data-photo-post-id="' + remotePostId + '"]').count(), 0, 'the deleted post leaves the other home feed');
       await capture(second.page, 'continuity-after-delete', '#lifeHome'); await second.page.setViewportSize({ width: 1440, height: 1000 });
       assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
       phase('Explicit deletion reaches the server, its originals and the other device');
