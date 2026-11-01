@@ -70,7 +70,8 @@ function fixture(t, options = {}) {
         localRevision: state.local.revision };
       state.meta.status = 'conflict';
     },
-    async readWorkbenchSnapshot() { return { workbench: copy(state.local), bundle: {}, editedAt: state.editedAt ?? null }; },
+    async readWorkbenchSnapshot() { return { workbench: copy(state.local), bundle: {} }; },
+    async readWorkbenchEditedAt() { return state.editedAt ?? null; },
     async resolveCompositionSync(_id, _binding, request) {
       state.mutations.push('resolve:' + request.choice); state.resolutions = (state.resolutions || []).concat(copy(request));
       assert.ok(state.meta.conflict && !state.meta.conflict.missing, 'resolve needs a recorded conflict');

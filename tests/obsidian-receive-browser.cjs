@@ -27,7 +27,7 @@ async function main() {
   const check = async (name, action) => { await action(); report.checks.push(name); console.log('PASS ' + name); };
   const click = async name => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
   const active = () => page.evaluate(() => HaedoLife.Shell.storage.getActive());
-  const sync = async () => { await openManagement(page); await click('기기 간 동기화'); await click('서버 작업공간 목록 확인'); };
+  const sync = async () => { await openManagement(page); await click('동기화'); await click('서버 작업공간 목록 확인'); };
   try {
     await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
     const original = await page.evaluate(async () => {

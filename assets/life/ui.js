@@ -95,7 +95,7 @@
     let disposed = false;
     let unsubscribe = null;
     let unsubscribeSync = null;
-    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0;
+    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, unlinkedAdoption = null;
     let workspaceListRefresh = 0, workspaceListApplied = 0;
     const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
@@ -144,7 +144,7 @@
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
-      discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '기기 간 동기화', transfer: '자료 백업·복원',
+      discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
     let selectionReturn = null;
@@ -1056,24 +1056,24 @@
 
     function syncPresentation() {
       if (managedLibrary) return libraryPresentation();
-      if (!sync) return { key: 'unavailable', label: '기기 간 자동 동기화 미연결', hint: '자료는 이 브라우저에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
+      if (!sync) return { key: 'unavailable', label: '서버 동기화 미연결', hint: '자료는 이 기기에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
       if (state.syncWorkspaceId !== state.bundle?.workspaceId) return { key: 'loading', label: '동기화 상태 확인 중', hint: '현재 작업공간의 연결 상태를 확인합니다.' };
-      if (state.syncReadError) return { key: 'read_error', label: '동기화 상태 확인 실패 · 자료는 이 브라우저에 보관', hint: '기존 연결은 유지합니다. 상태를 다시 확인해 주세요.' };
+      if (state.syncReadError) return { key: 'read_error', label: '동기화 상태 확인 실패 · 자료는 이 기기에 보관', hint: '기존 연결은 유지합니다. 상태를 다시 확인해 주세요.' };
       if (state.syncLoading) return { key: 'loading', label: '동기화 상태 확인 중', hint: '연결 상태를 확인한 뒤 가능한 작업을 표시합니다.' };
       const item = state.syncState;
-      if (!state.syncAccount) return { key: 'auth_required', label: '동기화 로그인 필요 · 자료는 이 브라우저에 보관', hint: '관리에서 계정을 확인한 뒤 다시 시도해 주세요.' };
+      if (!state.syncAccount) return { key: 'auth_required', label: '동기화 로그인 필요 · 자료는 이 기기에 보관', hint: '관리에서 계정을 확인한 뒤 다시 시도해 주세요.' };
       if (item?.status === 'account_mismatch' || (item?.binding && (item.binding.userId !== state.syncAccount.userId || item.binding.projectUrl !== state.syncAccount.projectUrl))) return { key: 'mismatch', label: '다른 계정에 연결된 작업공간 · 자동 전송 안 함', hint: '기존 연결은 바꾸지 않습니다. 다른 계정으로 옮기려면 JSON 백업을 새 사본으로 복원하세요.' };
-      if (!item?.binding) return { key: 'unbound', label: '기기 간 자동 동기화 미연결', hint: '시작하면 이 작업공간의 확정 자료를 서버에 보냅니다. 검토 초안은 이 브라우저에 남습니다.' };
-      if (!item.enabled) return { key: 'paused', label: '기기 간 동기화 중지됨', hint: item.conflict ? '양쪽에 변경이 남아 있습니다. 동기화를 다시 시작한 뒤 비교해 주세요.' : '이 브라우저의 자료와 기존 연결을 유지합니다. 다시 시작하면 양쪽 변경을 확인합니다.' };
+      if (!item?.binding) return { key: 'unbound', label: '서버 동기화 미연결', hint: '시작하면 이 작업공간의 확정 자료를 서버에 보냅니다. 검토 초안은 이 기기에 남습니다.' };
+      if (!item.enabled) return { key: 'paused', label: '동기화 중지됨', hint: item.conflict ? '양쪽에 변경이 남아 있습니다. 동기화를 다시 시작한 뒤 비교해 주세요.' : '이 기기의 자료와 기존 연결을 유지합니다. 다시 시작하면 양쪽 변경을 확인합니다.' };
       const descriptions = {
-        pending: ['동기화 대기', '이 브라우저의 변경을 보관했습니다. 연결되면 전송을 다시 시도합니다.'],
-        syncing: ['동기화 중', '서버와 변경을 확인하고 있습니다. 이 브라우저의 자료는 그대로 유지합니다.'],
-        synced: ['서버와 동기화됨', '다른 기기에서 같은 계정으로 로그인한 뒤 이 작업공간을 받으세요. 그 기기에서 열었는지는 확인하지 않습니다.'],
+        pending: ['동기화 대기', '이 기기의 변경을 보관했습니다. 연결되면 전송을 다시 시도합니다.'],
+        syncing: ['동기화 중', '서버와 변경을 확인하고 있습니다. 이 기기의 자료는 그대로 유지합니다.'],
+        synced: ['서버와 동기화됨', '같은 계정으로 로그인한 기기에서 이 작업공간을 이어 봅니다.'],
         conflict: ['양쪽 변경 확인 필요', '내 변경과 서버 변경을 비교해 선택하세요. 선택하지 않은 쪽도 별도 사본으로 남습니다.'],
-        error: ['동기화 실패', '이 브라우저의 자료는 유지합니다. 연결을 확인하고 지금 동기화를 다시 시도해 주세요.']
+        error: ['동기화 실패', '이 기기의 자료는 유지합니다. 연결을 확인하고 지금 동기화를 다시 시도해 주세요.']
       };
       const key = item.conflict ? 'conflict' : item.status;
-      const [label, hint] = descriptions[key] || ['동기화 상태 확인 필요', '상태를 다시 확인해 주세요. 이 브라우저의 자료는 유지합니다.'];
+      const [label, hint] = descriptions[key] || ['동기화 상태 확인 필요', '상태를 다시 확인해 주세요. 이 기기의 자료는 유지합니다.'];
       return { key, label, hint };
     }
 
@@ -2238,7 +2238,7 @@
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       if (sync) {
-        const connection = actionRow(managedLibrary ? '계정 보관' : '기기 간 동기화', '', 'cloud', async () => {
+        const connection = actionRow(managedLibrary ? '계정 보관' : '동기화', '', 'cloud', async () => {
           await navigate('sync'); await refreshSync();
         });
         const status = connection.querySelector('.life-meta');
@@ -2421,7 +2421,7 @@
       readingResumeCleanup?.(); readingResumeCleanup = null;
       const row = node('section', null, 'life-reading-resume');
       row.id = prefix + 'ReadingResume';
-      row.setAttribute('aria-label', '이 브라우저의 읽기 위치');
+      row.setAttribute('aria-label', '읽던 위치');
       row.hidden = true;
       parent.append(row);
       if (!readingPosition) return;
@@ -4295,7 +4295,7 @@
       panel.append(top);
       const info = books ? node('details', null, 'life-details') : panel;
       if (books) { info.append(node('summary', '복원 정보')); panel.append(info); }
-      info.append(node('p', managedLibrary ? '이전 자료는 그대로 남아 있습니다.' : '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      info.append(node('p', managedLibrary ? '이전 자료는 그대로 남아 있습니다. 새 사본은 같은 계정의 기기와 자동으로 동기화합니다.' : '이전 작업공간은 그대로 남아 있습니다.', 'life-help'));
       for (const copy of receipt.copies || []) {
         if (copy.workspaceId === state.bundle.workspaceId) continue;
         info.append(button('함께 복원한 공간 열기: ' + copy.title, guarded(async () => {
@@ -4343,7 +4343,7 @@
       for (const copy of installed) if (!state.workspaces.some(row => row.workspaceId === copy.workspaceId)) state.workspaces.push({ workspaceId: copy.workspaceId, title: copy.title });
       resetSearchContext(); state.mode = 'sources'; connectSubscription(); render();
       global.scrollTo({ top: 0, behavior: 'instant' });
-      announce(managedLibrary ? '새 사본을 열었습니다. 이전 자료는 그대로 유지됩니다.' : '새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
+      announce(managedLibrary ? '새 사본을 열었습니다. 이전 자료는 그대로 유지되고 새 사본은 자동으로 동기화합니다.' : '새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다.', { quiet: true });
       main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
       // Already committed: a later refresh error must never offer another installation.
       try { await refreshData(); render(); }
@@ -4441,7 +4441,7 @@
         candidate.sourceVersions.forEach(version => { counts[version.coverage.status] += 1; });
         const coverage = Object.entries(counts).filter(([, count]) => count).map(([kind, count]) => COVERAGE[kind] + ' ' + count + '개');
         if (coverage.length) preview.append(node('p', '원문 버전 기준 · ' + coverage.join(' / '), 'life-help'));
-        preview.append(backupContents(candidate), node('p', managedLibrary ? '현재 자료를 유지하고 새 사본을 만듭니다.' : '현재 작업공간을 덮어쓰지 않습니다. 새 사본을 만들고 자동 동기화는 연결하지 않습니다.', 'life-help'));
+        preview.append(backupContents(candidate), node('p', managedLibrary ? '현재 자료를 유지하고 새 사본을 만듭니다. 새 사본은 같은 계정의 기기와 자동으로 동기화합니다.' : '현재 작업공간을 덮어쓰지 않고 새 사본을 만듭니다.', 'life-help'));
         const actions = node('div', null, 'life-actions');
         actions.append(button('새 사본으로 복원', guarded(async () => {
           const selected = candidate;
@@ -4463,7 +4463,7 @@
         preview.append(actions);
       }));
       const restoreSection = node('section', null, 'life-settings-section');
-      restoreSection.append(node('h3', '백업에서 복원'), restore.label, preview, node('p', '다른 기기로 옮긴 백업은 별도 사본입니다. 여러 기기의 변경이 서로 자동 반영되지 않습니다.', 'life-help'));
+      restoreSection.append(node('h3', '백업에서 복원'), restore.label, preview, node('p', '백업에서 복원한 자료는 원래 작업공간과 합치지 않는 별도 사본입니다.', 'life-help'));
       main.append(restoreSection, renderObsidianRestore());
       const workspaceName = field('새 작업공간 이름', 'text', 'lifeNewWorkspaceName', '');
       const workspaceSection = node('section', null, 'life-settings-section');
@@ -4486,43 +4486,32 @@
         announce('빈 작업공간을 만들었습니다. 이전 기록은 유지됩니다.');
       })));
       main.append(workspaceSection);
-      if (storage.listUnownedWorkspaces && storage.importUnownedWorkspace) {
-        const old = node('details', null, 'life-details');
+      if (unlinkedAdoption?.adopted.length || unlinkedAdoption?.failed.length) {
+        const old = node('section', null, 'life-unlinked-adoption');
         old.id = 'lifeUnownedImport';
-        old.append(node('summary', '이 브라우저의 기존 자료 가져오기'));
-        old.append(node('p', 'Google 계정에 연결하지 않고 이 브라우저에 보관했던 자료만 확인합니다. 원문·발췌·보관된 검토초안을 현재 계정의 새 사본으로 가져오며, 원본을 그대로 남깁니다.' + (managedLibrary ? '' : ' 자동 동기화는 연결하지 않습니다.'), 'life-help'));
-        const list = node('div', null, 'life-restore-preview');
-        old.append(button('기존 자료 목록 확인', guarded(async () => {
-          const rows = await storage.listUnownedWorkspaces();
-          if (disposed) return;
-          list.replaceChildren();
-          if (!rows.length) { list.append(empty('계정에 연결하지 않은 기존 자료가 없습니다.')); return; }
-          const choice = selectField('가져올 기존 작업공간', 'lifeUnownedWorkspace', rows.map(item => [item.workspaceId, item.title]), rows[0].workspaceId);
-          const ownership = field('선택한 자료는 내가 이 계정에서 사용할 자료입니다.', 'checkbox', 'lifeUnownedOwnership', '');
-          const adopt = button('현재 계정에 자료 사본 만들기', guarded(async () => {
-            if (!ownership.input.checked) return;
-            if (dirty()) await persistStage();
-            invalidateBatchContext();
-            const copy = await storage.importUnownedWorkspace(choice.input.value);
-            if (disposed) return;
-            invalidateBatchContext();
-        await storage.setActive(copy.workspaceId);
-            state.bundle = copy;
-            state.stage = state.prepared = null;
-            resetSearchContext();
-            state.mode = 'sources';
-            await refreshData();
-            connectSubscription();
-            render();
-            announce(managedLibrary ? '현재 계정의 새 사본을 열었습니다. 원본과 검토초안은 보존했습니다.' : '현재 계정의 새 사본을 열었습니다. 원본과 검토초안은 보존했으며 자동 동기화는 연결하지 않았습니다.');
-          }), 'life-primary');
-          adopt.disabled = true;
-          ownership.input.addEventListener('change', () => { adopt.disabled = !ownership.input.checked; });
-          list.append(choice.label, ownership.label, adopt);
-        })), list);
+        old.append(node('h3', '계정 없이 보관했던 자료'));
+        if (unlinkedAdoption.adopted.length) old.append(node('p', '로그인 전 이 기기에 보관했던 자료 ' + unlinkedAdoption.adopted.length + '개를 현재 계정의 사본으로 가져왔습니다. 원본은 그대로 남아 있습니다.', 'life-help'));
+        if (unlinkedAdoption.failed.length) old.append(node('p', '자료 ' + unlinkedAdoption.failed.length + '개는 가져오지 못했습니다. 원본은 그대로 있고 다음 로그인 때 다시 시도합니다.', 'life-help'),
+          button('다시 시도', guarded(async () => { await adoptUnlinkedWorkspaces(); if (!disposed && state.mode === 'manage') render(); })));
         main.append(old);
       }
 
+    }
+
+    // Sign-in adoption of account-less local workspaces. The owner is the only user, so every
+    // such workspace becomes a new account copy that ordinary workspace sync uploads.
+    // Originals are never deleted; recovery workspaces are skipped (storage decides).
+    async function adoptUnlinkedWorkspaces() {
+      if (!storage.adoptUnownedWorkspaces || !storage.account || disposed) return null;
+      const result = await storage.adoptUnownedWorkspaces();
+      if (disposed) return result;
+      unlinkedAdoption = { adopted: [...(unlinkedAdoption?.adopted || []), ...result.adopted], failed: result.failed };
+      if (result.adopted.length) {
+        await refreshWorkspaceList().catch(() => {});
+        if (managedLibrary) accountLibrary.reconcile?.().catch(() => {});
+        announce('로그인 전 이 기기에 보관했던 자료 ' + result.adopted.length + '개를 계정 자료로 가져왔습니다. 원본은 그대로 남아 있습니다.');
+      }
+      return result;
     }
 
     function renderTime() {
@@ -4849,7 +4838,7 @@
     }
 
     function renderSync() {
-      if (!managedLibrary) main.append(title('기기 간 동기화'), node('p', 'Mac·iPad·iPhone에서 같은 계정의 자료를 이어 봅니다. 로그인만으로 로컬 자료를 올리지 않습니다.', 'life-help'));
+      if (!managedLibrary) main.append(title('동기화'), node('p', '같은 계정으로 로그인한 Mac·iPad·iPhone에서 자료를 이어 봅니다.', 'life-help'));
       const panel = node('section', null, 'life-sync-state-panel');
       panel.id = 'lifeSyncState';
       main.append(panel);
@@ -5118,6 +5107,7 @@
         });
         await refreshLibrary();
       }
+      adoptUnlinkedWorkspaces().catch(() => {});
     } else {
       header.append(node('h1', '자료 모아보기'));
       main.append(title('보관한 작업공간 선택'));

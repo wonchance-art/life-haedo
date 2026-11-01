@@ -2463,13 +2463,20 @@
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
         const state = await workbenchValue(tx.objectStore('meta'), workspaceId);
-        const edited = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value;
-        return { bundle: clone(bundle), workbench: clone(state), editedAt: typeof edited === 'string' ? edited : null };
+        return { bundle: clone(bundle), workbench: clone(state) };
       });
     }
     async function readWorkbench(workspaceId) { return (await readWorkbenchSnapshot(workspaceId)).workbench; }
     // Local edit time for latest-wins composition conflicts. Not part of the composition payload.
     const workbenchEditedKey = workspaceId => `workbenchEditedAt:${workspaceId}`;
+    async function readWorkbenchEditedAt(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        const value = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value;
+        return typeof value === 'string' ? value : null;
+      });
+    }
     async function saveWorkbench(workspaceId, input, baseRevision) {
       requireId(workspaceId, '작업공간'); requireRevision(baseRevision, 'baseRevision');
       workbench().validate(input);
@@ -4326,9 +4333,18 @@
         return result;
       });
     }
-    async function importUnownedWorkspace(workspaceId) {
+    // Stamp of an account-less workspace as it was copied. A later change to the original
+    // (made without signing in) is adopted again as another copy; nothing is overwritten.
+    const unownedAdoptionKey = workspaceId => `unownedAdoption:${accountKey}:${workspaceId}`;
+    function unownedStamp(bundle, stages) {
+      return stablePayload({ revision: bundle.revision, updatedAt: bundle.updatedAt,
+        stages: stages.map(stage => [stage.stageId, stage.revision]).sort((a, b) => a[0].localeCompare(b[0])) });
+    }
+    async function importUnownedWorkspace(workspaceId, options = {}) {
       if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 사본으로 가져와 주세요.');
       requireId(workspaceId, '이전 작업공간');
+      onlyFields(options, ['activate'], 'invalid_request');
+      const activate = options.activate !== false;
       const source = await transaction(['bundles', 'staging'], 'readonly', async tx => {
         if (await workspaceOwner(tx.objectStore('meta'), workspaceId)) throw fault('workspace_access_denied', '계정에 연결된 자료는 이 경로로 가져올 수 없습니다.');
         const bundle = await tx.objectStore('bundles').get(workspaceId);
@@ -4403,10 +4419,36 @@
         await tx.objectStore('bundles').add(copy);
         await saveOwner(tx.objectStore('meta'), copy.workspaceId);
         for (const stage of copiedStages) await tx.objectStore('staging').add(stage);
-        await tx.objectStore('meta').put({ key: activeKey, value: copy.workspaceId });
+        await tx.objectStore('meta').put({ key: unownedAdoptionKey(workspaceId), value: { copyWorkspaceId: copy.workspaceId, stamp: unownedStamp(source.bundle, source.stages) } });
+        if (activate) await tx.objectStore('meta').put({ key: activeKey, value: copy.workspaceId });
       });
       changed(copy.workspaceId, copy.revision);
       return clone(copy);
+    }
+    // Sign-in adoption: every account-less workspace on this device becomes a new copy owned
+    // by the signed-in account (the owner is the only user), so ordinary workspace sync
+    // uploads it. Originals are never deleted or changed; recovery copies are skipped;
+    // a workspace already adopted unchanged is not copied twice.
+    async function adoptUnownedWorkspaces() {
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 가져와 주세요.');
+      const candidates = await transaction(['bundles', 'staging', 'meta', 'recovery'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), recoveryIds = new Set((await tx.objectStore('recovery').getAll()).map(item => item.copyWorkspaceId)), result = [];
+        for (const bundle of await tx.objectStore('bundles').getAll()) {
+          if (await workspaceOwner(meta, bundle.workspaceId) || recoveryIds.has(bundle.workspaceId)) continue;
+          if ((await meta.get(`libraryRole:${bundle.workspaceId}`))?.value?.kind === 'recovery') continue;
+          const stages = await tx.objectStore('staging').index('workspaceId').getAll(bundle.workspaceId);
+          const done = (await meta.get(unownedAdoptionKey(bundle.workspaceId)))?.value;
+          if (done && done.stamp === unownedStamp(bundle, stages)) continue;
+          result.push({ workspaceId: bundle.workspaceId, title: bundle.title });
+        }
+        return result;
+      });
+      const adopted = [], failed = [];
+      for (const candidate of candidates) {
+        try { const copy = await importUnownedWorkspace(candidate.workspaceId, { activate: false }); adopted.push({ from: candidate.workspaceId, workspaceId: copy.workspaceId, title: copy.title }); }
+        catch (error) { scopeGuard(); failed.push({ workspaceId: candidate.workspaceId, code: error?.code || 'unknown' }); }
+      }
+      return { adopted, failed };
     }
     function subscribeAll(listener) {
       scopeGuard();
@@ -4442,7 +4484,7 @@
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
-      readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
+      readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
       listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
@@ -4456,7 +4498,7 @@
       listLibraryMetaRecoveries, readLibraryMetaRecovery,
       getWritingSyncState, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
-      listUnownedWorkspaces, importUnownedWorkspace };
+      listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

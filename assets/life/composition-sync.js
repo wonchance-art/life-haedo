@@ -33,8 +33,11 @@
   function create({ storage, sourceSync, auth = root.HaedoAuth,
     remote = root.HaedoLife?.CompositionRemote?.create({ auth }), errorCleaner = null,
     resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true,
-    initialReceive = null, autoResolve = latest } = {}) {
+    initialReceive = null, autoResolve = undefined } = {}) {
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
+    // Compositions (whose storage records local edit times) default to latest-wins.
+    // Other domains on this engine keep their own explicit choice unless they pass one.
+    if (autoResolve === undefined) autoResolve = typeof storage.readWorkbenchEditedAt === 'function' ? latest : null;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -90,7 +93,8 @@
       await conflict(ctx, row);
       if (!autoResolve || !row) return false;
       const snapshot = await storage.readWorkbenchSnapshot(ctx.workspaceId); guard(ctx);
-      const choice = await autoResolve({ workspaceId: ctx.workspaceId, local: clone(snapshot.workbench), remote: clone(row), editedAt: snapshot.editedAt || null }); guard(ctx);
+      const editedAt = typeof storage.readWorkbenchEditedAt === 'function' ? await storage.readWorkbenchEditedAt(ctx.workspaceId) : null; guard(ctx);
+      const choice = await autoResolve({ workspaceId: ctx.workspaceId, local: clone(snapshot.workbench), remote: clone(row), editedAt }); guard(ctx);
       if (!resolutionChoices.includes(choice)) return false;
       try {
         const result = await storage.resolveCompositionSync(ctx.workspaceId, binding(ctx.workspaceId), {

@@ -186,7 +186,7 @@ async function main() {
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '다시 찾기');
       await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await mode(page, 'discover'); await nav(page, 'tools'); await mode(page, 'tools');
       await nav(page, 'manage');
-      for (const [label, destination, title] of [['내보내기·사본 복원', 'transfer', '자료 백업·복원'], ['기기 간 동기화', 'sync', '기기 간 동기화'], ['자료·구성 백업', 'workbench-backup', '자료·구성 백업']]) {
+      for (const [label, destination, title] of [['내보내기·사본 복원', 'transfer', '자료 백업·복원'], ['동기화', 'sync', '동기화'], ['자료·구성 백업', 'workbench-backup', '자료·구성 백업']]) {
         await page.getByRole('button', { name: label, exact: true }).click(); await mode(page, destination);
         assert.equal(await heading(page).textContent(), title);
         if (destination === 'transfer') await capture(page, 'transfer', width);
@@ -246,7 +246,7 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','home']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','manage'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','home']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }
