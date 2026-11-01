@@ -22,7 +22,7 @@
     const clean = root.HaedoLife?.WritingRemote?.clean || (error => error);
     const fault = code => clean({ code });
     if (!storage?.account || !sourceSync || !auth || !remote || !engine) throw fault('account_mismatch');
-    const owner = storage.account, entries = new Map(), listeners = new Set(), notices = new Map();
+    const owner = storage.account, entries = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = null, again = false, soon = null, offAll = null, material = null;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const guard = epoch => { if (disposed || !same(auth.getAccount()) || epoch !== undefined && epoch !== auth.epoch) throw fault('request_cancelled'); };
@@ -45,6 +45,7 @@
         setCompositionConflict: (_, __, row) => storage.setWritingConflict(ws, id, binding(ws), row),
         setCompositionError: (_, __, error) => storage.setWritingError(ws, id, binding(ws), error),
         resolveCompositionSync: (_, __, request) => storage.resolveWritingSync(ws, id, binding(ws), request),
+        dismissCompositionNotice: () => storage.dismissWritingNotice(ws, id),
         readWorkbenchSnapshot: async () => { const value = await storage.readWritingSnapshot(ws, id); return { workbench: value.stage, bundle: value.bundle }; },
         listWorkspaces: async () => { const state = await getState(ws, id); return state.enabled && state.status !== 'closed' ? [{ workspaceId: id }] : []; },
         subscribe: (_, listener) => storage.subscribe(ws, event => {
@@ -59,10 +60,7 @@
       const instance = engine.create({ storage: adapter, sourceSync: sourceAdapter, auth, remote: transport,
         errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false,
         autoResolve: latest });
-      instance.subscribe(event => {
-        if (event?.autoResolved) notices.set(key, { choice: event.choice, recoveryStageId: event.recoveryId || null, at: new Date().toISOString() });
-        emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null);
-      });
+      instance.subscribe(event => emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null));
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
     }
@@ -71,7 +69,7 @@
       const stage = await storage.getStage(id); guard(epoch);
       if (stage && (stage.workspaceId !== ws || stage.kind !== 'writing')) throw fault('account_mismatch');
       const metadata = stage ? await storage.getWritingSyncState(ws, id) : null; guard(epoch);
-      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled, notice: notices.get(ws + '/' + id) || null,
+      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled, notice: metadata?.notice || null,
         status: !metadata ? 'not_enabled' : !metadata.enabled ? 'paused' : stage.state === 'applied' && metadata.status === 'synced' ? 'closed' : metadata.status };
     }
     async function call(method, ws, id, ...args) {
@@ -179,14 +177,15 @@
     }
     function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval); root.clearTimeout(soon); soon = null;
       offAll?.(); material?.dispose(); material = null;
-      for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); notices.clear(); remote.dispose?.();
+      for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
     }
     return Object.freeze({ start, getState, listRemote, download, dispose, refresh: automatic,
       enable: (ws, id) => call('enable', ws, id), pause: (ws, id) => call('pause', ws, id), syncNow: (ws, id) => call('syncNow', ws, id),
       compare: (ws, id) => call('compare', ws, id), resolve: (ws, id, choice, expected) => call('resolve', ws, id, choice, expected),
-      dismissNotice: (ws, id) => { notices.delete(ws + '/' + id); },
+      // The notice is stored with the draft's sync record, so it survives reloads until dismissed.
+      dismissNotice: async (ws, id) => { guard(); await storage.dismissWritingNotice(ws, id); emit(ws, id); },
       subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     });
   }

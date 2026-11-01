@@ -50,7 +50,7 @@
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
-    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(), notices = new Map(); let disposed = false;
+    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
     function guard(c) {
@@ -290,8 +290,8 @@
     async function settle(ws, id) {
       const view = await compare(ws, id), choice = latest(view.local.data, view.remote.data);
       const result = await resolve(ws, id, choice, view.expected);
-      notices.set(key(ws, id), { choice, at: new Date().toISOString(), recoveryWorkspaceId: result?.recoveryWorkspaceId || null });
-      emit(context(ws, id));
+      // Persist the short notice with the link so it survives reloads until dismissed.
+      await serial(ws, id, async c => { const state = await read(c); if (state) await write(c, state, { notice: { choice, at: new Date().toISOString(), recoveryWorkspaceId: result?.recoveryWorkspaceId || null } }); });
       return { ...await stateFor(context(ws, id)), resolved: choice, received: choice === 'remote' ? result : null };
     }
     // One automatic step for a preparation: upload local changes (the full review is
@@ -339,9 +339,9 @@
       emit(context(ws, planId)); return result;
     }
     function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); listeners.clear(); }
-    return Object.freeze({ getState: async (ws, id) => ({ ...await stateFor(context(ws, id)), notice: notices.get(key(ws, id)) || null }),
+    return Object.freeze({ getState: (ws, id) => stateFor(context(ws, id)),
       preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle,
-      dismissNotice: (ws, id) => { notices.delete(key(ws, id)); },
+      dismissNotice: (ws, id) => serial(ws, id, async c => { const state = await read(c); if (state?.notice) await write(c, state, { notice: null }); }),
       handoff, shareOutput, compare, resolve, inspect, receive,
       async list(after = null) { const c = context(); await verified(c); const result = await remote.list(after); guard(c); return result; },
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, dispose });
