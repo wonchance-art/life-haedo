@@ -1,4 +1,7 @@
 /* Read-only local post discovery: synthetic HTTP Auth, real SDK and IndexedDB.
+ * 2026-11-01 owner directive: posts sync to every device automatically, so the
+ * per-browser "이 브라우저에서 글 찾기" control is gone from the manager. The
+ * read-only, account-scoped storage scan it used is still verified here.
  * No personal browser profile, production API, recovery writes or Apple claims.
  * BASE_URL=http://127.0.0.1:4233 PW_MODULE_PATH=<installed playwright> node tests/local-post-finder-browser.cjs
  */
@@ -132,20 +135,27 @@ async function manager(page) {
   await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click();
   await page.locator('.blog-manager-list[data-state="ready"],.blog-manager-list[data-state="partial"]').waitFor();
 }
-async function finder(page) {
-  const details = page.locator('#blogLocalFind');
-  if (!await details.evaluate(node => node.open)) await details.locator(':scope > summary').click();
-  await page.locator('#blogLocalScan').waitFor();
-}
-async function scan(page) {
+// The background account sync is parked so this read-only scan observes an
+// unchanged database; explicit storage calls stand in for the removed control.
+async function scan(page, options = {}) {
   const before = await page.evaluate(() => window.__finderScans || 0);
-  await page.locator('#blogLocalScan').click();
-  await page.waitForFunction(before => (window.__finderScans || 0) > before &&
-    ['ready', 'partial', 'error'].includes(document.querySelector('#blogLocalStatus')?.dataset.state), before);
-  assert.notEqual(await page.locator('#blogLocalStatus').getAttribute('data-state'), 'error', await page.locator('#blogLocalStatus').innerText());
-  return page.evaluate(() => window.__lastFinderScan);
+  const result = await page.evaluate(options => HaedoLife.Shell.storage.scanLocalPosts(options), options);
+  assert.equal(await page.evaluate(() => window.__finderScans || 0), before + 1);
+  return result;
 }
-const row = (page, id) => page.locator('#blogLocalResults article[data-local-post-id="' + id + '"]');
+// Explicit app writes (a save, an account start) may still be committing
+// listeners' follow-up work; observe the database once it is quiet.
+async function settled(page) {
+  let value = await databaseSnapshot(page);
+  for (let tries = 0; tries < 50; tries++) { await page.waitForTimeout(200); const next = await databaseSnapshot(page); if (JSON.stringify(next) === JSON.stringify(value)) return next; value = next; }
+  return value;
+}
+async function candidate(page, input) {
+  return page.evaluate(async input => {
+    try { const value = await HaedoLife.Shell.storage.readLocalPostCandidate(input); return { ok: true, kind: value.kind, title: value.title, body: value.body ?? null }; }
+    catch (error) { return { ok: false, code: error.code }; }
+  }, input);
+}
 
 async function main() {
   assert.equal(new URL(base).hostname, '127.0.0.1', 'Use the explicitly owned loopback test server');
@@ -156,11 +166,16 @@ async function main() {
   report.browser = browser.version(); let active;
   async function fixture(options) {
     const fake = new FakeCloud(), context = await makeContext(browser, fake, 'local-finder-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } }); active = context;
+    await context.addInitScript(() => {
+      const request = LockManager.prototype.request;
+      LockManager.prototype.request = function (name, ...rest) { if (String(name).startsWith('haedo-blog-sync:')) return Promise.resolve(rest.at(-1)(null)); return request.call(this, name, ...rest); };
+    });
     context.on('request', request => {
       const url = new URL(request.url());
       if (isAccountDocumentSync(request, { cloud, server: fake })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
-          url.pathname !== '/rest/v1/rpc/life_blog_list') report.remoteWrites++;
+          !/^\/rest\/v1\/rpc\/life_(?:blog|blog_sync|material)_list$/.test(url.pathname)) { // read-only list RPCs are POSTs
+          report.remoteWrites++; (report.remoteWritePaths ||= []).push(url.pathname); }
     });
     // Instrument only the asynchronous test boundary. Original storage APIs and
     // IndexedDB validation execute in full; account transitions cannot be faked.
@@ -191,13 +206,13 @@ async function main() {
     finally { await f.context.close(); active = null; }
   }
   try {
-    await check('An omitted summary stays absent from home/manager but explicit local discovery reads and exports its two original photos without any DB mutation', async ({ page, seeded }) => {
+    await check('An omitted summary stays absent from home/manager; the manager offers no per-browser finder, and the account-scoped scan reads and exports its two originals without any DB mutation', async ({ page, seeded }) => {
       await page.locator('#homePostList').waitFor();
       assert.equal(await page.locator('#homePostList .home-post').count(), 0);
       await manager(page); assert.equal(await page.locator('.blog-manager-list .blog-post').count(), 0);
+      assert.equal(await page.locator('#blogLocalFind').count(), 0, 'No per-device discovery choice remains');
+      assert.equal(await page.getByText('이 브라우저에서 글 찾기').count(), 0);
       const before = await databaseSnapshot(page); assert.equal(await page.evaluate(() => window.__finderScans || 0), 0);
-      await finder(page); assert.equal(await page.evaluate(() => window.__finderScans || 0), 0);
-      assert.equal(await page.locator('#blogLocalIncludeUnowned').isChecked(), false);
       const found = await scan(page);
       assert.equal(found.complete, true); assert.deepEqual(found.issues, []);
       const missing = found.posts.find(p => p.id === seeded.missingId); assert.ok(missing); assert.equal(missing.indexState, 'missing');
@@ -209,60 +224,27 @@ async function main() {
       assert.ok(found.workspaces.some(w => w.workspaceId === seeded.otherWorkspaceId));
       assert.ok(!found.posts.some(p => [seeded.foreignPostId, seeded.unownedId].includes(p.id)));
       assert.ok(!found.workspaces.some(w => [seeded.foreignWorkspaceId, seeded.unownedWorkspaceId].includes(w.workspaceId)));
-      const denied = await page.evaluate(async input => {
-        try { await HaedoLife.Shell.storage.readLocalPostCandidate(input); return null; } catch (error) { return error.code; }
-      }, { workspaceId: seeded.foreignWorkspaceId, id: seeded.foreignPostId, kind: 'photo', revision: 1, unowned: false });
-      assert.equal(denied, 'workspace_access_denied', 'A forged candidate reference must not cross account ownership');
-      // Inspect the first result on mobile before any download/second click can
-      // auto-scroll and conceal an off-screen, merely programmatically focused preview.
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.locator('#blogLocalResults article').first().getByRole('button', { name: '내용 확인', exact: true }).click();
-      await page.locator('#blogLocalPreview[data-state="ready"]').waitFor();
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      const position = await page.evaluate(() => {
-        const heading = document.querySelector('#blogLocalPreview h3'), bounds = heading.getBoundingClientRect();
-        const header = document.querySelector('.life-toolbar.haedo-page-heading').getBoundingClientRect();
-        return { top: bounds.top, bottom: bounds.bottom, headerBottom: header.bottom,
-          height: innerHeight, focused: document.activeElement === heading };
-      });
-      assert.equal(position.focused, true);
-      assert.ok(position.headerBottom > 0, 'Measure the actual visible sticky heading bar');
-      assert.ok(position.top >= Math.max(0, position.headerBottom) - 1, 'Preview heading must clear the sticky header');
-      assert.ok(position.top < position.height && position.bottom > 0 && position.bottom <= position.height,
-        'First result preview heading must be visible before another click can scroll it into view');
-      report.mobilePreview = position;
-      await page.screenshot({ path: path.join(out, 'preview-mobile-390.png'), timeout: 20000 });
-      report.visual.push({ scene: 'preview', width: 390 });
-      await page.setViewportSize({ width: 1440, height: 1000 });
-      await row(page, seeded.missingId).getByRole('button', { name: '내용 확인', exact: true }).click();
-      const preview = page.locator('#blogLocalPreview'); await preview.waitFor();
-      assert.ok((await preview.innerText()).includes(seeded.title));
-      const download = page.waitForEvent('download'); await preview.getByRole('button', { name: /ZIP/ }).click();
-      const file = await download, bytes = await fs.readFile(await file.path());
-      const restored = await page.evaluate(async bytes => {
-        const doc = await HaedoLife.PhotoPost.readBackup(new Blob([new Uint8Array(bytes)], { type: 'application/zip' }), HaedoLife.Core.id);
-        return { title: doc.title, body: HaedoLife.PhotoPost.plainText(doc), photos: await Promise.all(doc.photos.map(async p => ({ digest: await HaedoLife.PhotoPost.digest(p.blob), width: p.width, height: p.height }))) };
-      }, [...bytes]);
-      assert.equal(restored.title, seeded.title); assert.equal(restored.body, seeded.body); assert.deepEqual(restored.photos, seeded.originals);
-      await row(page, seeded.writingId).getByRole('button', { name: '내용 확인', exact: true }).click();
-      await page.locator('#blogLocalPreview[data-state="ready"]').waitFor();
-      const textDownload = page.waitForEvent('download');
-      await page.locator('#blogLocalPreview').getByRole('button', { name: '본문 사본 저장', exact: true }).click();
-      assert.equal(await fs.readFile(await (await textDownload).path(), 'utf8'), seeded.sourceBody, 'Text download preserves BOM, CRLF and emoji without title prefix');
-      await page.locator('#blogLocalSearch').fill('목록과 독립적으로');
-      assert.equal(await page.locator('#blogLocalResults article').count(), 0, 'The search promises titles, not an unperformed full-body scan');
-      await page.locator('#blogLocalSearch').fill('');
-      await page.locator('#blogLocalIncludeUnowned').check(); assert.equal(await row(page, seeded.unownedId).count(), 0, 'Checkbox alone must not read old local data');
-      const withUnowned = await scan(page); assert.ok(withUnowned.posts.some(p => p.id === seeded.unownedId && p.unowned));
+      assert.equal((await candidate(page, { workspaceId: seeded.foreignWorkspaceId, id: seeded.foreignPostId, kind: 'photo', revision: 1, unowned: false })).code, 'workspace_access_denied', 'A forged candidate reference must not cross account ownership');
+      const exported = await page.evaluate(async input => {
+        const value = await HaedoLife.Shell.storage.readLocalPostCandidate(input);
+        const doc = await HaedoLife.Blog.hydrate(HaedoLife.Blog.pack(value.doc), value.doc.photos), zip = await HaedoLife.PhotoPost.backup(doc);
+        const restored = await HaedoLife.PhotoPost.readBackup(zip, HaedoLife.Core.id);
+        return { title: restored.title, body: HaedoLife.PhotoPost.plainText(restored), photos: await Promise.all(restored.photos.map(async p => ({ digest: await HaedoLife.PhotoPost.digest(p.blob), width: p.width, height: p.height }))) };
+      }, ref(missing));
+      assert.equal(exported.title, seeded.title); assert.equal(exported.body, seeded.body); assert.deepEqual(exported.photos, seeded.originals);
+      const source = await candidate(page, ref(found.posts.find(p => p.id === seeded.writingId)));
+      assert.equal(source.body, seeded.sourceBody, 'Text body preserves BOM, CRLF and emoji');
+      const withUnowned = await scan(page, { includeUnowned: true }); assert.ok(withUnowned.posts.some(p => p.id === seeded.unownedId && p.unowned));
       assert.ok(!withUnowned.posts.some(p => p.id === seeded.foreignPostId));
-      assert.deepEqual(await databaseSnapshot(page), before, 'Scan/preview/file download must preserve all rows, revisions, owner/active keys, timestamps, indexes and Blob SHA');
+      assert.deepEqual(await databaseSnapshot(page), before, 'Scan/read/export must preserve all rows, revisions, owner/active keys, timestamps, indexes and Blob SHA');
       report.originalPhotos = seeded.originals;
       for (const width of [1440, 820, 390]) { await page.setViewportSize({ width, height: 1000 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-        await page.screenshot({ path: path.join(out, 'found-' + width + '.png'), timeout: 20000 }); report.visual.push({ scene: 'found', width }); }
+        await page.screenshot({ path: path.join(out, 'manager-' + width + '.png'), timeout: 20000 }); report.visual.push({ scene: 'manager-without-finder', width }); }
+      await page.setViewportSize({ width: 1440, height: 1000 });
     });
     await check('Corrupt raw documents, invalid summaries and dangling indexes report partial results while retaining readable candidates and every stored byte', async ({ page, seeded }) => {
-      await manager(page); await finder(page); const before = await databaseSnapshot(page), result = await scan(page);
+      const before = await databaseSnapshot(page), result = await scan(page);
       assert.equal(result.complete, false); assert.ok(result.issues.length >= 3);
       assert.ok(result.posts.some(p => p.id === seeded.missingId)); assert.ok(result.posts.some(p => p.id === seeded.staleId));
       assert.ok(!result.posts.some(p => ['corrupt-synthetic-id', 'dangling-synthetic-id'].includes(p.id)));
@@ -273,41 +255,30 @@ async function main() {
       }
       const ownershipIssues = result.issues.filter(issue => issue.code === 'workspace_ownership_unknown');
       assert.equal(ownershipIssues.length, 2); assert.ok(ownershipIssues.every(issue => !Object.hasOwn(issue, 'workspaceId')));
-      await row(page, seeded.missingId).getByRole('button', { name: '내용 확인', exact: true }).click(); await page.locator('#blogLocalPreview').waitFor();
+      assert.equal((await candidate(page, ref(result.posts.find(p => p.id === seeded.missingId)))).ok, true);
       assert.deepEqual(await databaseSnapshot(page), before);
       report.partialIssueCodes = result.issues.map(issue => issue.code).sort();
     }, { corrupt: true });
-    await check('A changed candidate is refused and delayed old-account scan/read results never enter the new account view', async ({ page, seeded }) => {
-      await manager(page); await finder(page); const found = await scan(page), candidate = found.posts.find(p => p.id === seeded.missingId);
+    await check('A changed candidate is refused, and an old account handle cannot scan or read after the account changes', async ({ page, seeded }) => {
+      const found = await scan(page), item = found.posts.find(p => p.id === seeded.missingId);
       await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), doc = await s.readPhotoPost(w, id); doc.title = '명시적으로 바꾼 합성글'; await s.savePhotoPost(w, doc, doc.revision); }, seeded.missingId);
-      const beforeStaleRead = await databaseSnapshot(page);
-      const staleCode = await page.evaluate(async input => { try { await HaedoLife.Shell.storage.readLocalPostCandidate(input); return null; } catch (error) { return error.code; } }, ref(candidate));
-      assert.equal(staleCode, 'local_post_changed'); assert.deepEqual(await databaseSnapshot(page), beforeStaleRead);
-      await row(page, seeded.missingId).getByRole('button', { name: '내용 확인', exact: true }).click();
-      await page.locator('#blogLocalStatus[data-state="error"]').waitFor();
-      assert.equal(await page.locator('#blogLocalPreview').isVisible(), false);
-      assert.deepEqual(await databaseSnapshot(page), beforeStaleRead);
-      await page.evaluate(() => { window.__holdFinderScan = true; window.__finderScanHeld = false; });
-      await page.locator('#blogLocalScan').click(); await page.waitForFunction(() => __finderScanHeld);
+      const beforeStaleRead = await settled(page);
+      assert.equal((await candidate(page, ref(item))).code, 'local_post_changed'); assert.deepEqual(await databaseSnapshot(page), beforeStaleRead);
+      await page.evaluate(() => { window.__oldFinderStorage = HaedoLife.Shell.storage; });
       await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
       await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id); await ready(page);
-      const beforeRelease = await databaseSnapshot(page);
-      await page.evaluate(() => __releaseFinderScan());
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      assert.equal(await page.locator('#blogLocalResults article').count(), 0);
-      assert.ok(!(await page.locator('#lifeApp').innerText()).includes(seeded.title));
-      assert.deepEqual(await databaseSnapshot(page), beforeRelease);
-      await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.a));
-      await page.waitForFunction(id => HaedoLife.Shell.storage?.account?.userId === id, accounts.a.id); await ready(page);
-      await manager(page); await finder(page); await scan(page);
-      await page.evaluate(() => { window.__holdFinderRead = true; window.__finderReadHeld = false; });
-      await row(page, seeded.missingId).getByRole('button', { name: '내용 확인', exact: true }).click(); await page.waitForFunction(() => __finderReadHeld);
-      await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
-      await page.waitForFunction(id => HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id); await ready(page);
-      const beforeReadRelease = await databaseSnapshot(page); await page.evaluate(() => __releaseFinderRead());
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      assert.equal(await page.locator('#blogLocalPreview').count(), 0); assert.ok(!(await page.locator('#lifeApp').innerText()).includes('명시적으로 바꾼 합성글'));
-      assert.deepEqual(await databaseSnapshot(page), beforeReadRelease);
+      // The newly signed-in account finishes its own startup writes first.
+      const beforeOld = await settled(page);
+      const stale = await page.evaluate(async input => {
+        const codes = [];
+        try { await __oldFinderStorage.scanLocalPosts({}); codes.push('read'); } catch (error) { codes.push(error.code); }
+        try { await __oldFinderStorage.readLocalPostCandidate(input); codes.push('read'); } catch (error) { codes.push(error.code); }
+        return codes;
+      }, { ...ref(item), revision: item.revision + 1 });
+      assert.deepEqual(stale, ['storage_scope_closed', 'storage_scope_closed']);
+      const other = await scan(page); assert.ok(!other.posts.some(p => p.id === seeded.missingId), 'the other account sees nothing of this account');
+      assert.ok(!(await page.locator('#lifeApp').innerText()).includes('명시적으로 바꾼 합성글'));
+      assert.deepEqual(await databaseSnapshot(page), beforeOld);
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (error) { report.pass = false; report.error = error.stack; throw error; }
@@ -317,5 +288,5 @@ async function main() {
     consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, remoteWrites: 0 }));
 }
 
-module.exports = { databaseSnapshot, seed, manager, finder, scan, ref };
+module.exports = { databaseSnapshot, seed, manager, scan, candidate, ref };
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
