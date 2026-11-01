@@ -28,7 +28,7 @@
     if (!storage?.account || !storage.readBlogSyncState || !storage.writeBlogSyncState || !auth || !remote || !blog?.pack || !photoPost?.validate) throw fault('auth_required');
     const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map();
     const holds = new Map(), retries = new Map(), draftDue = new Map();
-    let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null;
+    let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null, soon = null;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
     let parked = false;
     const removers = [];
@@ -468,9 +468,29 @@
     function schedule(delay) {
       if (disposed || !started) return;
       if (timer) timers.clearTimeout(timer);
-      timer = timers.setTimeout(() => { timer = null; if (events?.document?.visibilityState === 'hidden') return; void syncNow(); }, delay);
+      timer = timers.setTimeout(() => {
+        timer = null;
+        // A hidden page stops pulling the server list, but anything waiting
+        // here (a saved edit, a draft, a kept conflict copy, a deletion) still
+        // goes up. The check is local only; no request is made otherwise.
+        if (events?.document?.visibilityState === 'hidden') { void localWork().then(waiting => { if (waiting && !disposed) return syncNow({ uploadOnly: true, flushDrafts: true }); }).catch(() => {}); return; }
+        void syncNow();
+      }, delay);
     }
-    function kick(delay = 0) { if (started) schedule(delay); }
+    // Whether this device has anything to upload or delete, read locally.
+    async function localWork() {
+      const libraries = await storage.listAccountLibraries();
+      for (const item of libraries) {
+        if (item.eligible === false) continue;
+        const value = await storage.listBlogSyncStates(item.workspaceId), states = new Map(value.states.map(entry => [entry.localPostId, entry.state]));
+        if (value.tombstones.length || value.posts.some(post => dirty(states.get(post.id), post))) return true;
+      }
+      return false;
+    }
+    // A request made while a cycle runs (e.g. a kept conflict copy that should
+    // go up now) is remembered: the end of the cycle must not postpone it to
+    // the regular interval.
+    function kick(delay = 0) { if (!started) return; if (running) soon = Math.min(soon ?? delay, delay); else schedule(delay); }
     async function syncNow(options = {}) {
       // A cached page starts nothing: script running there evicts it from the
       // back/forward cache, and an account check begun while the private view is
@@ -484,7 +504,7 @@
         let next = options, result;
         try {
           while (next && !disposed) { rerun = null; result = await withLock(() => cycle(next)); next = rerun; }
-        } finally { running = null; schedule(interval); }
+        } finally { running = null; const next = soon ?? interval; soon = null; schedule(next); }
         return result;
       })();
       return running;

@@ -118,3 +118,44 @@ test('m2: no polling while the page is hidden; the hidden flush runs once and vi
   assert(a.auth.verifications > before + 1, 'becoming visible resumes the cycle');
   sync.dispose();
 });
+
+test('m2: a hidden page still uploads a kept conflict copy and other waiting changes, without pulling the server list', async () => {
+  const { cloud, time, a, b } = await pair(), timers = [];
+  const doc = { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} };
+  const events = { document: doc, addEventListener() {}, removeEventListener() {} };
+  const post0 = await save(a, await post({ title: '원래 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  // B saves later; A's earlier edit loses and is kept as a separate draft on A.
+  const aDraft = await edit(a, post0.id, { title: '맥 이른 수정' }, '2026-11-01T10:00:00.000Z'); const aSaved = await finish(a, aDraft, '2026-11-01T10:00:00.000Z');
+  const bDraft = await edit(b, post0.id, { title: '아이패드 늦은 수정' }, '2026-11-01T11:00:00.000Z'); await finish(b, bDraft, '2026-11-01T11:00:00.000Z'); await b.sync.syncNow();
+  const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote, makeId: Core.id, locks: null, now: () => time.now, events,
+    timers: { setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {} } });
+  sync.start(); doc.visibilityState = 'hidden';
+  const originalList = a.remote.syncList; let listCalls = 0; a.remote.syncList = async (...args) => { listCalls++; return originalList.apply(a.remote, args); };
+  const kept = Sync.CONFLICT_PREFIX + '맥 이른 수정';
+  for (let n = 0; n < 6 && ![...cloud.rows.values()].some(row => row.data.title === kept); n++) { timers.at(-1)(); await new Promise(done => setTimeout(done, 60)); }
+  assert.equal(cloud.rows.get(post0.id).data.title, '아이패드 늦은 수정', 'the later edit stays on the server');
+  assert([...cloud.rows.values()].some(row => row.data.status === 'draft' && row.data.title === kept), 'the kept conflict copy reached the account while hidden');
+  assert.equal((await a.storage.readPhotoPost(a.ws, aSaved.id)).title, '아이패드 늦은 수정');
+  assert.equal(listCalls, 0, 'a hidden page never pulls the server list');
+  const quiet = a.auth.verifications; timers.at(-1)(); await new Promise(done => setTimeout(done, 60));
+  assert.equal(a.auth.verifications, quiet, 'with nothing waiting, a hidden page makes no request');
+  a.remote.syncList = originalList; sync.dispose();
+});
+
+test('a conflict copy made during a cycle is uploaded by the next cycle at once, not after the regular interval', async () => {
+  const { cloud, time, a, b } = await pair(), timers = [];
+  const events = { document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} }, addEventListener() {}, removeEventListener() {} };
+  const post0 = await save(a, await post({ title: '원래 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  const aDraft = await edit(a, post0.id, { title: '맥 이른 수정' }, '2026-11-01T10:00:00.000Z'); await finish(a, aDraft, '2026-11-01T10:00:00.000Z');
+  const bDraft = await edit(b, post0.id, { title: '아이패드 늦은 수정' }, '2026-11-01T11:00:00.000Z'); await finish(b, bDraft, '2026-11-01T11:00:00.000Z'); await b.sync.syncNow();
+  const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote, makeId: Core.id, locks: null, now: () => time.now, events,
+    timers: { setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; }, clearTimeout() {} } });
+  sync.start();
+  await sync.syncNow(); // resolves the conflict and keeps A's edit as a new local draft
+  const kept = Sync.CONFLICT_PREFIX + '맥 이른 수정';
+  assert((await list(a)).some(row => row.title === kept));
+  assert.equal(timers.at(-1).delay, 1000, 'the follow-up cycle is scheduled within a second');
+  timers.at(-1).fn(); for (let n = 0; n < 40 && ![...cloud.rows.values()].some(row => row.data.title === kept); n++) await new Promise(done => setTimeout(done, 25));
+  assert([...cloud.rows.values()].some(row => row.data.status === 'draft' && row.data.title === kept), 'the kept draft reached the account');
+  sync.dispose();
+});
