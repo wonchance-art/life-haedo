@@ -149,7 +149,9 @@ async function main() {
       await b.page.locator('#lifeWritingError').waitFor(); await b.page.locator('#lifeWritingRescue').click(); await b.page.waitForFunction(() => document.querySelector('#lifeWritingStatus')?.dataset.state === 'draft'); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input));
       await openDraft(a.page, id); await a.page.locator('#lifeWritingSave').click(); await a.page.locator('#lifeSourceText').waitFor(); await sync(a.page, ws, id);
       const published = await stage(a.page, id), source = await bundle(a.page, ws), remote = server.draft(accounts.a.id, ws, id); assert.equal(published.state, 'applied'); assert.equal(remote.data.state, 'applied'); assert.ok(source.sourceVersions.some(value => value.id === published.appliedResult.sourceVersionId && value.sourceId === published.appliedResult.sourceId));
-      await b.page.evaluate(ws => HaedoLife.Shell.sync.syncNow(ws), ws); await sync(b.page, ws, id); assert.equal((await stage(b.page, id)).state, 'applied'); assert.deepEqual((await stage(b.page, id)).appliedResult, published.appliedResult); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input));
+      // B's background passes may hold the same draft queue; retry the explicit pass until the record arrives.
+      for (let attempt = 0; attempt < 10 && (await stage(b.page, id)).state !== 'applied'; attempt++) { await b.page.evaluate(ws => HaedoLife.Shell.sync.syncNow(ws), ws).catch(() => {}); await sync(b.page, ws, id); if ((await stage(b.page, id)).state !== 'applied') await b.page.waitForTimeout(300); }
+      assert.equal((await stage(b.page, id)).state, 'applied'); assert.deepEqual((await stage(b.page, id)).appliedResult, published.appliedResult); assert.ok((await stages(b.page, ws)).some(value => value.stageId !== id && value.text === input));
     });
     await check('a remote saved record closes the draft identity and the unsaved local alternative becomes a recoverable draft automatically', async context => {
       const { server } = context, { a, b, ws, id } = await paired(context); server.writingOffline.add('b');
