@@ -126,9 +126,19 @@ async function main() {
       await page.evaluate(({ workspaceId, postId }) => {
         const original = IDBObjectStore.prototype.get, key = 'photo-post:' + workspaceId + ':' + postId;
         window.__materialOutputGate = { held: false, released: false };
+        // The account's background sync (e.g. the material continuity pass that a
+        // new preparation schedules) reads this same post. Hold only the read made
+        // by the output action, recognised from its async call stack, so a
+        // background reader can neither take the gate nor be suspended by it.
+        const fromOutputAction = () => {
+          const limit = Error.stackTraceLimit; Error.stackTraceLimit = Infinity;
+          try { return /\bat async openOutput \(/.test(new Error().stack); } finally { Error.stackTraceLimit = limit; }
+        };
         IDBObjectStore.prototype.get = function (requested) {
           const request = original.call(this, requested);
-          if (requested === key && !__materialOutputGate.held) request.addEventListener('success', event => {
+          if (requested !== key || __materialOutputGate.held) return request;
+          if (!fromOutputAction()) return request;
+          request.addEventListener('success', event => {
             if (__materialOutputGate.released) return;
             event.stopImmediatePropagation(); __materialOutputGate.held = true;
             window.__releaseMaterialOutput = () => {
@@ -138,8 +148,17 @@ async function main() {
           return request;
         };
       }, { workspaceId: fixture.workspaceId, postId: firstPostId });
+      // Make the background sync's read of A's post come first, as it can in CI:
+      // it completes and leaves the gate for the output action's own read.
+      await page.evaluate(({ workspaceId, planId }) => {
+        HaedoLife.Shell.storage.readMaterialContinuitySnapshot(workspaceId, planId).then(value => { window.__materialBackgroundRead = value.post?.id || null; }, error => { window.__materialBackgroundRead = error.code || 'error'; });
+      }, { workspaceId: fixture.workspaceId, planId });
+      await page.waitForFunction(() => __materialOutputGate.held || window.__materialBackgroundRead !== undefined);
+      assert.equal(await page.evaluate(() => __materialOutputGate.held), false, 'A background read of the same post does not take the gate');
+      assert.equal(await page.evaluate(() => __materialBackgroundRead), firstPostId);
       await page.locator('#mwManageOutput').click(); await page.waitForFunction(() => __materialOutputGate.held);
       try {
+        assert.equal(await page.locator('#mwOutputTool').isVisible(), false, 'The held read is the pending output read for A');
         await page.locator('#mwPlanSelect').selectOption(secondId);
         await page.waitForFunction(() => document.getElementById('mwTitle')?.value === '다른 자료로 새롭게 준비하는 두 번째 글');
         await page.locator('#mwQuestion').fill('B의 현재 입력은 A의 늦은 조회와 분리한다');
