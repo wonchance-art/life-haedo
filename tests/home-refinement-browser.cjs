@@ -68,16 +68,20 @@ async function main() {
     const server = new ShareCloud(), device = 'refinement-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 320, height: 568 }, hasTouch: true, ...contextOptions }); await instrument(context);
     await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) {
-      if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push({ name, path: url.pathname }); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.pathname === '/rest/v1/rpc/life_blog_save' && request.method() === 'POST') report.privateSaves.push({ name, postId: request.postDataJSON().p_post_id });
       else report.remoteWrites.push({ method: request.method(), path: url.pathname });
     } if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
     const page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run(page); assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);
-      const expected = name === 'empty home offers one first write and completes private save/read/home' ? 1 : 0;
-      assert.equal(server.saves().length, expected, 'Only the explicit saved-post journey may store a private server copy');
-      assert.equal(report.privateSaves.filter(call => call.name === name).length, expected);
-      for (const row of server.posts.values()) { assert.equal(row.owner, accounts.a.id); assert.equal(row.publication, null); assert.equal(row.data.status, 'saved'); }
+      // 2026-11-01: saved posts and drafts reach the owner's private account
+      // storage automatically (background sync). They stay private: same
+      // owner, never published, and no other write path is used.
+      if (name === 'empty home offers one first write and completes private save/read/home') assert(server.saves().length >= 1, 'The explicit saved post reaches the private account');
+      assert.equal((report.backgroundSync || []).filter(call => call.name === name && call.path === '/rest/v1/rpc/life_blog_save').length, server.saves().length);
+      assert.equal(report.privateSaves.filter(call => call.name === name).length, 0, 'every private save is the owner-scoped background sync');
+      assert(server.saves().every(call => call.owner === accounts.a.id));
+      for (const row of server.posts.values()) { assert.equal(row.owner, accounts.a.id); assert.equal(row.publication, null); assert(['saved', 'draft'].includes(row.data.status)); }
       report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, `failure-${report.checks.length}.png`), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }

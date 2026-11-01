@@ -1,6 +1,7 @@
 'use strict';
 // Actual owner UI/SDK/IndexedDB and downloaded bytes; synthetic Auth only.
 process.env.BASE_URL ||= 'http://127.0.0.1:4212';
+const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -11,7 +12,7 @@ const { inspect } = require('../scripts/check-site-design.cjs');
 const Z = require('../vendor/fflate/fflate.js');
 const output = path.resolve(__dirname, '../.local/blog-series');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [],
+const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [], backgroundSync: [],
   scope: 'Actual local owner UI/SDK/IndexedDB, original PNG decoding and downloaded ZIP bytes. Synthetic Auth, Chromium viewports; no production, Google OAuth, Apple hardware, publication or deployment claims.' };
 
 async function main() {
@@ -31,6 +32,8 @@ async function main() {
     });
     context.on('request', request => {
       const u = new URL(request.url());
+      // Owner-scoped private account sync (2026-11-01) is audited separately; publication never is.
+      if (isBackgroundSyncWrite(u.href)) { report.backgroundSync.push(u.pathname); return; }
       if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
         (/\/storage\/v1\/object/.test(u.pathname) || /\/functions\/v1\//.test(u.pathname) ||
           /\/rest\/v1\/rpc\/(?:life_blog_(?:save|publish|unpublish|prepare_asset)|life_page_publish|life_sync_put)/.test(u.pathname))) report.remoteWrites.push(u.pathname);
