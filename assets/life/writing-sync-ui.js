@@ -46,6 +46,7 @@
         }
         if (errorBox.textContent && state.status !== 'closed') content.append(button('다시 시도', 'writingSyncNow', async () => {
           if (state.enabled) await manager.syncNow(ws, id); else await manager.enable(ws, id);
+          await manager.refresh?.({ force: true });
         }));
         if (state.conflict?.missing) content.append(el('p', '서버 초안을 찾지 못해 자동으로 다시 만들지 않았습니다. 이 기기의 글은 그대로 있고 TXT로 보관할 수 있습니다.', 'life-help'));
       }

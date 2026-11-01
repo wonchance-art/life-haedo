@@ -32,7 +32,7 @@ async function fixture(t, options = {}) {
   const ref = await R.build({ bundle, sourceId: imported.source.id, versionId: imported.version.id, locator: { start: 0, end: '정확한 인용 구절'.length } });
   const plan = M.create(C.id); plan.blocks.push({ id: C.id(), kind: 'paragraph', text: '글에 쓸 내 문단' });
   let db = { ...M.empty(bundle.workspaceId), plans: [plan] }, beforeSave = null, beforeCreate = null, beforeSources = null, failRead = false, scope = true, sourceOptions = null, sourcePending = false, sourceView = { activeId: null, compareId: null };
-  const docs = new Map(), saves = [], handoffs = [], opens = []; let creates = 0, failOpen = false;
+  const docs = new Map(), saves = [], handoffs = [], opens = []; let creates = 0, failOpen = false, changeListener = null;
   const clone = value => structuredClone(value), storage = {
     read: async () => clone(bundle), readMaterialWriting: async () => { if (failRead) throw Error('준비 목록 조회 실패'); return clone(db); },
     saveMaterialWriting: async (ws, input, base) => { if (beforeSave) await beforeSave(); M.validate(input); if (base !== db.revision) throw Object.assign(Error('두 탭 충돌'), { code: 'material_writing_conflict' }); db = { ...clone(input), revision: base + 1 }; saves.push(clone(db)); return clone(db); },
@@ -43,6 +43,7 @@ async function fixture(t, options = {}) {
       const { doc } = M.project(db, id, C.id); doc.revision = 1; docs.set(doc.id, clone(doc)); owner.output = { postId: doc.id }; db.revision++; creates++;
       return { postId: doc.id, revision: doc.revision, planRevision: db.revision, created: true };
     }, readPhotoPost: async (ws, id) => clone(docs.get(id)),
+    subscribe: (ws, fn) => { changeListener = fn; return () => { changeListener = null; }; },
   };
   global.HaedoLife = { Core: C, MaterialWriting: M, PhotoPost: P, Discovery: require('../assets/life/discovery.js'), MaterialWritingSources: { create(value) { sourceOptions = value; return { mount: async () => { await beforeSources?.(); }, refresh: async () => {}, pending: () => sourcePending, getView: () => sourceView, dispose() {} }; } } };
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../assets/life/material-writing-ui.js'), 'utf8'));
@@ -55,7 +56,9 @@ async function fixture(t, options = {}) {
   const input = async (selector, text) => { const node = get(selector); node.value = text; await node.emit('input'); return node; };
   const preview = async () => { await click('#mwPreview'); get('#mwConsent').checked = true; };
   return { ui, get, click, input, preview, host, document, storage, M, C, P, ref, imported, bundle, docs, opens, saves, handoffs,
-    db: () => clone(db), setDb: value => { db = clone(value); }, sources: () => sourceOptions, setPending: value => { sourcePending = value; sourceOptions.onPendingChange(value); },
+    db: () => clone(db), setDb: value => { db = clone(value); },
+    // A preparation change installed by account sync (another device) or another tab.
+    remoteChange: async edit => { const next = clone(db); edit(next); next.revision = db.revision + 1; db = next; changeListener?.({ type: 'material_writing_changed', workspaceId: bundle.workspaceId, revision: db.revision }); await new Promise(resolve => setTimeout(resolve, 5)); await settle(); }, sources: () => sourceOptions, setPending: value => { sourcePending = value; sourceOptions.onPendingChange(value); },
     setBundle: value => { bundle = clone(value); }, setBeforeSources: value => { beforeSources = value; },
     setBeforeSave: value => { beforeSave = value; }, setBeforeCreate: value => { beforeCreate = value; }, setFailRead: value => { failRead = value; }, setFailOpen: value => { failOpen = value; }, setScope: value => { scope = value; }, creates: () => creates };
 }
@@ -231,4 +234,21 @@ test('link adoption refuses nonpublic addresses without adding a paragraph', asy
     await assert.rejects(f.sources().onLink(material.id));
   }
   assert.equal(f.db().plans[0].blocks.length, 1);
+});
+
+test('a preparation changed on another device reloads a clean view and never replaces unsaved input', async t => {
+  const f = await fixture(t);
+  await f.remoteChange(next => { next.plans[0].title = '다른 기기에서 바꾼 제목'; });
+  assert.equal(f.get('#mwTitle').value, '다른 기기에서 바꾼 제목'); assert.equal(f.get('#mwIncoming').hidden, true);
+  const title = await f.input('#mwTitle', '아직 저장하지 않은 내 제목');
+  f.setBeforeSave(() => new Promise(() => {})); // keep the local edit unsaved
+  await f.remoteChange(next => { next.plans[0].title = '그사이 다시 바뀐 제목'; });
+  assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '아직 저장하지 않은 내 제목');
+  assert.equal(f.get('#mwIncoming').hidden, false); assert.match(f.get('#mwLoadIncoming').textContent, /다른 기기에서 바뀜 · 불러오기/);
+  f.setBeforeSave(null); const planId = f.db().plans[0].id;
+  await f.click('#mwLoadIncoming');
+  const plans = f.db().plans;
+  assert.equal(plans.find(value => value.id === planId).title, '그사이 다시 바뀐 제목');
+  assert.ok(plans.some(value => value.id !== planId && value.title === '아직 저장하지 않은 내 제목'), 'the unsaved input is kept as its own preparation copy');
+  assert.equal(f.get('#mwTitle').value, '그사이 다시 바뀐 제목'); assert.equal(f.get('#mwIncoming').hidden, true);
 });

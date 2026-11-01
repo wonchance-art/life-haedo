@@ -1905,6 +1905,15 @@
         return { postId: oldPost.id };
       }
       if (oldPost && !preserveLocal && (!oldBinding || oldBinding.localRevision !== oldPost.revision || oldBinding.pending || oldBinding.conflict)) throw fault('local_changed', '이 기기의 글을 수정 중입니다. 양쪽 글을 보존할 방법을 먼저 선택해 주세요.');
+      // Account blog sync may already hold this exact server revision: link that post instead
+      // of installing a second local copy bound to the same server post.
+      const received = (await blogCopies(meta, workspaceId, output.postId)).find(value => value.remoteRevision === output.revision && value.status === 'received');
+      if (received) {
+        const refs = checkedEvidence(output.refs, workspaceId), key = `post-evidence:${workspaceId}:${received.localPostId}`, evidence = (await meta.get(key))?.value;
+        if (evidence && stablePayload(evidence.refs) !== stablePayload(refs)) throw fault('material_output_changed', '완성 글의 인용 근거가 다릅니다. 기존 글을 바꾸지 않았습니다.');
+        if (!evidence) await meta.put({ key, value: { revision: 1, refs: clone(refs) } });
+        return { postId: received.localPostId };
+      }
       if (!original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
       const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
       const blog = root.HaedoLife?.Blog || require('./blog.js');

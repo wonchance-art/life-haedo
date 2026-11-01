@@ -8,7 +8,7 @@ const WS = '22222222-2222-4222-8222-222222222222';
 const id = n => `33333333-3333-4333-8333-${String(n).padStart(12, '0')}`;
 const copy = value => structuredClone(value);
 
-function fixture({ stages = [], states = [], rows = [], source = { enabled: true, status: 'synced' } } = {}) {
+function fixture({ stages = [], states = [], rows = [], source = { enabled: true, status: 'synced' }, listError = null } = {}) {
   const calls = [], created = new Map(), local = new Map(stages.map(stage => [stage.stageId, copy(stage)]));
   const stateMap = new Map(states.map(state => [state.draftId, copy(state)]));
   const storage = {
@@ -26,7 +26,7 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
   };
   const sourceSync = { async getState() { return { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; }, async syncNow() { calls.push(['sourceSync']); }, subscribe() { return () => {}; } };
   const remote = {
-    async list(ws, after) { calls.push(['list', after]); return copy(rows); },
+    async list(ws, after) { calls.push(['list', after]); if (listError) throw Object.assign(new Error('schema'), listError); return copy(rows); },
     async read(ws, draftId) { const row = rows.find(value => value.draft_id === draftId); return row ? { ...copy(row), source_revision: 1, data: { stageId: draftId, workspaceId: ws, kind: 'writing', state: 'draft', revision: 2 } } : null; },
     write() { throw new Error('unexpected write'); }, dispose() {}
   };
@@ -85,4 +85,11 @@ test('latest edit wins; a saved record keeps both sides through the fork recover
   assert.equal(WritingSync.latest({ local: at('2026-10-01T00:00:00Z'), remote: { data: at('2026-10-01T00:00:00Z') } }), 'remote');
   assert.equal(WritingSync.latest({ local: { ...at('2026-10-03T00:00:00Z'), state: 'applied' }, remote: { data: at('2026-10-01T00:00:00Z') } }), 'fork');
   assert.equal(WritingSync.latest({ local: at('2026-10-01T00:00:00Z'), remote: { data: { ...at('2026-10-02T00:00:00Z'), state: 'applied' } } }), 'fork');
+});
+
+test('a server without the draft schema is marked unavailable and not probed again every cycle', async t => {
+  const f = fixture({ stages: [draft(1)], listError: { code: 'schema_missing' } }); t.after(() => f.manager.dispose());
+  await f.manager.refresh(); await f.manager.refresh(); await f.manager.refresh();
+  assert.equal(f.calls.filter(call => call[0] === 'list').length, 1); assert.equal(f.calls.filter(call => call[0] === 'enable').length, 0);
+  assert.equal(f.manager.availability().status, 'unavailable'); assert.ok(f.manager.availability().until > Date.now());
 });
