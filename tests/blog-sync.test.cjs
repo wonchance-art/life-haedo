@@ -279,10 +279,14 @@ test('a page entering the back/forward cache starts no transfer or account check
   const events = new EventTarget(); events.document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
   const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: cloud.client('mac-page'), makeId: Core.id,
     locks: null, now: () => time.now, timers: { setTimeout: () => 0, clearTimeout() {} }, events, interval: 30000 });
-  sync.start();
-  const doc = await save(a, await post({ title: '떠나기 직전 초안', status: 'draft', photos: 1, time: new Date(time.now).toISOString() }));
   const page = (type, persisted) => events.dispatchEvent(Object.assign(new Event(type), { persisted }));
   const settle = async () => { for (let n = 0; n < 20; n++) await new Promise(done => setImmediate(done)); };
+  sync.start();
+  // The first cycle starts with start(); let it finish so its account check is
+  // not counted as one begun by the cached page.
+  await sync.syncNow(); await settle();
+  const doc = await save(a, await post({ title: '떠나기 직전 초안', status: 'draft', photos: 1, time: new Date(time.now).toISOString() }));
+  await settle();
   const before = a.auth.verifications;
   page('pagehide', true);
   events.document.visibilityState = 'hidden'; events.document.dispatchEvent(new Event('visibilitychange'));
@@ -294,7 +298,10 @@ test('a page entering the back/forward cache starts no transfer or account check
   assert.equal(a.auth.verifications, before + 1); assert.equal(cloud.rows.get(doc.id).data.title, '떠나기 직전 초안');
   // An ordinary (non-cached) pagehide still flushes the waiting draft.
   const next = await a.storage.savePhotoPost(a.ws, { ...copy(await a.storage.readPhotoPost(a.ws, doc.id)), title: '닫기 직전 초안', updatedAt: new Date(time.now).toISOString() }, 1);
-  page('pagehide', false); await settle();
+  page('pagehide', false);
+  // The flush is asynchronous (photo transfer, then the document); wait for the
+  // stored result itself rather than a fixed number of turns.
+  for (let n = 0; n < 2000 && cloud.rows.get(next.id)?.data.title !== '닫기 직전 초안'; n++) await new Promise(done => setImmediate(done));
   assert.equal(cloud.rows.get(next.id).data.title, '닫기 직전 초안');
   sync.dispose();
 });
