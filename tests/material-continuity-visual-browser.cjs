@@ -97,9 +97,13 @@ async function main() {
     await check('A failed automatic send shows one retry that sends the same preparation again', async () => {
       await enter(page, otherId); await panel();
       await page.evaluate(async ({ id }) => { const s = HaedoLife.Shell.storage, ws = await s.getActive(), state = await s.readMaterialWriting(ws); const plan = state.plans.find(p => p.id === id); plan.question = '실패 후 다시 보낼 질문'; plan.updatedAt = new Date().toISOString(); await s.saveMaterialWriting(ws, state, state.revision); }, { id: otherId });
-      server.materialFailure = entry => entry.rpc === 'life_material_put'; await syncMaterials(page);
+      // Keep every send failing until the retry, so background passes cannot hide the error state first.
+      let failing = true; const failSend = entry => entry.rpc === 'life_material_put';
+      Object.defineProperty(server, 'materialFailure', { configurable: true, get: () => failing ? failSend : null, set() {} });
+      await syncMaterials(page);
       await page.locator('#mcStatus[data-state="error"]').waitFor(); await page.locator('#mcSync').waitFor(); await capture('sync-retry', [1440, 390]);
       // The failed response is retried with the same durable operation (by this retry or the next background pass).
+      failing = false; delete server.materialFailure; server.materialFailure = null;
       await click('#mcSync'); await page.locator('#mcStatus[data-state="synced"]').waitFor();
       const failed = writes().filter(entry => entry.body.p_data.plan.id === otherId && entry.body.p_data.plan.question === '실패 후 다시 보낼 질문');
       assert.ok(failed.length >= 2, 'the aborted send was replayed'); assert.equal(new Set(failed.map(entry => entry.body.p_operation_id)).size, 1, 'the replay reuses the same operation');

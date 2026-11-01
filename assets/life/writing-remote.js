@@ -50,6 +50,10 @@
     const client = clientFactory(auth, { scope: 'writing' })(auth.config.url, auth.config.key);
     let disposed = false;
     const alive = () => { if (disposed) throw fault('request_cancelled'); };
+    // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
+    // account's current token; uid/epoch are captured and an account change cancels the result.
+    const capture = () => { alive(); if (!auth.user?.id) throw fault('auth_required'); return { uid: auth.user.id, epoch: auth.epoch }; };
+    const same = captured => { alive(); if (auth.user?.id !== captured.uid || auth.epoch !== captured.epoch) throw fault('request_cancelled'); };
     const ids = (ws, id) => { if (!validId(ws) || !validId(id)) throw fault('invalid_request'); };
     function data(value, ws, id) {
       try {
@@ -62,9 +66,8 @@
     }
     async function rpc(name, args) {
       try {
-        alive(); const user = await client.auth.getUser(); alive();
-        if (user.error || !user.data?.user) throw fault('auth_required');
-        const result = await client.rpc(name, args); alive();
+        const captured = capture();
+        const result = await client.rpc(name, args); same(captured);
         if (result.error) throw result.error; return result.data;
       } catch (error) { alive(); throw clean(error); }
     }

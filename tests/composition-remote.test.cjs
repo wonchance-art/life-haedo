@@ -187,3 +187,15 @@ test('platform account switch rejects late composition read and write responses'
     assert.equal(shared.state.disposedAuth, 0); assert.equal(shared.auth.user.id, OTHER);
   }
 });
+
+test('a server without the edit-time migration gets the same composition without editedAt, then never again', async () => {
+  const { state, adapter } = fixture(), data = { ...Workbench.empty(ID), editedAt: '2026-11-01T00:00:00.000Z' };
+  const responses = [{ data: null, error: { code: '22023', message: 'life_composition_invalid_snapshot' } }, { data: { status: 'stored', revision: 1 }, error: null }, { data: { status: 'stored', revision: 2 }, error: null }];
+  let index = 0;
+  Object.defineProperty(state, 'result', { get: () => responses[Math.min(index++, responses.length - 1)], configurable: true });
+  assert.deepEqual(await adapter.write({ ...request(), data }), { status: 'stored', revision: 1 });
+  assert.equal(state.calls.length, 2); assert.equal(state.calls[0].params.p_data.editedAt, data.editedAt); assert.equal(Object.hasOwn(state.calls[1].params.p_data, 'editedAt'), false);
+  assert.deepEqual({ ...state.calls[1].params.p_data, editedAt: data.editedAt }, data, 'only the edit time is left out');
+  await adapter.write({ ...request(), expectedRevision: 1, data });
+  assert.equal(state.calls.length, 3); assert.equal(Object.hasOwn(state.calls[2].params.p_data, 'editedAt'), false);
+});

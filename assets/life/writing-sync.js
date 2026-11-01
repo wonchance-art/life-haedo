@@ -154,8 +154,17 @@
       }
     }
     // Callers that arrive during a pass wait for the same pass, which then runs once more.
+    // A suspended page (haedo:page-suspend) sends nothing with the old session until the shell's
+    // fresh verification is followed by haedo:page-ready. Between a persisted pagehide and its
+    // pageshow (back/forward cache) nothing starts: work there evicts the page, and nothing begun
+    // then may stand in for the resumed page's own account check. It resumes on the regular poll.
+    let suspended = false, parked = false;
+    const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
+    const resume = () => { if (!suspended) return; suspended = false; automatic(); };
+    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
+    const pageshow = event => { if (event?.persisted) parked = false; };
     function automatic() {
-      if (disposed || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (disposed || suspended || parked || root.document?.visibilityState === 'hidden') return Promise.resolve();
       if (refreshing) { again = true; return refreshing; }
       refreshing = passes().finally(() => { refreshing = null; });
       return refreshing;
@@ -174,7 +183,7 @@
       } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
     }
     function nudge() {
-      if (disposed || soon) return;
+      if (disposed || suspended || parked || soon) return;
       soon = root.setTimeout(() => { soon = null; automatic(); }, 1500); soon?.unref?.();
     }
     function onStorage(event) {
@@ -185,6 +194,8 @@
       interval = root.setInterval(automatic, every); interval?.unref?.();
       root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
       root.document?.addEventListener('visibilitychange', automatic);
+      root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
+      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
       try { offAll = storage.subscribeAll?.(onStorage) || null; } catch (_) { offAll = null; }
       if (materials !== null) {
         try { material = (materials || root.HaedoLife?.MaterialContinuitySync?.automatic)?.({ storage, auth }) || null; material?.start(); }
@@ -197,6 +208,8 @@
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
+      root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
+      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
     }
     // { force: true } (an explicit retry) ignores the unavailable back-off once.
     return Object.freeze({ start, getState, listRemote, download, dispose, refresh: options => { if (options?.force === true) availability.until = 0; return automatic(); },
