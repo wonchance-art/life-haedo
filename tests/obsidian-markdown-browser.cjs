@@ -2,6 +2,7 @@
  * Anonymous fixtures and FakeCloud Auth only; no real vault, account or network.
  * BASE_URL=http://127.0.0.1:4173 node tests/obsidian-markdown-browser.cjs */
 'use strict';
+const { isBackgroundSync, isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs'); // owner directive 2026-11-01
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
@@ -110,6 +111,7 @@ async function main() {
       const u = new URL(request.url()), body = request.postData() || '';
       if ([propertyTitle, quote, note, raw].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
       if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 });
+      else if (u.origin === cloud && isBackgroundSync(u.href) && !isBackgroundSyncWrite(u.href)) (report.backgroundSyncReads ||= []).push(u.pathname); // owner-scoped background sync reads are not writes
       else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });
     });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ check: name, destination: u.origin + u.pathname }); return route.abort('blockedbyclient'); });
