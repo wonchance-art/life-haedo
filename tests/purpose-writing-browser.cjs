@@ -21,6 +21,14 @@ async function poll(read, accept, label, timeout = 15000) {
   do { value = await read(); if (accept(value)) return value; await new Promise(resolve => setTimeout(resolve, 75)); } while (Date.now() - start < timeout);
   throw Error(label + ': ' + JSON.stringify(value));
 }
+// 2026-11-01: saved posts reach the account automatically. Let that background
+// upload finish so a check can show that its own navigation writes nothing.
+async function accountSynced(page, f) {
+  await page.evaluate(() => dispatchEvent(new Event('online')));
+  return poll(() => page.evaluate(async ws => { const s = HaedoLife.Shell.storage, rows = await s.listPhotoPosts(ws), states = await Promise.all(rows.map(row => s.readBlogSyncState(ws, row.id)));
+    return rows.map((row, i) => ({ id: row.id, revision: row.revision, state: states[i] && { status: states[i].status, localRevision: states[i].localRevision, pending: !!states[i].pending } })); }, f.workspaceId),
+  rows => rows.length > 0 && rows.every(row => row.state?.status === 'synced' && row.state.localRevision === row.revision && !row.state.pending), 'background account sync settled', 40000);
+}
 async function seed(page) {
   const fixture = await page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, C = HaedoLife.Core, P = HaedoLife.PhotoPost, workspaceId = await s.getActive();
@@ -98,6 +106,7 @@ async function main() {
     for (const width of [1440, 390]) await check('exact reader manager file return ' + width, async ({ server, device }) => {
       const { page } = await device('exact-' + width), f = await seed(page);
       await poll(() => page.evaluate(() => HaedoLife.Shell.accountLibrary.getState()), value => value.status === 'synced', 'source fixture sync');
+      await accountSynced(page, f);
       const original = await postState(page, f), writes = server.saves().length, assets = server.assetCalls.filter(c => c.method === 'POST').length;
       await openReader(page, f, true); await more(page, 'manage');
       assert.deepEqual(await page.locator('.blog-post').evaluateAll(rows => rows.map(row => row.dataset.postId)), [f.postId]);
@@ -187,6 +196,7 @@ async function main() {
 
     await check('reader action read failure stays readable; duplicate pending action and late navigation are suppressed', async ({ device, server }) => {
       const { page } = await device('navigation-race'), f = await seed(page);
+      await accountSynced(page, f); const writes = server.saves().length, uploads = server.assetCalls.filter(call => call.method === 'POST').length;
       await openReader(page, f);
       await page.evaluate(f => {
         const get = IDBObjectStore.prototype.get; window.__actionFaults = 0;
@@ -226,32 +236,29 @@ async function main() {
       // Await a same-page IO turn after release; no fixed sleep or Promise predicate.
       await page.evaluate(async () => { await HaedoLife.Shell.storage.getActive(); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
       assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="news"]').getAttribute('aria-current'), 'page'); assert.equal(await page.locator('.blog-manager').count(), 0);
-      assert.equal(server.saves().length, 0); assert.equal(server.assetCalls.filter(call => call.method === 'POST').length, 0);
+      assert.equal(server.saves().length, writes); assert.equal(server.assetCalls.filter(call => call.method === 'POST').length, uploads);
     });
 
-    await check('representative account catalog receives once; explicit independent copy remains available', async ({ server, device }) => {
+    await check('a saved post reaches the other device automatically under the same identity; the account overview opens it without another copy', async ({ server, device }) => {
       const { page: owner } = await device('catalog-owner'), f = await seed(owner);
-      await openReader(owner, f); await more(owner, 'manage'); await owner.locator('.blog-manager-server > summary').click();
-      await owner.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click();
-      await poll(() => owner.evaluate(async f => HaedoLife.Shell.storage.readBlogSyncState(f.workspaceId, f.postId), f), value => value?.status === 'synced', 'explicit fixture blog sync');
+      // No per-post server choice: the background account sync uploads the saved post.
+      await owner.evaluate(() => dispatchEvent(new Event('online')));
+      await poll(() => owner.evaluate(async f => HaedoLife.Shell.storage.readBlogSyncState(f.workspaceId, f.postId), f), value => value?.status === 'synced', 'automatic fixture blog sync', 40000);
       const original = await postState(owner, f), writes = server.saves().length, uploadCount = server.assetCalls.filter(c => c.method === 'POST').length;
-      const { page } = await device('catalog-receiver'); await manager(page); await page.locator('#blogAccountList').click(); await page.locator('#accountBlogList[data-state="ready"]').waitFor();
-      assert.equal(await page.locator('.ab-post').count(), 1); await page.getByRole('button', { name: '이 기기에 받기', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      const { page } = await device('catalog-receiver');
       const readCopies = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { workspaceId: id, rows: await s.listPhotoPosts(id) }; });
-      const first = await readCopies(); assert.equal(first.rows.length, 1); const localId = first.rows[0].id;
+      await page.evaluate(() => dispatchEvent(new Event('online')));
+      const first = await poll(readCopies, value => value.rows.some(row => row.id === f.postId), 'automatic receipt', 40000); const localId = f.postId;
+      const count = first.rows.length; assert.equal(new Set(first.rows.map(row => row.id)).size, count);
       await manager(page); await page.locator('#blogAccountList').click(); await page.locator('#accountBlogList[data-state="ready"]').waitFor();
-      await page.getByRole('button', { name: '이 기기의 글 열기', exact: true }).click(); await page.locator('.photo-article').waitFor();
-      assert.equal((await readCopies()).rows.length, 1); assert.equal((await readCopies()).rows[0].id, localId);
+      assert.equal(await page.locator('.ab-post').count(), count);
+      for (const label of ['이 기기에 받기', '이 기기의 글 열기', '이 글을 새 사본으로 받기']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, label);
+      await page.locator('.ab-post[data-remote-id="' + f.postId + '"]').getByRole('button', { name: '열기', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      assert.equal((await readCopies()).rows.length, count, 'opening creates no copy');
       const received = await postState(page, { workspaceId: first.workspaceId, postId: localId });
-      const photoMap = new Map(original.doc.photos.map((photo, index) => [photo.id, received.doc.photos[index].id]));
-      const expectedOps = structuredClone(original.doc.ops); for (const op of expectedOps) if (op.insert?.photo) op.insert.photo.id = photoMap.get(op.insert.photo.id);
-      assert.deepEqual(received.doc.ops, expectedOps);
-      const photoBytes = doc => doc.photos.map(({ id, ...photo }) => photo); assert.deepEqual(photoBytes(received.doc), photoBytes(original.doc));
-      await manager(page); await page.locator('.blog-manager-copy-tools > summary').click(); await page.getByRole('button', { name: '서버 글에서 새 사본 선택', exact: true }).click();
-      await page.getByRole('button', { name: '이 글을 새 사본으로 받기', exact: true }).click();
-      await poll(readCopies, value => value.rows.length === 2, 'explicit copy receipt');
-      const copies = await readCopies(); assert.equal(new Set(copies.rows.map(row => row.id)).size, 2); assert(copies.rows.some(row => row.id === localId));
-      assert.equal(server.saves().length, writes); assert.equal(server.assetCalls.filter(c => c.method === 'POST').length, uploadCount);
+      assert.deepEqual(received.doc.ops, original.doc.ops); assert.deepEqual(received.doc.photos, original.doc.photos, 'same photo identities and bytes');
+      await manager(page); assert.equal(await page.locator('.blog-manager-copy-tools').count(), 0, 'no separate copy tool remains');
+      assert.equal(server.saves().length, writes); assert.equal(server.assetCalls.filter(c => c.method === 'POST').length, uploadCount, 'receiving never uploads');
     });
   } finally { await browser.close(); report.after = await hashes(); report.sourceStable = JSON.stringify(report.before) === JSON.stringify(report.after); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); }
   assert(report.checks.length > 0); assert.equal(report.checks.some(check => !check.pass), false, 'purpose writing checks failed');

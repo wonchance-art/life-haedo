@@ -99,7 +99,7 @@
     async function syncNow() {
       if (!valid() || busy) return;
       const token = epoch; busy = 'sync'; clearError(); lock(); status.textContent = '동기화 중…'; status.dataset.state = 'pending';
-      try { if (blogSync?.syncNow) await blogSync.syncNow(); }
+      try { if (blogSync?.syncNow) await blogSync.syncNow({ force: true }); }
       catch (cause) { if (valid(token)) fail(cause); }
       finally { if (valid(token)) { busy = null; lock(); } }
       if (valid(token)) await load();

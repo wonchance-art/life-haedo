@@ -11,7 +11,8 @@
   'use strict';
   const CONFLICT_PREFIX = '충돌로 보관한 이전 내용 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
-  const QUIET = new Set(['request_cancelled']);
+  // A concurrent local change (another tab) is simply decided again next cycle.
+  const QUIET = new Set(['request_cancelled', 'blog_state_conflict', 'photo_post_conflict']);
   // Live instances with automatic sync. The editor reports a committed local
   // draft through the module (HaedoLife.BlogSync.noteLocalDraftSaved).
   const live = new Set();
@@ -193,12 +194,12 @@
       if (remoteWins) {
         await storage.commitBlogSync(c.ws, { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision,
           binding: synced(state, row), bindingRevision: state.revision, copy: conflictCopy(post) }, { isCurrent: () => current(c) });
-        guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
+        guard(c); emit(c.ws, c.id); kick(1000); // the kept draft reaches the other devices promptly retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
       }
       await storage.commitBlogSync(c.ws, { postId: c.id, baseRevision: post.revision,
         binding: synced(state, row, { localRevision: state.localRevision, status: 'pending' }), bindingRevision: state.revision,
         copy: conflictCopy({ ...remoteDoc, id: c.id, revision: post.revision, replaces: null }) }, { isCurrent: () => current(c) });
-      guard(c); emit(c.ws, c.id);
+      guard(c); emit(c.ws, c.id); kick(1000);
       return pushLocked(c, { attempt: attempt + 1, byRemote: map });
     }
     async function rememberError(c, error) {
@@ -217,7 +218,8 @@
     }
     // Called by the editor right after an explicit save: uploads now instead of
     // waiting for the next cycle. Failures stay queued for the automatic retry.
-    const saveDefault = (ws, id, options = {}) => push(ws, id, { expectedLocalRevision: options.expectedLocalRevision, expectedManifest: options.expectedManifest || null });
+    // A following cycle retires a replaced editing draft on the server promptly.
+    const saveDefault = (ws, id, options = {}) => push(ws, id, { expectedLocalRevision: options.expectedLocalRevision, expectedManifest: options.expectedManifest || null }).finally(() => kick(0));
     const save = (ws, id, options = {}) => push(ws, id, { expectedManifest: options.expectedManifest || null });
     // ---- download --------------------------------------------------------------
     async function install(ws, head, byRemote) {
@@ -230,9 +232,11 @@
           try { await storage.commitBlogSync(ws, { postId: row.id, post: doc, baseRevision: 0, binding, bindingRevision: 0 }, { isCurrent: () => current(c) }); }
           catch (error) {
             if (error?.code === 'blog_post_deleted') return null;
-            // An unbound local document already uses this identity: decide it as a conflict.
-            if (error?.code === 'photo_post_conflict' && !(await readState(c))) {
-              await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null;
+            if (error?.code === 'photo_post_conflict' || error?.code === 'blog_state_conflict') {
+              const existing = await readState(c);
+              if (existing?.remoteId === row.id) return null; // another tab installed it
+              // An unbound local document already uses this identity: decide it as a conflict.
+              if (!existing && error.code === 'photo_post_conflict') { await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null; }
             }
             throw error;
           }
@@ -441,6 +445,8 @@
     function kick(delay = 0) { if (started) schedule(delay); }
     async function syncNow(options = {}) {
       if (disposed) return getStatus();
+      // An explicit retry or a restored connection does not wait for backoff.
+      if (options.force) for (const value of retries.values()) value.until = 0;
       if (running) { rerun = { uploadOnly: !!rerun?.uploadOnly && !!options.uploadOnly, flushDrafts: !!rerun?.flushDrafts || !!options.flushDrafts }; return running; }
       if (timer) { timers.clearTimeout(timer); timer = null; }
       running = (async () => {
@@ -463,7 +469,7 @@
       if (disposed || started) return; started = true;
       const on = (target, name, handler) => { if (typeof target?.addEventListener === 'function') { target.addEventListener(name, handler); removers.push(() => target.removeEventListener(name, handler)); } };
       const doc = events?.document;
-      on(events, 'online', () => kick(0));
+      on(events, 'online', () => { void syncNow({ force: true }); });
       on(events, 'focus', () => kick(0));
       on(events, 'pagehide', () => { void syncNow({ uploadOnly: true, flushDrafts: true }); });
       on(doc, 'visibilitychange', () => {
@@ -522,6 +528,13 @@
       return serial(ws, id, async () => {
         let state = await readState(c); const latest = await readPost(c);
         if (latest.revision !== choices.expectedLocalRevision || state.localRevision !== latest.revision || state.pending) throw fault('local_changed');
+        // Compare the reviewed preview with the current server publication
+        // before any publication request (another device may have published).
+        if (!state.publishPending) {
+          const head = await remote.read(state.remoteId); guard(c);
+          if (!head || head.revision !== state.remoteRevision) throw fault('local_changed');
+          if (canonical(head.publication ?? null) !== canonical(state.publication ?? null)) state = await writeState(c, state, { publication: head.publication ?? null });
+        }
         if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
         if (state.publishPending && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
         if (!state.publishPending) state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection } });
