@@ -187,8 +187,13 @@ async function main() {
       await page.evaluate(() => { __nativeHold = true; __nativeHeld = false; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page);
       await page.evaluate(() => { __nativeHold = false; __nativeReleaseOld = __nativeRelease; }); await nav(page, 'home'); await loaded(page); await idle(page); await cleanTrace(page);
+      // Owner directive 2026-11-01: home lists the whole account's blog, so the
+      // other workspace shows the same posts. The released stale list read from
+      // the previous workspace must not add, duplicate or animate rows.
+      const accountRows = await page.locator('#homePosts .home-post').count();
+      assert(accountRows > 0, 'the account-wide home shows the posts from the first workspace');
       await page.evaluate(() => __nativeReleaseOld()); await settle(page);
-      assert.equal(await page.locator('#homePosts .home-post').count(), 0); assert.deepEqual(await page.evaluate(() => __nativeMotion.calls), []);
+      assert.equal(await page.locator('#homePosts .home-post').count(), accountRows); assert.deepEqual(await page.evaluate(() => __nativeMotion.calls), []);
       await nav(page, 'tools'); await page.evaluate(() => { __nativeHold = true; __nativeHeld = false; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
       await page.evaluate(() => { window.__nativeSignout = HaedoAuth.client.auth.signOut({ scope: 'local' }); });
       await page.waitForFunction(() => document.querySelector('#lifeApp').hidden && !HaedoLife.Shell.storage); await cleanTrace(page); await page.evaluate(() => __nativeRelease());
