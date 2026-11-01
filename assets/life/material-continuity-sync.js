@@ -1,24 +1,47 @@
-/* Explicit one-preparation checkpoints. Ordinary source/blog sync retain their contracts. */
+/* Per-preparation server heads. Every preparation of the signed-in account syncs automatically:
+ * local changes upload, server changes install into the same preparation ID, and conflicts keep
+ * the newer plan while the other side stays in a private recovery copy. Ordinary source/blog
+ * sync retain their contracts. */
 (function (root, factory) {
   'use strict'; const api = factory(root); (root.HaedoLife ||= {}).MaterialContinuitySync = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
   const messages = {
-    material_review_required: '준비나 완성 글이 바뀌었습니다. 포함 내용을 다시 검토하고 보관해 주세요.',
-    material_not_connected: '이 준비의 포함 내용을 검토한 뒤 다른 기기 이어쓰기를 연결해 주세요.',
-    material_paused: '이어쓰기가 중지되어 있습니다. 포함 내용을 검토한 뒤 다시 연결해 주세요.',
-    material_conflict: '두 기기의 준비가 다릅니다. 양쪽 내용을 비교하고 보존할 내용을 선택해 주세요.',
+    material_review_required: '준비나 완성 글이 바뀌었습니다. 다음 동기화에서 최신 내용을 다시 보냅니다.',
+    material_not_connected: '준비 동기화를 시작하는 중입니다. 잠시 후 다시 시도해 주세요.',
+    material_paused: '준비 동기화를 다시 시작하는 중입니다. 잠시 후 다시 시도해 주세요.',
+    material_conflict: '다른 기기의 변경을 반영하는 중입니다. 이전 내용은 복구 목록에 보관됩니다. 잠시 후 다시 시도해 주세요.',
     material_remote_missing: '서버의 작성 준비를 찾지 못했습니다. 이 기기의 준비는 유지됩니다.',
-    material_output_elsewhere: '다른 기기에서 이 준비의 글을 작성 중입니다. 그 기기에서 글과 사진을 저장·보관한 뒤 여기서 다시 받아 주세요.',
-    material_output_not_saved: '기존 작성기에서 글을 저장한 뒤 완성 글과 사진 원본을 보관해 주세요.',
-    material_output_changed: '보관된 글의 버전이 달라졌습니다. 작성한 기기에서 완성 글 연결을 다시 보관해 주세요.',
-    material_receive_changed: '검토한 뒤 서버 준비가 바뀌었습니다. 최신 내용을 다시 확인해 주세요.',
-    request_cancelled: '계정이나 이어쓰기 상태가 바뀌어 이전 요청을 중단했습니다.',
-    material_busy: '처리 중인 이어쓰기 결과를 확인한 뒤 다시 시도해 주세요.'
+    material_output_elsewhere: '다른 기기에서 이 준비의 글을 작성 중입니다. 그 기기에서 글을 저장하면 여기에도 반영됩니다.',
+    material_output_not_saved: '작성기에서 글을 저장하면 완성 글과 사진 원본이 자동으로 보관됩니다.',
+    material_output_changed: '보관된 글의 버전이 달라졌습니다. 다음 동기화에서 다시 확인합니다.',
+    material_receive_changed: '서버 준비가 바뀌었습니다. 다음 동기화에서 최신 내용을 다시 확인합니다.',
+    request_cancelled: '계정이나 동기화 상태가 바뀌어 이전 요청을 중단했습니다.',
+    material_busy: '처리 중인 동기화 결과를 확인한 뒤 다시 시도해 주세요.'
   };
-  const fault = code => Object.assign(new Error(messages[code] || '이어쓰기 요청을 마치지 못했습니다. 이 기기의 내용은 유지됩니다.'), { code });
+  const fault = code => Object.assign(new Error(messages[code] || '동기화 요청을 마치지 못했습니다. 이 기기의 내용은 유지됩니다.'), { code });
   const clone = value => structuredClone(value);
+  const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
+  // Latest plan edit wins; ties converge on the server copy.
+  function latest(local, remote) {
+    const mine = time(local?.plan?.updatedAt), theirs = time(remote?.plan?.updatedAt);
+    if (mine === null) return 'remote';
+    return theirs !== null && theirs >= mine ? 'remote' : 'local';
+  }
+  // Open editors register here so background passes never replace unsaved input
+  // and can ask a clean editor to reload after a received change.
+  const holds = new Map(), shared = new WeakMap();
+  function watch(workspaceId, handlers) {
+    const entry = { busy: typeof handlers?.busy === 'function' ? handlers.busy : () => false, reload: typeof handlers?.reload === 'function' ? handlers.reload : null };
+    if (!holds.has(workspaceId)) holds.set(workspaceId, new Set());
+    holds.get(workspaceId).add(entry);
+    return () => { holds.get(workspaceId)?.delete(entry); if (!holds.get(workspaceId)?.size) holds.delete(workspaceId); };
+  }
+  const held = workspaceId => [...(holds.get(workspaceId) || [])].some(entry => { try { return !!entry.busy(); } catch (_) { return true; } });
+  async function reloadHeld(workspaceId, result) {
+    for (const entry of [...(holds.get(workspaceId) || [])]) { try { await entry.reload?.(result); } catch (_) { /* Editor keeps its input. */ } }
+  }
   const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}' : JSON.stringify(value);
   function create({ storage, auth = root.HaedoAuth, model = root.HaedoLife?.MaterialContinuity,
     remote = root.HaedoLife?.MaterialContinuityRemote?.create({ auth }),
@@ -27,7 +50,7 @@
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
-    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
+    const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(), notices = new Map(); let disposed = false;
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
     function guard(c) {
@@ -177,9 +200,17 @@
           await verified(c); if (!state.enabled) throw fault('material_paused');
           if (state.pending) { state = await send(c); if (state.conflict) throw fault('material_conflict'); }
           if (state.conflict) throw fault('material_conflict');
-          const local = await snapshot(c);
+          let local = await snapshot(c);
           if (local.localRevision !== expectedRevision) throw fault('material_review_required');
-          if (!state.head || local.fingerprint !== await model.fingerprint(state.head.data)) throw fault('material_review_required');
+          if (!state.head || local.fingerprint !== await model.fingerprint(state.head.data)) {
+            // Automatic sync: send the current preparation first, then claim the post.
+            if (state.head) {
+              const current = await checkedRow(c, state.remoteId);
+              if (current.revision !== state.remoteRevision || await model.fingerprint(current.data) !== await model.fingerprint(state.head.data)) { await conflict(c, state, current); throw fault('material_conflict'); }
+            }
+            await pending(c, state, local.data); state = await send(c); if (state.conflict) throw fault('material_conflict');
+            local = await snapshot(c); if (local.localRevision !== expectedRevision) throw fault('material_review_required');
+          }
           const row = await checkedRow(c, state.remoteId);
           if (row.revision !== state.remoteRevision || await model.fingerprint(row.data) !== await model.fingerprint(state.head.data)) { await conflict(c, state, row); throw fault('material_conflict'); }
           if (!state.output) {
@@ -255,11 +286,131 @@
         return install(c, row);
       });
     }
+    // Conflict: keep the newer plan; resolve() stores the other side as a private recovery copy.
+    async function settle(ws, id) {
+      const view = await compare(ws, id), choice = latest(view.local.data, view.remote.data);
+      const result = await resolve(ws, id, choice, view.expected);
+      notices.set(key(ws, id), { choice, at: new Date().toISOString(), recoveryWorkspaceId: result?.recoveryWorkspaceId || null });
+      emit(context(ws, id));
+      return { ...await stateFor(context(ws, id)), resolved: choice, received: choice === 'remote' ? result : null };
+    }
+    // One automatic step for a preparation: upload local changes (the full review is
+    // generated here, so no consent toggle exists), receive server changes, settle conflicts,
+    // and store a completed post's exact revision once it is saved.
+    async function autoSync(ws, id) {
+      let state = await stateFor(context(ws, id));
+      if (state.status === 'conflict' && state.conflict?.row) return settle(ws, id);
+      let received = null;
+      if (!state.enabled || !state.head || state.pending || state.changed) {
+        const preview = await review(context(ws, id));
+        state = await connect(ws, id, preview.fingerprint);
+      } else {
+        const result = await sync(ws, id); received = result.received || null; state = result;
+      }
+      if (state.status === 'conflict' && state.conflict?.row) return settle(ws, id);
+      if (state.enabled && state.output && (state.outputNeedsReview || state.output.state === 'writing' && state.ownClaim)) {
+        const preview = await review(context(ws, id));
+        if (preview.post?.status === 'saved' && !preview.editingDrafts?.length && preview.outputData) state = await shareOutput(ws, id, preview.fingerprint);
+      }
+      return { ...state, received };
+    }
+    // A server preparation without a local link: install it with its own ID into the
+    // same workspace when this device already holds that workspace.
+    async function adopt(item) {
+      const c = context('*', item.id);
+      const target = await storage.findMaterialContinuity(item.id); guard(c);
+      if (target) return null;
+      await verified(c);
+      const row = await checkedRow(c, item.id), ws = row.data.bundle.workspaceId, planId = row.data.plan.id;
+      const wrapper = await storage.readMaterialWriting(ws); guard(c);
+      if (wrapper.plans.some(plan => plan.id === planId)) {
+        // Same preparation already here without a link: bind to the server head and
+        // let the ordinary conflict path keep the newer side plus a recovery copy.
+        const local = await snapshot(context(ws, planId));
+        const base = { binding: owner, enabled: true, remoteId: row.id, remoteRevision: row.revision, head: row, mapping: null,
+          output: row.data.output, pending: null, conflict: null, localClaim: null, error: null };
+        const remoteFingerprint = await model.fingerprint(row.data); guard(c);
+        await storage.writeMaterialContinuityState(ws, planId, local.fingerprint === remoteFingerprint ? base : { ...base, conflict: { row, localFingerprint: local.fingerprint } }, 0);
+        return { workspaceId: ws, planId, bound: true };
+      }
+      if (held(ws)) return null;
+      const completed = await outputPost(c, row); guard(c);
+      const result = await storage.adoptMaterialContinuity(row, completed ? { post: completed.doc, blogRow: completed.row } : {}); guard(c);
+      emit(context(ws, planId)); return result;
+    }
     function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); listeners.clear(); }
-    return Object.freeze({ getState: (ws, id) => stateFor(context(ws, id)), preview: (ws, id) => review(context(ws, id)), connect, sync, pause,
+    return Object.freeze({ getState: async (ws, id) => ({ ...await stateFor(context(ws, id)), notice: notices.get(key(ws, id)) || null }),
+      preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle,
+      dismissNotice: (ws, id) => { notices.delete(key(ws, id)); },
       handoff, shareOutput, compare, resolve, inspect, receive,
       async list(after = null) { const c = context(); await verified(c); const result = await remote.list(after); guard(c); return result; },
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, dispose });
   }
-  return Object.freeze({ create, fault });
+  // Background loop started with the account's writing sync: every preparation in every
+  // account (non-recovery) workspace, plus server preparations not yet on this device.
+  function automatic({ storage, auth = root.HaedoAuth, every = 60000, manager = null } = {}) {
+    if (!storage?.account || typeof storage.readMaterialWriting !== 'function' || typeof storage.adoptMaterialContinuity !== 'function') return null;
+    let instance = manager, disposed = false, running = null, again = false, timer = null, offAll = null, soon = null;
+    try { instance ||= create({ storage, auth }); } catch (_) { return null; }
+    shared.set(storage, instance);
+    async function workspaces() {
+      if (typeof storage.listAccountLibraries === 'function') return (await storage.listAccountLibraries()).filter(row => row.eligible).map(row => row.workspaceId);
+      return (await storage.listWorkspaces()).map(row => row.workspaceId);
+    }
+    function pass() {
+      if (disposed || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (running) { again = true; return running; }
+      running = passes().finally(() => { running = null; });
+      return running;
+    }
+    async function passes() {
+      try {
+        do {
+          again = false;
+          for (const ws of await workspaces()) {
+            if (disposed) return;
+            if (held(ws)) continue;
+            let wrapper; try { wrapper = await storage.readMaterialWriting(ws); } catch (_) { continue; }
+            let changed = false;
+            for (const plan of wrapper.plans) {
+              if (disposed || held(ws)) break;
+              try { const result = await instance.autoSync(ws, plan.id); if (result?.received || result?.resolved) changed = true; } catch (_) { /* Durable error stays; next pass retries. */ }
+            }
+            if (changed && !held(ws)) await reloadHeld(ws);
+          }
+          let cursor = null;
+          for (let page = 0; page < 50 && !disposed; page++) {
+            const result = await instance.list(cursor);
+            for (const item of result.items || []) {
+              try { const adopted = await instance.adopt(item); if (adopted && !held(adopted.workspaceId)) await reloadHeld(adopted.workspaceId, adopted); } catch (_) { /* Retry next pass. */ }
+            }
+            if (!result.next) break; cursor = result.next;
+          }
+        } while (again && !disposed);
+      } catch (_) { /* Network or account changes: local preparations stay as they are. */ }
+    }
+    const nudge = event => {
+      if (disposed || event?.type !== 'material_writing_changed' || soon) return;
+      soon = root.setTimeout(() => { soon = null; pass(); }, 2000); soon?.unref?.();
+    };
+    return Object.freeze({
+      manager: instance, refresh: pass,
+      start() {
+        if (disposed || timer) return;
+        timer = root.setInterval(pass, every); timer?.unref?.();
+        root.addEventListener?.('online', pass); root.addEventListener?.('focus', pass); root.document?.addEventListener('visibilitychange', pass);
+        try { offAll = storage.subscribeAll?.(nudge) || null; } catch (_) { offAll = null; }
+        pass();
+      },
+      dispose() {
+        if (disposed) return; disposed = true; root.clearInterval(timer); root.clearTimeout(soon); offAll?.();
+        if (shared.get(storage) === instance) shared.delete(storage);
+        root.removeEventListener?.('online', pass); root.removeEventListener?.('focus', pass); root.document?.removeEventListener('visibilitychange', pass);
+        if (!manager) instance.dispose();
+      }
+    });
+  }
+  // The background instance for this account storage, so screens share one queue per preparation.
+  const managerFor = storage => (storage && shared.get(storage)) || null;
+  return Object.freeze({ create, fault, latest, watch, automatic, managerFor });
 });

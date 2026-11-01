@@ -1922,3 +1922,22 @@ test('trash committed after quote selection blocks new sidecars atomically while
   const ref = installed.posts[0].evidence.refs[0]; await Refs.resolve(installed.bundle, ref);
   assert.equal(ref.quote, f.ref.quote); assert.equal(installed.posts[0].doc.ops[0].insert, saved.ops[0].insert);
 });
+
+test('sign-in adoption copies every account-less workspace once, keeps originals and the active pointer, and recopies only a changed original', async t => {
+  const { storage: base } = syncFixture(); t.after(() => base.close());
+  const original = await initialImport(base), second = await base.createWorkspace('계정 없이 만든 두 번째 자료');
+  const account = base.forAccount(accountA);
+  const first = await account.adoptUnownedWorkspaces();
+  assert.deepEqual(first.failed, []); assert.deepEqual(first.adopted.map(row => row.from).sort(), [original.workspaceId, second.workspaceId].sort());
+  assert.equal(await account.getActive(), null);
+  const owned = (await account.listWorkspaces()).map(row => row.workspaceId);
+  assert.equal(owned.length, 2); assert.ok(first.adopted.every(row => owned.includes(row.workspaceId) && row.workspaceId !== row.from));
+  const copy = await account.read(first.adopted.find(row => row.from === original.workspaceId).workspaceId);
+  assert.equal(copy.sourceVersions[0].contentText, original.sourceVersions[0].contentText);
+  assert.deepEqual(await base.read(original.workspaceId), original);
+  assert.deepEqual((await account.listUnownedWorkspaces()).map(row => row.workspaceId).sort(), [original.workspaceId, second.workspaceId].sort());
+  assert.deepEqual(await account.adoptUnownedWorkspaces(), { adopted: [], failed: [] });
+  await base.saveStage(draft(original, 'later-unowned-draft'));
+  const again = await account.adoptUnownedWorkspaces();
+  assert.deepEqual(again.adopted.map(row => row.from), [original.workspaceId]); assert.equal((await account.listWorkspaces()).length, 3);
+});

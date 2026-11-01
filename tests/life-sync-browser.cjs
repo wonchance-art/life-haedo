@@ -192,7 +192,7 @@ async function openAccount(page) {
   if (!(await toggle.evaluate(el => el.closest('details').open))) await toggle.click();
 }
 async function click(page,name) {
-  if (['기기 간 동기화','내보내기·사본 복원'].includes(name)) await openManagement(page);
+  if (['동기화','내보내기·사본 복원'].includes(name)) await openManagement(page);
   if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button',{name,exact:true}).click(); await settle(page);
@@ -222,7 +222,7 @@ async function loginUI(page,account=accounts.a,server,device) {
     await page.goto(`${base}/login.html?next=life.html`);await page.locator('#googleLogin').click();
     await page.waitForURL('**/life.html');await ready(page);
   }
-  await click(page,'기기 간 동기화');
+  await click(page,'동기화');
   await page.waitForFunction(userId => HaedoLife.Shell.sync.getAccount()?.userId === userId,account.id);
 }
 
@@ -324,7 +324,7 @@ async function main() {
       assert.equal((await state(b.page,id)).status,'conflict');
       const before = await bundle(b.page,id);
       const beforeIds = await b.page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w=>w.workspaceId));
-      await click(b.page,'기기 간 동기화'); await click(b.page,'양쪽 변경 비교');
+      await click(b.page,'동기화'); await click(b.page,'양쪽 변경 비교');
       assert.ok(await b.page.locator('#lifeSyncConflict .life-conflict-content').count() >= 2);
       await click(b.page,'서버 변경 받기 · 내 변경은 사본 보관');
       const current = await bundle(b.page,id);
@@ -345,7 +345,7 @@ async function main() {
       server.offline.delete('b'); await b.context.setOffline(false); await syncNow(b.page,id);
       assert.equal((await state(b.page,id)).status,'conflict');
       const beforeIds = await b.page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w=>w.workspaceId));
-      await click(b.page,'기기 간 동기화'); await click(b.page,'양쪽 변경 비교');
+      await click(b.page,'동기화'); await click(b.page,'양쪽 변경 비교');
       await click(b.page,'내 변경 보내기 · 서버 변경은 사본 보관'); await syncNow(b.page,id);
       assert.ok(server.row(accounts.a.id,id).data.sources.some(s=>s.title==='B 선택할 로컬 변경'));
       assert.ok(!server.row(accounts.a.id,id).data.sources.some(s=>s.title==='A 보존할 서버 변경'));
@@ -355,7 +355,7 @@ async function main() {
       assert.equal(await state(b.page,copies[0].workspaceId),null);
     });
     await check('pause and logout keep local work/outbox; another account cannot upload the old binding',async () => {
-      await click(b.page,'기기 간 동기화'); await click(b.page,'연결 중지');
+      await click(b.page,'동기화'); await click(b.page,'연결 중지');
       const requests = server.writes().length;
       await append(b.page,id,'중지 중 로컬 변경'); await syncNow(b.page,id);
       assert.equal(server.writes().length,requests); assert.equal((await state(b.page,id)).enabled,false);
@@ -443,7 +443,7 @@ async function main() {
     await check('schema_missing remains a local-preserving UI error with setup guidance',async () => {
       server.schemaMissing = true;
       const before = await bundle(b.page,id);
-      await click(b.page,'기기 간 동기화'); await click(b.page,'서버 작업공간 목록 확인');
+      await click(b.page,'동기화'); await click(b.page,'서버 작업공간 목록 확인');
       const content = await b.page.locator('#lifeApp').textContent();
       assert.match(content,/저장소가 준비|스키마|SQL|연결 도움말/);
       assert.deepEqual(await bundle(b.page,id),before);

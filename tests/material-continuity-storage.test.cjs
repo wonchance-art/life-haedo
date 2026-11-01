@@ -336,3 +336,29 @@ test('a separate editing draft created during received-photo verification invali
     await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, before);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
 });
+
+test('automatic receive adopts a server preparation into the same workspace with its own preparation ID, once', async () => {
+  const f = await fixture(), row = rowFor(f), before = await f.a.read(f.ws);
+  // Another device created this plan; this device holds the same workspace without it.
+  await f.a.saveMaterialWriting(f.ws, { ...M.empty(f.ws), revision: f.state.revision, plans: [] }, f.state.revision);
+  const result = await f.a.adoptMaterialContinuity(row);
+  assert.equal(result.workspaceId, f.ws); assert.equal(result.planId, f.plan.id); assert.equal(result.adopted, true);
+  const wrapper = await f.a.readMaterialWriting(f.ws), plan = wrapper.plans.find(value => value.id === f.plan.id);
+  assert.equal(plan.question, '비공개 질문'); assert.equal(plan.materials[0].sourceVersionId, f.plan.materials[0].sourceVersionId);
+  assert.deepEqual(await f.a.findMaterialContinuity(row.id), { workspaceId: f.ws, planId: f.plan.id });
+  const state = await f.a.readMaterialContinuityState(f.ws, f.plan.id); assert.equal(state.remoteId, row.id); assert.equal(state.mapping, null); assert.equal(state.enabled, true);
+  // Exact versions already here are untouched; no other workspace is created.
+  assert.deepEqual((await f.a.read(f.ws)).sourceVersions, before.sourceVersions); assert.equal((await f.a.listWorkspaces()).length, 1);
+  await assert.rejects(f.a.adoptMaterialContinuity(row), { code: 'material_continuity_exists' });
+  f.close();
+});
+
+test('automatic receive never replaces a local preparation with the same ID or a changed exact source version', async () => {
+  const f = await fixture(), row = rowFor(f);
+  await assert.rejects(f.a.adoptMaterialContinuity(row), { code: 'material_continuity_exists' });
+  const changed = copy(row); changed.data.bundle.sourceVersions[0].originalCreatedAt = '1999-01-01';
+  await f.a.saveMaterialWriting(f.ws, { ...M.empty(f.ws), revision: f.state.revision, plans: [] }, f.state.revision);
+  await assert.rejects(f.a.adoptMaterialContinuity(changed));
+  assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []);
+  f.close();
+});
