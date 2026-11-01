@@ -27,7 +27,7 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
   let state = { revision: 1, binding: { userId: C.id(), projectUrl: 'https://synthetic.example.org' }, enabled: true, remoteId: row.id, remoteRevision: 1,
     head: copy(row), mapping: null, output: copy(output), pending: null, conflict: null, localClaim: { postId: post.id, claimId: output.claimId }, error: null };
   const owner = copy(state.binding), stats = { writes: [], installs: [], reads: 0, blogReads: 0, saved: false };
-  const auth = { epoch: 1, getAccount: () => owner, verify: async () => ({ id: owner.userId }) };
+  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => owner, verify: async () => { throw new Error('background steps must not verify per call'); } };
   const storage = { account: owner,
     async readMaterialContinuityState() { return copy(state); },
     async writeMaterialContinuityState(ws, id, input, base) {

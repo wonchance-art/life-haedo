@@ -58,7 +58,9 @@
       const account = auth.getAccount();
       if (disposed || account?.userId !== owner.userId || account?.projectUrl !== owner.projectUrl || c.epoch !== auth.epoch || c.generation !== (generations.get(key(c.ws, c.id)) || 0)) throw fault('request_cancelled');
     }
-    async function verified(c) { guard(c); const user = await auth.verify(); guard(c); if (user?.id !== owner.userId) throw fault('request_cancelled'); }
+    // The shell verifies the session; background steps only require that the same account is
+    // still signed in (auth_required when signed out) and abort on any account change.
+    async function verified(c) { guard(c); if (!auth.user?.id) throw fault('auth_required'); if (auth.user.id !== owner.userId) throw fault('request_cancelled'); }
     const emit = c => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId: c.ws, planId: c.id }); } catch (_) {} } };
     function serial(ws, id, task) {
       const k = key(ws, id), previous = queues.get(k) || Promise.resolve(), c = context(ws, id);
@@ -391,7 +393,7 @@
       return (await storage.listWorkspaces()).map(row => row.workspaceId);
     }
     function pass() {
-      if (disposed || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (disposed || suspended || root.document?.visibilityState === 'hidden') return Promise.resolve();
       if (running) { again = true; return running; }
       running = passes().finally(() => { running = null; });
       return running;
@@ -440,6 +442,11 @@
         } while (again && !disposed);
       } catch (_) { /* Network or account changes: local preparations stay as they are. */ }
     }
+    // A suspended page (bfcache/history) sends nothing with the old session; the shell's fresh
+    // verification is followed by haedo:page-ready.
+    let suspended = false;
+    const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
+    const resume = () => { if (!suspended) return; suspended = false; pass(); };
     const nudge = event => {
       // Writes made by a running pass also announce changes; they never schedule another pass.
       if (disposed || running || event?.type !== 'material_writing_changed' || soon) return;
@@ -451,6 +458,7 @@
         if (disposed || timer) return;
         timer = root.setInterval(pass, every); timer?.unref?.();
         root.addEventListener?.('online', pass); root.addEventListener?.('focus', pass); root.document?.addEventListener('visibilitychange', pass);
+        root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
         try { offAll = storage.subscribeAll?.(nudge) || null; } catch (_) { offAll = null; }
         pass();
       },
@@ -458,6 +466,7 @@
         if (disposed) return; disposed = true; root.clearInterval(timer); root.clearTimeout(soon); offAll?.();
         if (shared.get(storage) === instance) shared.delete(storage);
         root.removeEventListener?.('online', pass); root.removeEventListener?.('focus', pass); root.document?.removeEventListener('visibilitychange', pass);
+        root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
         if (!manager) instance.dispose();
       }
     });
