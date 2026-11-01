@@ -47,7 +47,7 @@
       const openKeys = new Set([...body.querySelectorAll('details[open][data-section]')].map(el => el.dataset.section));
       host.setAttribute('aria-busy', 'false');
       const failed = !!(error || state?.error || state?.conflict);
-      host.hidden = managed && !failed && !recoveries.length && !message;
+      host.hidden = managed && !failed && !recoveries.length && !message && !state?.noticeAt;
       status.textContent = managed ? failed ? '구성 동기화 확인 필요' : '구성 복구' : labels[state?.status] || '동기화 확인 필요'; status.dataset.state = state?.status || 'error';
       errorNode.textContent = error || state?.error?.message || ''; errorNode.hidden = !errorNode.textContent;
       body.replaceChildren();
@@ -57,9 +57,13 @@
         else if (managed && onRetry) await onRetry(); else if (state.enabled) await manager.syncNow(workspaceId); else await manager.enable(workspaceId);
       }));
       if (state.conflict?.missing) body.append(node('p', '서버 구성을 찾을 수 없어 자동으로 다시 만들지 않았습니다. 현재 구성은 자료·구성 백업이나 복구 파일로 보관할 수 있습니다.', 'life-help'));
+      if (state.noticeAt) {
+        const notice = node('p', NOTICE, 'life-help'); notice.id = 'compositionNotice'; body.append(notice);
+        body.append(button('확인', 'compositionNoticeDone', () => manager.dismissNotice(workspaceId)));
+      }
       if (message) body.append(node('p', message, 'life-help'));
       if (recoveries.length) {
-        const details = node('details', null, 'life-details'); details.dataset.section = 'recovery'; details.open = openKeys.has('recovery') || !!message;
+        const details = node('details', null, 'life-details'); details.dataset.section = 'recovery'; details.open = openKeys.has('recovery') || !!message || !!state.noticeAt;
         details.append(node('summary', '구성 복구 사본 ' + recoveries.length + '개'));
         recoveries.forEach(item => {
           const row = node('div', null, 'composition-recovery'); row.append(node('p', item.title, 'life-note'), node('p', new Date(item.createdAt).toLocaleString('ko-KR'), 'life-meta'));
@@ -83,7 +87,6 @@
     }
     const unsubscribe = manager.subscribe(event => {
       if (event.workspaceId !== workspaceId) return;
-      if (event.autoResolved) message = NOTICE;
       refresh();
     });
     refresh();

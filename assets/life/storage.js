@@ -697,7 +697,7 @@
           if (!core().isSourceActive(bundle, item.sourceId)) throw fault('source_trashed', '휴지통의 자료는 복원한 뒤 폴더에 넣어 주세요.');
         }
         state.revision = baseRevision + 1; validateSourceFolders(state, workspaceId);
-        await meta.put({ key: sourceFoldersKey(workspaceId), value: state }); return clone(state);
+        await meta.put({ key: sourceFoldersKey(workspaceId), value: state }); await markLibraryMetaEdited(meta, workspaceId); return clone(state);
       });
       sourceFoldersChanged(saved); return saved;
     }
@@ -1063,7 +1063,7 @@
         if (previous.revision !== baseRevision) throw fault('collection_conflict', '다른 탭에서 컬렉션을 수정했습니다. 입력을 보존하고 최신 내용과 비교해 주세요.');
         state.revision = baseRevision + 1;
         collection().validate(state);
-        await meta.put({ key: `collection:${workspaceId}`, value: state });
+        await meta.put({ key: `collection:${workspaceId}`, value: state }); await markLibraryMetaEdited(meta, workspaceId);
         return clone(state);
       });
       const event = { type: 'collection_changed', workspaceId, revision: saved.revision };
@@ -1112,7 +1112,7 @@
           }
         }
         value.revision++; nineBoard().validate(value);
-        await meta.put({ key: `nine-board:${workspaceId}`, value }); return clone(value);
+        await meta.put({ key: `nine-board:${workspaceId}`, value }); await markLibraryMetaEdited(meta, workspaceId); return clone(value);
       });
       const event = { type: 'nine_board_changed', workspaceId, revision: saved.revision };
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data remains authoritative. */ }
@@ -1681,7 +1681,12 @@
       }
     }
     function validateMaterialContinuityState(value, workspaceId) {
-      onlyFields(value, ['revision', 'binding', 'enabled', 'remoteId', 'remoteRevision', 'head', 'mapping', 'output', 'pending', 'conflict', 'localClaim', 'error'], 'invalid_material_continuity');
+      onlyFields(value, ['revision', 'binding', 'enabled', 'remoteId', 'remoteRevision', 'head', 'mapping', 'output', 'pending', 'conflict', 'localClaim', 'error', 'notice'], 'invalid_material_continuity');
+      if (value.notice !== undefined && value.notice !== null) {
+        onlyFields(value.notice, ['choice', 'at', 'recoveryWorkspaceId'], 'invalid_material_continuity');
+        if (!['local', 'remote'].includes(value.notice.choice) || typeof value.notice.at !== 'string' || !Number.isFinite(Date.parse(value.notice.at)) ||
+            value.notice.recoveryWorkspaceId !== null && typeof value.notice.recoveryWorkspaceId !== 'string') throw fault('invalid_material_continuity', '준비 동기화 안내를 확인해 주세요.');
+      }
       requireRevision(value.revision); materialBinding(value.binding); requireId(value.remoteId, '서버 준비'); requireRevision(value.remoteRevision);
       if (typeof value.enabled !== 'boolean') throw fault('invalid_material_continuity', '준비 연결 상태를 확인해 주세요.');
       materialMapping(value.mapping, workspaceId);
@@ -1744,6 +1749,52 @@
         await meta.put({ key: materialInstallKey(value.remoteId), value: { workspaceId, planId } }); return clone(value);
       });
       materialWritingChanged(workspaceId, planRevision); return saved;
+    }
+    // Links whose preparation was deleted on this device: the deletion still has to reach the server.
+    async function listMaterialContinuityOrphans(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `material-continuity:${workspaceId}:`, plans = new Set((await materialWritingValue(meta, workspaceId)).plans.map(plan => plan.id)), result = [];
+        for (const key of await meta.getAllKeys()) {
+          if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
+          const planId = key.slice(prefix.length);
+          if (!plans.has(planId)) { const state = await materialContinuityState(meta, workspaceId, planId); result.push({ planId, remoteId: state.remoteId, revision: state.revision, remoteRevision: state.remoteRevision }); }
+        }
+        return result;
+      });
+    }
+    // Drops one preparation's server link (never its sources or posts). With removePlan the
+    // preparation itself is removed too: used only when the server copy was deleted on another
+    // device and this device holds no unsent change (checked by the caller's exact fingerprint).
+    async function forgetMaterialContinuity(workspaceId, planId, options = {}) {
+      collectionScope(workspaceId); requireId(planId, '글 준비');
+      onlyFields(options, ['expectedRevision', 'removePlan', 'expectedFingerprint'], 'invalid_material_continuity');
+      requireRevision(options.expectedRevision);
+      let before = null;
+      if (options.removePlan) {
+        before = await readMaterialContinuitySnapshot(workspaceId, planId); scopeGuard();
+        if (before.fingerprint !== options.expectedFingerprint) throw fault('material_continuity_changed', '준비가 바뀌었습니다. 지우지 않고 다시 보냅니다.');
+      }
+      let planRevision = null;
+      await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await materialContinuityState(meta, workspaceId, planId);
+        if (!state || state.revision !== options.expectedRevision) throw fault('material_continuity_conflict', '준비 연결이 바뀌었습니다. 다시 확인합니다.');
+        const wrapper = clone(await materialWritingValue(meta, workspaceId));
+        if (options.removePlan) {
+          const current = await materialSnapshot(tx, workspaceId, planId);
+          if (materialSnapshotGuard(current) !== materialSnapshotGuard(before)) throw fault('material_continuity_changed', '준비가 바뀌었습니다. 지우지 않고 다시 보냅니다.');
+          wrapper.plans = wrapper.plans.filter(plan => plan.id !== planId); wrapper.revision++; materialWriting().validate(wrapper);
+          await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper }); await meta.delete(materialOutputKey(workspaceId, planId));
+          planRevision = wrapper.revision;
+        }
+        await meta.delete(materialContinuityKey(workspaceId, planId));
+        const receipt = (await meta.get(materialInstallKey(state.remoteId)))?.value;
+        if (receipt?.workspaceId === workspaceId && receipt.planId === planId) await meta.delete(materialInstallKey(state.remoteId));
+        if (planRevision === null) planRevision = wrapper.revision;
+      });
+      materialWritingChanged(workspaceId, planRevision); return { workspaceId, planId, removed: !!options.removePlan };
     }
     async function findMaterialContinuity(remoteId) {
       scopeGuard(); requireId(remoteId, '서버 준비'); if (!account) throw fault('auth_scope_required', '확인된 계정으로 준비를 받아 주세요.');
@@ -3359,14 +3410,15 @@
     function validateCompositionState(sync, workspaceId) {
       try {
         onlyFields(sync, ['format', 'workspaceId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision',
-          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId']);
+          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId', 'noticeAt']);
         if (sync.format !== 'life-composition-sync-v1' || sync.workspaceId !== workspaceId || typeof sync.enabled !== 'boolean' ||
             !['pending', 'synced', 'conflict', 'error'].includes(sync.status) ||
             !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
         if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
         requireRevision(sync.remoteRevision); requireRevision(sync.sourceRevision);
         if ((sync.remoteRevision === 0) !== (sync.sourceRevision === 0) ||
-            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId))) throw new Error('metadata');
+            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId)) ||
+            (sync.noticeAt !== undefined && sync.noticeAt !== null && (typeof sync.noticeAt !== 'string' || !Number.isFinite(Date.parse(sync.noticeAt))))) throw new Error('metadata');
         if (sync.outbox !== null) {
           const box = sync.outbox;
           onlyFields(box, ['operationId', 'expectedRevision', 'sourceRevision', 'localRevision', 'data']);
@@ -3461,6 +3513,17 @@
     }
     async function saveCompositionHead(meta, row) {
       await meta.put({ key: `compositionHead:${row.workspace_id}`, value: clone(row) });
+    }
+    // The person has seen the automatic-resolution notice; the recovery copy itself stays.
+    async function dismissCompositionNotice(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const sync = await readCompositionState(meta, workspaceId, await workbenchValue(meta, workspaceId));
+        if (!sync?.noticeAt) return null;
+        sync.noticeAt = null; return writeCompositionState(meta, sync);
+      });
+      if (result) compositionChanged(result); return result;
     }
     async function getCompositionState(workspaceId) {
       requireId(workspaceId, '작업공간');
@@ -3661,7 +3724,7 @@
         await saveCompositionHead(meta, row);
         sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
         sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
-        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId;
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString();
         return { workbench: clone(updated), metadata: await writeCompositionState(meta, sync), recoveryId };
       });
       if (request.choice === 'remote') workbenchChanged(result.workbench);
@@ -3701,6 +3764,17 @@
       const value = options.libraryMeta || root.HaedoLife?.LibraryMeta || (typeof require === 'function' ? require('./library-meta.js') : null);
       if (!value?.validate || !value?.validateReferences || !value?.empty) throw fault('dependency_unavailable', '자료 분류 모듈을 불러오지 못했습니다.');
       return value;
+    }
+    // Local edit time of folders/collections/nine boards for latest-wins conflicts. Local only.
+    const libraryMetaEditedKey = workspaceId => `libraryMetaEditedAt:${workspaceId}`;
+    async function markLibraryMetaEdited(meta, workspaceId) { await meta.put({ key: libraryMetaEditedKey(workspaceId), value: new Date().toISOString() }); }
+    async function readLibraryMetaEditedAt(workspaceId) {
+      privateProfileScope(workspaceId, '자료 분류를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        const value = (await tx.objectStore('meta').get(libraryMetaEditedKey(workspaceId)))?.value;
+        return typeof value === 'string' ? value : null;
+      });
     }
     function libraryMetaRevision(children) {
       const revision = children.reduce((sum, value) => sum + value.revision, 0);
@@ -3762,14 +3836,15 @@
     function validateLibraryMetaState(sync, workspaceId) {
       try {
         onlyFields(sync, ['format', 'workspaceId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision',
-          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId']);
+          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId', 'noticeAt']);
         if (sync.format !== 'life-library-meta-sync-v1' || sync.workspaceId !== workspaceId || typeof sync.enabled !== 'boolean' ||
             !['pending', 'synced', 'conflict', 'error'].includes(sync.status) ||
             !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
         if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
         requireRevision(sync.remoteRevision); requireRevision(sync.sourceRevision);
         if ((sync.remoteRevision === 0) !== (sync.sourceRevision === 0) ||
-            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId))) throw new Error('metadata');
+            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId)) ||
+            (sync.noticeAt !== undefined && sync.noticeAt !== null && (typeof sync.noticeAt !== 'string' || !Number.isFinite(Date.parse(sync.noticeAt))))) throw new Error('metadata');
         if (sync.outbox !== null) {
           const box = sync.outbox;
           onlyFields(box, ['operationId', 'expectedRevision', 'sourceRevision', 'localRevision', 'data']);
@@ -3852,6 +3927,16 @@
     }
     async function saveLibraryMetaHead(meta, row) {
       await meta.put({ key: `libraryMetaHead:${row.workspace_id}`, value: clone(row) });
+    }
+    async function dismissLibraryMetaNotice(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const sync = await readLibraryMetaState(meta, workspaceId, await libraryMetaValue(meta, workspaceId));
+        if (!sync?.noticeAt) return null;
+        sync.noticeAt = null; return writeLibraryMetaState(meta, sync);
+      });
+      if (result) libraryMetaChanged(result); return result;
     }
     async function getLibraryMetaState(workspaceId) {
       requireId(workspaceId, '작업공간');
@@ -4034,7 +4119,7 @@
         await saveLibraryMetaHead(meta, row);
         sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
         sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
-        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId;
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString();
         return { metadata: clone(updated), sync: await writeLibraryMetaState(meta, sync), recoveryId };
       });
       if (request.choice === 'remote') libraryMetaChildrenChanged(result.metadata);
@@ -4104,7 +4189,11 @@
     }
     function validateWritingState(sync, workspaceId, draftId) {
       try {
-        onlyFields(sync, ['format', 'workspaceId', 'draftId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision', 'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error']);
+        onlyFields(sync, ['format', 'workspaceId', 'draftId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision', 'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'notice']);
+        if (sync.notice !== undefined && sync.notice !== null) {
+          onlyFields(sync.notice, ['recoveryStageId', 'at']); requireId(sync.notice.recoveryStageId, '복구 초안');
+          if (typeof sync.notice.at !== 'string' || !Number.isFinite(Date.parse(sync.notice.at))) throw new Error('notice');
+        }
         if (sync.format !== 'life-writing-sync-v1' || sync.workspaceId !== workspaceId || sync.draftId !== draftId || typeof sync.enabled !== 'boolean' ||
             !['pending', 'synced', 'conflict', 'error'].includes(sync.status) || !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
         if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
@@ -4195,6 +4284,15 @@
     function freshWritingState(workspaceId, draftId, binding) {
       return { format: 'life-writing-sync-v1', workspaceId, draftId, binding, enabled: true, remoteRevision: 0, sourceRevision: 0,
         syncedLocalRevision: -1, outbox: null, conflict: null, status: 'pending', error: null };
+    }
+    async function dismissWritingNotice(workspaceId, draftId) {
+      writingIdentity(workspaceId, draftId);
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), sync = await readWritingState(meta, workspaceId, draftId, stage);
+        if (!sync?.notice) return null;
+        sync.notice = null; return writeWritingState(meta, sync);
+      }); if (result) writingSyncChanged(result); return result;
     }
     async function getWritingSyncState(workspaceId, draftId) {
       writingIdentity(workspaceId, draftId);
@@ -4349,7 +4447,7 @@
         writing().validateDraft(updated); if (useRemote) await stages.put(updated);
         await saveWritingHead(meta, row);
         Object.assign(sync, { remoteRevision: row.revision, sourceRevision: row.source_revision, syncedLocalRevision: useRemote ? updated.revision : -1,
-          outbox: null, conflict: null, error: null, status: useRemote ? 'synced' : 'pending' });
+          outbox: null, conflict: null, error: null, status: useRemote ? 'synced' : 'pending', notice: { recoveryStageId: recovered.stageId, at: new Date().toISOString() } });
         return { stage: clone(updated), metadata: await writeWritingState(meta, sync), recoveryStageId: recovered.stageId };
       }); writingChanged(recovered); writingChanged(result.stage); writingSyncChanged(result.metadata); return result;
     }
@@ -4825,7 +4923,7 @@
       readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
-      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, finishMaterialContinuityClaim,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
@@ -4833,13 +4931,13 @@
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,
-      getCompositionState, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
+      getCompositionState, dismissCompositionNotice, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
       applyCompositionRemote, adoptCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
       listCompositionRecoveries, readCompositionRecovery,
-      readLibraryMetaSnapshot, getLibraryMetaState, bindLibraryMetaSync, pauseLibraryMetaSync, prepareLibraryMetaUpload, ackLibraryMetaSync,
+      readLibraryMetaSnapshot, readLibraryMetaEditedAt, dismissLibraryMetaNotice, getLibraryMetaState, bindLibraryMetaSync, pauseLibraryMetaSync, prepareLibraryMetaUpload, ackLibraryMetaSync,
       applyLibraryMetaRemote, adoptLibraryMetaRemote, setLibraryMetaConflict, setLibraryMetaError, resolveLibraryMetaSync,
       listLibraryMetaRecoveries, readLibraryMetaRecovery,
-      getWritingSyncState, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
+      getWritingSyncState, dismissWritingNotice, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
       listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces,
       listAccountDocs, listAccountDocKeys, readAccountDocRecord, applyAccountDoc, writeAccountDocSync,

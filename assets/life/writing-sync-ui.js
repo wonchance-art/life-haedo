@@ -39,9 +39,9 @@
           const notice = el('p', NOTICE, 'life-help'); notice.id = 'writingSyncNotice'; content.append(notice);
           const actions = el('div', null, 'life-actions');
           if (state.notice.recoveryStageId && state.notice.recoveryStageId !== id) actions.append(button('이전 내용 열기', 'writingSyncRecovery', async () => {
-            const target = state.notice.recoveryStageId; manager.dismissNotice?.(ws, id); await onOpen(target);
+            const target = state.notice.recoveryStageId; await manager.dismissNotice?.(ws, id); await onOpen(target);
           }));
-          actions.append(button('확인', 'writingSyncNoticeDone', async () => { manager.dismissNotice?.(ws, id); }));
+          actions.append(button('확인', 'writingSyncNoticeDone', async () => { await manager.dismissNotice?.(ws, id); }));
           content.append(actions);
         }
         if (errorBox.textContent && state.status !== 'closed') content.append(button('다시 시도', 'writingSyncNow', async () => {

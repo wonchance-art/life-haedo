@@ -106,7 +106,9 @@
     async function domain(manager, workspaceId) {
       const state = await step(() => manager.getState(workspaceId));
       if (!state.enabled) return step(() => manager.enable(workspaceId));
-      if (state.conflict || state.status === 'conflict') return state;
+      // Both domains resolve conflicts automatically (latest wins, the other side kept as a
+      // recovery copy), so a recorded conflict still runs. Only a deleted server copy waits.
+      if (state.conflict?.missing) return state;
       return step(() => manager.syncNow(workspaceId));
     }
     async function synchronizeRow(row, knownRemote = false) {

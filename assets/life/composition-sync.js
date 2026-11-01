@@ -263,7 +263,13 @@
       root.document?.removeEventListener('visibilitychange', automatic); remote.dispose?.();
     }
     function subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
-    return Object.freeze({ start, getState, enable, pause, syncNow, compare, resolve, subscribe, dispose });
+    // The automatic-resolution notice persists in the state record until acknowledged.
+    async function dismissNotice(workspaceId) {
+      const ctx = context(workspaceId);
+      if (typeof storage.dismissCompositionNotice === 'function') { await storage.dismissCompositionNotice(workspaceId); guard(ctx); }
+      emit(workspaceId); return getState(workspaceId);
+    }
+    return Object.freeze({ start, getState, enable, pause, syncNow, compare, resolve, dismissNotice, subscribe, dispose });
   }
   return Object.freeze({ create, latest });
 });
