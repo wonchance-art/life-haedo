@@ -738,6 +738,11 @@ jobs:
         env:
           BLOG_POSTGRES_DATABASE: haedo_blog_qa_account_continuity_ci
         run: node tests/account-blog-continuity-browser.cjs --prepare-database
+      - name: Verify one account blog across devices with different open libraries
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        env:
+          BLOG_POSTGRES_DATABASE: haedo_blog_qa_account_wide_home_ci
+        run: node tests/account-wide-home-browser.cjs --prepare-database
       - name: Verify additive installation rollback and preservation of existing records
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/integrated-release-installation.cjs
@@ -819,6 +824,7 @@ jobs:
             .local/blog-backend/
             .local/blog-completion/
             .local/account-blog-continuity/
+            .local/account-wide-home/
             .local/blog-series-backend/
             .local/blog-series-public/
             .local/nine-public-backend/
