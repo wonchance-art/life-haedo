@@ -3,6 +3,7 @@
  * BASE_URL=<local dev server> PW_MODULE_PATH=<installed Playwright> node this-file
  */
 'use strict';
+const syncRpcs = require('./helpers/account-sync-rpcs.cjs');
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -188,7 +189,11 @@ async function main() {
       assert.equal(original.doc.photos[0].blob, seeded.original.digest); assert.equal(seeded.original.width, 4032); assert.equal(seeded.original.height, 3024);
       await action({ page, context, server, seeded });
       assert.equal(server.writes().length, 0, 'Naver import must not transmit the private workspace');
-      const blogWrites = server.blogCalls.filter(call => !['life_blog_list', 'life_blog_read'].includes(call.rpc)).length;
+      // 2026-11-01: the owner's posts sync privately in the background; Naver
+      // import itself never publishes and never writes for another account.
+      const backgroundSync = server.blogCalls.filter(call => syncRpcs.reads.has(call.rpc) || syncRpcs.writes.has(call.rpc));
+      assert(backgroundSync.every(call => Object.values(accounts).some(account => account.id === call.owner)), 'private sync is always owner-scoped to a signed-in synthetic account');
+      const blogWrites = server.blogCalls.filter(call => !backgroundSync.includes(call)).length;
       assert.equal(blogWrites, 0, 'Naver import must not write or publish personal posts');
       report.checks.push({ name, pass: true, original: seeded.original, calls: server.naverCalls.map(call => ({ rpc: call.rpc, owner: call.owner, workspaceId: call.body.p_workspace_id, enabled: call.body.p_enabled })), workspaceWrites: server.writes().length, blogWrites });
       console.log('PASS ' + name);
