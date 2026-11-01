@@ -54,7 +54,8 @@
     return { revision, data: value.data === null ? null : JSON.parse(JSON.stringify(value.data)), deleted: value.deleted,
       client_updated_at: value.client_updated_at ?? null };
   }
-  function create({ auth = root.HaedoAuth, clientFactory = root.HaedoLife?.PlatformRemote?.clientFactory } = {}) {
+  function create({ auth = root.HaedoAuth, clientFactory = root.HaedoLife?.PlatformRemote?.clientFactory, ownerId = auth?.user?.id } = {}) {
+    if (typeof ownerId !== 'string' || !ownerId) throw fault('auth_required');
     if (!auth?.ready || !clientFactory) throw fault('auth_required');
     const client = clientFactory(auth, { scope: 'account-docs' })(auth.config.url, auth.config.key);
     let disposed = false;
@@ -64,7 +65,8 @@
     // (uid/epoch captured, cancelled on any account change, auth_required when
     // signed out), and the server checks that token and auth.uid() on every RPC.
     // No completed verification result is cached or shared here.
-    function authorize() { alive(); }
+    // Every call is for the engine's owner fixed at creation; a different signed-in user is refused.
+    function authorize() { alive(); if (auth.user?.id !== ownerId || auth.getAccount?.() && auth.getAccount().userId !== ownerId) throw fault('request_cancelled'); }
     async function put(request) {
       const { docKey, expectedRevision, operationId, deleted = false, clientUpdatedAt = null } = request || {};
       if (!validKey(docKey) || !validRevision(expectedRevision) || typeof operationId !== 'string' || !UUID.test(operationId) ||
