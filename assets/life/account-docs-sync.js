@@ -38,6 +38,9 @@
     // A server without the account-document RPCs is 'unavailable': local saves
     // stay pending and the server is asked again only after a growing pause.
     let unavailableUntil = 0, unavailableDelay = 0;
+    // While a page is suspended (bfcache/history) no pass may send with the old
+    // session; the shell's own fresh verification is followed by haedo:page-ready.
+    let suspended = false;
     let status = { state: 'idle', pending: 0, error: null, lastSyncedAt: null };
     const changeTimes = new Map(); // key -> time of the first local save seen since the last mark
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -205,6 +208,7 @@
     async function cycle() {
       guard();
       await mark();
+      if (suspended) return;
       if (!online()) { emit({ state: 'offline' }); return; }
       if (clock() < unavailableUntil) { emit({ state: 'unavailable' }); return; }
       emit({ state: 'syncing' });
@@ -246,8 +250,10 @@
       timer = root.setTimeout(() => { timer = null; run(); }, delay);
       timer?.unref?.();
     }
-    const wake = () => schedule(0);
-    const visibility = () => schedule(0); // Hidden: flush pending saves now; visible: pull other devices' changes.
+    const wake = () => { if (!suspended) schedule(0); };
+    const suspend = () => { suspended = true; root.clearTimeout(timer); timer = null; };
+    const ready = () => { if (!suspended) return; suspended = false; schedule(0); };
+    const visibility = () => wake(); // Hidden: flush pending saves now; visible: pull other devices' changes.
     function start() {
       guard(); if (started) return; started = true;
       unlisten = storage.subscribeAll(event => {
@@ -257,6 +263,7 @@
       });
       root.addEventListener?.('online', wake); root.addEventListener?.('focus', wake);
       root.document?.addEventListener?.('visibilitychange', visibility);
+      root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', ready);
       // Poll only while visible; hiding the page flushes once through visibilitychange.
       if (polling) { interval = root.setInterval(() => { if (root.document?.visibilityState !== 'hidden') run(); }, intervalMs); interval?.unref?.(); }
       run();
@@ -266,6 +273,7 @@
       root.clearTimeout(timer); root.clearInterval(interval); unlisten?.(); listeners.clear();
       root.removeEventListener?.('online', wake); root.removeEventListener?.('focus', wake);
       root.document?.removeEventListener?.('visibilitychange', visibility);
+      root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', ready);
       client.dispose?.();
     }
     function subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }

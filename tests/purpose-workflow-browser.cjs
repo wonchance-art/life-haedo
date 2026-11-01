@@ -11,6 +11,7 @@ const { createHash } = require('node:crypto');
 const sourceRoot = path.resolve(process.env.PURPOSE_SOURCE_ROOT || path.join(__dirname, '..'));
 const { CompositionCloud } = require(path.join(sourceRoot, 'tests/composition-sync-browser.cjs'));
 const { accounts, cloud, base } = require(path.join(sourceRoot, 'tests/life-sync-browser.cjs'));
+const { isBackgroundSync } = require(path.join(sourceRoot, 'tests/helpers/account-sync-rpcs.cjs'));
 const { playwright, makeContext, ready, settle, nav } = require(path.join(sourceRoot, 'tests/unified-home-browser.cjs'));
 const { inspectHome } = require(path.join(sourceRoot, 'tests/home-entry-browser.cjs'));
 const { openRecordsMenu } = require(path.join(sourceRoot, 'tests/helpers/feature-menus.cjs'));
@@ -113,7 +114,9 @@ async function main() {
       const row = { device, method, path: url.pathname }; report.privateRequests.push(row);
       const reads = method === 'GET' && ['/auth/v1/user', '/auth/v1/settings', '/rest/v1/life_workspaces', '/rest/v1/life_account_materials', '/rest/v1/haedo_documents', '/rest/v1/haedo_items', '/rest/v1/charts'].includes(url.pathname);
       const auth = method === 'POST' && ['/auth/v1/token', '/auth/v1/logout'].includes(url.pathname);
-      const rpc = method === 'POST' && ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_composition_get', 'life_composition_put', 'life_sync_put', 'life_blog_list', 'life_blog_read'].some(name => url.pathname === '/rest/v1/rpc/' + name);
+      const rpc = method === 'POST' && ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_composition_get', 'life_composition_put', 'life_sync_put', 'life_blog_list', 'life_blog_read'].some(name => url.pathname === '/rest/v1/rpc/' + name)
+        // Owner-scoped background account sync (2026-11-01); publication and other RPCs stay forbidden.
+        || method === 'POST' && isBackgroundSync(request.url());
       if (!(reads || auth || rpc)) report.forbiddenPrivateRequests.push(row);
     });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.external.push({ device, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient'); });
@@ -136,7 +139,10 @@ async function main() {
       await page.evaluate(async post => { const s = HaedoLife.Shell.storage; const saved = await s.savePhotoPost(await s.getActive(), post, 0); if (saved.status !== 'saved') throw Error('Real anonymous post seed did not save'); }, data.post);
       await action({ page, context, server, device, data, size, drainStatic });
       assert.deepEqual(server.libraryRouteErrors, []); assert.deepEqual(report.forbiddenPrivateRequests.filter(row => row.device === device), []);
-      assert(server.blogCalls.every(call => ['life_blog_list', 'life_blog_read'].includes(call.rpc)), 'Navigation must not save or publish a blog post'); assert.equal(server.saves().length, 0); assert.equal(server.assetCalls.filter(call => call.method !== 'GET').length, 0, 'Navigation must not upload blog originals');
+      // Owner directive 2026-11-01: the seeded saved post may be kept privately in the owner's
+      // own account by background sync. Navigation must still never publish or reach another account.
+      assert(server.blogCalls.every(call => isBackgroundSync('/rest/v1/rpc/' + call.rpc) && call.owner === accounts.a.id), 'Navigation must not publish a blog post');
+      assert(server.saves().every(call => call.owner === accounts.a.id)); assert(server.assetCalls.filter(call => call.method !== 'GET').every(call => call.owner === accounts.a.id), 'Blog originals go only to the owner\'s private storage');
       assert(server.libraryRequests.some(row => row.rpc === 'life_library_capabilities')); receipt.privateRequests = server.requests.length; receipt.libraryRequests = server.libraryRequests.length; receipt.blogReadRPCs = server.blogCalls.map(call => call.rpc); receipt.blogSaves = server.saves().length; receipt.blogAssetWrites = server.assetCalls.filter(call => call.method !== 'GET').length;
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) {
