@@ -393,7 +393,7 @@
       return (await storage.listWorkspaces()).map(row => row.workspaceId);
     }
     function pass() {
-      if (disposed || suspended || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (disposed || suspended || parked || root.document?.visibilityState === 'hidden') return Promise.resolve();
       if (running) { again = true; return running; }
       running = passes().finally(() => { running = null; });
       return running;
@@ -444,12 +444,17 @@
     }
     // A suspended page (bfcache/history) sends nothing with the old session; the shell's fresh
     // verification is followed by haedo:page-ready.
-    let suspended = false;
+    let suspended = false, parked = false;
     const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
     const resume = () => { if (!suspended) return; suspended = false; pass(); };
+    // Between a persisted pagehide and its pageshow the page sits in the back/forward cache:
+    // starting work there evicts it, and nothing begun then may stand in for the resumed page's
+    // own account check. A cached page resumes on the regular poll.
+    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
+    const pageshow = event => { if (event?.persisted) parked = false; };
     const nudge = event => {
       // Writes made by a running pass also announce changes; they never schedule another pass.
-      if (disposed || running || event?.type !== 'material_writing_changed' || soon) return;
+      if (disposed || running || parked || event?.type !== 'material_writing_changed' || soon) return;
       soon = root.setTimeout(() => { soon = null; pass(); }, 2000); soon?.unref?.();
     };
     return Object.freeze({
@@ -459,6 +464,7 @@
         timer = root.setInterval(pass, every); timer?.unref?.();
         root.addEventListener?.('online', pass); root.addEventListener?.('focus', pass); root.document?.addEventListener('visibilitychange', pass);
         root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
+        root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
         try { offAll = storage.subscribeAll?.(nudge) || null; } catch (_) { offAll = null; }
         pass();
       },
@@ -467,6 +473,7 @@
         if (shared.get(storage) === instance) shared.delete(storage);
         root.removeEventListener?.('online', pass); root.removeEventListener?.('focus', pass); root.document?.removeEventListener('visibilitychange', pass);
         root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
+        root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
         if (!manager) instance.dispose();
       }
     });

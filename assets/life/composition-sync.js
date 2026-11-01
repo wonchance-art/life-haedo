@@ -45,7 +45,12 @@
     // as soon as its originals sync for this account (no per-workspace opt-in).
     const autoEnable = compositionDomain;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
-    let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
+    let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null, parked = false;
+    // Between a persisted pagehide and its pageshow the page sits in the back/forward cache:
+    // starting work there evicts it, and nothing begun then may stand in for the resumed page's
+    // own account check. A cached page resumes on the regular poll.
+    const pagehide = event => { if (event?.persisted) { parked = true; for (const timer of timers.values()) root.clearTimeout(timer); timers.clear(); } };
+    const pageshow = event => { if (event?.persisted) parked = false; };
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     function guard(context) {
       if (disposed || !sameAccount(auth.getAccount()) || context &&
@@ -176,7 +181,7 @@
     }
     async function syncNow(workspaceId) { const ctx = context(workspaceId); return serial(ctx, () => run(ctx)); }
     function schedule(workspaceId) {
-      if (disposed || timers.has(workspaceId)) return;
+      if (disposed || parked || timers.has(workspaceId)) return;
       const timer = root.setTimeout(() => { timers.delete(workspaceId); syncNow(workspaceId).catch(() => {}); }, 500);
       timer?.unref?.(); timers.set(workspaceId, timer);
     }
@@ -242,7 +247,7 @@
       });
     }
     async function automatic() {
-      if (disposed || refreshing || root.document?.visibilityState === 'hidden') return;
+      if (disposed || parked || refreshing || root.document?.visibilityState === 'hidden') return;
       refreshing = true;
       try {
         guard(); const rows = await storage.listWorkspaces(); guard();
@@ -261,6 +266,7 @@
       guard(); if (started) return; started = true;
       root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
       root.document?.addEventListener('visibilitychange', automatic);
+      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
       if (polling) { interval = root.setInterval(automatic, 30000); interval?.unref?.(); }
       unlistenSources = sourceSync.subscribe(event => {
         if (!event.workspaceId) return;
@@ -277,6 +283,7 @@
       root.clearInterval(interval); unlistenSources?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic); remote.dispose?.();
+      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
     }
     function subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     // The automatic-resolution notice persists in the state record until acknowledged.
