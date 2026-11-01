@@ -352,6 +352,7 @@
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate: (mode, options = {}) => navigate(mode, mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget) ? { ...options, blogContext: true } : options),
       renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
+      openPostInWorkspace: (workspaceId, target) => openPostInWorkspace(workspaceId, target),
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
         returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
@@ -2039,9 +2040,11 @@
         viewState: accountBlogViews.get(workspaceId),
         isCurrent: () => !disposed && workspaceToken === workspaceGeneration &&
           state.mode === 'account-blog' && state.bundle?.workspaceId === workspaceId,
-        onOpenPost: (postId, options = {}) => navigate('page', { blogContext: true,
-          searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision },
-          pagePreview: false, originFocusKey: options.focusKey }),
+        onOpenPost: (postId, options = {}) => options.workspaceId && options.workspaceId !== workspaceId
+          ? openPostInWorkspace(options.workspaceId, { photoPostId: postId, photoPostRevision: options.expectedRevision }, { focusKey: options.focusKey })
+          : navigate('page', { blogContext: true,
+            searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision },
+            pagePreview: false, originFocusKey: options.focusKey }),
         onManagePost: (postId, options = {}) => navigate('blog', { blogPostId: postId, originFocusKey: options.focusKey })
       });
       accountBlogUI = instance; accountBlogWorkspace = workspaceId;
@@ -2141,6 +2144,38 @@
       });
       preservationUI = instance; await instance.mount(host, { postIds: openOptions.postIds || [],
         expectedPostRevisions: openOptions.exactPost ? { [openOptions.exactPost.id]: openOptions.exactPost.revision } : {} });
+    }
+
+    // One account, one blog (2026-11-01): the home and the sync list show the
+    // posts of every library of the account. A post kept in another library
+    // opens in that library, so its editing, deletion and publication use its
+    // own storage. The return goes to the same home tab/search or sync list.
+    async function openPostInWorkspace(workspaceId, target, { focusKey } = {}) {
+      if (disposed || typeof target?.photoPostId !== 'string') return false;
+      if (workspaceId === state.bundle?.workspaceId) return navigate('page', { blogContext: true, pagePreview: false, searchTarget: target, ...(focusKey ? { originFocusKey: focusKey } : {}) });
+      const workspace = workspaceGeneration, navigation = navigationGeneration, account = state.syncAccountKey, from = state.mode;
+      const current = () => !disposed && workspace === workspaceGeneration && navigation === navigationGeneration && account === state.syncAccountKey && state.mode === from;
+      const homeState = from === 'home' ? home?.captureState() : null;
+      const returnFocus = focusKey || document.activeElement?.dataset.focusKey, scrollY = global.scrollY;
+      await persistDrafts();
+      if (!current()) return false;
+      // Both reads fail before anything changes when the post is gone.
+      const [bundle, post] = await Promise.all([storage.read(workspaceId), storage.readPhotoPost(workspaceId, target.photoPostId)]);
+      if (!current()) return false;
+      if (post.id !== target.photoPostId || target.photoPostRevision != null && post.revision !== target.photoPostRevision) throw postContextChanged(target.photoPostId);
+      await storage.setActive(workspaceId);
+      if (!current()) return false;
+      invalidateBatchContext();
+      state.bundle = bundle; state.stage = state.prepared = null; state.sourceId = state.sourceVersionId = null;
+      state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
+      const installed = workspaceGeneration;
+      await refreshData();
+      if (disposed || installed !== workspaceGeneration || navigation !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return false;
+      connectSubscription();
+      const viewOrigin = from === 'home' ? { mode: 'home', workspaceId, scrollY, focusKey: returnFocus, homeState: { ...homeState, workspaceId } }
+        : from === 'account-blog' ? { mode: 'account-blog', workspaceId, scrollY, focusKey: returnFocus } : null;
+      if (from === 'account-blog') accountBlogViews.set(workspaceId, accountBlogUI?.getView?.() || {});
+      return navigate('page', { blogContext: true, pagePreview: false, searchTarget: target, ...(viewOrigin ? { viewOrigin } : {}) });
     }
 
     async function openOriginalSource(match, origin) {

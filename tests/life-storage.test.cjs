@@ -1937,7 +1937,7 @@ test('sign-in adoption copies every account-less workspace once, keeps originals
   assert.equal(copy.sourceVersions[0].contentText, original.sourceVersions[0].contentText);
   assert.deepEqual(await base.read(original.workspaceId), original);
   assert.deepEqual((await account.listUnownedWorkspaces()).map(row => row.workspaceId).sort(), [original.workspaceId, second.workspaceId].sort());
-  assert.deepEqual(await account.adoptUnownedWorkspaces(), { adopted: [], failed: [] });
+  assert.deepEqual(await account.adoptUnownedWorkspaces(), { adopted: [], failed: [], repaired: [] });
   await base.saveStage(draft(original, 'later-unowned-draft'));
   const again = await account.adoptUnownedWorkspaces();
   assert.deepEqual(again.adopted.map(row => row.from), [original.workspaceId]); assert.equal((await account.listWorkspaces()).length, 3);

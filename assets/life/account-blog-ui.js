@@ -11,9 +11,31 @@
     if (status.state === 'pending') return { state: 'pending', text: labels.pending + ((status.pending || 0) + (status.receiving || 0) ? ' · ' + ((status.pending || 0) + (status.receiving || 0)) + '개' : '') };
     return { state: 'synced', text: labels.synced };
   }
+  // The offline shell's cache name tells which release this device runs.
+  async function appVersion() {
+    try {
+      const keys = await root.caches?.keys?.();
+      const versions = (keys || []).map(key => /^haedo-v(\d+)$/.exec(key)?.[1]).filter(Boolean).map(Number);
+      return versions.length ? 'haedo-v' + Math.max(...versions) : null;
+    } catch (_) { return null; }
+  }
+  function clock(value) {
+    const date = new Date(value);
+    if (!value || !Number.isFinite(date.getTime())) return null;
+    const today = new Date().toDateString() === date.toDateString();
+    return new Intl.DateTimeFormat('ko-KR', today ? { hour: 'numeric', minute: '2-digit' } : { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+  }
+  function facts(value, version) {
+    const parts = [version || '앱 버전 확인 불가'];
+    if (Number.isSafeInteger(value?.posts)) parts.push('글 ' + value.posts + '개' + (value.drafts ? ' · 초안 ' + value.drafts + '개' : ''));
+    parts.push('대기 ' + ((value?.pending || 0) + (value?.receiving || 0)) + ' · 실패 ' + (value?.errors || 0));
+    const last = clock(value?.lastSyncAt);
+    parts.push(last ? '마지막 동기화 ' + last : '아직 동기화 전');
+    return parts.join(' · ');
+  }
   function create({ storage, workspaceId, blogSync, isCurrent = () => true, onOpenPost, viewState = {} }) {
     viewState ||= {};
-    let host = null, surface, search, status, error, list, more, refresh, unsubscribe = null;
+    let host = null, surface, search, status, detail, error, list, more, refresh, unsubscribe = null, version = null;
     let disposed = false, epoch = 0, busy = null, navigating = false, composing = false;
     let rows = [], loaded = false, query = typeof viewState.query === 'string' ? viewState.query.slice(0, 1000) : '';
     let shown = Number.isSafeInteger(viewState.shown) ? Math.max(20, Math.min(10000, viewState.shown)) : 20;
@@ -24,6 +46,7 @@
       const summary = overall(value || blogSync?.getStatus?.());
       status.textContent = summary.text; status.dataset.state = summary.state;
       refresh.textContent = summary.state === 'error' ? '다시 시도' : '지금 동기화';
+      detail.textContent = facts(value || blogSync?.getStatus?.(), version);
     }
     function fail(cause) {
       if (!valid()) return;
@@ -53,7 +76,7 @@
     async function open(row, focusKey) {
       if (!valid() || busy || !row.localPostId) return;
       clearError(); navigating = true;
-      try { await onOpenPost(row.localPostId, { expectedRevision: row.localRevision, focusKey }); }
+      try { await onOpenPost(row.localPostId, { expectedRevision: row.localRevision, focusKey, workspaceId: row.localWorkspaceId || workspaceId }); }
       finally { navigating = false; }
     }
     function renderRows() {
@@ -64,10 +87,9 @@
       matching.slice(0, shown).forEach(row => {
         const article = el('article', null, 'ab-post'); article.dataset.remoteId = row.id; article.dataset.state = row.status;
         article.append(el('h3', row.title?.trim() || (row.draft ? '제목 없는 초안' : '제목 없는 글')));
-        const local = row.localPostId && row.localWorkspaceId === workspaceId;
+        const local = !!row.localPostId;
         const parts = [row.draft ? '초안' : row.archived ? '보관한 글' : '글', !row.localPostId ? '이 기기로 받는 중' : labels[row.status] || labels.error];
         if (row.publication?.active) parts.push('공개 중');
-        if (row.localPostId && !local) parts.push('다른 공간');
         const metadata = el('p', parts.join(' · '), 'life-meta ab-post-state');
         const date = new Date(row.updated_at);
         if (Number.isFinite(date.getTime())) { const time = el('time', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' }).format(date)); time.dateTime = date.toISOString(); metadata.append(document.createTextNode(' · '), time); }
@@ -112,6 +134,7 @@
       const head = el('div', null, 'ab-tools');
       status = el('p', '', 'life-meta ab-status'); status.id = 'accountBlogStatus'; status.setAttribute('role', 'status');
       refresh = button('지금 동기화', syncNow, { kind: 'refresh' }); refresh.id = 'accountBlogRefresh';
+      detail = el('p', '', 'life-meta ab-facts'); detail.id = 'accountBlogFacts';
       head.append(status, refresh);
       const tools = el('div', null, 'ab-tools');
       const label = el('label', '글 제목 검색', 'life-field'); search = el('input'); search.type = 'search'; search.id = 'accountBlogSearch'; search.maxLength = 1000; search.value = query; search.autocomplete = 'off'; label.append(search);
@@ -126,7 +149,8 @@
         const next = list.children[start];
         next?.querySelector('button')?.focus({ preventScroll: true }); next?.scrollIntoView({ block: 'nearest' });
       }, { kind: 'more' }); more.id = 'accountBlogMore'; more.hidden = true;
-      surface.append(hint, head, tools, error, list, more); host.replaceChildren(surface);
+      surface.append(hint, head, detail, tools, error, list, more); host.replaceChildren(surface);
+      const token = epoch; void appVersion().then(value => { if (valid(token)) { version = value; showStatus(); } });
       unsubscribe?.();
       unsubscribe = blogSync?.subscribe?.(event => { if (event?.type === 'status') showStatus(event.status); });
       showStatus();
