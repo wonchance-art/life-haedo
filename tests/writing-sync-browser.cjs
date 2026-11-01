@@ -15,55 +15,8 @@ const copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 const title = '산책을 마치고 돌아오는 길에서 발견한 작은 질문을 나만의 문장으로 남기고 다시 읽는 기록 — 오래된 관심과 새로운 생각을 함께 이어 쓰기';
 const body = '책을 덮고 천천히 걸었다.\n다시 읽을 문장🌱\n그때의 생각은 아직 완성되지 않았다. 내 언어로 쓰는 일은 오래 머문 자리를 확인하는 일이었다.\n<img src=x onerror="window.__writingInjected=1">';
-class WritingCloud extends FakeCloud {
-  constructor() { super(); this.drafts = new Map(); this.draftReceipts = new Map(); this.writingMissing = false; this.writingOffline = new Set(); this.loseWriting = new Set(); this.heldWriting = null; }
-  draftKey(owner, workspace, id) { return this.key(owner, workspace) + ':' + id; }
-  draft(owner, workspace, id) { return this.drafts.get(this.draftKey(owner, workspace, id)); }
-  draftWrites(device) { return this.requests.filter(value => value.kind === 'writing-put' && (!device || value.device === device)); }
-  async handle(route, device) {
-    const request = route.request(), url = new URL(request.url()), kind = url.pathname.split('/').at(-1).replace('life_writing_draft_', '');
-    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-type': 'application/json' };
-    const send = (value, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(value) });
-    if (!['/rest/v1/rpc/life_writing_draft_get', '/rest/v1/rpc/life_writing_draft_put', '/rest/v1/rpc/life_writing_draft_list'].includes(url.pathname)) return super.handle(route, device);
-    if (request.method() === 'OPTIONS') return send(null, 204);
-    if (this.offline.has(device) || this.writingOffline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }
-    let account;
-    try { const token = request.headers().authorization.replace(/^Bearer /i, ''), payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')); account = Object.values(accounts).find(value => value.id === payload.sub); } catch (_) {}
-    if (!account) return send({ code: 'PGRST301', message: 'Anonymous account required' }, 401);
-    const input = request.postDataJSON(), workspace = input.p_workspace_id, id = input.p_draft_id, owner = account.id, key = this.draftKey(owner, workspace, id);
-    this.requests.push({ kind: 'writing-' + kind, owner, workspace, id, device, operation: input.p_operation_id, expected: input.p_expected_revision, after: input.p_after_draft_id });
-    if (this.writingMissing) { this.expectedFailures++; return send({ code: 'PGRST202', message: 'Anonymous writing schema missing' }, 404); }
-    const hold = this.heldWriting?.device === device && this.heldWriting.kind === kind ? this.heldWriting : null;
-    if (hold) this.heldWriting = null;
-    if (kind === 'get' || kind === 'list') {
-      const result = kind === 'get' ? copy(this.drafts.get(key) || null) : [...this.drafts.values()].filter(value => value.owner_id === owner && value.workspace_id === workspace && (!input.p_after_draft_id || value.draft_id > input.p_after_draft_id)).sort((a, b) => a.draft_id.localeCompare(b.draft_id)).slice(0, 100).map(value => ({ draft_id: value.draft_id, title: value.data.title, state: value.data.state, revision: value.revision, updated_at: value.updated_at }));
-      if (kind === 'get' && result) delete result.owner_id;
-      if (hold) { hold.entered.resolve(); await hold.release.promise; }
-      return send(result);
-    }
-    const { p_expected_revision: expected, p_operation_id: operation, p_source_revision: sourceRevision, p_data: data } = input;
-    const payload = JSON.stringify({ expected, sourceRevision, data }), receiptKey = key + ':' + operation;
-    const receipt = this.draftReceipts.get(receiptKey); let result;
-    if (receipt) {
-      if (receipt.payload !== payload) return send({ code: '22023', message: 'life_writing_draft_operation_mismatch' }, 400);
-      result = receipt.result;
-    } else {
-      const source = this.row(owner, workspace), old = this.drafts.get(key);
-      const applied = data.state !== 'applied' || data.appliedResult && source?.data.sourceVersions.some(value => value.id === data.appliedResult.sourceVersionId && value.sourceId === data.appliedResult.sourceId);
-      if (!source || sourceRevision > source.revision || (old && sourceRevision < old.source_revision) || !applied) return send({ code: '22023', message: 'life_writing_draft_source_not_ready' }, 400);
-      if (!old && expected !== 0) result = { status: 'missing' };
-      else if (old && (old.revision !== expected || old.data.state === 'applied')) result = { status: 'conflict', revision: old.revision };
-      else {
-        result = { status: 'stored', revision: (old?.revision || 0) + 1 };
-        this.drafts.set(key, { owner_id: owner, workspace_id: workspace, draft_id: id, revision: result.revision, source_revision: sourceRevision, data: copy(data), updated_at: new Date().toISOString() });
-        this.draftReceipts.set(receiptKey, { payload, result });
-      }
-    }
-    if (hold) { hold.entered.resolve(); await hold.release.promise; }
-    if (this.loseWriting.has(device)) { this.expectedFailures++; return route.abort('failed'); }
-    return send(result);
-  }
-}
+// Draft RPCs live in tests/helpers/writing-cloud.cjs, composed into the shared FakeCloud.
+class WritingCloud extends FakeCloud {}
 async function go(page, view = 'write') {
   await page.goto(base + '/index.html?section=' + (view === 'sync' ? 'manage' : 'records') + '&view=' + view); await ready(page); await settle(page);
   await page.waitForFunction(() => !!HaedoLife.Shell.writingSync);
@@ -174,7 +127,9 @@ async function main() {
       const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); server.writingMissing = true; await auto(a.page);
       assert.equal((await metadata(a.page, ws, draft.stageId)).enabled, false); assert.equal((await stage(a.page, draft.stageId)).text, body); assert.equal(server.draft(accounts.a.id, ws, draft.stageId), undefined);
       await go(a.page); await panel(a.page); await status(a.page, 'not_enabled'); await capture(a.page, 'missing-installation');
-      server.writingMissing = false; await auto(a.page); await go(a.page); await panel(a.page); await status(a.page, 'synced');
+      // The missing schema is not probed again every cycle; an explicit retry (force) checks it once.
+      await auto(a.page); assert.equal(await a.page.evaluate(() => HaedoLife.Shell.writingSync.availability().status), 'unavailable');
+      server.writingMissing = false; await a.page.evaluate(() => HaedoLife.Shell.writingSync.refresh({ force: true })); await settle(a.page); await go(a.page); await panel(a.page); await status(a.page, 'synced');
       assert.equal(server.draft(accounts.a.id, ws, draft.stageId).data.text, body);
       await a.page.evaluate(ws => HaedoLife.Shell.sync.pause(ws), ws); const writes = server.draftWrites().length; await editStored(a.page, draft.stageId, '원문 연결을 멈춘 뒤 작성한 문장');
       assert.notEqual(await sync(a.page, ws, draft.stageId), null); assert.equal(server.draftWrites().length, writes); assert.equal((await stage(a.page, draft.stageId)).text, '원문 연결을 멈춘 뒤 작성한 문장');
@@ -222,7 +177,7 @@ async function main() {
       for (let index = 0; index < 101; index++) { const draftId = '00000000-0000-4000-8000-' + String(index).padStart(12, '0'), value = copy(original); value.draft_id = draftId; value.data.stageId = draftId; value.data.title = '다른 기기의 글 ' + index; server.drafts.set(server.draftKey(accounts.a.id, ws, draftId), value); }
       const before = await stage(b.page, id); await auto(b.page);
       assert.equal((await stages(b.page, ws)).filter(value => value.kind === 'writing').length, 102); assert.deepEqual(await stage(b.page, id), before);
-      const requests = server.requests.filter(value => value.kind === 'writing-list' && value.device === 'b'); assert.ok(requests.some(value => value.after));
+      const requests = server.writingRequests.filter(value => value.kind === 'writing-list' && value.device === 'b'); assert.ok(requests.some(value => value.after));
       assert.equal(server.draftWrites('b').length, 0);
     });
   } finally { await browser.close(); await fs.writeFile(path.join(out, 'selected-drafts-report.json'), JSON.stringify(report, null, 2) + '\n'); }

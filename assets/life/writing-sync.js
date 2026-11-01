@@ -105,9 +105,25 @@
     // One pass over every workspace whose originals already sync for this account:
     // upload every local draft, keep enabled drafts moving and install drafts that
     // exist only on the server. Each draft fails independently; text stays local.
+    // A server without the draft schema is recorded as unavailable and retried with growing
+    // back-off (5 min → 1 h) instead of probing every draft on every cycle.
+    let availability = { status: 'unknown', until: 0, backoff: 0 };
+    const UNAVAILABLE = new Set(['schema_missing', 'permission_denied']);
+    function markUnavailable(error) {
+      if (!UNAVAILABLE.has(error?.code)) return false;
+      const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
+      availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
+    }
     async function workspacePass(ws, epoch) {
       const source = await sourceSync.getState(ws); guard(epoch);
       if (!source?.enabled || !same(source.binding)) return;
+      // Probe once per workspace before touching any draft.
+      let firstPage = null;
+      if (source.status === 'synced') {
+        try { firstPage = await remote.list(ws, null); guard(epoch); }
+        catch (error) { guard(epoch); if (markUnavailable(clean(error))) throw clean(error); return; }
+        availability = { status: 'available', until: 0, backoff: 0 };
+      }
       const stages = (await storage.listStages(ws)).filter(stage => stage.kind === 'writing'); guard(epoch);
       const states = new Map((await storage.listWritingSyncStates(ws)).map(state => [state.draftId, state])); guard(epoch);
       for (const stage of stages) {
@@ -121,14 +137,14 @@
             if (!value.started) value.start();
             await value.instance.syncNow(stage.stageId).catch(() => {});
           }
-        } catch (_) { guard(epoch); /* Durable state keeps the error; the next pass retries. */ }
+        } catch (error) { guard(epoch); if (markUnavailable(error)) throw error; /* Durable state keeps the error; the next pass retries. */ }
         guard(epoch);
       }
       if (source.status !== 'synced') return;
       const known = new Set(stages.map(stage => stage.stageId));
       let after = null;
       for (let page = 0; page < 50; page++) {
-        const rows = await remote.list(ws, after); guard(epoch);
+        const rows = page === 0 && firstPage ? firstPage : await remote.list(ws, after); guard(epoch);
         for (const row of rows) {
           if (row.state !== 'draft' || known.has(row.draft_id)) continue;
           try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
@@ -145,13 +161,14 @@
       return refreshing;
     }
     async function passes() {
+      if (Date.now() < availability.until) return;
       try {
         do {
           again = false;
           guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
           for (const workspace of workspaces) {
             try { await workspacePass(workspace.workspaceId, epoch); }
-            catch (error) { guard(epoch); /* Other workspaces still sync. */ }
+            catch (error) { guard(epoch); if (Date.now() < availability.until) return; /* Other workspaces still sync. */ }
           }
         } while (again && !disposed);
       } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
@@ -181,7 +198,11 @@
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
     }
-    return Object.freeze({ start, getState, listRemote, download, dispose, refresh: automatic,
+    // { force: true } (an explicit retry) ignores the unavailable back-off once.
+    return Object.freeze({ start, getState, listRemote, download, dispose, refresh: options => { if (options?.force === true) availability.until = 0; return automatic(); },
+      // The preparation loop started with this account's writing sync (null when unavailable).
+      availability: () => ({ status: availability.status, until: availability.until }),
+      refreshMaterials: () => material?.refresh() || Promise.resolve(), materialAvailability: () => material?.availability() || null,
       enable: (ws, id) => call('enable', ws, id), pause: (ws, id) => call('pause', ws, id), syncNow: (ws, id) => call('syncNow', ws, id),
       compare: (ws, id) => call('compare', ws, id), resolve: (ws, id, choice, expected) => call('resolve', ws, id, choice, expected),
       // The notice is stored with the draft's sync record, so it survives reloads until dismissed.
