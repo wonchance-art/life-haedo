@@ -443,7 +443,8 @@
               if (disposed || held(ws)) break;
               try { const result = await instance.autoSync(ws, plan.id, { listed }); if (result?.received || result?.resolved) changed = true; } catch (_) { /* Durable error stays; next pass retries. */ }
             }
-            if (changed && !held(ws)) await reloadHeld(ws);
+            // Registered screens decide themselves what they may refresh while input is unsaved.
+            if (changed) await reloadHeld(ws);
           }
           // A workspace arriving here may make a skipped server preparation installable.
           const spaceKey = [...spaces].sort().join('|'); if (spaceKey !== knownSpaces) { adoptSkips.clear(); knownSpaces = spaceKey; }
@@ -453,7 +454,7 @@
             if (skip && skip.revision === item.revision && Date.now() - skip.at < ADOPT_RETRY) continue;
             try {
               const adopted = await instance.adopt(item);
-              if (adopted) { adoptSkips.delete(item.id); if (!held(adopted.workspaceId)) await reloadHeld(adopted.workspaceId, adopted); }
+              if (adopted) { adoptSkips.delete(item.id); await reloadHeld(adopted.workspaceId, adopted); }
               else adoptSkips.set(item.id, { revision: item.revision, at: Date.now() });
             } catch (_) { adoptSkips.set(item.id, { revision: item.revision, at: Date.now() }); }
           }

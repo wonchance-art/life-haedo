@@ -18,7 +18,7 @@ async function main() {
     const hook = `;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage={...original,forAccount(...args){const s=original.forAccount(...args);return Object.freeze({...s,
       async saveStage(...args){if(window.__receiveFailDraft)throw new Error('익명 초안 보관 실패');return s.saveStage(...args);},
       async installSyncRemote(...args){const value=await s.installSyncRemote(...args);if(window.__receiveFailRefresh){window.__receiveFailRefresh=false;window.__receiveFailList=true;}return value;},
-      async listWorkspaces(...args){if(window.__receiveFailList){window.__receiveFailList=false;throw new Error('익명 수신 목록 조회 실패');}return s.listWorkspaces(...args);}});}};})();`;
+      async listWorkspaces(...args){if(window.__receiveFailList)throw new Error('익명 수신 목록 조회 실패');return s.listWorkspaces(...args);}});}};})();`;
     await route.fulfill({ response, body: await response.text() + hook });
   });
   const page = await context.newPage(); page.setDefaultTimeout(30000);
@@ -68,6 +68,8 @@ async function main() {
       await page.locator('[data-remote-id="' + second.workspaceId + '"]').getByRole('button', { name: '이 작업공간 받기', exact: true }).click(); await settle(page);
       assert.equal(await active(), second.workspaceId); assert.equal(await page.locator('#lifeRemoteList').count(), 0);
       assert.match(await page.locator('#lifeError').innerText(), /보관.*목록|목록.*보관/);
+      // Background sync passes also list workspaces, so the list stays failing until the screen has shown the error.
+      await page.evaluate(() => { window.__receiveFailList = false; });
       await openManagement(page); assert.equal(await page.locator('#lifeWorkspace').inputValue(), second.workspaceId);
       assert.equal(server.writes().length, 0);
     });
