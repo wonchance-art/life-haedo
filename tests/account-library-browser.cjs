@@ -10,6 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { CompositionCloud } = require('./composition-sync-browser.cjs');
 const { accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
 const { playwright, ready, shellReady, settle, makeContext, nav } = require('./unified-home-browser.cjs');
 const { fixture: originalFixture } = require('./fixtures/original-attachments.cjs');
 const output = path.resolve(process.env.ACCOUNT_LIBRARY_OUTPUT || '.local/account-library');
@@ -144,9 +145,7 @@ async function main() {
         const u = new URL(request.url()), method = request.method(); if (u.origin !== cloud || ['GET', 'OPTIONS'].includes(method) || u.pathname.startsWith('/auth/')) return;
         const owner = server.libraryOwner(request); let body; try { body = request.postDataJSON(); } catch (_) {}
         const compositionRead = method === 'POST' && u.pathname === '/rest/v1/rpc/life_composition_get' && owner === value.owner && body && Object.keys(body).length === 1 && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.p_workspace_id);
-        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && ['life_sync_put', 'life_composition_put', 'life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put', 'life_account_document_put', 'life_account_document_changes',
-          // Every signed-in device also syncs its own drafts, preparations and blog heads automatically (2026-11-01 owner directive).
-          'life_writing_draft_list', 'life_writing_draft_get', 'life_writing_draft_put', 'life_material_list', 'life_material_get', 'life_material_put', 'life_material_capabilities', 'life_material_delete', 'life_blog_sync_list'].includes(rpc); // Account documents sync automatically (2026-11-01).
+        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && isBackgroundSync(request.url()); // Owner-scoped account sync calls only (2026-11-01 owner directive).
         const chunk = method === 'POST' && u.pathname.startsWith('/storage/v1/object/life-library-originals/' + owner + '/');
         if (!(compositionRead || owner === value.owner && (allowedRpc || chunk))) report.forbiddenWrites.push({ name, method, path: u.pathname, owner });
       });

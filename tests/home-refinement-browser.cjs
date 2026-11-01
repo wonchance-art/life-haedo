@@ -3,9 +3,8 @@
  * No production account, remote persistence or native-device claims.
  */
 'use strict';
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -69,17 +68,18 @@ async function main() {
     const server = new ShareCloud(), device = 'refinement-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 320, height: 568 }, hasTouch: true, ...contextOptions }); await instrument(context);
     await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) {
-      if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push({ name, path: url.pathname }); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.pathname === '/rest/v1/rpc/life_blog_save' && request.method() === 'POST') report.privateSaves.push({ name, postId: request.postDataJSON().p_post_id });
-      else if (isBackgroundSync(url.href)) (report.backgroundSync ||= []).push({ name, path: url.pathname }); // owner-scoped private account sync (2026-11-01)
       else report.remoteWrites.push({ method: request.method(), path: url.pathname });
     } if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
     const page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run(page); assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);
       // 2026-11-01: saved posts and drafts reach the owner's private account
-      // storage automatically. They stay private: same owner, never published.
+      // storage automatically (background sync). They stay private: same
+      // owner, never published, and no other write path is used.
       if (name === 'empty home offers one first write and completes private save/read/home') assert(server.saves().length >= 1, 'The explicit saved post reaches the private account');
-      assert.equal(report.privateSaves.filter(call => call.name === name).length, server.saves().length);
+      assert.equal((report.backgroundSync || []).filter(call => call.name === name && call.path === '/rest/v1/rpc/life_blog_save').length, server.saves().length);
+      assert.equal(report.privateSaves.filter(call => call.name === name).length, 0, 'every private save is the owner-scoped background sync');
       assert(server.saves().every(call => call.owner === accounts.a.id));
       for (const row of server.posts.values()) { assert.equal(row.owner, accounts.a.id); assert.equal(row.publication, null); assert(['saved', 'draft'].includes(row.data.status)); }
       report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
