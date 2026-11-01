@@ -2,7 +2,7 @@
 'use strict';
 process.env.BASE_URL||='http://127.0.0.1:4184';
 const fs=require('node:fs/promises'),assert=require('node:assert/strict');
-const {FakeCloud,accounts,cloud,base,openManagement}=require('./life-sync-browser.cjs');
+const {FakeCloud,accounts,cloud,base,openManagement,openBackupCenter}=require('./life-sync-browser.cjs');
 const {playwright,ready,nav,makeContext,observe,settle}=require('./unified-home-browser.cjs');
 const {seed}=require('../scripts/check-life-collections-design.cjs');
 (async()=>{
@@ -12,7 +12,7 @@ const {seed}=require('../scripts/check-life-collections-design.cjs');
  const last=page.locator('#lifeMain button:visible').last();await last.focus();await last.scrollIntoViewIfNeeded();const overlap=await last.evaluate(el=>{const a=el.getBoundingClientRect(),b=document.querySelector('[data-haedo-navigation]').getBoundingClientRect();return {covered:a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top,button:{top:a.top,bottom:a.bottom},dock:{top:b.top,bottom:b.bottom},focused:el===document.activeElement};});assert.equal(overlap.covered,false);assert(overlap.focused);
  await page.locator('#lifeSearch').fill('문장을 더 모으기 전에');const quote=page.locator('.life-excerpt-open').first(),key=await quote.getAttribute('data-focus-key');await quote.tap();await settle(page);assert.equal(await page.locator('#lifeSourceText').textContent(),fixture.sources[0].raw);await page.waitForFunction(()=>getSelection().toString().length>0);
  await page.locator('#lifeSearchReturn').tap();await settle(page);assert.equal(await page.locator('#lifeSearch').inputValue(),'문장을 더 모으기 전에');await page.waitForFunction(key=>document.activeElement?.dataset.focusKey===key,key);
- await openManagement(page);await page.getByRole('button',{name:'내보내기·사본 복원',exact:true}).click();await settle(page);const waiting=page.waitForEvent('download');await page.getByRole('button',{name:'JSON 백업',exact:true}).click();const backup=JSON.parse(await fs.readFile(await (await waiting).path(),'utf8'));assert.equal(backup.format,'life-tools-backup-v1');assert.deepEqual(backup.workspace.sourceVersions,original.sourceVersions);assert.deepEqual(backup.workspace.records,original.records);
+ await openBackupCenter(page);await page.getByRole('button',{name:'내보내기·사본 복원',exact:true}).click();await settle(page);const waiting=page.waitForEvent('download');await page.getByRole('button',{name:'JSON 백업',exact:true}).click();const backup=JSON.parse(await fs.readFile(await (await waiting).path(),'utf8'));assert.equal(backup.format,'life-tools-backup-v1');assert.deepEqual(backup.workspace.sourceVersions,original.sourceVersions);assert.deepEqual(backup.workspace.records,original.records);
  assert.deepEqual(await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return s.read(await s.getActive());}),original);assert.equal(server.writes().length,0);report.checks.push({name:'dock end focus, exact quote/search return, backup preservation '+size.width,pass:true,overlap});
  }catch(error){report.checks.push({name:String(size.width),pass:false,error:error.stack});}finally{await context.close();}}}finally{await browser.close();await fs.mkdir('.local/app-feel',{recursive:true});const text=JSON.stringify(report,null,2)+'\n';await fs.writeFile('.local/app-feel/browser-report.json',text);await fs.writeFile('.local/app-feel/browser-run-'+report.createdAt.replace(/[:.]/g,'-')+'.json',text);}
  console.log(JSON.stringify(report));if(report.checks.some(c=>!c.pass)||report.consoleErrors.length||report.pageErrors.length||report.external.length)process.exitCode=1;

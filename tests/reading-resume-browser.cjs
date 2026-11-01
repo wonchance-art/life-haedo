@@ -5,7 +5,7 @@
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
-const { FakeCloud, accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, nav, makeContext, observe } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve(__dirname, '../.local/reading-resume');
@@ -58,7 +58,7 @@ async function visiblePosition(page, start) {
   }, start);
 }
 async function backup(page) {
-  await openManagement(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await settle(page);
+  await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await settle(page);
   const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: 'JSON 백업', exact: true }).click();
   return JSON.parse(await fs.readFile(await (await downloading).path(), 'utf8'));
 }
@@ -216,7 +216,7 @@ async function main() {
     await check('workspace and account boundaries keep local reading points private', async ({ page, server, device }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500); await actualScroll(page);
       const position = await savedPosition(page, { sourceVersionId: ids.oldVersion });
-      await openManagement(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await settle(page);
+      await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await settle(page);
       await page.locator('#lifeNewWorkspaceName').fill('다른 익명 읽기 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page);
       const otherWorkspace = (await current(page)).workspaceId; assert.notEqual(otherWorkspace, ids.workspaceId); assert.equal((await reading(page)).status, 'empty');
       await home(page); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);

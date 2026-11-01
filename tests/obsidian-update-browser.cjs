@@ -114,6 +114,7 @@ async function integrated() {
       assert.deepEqual(afterReload.sort(), ids.sort());
       // Long real management titles must leave both account and search usable.
       await page.locator('[data-haedo-navigation] [data-haedo-section=manage]').click();
+      await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await page.locator('#lifeMain[data-mode="backup"]').waitFor();
       await page.locator('#lifePreservationOpen').click(); await page.locator('#lifePreservation').waitFor();
       assert.match(await page.locator('.life-toolbar').innerText(), /보관 범위·근거 파일/);
       await page.locator('#lifeAccountToggle').focus();

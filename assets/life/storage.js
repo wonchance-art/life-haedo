@@ -3008,6 +3008,39 @@
       });
       changed(bundle.workspaceId, bundle.revision); return installed;
     }
+    // Full-backup restore: a capture file copy joins the exact source version of a
+    // workspace copy restored in the same run. Writes only its own key, never
+    // replaces an existing capture and checks the version's text and hash.
+    async function attachNaverCaptureCopy(workspaceId, input, { isCurrent = () => true } = {}) {
+      collectionScope(workspaceId);
+      const attachment = await naverMedia().validate(clone(input)); scopeGuard();
+      if (!attachment.localOnly) throw fault('invalid_naver_media', '파일에서 읽은 원문 사진 사본만 연결합니다.');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 원문 사진 연결을 중지했습니다.');
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        naverMedia().checkTarget(bundle, attachment);
+        const key = naverCaptureKey(workspaceId, attachment.sourceVersionId);
+        if (await meta.get(key)) throw fault('naver_capture_exists', '이미 사진이 있는 원문 버전에는 덮어쓰지 않았습니다.');
+        await meta.add({ key, value: attachment });
+        return { status: 'stored', sourceId: attachment.sourceId, sourceVersionId: attachment.sourceVersionId };
+      });
+      naverMediaChanged(workspaceId, attachment.sourceVersionId); return result;
+    }
+    // Counts only: which versions of a workspace have a capture, without validating or decoding photos.
+    async function listNaverCaptures(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `naver-capture:${workspaceId}:`, rows = [];
+        for (const key of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff'))) {
+          if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
+          const photos = (await meta.get(key))?.value?.photos;
+          rows.push({ sourceVersionId: key.slice(prefix.length), photos: Array.isArray(photos) ? photos.length : 0,
+            bytes: Array.isArray(photos) ? photos.reduce((sum, photo) => sum + (photo?.blob?.size || 0), 0) : 0 });
+        }
+        return rows;
+      });
+    }
     async function commitLocal(request, options) { return commitLocalVerified(request, options); }
     function assertWritableSourceChanges(bundle, changes) {
       if (typeof core().isSourceActive !== 'function') return;
@@ -5063,7 +5096,7 @@
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
-      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
+      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy, attachNaverCaptureCopy, listNaverCaptures,
       listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,

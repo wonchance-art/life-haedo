@@ -156,7 +156,10 @@ async function main() {
         await nav(page, 'tools'); await capture(page, 'home-tools', size);
         await nav(page, 'manage'); await capture(page, 'home-manage', size);
         await openManagement(page); await capture(page, 'home-management-options', size);
-        if (phase === 'after') { await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await capture(page, 'home-transfer', size); }
+        if (phase === 'after') {
+          await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await capture(page, 'home-backup', size);
+          await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await capture(page, 'home-transfer', size);
+        }
       });
       await run('guest', null, async (page, context) => {
         await page.goto(base + '/index.html'); await shellReady(page); await capture(page, 'home-welcome', size);

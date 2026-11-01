@@ -6,7 +6,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const {FakeCloud,platformContext,cloud,openManagement,openSection}=require('./life-sync-browser.cjs');
+const {FakeCloud,platformContext,cloud,openManagement,openBackupCenter,openSection}=require('./life-sync-browser.cjs');
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 
 function loadPlaywright() {
@@ -147,7 +147,7 @@ async function applicationChecks(browser, observe) {
   let originalWorkspace, backup;
   const settle = () => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
   async function click(name) {
-    if (name === '내보내기·사본 복원') await openManagement(page);
+    if (name === '내보내기·사본 복원') await openBackupCenter(page);
     if (['자료실','기록 검색','가져오기','연표'].includes(name)) {
       await openSection(page, 'records');
       if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(); }

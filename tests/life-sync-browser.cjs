@@ -183,10 +183,22 @@ async function openSection(page, section) {
 }
 async function openManagement(page) {
   await openSection(page, 'manage');
-  const back = page.getByRole('button',{name:'설정으로 돌아가기',exact:true});
-  if (await back.isVisible()) { await back.click(); await settle(page); }
+  // A format screen returns to 백업·복원 first, then to the settings list.
+  for (const name of ['백업·복원으로 돌아가기','설정으로 돌아가기']) {
+    const back = page.getByRole('button',{name,exact:true});
+    if (await back.isVisible()) { await back.click(); await settle(page); }
+  }
   const button = page.getByRole('button',{name:'현재 자료공간',exact:true});
   if (await button.getAttribute('aria-expanded') !== 'true') { await button.click(); await settle(page); }
+}
+// The file formats moved from the settings list to 설정 → 백업·복원 (2026-11-01).
+async function openBackupCenter(page) {
+  if (await page.locator('#lifeMain').getAttribute('data-mode') === 'backup') return;
+  const parent = page.getByRole('button',{name:'백업·복원으로 돌아가기',exact:true});
+  if (await parent.isVisible()) { await parent.click(); await settle(page); return; }
+  await openManagement(page);
+  await page.getByRole('button',{name:'백업·복원',exact:true}).click(); await settle(page);
+  await page.locator('#lifeMain[data-mode="backup"]').waitFor();
 }
 async function openAccount(page) {
   if (!(await page.locator('#lifeAccountToggle').isVisible())) await openSection(page, 'manage');
@@ -194,7 +206,8 @@ async function openAccount(page) {
   if (!(await toggle.evaluate(el => el.closest('details').open))) await toggle.click();
 }
 async function click(page,name) {
-  if (['동기화','내보내기·사본 복원'].includes(name)) await openManagement(page);
+  if (name === '동기화') await openManagement(page);
+  if (name === '내보내기·사본 복원') await openBackupCenter(page);
   if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button',{name,exact:true}).click(); await settle(page);
@@ -458,5 +471,5 @@ async function main() {
   console.log(`Sync browser checks: ${passed} passed, ${failures.length} failed; ${expectedConsoleErrors} expected transport/schema console errors. HTTP simulator only; live RLS and Apple hardware not proven.`);
   if (failures.length) process.exitCode=1;
 }
-module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base,openManagement,openAccount,openSection};
+module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base,openManagement,openBackupCenter,openAccount,openSection};
 if(require.main===module)main().catch(error=>{console.error(error.stack);process.exitCode=1;});

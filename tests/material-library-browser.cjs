@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { FakeCloud, accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve(process.env.MATERIAL_LIBRARY_OUT || '.local/material-library');
@@ -79,7 +79,7 @@ async function openTrash(page) {
   await page.locator('#lifeSourceTrashList').waitFor();
 }
 async function backup(page) {
-  await openManagement(page); await byName(page, '내보내기·사본 복원');
+  await openBackupCenter(page); await byName(page, '내보내기·사본 복원');
   const pending = page.waitForEvent('download'); await byName(page, 'JSON 백업');
   return JSON.parse(await fs.readFile(await (await pending).path(), 'utf8'));
 }
@@ -246,7 +246,7 @@ async function main() {
       const restored = (await snapshot(page)).bundle;
       assert.equal(await page.evaluate(async id => { const s = HaedoLife.Shell.storage; return HaedoLife.Core.sourceState(await s.read(await s.getActive()), id).status; }, f.source.id), 'active');
       assert.deepEqual(restored.sourceVersions, trashed.sourceVersions); assert.deepEqual(restored.records, trashed.records);
-      await openManagement(page); await byName(page, '내보내기·사본 복원');
+      await openBackupCenter(page); await byName(page, '내보내기·사본 복원');
       await page.locator('#lifeRestoreFile').setInputFiles({ name: 'anonymous-materials-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
       await settle(page); await byName(page, '새 사본으로 복원');
       const copied = (await snapshot(page)).bundle; assert.notEqual(copied.workspaceId, f.workspaceId); assert.equal(copied.sources.length, 1); assert.equal(copied.sourceVersions.length, 2);

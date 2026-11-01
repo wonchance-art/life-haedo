@@ -139,9 +139,15 @@ async function main() {
     });
     await check('Two-device edit: the later local edit wins and the earlier server body is kept as a separate draft', async f => {
       await draft(f, '경합 여행'); const initial = await save(f), key = accounts.a.id + ':' + initial.doc.sync.remoteId, row = f.server.posts.get(key);
-      // Another device stored an earlier-dated edit after this device last synced.
+      // Another device stores an earlier-dated edit while this device has the post
+      // open in its editor. Before the editor opens, background sync would simply
+      // adopt that edit (no conflict), so the server change is made only once the
+      // editor holds the post.
+      await f.page.getByRole('button', { name: '글 수정', exact: true }).click(); await f.page.locator('#photoTitle').waitFor();
       row.revision++; const bumped = row.revision; row.data.title = '다른 기기에서 쓴 제목'; row.data.ops.unshift({ insert: 'REMOTE_BODY_SENTINEL\n' });
-      await edit(f, '현재 기기의 새 제목'); const saved = await save(f);
+      await f.page.locator('#photoTitle').fill('현재 기기의 새 제목');
+      await f.page.locator('.ql-editor').press('End'); await f.page.locator('.ql-editor').pressSequentially(' 수정한 여행 문장');
+      const saved = await save(f);
       assert.equal(saved.doc.title, '현재 기기의 새 제목'); assert.equal(saved.doc.photos[0].digest, initial.doc.photos[0].digest);
       assert.equal(f.server.posts.get(key).data.title, '현재 기기의 새 제목'); assert.equal(f.server.posts.get(key).revision, bumped + 1);
       const kept = saved.docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · 다른 기기에서 쓴 제목');

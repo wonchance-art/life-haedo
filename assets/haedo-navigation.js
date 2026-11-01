@@ -18,7 +18,7 @@
     'naver-blog': 'records', 'naver-capture': 'records', 'obsidian-update': 'records',
     'source-trash': 'records', discover: 'records', reflection: 'records', books: 'records',
     tools: 'tools', 'annual-plan': 'tools',
-    manage: 'manage', sync: 'manage', transfer: 'manage', 'workbench-backup': 'manage', preservation: 'manage'
+    manage: 'manage', backup: 'manage', sync: 'manage', transfer: 'manage', 'workbench-backup': 'manage', preservation: 'manage'
   });
   function getSectionForView(view) {
     return Object.hasOwn(viewSections, view) ? viewSections[view] : null;
