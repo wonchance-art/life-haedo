@@ -64,6 +64,7 @@ return class BlogCloud extends BaseCloud {
     if (rpc === 'life_blog_delete') {
       this.deletedOriginals ||= new Set();
       if (row && body.p_expected_revision !== null && body.p_expected_revision !== undefined && row.revision !== body.p_expected_revision) return send({ status: 'conflict', revision: row.revision });
+      if (row?.publication?.active) return send({ status: 'published', revision: row.revision }); // 20261101160000: withdraw first
       if (row) { this.posts.delete(key); for (const name of this.originals.keys()) if (name.startsWith(owner + '/' + body.p_post_id + '/')) this.deletedOriginals.add(name); }
       return send({ status: row ? 'deleted' : 'missing', revision: row?.revision || 0, paths: [...this.deletedOriginals].filter(name => name.startsWith(owner + '/' + body.p_post_id + '/')).sort() });
     }

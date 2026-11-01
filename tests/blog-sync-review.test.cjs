@@ -1,0 +1,120 @@
+'use strict';
+// 2026-11-01 independent review of automatic account blog sync: deletion only
+// of the exact revision a device saw (B1), a draft finished on another device
+// (M1), conflict state cleared when the server wins (M2), no hidden polling (m2).
+const test = require('node:test'), assert = require('node:assert/strict');
+const { server, device, clock, post, edit, finish, Core, Photo, Blog, Sync } = require('./helpers/blog-sync-cloud.cjs');
+
+async function pair() {
+  const cloud = server(), time = clock();
+  return { cloud, time, a: await device(cloud, 'mac', { time }), b: await device(cloud, 'ipad', { time }) };
+}
+const save = (dev, doc) => dev.storage.savePhotoPost(dev.ws, doc, 0);
+const list = dev => dev.storage.listPhotoPosts(dev.ws);
+
+test('B1: a stale device deletes only the revision it saw; the newer edit survives and returns to the deleting device', async () => {
+  const { cloud, time, a, b } = await pair();
+  const doc = await save(a, await post({ title: '원래 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  const bDraft = await edit(b, doc.id, { title: '아이패드 새 수정' }, '2026-11-01T11:00:00.000Z'); await finish(b, bDraft, '2026-11-01T11:00:00.000Z');
+  await b.sync.syncNow(); assert.equal(cloud.rows.get(doc.id).revision, 2);
+  await a.sync.deletePost(a.ws, doc.id);
+  await a.sync.syncNow();
+  assert.deepEqual(cloud.stats.deletes.map(call => [call.postId, call.expected]), [[doc.id, 1]], 'deletion names the exact revision 1 the deleting device saw');
+  assert.equal(cloud.rows.get(doc.id).data.title, '아이패드 새 수정', 'the newer edit is never erased');
+  assert.deepEqual((await a.storage.listBlogSyncStates(a.ws)).tombstones, [], 'the refused deletion is dropped');
+  await a.sync.syncNow();
+  assert.deepEqual((await list(a)).map(row => row.title), ['아이패드 새 수정'], 'the deleting device receives the newer version again');
+  time.advance(60000); await b.sync.syncNow();
+  assert.deepEqual((await list(b)).map(row => row.title), ['아이패드 새 수정']);
+});
+
+test('B1: a post published on another device is never deleted by a device that thinks it is private', async () => {
+  const { cloud, a, b } = await pair();
+  const doc = await save(a, await post({ title: '공개될 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  await b.sync.publish(b.ws, doc.id, { expectedLocalRevision: (await b.storage.readPhotoPost(b.ws, doc.id)).revision });
+  assert.equal(cloud.rows.get(doc.id).publication.active, true);
+  assert.equal((await a.storage.readBlogSyncState(a.ws, doc.id)).publication, null, 'A has not seen the publication yet');
+  await a.sync.deletePost(a.ws, doc.id); await a.sync.syncNow();
+  assert.equal(cloud.rows.has(doc.id), true); assert.equal(cloud.rows.get(doc.id).publication.active, true);
+  await a.sync.syncNow();
+  assert((await list(a)).some(row => row.id === doc.id), 'the public post returns to the deleting device');
+  assert.equal((await a.storage.readBlogSyncState(a.ws, doc.id)).publication.active, true);
+  await assert.rejects(a.sync.deletePost(a.ws, doc.id), { code: 'blog_post_published' }, 'now refused locally too until withdrawn');
+});
+
+test('B1: the deleting device\'s own unacknowledged revision is still deleted', async () => {
+  const { cloud, a } = await pair();
+  const doc = await save(a, await post({ title: '보낸 직후 지울 글' })); await a.sync.syncNow();
+  const draft = await edit(a, doc.id, { title: '응답을 못 받은 수정' }, '2026-11-01T11:00:00.000Z'); const edited = await finish(a, draft, '2026-11-01T11:00:00.000Z');
+  cloud.control.loseSave = true;
+  await assert.rejects(a.sync.saveDefault(a.ws, edited.id, { expectedLocalRevision: edited.revision }), { code: 'network_error' });
+  assert.equal(cloud.rows.get(doc.id).revision, 2);
+  await a.sync.deletePost(a.ws, edited.id); await a.sync.syncNow();
+  assert.equal(cloud.rows.has(doc.id), false, 'revision 2 was this device\'s own request');
+  assert.deepEqual(cloud.stats.deletes.map(call => call.expected), [1, 2]);
+});
+
+test('M1: a draft finished on another device stays saved; this device\'s later draft text is kept as its own draft without an error loop', async () => {
+  const { cloud, time, a, b } = await pair();
+  const draft = await save(a, await post({ title: '쓰는 중', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
+  time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow();
+  const aCur = await a.storage.readPhotoPost(a.ws, draft.id);
+  const finished = await a.storage.savePhotoPost(a.ws, { ...aCur, status: 'saved', title: '완성', updatedAt: '2026-11-01T10:00:00.000Z' }, aCur.revision);
+  await a.sync.saveDefault(a.ws, finished.id, { expectedLocalRevision: finished.revision });
+  const bCur = await b.storage.readPhotoPost(b.ws, draft.id);
+  await b.storage.savePhotoPost(b.ws, { ...bCur, title: '맥에서 더 쓴 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
+  for (let i = 0; i < 3; i++) { time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true }); }
+  const rows = await list(b), x = rows.find(row => row.id === draft.id);
+  assert.equal(x.status, 'saved'); assert.equal(x.title, '완성');
+  assert(rows.some(row => row.status === 'draft' && row.title === Sync.CONFLICT_PREFIX + '맥에서 더 쓴 초안'), 'the later draft text is kept');
+  assert.equal((await b.sync.getState(b.ws, draft.id)).status, 'synced'); assert.equal(b.sync.getStatus().state, 'synced');
+  assert.equal(cloud.rows.get(draft.id).data.status, 'saved'); assert.equal(cloud.rows.get(draft.id).data.title, '완성');
+  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id).length, saves = count();
+  time.advance(20 * 60000); await b.sync.syncNow();
+  assert.equal(count(), saves, 'no repeated rejected request');
+});
+
+test('M1: the same refusal reached without a revision conflict is decided once, not retried forever', async () => {
+  const { cloud, time, a, b } = await pair();
+  const draft = await save(a, await post({ title: '쓰는 중', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
+  time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow();
+  // The server row turns saved without B's binding noticing a new revision.
+  const row = cloud.rows.get(draft.id); row.data = { ...row.data, status: 'saved', title: '다른 기기 완성', updatedAt: '2026-11-01T09:30:00.000Z' };
+  const bCur = await b.storage.readPhotoPost(b.ws, draft.id);
+  await b.storage.savePhotoPost(b.ws, { ...bCur, title: '이 기기 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
+  time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true });
+  const rows = await list(b);
+  assert.equal(rows.find(r => r.id === draft.id).status, 'saved');
+  assert(rows.some(r => r.status === 'draft' && r.title === Sync.CONFLICT_PREFIX + '이 기기 초안'));
+  assert.notEqual(b.sync.getStatus().state, 'error');
+});
+
+test('M2: when the server version wins, the conflict clears its retry state and ends synced', async () => {
+  const { cloud, time, a, b } = await pair();
+  const doc = await save(a, await post({ title: '원래 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  const bDraft = await edit(b, doc.id, { title: '아이패드 이른 수정' }, '2026-11-01T10:00:00.000Z'); const bSaved = await finish(b, bDraft, '2026-11-01T10:00:00.000Z');
+  cloud.control.failSave = () => true; await b.sync.syncNow(); cloud.control.failSave = null;
+  assert.equal((await b.sync.getState(b.ws, bSaved.id)).status, 'error');
+  const aDraft = await edit(a, doc.id, { title: '맥 늦은 수정' }, '2026-11-01T11:00:00.000Z'); await finish(a, aDraft, '2026-11-01T11:00:00.000Z'); await a.sync.syncNow();
+  time.advance(10 * 60000);
+  const state = await b.sync.save(b.ws, bSaved.id);
+  assert.equal(state.status, 'synced'); assert.equal((await b.storage.readPhotoPost(b.ws, bSaved.id)).title, '맥 늦은 수정');
+  await b.sync.syncNow(); assert.equal(b.sync.getStatus().state, 'synced'); assert.equal(b.sync.getStatus().errors, 0);
+});
+
+test('m2: no polling while the page is hidden; the hidden flush runs once and visibility resumes the cycle', async () => {
+  const { a } = await pair(), timers = [], listeners = {};
+  const doc = { visibilityState: 'visible', addEventListener(name, handler) { listeners['doc:' + name] = handler; }, removeEventListener() {} };
+  const events = { document: doc, addEventListener(name, handler) { listeners[name] = handler; }, removeEventListener() {} };
+  const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote, makeId: Core.id, locks: null, now: () => a.time.now, events,
+    timers: { setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {} } });
+  sync.start();
+  const before = a.auth.verifications;
+  doc.visibilityState = 'hidden'; timers.at(-1)(); await new Promise(done => setTimeout(done, 20));
+  assert.equal(a.auth.verifications, before, 'a hidden page does not poll');
+  listeners['doc:visibilitychange'](); await new Promise(done => setTimeout(done, 100));
+  assert.equal(a.auth.verifications, before + 1, 'hiding flushes once');
+  doc.visibilityState = 'visible'; listeners['doc:visibilitychange'](); timers.at(-1)(); await new Promise(done => setTimeout(done, 100));
+  assert(a.auth.verifications > before + 1, 'becoming visible resumes the cycle');
+  sync.dispose();
+});

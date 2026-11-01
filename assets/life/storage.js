@@ -1395,7 +1395,7 @@
             // The saved post keeps its established server identity. An editing
             // draft that was synced on its own is retired on every device.
             if (ownBlog && typeof ownBlog.remoteId === 'string' && (ownBlog.remoteRevision > 0 || ownBlog.pending))
-              await meta.put({ key: blogDeleteKey(workspaceId, ownBlog.remoteId), value: { remoteId: ownBlog.remoteId, remoteWorkspaceId: ownBlog.remoteWorkspaceId || workspaceId, reason: 'replaced' } });
+              await meta.put({ key: blogDeleteKey(workspaceId, ownBlog.remoteId), value: blogTombstone(ownBlog, workspaceId, 'replaced') });
             const binding = { ...clone(priorBlog), revision: (Number.isSafeInteger(ownBlog?.revision) ? ownBlog.revision : 0) + 1, localRevision: 0, publishPending: null, unpublishPending: null, status: 'pending' };
             if (binding.pending) binding.pending.localRevision = 0;
             await meta.put({ key: `blog-sync:${workspaceId}:${value.id}`, value: binding });
@@ -2482,6 +2482,14 @@
     // the local document, its index row, its sync binding and deletion records
     // in one transaction; they never send anything themselves.
     const blogDeleteKey = (workspaceId, remoteId) => `blog-delete:${workspaceId}:${remoteId}`;
+    // A deletion names the exact server revision this device last stored (and
+    // the one its unacknowledged request would create): the server deletes only
+    // that revision, so a newer edit from another device is never erased.
+    function blogTombstone(binding, workspaceId, reason) {
+      const pendingRevision = binding.pending && Number.isSafeInteger(binding.pending.expectedRevision) ? binding.pending.expectedRevision + 1 : null;
+      return { remoteId: binding.remoteId, remoteWorkspaceId: binding.remoteWorkspaceId || workspaceId, reason,
+        remoteRevision: Number.isSafeInteger(binding.remoteRevision) ? binding.remoteRevision : 0, pendingRevision };
+    }
     function blogBindingShape(state) {
       return plain(state) && typeof state.remoteId === 'string' && !!state.remoteId && typeof state.enabled === 'boolean' &&
         Number.isSafeInteger(state.revision) && state.revision >= 1 && Number.isSafeInteger(state.remoteRevision) && state.remoteRevision >= 0 &&
@@ -2574,7 +2582,7 @@
         if (binding) {
           await meta.delete(bindingKey);
           if (blogBindingShape(binding) && (binding.remoteRevision > 0 || binding.pending))
-            await meta.put({ key: blogDeleteKey(workspaceId, binding.remoteId), value: { remoteId: binding.remoteId, remoteWorkspaceId: binding.remoteWorkspaceId || workspaceId, reason: 'deleted' } });
+            await meta.put({ key: blogDeleteKey(workspaceId, binding.remoteId), value: blogTombstone(binding, workspaceId, 'deleted') });
         }
         const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
         await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });

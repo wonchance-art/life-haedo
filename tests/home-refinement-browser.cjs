@@ -81,6 +81,15 @@ async function main() {
       assert.equal((report.backgroundSync || []).filter(call => call.name === name && call.path === '/rest/v1/rpc/life_blog_save').length, server.saves().length);
       assert.equal(report.privateSaves.filter(call => call.name === name).length, 0, 'every private save is the owner-scoped background sync');
       assert(server.saves().every(call => call.owner === accounts.a.id));
+      // No duplicate private saves: every request is a new operation and each
+      // post's server revisions strictly increase (no re-sent or racing save).
+      assert.equal(new Set(server.saves().map(call => call.body.p_operation_id)).size, server.saves().length, 'no repeated private save operation');
+      const revisions = new Map();
+      for (const call of server.saves()) {
+        const prior = revisions.get(call.body.p_post_id) ?? -1;
+        assert(call.body.p_expected_revision > prior, 'private saves of one post advance strictly: ' + call.body.p_post_id);
+        revisions.set(call.body.p_post_id, call.body.p_expected_revision);
+      }
       for (const row of server.posts.values()) { assert.equal(row.owner, accounts.a.id); assert.equal(row.publication, null); assert(['saved', 'draft'].includes(row.data.status)); }
       report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, `failure-${report.checks.length}.png`), fullPage: true }).catch(() => {}); }

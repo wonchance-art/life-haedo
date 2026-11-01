@@ -27,10 +27,12 @@ async function main() {
   async function fixture() {
     const server = new FakeCloud(), device = 'nine-compose-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 1440, height: 1000 } });
-    active = context; const remoteWrites = [], backgroundWrites = [];
+    active = context; const remoteWrites = [], backgroundWrites = [], deletes = [];
     context.on('request', request => {
       const u = new URL(request.url());
       // Owner-scoped private account sync (2026-11-01) is audited separately.
+      // Deletions are never exempt: each one is recorded and asserted explicitly.
+      if (u.pathname === '/rest/v1/rpc/life_blog_delete' && request.method() === 'POST') { deletes.push(request.postDataJSON().p_post_id); return; }
       if (isBackgroundSyncWrite(u.href)) { backgroundWrites.push(u.pathname); return; }
       if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
           (/\/storage\/v1\/object/.test(u.pathname) || /\/functions\/v1\//.test(u.pathname) ||
@@ -90,7 +92,7 @@ async function main() {
       await page.locator('#nbImageArea').selectOption('selected_area');
     }
     await go();
-    return { page, context, server, remoteWrites, backgroundWrites, seed, go, observe };
+    return { page, context, server, remoteWrites, backgroundWrites, deletes, seed, go, observe };
   }
 
   const read = page => page.evaluate(async () => {
@@ -388,7 +390,9 @@ async function main() {
       assert.equal(f.server.assetCalls.filter(call => call.method === 'POST' && call.key.includes('/' + stored.state.remoteId + '/')).length, 1, 'The unchanged original must not be uploaded twice');
       for (const marker of [...forbidden, f.seed.ref.sourceId, f.seed.ref.sourceVersionId]) assert(!JSON.stringify(remote.data).includes(marker), 'Private or unselected material reached the private post');
       assert(f.backgroundWrites.length > 0); assert.deepEqual(f.remoteWrites, [], 'only owner-scoped private account sync wrote');
-      assert(f.backgroundWrites.every(url => /^\/rest\/v1\/rpc\/life_blog_(?:save|prepare_asset|delete)$/.test(url) || url.startsWith('/storage/v1/object/haedo-blog-originals/')));
+      assert(f.backgroundWrites.every(url => /^\/rest\/v1\/rpc\/life_blog_(?:save|prepare_asset)$/.test(url) || url.startsWith('/storage/v1/object/haedo-blog-originals/')));
+      // The only deletions retire the editing draft that the explicit save replaced.
+      assert(f.deletes.every(id => id !== stored.state.remoteId && !saved.docs.some(d => d.id === id)), 'only a replaced editing draft was deleted');
       assert(f.server.blogCalls.every(call => !/publish/.test(call.rpc)), 'Saving must never publish or withdraw');
       assert.equal(f.server.writes().length, 0, 'Saving a post must not upload the source workspace');
     });

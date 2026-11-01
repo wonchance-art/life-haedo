@@ -16,6 +16,7 @@ select jsonb_build_object(
   and has_function_privilege('authenticated','public.life_blog_delete(uuid,bigint)','execute') and not has_function_privilege('anon','public.life_blog_delete(uuid,bigint)','execute')
   and (select count(*)=2 and bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in('life_blog_sync_list','life_blog_delete')),
  'heic_view_bucket',exists(select 1 from storage.buckets where id='haedo-blog-originals' and allowed_mime_types @> array['image/heic','image/heif','image/jpeg']),
+ 'published_post_delete_guard',exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_blog_private' and p.proname='delete_post' and p.prosrc like '%''published''%'),
  'deleted_originals_removable_only',exists(select 1 from pg_policy where polrelid='storage.objects'::regclass and polname='blog_originals_delete' and polcmd='d')
 ) as result;
 rollback;

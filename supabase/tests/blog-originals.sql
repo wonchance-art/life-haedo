@@ -218,12 +218,23 @@ begin
  execute 'reset role'; select count(*) into n from storage.objects where name=path_o; execute 'set local role authenticated';
  perform pg_temp.blog_assert(n=1,'a live original cannot be removed even by its owner');
  perform pg_temp.blog_assert(public.life_blog_delete(hp,5)='{"status":"conflict","revision":1}','a stale deletion cannot remove a newer head');
- r:=public.life_blog_delete(hp,1);
- perform pg_temp.blog_assert(r->>'status'='deleted' and r->'revision'='1' and r->'paths'=jsonb_build_array(least(path_o,path_v),greatest(path_o,path_v)),'deletion returns exactly this post''s original and view paths');
+ -- 20261101160000: a public post is never deleted, even when the deleting
+ -- device believes it is unpublished (another device published it).
+ perform pg_temp.blog_assert(public.life_blog_delete(hp,1)='{"status":"published","revision":1}' and public.life_blog_read(hp) is not null,'a published post is refused and kept');
+ perform pg_temp.blog_assert(public.life_blog_delete(hp,null)->>'status'='published','an unconditional deletion cannot remove a published post either');
+ execute 'set local role anon'; perform set_config('request.jwt.claims','{}',true);
+ perform pg_temp.blog_assert(public.life_blog_public_read(tok) is not null,'the refused deletion leaves the publication readable');
+ execute 'set local role authenticated'; perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ perform pg_temp.blog_assert(public.life_blog_unpublish(hp,1,gen_random_uuid())->>'status'='stored','explicit withdrawal first');
+ -- Mac stored revision 1 and deletes it while the iPad already saved revision 2.
+ perform pg_temp.blog_assert(public.life_blog_save(w,hp,1,gen_random_uuid(),h||'{"title":"아이패드에서 고친 HEIC 글"}')='{"status":"stored","revision":2}','another device saves a newer revision');
+ perform pg_temp.blog_assert(public.life_blog_delete(hp,1)='{"status":"conflict","revision":2}' and public.life_blog_read(hp)->'data'->>'title'='아이패드에서 고친 HEIC 글','a stale device deletion keeps the newer edit');
+ r:=public.life_blog_delete(hp,2);
+ perform pg_temp.blog_assert(r->>'status'='deleted' and r->'revision'='2' and r->'paths'=jsonb_build_array(least(path_o,path_v),greatest(path_o,path_v)),'deletion returns exactly this post''s original and view paths');
  perform pg_temp.blog_assert(public.life_blog_read(hp) is null and jsonb_array_length(public.life_blog_sync_list())=1,'deleted post disappears from owner reads and device sync');
  perform pg_temp.blog_assert(public.life_blog_save(w,hp,1,gen_random_uuid(),h)='{"status":"missing"}','a late edit of a deleted post reports it missing');
  execute 'set local role anon'; perform set_config('request.jwt.claims','{}',true);
- perform pg_temp.blog_assert(public.life_blog_public_read(tok) is null,'deleting a post also withdraws its publication');
+ perform pg_temp.blog_assert(public.life_blog_public_read(tok) is null,'a deleted post has no readable publication');
  execute 'set local role authenticated'; perform set_config('request.jwt.claims',jsonb_build_object('sub',b,'role','authenticated')::text,true);
  delete from storage.objects where name in(path_o,path_v);
  perform pg_temp.blog_assert(public.life_blog_delete(hp,null)->>'status'='missing','another account cannot see the deleted post');

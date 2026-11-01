@@ -2,7 +2,8 @@
 /* Two or more synthetic devices of one account: each has its own real Storage
  * (serialized in-memory IndexedDB adapter) and BlogSync; they share only a
  * synthetic private blog server that follows the SQL CAS/receipt/deletion
- * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql. */
+ * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql and
+ * 20261101160000_life_blog_delete_guard.sql. */
 const assert = require('node:assert/strict');
 const { createStorage } = require('../../assets/life/storage.js');
 const Core = require('../../assets/life/core.js'), Photo = require('../../assets/life/photo-post.js'), Blog = require('../../assets/life/blog.js');
@@ -118,6 +119,7 @@ function server() {
         stats.deletes.push({ device: name, postId, expected });
         const row = rows.get(postId);
         if (row && expected !== null && row.revision !== expected) return { status: 'conflict', revision: row.revision };
+        if (row?.publication?.active) return { status: 'published', revision: row.revision }; // 20261101160000
         if (row) { rows.delete(postId); for (const [at, asset] of assets) if (at.startsWith(USER + '/' + postId + '/')) asset.deleted = true; }
         const paths = [...assets].filter(([at, asset]) => at.startsWith(USER + '/' + postId + '/') && asset.deleted).map(([at]) => at).sort();
         return { status: row ? 'deleted' : 'missing', revision: row?.revision || 0, paths };
