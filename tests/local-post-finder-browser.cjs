@@ -210,8 +210,16 @@ async function main() {
   }
   try {
     await check('An omitted summary stays absent from home/manager; the manager offers no per-browser finder, and the account-scoped scan reads and exports its two originals without any DB mutation', async ({ page, seeded }) => {
-      await page.locator('#homePostList').waitFor();
-      assert.equal(await page.locator('#homePostList .home-post').count(), 0);
+      await page.locator('#homePostList').waitFor(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      // 2026-11-01 one account, one blog: the home lists the indexed posts of
+      // every library of the account: the second library's saved post and the
+      // account-less post that sign-in adoption copied (same id) into the
+      // account's new copy. A document omitted from its summary list stays absent.
+      const homeIds = () => page.locator('#homePostList .home-post').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId + '@' + node.dataset.workspaceId).sort());
+      const shown = await (async () => { for (let tries = 0; tries < 100; tries++) { const ids = await homeIds(); if (ids.length === 2) return ids; await page.waitForTimeout(100); } return homeIds(); })();
+      assert.deepEqual(shown.map(row => row.split('@')[0]).sort(), [seeded.staleId, seeded.unownedId].sort());
+      assert.ok(shown.every(row => row.split('@')[1] !== seeded.unownedWorkspaceId), 'the copied post opens in the account copy, never the account-less library');
+      assert.equal(await page.locator('#homePostList [data-photo-post-id="' + seeded.missingId + '"]').count(), 0);
       await manager(page); assert.equal(await page.locator('.blog-manager-list .blog-post').count(), 0);
       assert.equal(await page.locator('#blogLocalFind').count(), 0, 'No per-device discovery choice remains');
       assert.equal(await page.getByText('이 브라우저에서 글 찾기').count(), 0);
@@ -225,7 +233,9 @@ async function main() {
       assert.equal(found.posts.find(p => p.id === seeded.draftId).status, 'draft'); assert.equal(found.posts.find(p => p.id === seeded.archivedId).archived, true);
       assert.equal(found.posts.find(p => p.id === seeded.appliedStageId).status, 'applied');
       assert.ok(found.workspaces.some(w => w.workspaceId === seeded.otherWorkspaceId));
-      assert.ok(!found.posts.some(p => [seeded.foreignPostId, seeded.unownedId].includes(p.id)));
+      assert.ok(!found.posts.some(p => p.id === seeded.foreignPostId));
+      // The account-less post is found only as the adopted account copy.
+      assert.ok(found.posts.filter(p => p.id === seeded.unownedId).every(p => !p.unowned && p.workspaceId !== seeded.unownedWorkspaceId));
       assert.ok(!found.workspaces.some(w => [seeded.foreignWorkspaceId, seeded.unownedWorkspaceId].includes(w.workspaceId)));
       assert.equal((await candidate(page, { workspaceId: seeded.foreignWorkspaceId, id: seeded.foreignPostId, kind: 'photo', revision: 1, unowned: false })).code, 'workspace_access_denied', 'A forged candidate reference must not cross account ownership');
       const exported = await page.evaluate(async input => {

@@ -10,7 +10,26 @@
     if (className) element.className = className;
     return element;
   }
-  function create({ storage, core, host, getBundle, navigate, openSource, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
+  // Posts and drafts of every library this account owns (2026-11-01: one
+  // account, one blog). Each row keeps its own workspaceId. Without an account
+  // scope only the open library is listed, as before. Recovery copies are left
+  // out unless one is the open library. A library that cannot be read is
+  // reported as `failed`; the readable ones are still listed.
+  async function listAccountPosts(storage, workspaceId) {
+    let ids = [workspaceId];
+    if (typeof storage.listAccountLibraries === 'function') {
+      try {
+        const libraries = await storage.listAccountLibraries();
+        if (libraries.some(item => item.workspaceId === workspaceId)) ids = [...new Set([workspaceId, ...libraries.filter(item => item.eligible !== false).map(item => item.workspaceId)])];
+      } catch (error) { if (error?.code !== 'auth_scope_required') throw error; }
+    }
+    const lists = await Promise.allSettled(ids.map(id => storage.listPhotoPosts(id)));
+    if (lists[0].status !== 'fulfilled') throw lists[0].reason;
+    const posts = [];
+    lists.forEach((result, index) => { if (result.status === 'fulfilled' && Array.isArray(result.value)) posts.push(...result.value.map(post => ({ ...post, workspaceId: ids[index] }))); });
+    return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
+  }
+  function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
     let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
@@ -217,7 +236,7 @@
       const readCover = async () => {
         if (!current()) return;
         try {
-          const doc = await storage.readPhotoPost(context.workspaceId, row.id);
+          const doc = await storage.readPhotoPost(row.workspaceId || context.workspaceId, row.id);
           if (!current()) return;
           if (doc.status !== 'saved' || doc.archived !== !!row.archived) throw new Error('post_changed');
           const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
@@ -259,10 +278,10 @@
     function blogPost(context, row) {
       const article = el('article', null, 'home-post'); article.dataset.homeKind = row.kind;
       const target = row.kind === 'photo' ? { photoPostId: row.id } : { postId: row.id };
-      if (row.kind === 'photo') article.dataset.photoPostId = row.id;
+      if (row.kind === 'photo') { article.dataset.photoPostId = row.id; article.dataset.workspaceId = row.workspaceId || context.workspaceId; }
       else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
       else article.dataset.postId = row.id;
-      const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
+      const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : row.kind === 'photo' ? openPhoto(context, row) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
       const meta = el('p', null, 'life-meta home-post-meta');
       const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
@@ -284,14 +303,23 @@
       footer.append(meta, read); article.append(footer);
       return article;
     }
+    // One account, one blog: a post kept in another library of this account
+    // opens there, so editing, deleting and publishing use its own library.
+    function openPhoto(context, row) {
+      const target = { photoPostId: row.id };
+      if (!row.workspaceId || row.workspaceId === context.workspaceId) return navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
+      if (typeof openPostInWorkspace !== 'function') throw new Error('post_workspace_unavailable');
+      return openPostInWorkspace(row.workspaceId, target);
+    }
     function openRow(context, row) {
       if (row.kind === 'source-draft') return navigate('write', { writing: { stageId: row.id } });
       if (row.kind === 'plain-draft') return navigate('page', { blogContext: true, pageDraftId: row.id });
-      return navigate('page', { blogContext: true, pagePreview: false, searchTarget: { photoPostId: row.id } });
+      return openPhoto(context, row);
     }
     function draftRow(context, row) {
       const article = el('article', null, 'home-draft');
       article.dataset.draftId = row.id; article.dataset.draftKind = row.kind;
+      if (row.kind === 'photo-draft') article.dataset.workspaceId = row.workspaceId || context.workspaceId;
       const open = action(context, '', () => openRow(context, row), 'home-draft-open');
       open.dataset.focusKey = 'home:draft:' + row.kind + ':' + row.id;
       const copy = el('span', null, 'home-draft-copy');
@@ -323,10 +351,11 @@
         intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
         intro.hidden = !intro.textContent;
       });
-      read('photo', '글·초안·보관함', posts => {
-        if (!Array.isArray(posts)) throw new Error('invalid_posts');
-        rows.push(...posts.map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
-          tab: post.archived ? 'archive' : post.status === 'draft' ? 'drafts' : 'posts', editing: context.photoDrafts.get(post.id) })));
+      read('photo', '글·초안·보관함', value => {
+        if (!Array.isArray(value?.posts)) throw new Error('invalid_posts');
+        rows.push(...value.posts.map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
+          tab: post.archived ? 'archive' : post.status === 'draft' ? 'drafts' : 'posts', editing: context.photoDrafts.get(post.workspaceId + ':' + post.id) })));
+        if (value.failed) errors.push({ key: 'photo', label: '일부 자료공간의 글' });
       });
       read('plainDrafts', '첨부 글 초안', drafts => {
         life.PagePosts.validate(drafts.posts);
@@ -487,7 +516,7 @@
       void enrichDrafts(context);
     }
     async function load(context, keys = ['workbench', 'photo', 'plainDrafts', 'sourceDrafts']) {
-      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => storage.listPhotoPosts(context.workspaceId),
+      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => listAccountPosts(storage, context.workspaceId),
         plainDrafts: () => storage.readPageDrafts(context.workspaceId), sourceDrafts: () => storage.listStages(context.workspaceId) };
       context.area.setAttribute('aria-busy', 'true');
       const results = await Promise.allSettled(keys.map(key => Promise.resolve().then(read[key])));
@@ -513,17 +542,17 @@
       if ((state.books || []).some(book => !book.archived)) context.materials.append(books(context, state));
     }
     async function enrichDrafts(context) {
-      if (!showing(context) || listState.tab !== 'drafts' || context.draftLoading || context.results.photo?.status !== 'fulfilled' || !Array.isArray(context.results.photo.value)) return;
-      const drafts = context.results.photo.value.filter(item => item.status === 'draft' && !item.archived && !context.photoDrafts.has(item.id)).slice(0, listState.limit);
+      if (!showing(context) || listState.tab !== 'drafts' || context.draftLoading || context.results.photo?.status !== 'fulfilled' || !Array.isArray(context.results.photo.value?.posts)) return;
+      const drafts = context.results.photo.value.posts.filter(item => item.status === 'draft' && !item.archived && !context.photoDrafts.has(item.workspaceId + ':' + item.id)).slice(0, listState.limit);
       if (!drafts.length) return;
       context.draftLoading = true;
       try {
         for (let offset = 0; offset < drafts.length; offset += 4) {
           if (!showing(context) || listState.tab !== 'drafts') return;
           const batch = drafts.slice(offset, offset + 4);
-          const details = await Promise.allSettled(batch.map(row => storage.readPhotoPost(context.workspaceId, row.id)));
+          const details = await Promise.allSettled(batch.map(row => storage.readPhotoPost(row.workspaceId || context.workspaceId, row.id)));
           if (!showing(context)) return;
-          batch.forEach((row, index) => { context.photoDrafts.set(row.id, details[index].status === 'fulfilled' ? !!details[index].value.replaces : null); });
+          batch.forEach((row, index) => { context.photoDrafts.set(row.workspaceId + ':' + row.id, details[index].status === 'fulfilled' ? !!details[index].value.replaces : null); });
         }
         if (showing(context) && listState.tab === 'drafts') updateList(context);
       } finally { context.draftLoading = false; }
@@ -644,14 +673,17 @@
     function unwatch() { stopWatch?.(); stopWatch = null; if (watchTimer) clearTimeout(watchTimer); watchTimer = null; }
     function watch(context) {
       unwatch();
+      const listener = event => {
+        if (event?.type !== 'photo_posts_changed' || !showing(context)) return;
+        if (watchTimer) clearTimeout(watchTimer);
+        watchTimer = setTimeout(() => { watchTimer = null; if (showing(context)) { context.photoDrafts.clear(); void load(context, ['photo']); } }, 250);
+      };
+      // Posts arrive in any library of the account; without an account only
+      // the open library is listed and watched.
+      try { if (typeof storage.subscribeAll === 'function') { stopWatch = storage.subscribeAll(listener); return; } }
+      catch (error) { if (error?.code !== 'auth_scope_required') { stopWatch = null; return; } }
       if (typeof storage.subscribe !== 'function') return;
-      try {
-        stopWatch = storage.subscribe(context.workspaceId, event => {
-          if (event?.type !== 'photo_posts_changed' || !showing(context)) return;
-          if (watchTimer) clearTimeout(watchTimer);
-          watchTimer = setTimeout(() => { watchTimer = null; if (showing(context)) { context.photoDrafts.clear(); void load(context, ['photo']); } }, 250);
-        });
-      } catch (_) { stopWatch = null; }
+      try { stopWatch = storage.subscribe(context.workspaceId, listener); } catch (_) { stopWatch = null; }
     }
     function leave() {
       unwatch();
@@ -666,5 +698,5 @@
     function dispose() { leave(); disposed = true; }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create });
+  life.HomeUI = Object.freeze({ create, listAccountPosts });
 })(globalThis);

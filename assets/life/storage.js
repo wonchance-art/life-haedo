@@ -4611,6 +4611,54 @@
       return stablePayload({ revision: bundle.revision, updatedAt: bundle.updatedAt,
         stages: stages.map(stage => [stage.stageId, stage.revision]).sort((a, b) => a[0].localeCompare(b[0])) });
     }
+    // Photo posts of an adopted account-less workspace (2026-11-01: one account,
+    // one blog). They are copied with their own ids, original photo bytes (and
+    // HEIC views) and remapped evidence into the account copy, so BlogSync
+    // uploads them. The account-less originals are never changed or deleted.
+    // `skip` holds ids copied before: a post later deleted from the copy is not
+    // copied again.
+    function remapUnownedEvidence(refs, toId, bundle, remap) {
+      try {
+        const next = refs.map(ref => {
+          let sourceId = remap?.sources.get(ref.sourceId), sourceVersionId = remap?.versions.get(ref.sourceVersionId);
+          if (!sourceId || !sourceVersionId) {
+            // An earlier adoption kept no id map: find the identical version by content.
+            const version = bundle.sourceVersions.find(item => item.contentHash === ref.contentHash && typeof item.contentText === 'string' &&
+              item.contentText.slice(ref.locator.start, ref.locator.end) === ref.quote);
+            if (!version) throw fault('invalid_source_reference', '원문 근거를 사본에서 찾지 못했습니다.');
+            sourceId = version.sourceId; sourceVersionId = version.id;
+          }
+          return { ...clone(ref), workspaceId: toId, sourceId, sourceVersionId };
+        });
+        checkedEvidence(next, toId); checkEvidenceTargets(next, bundle); return next;
+      } catch (_) { return null; }
+    }
+    async function copyUnownedPosts(meta, fromId, toId, toBundle, remap, skip = new Set()) {
+      const ids = new Set(), index = (await meta.get(`photo-posts:${fromId}`))?.value, prefix = `photo-post:${fromId}:`;
+      if (Array.isArray(index)) for (const row of index) if (typeof row?.id === 'string') ids.add(row.id);
+      // A document missing from the summary list is still the owner's post.
+      for (const key of await meta.getAllKeys()) if (typeof key === 'string' && key.startsWith(prefix)) ids.add(key.slice(prefix.length));
+      let target = (await meta.get(`photo-posts:${toId}`))?.value || [];
+      const copied = [], skipped = [];
+      for (const id of [...ids].sort()) {
+        if (skip.has(id)) continue;
+        const doc = (await meta.get(prefix + id))?.value;
+        try { photoPost().validate(doc); if (doc.id !== id) throw fault('invalid_photo_post', '글 식별자가 다릅니다.'); }
+        catch (_) { skipped.push({ id, code: 'invalid_photo_post' }); continue; }
+        if (await meta.get(`photo-post:${toId}:${id}`)) { copied.push(id); continue; }
+        if (target.length >= 200) { skipped.push({ id, code: 'photo_post_limit' }); continue; }
+        await meta.put({ key: `photo-post:${toId}:${id}`, value: clone(doc) });
+        target = target.filter(row => row.id !== id).concat(photoSummary(doc));
+        const evidence = (await meta.get(`post-evidence:${fromId}:${id}`))?.value;
+        if (Array.isArray(evidence?.refs) && evidence.refs.length) {
+          const refs = remapUnownedEvidence(evidence.refs, toId, toBundle, remap);
+          if (refs) await meta.put({ key: `post-evidence:${toId}:${id}`, value: { revision: 1, refs } });
+        }
+        copied.push(id);
+      }
+      await meta.put({ key: `photo-posts:${toId}`, value: target });
+      return { copied, skipped };
+    }
     async function importUnownedWorkspace(workspaceId, options = {}) {
       if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 사본으로 가져와 주세요.');
       requireId(workspaceId, '이전 작업공간');
@@ -4690,10 +4738,12 @@
         await tx.objectStore('bundles').add(copy);
         await saveOwner(tx.objectStore('meta'), copy.workspaceId);
         for (const stage of copiedStages) await tx.objectStore('staging').add(stage);
-        await tx.objectStore('meta').put({ key: unownedAdoptionKey(workspaceId), value: { copyWorkspaceId: copy.workspaceId, stamp: unownedStamp(source.bundle, source.stages) } });
+        const posts = await copyUnownedPosts(tx.objectStore('meta'), workspaceId, copy.workspaceId, copy, { sources: sourceIds, versions: versionIds });
+        await tx.objectStore('meta').put({ key: unownedAdoptionKey(workspaceId), value: { copyWorkspaceId: copy.workspaceId, stamp: unownedStamp(source.bundle, source.stages), posts: posts.copied } });
         if (activate) await tx.objectStore('meta').put({ key: activeKey, value: copy.workspaceId });
       });
       changed(copy.workspaceId, copy.revision);
+      const event = { type: 'photo_posts_changed', workspaceId: copy.workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       return clone(copy);
     }
     // Automatic account documents (owner directive 2026-11-01). Small JSON meta
@@ -4936,6 +4986,7 @@
     // a workspace already adopted unchanged is not copied twice.
     async function adoptUnownedWorkspaces() {
       if (!account) throw fault('auth_scope_required', '로그인한 계정에서 이전 자료를 가져와 주세요.');
+      const repairs = [], failed = [];
       const candidates = await transaction(['bundles', 'staging', 'meta', 'recovery'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'), recoveryIds = new Set((await tx.objectStore('recovery').getAll()).map(item => item.copyWorkspaceId)), result = [];
         for (const bundle of await tx.objectStore('bundles').getAll()) {
@@ -4943,17 +4994,39 @@
           if ((await meta.get(`libraryRole:${bundle.workspaceId}`))?.value?.kind === 'recovery') continue;
           const stages = await tx.objectStore('staging').index('workspaceId').getAll(bundle.workspaceId);
           const done = (await meta.get(unownedAdoptionKey(bundle.workspaceId)))?.value;
-          if (done && done.stamp === unownedStamp(bundle, stages)) continue;
+          if (done && done.stamp === unownedStamp(bundle, stages)) { repairs.push({ workspaceId: bundle.workspaceId, copyWorkspaceId: done.copyWorkspaceId }); continue; }
           result.push({ workspaceId: bundle.workspaceId, title: bundle.title });
         }
         return result;
       });
-      const adopted = [], failed = [];
+      // Earlier adoptions copied sources only. Their posts (and posts written
+      // there since) are added to the same account copy, once each.
+      const repaired = [];
+      for (const repair of repairs) {
+        try {
+          const count = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+            const meta = tx.objectStore('meta'), markerKey = unownedAdoptionKey(repair.workspaceId), marker = (await meta.get(markerKey))?.value;
+            if (!marker || marker.copyWorkspaceId !== repair.copyWorkspaceId || await workspaceOwner(meta, repair.workspaceId)) return 0;
+            if (!sameAccount(await workspaceOwner(meta, repair.copyWorkspaceId), account)) return 0;
+            const copyBundle = await tx.objectStore('bundles').get(repair.copyWorkspaceId); if (!copyBundle) return 0;
+            const known = new Set(Array.isArray(marker.posts) ? marker.posts : []);
+            const result = await copyUnownedPosts(meta, repair.workspaceId, repair.copyWorkspaceId, copyBundle, null, known);
+            const added = result.copied.filter(id => !known.has(id));
+            if (added.length || !Array.isArray(marker.posts)) await meta.put({ key: markerKey, value: { ...marker, posts: [...known, ...added] } });
+            return added.length;
+          });
+          if (count) {
+            repaired.push({ from: repair.workspaceId, workspaceId: repair.copyWorkspaceId, posts: count });
+            const event = { type: 'photo_posts_changed', workspaceId: repair.copyWorkspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+          }
+        } catch (error) { scopeGuard(); failed.push({ workspaceId: repair.workspaceId, code: error?.code || 'unknown' }); }
+      }
+      const adopted = [];
       for (const candidate of candidates) {
         try { const copy = await importUnownedWorkspace(candidate.workspaceId, { activate: false }); adopted.push({ from: candidate.workspaceId, workspaceId: copy.workspaceId, title: copy.title }); }
         catch (error) { scopeGuard(); failed.push({ workspaceId: candidate.workspaceId, code: error?.code || 'unknown' }); }
       }
-      return { adopted, failed };
+      return { adopted, failed, repaired };
     }
     function subscribeAll(listener) {
       scopeGuard();

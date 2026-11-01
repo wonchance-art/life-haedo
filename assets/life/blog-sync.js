@@ -32,7 +32,7 @@
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
     let parked = false;
     const removers = [];
-    const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, lastSyncAt: null, lastError: null, running: false };
+    const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, posts: null, drafts: null, lastSyncAt: null, lastError: null, running: false };
     const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(name => JSON.stringify(name) + ':' + canonical(value[name])).join(',') + '}' : JSON.stringify(value);
     const key = (ws, id) => ws + '/' + id;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -445,17 +445,21 @@
       return getStatus();
     }
     async function tally(c, rows) {
-      const local = await snapshot(c); let pending = 0, errors = 0, receiving = 0;
+      const libraries = await storage.listAccountLibraries(); guard(c);
+      const eligible = new Set(libraries.filter(item => item.eligible !== false).map(item => item.workspaceId));
+      const local = await snapshot(c, libraries.map(item => item.workspaceId)); let pending = 0, errors = 0, receiving = 0, posts = 0, drafts = 0;
       for (const [ws, value] of local.workspaces) for (const post of value.posts) {
         const status = statusOf(ws, post, value.states.get(post.id));
         if (status === 'error') errors++; else if (status === 'pending') pending++;
+        // The account's blog as the home lists it: every library but recovery copies.
+        if (eligible.has(ws)) { if (post.status === 'draft') drafts++; else posts++; }
       }
       for (const item of local.tombstones) if (retries.get(key(item.ws, 'delete:' + item.remoteId))?.error) errors++; else pending++;
       if (rows) {
         const deleted = new Set(local.tombstones.map(item => item.remoteId));
         for (const row of rows) if (!local.byRemote.has(row.id) && !deleted.has(row.id)) { if ([...retries].some(([k, value]) => k.endsWith('/' + row.id) && value.error)) errors++; else receiving++; }
       }
-      Object.assign(summary, { pending, errors, receiving, state: summary.lastError || errors ? 'error' : pending || receiving ? 'pending' : 'synced' });
+      Object.assign(summary, { pending, errors, receiving, posts, drafts, state: summary.lastError || errors ? 'error' : pending || receiving ? 'pending' : 'synced' });
     }
     function getStatus() { return { ...summary }; }
     function withLock(task) {

@@ -14,12 +14,12 @@ const copy = value => structuredClone(value), key = value => JSON.stringify(valu
 const fault = code => Object.assign(new Error(code), { code });
 
 function memoryIdb() {
-  const rows = new Map(), paths = new Map(), control = { writes: [], fail: null }; let tail = Promise.resolve();
+  const rows = new Map(), paths = new Map(), indexes = new Map(), control = { writes: [], fail: null }; let tail = Promise.resolve();
   return { rows, control, idb: { async openDB(_name, _version, callbacks) {
     let closed = false;
     const db = {
       objectStoreNames: { contains: name => rows.has(name) },
-      createObjectStore(name, options) { rows.set(name, new Map()); paths.set(name, options.keyPath); return { createIndex() {} }; },
+      createObjectStore(name, options) { rows.set(name, new Map()); paths.set(name, options.keyPath); indexes.set(name, new Map()); return { createIndex(index, path) { indexes.get(name).set(index, path); } }; },
       close() { closed = true; },
       transaction(names, mode) {
         if (closed) throw new DOMException('closed', 'InvalidStateError');
@@ -37,6 +37,7 @@ function memoryIdb() {
           if (method === 'get') return copy(store.get(key(value)));
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(item => JSON.parse(item));
+          if (method === 'indexGetAll') { const field = indexes.get(name).get(value.index); return copy([...store.values()].filter(row => key(row[field]) === key(value.value))); }
           assert.equal(mode, 'readwrite');
           const path = paths.get(name), id = method === 'delete' ? value : Array.isArray(path) ? path.map(field => value[field]) : value[path];
           const write = { name, method, id }; control.writes.push(write);
@@ -46,7 +47,8 @@ function memoryIdb() {
         }
         return { done, abort, objectStore(name) { return {
           get: item => request(name, 'get', item), getAll: () => request(name, 'getAll'), getAllKeys: () => request(name, 'getAllKeys'),
-          put: item => request(name, 'put', item), add: item => request(name, 'add', item), delete: item => request(name, 'delete', item)
+          put: item => request(name, 'put', item), add: item => request(name, 'add', item), delete: item => request(name, 'delete', item),
+          index: index => ({ getAll: item => request(name, 'indexGetAll', { index, value: item }) })
         }; } };
       }
     };

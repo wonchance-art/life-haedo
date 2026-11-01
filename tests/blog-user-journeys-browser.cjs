@@ -210,14 +210,24 @@ async function main() {
         assert.equal(await page.locator(`#homePosts [data-source-id="${refs.source}"]`).count(), 1); assert.equal(await page.locator(`[data-post-id="${refs.legacy}"]`).count(), 1); assert.equal(await page.locator('#homeFirstWrite').count(), 0);
         await fillSearch(page, 'no matching result'); assert.equal(await page.locator('#homePosts .home-first-post').count(), 0, 'An incomplete search must not claim no matches'); assert.equal(await page.locator('#homePosts .home-load-error').count(), 1);
       });
-      await check('changing workspace while a real old list read is held preserves the selected workspace and its empty state', async ({ page }) => {
+      // 2026-11-01 owner directive (one account, one blog): the home lists the
+      // posts of every library of the account, so the newly selected library
+      // shows the same account posts, each from its own library. What stays
+      // per library (profile/workbench) must come from the selected one, and
+      // the late old read must not add or duplicate rows.
+      await check('changing workspace while a real old list read is held preserves the selected workspace and its own profile', async ({ page }) => {
         await openHome(page); const sample = await seed(page);
         const other = await page.evaluate(async original => { const s = HaedoLife.Shell.storage, created = await s.createWorkspace('별도의 익명 작업공간'); await s.setActive(original); return created.workspaceId; }, sample.workspaceId);
         await page.reload(); await ready(page); await nav(page, 'tools'); await page.evaluate(() => { window.__journeyHoldList = true; }); await nav(page, 'home'); await page.waitForFunction(() => window.__journeyHeldList);
         await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), other); await settle(page);
         await page.evaluate(() => { window.__journeyHoldList = false; window.__journeyReleaseOldList = window.__journeyReleaseList; }); await home(page);
-        assert.equal((await documents(page)).workspaceId, other); assert.equal(await page.locator('#homePosts .home-post').count(), 0); assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
-        await page.evaluate(() => __journeyReleaseOldList()); await settle(page); assert.equal(await page.locator('#homePosts .home-post').count(), 0); assert.doesNotMatch(await page.locator('#homePosts').innerText(), /산책에서 발견한 문장/);
+        const rows = () => page.locator('#homePosts .home-post').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId + '@' + node.dataset.workspaceId).sort());
+        const expected = sample.ids.map(id => id + '@' + sample.workspaceId).sort();
+        assert.equal((await documents(page)).workspaceId, other); assert.deepEqual(await rows(), expected);
+        assert.equal(await page.locator('.home-author-name').innerText(), '내 블로그', 'the selected library\'s own profile');
+        await page.evaluate(() => __journeyReleaseOldList()); await settle(page);
+        assert.equal((await documents(page)).workspaceId, other); assert.deepEqual(await rows(), expected, 'the late old read adds or duplicates nothing');
+        assert.equal(await page.locator('.home-author-name').innerText(), '내 블로그'); assert.doesNotMatch(await page.locator('#lifeHome').innerText(), /느린 오후의 기록/);
       });
       await check('late account reads cannot paint old private rows into the next context', async ({ page, server, device }) => {
         await openHome(page); const sample = await seed(page); await nav(page, 'tools'); await page.evaluate(() => { window.__journeyHoldList = true; }); await nav(page, 'home'); await page.waitForFunction(() => window.__journeyHeldList);
