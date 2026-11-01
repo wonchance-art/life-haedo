@@ -75,7 +75,8 @@ test('account library and original archive scopes authorize only their own priva
   const s = setup();
   const scopes = {
     library: ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put'],
-    originals: ['life_library_capabilities', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put']
+    originals: ['life_library_capabilities', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put'],
+    'account-docs': ['life_account_document_put', 'life_account_document_changes']
   };
   for (const [scope, allowed] of Object.entries(scopes)) {
     const client = bridge.clientFactory(s.auth, { scope })(config.url, config.key);

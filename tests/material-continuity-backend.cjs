@@ -54,7 +54,7 @@ async function main() {
   }
   try {
     await fs.mkdir(out, { recursive: true }); server.docker(['exec', server.container, 'createdb', '-U', 'postgres', database]); created = true;
-    for (const file of ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration]) psql(await fs.readFile(path.resolve(__dirname, '..', file), 'utf8'));
+    for (const file of ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration, 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql']) psql(await fs.readFile(path.resolve(__dirname, '..', file), 'utf8'));
     psql(await fs.readFile(path.resolve(__dirname, '..', migration), 'utf8'));
     remote = Remote.create({ auth, model: Model, clientFactory: Platform.clientFactory });
     let bundle = Core.createWorkspace();
@@ -82,7 +82,12 @@ async function main() {
       assert.equal(data.bundle.sourceVersions.find(v => v.id === link.version.id).contentHash, null);
       assert.deepEqual(await remote.write({ remoteId: id, operationId, expectedRevision: 0, data }), { status: 'stored', revision: 1 });
       const read = await remote.read(id); assert.deepEqual(read.data, data); assert.equal(read.data.plan.blocks[0].reference.quote, reference.quote);
-      user = foreign; auth.user = { id: foreign }; auth.epoch++; assert.equal(await remote.read(id), null); assert.deepEqual(await remote.list(), { items: [], next: null }); user = owner; auth.user = { id: owner }; auth.epoch++;
+      // A signed-in account switch builds new transports: the owner's transport refuses the other user, and the
+      // other user's own transport sees nothing of the owner's (RLS).
+      user = foreign; auth.user = { id: foreign }; auth.epoch++; await assert.rejects(remote.read(id), { code: 'request_cancelled' });
+      const foreignRemote = Remote.create({ auth, model: Model, clientFactory: Platform.clientFactory });
+      assert.equal(await foreignRemote.read(id), null); assert.deepEqual(await foreignRemote.list(), { items: [], next: null }); foreignRemote.dispose();
+      user = owner; auth.user = { id: owner }; auth.epoch++;
     });
     await check('Additive edited-copy migration preserves populated legacy heads, receipts, RLS and existing signatures', async () => {
       const before = storedDigest();

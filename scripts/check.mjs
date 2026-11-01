@@ -65,5 +65,32 @@ const shell = sw.match(/const\s+SHELL\s*=\s*\[([^\]]*)\]/)?.[1];
 assert(shell, 'Service worker SHELL list not found; update the checker if its format changes');
 for (const entry of shell.matchAll(/['"]([^'"]+)['"]/g)) await localResource(entry[1], 'sw.js');
 
-console.log(`PASS: ${htmlFiles.length} HTML pages, ${scriptCount} JavaScript blocks/files, ${resourceCount} local resource references, PWA manifest and shell.`);
+// The module list is maintained by hand in the pages, the offline shell and the
+// deploy allowlist. A file missing from one of them silently drops a feature
+// offline or in the published copy, so every local file an app page loads must
+// appear in both lists. assets/platform-config.js is generated at deploy time.
+const normalize = path => path.replace(/^\.\//, '').split(/[?#]/)[0];
+const shellFiles = new Set([...shell.matchAll(/['"]([^'"]+)['"]/g)].map(entry => normalize(entry[1])));
+const deployScript = await readFile(resolve(root, 'scripts/prepare-site.mjs'), 'utf8');
+const deployList = deployScript.match(/for \(const path of \[([\s\S]*?)\]\) \{/)?.[1];
+assert(deployList, 'Deploy allowlist not found in prepare-site.mjs; update the checker if its format changes');
+const deployFiles = new Set([...deployList.matchAll(/['"]([^'"]+)['"]/g)].map(entry => normalize(entry[1])));
+const generated = new Set(['assets/platform-config.js']);
+let listedReferences = 0;
+for (const name of htmlFiles.filter(page => deployFiles.has(page))) {
+  const html = await readFile(resolve(root, name), 'utf8');
+  const offline = shellFiles.has(name);
+  for (const tag of html.matchAll(/<(?:script|link)\b[^>]*>/gi)) {
+    for (const attr of tag[0].matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(attr[1])) continue;
+      const path = normalize(decodeURIComponent(attr[1]));
+      if (!path || generated.has(path) || !/\.(?:js|css|json|webmanifest|svg|woff2)$/.test(path)) continue;
+      assert(deployFiles.has(path), `${name}: ${path} is not in the prepare-site.mjs deploy allowlist`);
+      if (offline) assert(shellFiles.has(path), `${name}: ${path} is not in the sw.js SHELL list`);
+      listedReferences++;
+    }
+  }
+}
+
+console.log(`PASS: ${htmlFiles.length} HTML pages, ${scriptCount} JavaScript blocks/files, ${resourceCount} local resource references, ${listedReferences} page modules listed for offline and deploy, PWA manifest and shell.`);
 console.log('Browser interactions, remote resources and cloud sync need separate verification.');

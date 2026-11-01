@@ -8,6 +8,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const output = path.resolve(process.env.DISCOVERY_AUTOMATION_OUTPUT || path.join(__dirname, '../.local/discovery-automation-browser'));
 const feedPath = '/assets/life/discovery-feed.json', entry = base + '/index.html?section=tools&view=external-discovery';
@@ -89,6 +90,8 @@ async function main() {
     const control = await feedRoute(context); await saveHooks(context);
     context.on('request', request => {
       const u = new URL(request.url()), body = request.postData() || '', headers = request.headers();
+      // Owner-scoped background account sync legitimately carries private settings (2026-11-01).
+      if (u.origin === cloud && isBackgroundSync(request.url())) { (report.backgroundSync ||= []).push({ check: name, path: u.pathname }); return; }
       if ([PRIVATE_TERM, PRIVATE_BODY].some(value => u.href.includes(value) || u.href.includes(encodeURIComponent(value)) || body.includes(value) || body.includes(JSON.stringify(value).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
       if (/huggingface|xethub|transformers|onnxruntime|\.onnx(?:$|\?)|\.wasm(?:$|\?)/i.test(u.href)) report.modelRequests.push({ check: name, destination: u.origin + u.pathname });
       if (u.origin === new URL(base).origin && u.pathname === feedPath) { report.catalogueRequests.push({ check: name, method: request.method(), hasQuery: !!u.search, hasBody: !!request.postData(), hasAuthorization: !!headers.authorization, referrer: headers.referer || null }); if (request.method() !== 'GET' || u.search || request.postData() || headers.authorization || headers.referer) report.privacyViolations.push({ check: name, reason: 'Catalog GET boundary' }); }

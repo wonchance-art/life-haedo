@@ -30,7 +30,7 @@
       const used = new Set(row.doc.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
       if (row.doc.photos.some(photo => !used.has(photo.id))) fail('본문에서 사용한 사진만 모음에 보관해 주세요.');
       itemIds.add(row.itemId); photos += row.doc.photos.length;
-      row.doc.photos.forEach(photo => { bytes += photo.size; });
+      row.doc.photos.forEach(photo => { bytes += photo.size + (photo.view ? photo.view.size : 0); });
     });
     if (photos > LIMITS.photos || bytes > LIMITS.bytes) fail('사진은 합계 200장·256 MiB까지 보관할 수 있습니다. 원본은 줄이지 않았습니다.');
   }
@@ -51,7 +51,8 @@
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), end = bytes.byteLength - 22;
     if (view.getUint32(end, true) !== 0x06054b50 || view.getUint16(end + 20, true) || view.getUint32(end + 4, true)) fail('모음 ZIP의 파일 목록을 확인해 주세요.');
     const count = view.getUint16(end + 10, true), start = view.getUint32(end + 16, true);
-    if (!count || count > LIMITS.posts + 1 || count !== view.getUint16(end + 8, true) || start + view.getUint32(end + 12, true) !== end) fail('모음 ZIP의 파일 개수와 크기가 다릅니다.');
+    // A nested post ZIP holds one manifest, 20 originals and up to 20 HEIC views.
+    if (!count || count > (nested ? 2 * 20 + 1 : LIMITS.posts + 1) || count !== view.getUint16(end + 8, true) || start + view.getUint32(end + 12, true) !== end) fail('모음 ZIP의 파일 개수와 크기가 다릅니다.');
     const rows = new Map(), decoder = new TextDecoder('utf-8', { fatal: true });
     let at = start, local = 0, total = 0;
     for (let index = 0; index < count; index++) {
@@ -63,7 +64,7 @@
       const encoded = bytes.subarray(at + 46, at + 46 + nameLength);
       let name; try { name = decoder.decode(encoded); } catch (_) { fail('ZIP 파일 경로의 문자 인코딩을 확인해 주세요.'); }
       const metadata = name === (nested ? 'manifest.json' : 'series.json');
-      const permitted = nested ? /^photos\/[A-Za-z0-9_-]{1,128}$/ : /^posts\/[A-Za-z0-9_-]{1,128}\.zip$/;
+      const permitted = nested ? /^(photos|views)\/[A-Za-z0-9_-]{1,128}$/ : /^posts\/[A-Za-z0-9_-]{1,128}\.zip$/;
       if ((!metadata && !permitted.test(name)) || rows.has(name)) fail('중복되거나 지원하지 않는 모음 ZIP 경로입니다.');
       total += length;
       if (compressed !== length || length > (metadata ? nested ? 2 * 1024 * 1024 : LIMITS.json : nested ? 64 * 1024 * 1024 : LIMITS.bytes) || total > LIMITS.bytes || view.getUint32(at + 42, true) !== local || local + 30 > start ||
@@ -76,7 +77,7 @@
     return rows;
   }
   function contents(doc) {
-    return { title: doc.title, ops: doc.ops, attachments: doc.attachments || [], photos: doc.photos.map(({ blob, ...photo }) => photo) };
+    return { title: doc.title, ops: doc.ops, attachments: doc.attachments || [], photos: doc.photos.map(photo => dependency('PhotoPost').metadata(photo)) };
   }
   async function readPost(row, bytes) {
     const nested = stored(bytes, true);

@@ -11,12 +11,45 @@
     bytes: 256 * 1024 * 1024,
     text: 50000,
     ops: 5000,
+    // Long edge of the derived JPEG for HEIC/HEIF originals. iOS canvases
+    // fail above ~16.7M pixels, and 4096 keeps 4:3 and 1:1 views within it.
+    viewEdge: 4096,
   });
+  const ORIGINAL_TYPES = Object.freeze([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ]);
+  const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
+  const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis"]);
+  // HEIC/HEIF originals keep their exact bytes; every display path uses the
+  // derived JPEG in `view`. Other types never carry a view.
+  const viewRequired = (type) => HEIC_TYPES.has(type);
+  const HEIC_UNSUPPORTED =
+    "이 브라우저에서는 HEIC 보기용 사본을 만들 수 없습니다. iPhone·iPad에서 추가해 주세요.";
   const fault = (message, code = "invalid_photo_post") =>
     Object.assign(new Error(message), { code });
   const posts = () =>
     root.HaedoLife?.PagePosts ||
     (typeof require === "function" && require("./page-posts.js"));
+  // Serializable photo fields: removes the original and the view Blob while
+  // keeping key order, so non-HEIC manifests stay byte-identical.
+  function metadata(p) {
+    const { blob, ...rest } = p;
+    if (rest.view) {
+      const { blob: viewBlob, ...view } = rest.view;
+      rest.view = view;
+    }
+    return rest;
+  }
+  // Same-session pairing of a validated original Blob with its view Blob, so
+  // callers that pass only `photo.blob` to Blog.hydrate after Blog.pack(doc)
+  // keep working. Hydrate still verifies size, digest and dimensions.
+  const pairs = new WeakMap();
+  const pairedView = (blob) =>
+    blob && typeof blob === "object" ? pairs.get(blob) : undefined;
   function manifest(d) {
     return {
       format:
@@ -25,7 +58,7 @@
           : "life-photo-post-backup-v2",
       title: d.title,
       ops: d.ops,
-      photos: d.photos.map(({ blob, ...metadata }) => metadata),
+      photos: d.photos.map(metadata),
       ...(d.format === "life-photo-post-v2"
         ? { attachments: d.attachments }
         : {}),
@@ -139,6 +172,7 @@
     return used;
   }
   function photo(p, withBlob = true) {
+    const heic = plain(p) && viewRequired(p.type);
     fields(p, [
       "id",
       "name",
@@ -147,12 +181,13 @@
       "height",
       "size",
       "digest",
+      ...(heic ? ["view"] : []),
       ...(withBlob ? ["blob"] : []),
     ]);
     id(p.id);
     text(p.name, 500);
     if (
-      !["image/jpeg", "image/png", "image/webp"].includes(p.type) ||
+      !ORIGINAL_TYPES.includes(p.type) ||
       !Number.isSafeInteger(p.size) ||
       p.size <= 0 ||
       p.size > LIMITS.file ||
@@ -170,6 +205,41 @@
         p.blob.type !== p.type)
     )
       throw fault("원본 사진 파일이 누락됐습니다.");
+    if (heic) checkView(p, withBlob);
+  }
+  function checkView(p, withBlob) {
+    const v = p.view;
+    fields(v, [
+      "type",
+      "size",
+      "digest",
+      "width",
+      "height",
+      ...(withBlob ? ["blob"] : []),
+    ]);
+    if (
+      v.type !== "image/jpeg" ||
+      !Number.isSafeInteger(v.size) ||
+      v.size <= 0 ||
+      v.size > LIMITS.file ||
+      !Number.isSafeInteger(v.width) ||
+      v.width < 1 ||
+      v.width > Math.min(p.width, LIMITS.viewEdge) ||
+      !Number.isSafeInteger(v.height) ||
+      v.height < 1 ||
+      v.height > Math.min(p.height, LIMITS.viewEdge) ||
+      !/^[a-f0-9]{64}$/.test(v.digest)
+    )
+      throw fault("HEIC 사진의 보기용 사본 정보를 확인해 주세요.");
+    if (withBlob) {
+      if (
+        !(v.blob instanceof Blob) ||
+        v.blob.size !== v.size ||
+        v.blob.type !== v.type
+      )
+        throw fault("HEIC 사진의 보기용 사본 파일이 누락됐습니다.");
+      pairs.set(p.blob, v.blob);
+    }
   }
   function validate(d) {
     const v2 = d?.format === "life-photo-post-v2";
@@ -217,7 +287,7 @@
       photo(p);
       if (ids.has(p.id)) throw fault("중복된 사진 식별자입니다.");
       ids.add(p.id);
-      bytes += p.size;
+      bytes += p.size + (p.view ? p.view.size : 0);
     }
     if (bytes > LIMITS.bytes)
       throw fault(
@@ -294,47 +364,197 @@
       (b) => b.toString(16).padStart(2, "0"),
     ).join("");
   }
+  // Type from content only. HEIF: `ftyp` box with a HEVC-coded brand. A plain
+  // mif1/msf1 file counts only when it lists a HEVC brand, so AVIF is refused.
+  function detectType(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+    const s = (from, to) => String.fromCharCode(...b.subarray(from, to));
+    if (b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255)
+      return "image/jpeg";
+    if (b.length >= 8 && s(0, 8) === "\x89PNG\r\n\x1a\n") return "image/png";
+    if (b.length >= 12 && s(0, 4) === "RIFF" && s(8, 12) === "WEBP")
+      return "image/webp";
+    if (b.length >= 16 && s(4, 8) === "ftyp") {
+      const size = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
+      if (size < 16 || size % 4 || size > b.length) return null;
+      const major = s(8, 12),
+        compatible = [];
+      for (let at = 16; at + 4 <= size; at += 4) compatible.push(s(at, at + 4));
+      if (HEIC_BRANDS.has(major)) return "image/heic";
+      if (
+        (major === "mif1" || major === "msf1") &&
+        compatible.some((brand) => HEIC_BRANDS.has(brand))
+      )
+        return "image/heif";
+    }
+    return null;
+  }
+  const head = async (blob) =>
+    new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
+  function loadImage(url, message) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(),
+        timer = setTimeout(() => {
+          img.src = "";
+          reject(fault(message || "사진을 열지 못했습니다. 원본은 바꾸지 않았습니다."));
+        }, 20000);
+      img.onload = () => {
+        clearTimeout(timer);
+        resolve(img);
+      };
+      img.onerror = () => {
+        clearTimeout(timer);
+        reject(fault(message || "이 브라우저에서 사진을 열지 못했습니다."));
+      };
+      img.src = url;
+    });
+  }
+  // HEIC decoding holds a full-resolution bitmap (48 MP ≈ 190 MB). One at a
+  // time keeps several selected iPhone photos from exhausting tab memory.
+  let heicQueue = Promise.resolve();
+  function oneHeicAtATime(task) {
+    const result = heicQueue.then(task, task);
+    heicQueue = result.catch(() => {});
+    return result;
+  }
+  async function decodeImage(blob) {
+    if (typeof root.createImageBitmap === "function") {
+      try {
+        // The default orientation applies HEIF irot/imir and EXIF rotation.
+        const bitmap = await root.createImageBitmap(blob);
+        if (bitmap.width > 0 && bitmap.height > 0)
+          return {
+            image: bitmap,
+            width: bitmap.width,
+            height: bitmap.height,
+            close: () => bitmap.close?.(),
+          };
+        bitmap.close?.();
+      } catch (_) {}
+    }
+    if (typeof root.Image !== "function" || !root.URL?.createObjectURL)
+      throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+    const url = root.URL.createObjectURL(blob);
+    try {
+      const img = await loadImage(url, HEIC_UNSUPPORTED);
+      if (!img.naturalWidth || !img.naturalHeight) throw 0;
+      return {
+        image: img,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        close: () => root.URL.revokeObjectURL(url),
+      };
+    } catch (_) {
+      root.URL.revokeObjectURL(url);
+      throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+    }
+  }
+  async function encodeJpeg(image, width, height) {
+    const paint = (ctx) => {
+      if (!ctx) throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+      // JPEG has no alpha; transparent HEIF regions become white, not black.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, 0, 0, width, height);
+    };
+    if (root.document?.createElement) {
+      const canvas = root.document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      try {
+        paint(canvas.getContext("2d"));
+        return await new Promise((resolve, reject) =>
+          canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(fault(HEIC_UNSUPPORTED, "heic_unsupported"))),
+            "image/jpeg",
+            0.9,
+          ),
+        );
+      } finally {
+        // iOS keeps canvas backing stores until they are shrunk.
+        canvas.width = canvas.height = 0;
+      }
+    }
+    if (typeof root.OffscreenCanvas === "function") {
+      const canvas = new root.OffscreenCanvas(width, height);
+      paint(canvas.getContext("2d"));
+      return canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+    }
+    throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+  }
+  // Returns the displayed size of the original and a derived JPEG. The HEIC
+  // bytes themselves are never rewritten.
+  function makeView(original) {
+    return oneHeicAtATime(async () => {
+      const source = await decodeImage(original);
+      try {
+        const scale = Math.min(
+          1,
+          LIMITS.viewEdge / Math.max(source.width, source.height),
+        );
+        const width = Math.max(1, Math.min(LIMITS.viewEdge, Math.round(source.width * scale))),
+          height = Math.max(1, Math.min(LIMITS.viewEdge, Math.round(source.height * scale)));
+        const blob = await encodeJpeg(source.image, width, height);
+        if (
+          !(blob instanceof Blob) ||
+          blob.type !== "image/jpeg" ||
+          !blob.size ||
+          blob.size > LIMITS.file ||
+          detectType(await head(blob)) !== "image/jpeg"
+        )
+          throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+        return {
+          width: source.width,
+          height: source.height,
+          view: {
+            type: "image/jpeg",
+            size: blob.size,
+            digest: await digest(blob),
+            width,
+            height,
+            blob,
+          },
+        };
+      } finally {
+        source.close();
+      }
+    });
+  }
   async function readPhoto(file, makeId) {
     if (
       !file ||
-      !["", "image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      !["", ...ORIGINAL_TYPES].includes(file.type) ||
       !file.size ||
       file.size > LIMITS.file
     )
       throw fault(
-        "JPEG·PNG·WebP 사진을 골라 주세요. 원본 한 장은 64 MiB까지 보관할 수 있습니다.",
+        "JPEG·PNG·WebP·HEIC 사진을 골라 주세요. 원본 한 장은 64 MiB까지 보관할 수 있습니다.",
       );
-    const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer()),
-      s = String.fromCharCode(...signature);
-    const detectedType = signature[0] === 255 && signature[1] === 216 && signature[2] === 255
-      ? "image/jpeg" : s.startsWith("\x89PNG\r\n\x1a\n") ? "image/png"
-        : s.startsWith("RIFF") && s.slice(8) === "WEBP" ? "image/webp" : null;
-    if (!detectedType || (file.type && file.type !== detectedType))
+    const detectedType = detectType(await head(file));
+    if (
+      !detectedType ||
+      (file.type &&
+        file.type !== detectedType &&
+        !(viewRequired(file.type) && viewRequired(detectedType)))
+    )
       throw fault("사진 내용과 파일 형식이 일치하지 않습니다.");
     // An empty MIME label is supplied by some file providers. The signature
-    // determines only the label; Image below must still decode the bytes.
+    // determines only the label; the decoder below must still open the bytes.
     const original = file.slice(0, file.size, detectedType);
-    const url = URL.createObjectURL(original);
-    let width, height;
-    try {
-      [width, height] = await new Promise((resolve, reject) => {
-        const img = new Image(),
-          timer = setTimeout(() => {
-            img.src = "";
-            reject(fault("사진을 열지 못했습니다. 원본은 바꾸지 않았습니다."));
-          }, 20000);
-        img.onload = () => {
-          clearTimeout(timer);
-          resolve([img.naturalWidth, img.naturalHeight]);
-        };
-        img.onerror = () => {
-          clearTimeout(timer);
-          reject(fault("이 브라우저에서 사진을 열지 못했습니다."));
-        };
-        img.src = url;
-      });
-    } finally {
-      URL.revokeObjectURL(url);
+    let width, height, derived;
+    if (viewRequired(detectedType)) {
+      derived = await makeView(original);
+      ({ width, height } = derived);
+    } else {
+      const url = URL.createObjectURL(original);
+      try {
+        const img = await loadImage(url);
+        [width, height] = [img.naturalWidth, img.naturalHeight];
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     }
     const p = {
       id: makeId(),
@@ -344,6 +564,7 @@
       height,
       size: file.size,
       digest: await digest(file),
+      ...(derived ? { view: derived.view } : {}),
       blob: original,
     };
     photo(p);
@@ -358,6 +579,8 @@
     for (const p of d.photos) {
       const { blob } = p;
       files["photos/" + p.id] = new Uint8Array(await blob.arrayBuffer());
+      if (p.view)
+        files["views/" + p.id] = new Uint8Array(await p.view.blob.arrayBuffer());
     }
     files["manifest.json"] = zip().strToU8(JSON.stringify(manifest(d)));
     return new Blob([zip().zipSync(files, { level: 0 })], {
@@ -377,14 +600,14 @@
             seen.has(entry.name) ||
             !(
               entry.name === "manifest.json" ||
-              /^photos\/[A-Za-z0-9_-]{1,128}$/.test(entry.name)
+              /^(photos|views)\/[A-Za-z0-9_-]{1,128}$/.test(entry.name)
             )
           )
             throw fault("중복되거나 지원하지 않는 백업 경로입니다.");
           seen.add(entry.name);
           total += entry.originalSize;
           if (
-            seen.size > 21 ||
+            seen.size > 2 * LIMITS.photos + 1 ||
             (entry.name === "manifest.json" &&
               entry.originalSize > 2 * 1024 * 1024) ||
             total > LIMITS.bytes + 2 * 1024 * 1024
@@ -423,8 +646,7 @@
         m.format,
       ) ||
       !Array.isArray(m.photos) ||
-      m.photos.length > 20 ||
-      Object.keys(files).length !== m.photos.length + 1
+      m.photos.length > 20
     )
       throw fault("사진 글 전용 백업 파일인지 확인해 주세요.");
     const d = create(makeId),
@@ -443,10 +665,32 @@
       const blob = new Blob([data], { type: p.type });
       if ((await digest(blob)) !== p.digest)
         throw fault("원본 사진의 내용이 백업 정보와 다릅니다.");
-      const next = { ...p, id: makeId(), blob };
+      let viewBlob = null;
+      if (p.view) {
+        const viewData = files["views/" + p.id];
+        if (!viewData || viewData.length !== p.view.size)
+          throw fault("HEIC 사진의 보기용 사본 파일이 누락됐습니다.");
+        viewBlob = new Blob([viewData], { type: p.view.type });
+        if (
+          detectType(viewData.subarray(0, 16)) !== "image/jpeg" ||
+          (await digest(viewBlob)) !== p.view.digest
+        )
+          throw fault("보기용 사본의 내용이 백업 정보와 다릅니다.");
+      }
+      const next = {
+        ...p,
+        id: makeId(),
+        ...(viewBlob ? { view: { ...p.view, blob: viewBlob } } : {}),
+        blob,
+      };
       ids.set(p.id, next.id);
       d.photos.push(next);
     }
+    if (
+      Object.keys(files).length !==
+      1 + m.photos.length + m.photos.filter((p) => p.view).length
+    )
+      throw fault("사진 글 전용 백업 파일인지 확인해 주세요.");
     ops(d.ops, oldIds);
     d.ops = structuredClone(d.ops).map((op) =>
       typeof op.insert === "string"
@@ -469,6 +713,10 @@
     compact,
     plainText,
     readPhoto,
+    detectType,
+    viewRequired,
+    metadata,
+    pairedView,
     digest,
     backup,
     readBackup,

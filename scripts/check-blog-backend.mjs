@@ -12,6 +12,8 @@ const run = promisify(execFile), root = resolve(dirname(fileURLToPath(import.met
 const image = "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3";
 const container = `haedo-blog-postgres-${Date.now()}${process.pid}`;
 const migration = "supabase/migrations/20261017144744_life_blog_originals.sql";
+const syncMigration = "supabase/migrations/20261101091500_life_blog_account_sync.sql";
+const deleteGuardMigration = "supabase/migrations/20261101160000_life_blog_delete_guard.sql";
 let owns = false;
 const keep = process.argv.slice(2).includes("--keep");
 if (process.argv.slice(2).some((arg) => arg !== "--keep")) throw new Error("Only --keep is supported");
@@ -95,10 +97,10 @@ try {
  if (!ready) throw new Error("isolated PostgreSQL did not start");
  const isolation = JSON.parse(docker(["inspect", container, "--format", "{{json .HostConfig}}"]));
  assert.equal(isolation.NetworkMode, "none"); assert.equal(Object.keys(isolation.PortBindings || {}).length, 0);
- await fixture("supabase/tests/blog-bootstrap.sql"); await fixture(migration);
+ await fixture("supabase/tests/blog-bootstrap.sql"); await fixture(migration); await fixture(syncMigration); await fixture(deleteGuardMigration);
  const sqlChecks = parsed(await fixture("supabase/tests/blog-originals.sql")); assert.equal(sqlChecks.failures, 0);
  const installed = parsed(await fixture("supabase/tests/blog-installation.sql")); assert.equal(Object.values(installed).every((v) => v === true), true);
- await fixture(migration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
+ await fixture(syncMigration); await fixture(deleteGuardMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
  const simultaneous = await concurrency(), streams = await edge();
  const report = { pass: true, postgres: docker(["exec", container, "postgres", "--version"]).trim(),
   sqlAssertions: sqlChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,

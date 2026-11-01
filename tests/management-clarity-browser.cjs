@@ -71,17 +71,17 @@ async function main() {
     },width);
     await check('live sync summary preserves focus, reports pause and permits recovery after read error',async({page})=>{
       await page.goto(base+'/index.html');await ready(page);await manage(page);await status(page,'unbound');
-      await button(page,'기기 간 동기화');await enable(page);await manage(page);await status(page,'synced');
-      const control=page.getByRole('button',{name:'기기 간 동기화',exact:true});await control.focus();
+      await button(page,'동기화');await enable(page);await manage(page);await status(page,'synced');
+      const control=page.getByRole('button',{name:'동기화',exact:true});await control.focus();
       await page.evaluate(async()=>{const s=HaedoLife.Shell;await s.sync.pause(await s.storage.getActive());});await status(page,'paused');
       assert.equal(await control.evaluate(el=>el===document.activeElement),true);
       await page.evaluate(()=>{window.__managementFailState=true;});await nav(page,'tools');await manage(page);await status(page,'read_error');await capture(page,'read-error',390);
-      await button(page,'기기 간 동기화');await page.getByRole('button',{name:'동기화 상태 다시 확인',exact:true}).waitFor();
+      await button(page,'동기화');await page.getByRole('button',{name:'동기화 상태 다시 확인',exact:true}).waitFor();
       await page.evaluate(()=>{window.__managementFailState=false;});await button(page,'동기화 상태 다시 확인');await page.locator('#lifeSyncState[data-sync-state=paused]').waitFor();
       await manage(page);await status(page,'paused');
     },390);
     await check('switching workspaces never labels an unbound copy with a previous server state',async({page,server})=>{
-      await page.goto(base+'/index.html');await ready(page);await manage(page);await button(page,'기기 간 동기화');await enable(page);
+      await page.goto(base+'/index.html');await ready(page);await manage(page);await button(page,'동기화');await enable(page);
       const ids=await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,a=await s.getActive(),b=await s.createWorkspace('연결하지 않은 두 번째 공간'),c=await s.createWorkspace('나중에 고른 세 번째 공간');await s.setActive(a);window.__managementHoldId=b.workspaceId;return {a,b:b.workspaceId,c:c.workspaceId};});
       await page.reload();await ready(page);await page.evaluate(id=>{window.__managementHoldId=id;},ids.b);
       await manage(page);await status(page,'synced');await button(page,'현재 자료공간');await page.locator('#lifeWorkspace').selectOption(ids.b);await settle(page);await manage(page);

@@ -7,6 +7,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
+const { blogSyncSettled } = require('./helpers/blog-sync-settle.cjs');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const Z = require('../vendor/fflate/fflate.js');
@@ -62,9 +63,13 @@ async function seed(page) {
     selected.areas[0].items[0].reason = '선택한 구절의 이유'; selected.areas[0].items[1].reason = '선택한 저장 글의 이유';
     const privateBoard = N.create(C.id); privateBoard.title = 'UNSELECTED_BOARD_SENTINEL'; privateBoard.areas[0].note = 'UNSELECTED_AREA_NOTE_SENTINEL';
     await s.saveNineBoard(workspaceId, { format: 'life-nine-board-v2', workspaceId, revision: 0, boards: [selected, privateBoard] }, 0);
-    await s.writeBlogSyncState(workspaceId, post.id, { enabled: false, status: 'paused', remoteId: 'PRIVATE_REMOTE_ID_SENTINEL', publication: { token: 'PRIVATE_PUBLIC_TOKEN_SENTINEL', active: false } }, 0);
+    // A complete earlier "paused" binding (the shape storage wrote). Its server
+    // identity is a UUID like every real binding; account sync re-enables it.
+    const remoteId = C.id();
+    await s.writeBlogSyncState(workspaceId, post.id, { enabled: false, status: 'paused', remoteId, remoteWorkspaceId: workspaceId, remoteRevision: 0, localRevision: 0,
+      remoteManifest: null, pending: null, conflict: null, error: null, publication: { token: 'PRIVATE_PUBLIC_TOKEN_SENTINEL', active: false } }, 0);
     return { workspaceId, raw, quote, locator, sourceId: old.source.id, oldVersionId: old.version.id, latestVersionId: newer.version.id,
-      postId: post.id, postRevision: post.revision, dependencyId: dependency.id, dependencyRevision: dependency.revision,
+      postId: post.id, postRevision: post.revision, remoteId, dependencyId: dependency.id, dependencyRevision: dependency.revision,
       boardId: selected.id, photoHashes: photos.map(p => ({ id: p.id, digest: p.digest, size: p.size, width: p.width, height: p.height, name: p.name, type: p.type })) };
   });
 }
@@ -183,8 +188,13 @@ async function main() {
   };
   let fixture, original, archive, manifest;
   try {
-    await page.goto(base + '/index.html'); await ready(page); fixture = await seed(page); original = await state(page, fixture.workspaceId);
-    await page.reload(); await ready(page);
+    await page.goto(base + '/index.html'); await ready(page); fixture = await seed(page);
+    // 2026-11-01: saved posts and drafts (including the earlier paused one)
+    // reach the owner's private account storage; compare once that settles.
+    await page.reload(); await ready(page); await blogSyncSettled(page, fixture.workspaceId);
+    original = await state(page, fixture.workspaceId);
+    const paused = original.posts.find(item => item.doc.id === fixture.postId).blog;
+    assert.equal(paused.enabled, true); assert.equal(paused.remoteId, fixture.remoteId); assert.equal(paused.error, null, 'the re-enabled binding uploads without error');
     await check('Management inventory and explicit selection preserve every original and require a separate file download', async () => {
       await enter(); assert.equal(await page.locator('#lifePreservation input[type="checkbox"]:checked').count(), 0);
       const scopeNotice = await page.locator('#preservationNaverPhotos').innerText();
@@ -231,7 +241,8 @@ async function main() {
       assert.equal(hash(Buffer.from(fixture.raw)), manifest.bundle.sourceVersions[0].contentHash);
       for (const key of ['records', 'links', 'resumeHints']) assert.deepEqual(manifest.bundle[key], []);
       const encoded = JSON.stringify(manifest);
-      for (const excluded of ['PRIVATE_RECORD_SENTINEL', 'UNSELECTED_SOURCE_SENTINEL', 'UNSELECTED_BODY_SENTINEL', 'UNSELECTED_POST_SENTINEL', 'UNSELECTED_POST_BODY_SENTINEL', 'UNSELECTED_BOARD_SENTINEL', 'UNSELECTED_AREA_NOTE_SENTINEL', 'UNSAVED_DRAFT_SENTINEL', 'PRIVATE_REMOTE_ID_SENTINEL', 'PRIVATE_PUBLIC_TOKEN_SENTINEL', 'LATEST_VERSION_MUST_NOT_REPLACE_OLD']) assert(!encoded.includes(excluded), excluded);
+      for (const excluded of ['PRIVATE_RECORD_SENTINEL', 'UNSELECTED_SOURCE_SENTINEL', 'UNSELECTED_BODY_SENTINEL', 'UNSELECTED_POST_SENTINEL', 'UNSELECTED_POST_BODY_SENTINEL', 'UNSELECTED_BOARD_SENTINEL', 'UNSELECTED_AREA_NOTE_SENTINEL', 'UNSAVED_DRAFT_SENTINEL', 'PRIVATE_PUBLIC_TOKEN_SENTINEL', 'LATEST_VERSION_MUST_NOT_REPLACE_OLD']) assert(!encoded.includes(excluded), excluded);
+      assert(!encoded.includes(fixture.remoteId), 'the private server identity is not exported');
       assert(encoded.includes('SELECTED_AREA_NOTE_KEEP'));
       const expectedPaths = ['manifest.json'];
       for (const p of fixture.photoHashes) { const name = 'photos/' + fixture.postId + '/' + p.id; expectedPaths.push(name); assert.equal(hash(files[name]), p.digest); assert.equal(files[name].length, p.size); }

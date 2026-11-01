@@ -1,20 +1,33 @@
-/* Adapt selected drafts to the already tested CAS/lifetime engine. Reuse its queue, retry and account boundaries. */
+/* Every writing draft of the signed-in account syncs automatically through the tested CAS/lifetime
+ * engine (one engine per draft, polling off). Conflicts keep the newest edit and store the other
+ * side as a new unlinked draft through the existing fork/recovery transaction. */
 (function (root, factory) {
   'use strict'; const api = factory(root); (root.HaedoLife ||= {}).WritingSync = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
+  // A saved record is terminal: keep it and recover the other input as a new draft.
+  // Otherwise the newer edit time wins; ties converge on the server copy.
+  function latest({ local, remote }) {
+    const other = remote?.data;
+    if (local?.state === 'applied' || other?.state === 'applied') return 'fork';
+    const mine = time(local?.updatedAt), theirs = time(other?.updatedAt);
+    if (mine === null) return 'remote';
+    return theirs !== null && theirs >= mine ? 'remote' : 'local';
+  }
   function create({ storage, sourceSync, auth = root.HaedoAuth,
-    remote = root.HaedoLife?.WritingRemote?.create({ auth }), engine = root.HaedoLife?.CompositionSync } = {}) {
+    remote = root.HaedoLife?.WritingRemote?.create({ auth }), engine = root.HaedoLife?.CompositionSync,
+    materials = undefined, interval: every = 30000 } = {}) {
     const clean = root.HaedoLife?.WritingRemote?.clean || (error => error);
     const fault = code => clean({ code });
     if (!storage?.account || !sourceSync || !auth || !remote || !engine) throw fault('account_mismatch');
     const owner = storage.account, entries = new Map(), listeners = new Set();
-    let disposed = false, started = false, interval = null, refreshing = false;
+    let disposed = false, started = false, interval = null, refreshing = null, again = false, soon = null, offAll = null, material = null;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const guard = epoch => { if (disposed || !same(auth.getAccount()) || epoch !== undefined && epoch !== auth.epoch) throw fault('request_cancelled'); };
     const binding = ws => ({ ...owner, remoteId: ws });
-    const emit = (workspaceId, draftId) => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId, draftId }); } catch (_) {} } };
+    const emit = (workspaceId, draftId, extra = null) => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId, draftId, ...(extra || {}) }); } catch (_) {} } };
     function entry(ws, id) {
       guard(); const key = ws + '/' + id;
       if (entries.has(key)) return entries.get(key);
@@ -32,6 +45,7 @@
         setCompositionConflict: (_, __, row) => storage.setWritingConflict(ws, id, binding(ws), row),
         setCompositionError: (_, __, error) => storage.setWritingError(ws, id, binding(ws), error),
         resolveCompositionSync: (_, __, request) => storage.resolveWritingSync(ws, id, binding(ws), request),
+        dismissCompositionNotice: () => storage.dismissWritingNotice(ws, id),
         readWorkbenchSnapshot: async () => { const value = await storage.readWritingSnapshot(ws, id); return { workbench: value.stage, bundle: value.bundle }; },
         listWorkspaces: async () => { const state = await getState(ws, id); return state.enabled && state.status !== 'closed' ? [{ workspaceId: id }] : []; },
         subscribe: (_, listener) => storage.subscribe(ws, event => {
@@ -44,8 +58,9 @@
         subscribe: listener => sourceSync.subscribe(event => { if (event.workspaceId === ws) listener({ workspaceId: id }); }) };
       const transport = { read: () => remote.read(ws, id), write: request => remote.write({ ...request, workspaceId: ws, draftId: id }) };
       const instance = engine.create({ storage: adapter, sourceSync: sourceAdapter, auth, remote: transport,
-        errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false });
-      instance.subscribe(() => emit(ws, id));
+        errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false,
+        autoResolve: latest });
+      instance.subscribe(event => emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null));
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
     }
@@ -54,11 +69,13 @@
       const stage = await storage.getStage(id); guard(epoch);
       if (stage && (stage.workspaceId !== ws || stage.kind !== 'writing')) throw fault('account_mismatch');
       const metadata = stage ? await storage.getWritingSyncState(ws, id) : null; guard(epoch);
-      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled,
+      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled, notice: metadata?.notice || null,
         status: !metadata ? 'not_enabled' : !metadata.enabled ? 'paused' : stage.state === 'applied' && metadata.status === 'synced' ? 'closed' : metadata.status };
     }
     async function call(method, ws, id, ...args) {
-      try { const value = entry(ws, id); const result = await value.instance[method](id, ...args); if (['enable','syncNow'].includes(method)) value.start(); return result; }
+      // Engines are driven by this loop only (no per-draft polling or focus runs): every remote
+      // read is decided against the list revision first.
+      try { const value = entry(ws, id); return await value.instance[method](id, ...args); }
       catch (error) { throw clean(error); }
     }
     async function sourceReady(ws, floor = 1) {
@@ -72,52 +89,149 @@
     async function listRemote(ws, after = null) {
       const epoch = auth.epoch; await sourceReady(ws); const rows = await remote.list(ws, after); guard(epoch); return rows;
     }
-    async function download(ws, id) {
-      guard(); const epoch = auth.epoch; await sourceReady(ws);
+    // `source` is a state the caller already read as enabled and synced for this account;
+    // the originals are then refreshed only when the draft needs a newer source head.
+    async function download(ws, id, source = null) {
+      guard(); const epoch = auth.epoch; if (!source) await sourceReady(ws);
       const row = await remote.read(ws, id); guard(epoch);
       if (!row) throw fault('remote_missing');
-      await sourceReady(ws, row.source_revision); guard(epoch);
+      if (!source || row.source_revision > source.remoteRevision) { await sourceReady(ws, row.source_revision); guard(epoch); }
       const existing = await storage.getStage(id); guard(epoch);
       if (existing) {
         if (existing.workspaceId !== ws || existing.kind !== 'writing') throw fault('account_mismatch');
         await call('enable', ws, id); guard(epoch); return { stage: await storage.getStage(id), existing: true };
       }
       const result = await storage.installWritingRemote(ws, binding(ws), row); guard(epoch);
-      entry(ws, id).start(); emit(ws, id); return result;
+      emit(ws, id, { received: true }); return result;
     }
-    async function automatic() {
-      if (disposed || refreshing || root.document?.visibilityState === 'hidden') return;
-      refreshing = true;
-      try {
-        guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
-        for (const workspace of workspaces) {
-          const states = await storage.listWritingSyncStates(workspace.workspaceId); guard(epoch);
-          for (const state of states) {
-            if (!state.enabled) continue;
-            const actual = await getState(state.workspaceId, state.draftId); guard(epoch);
-            if (actual.status === 'closed') continue;
-            const value = entry(state.workspaceId, state.draftId);
-            if (!value.started) value.start(); else value.instance.syncNow(state.draftId).catch(() => {});
+    // One pass over every workspace whose originals already sync for this account:
+    // upload every local draft, keep enabled drafts moving and install drafts that
+    // exist only on the server. Each draft fails independently; text stays local.
+    // A server without the draft schema is recorded as unavailable and retried with growing
+    // back-off (5 min → 1 h) instead of probing every draft on every cycle.
+    let availability = { status: 'unknown', until: 0, backoff: 0 };
+    const UNAVAILABLE = new Set(['schema_missing', 'permission_denied']);
+    function markUnavailable(error) {
+      if (!UNAVAILABLE.has(error?.code)) return false;
+      const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
+      availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
+    }
+    // One pass per workspace: one metadata list (100 per page) decides which draft bodies to fetch.
+    // A draft whose local text is unchanged since its last exchange and whose listed server revision
+    // equals the acknowledged one is skipped: no body read on cellular for unchanged drafts.
+    async function workspacePass(ws, epoch) {
+      const source = await sourceSync.getState(ws); guard(epoch);
+      if (!source?.enabled || !same(source.binding)) return;
+      let listed = null;
+      if (source.status === 'synced') {
+        listed = new Map();
+        try {
+          let after = null;
+          for (let page = 0; page < 50; page++) {
+            const rows = await remote.list(ws, after); guard(epoch);
+            for (const row of rows) listed.set(row.draft_id, row);
+            if (rows.length < 100) break;
+            after = rows.at(-1).draft_id;
           }
-        }
-      } catch (_) { /* Retain local text and metadata; explicit actions report errors. */ }
-      finally { refreshing = false; }
+        } catch (error) { guard(epoch); if (markUnavailable(clean(error))) throw clean(error); return; }
+        availability = { status: 'available', until: 0, backoff: 0 };
+      }
+      const stages = (await storage.listStages(ws)).filter(stage => stage.kind === 'writing'); guard(epoch);
+      const states = new Map((await storage.listWritingSyncStates(ws)).map(state => [state.draftId, state])); guard(epoch);
+      for (const stage of stages) {
+        const state = states.get(stage.stageId);
+        try {
+          if (!state) { if (stage.state !== 'applied') await call('enable', ws, stage.stageId); }
+          else if (!state.enabled) await call('enable', ws, stage.stageId);
+          else {
+            if (stage.state === 'applied' && state.status === 'synced') continue;
+            const row = listed?.get(stage.stageId);
+            const localChange = !!state.outbox || !!state.conflict || !!state.error || state.status !== 'synced' || stage.revision !== state.syncedLocalRevision;
+            const remoteChange = listed !== null && (!row || row.revision !== state.remoteRevision);
+            if (!localChange && !remoteChange) continue;
+            await entry(ws, stage.stageId).instance.syncNow(stage.stageId).catch(() => {});
+          }
+        } catch (error) { guard(epoch); if (markUnavailable(error)) throw error; /* Durable state keeps the error; the next pass retries. */ }
+        guard(epoch);
+      }
+      if (!listed) return;
+      const known = new Set(stages.map(stage => stage.stageId));
+      for (const row of listed.values()) {
+        if (row.state !== 'draft' || known.has(row.draft_id)) continue;
+        try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
+      }
+    }
+    // Callers that arrive during a pass wait for the same pass, which then runs once more.
+    // A suspended page (haedo:page-suspend) sends nothing with the old session until the shell's
+    // fresh verification is followed by haedo:page-ready. Between a persisted pagehide and its
+    // pageshow (back/forward cache) nothing starts: work there evicts the page, and nothing begun
+    // then may stand in for the resumed page's own account check. It resumes on the regular poll.
+    let suspended = false, parked = false;
+    const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
+    const resume = () => { if (!suspended) return; suspended = false; automatic(); };
+    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
+    const pageshow = event => { if (event?.persisted) parked = false; };
+    function automatic() {
+      if (disposed || suspended || parked || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (refreshing) { again = true; return refreshing; }
+      refreshing = passes().finally(() => { refreshing = null; });
+      return refreshing;
+    }
+    async function passes() {
+      if (Date.now() < availability.until) return;
+      try {
+        do {
+          again = false;
+          guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
+          for (const workspace of workspaces) {
+            try { await workspacePass(workspace.workspaceId, epoch); }
+            catch (error) { guard(epoch); if (Date.now() < availability.until) return; /* Other workspaces still sync. */ }
+          }
+        } while (again && !disposed);
+      } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
+    }
+    function nudge() {
+      if (disposed || suspended || parked || soon) return;
+      soon = root.setTimeout(() => { soon = null; automatic(); }, 3000); soon?.unref?.();
+    }
+    // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
+    // reads no body for drafts that did not change on either side.
+    function onStorage(event) {
+      if (event?.type !== 'writing_draft_changed' || !event.stageId) return;
+      nudge();
     }
     function start() { guard(); if (started) return; started = true;
-      interval = root.setInterval(automatic, 30000); interval?.unref?.();
+      interval = root.setInterval(automatic, every); interval?.unref?.();
       root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
-      root.document?.addEventListener('visibilitychange', automatic); automatic();
+      root.document?.addEventListener('visibilitychange', automatic);
+      root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
+      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
+      try { offAll = storage.subscribeAll?.(onStorage) || null; } catch (_) { offAll = null; }
+      if (materials !== null) {
+        try { material = (materials || root.HaedoLife?.MaterialContinuitySync?.automatic)?.({ storage, auth }) || null; material?.start(); }
+        catch (_) { material = null; }
+      }
+      automatic();
     }
-    function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval);
+    function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval); root.clearTimeout(soon); soon = null;
+      offAll?.(); material?.dispose(); material = null;
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
+      root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
+      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
     }
-    return Object.freeze({ start, getState, listRemote, download, dispose,
+    // { force: true } (an explicit retry) ignores the unavailable back-off once.
+    return Object.freeze({ start, getState, listRemote, download, dispose, refresh: options => { if (options?.force === true) availability.until = 0; return automatic(); },
+      // The preparation loop started with this account's writing sync (null when unavailable).
+      availability: () => ({ status: availability.status, until: availability.until }),
+      refreshMaterials: () => material?.refresh() || Promise.resolve(), materialAvailability: () => material?.availability() || null,
       enable: (ws, id) => call('enable', ws, id), pause: (ws, id) => call('pause', ws, id), syncNow: (ws, id) => call('syncNow', ws, id),
       compare: (ws, id) => call('compare', ws, id), resolve: (ws, id, choice, expected) => call('resolve', ws, id, choice, expected),
+      // The notice is stored with the draft's sync record, so it survives reloads until dismissed.
+      dismissNotice: async (ws, id) => { guard(); await storage.dismissWritingNotice(ws, id); emit(ws, id); },
       subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     });
   }
-  return Object.freeze({ create });
+  return Object.freeze({ create, latest });
 });

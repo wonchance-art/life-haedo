@@ -1068,7 +1068,12 @@
     function renderMaterialWriting(session, token) {
       onBlogModeChange({ mode: 'material' });
       const active = () => showing(token, session) && session.materialOpen;
-      session.materialContinuity ||= life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
+      // Share the account's background sync instance (one queue per preparation). Session
+      // teardown disposes its own handle only, never the background instance.
+      if (!session.materialContinuity) {
+        const background = life.MaterialContinuitySync.managerFor?.(storage);
+        session.materialContinuity = background ? Object.freeze({ ...background, dispose() {} }) : life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
+      }
       const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
       const continuityHost = el('section', null, 'mw-continuity');
       let continuityUI = null;
@@ -1127,6 +1132,15 @@
       continuityUI = life.MaterialContinuityUI.create({ host: continuityHost, manager: session.materialContinuity, workspaceId: session.workspaceId,
         getPlanId: () => session.materialUI.getView().planId, beforeAction: () => session.materialUI.flush(),
         onDirty: () => updateStatus(session), isCurrent: active,
+        isBusy: () => !!session.materialUI?.dirty(),
+        onChanged: async () => {
+          // A change arrived from another device. The parent reader snapshot always follows the stored
+          // workspace (new exact versions); the editor reloads only while it holds no unsaved input.
+          if (!active()) return;
+          const bundle = await storage.read(session.workspaceId); if (!active()) return;
+          await onBundleUpdated(bundle); if (!active() || session.materialUI.dirty()) return;
+          await session.materialUI.reload({ planId: session.materialUI.getView().planId });
+        },
         onReceived: async result => {
           if (!active()) return;
           const selectedBefore = session.materialUI.getView().planId;
@@ -3172,7 +3186,7 @@
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
       scope.hidden = managed;
-      scope.append(notice('구성은 먼저 이 브라우저에 저장됩니다. 관리의 기기 간 동기화에서 묶음·내 페이지 이어쓰기를 별도로 시작하면 같은 계정의 서버에 보관합니다. 글쓰기·가져오기 초안은 포함하지 않습니다. 자료·구성 JSON 백업으로 새 사본을 복원할 수도 있습니다. 공개 사본은 따로 게시·갱신·철회하며, 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
+      scope.append(notice('구성은 먼저 이 기기에 저장하고 같은 계정으로 로그인한 기기와 자동으로 동기화합니다. 글쓰기·가져오기 초안은 구성에 포함하지 않습니다. 자료·구성 JSON 백업으로 새 사본을 복원할 수도 있습니다. 공개 사본은 따로 게시·갱신·철회하며, 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);

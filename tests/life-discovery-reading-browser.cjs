@@ -8,6 +8,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { FakeCloud, accounts, session, cloud, base } = require('./life-sync-browser.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const repo = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.DISCOVERY_READING_OUTPUT || path.join(repo, '.local/discovery-reading-browser'));
@@ -155,7 +156,7 @@ async function main() {
     await context.route(base + feedPath, route => { control.count++; return route.fulfill({ contentType: 'application/json', body: control.body }); });
     await gate(context);
     context.on('request', request => {
-      const u = new URL(request.url()), body = request.postData() || '', h = request.headers();
+      const u = new URL(request.url()), body = request.postData() || '', h = request.headers(); if (isBackgroundSync(request.url())) { (report.backgroundSync ||= []).push({ stage: name, path: u.pathname }); return; }
       if ([PRIVATE_TEXT, PRIVATE_TOPIC].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privateLeaks.push({ stage: name, origin: u.origin, path: u.pathname });
       if (/huggingface|xethub|transformers|onnxruntime|\.onnx(?:$|\?)|\.wasm(?:$|\?)/i.test(u.href)) report.modelRequests.push({ stage: name, origin: u.origin, path: u.pathname });
       if (u.origin === new URL(base).origin && request.method() !== 'GET') report.localWrites.push({ stage: name, path: u.pathname, method: request.method() });

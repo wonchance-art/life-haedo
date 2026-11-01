@@ -1,5 +1,8 @@
 'use strict';
 // Real owner UI/SDK/IndexedDB and PNG bytes. Authentication is synthetic only.
+const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
+const { blogSyncSettled } = require('./helpers/blog-sync-settle.cjs');
+const until = async (read, label, timeout = 40000) => { const end = Date.now() + timeout; while (!(await read())) { if (Date.now() > end) throw new Error('Timed out: ' + label); await new Promise(done => setTimeout(done, 150)); } };
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -24,9 +27,13 @@ async function main() {
   async function fixture() {
     const server = new FakeCloud(), device = 'nine-compose-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 1440, height: 1000 } });
-    active = context; const remoteWrites = [];
+    active = context; const remoteWrites = [], backgroundWrites = [], deletes = [];
     context.on('request', request => {
       const u = new URL(request.url());
+      // Owner-scoped private account sync (2026-11-01) is audited separately.
+      // Deletions are never exempt: each one is recorded and asserted explicitly.
+      if (u.pathname === '/rest/v1/rpc/life_blog_delete' && request.method() === 'POST') { deletes.push(request.postDataJSON().p_post_id); return; }
+      if (isBackgroundSyncWrite(u.href)) { backgroundWrites.push(u.pathname); return; }
       if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
           (/\/storage\/v1\/object/.test(u.pathname) || /\/functions\/v1\//.test(u.pathname) ||
            /\/rest\/v1\/rpc\/(?:life_blog_(?:save|publish|unpublish|prepare_asset)|life_sync_put)/.test(u.pathname))) remoteWrites.push(u.pathname);
@@ -85,7 +92,7 @@ async function main() {
       await page.locator('#nbImageArea').selectOption('selected_area');
     }
     await go();
-    return { page, context, server, remoteWrites, seed, go, observe };
+    return { page, context, server, remoteWrites, backgroundWrites, deletes, seed, go, observe };
   }
 
   const read = page => page.evaluate(async () => {
@@ -320,7 +327,7 @@ async function main() {
       const doc = await verifyDraft(f, before); assert.deepEqual(await read(f.page), committed);
       await f.page.locator('.ql-editor').focus(); await f.page.keyboard.press('Control+End');
       await f.page.keyboard.press('Enter'); await f.page.keyboard.insertText('직접 덧붙인 여행 생각과 한글 입력');
-      await f.page.locator('.photo-status').filter({ hasText: '브라우저에 자동 임시저장됨' }).waitFor();
+      await f.page.locator('.photo-status').filter({ hasText: '자동 저장됨' }).waitFor();
       const edited = (await read(f.page)).docs.find(value => value.id === doc.id);
       assert(edited.revision > 1);
       assert(edited.ops.some(op => typeof op.insert === 'string' && op.insert.includes('직접 덧붙인 여행 생각과 한글 입력')));
@@ -354,6 +361,10 @@ async function main() {
       const saved = await read(f.page); unchanged(saved, before); assert.equal(saved.docs.length, before.docs.length + 1);
       assert.deepEqual(saved.docs.find(value => value.id === currentDoc.id), currentDoc);
       assert.equal(saved.docs.filter(value => value.status === 'draft').length, before.docs.filter(value => value.status === 'draft').length);
+      // Saved posts and drafts reach the owner's private account storage in the
+      // background (2026-11-01); compare once that cycle has settled.
+      await blogSyncSettled(f.page);
+      await until(() => [...f.server.posts.values()].filter(row => row.data.status === 'draft').every(row => saved.docs.some(d => d.id === row.id && d.status === 'draft')), 'retired editing drafts leave the server');
       const stored = await f.page.evaluate(async id => {
         const storage = HaedoLife.Shell.storage, workspaceId = await storage.getActive();
         const state = await storage.readBlogSyncState(workspaceId, id);
@@ -365,19 +376,23 @@ async function main() {
       assert.equal(stored.state.localRevision, currentDoc.revision); assert.equal(stored.state.pending, null);
       assert.equal(stored.state.remoteId, doc.id, 'Replacing a saved local ID must retain the original private server identity');
       const remote = f.server.posts.get(accounts.a.id + ':' + stored.state.remoteId);
-      assert(remote); assert.equal(f.server.posts.size, 1); assert.equal(remote.owner, accounts.a.id);
-      assert.equal(remote.workspace_id, f.seed.workspaceId); assert.equal(remote.revision, 2);
+      assert(remote); assert.equal([...f.server.posts.values()].filter(row => row.data.status === 'saved').length, saved.docs.filter(d => d.status === 'saved').length, 'one server post per saved local post; the replaced ID left no extra copy'); assert.equal(remote.owner, accounts.a.id);
+      assert([...f.server.posts.values()].every(row => row.owner === accounts.a.id && row.publication === null));
+      const postSaves = f.server.saves().filter(call => call.body.p_post_id === stored.state.remoteId);
+      assert.equal(remote.workspace_id, f.seed.workspaceId); assert.equal(remote.revision, postSaves.length, 'every stored request advanced the same private revision once');
       assert.deepEqual(remote.data, stored.manifest); assert.equal(remote.publication, null);
-      assert.equal(f.server.saves().length, 2); assert.equal(new Set(f.server.saves().map(call => call.body.p_operation_id)).size, 2);
+      assert.equal(new Set(f.server.saves().map(call => call.body.p_operation_id)).size, f.server.saves().length, 'no request was replayed under another operation');
       for (const photo of remote.data.photos) {
         const original = f.server.originals.get(remote.assets[photo.id].path);
         assert(original); assert.equal(sha(original.bytes), photo.digest); assert.equal(original.bytes.length, photo.size);
         assert.equal(original.type, photo.type); assert.equal(original.bytes.readUInt32BE(16), photo.width); assert.equal(original.bytes.readUInt32BE(20), photo.height);
       }
-      assert.equal(f.server.assetCalls.filter(call => call.method === 'POST').length, 1, 'The unchanged original must not be uploaded twice');
+      assert.equal(f.server.assetCalls.filter(call => call.method === 'POST' && call.key.includes('/' + stored.state.remoteId + '/')).length, 1, 'The unchanged original must not be uploaded twice');
       for (const marker of [...forbidden, f.seed.ref.sourceId, f.seed.ref.sourceVersionId]) assert(!JSON.stringify(remote.data).includes(marker), 'Private or unselected material reached the private post');
-      assert(f.remoteWrites.length > 0);
-      assert(f.remoteWrites.every(url => /^\/rest\/v1\/rpc\/life_blog_(?:save|prepare_asset)$/.test(url) || url.startsWith('/storage/v1/object/haedo-blog-originals/')));
+      assert(f.backgroundWrites.length > 0); assert.deepEqual(f.remoteWrites, [], 'only owner-scoped private account sync wrote');
+      assert(f.backgroundWrites.every(url => /^\/rest\/v1\/rpc\/life_blog_(?:save|prepare_asset)$/.test(url) || url.startsWith('/storage/v1/object/haedo-blog-originals/')));
+      // The only deletions retire the editing draft that the explicit save replaced.
+      assert(f.deletes.every(id => id !== stored.state.remoteId && !saved.docs.some(d => d.id === id)), 'only a replaced editing draft was deleted');
       assert(f.server.blogCalls.every(call => !/publish/.test(call.rpc)), 'Saving must never publish or withdraw');
       assert.equal(f.server.writes().length, 0, 'Saving a post must not upload the source workspace');
     });

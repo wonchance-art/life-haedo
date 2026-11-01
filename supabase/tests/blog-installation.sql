@@ -11,6 +11,12 @@ select jsonb_build_object(
  'no_client_table_access',not has_table_privilege('authenticated','haedo_blog_private.posts','select') and not has_table_privilege('anon','haedo_blog_private.posts','select'),
  'four_restrictive_storage_guards',(select count(*)=4 from pg_policy where polrelid='storage.objects'::regclass and polname in('blog_originals_read_guard','blog_originals_insert_guard','blog_originals_update_guard','blog_originals_delete_guard') and not polpermissive),
  'nine_invoker_api_wrappers',(select count(*)=9 and bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in('life_blog_list','life_blog_read','life_blog_save','life_blog_prepare_asset','life_blog_publish','life_blog_unpublish','life_blog_public_read','life_blog_public_list','life_blog_public_media')),
- 'publication_cas_argument',exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='life_blog_publish' and 'p_expected_publication_revision'=any(p.proargnames))
+ 'publication_cas_argument',exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='life_blog_publish' and 'p_expected_publication_revision'=any(p.proargnames)),
+ 'account_sync_rpcs_owner_only',has_function_privilege('authenticated','public.life_blog_sync_list()','execute') and not has_function_privilege('anon','public.life_blog_sync_list()','execute')
+  and has_function_privilege('authenticated','public.life_blog_delete(uuid,bigint)','execute') and not has_function_privilege('anon','public.life_blog_delete(uuid,bigint)','execute')
+  and (select count(*)=2 and bool_and(not p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in('life_blog_sync_list','life_blog_delete')),
+ 'heic_view_bucket',exists(select 1 from storage.buckets where id='haedo-blog-originals' and allowed_mime_types @> array['image/heic','image/heif','image/jpeg']),
+ 'published_post_delete_guard',exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_blog_private' and p.proname='delete_post' and p.prosrc like '%''published''%'),
+ 'deleted_originals_removable_only',exists(select 1 from pg_policy where polrelid='storage.objects'::regclass and polname='blog_originals_delete' and polcmd='d')
 ) as result;
 rollback;

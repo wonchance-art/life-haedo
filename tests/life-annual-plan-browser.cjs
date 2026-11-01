@@ -3,6 +3,7 @@
  * No real account, server write, external calendar, Apple device or OS file-save claim. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -92,6 +93,8 @@ async function main() {
     await storageGate(context);
     context.on('request', request => {
       const u = new URL(request.url()), body = request.postData() || '';
+      // Owner directive 2026-11-01: the plan follows the signed-in account (owner-only RPC).
+      if (isBackgroundSync(request.url())) { (report.backgroundSync ||= []).push({ check: name, path: u.pathname }); return; }
       if ([PRIVATE, RAW, '2000-02-29'].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
       if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 });
       else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });

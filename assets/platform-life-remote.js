@@ -20,7 +20,8 @@
     const material = options.scope === 'material';
     const library = options.scope === 'library';
     const originals = options.scope === 'originals';
-    if (options.scope !== undefined && !composition && !writing && !material && !library && !originals) throw fault('invalid_request');
+    const accountDocs = options.scope === 'account-docs';
+    if (options.scope !== undefined && !composition && !writing && !material && !library && !originals && !accountDocs) throw fault('invalid_request');
     if (!auth?.ready || !auth.client || typeof auth.verify !== "function")
       throw fault("auth_required");
     return (url, key) => {
@@ -127,14 +128,14 @@
         auth: borrowedAuth,
         from(table) {
           alive();
-          if (composition || writing || material || library || originals || table !== "life_workspaces") throw fault("invalid_request");
+          if (composition || writing || material || library || originals || accountDocs || table !== "life_workspaces") throw fault("invalid_request");
           return query(auth.client.from(table));
         },
         rpc(name, args) {
           alive();
-          const allowed = library ? ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put'] :
+          const allowed = accountDocs ? ['life_account_document_put', 'life_account_document_changes'] : library ? ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put'] :
             originals ? ['life_library_capabilities', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put'] :
-            material ? ['life_material_get', 'life_material_list', 'life_material_put', 'life_material_capabilities'] : writing ? ['life_writing_draft_get', 'life_writing_draft_put', 'life_writing_draft_list'] :
+            material ? ['life_material_get', 'life_material_list', 'life_material_put', 'life_material_capabilities', 'life_material_delete'] : writing ? ['life_writing_draft_get', 'life_writing_draft_put', 'life_writing_draft_list'] :
             composition ? ['life_composition_get', 'life_composition_put'] : ['life_sync_put'];
           if (!allowed.includes(name)) throw fault("invalid_request");
           return query(auth.client.rpc(name, args));

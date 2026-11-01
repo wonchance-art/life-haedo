@@ -303,26 +303,52 @@
       }
       return controls;
     }
-    function actionsHeader() {
+    // The list tabs, sort and settings controls are created once per surface and
+    // updated in place. A redraw caused by another tab's or device's change (or
+    // any background update) must not detach a control the user is pressing or
+    // has focused; replacing it would drop that click and the focus.
+    function headerControls() {
+      if (current.header?.section && current.reactionHost?.contains(current.header.section)) return current.header;
+      if (current.header?.section && !current.header.section.isConnected) current.header = null;
+      if (current.header) return current.header;
       const section = node('section', null, 'discovery-reaction-header'), tabs = node('div', null, 'discovery-collection-tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', '글 목록');
-      for (const [collection, title, id] of [['discover', '피드', 'discoveryDiscover'], ['liked', '좋아요', 'discoveryLiked'], ['bookmarked', '담기', 'discoveryBookmarked']]) {
-        const count = collection === 'discover' ? '' : ' ' + (current.actions?.entries.filter(entry => collection === 'cancelled' ? !entry.liked && !entry.bookmarked : entry[collection]).length || 0);
-        const control = button(title + count, id, () => selectCollection(collection), 'discovery-mode'); control.setAttribute('aria-pressed', String(current.collection === collection)); tabs.append(control);
+      const collections = [];
+      for (const [collection, title, id, icon] of [['discover', '피드', 'discoveryDiscover', 'news'], ['liked', '좋아요', 'discoveryLiked', 'heart'], ['bookmarked', '담기', 'discoveryBookmarked', 'bookmark']]) {
+        const control = button(null, id, () => selectCollection(collection), 'discovery-mode'); control.append(root.HaedoLife.Icons.create(icon));
+        tabs.append(control); collections.push({ collection, title, control });
       }
       const toolbar = node('div', null, 'discovery-news-toolbar');
-      for (const control of tabs.children) {
-        const label = control.textContent; control.setAttribute('aria-label', label); control.title = label;
-        control.replaceChildren(root.HaedoLife.Icons.create(control.id === 'discoveryDiscover' ? 'news' : control.id === 'discoveryLiked' ? 'heart' : 'bookmark'));
-      }
       const sort = node('select', null, 'discovery-sort'); sort.id = 'discoverySort'; sort.setAttribute('aria-label', '글 정렬');
-      for (const [value, label] of [['latest', '최신순'], ['related', '관심순'], ['personal', '개인 추천']]) {
-        const option = node('option', label); option.value = value; option.selected = current.mode === value;
-        option.disabled = value === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked); sort.append(option);
-      }
-      sort.hidden = current.collection !== 'discover'; sort.addEventListener('change', () => { if (scope()) { setMode(sort.value); surface.querySelector('#discoverySort')?.focus({ preventScroll: true }); } });
+      for (const [value, label] of [['latest', '최신순'], ['related', '관심순'], ['personal', '개인 추천']]) { const option = node('option', label); option.value = value; sort.append(option); }
+      sort.addEventListener('change', () => { if (scope()) { setMode(sort.value); surface.querySelector('#discoverySort')?.focus({ preventScroll: true }); } });
       const settings = button(null, 'discoveryNewsSettings', () => showSettings(true), 'discovery-news-settings-toggle');
-      settings.setAttribute('aria-label', '뉴스 설정'); settings.title = '뉴스 설정'; settings.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settings.setAttribute('aria-expanded', String(!!current.settingsScreen)); settings.append(root.HaedoLife.Icons.create('settings'));
+      settings.setAttribute('aria-label', '뉴스 설정'); settings.title = '뉴스 설정'; settings.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settings.append(root.HaedoLife.Icons.create('settings'));
       toolbar.append(tabs, sort, settings); section.append(toolbar);
+      current.header = { section, toolbar, collections, sort, settings };
+      return current.header;
+    }
+    function recommendationControls() {
+      const body = current.recommendationBody;
+      if (current.recommendation?.body === body) return current.recommendation;
+      const text = node('p', '', 'discovery-limitation'), apply = button('새 추천 보기', 'discoveryApplyRecommendations', applyPersonal), notice = node('p', '추천 근거가 바뀌었습니다.', 'discovery-notice');
+      body.replaceChildren(text, apply, notice);
+      current.recommendation = { body, text, apply, notice };
+      return current.recommendation;
+    }
+    function actionsHeader() {
+      const { section, toolbar, collections, sort, settings } = headerControls();
+      for (const { collection, title, control } of collections) {
+        const count = collection === 'discover' ? '' : ' ' + (current.actions?.entries.filter(entry => entry[collection]).length || 0), label = title + count;
+        control.setAttribute('aria-pressed', String(current.collection === collection)); control.setAttribute('aria-label', label); control.title = label;
+      }
+      for (const option of sort.options) {
+        option.selected = current.mode === option.value;
+        option.disabled = option.value === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked);
+      }
+      if (sort.value !== current.mode && [...sort.options].some(option => option.value === current.mode)) sort.value = current.mode;
+      sort.hidden = current.collection !== 'discover'; settings.setAttribute('aria-expanded', String(!!current.settingsScreen));
+      // Messages below the toolbar are rebuilt; the toolbar itself stays attached.
+      for (const child of [...section.children]) if (child !== toolbar) child.remove();
       current.preferencesBody.replaceChildren(personalPreferences());
       const actionHost = current.settingsScreen ? current.recoveryBody : section;
       if (current.personalOffIntent) actionHost.append(node('p', '개인 추천 중지 · 남겨 둔 선택을 해결해 주세요.', 'life-meta'));
@@ -396,7 +422,7 @@
         current.languageSettings = result.settings;
         for (const key of Object.keys(patch)) if (JSON.stringify(current.languagePatch[key]) === JSON.stringify(patch[key])) delete current.languagePatch[key];
         current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
-        message('언어 설정을 이 브라우저에 저장했습니다.');
+        message('언어 설정을 계정에 자동 저장했습니다.');
       } catch (_) { if (valid(token)) current.languageError = '언어 설정을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
       finally {
         languageWrite = null;
@@ -591,7 +617,7 @@
         for (const group of ['interests', 'sources']) for (const [id, value] of Object.entries(changes[group])) if (current.settingChanges[group][id] === value) delete current.settingChanges[group][id];
         current.autoBlocked = !desiredSettings().autoRefresh;
         if (!wasAuto && result.settings.autoRefresh) current.nextDue = Date.now() + INTERVAL;
-        current.settingsError = ''; current.status = !current.catalog?.feed && !desiredSettings().autoRefresh ? '옵션을 저장했습니다. 목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.' : '주제·출처 옵션을 이 브라우저에 저장했습니다.';
+        current.settingsError = ''; current.status = !current.catalog?.feed && !desiredSettings().autoRefresh ? '옵션을 저장했습니다. 목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.' : '주제·출처 옵션을 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.settingsError = '옵션을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 취소해 주세요.'; }
       finally {
         settingsWrite = null;
@@ -637,7 +663,7 @@
         if (result.status !== 'stored') { current.topicConflict = true; current.topicError = '다른 탭에서 주제가 바뀌었습니다. 최신 주제를 확인한 뒤 입력을 다시 저장해 주세요.'; return; }
         current.profile = result.profile; dropPersonal(true);
         if (current.topicText === submitted) { current.topicText = ''; current.topicInput.value = ''; }
-        current.topicError = ''; current.topicSaved = true; current.status = '주제를 이 브라우저에 저장했습니다.';
+        current.topicError = ''; current.topicSaved = true; current.status = '주제를 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.topicError = '주제를 저장하지 못했습니다. 입력은 남아 있습니다. 다시 저장하거나 입력을 지워 주세요.'; }
       finally { topicWrite = null; if (valid(token)) { draw(); focusTopicControl(); } }
     }
@@ -821,9 +847,9 @@
       const focused = root.document.activeElement, settingsFocus = current.settingsScreen && current.settingsPanel?.contains(focused) ? { element: focused, id: focused.id, key: focused.dataset.focusKey, scrollY: root.scrollY || 0 } : null;
       ensureSurface(); current.editor.hidden = false; drawEditor(); surface.setAttribute('aria-busy', String(busy()));
       current.reactionHost.hidden = current.body.hidden = !!current.settingsScreen; current.settingsPanel.hidden = !current.settingsScreen;
-      current.managementBody.replaceChildren(); current.recoveryBody.replaceChildren(); current.recommendationBody.replaceChildren(); current.catalogStatus.replaceChildren(); current.topicNextHost.replaceChildren();
+      current.managementBody.replaceChildren(); current.recoveryBody.replaceChildren(); current.catalogStatus.replaceChildren(); current.topicNextHost.replaceChildren();
       const body = node('div'), recoveryHost = current.settingsScreen ? current.recoveryBody : body;
-      current.reactionHost.replaceChildren(actionsHeader());
+      const header = actionsHeader(); if (current.reactionHost.firstChild !== header || current.reactionHost.childNodes.length !== 1) current.reactionHost.replaceChildren(header);
       const languages = languageControls(); if (languages.parentNode !== current.languageHost) current.languageHost.replaceChildren(languages);
       current.catalogControls.querySelector('#discoveryRefresh').disabled = current.loading;
       const status = node('p', current.loading ? '공개 글 목록을 불러오고 있습니다.' : current.status, 'discovery-status sr-only'); status.id = 'discoveryStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.hidden = !status.textContent; body.append(status);
@@ -843,13 +869,15 @@
         const discard = button('선택 취소', 'discoveryFeedbackDiscard', () => { current.pending = null; current.conflict = false; message('이번 선택을 취소했습니다. 보관된 제외 목록은 유지했습니다.'); draw(); restore(); }); discard.disabled = !!pendingWrite; recovery.append(discard); recoveryHost.append(recovery);
       } else if (current.lastFeedback) current.managementBody.append(button('방금 제외 되돌리기', 'discoveryUndo', () => undo(current.lastFeedback), 'discovery-quiet'));
       const feed = current.catalog?.feed, result = rank();
+      // The recommendation note and its action are updated in place (see headerControls).
+      const recommendation = recommendationControls(); current.recommendationBody.hidden = !(current.collection === 'discover' && current.mode === 'personal');
       if (current.collection === 'discover' && current.mode === 'personal') {
         const explanation = current.personalBlocked ? '개인 추천은 꺼져 있습니다.' : current.personalResult?.metadata?.personalization?.applied ? '좋아요한 글에 보관한 제목·태그와 겹치는 표현으로 찾았습니다.' : current.personalPending && current.personalResult ? '지금 목록 순서를 유지하고 이전 개인 추천 점수·근거를 제거했습니다. 새 추천 보기로 다시 계산할 수 있습니다.' : (current.personalInspection?.signalCount ? '좋아요 근거와 표현이 겹치는 후보가 없어 ' : '개인 추천에 사용할 좋아요 근거가 부족해 ') + (current.baselineMode === 'latest' ? '최신순' : '관심순') + '을 보여 줍니다.';
         const settled = !!current.personalResult && !current.personalPending;
         const brief = current.personalResult?.metadata?.personalization?.applied ? '보관한 좋아요의 표현으로 찾은 글입니다.' : '추천 근거가 부족해 ' + (current.baselineMode === 'latest' ? '최신순' : '관심순') + '을 보여 줍니다.';
-        current.recommendationBody.append(node('p', settled ? brief : explanation, 'discovery-limitation'));
-        const apply = button('새 추천 보기', 'discoveryApplyRecommendations', applyPersonal); apply.disabled = current.personalBlocked || !current.catalog?.feed || !!actionWrite || !!current.actionIntent || !!languageWrite || languageDirty() || current.languageConflict; apply.hidden = settled; current.recommendationBody.append(apply);
-        if (current.personalPending) current.recommendationBody.append(node('p', '추천 근거가 바뀌었습니다.', 'discovery-notice'));
+        recommendation.text.textContent = settled ? brief : explanation;
+        const apply = recommendation.apply; apply.disabled = current.personalBlocked || !current.catalog?.feed || !!actionWrite || !!current.actionIntent || !!languageWrite || languageDirty() || current.languageConflict; apply.hidden = settled;
+        recommendation.notice.hidden = !current.personalPending;
       }
       if (feed) {
         const stale = current.catalog.stale || result?.metadata?.stale;
@@ -899,7 +927,7 @@
       current.managementBody.prepend(button('반응 해제 기록 ' + cancelledCount, 'discoveryCancelled', () => selectCollection('cancelled'), 'discovery-quiet'),
         node('p', '좋아요·담기를 모두 해제한 글을 다시 찾습니다. 부정 평가가 아니며 여기서 반응을 복구할 수 있습니다.', 'life-meta'));
       current.managementBody.append(portableControls());
-      current.managementBody.append(node('p', '설정과 반응은 이 브라우저에 보관합니다.', 'discovery-privacy'));
+      current.managementBody.append(node('p', '설정과 반응은 계정에 비공개로 자동 저장됩니다.', 'discovery-privacy'));
       current.body.replaceChildren(...body.childNodes);
       readingUI?.refreshLinks();
       if (settingsFocus && !settingsFocus.element.isConnected) {
@@ -923,7 +951,7 @@
             if (!event.local) current.remoteLanguageRevision = Math.max(current.remoteLanguageRevision, event.revision);
             current.languageReadEpoch++; stopTranslation(); invalidateLanguageResults();
             if (current.initialReading) return;
-            if (languageWrite || languageDirty()) { current.languageConflict = true; current.languageError = '다른 탭에서 언어 설정이 바뀌었습니다. 최신 언어 설정을 확인해 주세요.'; draw(); }
+            if (languageWrite || languageDirty()) { current.languageConflict = true; current.languageError = '다른 탭이나 기기에서 언어 설정이 바뀌었습니다. 최신 언어 설정을 확인해 주세요.'; draw(); }
             else { draw(); reloadLanguages().catch(error => report(error)); }
           }
           if (event.type === 'discovery_actions_changed' && current.actions && event.revision > current.actions.revision) {
@@ -931,19 +959,19 @@
             if (!event.local) current.remoteActionRevision = Math.max(current.remoteActionRevision, event.revision);
             current.personalBlocked = true; current.mode = current.baselineMode; dropPersonal();
             if (actionWrite) { draw(); return; }
-            if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
+            if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭이나 기기에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
             else { draw(); reloadActions().catch(error => report(error)); }
           }
           if (event.type === 'discovery_profile_changed' && current.feedback && event.revision > current.feedback.revision && !pendingWrite) {
             capture();
-            current.conflict = !!current.pending; current.error = '다른 탭에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
+            current.conflict = !!current.pending; current.error = '다른 탭이나 기기에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
             if (!current.pending) reloadFeedback().catch(error => report(error));
           }
           if (event.type === 'discovery_settings_changed' && current.settings && event.revision > current.settings.revision) {
             dropPersonal(true); surface?.querySelectorAll('.discovery-personal-evidence').forEach(el => el.remove());
             current.autoBlocked = true; stopTimer(); cancelFetch();
             if (settingsWrite) return;
-            if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
+            if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭이나 기기에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
             else reloadSettings().catch(error => report(error));
           }
           if (event.type === 'interest_profile_changed' && current.profile && event.revision > current.profile.revision && !topicWrite) {

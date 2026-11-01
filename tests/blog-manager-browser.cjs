@@ -37,7 +37,7 @@ async function main() {
         doc.ops = [{ insert: '안전한 공개 본문\n' }, { insert: { photo: { id: photo.id, caption: '선택한 사진 설명', alt: '작은 풍경' } } }, { insert: '\n' }];
         const docs = new Map([doc, make('draft-photo', '다시 쓰는 생각', 'draft'), make('archived-photo', '보관해 둔 여행', 'saved', true)].map(d => [d.id, d]));
         life.Writing = { isOwnSource: () => true, latestVersion: bundle => bundle.sourceVersions[0] };
-        const state = { status: 'not_enabled', remoteRevision: 0, publication: null };
+        const state = { status: 'pending', remoteRevision: 0, publication: null };
         window.testData = { docs, state, opens: [], legacy: [], openContexts: [], legacyContexts: [], publishCalls: [], readFail: false, syncFail: false, listFail: false, accountCurrent: true, previewSnapshots: [] };
         const actualRender = life.BlogPublicUI.render;
         life.BlogPublicUI = { ...life.BlogPublicUI, render(snapshot, options) { testData.previewSnapshots.push(structuredClone(snapshot)); return actualRender(snapshot, options); } };
@@ -52,10 +52,10 @@ async function main() {
         };
         const sync = {
           async getState() { if (testData.syncFail) throw Object.assign(Error('아직 준비되지 않은 서버'), { code: 'schema_missing' }); return structuredClone(state); },
-          async connect() { if (testData.syncFail) throw Object.assign(Error('아직 준비되지 않은 서버'), { code: 'schema_missing' }); state.status = 'conflict'; state.remoteId = 'remote-version'; return structuredClone(state); },
-          async sync() { return this.connect(); }, async pause() { state.status = 'paused'; },
-          async list() { if (testData.syncFail) throw Object.assign(Error('준비되지 않은 서버'), { code: 'schema_missing' }); return [{ id: 'remote-version', title: '다른 기기의 글' }]; },
-          async receive() { const fresh = make('received-copy', '다른 기기의 글'); docs.set(fresh.id, fresh); return { newLocalPostId: fresh.id, post: fresh }; },
+          async statuses() { return Object.fromEntries([...docs.keys()].map(id => [id, testData.syncFail ? 'error' : state.status])); },
+          async syncNow(options) { testData.syncRuns = (testData.syncRuns || 0) + 1; testData.syncOptions = structuredClone(options || null); if (!testData.syncFail) state.status = 'synced'; return { state: state.status }; },
+          async deletePost(ws, id, options) { if (testData.deleteFail) throw Object.assign(Error('공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.'), { code: 'blog_post_published' }); if (docs.get(id)?.revision !== options.expectedRevision) throw Object.assign(Error('바뀐 글'), { code: 'photo_post_conflict' }); docs.delete(id); testData.deleted = [...(testData.deleted || []), id]; },
+          subscribe() { return () => {}; },
           async publish(ws, id, options) { if (testData.syncFail) throw Object.assign(Error('준비되지 않은 서버'), { code: 'schema_missing' }); testData.publishCalls.push(structuredClone(options)); state.status = 'synced'; state.remoteRevision = 1; state.publication = { revision: (state.publication?.revision || 0) + 1, active: true }; if (testData.failAfterPublish) testData.syncFail = true; return { publicUrl: location.origin + '/blog.html?post=stable-public-token' }; },
           async unpublish() { state.publication = { revision: (state.publication?.revision || 0) + 1, active: false }; testData.unpublished = true; },
         };
@@ -71,13 +71,14 @@ async function main() {
     await check('all formats, exact resume and query retention through partial list failure', async page => {
       assert.equal(await page.locator('.blog-post').count(), 6);
       const draftRow = page.locator('.blog-post[data-post-id="draft-photo"]');
-      assert.equal(await draftRow.locator('.blog-manager-server').count(), 0);
-      assert.equal(await draftRow.getByText('초안은 이 브라우저에 보관합니다. 기본 글쓰기에서 글을 저장하면 본문과 사진 원본을 내 계정 서버에도 비공개로 보관합니다.', { exact: true }).count(), 1);
-      assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] .blog-manager-server').count(), 1);
+      assert.equal(await page.locator('.blog-manager-server').count(), 0, 'no per-device server panel remains');
+      assert.equal(await draftRow.locator('[data-sync-post="draft-photo"]').innerText(), '저장 대기', 'drafts sync to every device too');
+      assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]').innerText(), '저장 대기');
+      for (const label of ['이 글 서버에 보관', '서버와 변경 확인', '이 글 서버 연결 중지', '이 브라우저에서 글 찾기', '별도 사본 만들기']) assert.equal(await page.getByText(label, { exact: true }).count(), 0, label);
       assert.equal(await page.getByRole('button', { name: '보관해 둔 여행', exact: true }).count(), 0);
       assert.equal(await page.getByText('가져오기 검토 제외', { exact: true }).count(), 0);
       await page.locator('#blogManagerFilter').selectOption('archived');
-      assert.equal(await page.locator('.blog-post[data-post-id="archived-photo"] .blog-manager-server').count(), 1);
+      assert.equal(await page.locator('.blog-post[data-post-id="archived-photo"] [data-sync-post="archived-photo"]').count(), 1);
       await page.locator('#blogManagerFilter').selectOption('draft'); assert.equal(await page.locator('.blog-post').count(), 3);
       await page.getByRole('button', { name: '기록 초안', exact: true }).click();
       assert.equal(await page.evaluate(() => testData.legacy[0].id), 'writing-stage');
@@ -139,18 +140,31 @@ async function main() {
         assert.equal(result.overflow, false); assert.equal(result.unnamed, 0); report.visual.push({ width, file, ...result });
       }
     });
-    await check('uninstalled server is not reported as success; conflicts keep the original and receive a fresh copy', async page => {
-      const row = page.locator('.blog-post[data-post-id="saved-photo"]');
-      await row.locator('summary').click();
+    await check('an unavailable server shows one retry status, never success; deletion asks once, refuses a published post and keeps failures local', async page => {
       await page.evaluate(() => { testData.syncFail = true; });
-      await row.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click();
-      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /아직 준비되지/);
-      assert.equal(await page.evaluate(() => testData.state.status), 'not_enabled');
+      await page.getByRole('button', { name: '글 목록 다시 불러오기', exact: true }).click(); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+      const status = page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]');
+      assert.match(await status.innerText(), /^오류 · 다시 시도/); assert.equal(await status.getAttribute('data-state'), 'error');
+      await status.getByRole('button', { name: '다시 시도', exact: true }).click();
+      assert.deepEqual(await page.evaluate(() => [testData.syncRuns, testData.syncOptions]), [1, { force: true }], 'retry skips backoff');
+      assert.match(await status.innerText(), /^오류 · 다시 시도/, 'a failed retry is never shown as saved');
       await page.evaluate(() => { testData.syncFail = false; });
-      await row.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click();
-      await row.getByRole('button', { name: '서버 글을 새 사본으로 받기', exact: true }).click();
-      assert.equal(await page.evaluate(() => testData.docs.has('saved-photo') && testData.docs.has('received-copy')), true);
-      assert.equal(await page.evaluate(() => testData.opens.at(-1)), 'received-copy');
+      await status.getByRole('button', { name: '다시 시도', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('[data-sync-post="saved-photo"]')?.textContent === '모든 기기에 저장됨');
+      page.once('dialog', dialog => dialog.dismiss());
+      await page.locator('.blog-post[data-post-id="draft-photo"]').getByRole('button', { name: '삭제', exact: true }).click();
+      assert.equal(await page.evaluate(() => testData.docs.has('draft-photo')), true, 'a dismissed confirmation deletes nothing');
+      await page.evaluate(() => { testData.deleteFail = true; });
+      page.once('dialog', dialog => dialog.accept());
+      await page.locator('.blog-post[data-post-id="saved-photo"]').getByRole('button', { name: '삭제', exact: true }).click();
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /공개를 철회한 뒤 삭제/);
+      assert.equal(await page.evaluate(() => testData.docs.has('saved-photo')), true);
+      await page.evaluate(() => { testData.deleteFail = false; });
+      page.once('dialog', dialog => { assert.match(dialog.message(), /모든 기기에서 함께 삭제/); dialog.accept(); });
+      await page.locator('.blog-post[data-post-id="draft-photo"]').getByRole('button', { name: '삭제', exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('.blog-post[data-post-id="draft-photo"]'));
+      assert.deepEqual(await page.evaluate(() => testData.deleted), ['draft-photo']);
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /다른 기기에서도 삭제됩니다/);
       await page.evaluate(() => { testData.saveFail = true; });
       await page.locator('.blog-post[data-post-id="saved-photo"]').getByRole('button', { name: '보관함으로', exact: true }).click();
       assert.equal(await page.evaluate(() => testData.docs.get('saved-photo').archived), false);
@@ -224,6 +238,10 @@ async function main() {
       // the actual SDK and account-scoped IDB for the focused return as well.
       const server = new FakeCloud();
       const context = await makeContext(browser, server, 'manager-provenance-idb', accounts.a);
+      await context.addInitScript(() => {
+        const request = LockManager.prototype.request;
+        LockManager.prototype.request = function (name, ...rest) { if (String(name).startsWith('haedo-blog-sync:')) return Promise.resolve(rest.at(-1)(null)); return request.call(this, name, ...rest); };
+      });
       await context.route(base + '/assets/life/storage.js', async route => {
         const response = await route.fetch(), source = await response.text();
         const hook = `;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async listPhotoPosts(...values){const rows=await actual.listPhotoPosts(...values);if(window.__managerHoldReturn){window.__managerReturnWaiting=true;window.__managerReturnPromise ||= new Promise(resolve=>{window.__managerReleaseReturn=()=>{window.__managerHoldReturn=false;resolve();};});await window.__managerReturnPromise;}return rows;}});}});})();`;
@@ -301,18 +319,14 @@ async function main() {
           return { post: JSON.stringify(await s.readPhotoPost(ws, saved.id)), refs: JSON.stringify(await s.readPostEvidence(ws, saved.id)) };
         }, fixture);
         const remote = server.posts.get(accounts.a.id + ':' + fixture.postId); assert(remote); assert.equal(remote.revision, 1);
-        remote.revision++; remote.updated_at = new Date().toISOString();
-        remote.data = { ...remote.data, ops: [{ insert: '서버에 새로 보관한 합성 문단\n' }, ...remote.data.ops] };
-        require('../assets/life/blog.js').validateManifest(remote.data);
         const writeCounts = () => ({ saves: server.saves().length,
           uploads: server.assetCalls.filter(call => call.method === 'POST').length,
           publications: server.blogCalls.filter(call => /life_blog_(?:publish|unpublish)$/.test(call.rpc)).length });
         const writesBefore = writeCounts(), headBefore = structuredClone(remote);
-        await nav(page, 'home'); await page.getByRole('button', { name: '서버에 보관한 글', exact: true }).click();
-        await page.locator('#accountBlogStatus[data-state="ready"]').waitFor();
-        const catalogRow = page.locator('#accountBlogList .ab-post[data-remote-id="' + fixture.postId + '"]');
-        assert.equal(await catalogRow.getAttribute('data-state'), 'remote_updated');
-        await catalogRow.locator('button[data-action="manage"][data-local-post-id="' + fixture.postId + '"]').click();
+        await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await page.locator('#homePosts [data-photo-post-id="' + fixture.postId + '"]').getByRole('button', { name: '원문 연결필터 99', exact: true }).first().click();
+        await page.locator('.photo-article').waitFor();
+        await page.locator('.photo-more > summary').click(); await page.locator('[data-post-action="manage"]').click();
         await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
         assert.equal(await page.locator('.blog-post').count(), 1);
         assert.equal(await page.locator('#blogManagerSearch').isHidden(), true);

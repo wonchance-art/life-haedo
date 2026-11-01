@@ -10,6 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { CompositionCloud } = require('./composition-sync-browser.cjs');
 const { accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
 const { playwright, ready, shellReady, settle, makeContext, nav } = require('./unified-home-browser.cjs');
 const { fixture: originalFixture } = require('./fixtures/original-attachments.cjs');
 const output = path.resolve(process.env.ACCOUNT_LIBRARY_OUTPUT || '.local/account-library');
@@ -144,7 +145,7 @@ async function main() {
         const u = new URL(request.url()), method = request.method(); if (u.origin !== cloud || ['GET', 'OPTIONS'].includes(method) || u.pathname.startsWith('/auth/')) return;
         const owner = server.libraryOwner(request); let body; try { body = request.postDataJSON(); } catch (_) {}
         const compositionRead = method === 'POST' && u.pathname === '/rest/v1/rpc/life_composition_get' && owner === value.owner && body && Object.keys(body).length === 1 && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.p_workspace_id);
-        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && ['life_sync_put', 'life_composition_put', 'life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put'].includes(rpc);
+        const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && isBackgroundSync(request.url()); // Owner-scoped account sync calls only (2026-11-01 owner directive).
         const chunk = method === 'POST' && u.pathname.startsWith('/storage/v1/object/life-library-originals/' + owner + '/');
         if (!(compositionRead || owner === value.owner && (allowedRpc || chunk))) report.forbiddenWrites.push({ name, method, path: u.pathname, owner });
       });
@@ -187,15 +188,23 @@ async function main() {
       await a.page.reload(); await ready(a.page); server.loseLibraryResponses.delete(a.name); await focus(a.page); await synced(a.page, f.id); assert.equal(server.libraryMeta(accounts.a.id, f.id).data.collection.items[0].note, '익명 후속 메모'); assert(server.libraryWrites(a.name).filter(row => row.body.p_operation_id === metadataOutbox.operationId).length >= 2);
       const b = await device('b'); await b.login(); await synced(b.page, f.id); exactGraph(await snapshot(b.page), await snapshot(a.page));
     });
-    await check('two metadata writers require explicit comparison for both choices and retain exact unchosen recoveries without enrolling copies', async ({ server, device }) => {
+    await check('two metadata writers resolve automatically to the newest edit and retain the exact other side as a recovery with a notice', async ({ server, device }) => {
       const a = await device('a'); await a.login(); const f = await importMarkdown(a.page), rich = await richProfile(a.page, f); await synced(a.page, f.id); const b = await device('b'); await b.login(); await synced(b.page, f.id); b.expectedFailures = true;
-      for (const choice of ['remote', 'local']) {
-        const localLabel = '익명 기기 B ' + choice, remoteLabel = '익명 기기 A ' + choice, remoteBeforeOffline = copy(server.libraryMeta(accounts.a.id, f.id)); server.offline.add(b.name); await collectionNote(b.page, f.id, localLabel); await waitFor(() => durableDirty(b.page, f.id, 'libraryMetaSync'), value => value.revision > value.state.syncedLocalRevision && value.account.status === 'error' && !!value.account.error, 'Durable metadata dirty revision and account error before verified transmission'); assert.deepEqual(server.libraryMeta(accounts.a.id, f.id), remoteBeforeOffline); assert.equal((await snapshot(b.page)).collection.items[0].note, localLabel); await b.page.locator('#lifeAccountStorage[data-state="error"]').waitFor();
-        await collectionNote(a.page, f.id, remoteLabel); await synced(a.page, f.id); server.offline.delete(b.name); await focus(b.page); await waitFor(() => domainState(b.page, 'libraryMetaSync', f.id), value => !!value.conflict, 'Explicit metadata conflict');
-        const writes = server.libraryWrites(b.name).length; await b.page.goto(base + '/index.html?section=manage&view=sync'); await ready(b.page); await click(b.page, '#lifeLibraryMetaCompare'); const comparison = await b.page.locator('#lifeLibraryMetaComparison').innerText(); assert(comparison.includes(localLabel) && comparison.includes(remoteLabel)); assert.equal(server.libraryWrites(b.name).length, writes, 'Preview must not write');
-        await click(b.page, choice === 'remote' ? '#lifeLibraryMetaUseRemote' : '#lifeLibraryMetaUseLocal'); await synced(b.page, f.id);
-        const recoveries = await b.page.evaluate(async id => { const s = HaedoLife.Shell.storage; return Promise.all((await s.listLibraryMetaRecoveries(id)).map(row => s.readLibraryMetaRecovery(id, row.id))); }, f.id); assert(recoveries.some(row => row.metadata.collection.items[0].note === (choice === 'remote' ? localLabel : remoteLabel))); for (const row of recoveries) { assert.equal(row.bundle.workspaceId, f.id); assert.equal(row.bundle.sourceVersions.find(v => v.id === f.version.id).contentText, raw); assert.deepEqual(row.metadata.sourceFolders.assignments, rich.saved.sourceFolders.assignments); }
-        await focus(a.page); await waitFor(() => snapshot(a.page), value => value.collection.items[0].note === (choice === 'remote' ? remoteLabel : localLabel), 'Chosen metadata return to A'); await synced(a.page, f.id); await synced(b.page, f.id);
+      for (const newest of ['remote', 'local']) {
+        const localLabel = '익명 기기 B ' + newest, remoteLabel = '익명 기기 A ' + newest, remoteBeforeOffline = copy(server.libraryMeta(accounts.a.id, f.id)); server.offline.add(b.name);
+        // 'remote': B edits offline first and A edits later; 'local': A edits first and B edits offline later.
+        if (newest === 'local') { await collectionNote(a.page, f.id, remoteLabel); await synced(a.page, f.id); await b.page.waitForTimeout(20); }
+        await collectionNote(b.page, f.id, localLabel); await waitFor(() => durableDirty(b.page, f.id, 'libraryMetaSync'), value => value.revision > value.state.syncedLocalRevision && value.account.status === 'error' && !!value.account.error, 'Durable metadata dirty revision and account error before verified transmission'); if (newest === 'remote') assert.deepEqual(server.libraryMeta(accounts.a.id, f.id), remoteBeforeOffline); assert.equal((await snapshot(b.page)).collection.items[0].note, localLabel); await b.page.locator('#lifeAccountStorage[data-state="error"]').waitFor();
+        if (newest === 'remote') { await b.page.waitForTimeout(20); await collectionNote(a.page, f.id, remoteLabel); await synced(a.page, f.id); }
+        const winner = newest === 'remote' ? remoteLabel : localLabel, loser = newest === 'remote' ? localLabel : remoteLabel;
+        server.offline.delete(b.name); await focus(b.page);
+        await waitFor(() => snapshot(b.page), value => value.collection.items[0].note === winner, 'Newest metadata kept on B'); await synced(b.page, f.id);
+        assert.equal(server.libraryMeta(accounts.a.id, f.id).data.collection.items[0].note, winner);
+        const recoveries = await b.page.evaluate(async id => { const s = HaedoLife.Shell.storage; return Promise.all((await s.listLibraryMetaRecoveries(id)).map(row => s.readLibraryMetaRecovery(id, row.id))); }, f.id); assert(recoveries.some(row => row.metadata.collection.items[0].note === loser)); for (const row of recoveries) { assert.equal(row.bundle.workspaceId, f.id); assert.equal(row.bundle.sourceVersions.find(v => v.id === f.version.id).contentText, raw); assert.deepEqual(row.metadata.sourceFolders.assignments, rich.saved.sourceFolders.assignments); }
+        await b.page.goto(base + '/index.html?section=manage&view=sync'); await ready(b.page); await b.page.locator('#lifeLibraryMetaNotice').waitFor();
+        for (const removed of ['#lifeLibraryMetaCompare', '#lifeLibraryMetaUseLocal', '#lifeLibraryMetaUseRemote']) assert.equal(await b.page.locator(removed).count(), 0, removed);
+        await click(b.page, '#lifeLibraryMetaNoticeDone'); await b.page.locator('#lifeLibraryMetaNotice').waitFor({ state: 'detached' });
+        await focus(a.page); await waitFor(() => snapshot(a.page), value => value.collection.items[0].note === winner, 'Newest metadata return to A'); await synced(a.page, f.id); await synced(b.page, f.id);
       }
       assert.equal([...server.rows.values()].filter(row => row.owner_id === accounts.a.id).length, 1, 'Recovery must not become another automatically uploaded account library');
     });

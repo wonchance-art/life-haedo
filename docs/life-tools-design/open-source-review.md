@@ -1097,3 +1097,9 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 ## 네이버 운영 사전검사와 자동 재개 — 2026-10-29 KST
 
 새 크롤러나 브라우저 자동화 서비스를 추가하지 않고 기존 collector·harvest-network·extractor를 읽기 전용 CLI에서 재사용한다. 공식 npm의 [Cheerio](https://www.npmjs.com/package/cheerio)는 확인 당시1.2.0/MIT(공식메타데이터갱신2026-07-17)이며 기존worker와검수fixture의고정1.2.0을유지한다. 실제probe때만기존고정검수의존성을사용하고기본정책진단은추가패키지나외부요청없이실행된다. 전체본문·사진원본여부·예약가동을공개표본추출과혼동하지않는다. 새sync/추출엔진·쿠키수집·headless우회를도입하지않는다.
+
+## HEIC 보기용 사본 — 2026-11-01 KST
+
+소유자 결정은 HEIC 원본 바이트 보존 + 보기용 JPEG다. 이번에는 라이브러리를 추가하지 않고 기기 내장 디코더(`createImageBitmap`/`<img>`)와 캔버스 JPEG 인코딩을 사용한다. iPhone·iPad Safari는 HEIC를 직접 열 수 있어 추가 다운로드·WASM 메모리가 필요 없고, 원본은 어느 경로에서도 다시 쓰지 않는다. 디코더가 없는 브라우저는 명시 오류로 거절한다.
+
+나중 선택지로 WASM 디코더를 확인했다(확인일 2026-11-01, npm 공식 메타데이터): [libheif-js](https://www.npmjs.com/package/libheif-js) 1.23.5 / LGPL-3.0(최근 갱신 2026-10-04), [heic-to](https://www.npmjs.com/package/heic-to) 1.6.7 / LGPL-3.0(최근 갱신 2026-10-27, libheif 기반). 둘 다 수 MB의 WASM과 디코딩 시 전체 비트맵 메모리가 필요하고 LGPL 고지·교체 가능성 요건이 있다. 데스크톱 Chrome에서도 HEIC를 추가해야 하는 요구가 확인되거나 iOS 내장 디코더의 방향·색 결과가 기대와 다를 때 vendor 도입(라이선스 파일 보존, 지연 로드)을 다시 검토한다. 보안 권고는 npm 메타데이터 외에 별도 확인하지 않았다.

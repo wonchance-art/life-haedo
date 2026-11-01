@@ -2,6 +2,7 @@
  * preservation file. Actual UI/SDK/IndexedDB and isolated PostgreSQL RPCs;
  * synthetic Auth and Storage binary/Edge transport only. */
 'use strict';
+const { isBackgroundSync, isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4214';
 const assert = require('node:assert/strict');
@@ -98,7 +99,7 @@ async function main() {
   const server = new LocalSQLBlogCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
   if (process.argv.includes('--prepare-database')) {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
     server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], files.join('\n'));
   }
   await server.initialize();
@@ -150,7 +151,8 @@ async function main() {
       await quoteMaterial(page, a, f.first.quote); await quoteMaterial(page, b, f.second.quote);
       planId = await page.locator('#mwPlanSelect').inputValue(); const before = await readPreparation(page), plan = before.plans.find(p => p.id === planId);
       assert.equal(plan.materials.length, 3); assert.deepEqual(plan.blocks.map(b => b.kind), ['heading', 'paragraph', 'quote', 'quote']); assert.equal(plan.blocks[2].reference.quote, f.first.quote); assert.equal(plan.blocks[2].reference.sourceVersionId, f.first.versionId);
-      assert.equal(server.blogRequests.length, 0); await enter(page, planId); assert.equal(await page.locator('#mwQuestion').inputValue(), 'PRIVATE_QUESTION_SENTINEL');
+      // Only owner-scoped background sync reads may reach the blog server here: nothing is saved or published.
+      assert.deepEqual(server.blogRequests.filter(r => !(isBackgroundSync('/rest/v1/rpc/' + r.rpc) && !isBackgroundSyncWrite('/rest/v1/rpc/' + r.rpc))), []); await enter(page, planId); assert.equal(await page.locator('#mwQuestion').inputValue(), 'PRIVATE_QUESTION_SENTINEL');
       assert.deepEqual(await readPreparation(page), before); await page.locator('#mwPreview').click(); const preview = await page.locator('#mwPreviewContent').innerText();
       assert(preview.includes('두 자료를 비교하며')); for (const text of ['PRIVATE_QUESTION_SENTINEL', 'PRIVATE_NOTE_SENTINEL', 'LATEST_MUST_NOT_REPLACE_OLD', 'PRIVATE_FULL_BODY_NOT_PUBLIC']) assert(!preview.includes(text), text);
       await capture(page, 'outline-preview'); await page.locator('#mwConsent').check(); await page.locator('#mwCreate').click(); await page.locator('#photoTitle').waitFor();
@@ -174,7 +176,7 @@ async function main() {
       const original = (await snapshot(page)).posts.find(p => p.doc.status === 'saved'); assert(original); assert.equal(original.doc.photos.length, 2);
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('자료로 완성하고 다시 다듬은 여행글');
       await page.evaluate(() => Quill.find(document.querySelector('.ql-container')).insertText(0, '준비와 왕복해도 유지할 미완성 수정 문단🌱\n', 'user'));
-      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '브라우저에 자동 임시저장됨');
+      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '자동 저장됨');
       const pending = await snapshot(page), editing = pending.posts.find(p => p.doc.status === 'draft' && p.doc.replaces?.id === original.doc.id); assert(editing); assert.notEqual(editing.doc.id, original.doc.id);
       await page.locator('.photo-editor').getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#mwContinue').waitFor(); await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), editing.doc.title); assert.match(await page.locator('.ql-editor').innerText(), /준비와 왕복해도 유지할 미완성 수정 문단/);
@@ -235,25 +237,50 @@ async function main() {
     });
     await owner.context.close();
     await check('A real IndexedDB handoff abort preserves preparation and installs zero partial post/evidence; explicit retry creates exactly one post', async () => {
+      // Posts saved by the earlier checks reach this device of the same account through account blog sync;
+      // the handoff is judged only on posts created here.
+      const earlier = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id)), local = posts => posts.filter(p => !earlier.has(p.doc.id));
       const d = await fixture('material-abort'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id); const before = await snapshot(page);
       await page.evaluate(() => { window.__mwPut = IDBObjectStore.prototype.put; window.__mwAborts = 0; IDBObjectStore.prototype.put = function (...args) { const result = __mwPut.apply(this, args); if (this.name === 'meta' && String(args[0]?.key).startsWith('material-writing-output:')) { __mwAborts++; this.transaction.abort(); } return result; }; });
-      await previewCreate(page); await page.locator('.mw-error:not([hidden])').waitFor(); assert(await page.evaluate(() => __mwAborts > 0)); assert.deepEqual(await snapshot(page), before);
-      await page.evaluate(() => { IDBObjectStore.prototype.put = __mwPut; }); await previewCreate(page); await page.locator('#photoTitle').waitFor(); assert.equal((await snapshot(page)).posts.length, 1); await d.context.close();
+      await previewCreate(page); await page.locator('.mw-error:not([hidden])').waitFor(); assert(await page.evaluate(() => __mwAborts > 0)); { const after = await snapshot(page); assert.deepEqual(local(after.posts), local(before.posts)); assert.deepEqual(after.preparation, before.preparation); assert.deepEqual(after.bundle, before.bundle); assert.deepEqual(after.spaces, before.spaces); assert.equal(after.workspaceId, before.workspaceId); }
+      await page.evaluate(() => { IDBObjectStore.prototype.put = __mwPut; }); await previewCreate(page); await page.locator('#photoTitle').waitFor(); { const done = await snapshot(page), created = local(done.posts); assert.equal(created.length, 1); assert.equal(done.preparation.plans.find(p => p.id === id).output.postId, created[0].doc.id); } await d.context.close();
     });
     await check('Two real tabs keep the competing preparation and the current input; CAS failure requires explicit recovery', async () => {
+      const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id)); // received through account blog sync, not created here
       const d = await fixture('material-two-tabs'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);
-      const second = await d.context.newPage(); await enter(second, id); await second.locator('#mwTitle').fill('두 번째 창이 먼저 보관한 제목'); await saved(second);
-      await page.locator('#mwTitle').fill('첫 번째 창의 남겨야 할 입력'); await page.locator('.mw-error:not([hidden])').waitFor(); assert.equal(await page.locator('#mwTitle').inputValue(), '첫 번째 창의 남겨야 할 입력'); assert.equal((await readPreparation(page)).plans.find(p => p.id === id).title, '두 번째 창이 먼저 보관한 제목'); assert.equal((await snapshot(page)).posts.length, 0);
+      const second = await d.context.newPage(); await enter(second, id);
+      // A clean view reloads another tab's change by itself, so hold this tab's input unsaved (Korean composition) first.
+      const title = page.locator('#mwTitle'); await title.focus();
+      await title.evaluate(node => { window.__mwTitleNode = node; node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅊ' })); node.value = '첫 번째 창의 남겨야 할 입력'; node.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data: '입력' })); });
+      await second.locator('#mwTitle').fill('두 번째 창이 먼저 보관한 제목'); await saved(second);
+      await page.locator('#mwIncoming:not([hidden])').waitFor(); assert.equal(await title.evaluate(node => node === window.__mwTitleNode), true);
+      await title.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '입력' }))); await page.locator('.mw-error:not([hidden])').waitFor(); assert.equal(await page.locator('#mwTitle').inputValue(), '첫 번째 창의 남겨야 할 입력'); assert.equal((await readPreparation(page)).plans.find(p => p.id === id).title, '두 번째 창이 먼저 보관한 제목'); assert.equal((await snapshot(page)).posts.filter(p => !earlierPosts.has(p.doc.id)).length, 0);
       await page.locator('#mwRecover').click(); await saved(page); const state = await readPreparation(page); assert.equal(state.plans.length, 2); assert(state.plans.some(p => p.title === '첫 번째 창의 남겨야 할 입력' && p.output === null)); await d.context.close();
     });
     await check('A committed handoff survives an editor-open failure; explicit continuation reopens its existing ID without duplicate documents', async () => {
+      const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id)), own = state => ({ ...state, posts: state.posts.filter(p => !earlierPosts.has(p.doc.id)) });
       const d = await fixture('material-open-failure'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);
       await page.evaluate(() => { window.__mwSimulateOpenFailure = true; }); await previewCreate(page); await page.locator('.mw-error:not([hidden])').waitFor();
       await page.evaluate(() => { window.__mwSimulateOpenFailure = false; });
-      const before = await snapshot(page); assert.equal(before.posts.length, 1); const postId = before.posts[0].doc.id; assert.equal(before.preparation.plans.find(p => p.id === id).output.postId, postId);
-      await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor(); const after = await snapshot(page); assert.equal(after.posts.length, 1); assert.equal(after.posts[0].doc.id, postId); assert.deepEqual(after, before); await d.context.close();
+      const before = own(await snapshot(page)); assert.equal(before.posts.length, 1); const postId = before.posts[0].doc.id; assert.equal(before.preparation.plans.find(p => p.id === id).output.postId, postId);
+      await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor(); const after = own(await snapshot(page)); assert.equal(after.posts.length, 1); assert.equal(after.posts[0].doc.id, postId); assert.deepEqual(after, before); await d.context.close();
+    });
+    await check('Re-selecting the open preparation while its sources load is a no-op, and choosing another one waits for the load instead of leaving a stuck error', async () => {
+      const d = await fixture('material-select-loading'); page = d.page; const first = await seedPlan(page, d.fixture, '불러오는 중 선택 첫 준비'), second = await seedPlan(page, d.fixture, '불러오는 중 선택 둘째 준비');
+      await enter(page, first); await saved(page);
+      // Hold only the real source list's mount; storage, preparation and selector stay real.
+      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      await page.locator('#mwPlanSelect').selectOption(second); await page.waitForFunction(() => window.__mwSourcesHeld === true && document.querySelector('.mw-status')?.textContent === '자료를 불러오는 중…');
+      await page.locator('#mwPlanSelect').selectOption(second);
+      assert.equal(await page.locator('.mw-status').getAttribute('data-state'), 'dirty'); assert.equal(await page.locator('.mw-error').isHidden(), true, 'the same selection is not refused');
+      await page.locator('#mwPlanSelect').selectOption(first); assert.equal(await page.locator('.mw-error').isHidden(), true, 'a new selection waits for the read-only load');
+      await page.evaluate(() => window.__mwReleaseSources()); await page.waitForFunction(() => document.querySelector('#mwTitle')?.value === '불러오는 중 선택 첫 준비'); await saved(page);
+      assert.equal(await page.locator('#mwPlanSelect').inputValue(), first); assert.equal(await page.locator('#mwTitle').inputValue(), '불러오는 중 선택 첫 준비'); assert.equal(await page.locator('.mw-error').isHidden(), true);
+      assert.equal((await readPreparation(page)).plans.length, 2, 'no copy or new preparation was made');
     });
     await check('A real SDK account change during exact-source hashing cancels the old account handoff and leaves both accounts free of partial posts', async () => {
+      const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id));
       const d = await fixture('material-late-account'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);
       await page.evaluate(() => {
         window.__mwDigest = crypto.subtle.digest.bind(crypto.subtle); window.__mwHoldDigest = true;
@@ -269,12 +296,15 @@ async function main() {
         const open = indexedDB.open('life-tools-v1'); open.onerror = () => reject(open.error); open.onsuccess = () => {
           const db = open.result, tx = db.transaction('meta', 'readonly'), get = tx.objectStore('meta').getAll();
           get.onsuccess = () => { const rows = get.result, plan = rows.find(r => r.key === 'material-writing:' + ws)?.value;
-            resolve({ plan, postCount: rows.filter(r => r.key.startsWith('photo-post:' + ws + ':')).length, refsCount: rows.filter(r => r.key.startsWith('post-evidence:' + ws + ':')).length, receipts: rows.filter(r => r.key.startsWith('material-writing-output:' + ws + ':')).length }); };
+            resolve({ plan, postIds: rows.filter(r => r.key.startsWith('photo-post:' + ws + ':')).map(r => r.key.slice(('photo-post:' + ws + ':').length)), refIds: rows.filter(r => r.key.startsWith('post-evidence:' + ws + ':')).map(r => r.key.slice(('post-evidence:' + ws + ':').length)), receipts: rows.filter(r => r.key.startsWith('material-writing-output:' + ws + ':')).length }); };
           tx.oncomplete = () => db.close(); tx.onerror = () => reject(tx.error);
         };
       }), d.fixture.workspaceId);
-      assert.equal(oldRows.postCount, 0); assert.equal(oldRows.refsCount, 0); assert.equal(oldRows.receipts, 0); assert.equal(oldRows.plan.plans.find(p => p.id === id).output, null);
-      const current = await snapshot(page); assert.notEqual(current.workspaceId, d.fixture.workspaceId); assert.equal(current.posts.length, 0); assert.equal(current.preparation.plans.length, 0); assert.equal(server.blogRequests.filter(r => r.device === 'material-late-account').length, 0); await d.context.close();
+      // Posts received for account A through account blog sync carry their own evidence rows; none was created by the cancelled handoff.
+      assert.deepEqual(oldRows.postIds.filter(postId => !earlierPosts.has(postId)), []);
+      // Every evidence row belongs to a post the account blog sync legitimately received; none to the cancelled handoff.
+      assert.deepEqual(oldRows.refIds.filter(postId => !earlierPosts.has(postId) || !oldRows.postIds.includes(postId)), []); assert.equal(oldRows.receipts, 0); assert.equal(oldRows.plan.plans.find(p => p.id === id).output, null);
+      const current = await snapshot(page); assert.notEqual(current.workspaceId, d.fixture.workspaceId); assert.equal(current.posts.length, 0); assert.equal(current.preparation.plans.length, 0); assert.equal(server.blogRequests.filter(r => r.device === 'material-late-account' && !(isBackgroundSync('/rest/v1/rpc/' + r.rpc) && !isBackgroundSyncWrite('/rest/v1/rpc/' + r.rpc))).length, 0); await d.context.close();
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (error) { report.pass = false; report.error = error.stack; await page?.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }

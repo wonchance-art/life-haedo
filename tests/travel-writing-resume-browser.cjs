@@ -4,6 +4,7 @@
  * native IME, browser eviction, crash recovery or live Google verification. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isBackgroundSync, isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: owner-scoped private sync reads only; every write stays audited.
 process.env.BASE_URL ||= 'http://127.0.0.1:4231';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -53,7 +54,8 @@ async function main() {
   });
   context.on('request', request => {
     const url = new URL(request.url());
-    if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+    if (url.origin === cloud && isBackgroundSync(url.href) && !isBackgroundSyncWrite(url.href)) (report.backgroundSyncReads ||= []).push(url.pathname);
+    else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
     else if (url.origin === cloud && request.method() !== 'GET' && request.method() !== 'OPTIONS' && url.pathname.startsWith('/rest/')) report.writes.push(url.pathname);
   });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(15000);
@@ -64,7 +66,7 @@ async function main() {
     (expected ? report.expectedAuthErrors : report.consoleErrors).push(event.text());
   });
   const check = async (name, run) => { await run(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); };
-  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
+  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '자동 저장됨');
   const read = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return { ws, docs: await Promise.all((await s.listPhotoPosts(ws)).map(row => s.readPhotoPost(ws, row.id))) }; });
   const doc = async () => (await read()).docs.find(value => value.id === postId);
   const hide = async () => {

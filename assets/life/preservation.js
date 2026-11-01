@@ -22,7 +22,7 @@
     const posts = snapshot.posts.map(({ doc, evidence }) => ({ id: doc.id, title: doc.title, photos: doc.photos.length,
       dependency: !!selection && !chosen.has(doc.id), evidence: evidence.refs.length, archived: doc.archived === true }));
     const boards = snapshot.nineBoard.boards.map(board => ({ id: board.id, title: board.title, areas: board.areas.length }));
-    const photoBytes = snapshot.posts.reduce((total, { doc }) => total + doc.photos.reduce((sum, photo) => sum + photo.blob.size, 0), 0);
+    const photoBytes = snapshot.posts.reduce((total, { doc }) => total + doc.photos.reduce((sum, photo) => sum + photo.blob.size + (photo.view?.blob?.size || 0), 0), 0);
     return { posts, boards, sources, photos: posts.reduce((sum, post) => sum + post.photos, 0),
       sourceVersions: snapshot.bundle.sourceVersions.length, photoBytes,
       bytes: photoBytes + new TextEncoder().encode(fingerprint(snapshot)).length };

@@ -172,6 +172,29 @@ test('a workspace captures before conceal and owns one verified resume without g
   auth.dispose();
 });
 
+test('a cached page starts no account check, so its resume never shares one begun before pageshow', async () => {
+  const { auth, state, env, pageHandlers } = setup();
+  await auth.verify();
+  env.document.dispatchEvent = event => { state.events.push(event); if (event.type === 'haedo:page-resume') event.preventDefault(); return !event.defaultPrevented; };
+  const before = state.calls.filter(name => name === 'getUser').length;
+  pageHandlers.get('pagehide')({ persisted: true });
+  // A background engine woken by pagehide, or by the visibility change that
+  // precedes pageshow on restore, must not contact Auth for the cached page.
+  await assert.rejects(auth.verify(), errorCode('request_cancelled'));
+  assert.equal(state.calls.filter(name => name === 'getUser').length, before);
+  await pageHandlers.get('pageshow')({ persisted: true });
+  const waiting = deferred(); state.userPromise = waiting.promise;
+  const resume = auth.verify(), engine = auth.verify(); await tick(); await tick();
+  // The resumed page's check is new; checks overlapping it share that one request.
+  assert.equal(state.calls.filter(name => name === 'getUser').length, before + 1);
+  waiting.resolve({ data: { user: A }, error: null });
+  assert.equal((await resume).id, A.id); assert.equal((await engine).id, A.id);
+  // An ordinary (non-cached) pagehide does not block later checks.
+  state.userPromise = null; pageHandlers.get('pagehide')({ persisted: false });
+  assert.equal((await auth.verify()).id, A.id);
+  auth.dispose();
+});
+
 test('leaving the public home cancels a pending verification before it can expose an account', async () => {
   const { auth, state, pageHandlers } = setup({ pathname: '/', publicHome: true });
   const waiting = deferred(); state.userPromise = waiting.promise;

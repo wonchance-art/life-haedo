@@ -16,7 +16,9 @@ test('hashing owns a frozen outgoing request and account/dispose races stop befo
   const f = fixture({ async verify(value) { entered(); await gate; return M.verify(value); } }), remoteId = randomUUID(); f.result = { status: 'stored', revision: 1 };
   const request = { remoteId, operationId: randomUUID(), expectedRevision: 0, data: f.data }, original = structuredClone(request);
   const pending = f.remote.write(request); await started; request.data.plan.question = '해싱 중에 바뀐 입력'; release(); await pending; assert.deepEqual(f.calls[0].args.p_data, original.data);
-  let finish; f.verifyAuth = () => new Promise(resolve => { finish = resolve; }); const waiting = f.remote.read(remoteId); await new Promise(resolve => setImmediate(resolve)); f.auth.user = { id: randomUUID() }; f.auth.epoch++; finish(); await assert.rejects(waiting, { code: 'request_cancelled' }); assert.equal(f.calls.length, 1);
+  // No per-call /auth/v1/user round trip: an account change while the request is in flight cancels its result.
+  let finish; f.respond = () => new Promise(resolve => { finish = () => resolve({ data: null, error: null }); }); const waiting = f.remote.read(remoteId); await new Promise(resolve => setImmediate(resolve)); f.auth.user = { id: randomUUID() }; f.auth.epoch++; finish(); await assert.rejects(waiting, { code: 'request_cancelled' }); f.respond = null;
+  assert.equal(f.calls.length, 2, 'the in-flight read was sent with the earlier account token and its result discarded');
   f.remote.dispose(); assert.equal(f.disposed, true); await assert.rejects(f.remote.list(), { code: 'request_cancelled' });
 });
 test('strict metadata-only pages retain PostgreSQL microseconds and reject private fields or inconsistent cursors', async () => {
@@ -62,4 +64,10 @@ test('edited-marker writes require an explicit supported server before dispatch;
   changing.respond = async name => { assert.equal(name, 'life_material_capabilities'); entered(); await gate; return { data: { source_edited_copy: 1 } }; };
   const pending = changing.remote.write(request()); await started; changing.auth.epoch++; release();
   await assert.rejects(pending, { code: 'request_cancelled' }); assert.deepEqual(changing.calls.map(v => v.name), ['life_material_capabilities']); changing.remote.dispose();
+});
+
+test('a different signed-in user than the transport owner is refused before any request', async () => {
+  const f = fixture(); f.auth.user = { id: randomUUID() }; f.auth.epoch++;
+  await assert.rejects(f.remote.list(), { code: 'request_cancelled' }); await assert.rejects(f.remote.read(randomUUID()), { code: 'request_cancelled' });
+  assert.equal(f.calls.length, 0); f.remote.dispose();
 });

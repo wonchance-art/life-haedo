@@ -23,7 +23,16 @@ return class BlogCloud extends BaseCloud {
     if (url.pathname.startsWith('/storage/v1/object/')) {
       const parts = url.pathname.split('/').slice(4).map(decodeURIComponent); if (parts[0] === 'authenticated') parts.shift();
       const bucket = parts.shift(), key = parts.join('/');
-      assert.equal(bucket, 'haedo-blog-originals'); assert(key.startsWith(owner + '/'));
+      assert.equal(bucket, 'haedo-blog-originals');
+      if (method === 'DELETE' && !key) {
+        // Storage API remove(): only originals of an owner's deleted post.
+        const prefixes = request.postDataJSON()?.prefixes || [];
+        this.assetCalls.push({ owner, device, method, key: prefixes.join(',') });
+        const removed = [];
+        for (const name of prefixes) { assert(name.startsWith(owner + '/')); assert(this.deletedOriginals?.has(name), 'Only deleted originals are removable'); this.originals.delete(name); this.deletedOriginals.delete(name); removed.push({ name }); }
+        return send(removed);
+      }
+      assert(key.startsWith(owner + '/'));
       this.assetCalls.push({ owner, device, method, key });
       if (method === 'POST') {
         const type = request.headers()['content-type'] || '';
@@ -37,23 +46,35 @@ return class BlogCloud extends BaseCloud {
         const previous = this.originals.get(key); if (previous) assert.deepEqual(bytes, previous.bytes);
         this.originals.set(key, { bytes, type: mime }); return send({ Key: bucket + '/' + key, Id: key });
       }
-      assert.equal(method, 'GET'); const photo = this.originals.get(key); assert(photo);
+      assert.equal(method, 'GET'); const photo = this.originals.get(key); assert(photo && !this.deletedOriginals?.has(key));
       return route.fulfill({ status: 200, headers: { ...headers, 'content-type': photo.type }, body: photo.bytes });
     }
     assert.equal(method, 'POST'); const rpc = url.pathname.split('/').at(-1), body = request.postDataJSON();
     this.blogCalls.push({ owner, device, rpc, body: copy(body) });
-    if (rpc === 'life_blog_list') return send([...this.posts.values()].filter(row => row.owner === owner && (!body.p_workspace_id || row.workspace_id === body.p_workspace_id)).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision, title: row.data.title, updated_at: row.updated_at })));
+    if (rpc === 'life_blog_sync_list') return send([...this.posts.values()].filter(row => row.owner === owner).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision,
+      status: row.data.status, title: row.data.title, updated_at: row.updated_at, document_updated_at: row.data.updatedAt, photos: row.data.photos.length,
+      archived: row.data.archived === true, publication: copy(row.publication || null) })));
+    if (rpc === 'life_blog_list') return send([...this.posts.values()].filter(row => row.owner === owner && row.data.status === 'saved' && (!body.p_workspace_id || row.workspace_id === body.p_workspace_id)).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision, title: row.data.title, updated_at: row.updated_at })));
     const key = owner + ':' + body.p_post_id, row = this.posts.get(key);
     if (rpc === 'life_blog_read') { const value = row ? copy(row) : null; if (value) delete value.owner; return send(value); }
     if (rpc === 'life_blog_prepare_asset') {
       const assetPath = owner + '/' + body.p_post_id + '/' + body.p_photo_id + '/' + body.p_digest;
       return send({ bucket: 'haedo-blog-originals', path: assetPath, exists: this.originals.has(assetPath) });
     }
+    if (rpc === 'life_blog_delete') {
+      this.deletedOriginals ||= new Set();
+      if (row && body.p_expected_revision !== null && body.p_expected_revision !== undefined && row.revision !== body.p_expected_revision) return send({ status: 'conflict', revision: row.revision });
+      if (row?.publication?.active) return send({ status: 'published', revision: row.revision }); // 20261101160000: withdraw first
+      if (row) { this.posts.delete(key); for (const name of this.originals.keys()) if (name.startsWith(owner + '/' + body.p_post_id + '/')) this.deletedOriginals.add(name); }
+      return send({ status: row ? 'deleted' : 'missing', revision: row?.revision || 0, paths: [...this.deletedOriginals].filter(name => name.startsWith(owner + '/' + body.p_post_id + '/')).sort() });
+    }
     if (rpc !== 'life_blog_save') return send({ code: 'unsupported_blog_rpc', message: 'Synthetic private transport does not implement this RPC' }, 400);
-    Blog.validateManifest(body.p_data); assert.equal(body.p_data.status, 'saved');
+    Blog.validateManifest(body.p_data); assert(['saved', 'draft'].includes(body.p_data.status));
+    if (row?.data.status === 'saved' && body.p_data.status === 'draft') return send({ code: '22023', message: 'life_blog_status_regression' }, 400);
     const receiptKey = owner + ':' + body.p_operation_id, payload = JSON.stringify(body), prior = this.blogReceipts.get(receiptKey);
     let result;
     if (prior) { assert.equal(payload, prior.payload, 'A retry must reuse exactly the approved request'); result = prior.result; }
+    else if (!row && body.p_expected_revision !== 0) result = { status: 'missing' };
     else if ((row?.revision || 0) !== body.p_expected_revision) result = { status: 'conflict', revision: row.revision };
     else {
       const assets = {};
@@ -61,6 +82,11 @@ return class BlogCloud extends BaseCloud {
         const assetPath = owner + '/' + body.p_post_id + '/' + photo.id + '/' + photo.digest, original = this.originals.get(assetPath);
         assert(original); assert.equal(original.bytes.length, photo.size); assert.equal(sha(original.bytes), photo.digest); assert.equal(original.type, photo.type);
         assets[photo.id] = { bucket: 'haedo-blog-originals', path: assetPath };
+        if (photo.view) {
+          const viewPath = owner + '/' + body.p_post_id + '/' + photo.id + '/' + photo.view.digest, view = this.originals.get(viewPath);
+          assert(view); assert.equal(sha(view.bytes), photo.view.digest); assert.equal(view.type, 'image/jpeg');
+          assets[photo.id].view = { bucket: 'haedo-blog-originals', path: viewPath };
+        }
       }
       result = { status: 'stored', revision: (row?.revision || 0) + 1 };
       this.posts.set(key, { owner, id: body.p_post_id, workspace_id: body.p_workspace_id, revision: result.revision, data: copy(body.p_data), assets, publication: row?.publication || null, updated_at: new Date().toISOString() });

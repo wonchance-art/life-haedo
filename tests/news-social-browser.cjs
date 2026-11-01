@@ -3,6 +3,7 @@
  * No production/publisher requests, actual reading, Apple or usefulness claim. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -86,7 +87,7 @@ async function main() {
     await route.fulfill({ response, body: await response.text() + hook });
   });
   context.on('request', request => {
-    const address = new URL(request.url()), body = request.postData() || '', headers = request.headers();
+    const address = new URL(request.url()), body = request.postData() || '', headers = request.headers(); if (isBackgroundSync(request.url())) { (report.backgroundSync ||= []).push({ path: address.pathname }); return; }
     if ([PRIVATE, encodeURIComponent(PRIVATE), JSON.stringify(PRIVATE).slice(1, -1)].some(value => address.href.includes(value) || body.includes(value))) report.privacyViolations.push({ destination: address.origin + address.pathname });
     if (/huggingface|xethub|transformers|onnxruntime|\.onnx(?:$|\?)|\.wasm(?:$|\?)/i.test(address.href)) report.modelRequests.push(address.origin + address.pathname);
     if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: address.pathname, parameterCount: 0 });

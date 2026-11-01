@@ -27,11 +27,11 @@
     return result;
   }
   const canonical = value => Array.isArray(value) ? value.map(canonical) : plain(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-  const serializable = value => ({ ...value, posts: value.posts.map(row => ({ ...row, doc: { ...row.doc, photos: row.doc.photos.map(({ blob, ...metadata }) => metadata) } })) });
+  const serializable = value => ({ ...value, posts: value.posts.map(row => ({ ...row, doc: { ...row.doc, photos: row.doc.photos.map(photo => P().metadata(photo)) } })) });
   function limits(value) {
     const photos = value.posts.flatMap(row => row.doc.photos);
     const size = new TextEncoder().encode(JSON.stringify(serializable(value))).length;
-    if (value.posts.length > LIMITS.posts || photos.length > LIMITS.photos || size > LIMITS.json || size + photos.reduce((total, photo) => total + photo.size, 0) > LIMITS.bytes) {
+    if (value.posts.length > LIMITS.posts || photos.length > LIMITS.photos || size > LIMITS.json || size + photos.reduce((total, photo) => total + photo.size + (photo.view ? photo.view.size : 0), 0) > LIMITS.bytes) {
       fail('글·근거 보존은 글 20개, 사진 200개, 설명 16 MiB, 전체 256 MiB까지 가능합니다.');
     }
   }

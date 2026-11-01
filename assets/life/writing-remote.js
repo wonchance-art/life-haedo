@@ -8,7 +8,7 @@
   const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.', request_cancelled: '계정 또는 연결이 바뀌어 이전 요청을 중단했습니다.',
-    schema_missing: '서버에 초안 이어쓰기 준비가 필요합니다. 이 브라우저의 글은 보존됩니다.',
+    schema_missing: '서버에 초안 동기화 준비가 필요합니다. 이 기기의 글은 보존됩니다.',
     invalid_remote_data: '서버 초안의 형식을 확인하지 못했습니다. 현재 글은 보존됩니다.',
     invalid_request: '초안 전송의 식별자와 버전을 확인해 주세요.', operation_mismatch: '이전 전송 요청과 내용이 달라 적용하지 않았습니다.',
     writing_source_pending: '원문 동기화와 저장한 글의 도착을 먼저 확인해 주세요. 초안은 보존됩니다.',
@@ -21,7 +21,7 @@
     remote_missing: '연결된 서버 초안이 없습니다. 자동으로 다시 만들지 않았습니다.',
     remote_revision_mismatch: '같은 서버 버전의 내용이 달라 적용하지 않았습니다.',
     stale_sync_result: '현재 요청과 다른 이전 응답을 적용하지 않았습니다.',
-    sync_paused: '초안 이어쓰기가 중지되어 있습니다.', not_enabled: '이 초안의 이어쓰기를 먼저 시작해 주세요.',
+    sync_paused: '초안 동기화를 다시 시작하는 중입니다.', not_enabled: '초안 동기화를 준비하는 중입니다.',
     account_mismatch: '현재 계정의 초안 연결을 확인해 주세요.',
     storage_quota: '저장 공간이 부족합니다. TXT로 입력을 보관한 뒤 다시 시도해 주세요.'
   };
@@ -50,6 +50,12 @@
     const client = clientFactory(auth, { scope: 'writing' })(auth.config.url, auth.config.key);
     let disposed = false;
     const alive = () => { if (disposed) throw fault('request_cancelled'); };
+    // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
+    // account's current token; uid/epoch are captured and an account change cancels the result.
+    // The owner is fixed when this transport is created; a different signed-in user is refused.
+    const ownerId = auth.user?.id || auth.getAccount?.()?.userId || null;
+    const capture = () => { alive(); if (!auth.user?.id) throw fault('auth_required'); if (ownerId && auth.user.id !== ownerId) throw fault('account_mismatch'); return { uid: auth.user.id, epoch: auth.epoch }; };
+    const same = captured => { alive(); if (auth.user?.id !== captured.uid || auth.epoch !== captured.epoch) throw fault('request_cancelled'); };
     const ids = (ws, id) => { if (!validId(ws) || !validId(id)) throw fault('invalid_request'); };
     function data(value, ws, id) {
       try {
@@ -62,9 +68,8 @@
     }
     async function rpc(name, args) {
       try {
-        alive(); const user = await client.auth.getUser(); alive();
-        if (user.error || !user.data?.user) throw fault('auth_required');
-        const result = await client.rpc(name, args); alive();
+        const captured = capture();
+        const result = await client.rpc(name, args); same(captured);
         if (result.error) throw result.error; return result.data;
       } catch (error) { alive(); throw clean(error); }
     }

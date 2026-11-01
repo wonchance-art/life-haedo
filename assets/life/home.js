@@ -14,7 +14,7 @@
     let disposed = false, generation = 0, visible = false;
     let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
-    let mediaObserver = null, mediaGeneration = 0;
+    let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
@@ -161,8 +161,8 @@
       manage.append(life.Icons.create('edit'), el('span', '프로필 편집', 'home-profile-edit-label'));
       manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
       const server = action(context, '', () => navigate('account-blog'), 'home-blog-action');
-      server.id = 'homeAccountBlog'; server.setAttribute('aria-label', '서버에 보관한 글'); server.title = '서버에 보관한 글';
-      server.append(life.Icons.create('cloud'), el('span', '서버에 보관한 글', 'home-profile-edit-label'));
+      server.id = 'homeAccountBlog'; server.setAttribute('aria-label', '글 동기화'); server.title = '글 동기화';
+      server.append(life.Icons.create('cloud'), el('span', '글 동기화', 'home-profile-edit-label'));
       server.dataset.homeDestination = 'account-blog'; server.dataset.focusKey = 'home:action:account-blog';
       header.append(copy, manage, server); return header;
     }
@@ -222,8 +222,10 @@
           if (doc.status !== 'saved' || doc.archived !== !!row.archived) throw new Error('post_changed');
           const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
           const photo = doc.photos.find(item => item.id === embedded?.id);
-          if (!photo?.blob) throw new Error('photo_missing');
-          const url = URL.createObjectURL(photo.blob); mediaUrls.add(url);
+          // HEIC originals are displayed through their JPEG view.
+          const display = photo?.view?.blob ?? photo?.blob;
+          if (!display) throw new Error('photo_missing');
+          const url = URL.createObjectURL(display); mediaUrls.add(url);
           image.alt = embedded.alt || embedded.caption || '';
           image.addEventListener('load', () => { if (current()) frame.setAttribute('aria-busy', 'false'); }, { once: true });
           image.addEventListener('error', () => {
@@ -465,7 +467,6 @@
         if (query) empty.append(action(context, '검색어 지우기', () => { listState.query = ''; listState.limit = ROW_LIMIT; const input = context.surface.querySelector('#homePostSearch'); input.value = ''; updateList(context, true); (context.controls.hidden ? context.list.querySelector('#homeFirstWrite') : input)?.focus({ preventScroll: true }); }));
         else if (listState.tab === 'posts') {
           const start = action(context, '첫 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary'); start.id = 'homeFirstWrite'; start.dataset.homeDestination = 'write'; start.dataset.focusKey = 'home:action:write'; empty.append(start);
-          empty.append(el('p', '다른 기기에서 저장한 글은 위의 서버에 보관한 글에서 확인할 수 있습니다.', 'life-meta'));
         }
         fragment.append(empty);
       }
@@ -620,6 +621,7 @@
       posts.setAttribute('aria-busy', 'true'); composition.append(posts);
       const materials = library(context, bundle); context.materials = materials;
       surface.append(composition, materials); host.append(surface);
+      watch(context);
       await load(context);
       if (!showing(context)) return;
       composition.setAttribute('aria-busy', 'false');
@@ -639,7 +641,20 @@
         }
       }
     }
+    function unwatch() { stopWatch?.(); stopWatch = null; if (watchTimer) clearTimeout(watchTimer); watchTimer = null; }
+    function watch(context) {
+      unwatch();
+      if (typeof storage.subscribe !== 'function') return;
+      try {
+        stopWatch = storage.subscribe(context.workspaceId, event => {
+          if (event?.type !== 'photo_posts_changed' || !showing(context)) return;
+          if (watchTimer) clearTimeout(watchTimer);
+          watchTimer = setTimeout(() => { watchTimer = null; if (showing(context)) { context.photoDrafts.clear(); void load(context, ['photo']); } }, 250);
+        });
+      } catch (_) { stopWatch = null; }
+    }
     function leave() {
+      unwatch();
       // A native details toggle is queued asynchronously. Preserve its current
       // state before navigation makes that event's original context stale.
       captureLibraryState();

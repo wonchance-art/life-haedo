@@ -213,8 +213,9 @@ test('an edit after reviewed snapshot hashing but before the final transaction c
   const module = globalThis.HaedoLife.MaterialContinuity; let gated = false;
   globalThis.HaedoLife.MaterialContinuity = { ...C, async fingerprint(value) { const hash = await C.fingerprint(value); if (!gated) { gated = true; entered.resolve(); await gate.promise; } return hash; } };
   try {
-    const applying = f.a.installMaterialContinuity({ ...row, revision: 2 }, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: before.fingerprint });
-    await entered.promise; const edited = await f.b.readMaterialWriting(f.ws); edited.plans[0].question = '해시 대기 중 다른 탭 입력'; await f.b.saveMaterialWriting(f.ws, edited, edited.revision);
+    // Tab B has not hashed this preparation yet (fingerprints are cached per storage), so its install hashes now.
+    const applying = f.b.installMaterialContinuity({ ...row, revision: 2 }, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: before.fingerprint });
+    await entered.promise; const edited = await f.a.readMaterialWriting(f.ws); edited.plans[0].question = '해시 대기 중 다른 탭 입력'; await f.a.saveMaterialWriting(f.ws, edited, edited.revision);
     const preserved = copy(f.rows); gate.resolve(); await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, preserved);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
 });
@@ -335,4 +336,69 @@ test('a separate editing draft created during received-photo verification invali
     await f.b.savePhotoPost(target.workspaceId, draft, 0); const before = copy(f.rows); gate.resolve();
     await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, before);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
+});
+
+test('automatic receive adopts a server preparation into the same workspace with its own preparation ID, once', async () => {
+  const f = await fixture(), row = rowFor(f), before = await f.a.read(f.ws);
+  // Another device created this plan; this device holds the same workspace without it.
+  await f.a.saveMaterialWriting(f.ws, { ...M.empty(f.ws), revision: f.state.revision, plans: [] }, f.state.revision);
+  const result = await f.a.adoptMaterialContinuity(row);
+  assert.equal(result.workspaceId, f.ws); assert.equal(result.planId, f.plan.id); assert.equal(result.adopted, true);
+  const wrapper = await f.a.readMaterialWriting(f.ws), plan = wrapper.plans.find(value => value.id === f.plan.id);
+  assert.equal(plan.question, '비공개 질문'); assert.equal(plan.materials[0].sourceVersionId, f.plan.materials[0].sourceVersionId);
+  assert.deepEqual(await f.a.findMaterialContinuity(row.id), { workspaceId: f.ws, planId: f.plan.id });
+  const state = await f.a.readMaterialContinuityState(f.ws, f.plan.id); assert.equal(state.remoteId, row.id); assert.equal(state.mapping, null); assert.equal(state.enabled, true);
+  // Exact versions already here are untouched; no other workspace is created.
+  assert.deepEqual((await f.a.read(f.ws)).sourceVersions, before.sourceVersions); assert.equal((await f.a.listWorkspaces()).length, 1);
+  await assert.rejects(f.a.adoptMaterialContinuity(row), { code: 'material_continuity_exists' });
+  f.close();
+});
+
+test('automatic receive never replaces a local preparation with the same ID or a changed exact source version', async () => {
+  const f = await fixture(), row = rowFor(f);
+  await assert.rejects(f.a.adoptMaterialContinuity(row), { code: 'material_continuity_exists' });
+  const changed = copy(row); changed.data.bundle.sourceVersions[0].originalCreatedAt = '1999-01-01';
+  await f.a.saveMaterialWriting(f.ws, { ...M.empty(f.ws), revision: f.state.revision, plans: [] }, f.state.revision);
+  await assert.rejects(f.a.adoptMaterialContinuity(changed));
+  assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []);
+  f.close();
+});
+
+test('a preparation deleted on this device stays listed as an orphan link until its deletion reaches the server', async () => {
+  const f = await fixture(), linked = await connect(f);
+  const wrapper = await f.a.readMaterialWriting(f.ws);
+  await f.a.saveMaterialWriting(f.ws, { ...wrapper, plans: [] }, wrapper.revision);
+  assert.deepEqual(await f.a.listMaterialContinuityOrphans(f.ws), [{ planId: f.plan.id, remoteId: linked.row.id, revision: linked.state.revision, remoteRevision: 1 }]);
+  await assert.rejects(f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision + 1 }), { code: 'material_continuity_conflict' });
+  await f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision });
+  assert.deepEqual(await f.a.listMaterialContinuityOrphans(f.ws), []); assert.equal(await f.a.findMaterialContinuity(linked.row.id), null);
+  f.close();
+});
+
+test('a server-side deletion removes an unchanged preparation but never one edited since the last exchange', async () => {
+  const f = await fixture(), linked = await connect(f), before = await f.a.read(f.ws);
+  const snapshot = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  const wrapper = await f.a.readMaterialWriting(f.ws), edited = copy(wrapper); edited.plans[0].question = '삭제 소식 전에 고친 질문';
+  await f.a.saveMaterialWriting(f.ws, edited, wrapper.revision);
+  await assert.rejects(f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision, removePlan: true, expectedFingerprint: snapshot.fingerprint }), { code: 'material_continuity_changed' });
+  assert.equal((await f.a.readMaterialWriting(f.ws)).plans.length, 1);
+  const current = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  await f.a.forgetMaterialContinuity(f.ws, f.plan.id, { expectedRevision: linked.state.revision, removePlan: true, expectedFingerprint: current.fingerprint });
+  assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []); assert.equal(await f.a.readMaterialContinuityState(f.ws, f.plan.id), null);
+  assert.deepEqual((await f.a.read(f.ws)).sourceVersions, before.sourceVersions);
+  f.close();
+});
+
+test('an unchanged preparation is hashed once across background cycles; any change hashes again', async () => {
+  const counts = { verify: 0, fingerprint: 0 }, counted = { ...C, verify: async value => { counts.verify++; return C.verify(value); }, fingerprint: async value => { counts.fingerprint++; return C.fingerprint(value); } };
+  const f = await fixture(), options = { idb: f.idb, core: Core, channelFactory: null, account: accountA, materialContinuity: counted }, s = createStorage(options);
+  const first = await s.readMaterialContinuitySnapshot(f.ws, f.plan.id), hashed = { ...counts };
+  assert.ok(hashed.fingerprint >= 1);
+  for (let cycle = 0; cycle < 3; cycle++) assert.equal((await s.readMaterialContinuitySnapshot(f.ws, f.plan.id)).fingerprint, first.fingerprint);
+  assert.deepEqual(counts, hashed, 'no re-hash for an unchanged preparation');
+  const wrapper = await s.readMaterialWriting(f.ws), edited = copy(wrapper); edited.plans[0].question = '다시 해시해야 하는 질문';
+  await s.saveMaterialWriting(f.ws, edited, wrapper.revision);
+  const changed = await s.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  assert.notEqual(changed.fingerprint, first.fingerprint); assert.equal(counts.fingerprint, hashed.fingerprint + 1);
+  s.close(); f.close();
 });

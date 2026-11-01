@@ -9,6 +9,7 @@ const { FakeCloud, accounts, session, cloud, base } = require('./life-sync-brows
 const { inspect } = require('../scripts/check-site-design.cjs');
 const output = path.resolve(__dirname, '../.local/blog-default-server');
 const copy = value => structuredClone(value), sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const until = async (predicate, message, timeout = 20000) => { const end = Date.now() + timeout; while (!(await predicate())) { if (Date.now() > end) throw new Error('Timed out: ' + message); await new Promise(done => setTimeout(done, 100)); } };
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const report = { checks: [], visual: [], pageErrors: [], consoleErrors: [], expectedTransportErrors: [], external: [],
   scope: 'Actual local app, bundled SDK and account-scoped IndexedDB; synthetic Auth/blog CAS/Storage HTTP. No production account, hosted SQL/RLS, Google or Apple-device claim.' };
@@ -50,7 +51,7 @@ async function main() {
       return { ws, docs };
     });
   }
-  async function draft(f, title) {
+  async function draft(f, title, { synced = true } = {}) {
     const { page } = f;
     const previousSaves = f.server.saves().length, previousAssets = f.server.assetCalls.length;
     await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('.ql-editor').waitFor();
@@ -58,8 +59,14 @@ async function main() {
     const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 257; canvas.height = 193; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#385941'; ctx.fillRect(0, 0, 257, 193); return canvas.toDataURL('image/png').split(',')[1]; });
     f.original = Buffer.from(png, 'base64');
     await page.locator('#photoFiles').setInputFiles({ name: 'anonymous-original.png', mimeType: 'image/png', buffer: f.original });
+    const started = Date.now();
     await page.waitForFunction(async title => { const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws); const row = rows.find(row => row.title === title); return row && (await s.readPhotoPost(ws, row.id)).photos.length === 1; }, title);
-    assert.equal(f.server.saves().length, previousSaves); assert.equal(f.server.assetCalls.length, previousAssets, 'Draft autosave must stay entirely local');
+    // 2026-11-01: drafts reach the account too, but only after the autosave
+    // quiet period, never on every keystroke.
+    if (Date.now() - started < 4000) assert.equal(f.server.saves().length, previousSaves, 'Draft autosave is not sent on each keystroke');
+    if (!synced) return;
+    await until(() => [...f.server.posts.values()].some(row => row.data.status === 'draft' && row.data.title === title && row.data.photos.length === 1), 'draft with its photo reaches the account');
+    assert(f.server.assetCalls.length > previousAssets);
   }
   async function save(f, expected = 'synced') {
     await f.page.getByRole('button', { name: '글 저장', exact: true }).click(); await f.page.locator('.photo-article').waitFor();
@@ -84,8 +91,11 @@ async function main() {
       const geometry = await page.evaluate(() => {
         const bar = document.querySelector('.photo-commandbar')?.getBoundingClientRect();
         const scope = document.querySelector('.photo-server-scope')?.getBoundingClientRect();
-        return { commandbarHeight: bar?.height || 0, commandbarBottom: bar?.bottom || 0, scopeHeight: scope?.height || 0 };
+        const save = document.querySelector('.photo-save')?.getBoundingClientRect();
+        return { commandbarHeight: bar?.height || 0, commandbarBottom: bar?.bottom || 0, scopeHeight: scope?.height || 0, scopeVisible: !!document.querySelector('.photo-server-scope')?.checkVisibility(), saveHeight: save?.height || 0 };
       });
+      // The scope note lives in the closed more menu; narrow screens keep one compact row.
+      if (scene === 'writing') { assert.equal(geometry.scopeVisible, false, 'scope note is not a header line'); if (width <= 760) assert(geometry.commandbarHeight <= 56 && geometry.saveHeight >= 44, JSON.stringify(geometry)); }
       report.visual.push({ scene, width, metrics, geometry });
       assert.equal(metrics.horizontalOverflow, false, scene + ' ' + width);
       await page.screenshot({ path: path.join(output, scene + '-' + width + '.png') });
@@ -93,9 +103,11 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
   }
   try {
-    await check('Draft stays local; explicit save stores the whole post and exact original privately', async f => {
+    await check('A draft syncs after its quiet period; explicit save stores the whole post and exact original privately', async f => {
       await draft(f, '기본 서버 보관'); await capture(f.page, 'writing');
-      assert.equal(f.server.saves().length, 0); const saved = await save(f), row = [...f.server.posts.values()][0];
+      const draftRow = [...f.server.posts.values()][0]; assert.equal(draftRow.data.status, 'draft'); assert.equal(draftRow.publication, null);
+      const saved = await save(f), row = [...f.server.posts.values()][0];
+      assert.equal(f.server.posts.size, 1, 'the draft identity becomes the saved post'); assert.equal(row.id, draftRow.id); assert.equal(row.data.status, 'saved');
       assert.equal(saved.doc.photos[0].digest, sha(f.original)); assert.equal(saved.doc.photos[0].width, 257); assert.equal(saved.doc.photos[0].height, 193);
       assert.equal(row.data.photos[0].digest, sha(f.original)); assert.equal(row.data.photos[0].width, 257); assert.equal(row.data.photos[0].height, 193);
       assert.deepEqual(f.server.originals.get(row.assets[row.data.photos[0].id].path).bytes, f.original);
@@ -108,33 +120,40 @@ async function main() {
       await f.page.getByRole('button', { name: '다시 여는 여행', exact: true }).click(); await f.page.locator('.photo-article').waitFor();
       await f.page.locator('.photo-server-status[data-state="synced"]').waitFor(); assert.equal(f.server.saves().length, writes);
       await edit(f, '수정한 여행'); const second = await save(f);
-      assert.notEqual(second.doc.id, first.doc.id); assert.equal(second.doc.sync.remoteId, remoteId); assert.equal(f.server.posts.size, 1);
-      assert.equal(second.doc.photos[0].digest, sha(f.original)); assert.equal([...f.server.posts.values()][0].revision, 2);
+      assert.notEqual(second.doc.id, first.doc.id); assert.equal(second.doc.sync.remoteId, remoteId);
+      await until(() => f.server.posts.size === 1, 'a synced editing draft is retired on the server after saving');
+      const row = f.server.posts.get(accounts.a.id + ':' + remoteId);
+      assert.equal(second.doc.photos[0].digest, sha(f.original)); assert.equal(row.data.title, '수정한 여행'); assert.equal(row.data.status, 'saved');
     });
     await check('Offline verification cannot undo local saving; explicit retry stores that same post', async f => {
       await draft(f, '오프라인 여행'); f.server.offline.add(f.name);
       await f.page.getByRole('button', { name: '글 저장', exact: true }).click();
       await f.page.locator('#photoServerRetry').waitFor(); const local = await state(f.page), saved = local.docs.find(doc => doc.status === 'saved');
-      assert(saved); assert.equal(saved.photos[0].digest, sha(f.original)); assert.equal(f.server.posts.size, 0); assert(saved.sync, 'Failed default saving needs durable local state');
+      assert(saved); assert.equal(saved.photos[0].digest, sha(f.original)); assert(![...f.server.posts.values()].some(row => row.data.status === 'saved'));
+      assert.equal(saved.sync?.remoteRevision || 0, f.server.posts.size ? saved.sync.remoteRevision : 0, 'the saved version did not reach the account');
       await capture(f.page, 'offline-local-retained');
       f.server.offline.delete(f.name); await f.page.getByRole('button', { name: '서버 보관 다시 시도', exact: true }).click();
       await f.page.locator('.photo-server-status[data-state="synced"]').waitFor();
-      assert.equal((await state(f.page)).docs.find(doc => doc.status === 'saved').id, saved.id); assert.equal(f.server.posts.size, 1);
+      assert.equal((await state(f.page)).docs.find(doc => doc.status === 'saved').id, saved.id);
+      assert.equal(f.server.posts.size, 1); assert.equal([...f.server.posts.values()][0].data.status, 'saved');
     });
-    await check('Remote CAS conflict preserves both saved bodies and never overwrites the server', async f => {
-      await draft(f, '경합 여행'); const initial = await save(f), row = [...f.server.posts.values()][0];
-      row.revision++; row.data.title = '다른 기기에서 쓴 제목'; row.data.ops.unshift({ insert: 'REMOTE_BODY_SENTINEL\n' });
-      const remoteBefore = copy(row); await edit(f, '현재 기기의 새 제목'); const saved = await save(f, 'conflict');
+    await check('Two-device edit: the later local edit wins and the earlier server body is kept as a separate draft', async f => {
+      await draft(f, '경합 여행'); const initial = await save(f), key = accounts.a.id + ':' + initial.doc.sync.remoteId, row = f.server.posts.get(key);
+      // Another device stored an earlier-dated edit after this device last synced.
+      row.revision++; const bumped = row.revision; row.data.title = '다른 기기에서 쓴 제목'; row.data.ops.unshift({ insert: 'REMOTE_BODY_SENTINEL\n' });
+      await edit(f, '현재 기기의 새 제목'); const saved = await save(f);
       assert.equal(saved.doc.title, '현재 기기의 새 제목'); assert.equal(saved.doc.photos[0].digest, initial.doc.photos[0].digest);
-      assert.deepEqual([...f.server.posts.values()][0], remoteBefore); assert.equal(saved.doc.sync.status, 'conflict');
-      await f.page.getByRole('button', { name: '글 관리에서 서버 내용 확인', exact: true }).waitFor();
+      assert.equal(f.server.posts.get(key).data.title, '현재 기기의 새 제목'); assert.equal(f.server.posts.get(key).revision, bumped + 1);
+      const kept = saved.docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · 다른 기기에서 쓴 제목');
+      assert(kept, 'the other device body is kept, never silently dropped'); assert.equal(kept.ops[0].insert, 'REMOTE_BODY_SENTINEL\n');
+      assert.equal(kept.photos[0].digest, initial.doc.photos[0].digest);
     });
-    await check('Paused post remains paused after editing and saving; it is never silently enabled', async f => {
-      await draft(f, '중지한 여행'); const first = await save(f), writes = f.server.saves().length;
-      await f.page.evaluate(async id => { const storage = HaedoLife.Shell.storage, ws = await storage.getActive(), sync = HaedoLife.BlogSync.create({ storage, auth: HaedoAuth }); try { await sync.pause(ws, id); } finally { sync.dispose(); } }, first.doc.id);
-      await edit(f, '중지 상태로 수정'); const saved = await save(f, 'paused');
-      assert.equal(saved.doc.sync.enabled, false); assert.equal(saved.doc.sync.remoteId, first.doc.sync.remoteId); assert.equal(f.server.saves().length, writes);
-      assert.equal(await f.page.locator('#photoServerRetry').count(), 0);
+    await check('A post paused by an earlier per-device choice is uploaded again after editing', async f => {
+      await draft(f, '중지한 여행'); const first = await save(f);
+      await f.page.evaluate(async id => { const storage = HaedoLife.Shell.storage, ws = await storage.getActive(), state = await storage.readBlogSyncState(ws, id); await storage.writeBlogSyncState(ws, id, { ...state, enabled: false, status: 'paused' }, state.revision); }, first.doc.id);
+      await edit(f, '중지 상태로 수정'); const saved = await save(f);
+      assert.equal(saved.doc.sync.enabled, true); assert.equal(saved.doc.sync.remoteId, first.doc.sync.remoteId);
+      assert.equal(f.server.posts.get(accounts.a.id + ':' + first.doc.sync.remoteId).data.title, '중지 상태로 수정');
     });
     await check('A late private ACK cannot attach the old post or success UI to another account', async f => {
       await draft(f, 'A 계정의 여행'); const hold = { device: f.name, entered: deferred(), release: deferred() }; f.server.hold = hold;
@@ -152,8 +171,9 @@ async function main() {
       try {
         await f.page.getByRole('button', { name: '글 저장', exact: true }).click(); await hold.entered.promise;
         await nav(f.page, 'home'); await f.page.locator('#homePosts[aria-busy="false"]').waitFor();
-        await draft(f, '기다리지 않고 쓴 두 번째 여행'); const second = await save(f);
+        await draft(f, '기다리지 않고 쓴 두 번째 여행', { synced: false }); const second = await save(f);
         assert.equal(second.doc.title, '기다리지 않고 쓴 두 번째 여행'); assert.equal(f.server.posts.size, 2);
+        assert.equal(f.server.posts.get(accounts.a.id + ':' + second.doc.sync.remoteId).data.status, 'saved');
         hold.release.resolve(); await f.page.locator('.photo-server-status[data-state="synced"][data-post-id="' + second.doc.id + '"]').waitFor();
         assert.equal((await state(f.page)).docs.filter(doc => doc.status === 'saved').length, 2);
       } finally { hold.release.resolve(); }

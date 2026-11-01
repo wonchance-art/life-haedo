@@ -8,7 +8,7 @@
   const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.', request_cancelled: '계정이나 연결이 바뀌어 이전 요청을 중단했습니다.',
-    schema_missing: '서버에 자료 준비 이어쓰기 설치가 필요합니다. 이 브라우저의 준비는 유지합니다.',
+    schema_missing: '서버에 작성 준비 동기화 설치가 필요합니다. 이 기기의 준비는 유지합니다.',
     invalid_request: '자료 준비 전송의 식별자와 버전을 확인해 주세요.', invalid_remote_data: '서버 준비의 원문과 구절을 확인하지 못했습니다. 현재 입력은 유지합니다.',
     operation_mismatch: '이미 보낸 작업과 요청 내용이 달라 적용하지 않았습니다.', remote_missing: '연결한 서버 준비가 없습니다. 자동으로 다시 만들지 않았습니다.',
     output_conflict: '이미 정해진 글과 작성 기기를 바꿀 수 없습니다. 기존 글을 이어 쓰거나 별도 준비 사본을 만드세요.',
@@ -44,12 +44,16 @@
     if (!auth?.ready || !model?.verify || !clientFactory) throw fault('auth_required');
     const client = clientFactory(auth, { scope: 'material' })(auth.config.url, auth.config.key);
     let disposed = false, markerSupport = null;
-    const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); return { userId: auth.user.id, epoch: auth.epoch }; };
+    // The owner is fixed when this transport is created; a different signed-in user is refused.
+    const ownerId = auth.user?.id || auth.getAccount?.()?.userId || null;
+    const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); if (ownerId && auth.user.id !== ownerId) throw fault('request_cancelled'); return { userId: auth.user.id, epoch: auth.epoch }; };
     function alive(value) { if (disposed || value && (!value.userId || auth.user?.id !== value.userId || auth.epoch !== value.epoch)) throw fault('request_cancelled'); }
+    // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
+    // account's current token, uid/epoch are captured and any account change cancels the result;
+    // the server checks the token and auth.uid() on every RPC. No verification result is cached.
     async function rpc(name, args, captured) {
       try {
-        alive(captured); const user = await client.auth.getUser(); alive(captured);
-        if (user.error || !user.data?.user || user.data.user.id !== captured.userId) throw fault('auth_required');
+        alive(captured);
         const result = await client.rpc(name, args); alive(captured); if (result.error) throw result.error; return result.data;
       } catch (cause) { alive(captured); throw clean(cause); }
     }
@@ -64,6 +68,12 @@
       if (!id(remoteId)) throw fault('invalid_request'); const captured = context();
       const row = await rpc('life_material_get', { p_id: remoteId }, captured);
       if (row === null) return null;
+      // A deleted preparation keeps its revision as a tombstone so devices can tell
+      // "deleted elsewhere" from "never stored"; it carries no preparation data.
+      if (fields(row, ['id', 'revision', 'deleted', 'updated_at'])) {
+        if (row.id !== remoteId || row.deleted !== true || !revision(row.revision, 1) || !timestamp(row.updated_at)) throw fault('invalid_remote_data');
+        return { id: row.id, revision: row.revision, deleted: true, data: null, updated_at: row.updated_at };
+      }
       if (!fields(row, ['id', 'revision', 'data', 'updated_at']) || row.id !== remoteId || !revision(row.revision, 1) || !timestamp(row.updated_at)) throw fault('invalid_remote_data');
       const data = await verified(row.data); alive(captured); return { id: row.id, revision: row.revision, data, updated_at: row.updated_at };
     }
@@ -78,6 +88,15 @@
       }
       const result = await rpc('life_material_put', { p_id: owned.remoteId, p_operation_id: owned.operationId, p_expected_revision: owned.expectedRevision, p_data: data }, captured);
       if (!fields(result, ['status', 'revision']) || !['stored', 'conflict'].includes(result.status) || !revision(result.revision, 1) || result.status === 'stored' && result.revision !== owned.expectedRevision + 1) throw fault('invalid_remote_data');
+      return { status: result.status, revision: result.revision };
+    }
+    // Compare-and-delete of one preparation head. 'missing' means it never reached the server.
+    async function remove(request) {
+      const captured = context(), owned = structuredClone(request);
+      if (!fields(owned, ['remoteId', 'operationId', 'expectedRevision']) || !id(owned.remoteId) || !id(owned.operationId) || !revision(owned.expectedRevision, 1) || owned.expectedRevision === MAX_REVISION) throw fault('invalid_request');
+      const result = await rpc('life_material_delete', { p_id: owned.remoteId, p_operation_id: owned.operationId, p_expected_revision: owned.expectedRevision }, captured);
+      if (!fields(result, ['status', 'revision']) || !['deleted', 'conflict', 'missing'].includes(result.status) || !revision(result.revision) ||
+        result.status === 'deleted' && result.revision !== owned.expectedRevision + 1) throw fault('invalid_remote_data');
       return { status: result.status, revision: result.revision };
     }
     async function list(after = null) {
@@ -95,7 +114,7 @@
       if (result.next !== null && (!fields(result.next, ['updated_at', 'id']) || items.length !== 20 || result.next.id !== prior?.id || result.next.updated_at !== prior?.updated_at)) throw fault('invalid_remote_data');
       return { items, next: result.next === null ? null : { updated_at: result.next.updated_at, id: result.next.id } };
     }
-    return Object.freeze({ read, write, list, dispose() { if (disposed) return; disposed = true; client.auth.dispose(); } });
+    return Object.freeze({ read, write, remove, list, dispose() { if (disposed) return; disposed = true; client.auth.dispose(); } });
   }
   return Object.freeze({ create, clean, MAX_BYTES });
 });
