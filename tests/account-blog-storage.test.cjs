@@ -210,5 +210,5 @@ test('saving an editing draft that synced on its own keeps the target server ide
   const binding = await f.a.readBlogSyncState(f.ws, saved.id);
   assert.equal(binding.remoteId, id); assert.equal(binding.localRevision, 0); assert.equal(binding.revision, 2);
   assert.equal(await f.a.readBlogSyncState(f.ws, id), null);
-  assert.deepEqual((await f.a.listBlogSyncStates(f.ws)).tombstones, [{ remoteId: draft.id, remoteWorkspaceId: f.ws, reason: 'replaced' }]);
+  assert.deepEqual((await f.a.listBlogSyncStates(f.ws)).tombstones, [{ remoteId: draft.id, remoteWorkspaceId: f.ws, reason: 'replaced', remoteRevision: 1, pendingRevision: null }]);
 });

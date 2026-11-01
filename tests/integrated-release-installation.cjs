@@ -26,7 +26,7 @@ const observedBaselineMigration = ['supabase/migrations/20261029112456_naver_obs
 // 2026-11-01 owner directive: everything syncs across devices. These additive
 // migrations are verified by their own disposable PostgreSQL suites
 // (run-account-docs-postgres, blog-originals.sql, material tombstones).
-const accountSyncMigrations = ['supabase/migrations/20261101090000_life_account_documents.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101130000_life_material_tombstones.sql', 'supabase/migrations/20261101140000_life_sync_edit_times.sql'];
+const accountSyncMigrations = ['supabase/migrations/20261101090000_life_account_documents.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261101130000_life_material_tombstones.sql', 'supabase/migrations/20261101140000_life_sync_edit_times.sql'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];

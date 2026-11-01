@@ -182,8 +182,10 @@
       identity(postId); if (expectedRevision !== null && (!rev(expectedRevision) || expectedRevision < 1)) throw fault('invalid_request');
       const context = capture();
       const result = await rpc('life_blog_delete', { p_post_id: postId, p_expected_revision: expectedRevision }, { commit: true });
-      if (!['deleted', 'missing', 'conflict'].includes(result?.status) || !rev(result.revision) || result.status !== 'conflict' && (!Array.isArray(result.paths) || result.paths.length > 64)) throw fault('invalid_remote_data');
-      if (result.status !== 'conflict' && result.paths.some(path => typeof path !== 'string' || !path.startsWith(context.userId + '/' + postId + '/'))) throw fault('invalid_remote_data');
+      // 'conflict': a newer revision exists; 'published': the post is public (withdraw first). Neither deletes anything.
+      const kept = result?.status === 'conflict' || result?.status === 'published';
+      if (!['deleted', 'missing', 'conflict', 'published'].includes(result?.status) || !rev(result.revision) || !kept && (!Array.isArray(result.paths) || result.paths.length > 64)) throw fault('invalid_remote_data');
+      if (!kept && result.paths.some(path => typeof path !== 'string' || !path.startsWith(context.userId + '/' + postId + '/'))) throw fault('invalid_remote_data');
       return result;
     }
     async function removeAssets(postId, paths) {

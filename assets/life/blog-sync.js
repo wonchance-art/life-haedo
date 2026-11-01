@@ -140,8 +140,19 @@
       // An account change or a newer local request cannot commit this document.
       const latest = await readState(c);
       if (latest?.pending?.operationId !== pending.operationId || latest.remoteId !== state.remoteId) throw fault('request_cancelled');
-      const result = await remote.save({ workspaceId: latest.remoteWorkspaceId, postId: latest.remoteId,
-        expectedRevision: pending.expectedRevision, operationId: pending.operationId, data: pending.manifest }); guard(c);
+      let result;
+      try {
+        result = await remote.save({ workspaceId: latest.remoteWorkspaceId, postId: latest.remoteId,
+          expectedRevision: pending.expectedRevision, operationId: pending.operationId, data: pending.manifest }); guard(c);
+      } catch (error) {
+        // The server refuses to turn a saved post back into a draft. Decide it
+        // as a conflict (the saved version wins) instead of retrying forever.
+        if (error?.code !== 'invalid_request' || pending.manifest.status !== 'draft' || attempt >= 2) throw error;
+        const head = await remote.read(latest.remoteId); guard(c);
+        if (head?.data.status !== 'saved') throw error;
+        const fresh = await writeState(c, latest, { pending: null, status: 'pending', error: null });
+        return resolveConflict(c, fresh, await readPost(c), attempt + 1, byRemote);
+      }
       if (result.status === 'stored') {
         await writeState(c, latest, { remoteRevision: result.revision, remoteManifest: pending.manifest, localRevision: pending.localRevision, pending: null, conflict: null, error: null, status: 'synced' });
         retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
@@ -188,15 +199,21 @@
         await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
-      if (row.revision === state.remoteRevision) return pushLocked(c, { attempt: attempt + 1, byRemote });
-      const remoteWins = Date.parse(row.data.updatedAt) > Date.parse(post.updatedAt);
+      // A post finished on another device (draft -> saved) never returns to a
+      // draft: the saved server version stays and this device's later draft
+      // text is kept as its own draft, whatever the edit times are.
+      const finishedElsewhere = row.data.status === 'saved' && post.status === 'draft';
+      if (row.revision === state.remoteRevision && !finishedElsewhere) return pushLocked(c, { attempt: attempt + 1, byRemote });
+      const remoteWins = finishedElsewhere || Date.parse(row.data.updatedAt) > Date.parse(post.updatedAt);
       if (remoteWins && held(c.ws, c.id)) return getState(c.ws, c.id);
       const remoteDoc = await download(c, row);
       const map = byRemote || (await snapshot(c)).byRemote;
       if (remoteWins) {
         await storage.commitBlogSync(c.ws, { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision,
           binding: synced(state, row), bindingRevision: state.revision, copy: conflictCopy(post) }, { isCurrent: () => current(c) });
-        guard(c); emit(c.ws, c.id); kick(1000); // the kept draft reaches the other devices promptly retries.delete(key(c.ws, c.id)); return getState(c.ws, c.id);
+        guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id));
+        kick(1000); // the kept draft reaches the other devices promptly
+        return getState(c.ws, c.id);
       }
       await storage.commitBlogSync(c.ws, { postId: c.id, baseRevision: post.revision,
         binding: synced(state, row, { localRevision: state.localRevision, status: 'pending' }), bindingRevision: state.revision,
@@ -291,11 +308,20 @@
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
+    // A deletion removes only the exact server revision this device last saw
+    // (or its own unacknowledged request). A newer edit or a publication from
+    // another device wins: the deletion is dropped and the next cycle installs
+    // the server version here again, so nothing is lost.
     async function deleteRemote(c, tombstone) {
-      const result = await remote.deletePost(tombstone.remoteId, null); guard(c);
-      if (result.status === 'conflict') throw fault('blog_conflict');
-      if (result.paths.length) await remote.removeAssets(tombstone.remoteId, result.paths);
-      guard(c); await storage.clearBlogTombstone(tombstone.ws, tombstone.remoteId);
+      const known = Number.isSafeInteger(tombstone.remoteRevision) ? tombstone.remoteRevision : null, own = Number.isSafeInteger(tombstone.pendingRevision) ? tombstone.pendingRevision : null;
+      const legacy = known === null && !Object.hasOwn(tombstone, 'pendingRevision');
+      let result = await remote.deletePost(tombstone.remoteId, legacy ? null : known > 0 ? known : own); guard(c);
+      if (result.status === 'conflict' && own && known > 0 && result.revision === own) { result = await remote.deletePost(tombstone.remoteId, own); guard(c); }
+      if (result.status === 'deleted' || result.status === 'missing') { if (result.paths.length) await remote.removeAssets(tombstone.remoteId, result.paths); guard(c); }
+      else retries.delete(key(tombstone.ws, tombstone.remoteId));
+      await storage.clearBlogTombstone(tombstone.ws, tombstone.remoteId);
+      if (result.status === 'conflict' || result.status === 'published') kick(0);
+      return result.status;
     }
     // ---- explicit deletion -----------------------------------------------------
     async function deletePost(ws, id, { expectedRevision } = {}) {
@@ -442,7 +468,7 @@
     function schedule(delay) {
       if (disposed || !started) return;
       if (timer) timers.clearTimeout(timer);
-      timer = timers.setTimeout(() => { timer = null; void syncNow(); }, delay);
+      timer = timers.setTimeout(() => { timer = null; if (events?.document?.visibilityState === 'hidden') return; void syncNow(); }, delay);
     }
     function kick(delay = 0) { if (started) schedule(delay); }
     async function syncNow(options = {}) {

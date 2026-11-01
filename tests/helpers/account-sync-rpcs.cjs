@@ -21,8 +21,9 @@ const reads = new Set([
   'life_account_document_changes',
 ]);
 const writes = new Set([
-  'life_blog_save', 'life_blog_prepare_asset', 'life_blog_delete',
-  'life_material_put', 'life_material_delete',
+  // Deletions are never exempt: a suite that expects one asserts it explicitly.
+  'life_blog_save', 'life_blog_prepare_asset',
+  'life_material_put',
   'life_writing_draft_put',
   'life_composition_put',
   'life_library_meta_put', 'life_library_original_put', 'life_library_open',
