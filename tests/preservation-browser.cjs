@@ -158,7 +158,7 @@ async function main() {
   page.on('pageerror', error => report.pageErrors.push(error.message));
   page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push(event.text()); });
   const check = async (name, run) => { console.log('START ' + name); await run(); report.checks.push(name); console.log('PASS ' + name); };
-  const enter = async () => { await nav(page, 'manage'); await page.locator('#lifePreservationOpen').click(); await page.locator('#lifePreservation[data-state="ready"]').waitFor(); };
+  const enter = async () => { await nav(page, 'manage'); await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await settle(page); await page.locator('#lifePreservationOpen').click(); await page.locator('#lifePreservation[data-state="ready"]').waitFor(); };
   const prepare = async fixture => {
     await page.locator('#preservationPostSelection input[data-post-id="' + fixture.postId + '"]').check();
     await page.locator('#preservationBoardSelection input[data-board-id="' + fixture.boardId + '"]').check();

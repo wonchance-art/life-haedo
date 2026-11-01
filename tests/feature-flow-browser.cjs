@@ -108,10 +108,15 @@ async function main() {
       await capture(page, 'tools', size);
       await nav(page, 'manage'); await mode(page, 'manage');
       for (const label of ['글 공개·보관', '공개 표지', '공개한 페이지', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
-      for (const label of ['현재 자료공간', '자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      for (const label of ['현재 자료공간', '백업·복원']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      // 2026-11-01: the file formats live together on 설정 → 백업·복원.
+      for (const label of ['자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings lists ' + label + ' only inside 백업·복원');
       await capture(page, 'settings', size);
+      await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await mode(page, 'backup');
+      for (const label of ['자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
       await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click(); await mode(page, 'workbench-backup'); await page.locator('#wbBackupDownload').waitFor();
-      await back(page, 'manage'); await expectFocus(page, '자료·구성 백업');
+      await back(page, 'backup'); await expectFocus(page, '자료·구성 백업');
+      await back(page, 'manage'); await expectFocus(page, '백업·복원');
       await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await mode(page, 'interests'); await page.locator('#interestManual').waitFor();
       assert.equal(await page.locator('[data-haedo-section="news"][aria-current="page"]').count(), 1);
       await back(page, 'external-discovery'); await page.locator('#discoveryNewsSettingsPanel').waitFor({ state: 'visible' });

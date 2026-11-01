@@ -6,7 +6,7 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { FakeCloud, accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const { current, abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
@@ -160,7 +160,7 @@ async function main() {
       await go(page); await openBook(page, book.id); assert.match(await page.locator(`#wbChapterSources .wb-source[data-version-id="${gaps[0][0]}"]`).textContent(), /연결된 원문 없음/); await details(page, '책 원고 파일로 보관'); const exported = await download(page, '#wbBookExport'); assert(exported.text.includes('연결된 원문 없음')); assert(!exported.text.includes(latestBody));
     });
     await check('books and legacy reflection remain isolated across workspaces and account changes', 820, async ({ page, server, device }) => {
-      const f = await fixture(page), seed = await seedBooks(page, f); await openBook(page, seed.books[0].id); await openManagement(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('책을 따로 쓰는 익명 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); const other = (await current(page)).bundle.workspaceId; assert.notEqual(other, f.workspaceId);
+      const f = await fixture(page), seed = await seedBooks(page, f); await openBook(page, seed.books[0].id); await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('책을 따로 쓰는 익명 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); const other = (await current(page)).bundle.workspaceId; assert.notEqual(other, f.workspaceId);
       await go(page); assert.equal((await current(page)).workbench.books, undefined); const second = await createBook(page, '다른 공간의 책'); await createChapter(page, '다른 공간의 장'); await page.locator('#wbChapterNote').fill('다른 공간에서만 보여야 하는 문장.'); await save(page);
       await openManagement(page); await page.locator('#lifeWorkspace').selectOption(f.workspaceId); await settle(page); await go(page); await openBook(page, seed.books[0].id); assert.equal(await page.locator('#wbChapterNote').inputValue(), manuscript); assert.deepEqual((await current(page)).workbench.reflection, f.legacy);
       await switchAccount(page, server, device, accounts.b); assert.equal((await current(page)).workbench.books, undefined); assert.equal((await current(page)).workbench.reflection.note, ''); assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.read(id); return false; } catch (_) { return true; } }, f.workspaceId), true);

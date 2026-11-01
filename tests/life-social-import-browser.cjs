@@ -5,7 +5,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { FakeCloud, base, cloud, openManagement, openSection } = require('./life-sync-browser.cjs');
+const { FakeCloud, base, cloud, openManagement, openSection, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const button = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 const bundle = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
@@ -145,7 +145,7 @@ async function main() {
         await page.waitForFunction(expected => getSelection().toString() === expected, selected);
         assert.equal(await page.locator('#lifeApp .life-source-url').textContent(), url);
         assert.equal(await page.locator('#lifeApp a.life-external').getAttribute('href'), new URL(url).href);
-        await openManagement(page); await button(page, '내보내기·사본 복원'); const pending = page.waitForEvent('download'); await button(page, 'JSON 백업');
+        await openBackupCenter(page); await button(page, '내보내기·사본 복원'); const pending = page.waitForEvent('download'); await button(page, 'JSON 백업');
         const backup = JSON.parse(await fs.readFile(await (await pending).path(), 'utf8'));
         assert.equal(backup.workspace.sources[0].url, url); assert.deepEqual(backup.workspace.sourceVersions[0], version);
         await page.locator('#lifeRestoreFile').setInputFiles({ name: 'social-source-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) }); await settle(page);

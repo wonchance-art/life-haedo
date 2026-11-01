@@ -235,7 +235,9 @@ async function main() {
         if (size.name === 'phone') {
           await click(page, '가져오기'); await capture(page, 'import', size);
           for (const [name, scene] of [['내보내기·사본 복원', 'transfer'], ['동기화', 'sync']]) {
-            await toggle(page, '현재 자료공간', '#lifeManagement', true); await click(page, name);
+            await toggle(page, '현재 자료공간', '#lifeManagement', true);
+            if (name === '내보내기·사본 복원') await click(page, '백업·복원'); // formats live on 설정 → 백업·복원
+            await click(page, name);
             await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await capture(page, scene, size);
           }
         }

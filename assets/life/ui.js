@@ -135,17 +135,17 @@
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
     let naverCaptureUI = null, naverCaptureService = null, naverReaderService = null, naverPhotoView = null, naverCaptureTarget = null;
-    let obsidianUpdateUI = null, originalAttachmentsUI = null;
+    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null;
     let sourceFoldersUI = null, sourceFoldersWorkspace = null, sourceFoldersMount = null, sourceFoldersUpdate = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map(), naverBlogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth, autoSync: true });
-    const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage', 'backup']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
-      'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
+      'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리', backup: '백업·복원' };
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
@@ -1308,7 +1308,7 @@
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
-      if (!['tools', 'manage', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', ...workbenchModes].includes(mode) && !options?.preserveContext &&
+      if (!['tools', 'manage', 'backup', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
@@ -1498,10 +1498,12 @@
       const view = params.get('view');
       if (params.get('compose') === '1') return 'page';
       // A known destination survives an old section URL and is normalized on render.
-      if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'collection', 'find'].includes(view)) return view;
+      if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'backup', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'collection', 'find'].includes(view)) return view;
       if (section === 'news') return 'external-discovery';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return 'tools';
+      // The former settings file groups now live on the 백업·복원 screen.
+      if (section === 'manage' && /^#lifeBackup(?:Choices|Materials|Planning)$/.test(global.location.hash)) return 'backup';
       if (section === 'manage') return 'manage';
       if (view === 'related') return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
@@ -1516,7 +1518,7 @@
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
-      else if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      else if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'backup', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1578,6 +1580,9 @@
     function subviewOrigin() {
       const origin = viewOrigins.get(state.mode);
       if (origin?.workspaceId === state.bundle?.workspaceId) return origin;
+      // Old direct addresses of a file format return to 백업·복원 with that format's row focused.
+      if (['transfer', 'workbench-backup', 'preservation'].includes(state.mode))
+        return { mode: 'backup', workspaceId: state.bundle?.workspaceId, scrollY: 0, focusKey: 'backup:' + state.mode };
       const section = sectionFor(state.mode);
       return { mode: section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section, workspaceId: state.bundle?.workspaceId, scrollY: 0 };
     }
@@ -1678,7 +1683,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '계획' : '설정';
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', time: '연표로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', time: '연표로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -2286,31 +2291,90 @@
         if (!managedLibrary) main.append(node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
         refreshSync().catch(failure);
       }
+      // One entry for every file: 모두 받기, each existing format and restore.
       const backups = node('section', null, 'life-management-backups');
       backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
       const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
-      backups.append(heading);
+      const open = actionRow('백업·복원', '모두 받기 · 형식별 파일 · 새 사본으로 복원', 'download', () => navigate('backup'));
+      open.id = 'lifeBackupOpen';
+      backups.append(heading, open);
+      main.append(backups);
+    }
+
+    function backupFormatRows() {
+      const row = (key, ...args) => { const control = actionRow(...args); control.dataset.focusKey = 'backup:' + key; return control; };
+      const formats = node('section', null, 'life-management-backups fb-formats');
+      formats.id = 'lifeBackupFormats'; formats.setAttribute('aria-labelledby', 'lifeBackupFormatsHeading');
+      const heading = node('h2', '형식별 파일'); heading.id = 'lifeBackupFormatsHeading'; heading.tabIndex = -1;
+      formats.append(heading, node('p', '형식마다 따로 받고 복원하는 기존 화면입니다. 모두 받기 ZIP에도 같은 형식의 파일이 들어 있습니다.', 'life-help'));
       const materialFiles = node('section', null, 'life-backup-group'); materialFiles.id = 'lifeBackupMaterials'; materialFiles.setAttribute('aria-label', '자료·글');
       materialFiles.append(node('h3', '자료·글'));
       const planningFiles = node('section', null, 'life-backup-group'); planningFiles.id = 'lifeBackupPlanning'; planningFiles.setAttribute('aria-label', '계획·연표');
       planningFiles.append(node('h3', '계획·연표'));
       const destinations = node('div', null, 'life-destinations');
-      destinations.append(actionRow('자료·구성 백업', '원문·발췌와 폴더·묶음·내 페이지·회고·책을 함께', 'download', () => navigate('workbench-backup')));
-      destinations.append(actionRow('내보내기·사본 복원', '자료만 JSON·Markdown으로 · 구성 제외', 'book', () => navigate('transfer')));
-      destinations.append(actionRow('컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
-      const preservation = actionRow('보관 범위·근거 파일', '선택한 글·9칸과 정확한 원문 근거', 'download', () => navigate('preservation'));
+      destinations.append(row('workbench-backup', '자료·구성 백업', '현재 자료공간의 원문·발췌와 폴더·묶음·내 페이지·회고·책', 'download', () => navigate('workbench-backup')));
+      destinations.append(row('transfer', '내보내기·사본 복원', '자료만 JSON·Markdown으로 · 구성 제외', 'book', () => navigate('transfer')));
+      destinations.append(row('collection', '컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
+      const preservation = row('preservation', '보관 범위·근거 파일', '선택한 글·9칸과 정확한 원문 근거', 'download', () => navigate('preservation'));
       preservation.id = 'lifePreservationOpen'; destinations.append(preservation);
-      materialFiles.append(destinations);
+      materialFiles.append(destinations, node('p', '사진 글 ZIP은 글 편집 화면의 "사진 포함 백업"에서 한 편씩 받을 수 있습니다.', 'life-help'));
       const planningDestinations = node('div', null, 'life-destinations');
-      planningDestinations.append(actionRow('연간 계획 파일', '연간·월별 계획의 전용 백업·복원', 'timeline', async () => {
+      planningDestinations.append(row('annual-plan', '연간 계획 파일', '연간·월별 계획의 전용 백업·복원', 'timeline', async () => {
         if (await navigate('annual-plan') === false) return;
         const panel = main.querySelector('#apSettings');
         if (panel) { panel.open = true; panel.querySelector('summary')?.focus(); panel.scrollIntoView({ block: 'nearest' }); }
       }));
       planningDestinations.append(destinationRow('연표·목표·습관 백업·복원', '연간 계획 파일과 별도 형식', 'workspace.html?section=manage#backupAll', 'timeline'));
       planningFiles.append(planningDestinations);
-      backups.append(materialFiles, planningFiles);
-      main.append(backups);
+      formats.append(materialFiles, planningFiles);
+      return formats;
+    }
+
+    async function renderBackupCenter() {
+      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+      const isCurrent = () => !disposed && workspaceToken === workspaceGeneration && navigationToken === navigationGeneration && state.mode === 'backup';
+      const downloadHost = node('section', null, 'life-settings-section fb-section'); downloadHost.id = 'fbDownload';
+      const restoreHost = node('section', null, 'life-settings-section fb-section'); restoreHost.id = 'fbRestore';
+      const formats = backupFormatRows();
+      main.append(downloadHost, restoreHost, formats);
+      if (/^#lifeBackup(?:Choices|Materials|Planning)$/.test(global.location.hash)) global.requestAnimationFrame(() => {
+        if (isCurrent()) { formats.querySelector('h2')?.focus({ preventScroll: true }); formats.scrollIntoView({ block: 'start' }); }
+      });
+      const platformData = global.HaedoPlatformData, userId = storage.account?.userId;
+      const timeline = platformData && userId ? () => global.HaedoLife.FullBackup.timelineSnapshot({ platformData, localStorage: global.localStorage, uid: userId }) : null;
+      const instance = global.HaedoLife.FullBackupUI.create({ storage, timeline, isCurrent, onError: failure,
+        announce: text => announce(text, { quiet: true }),
+        async onRestored() {
+          const listSequence = ++workspaceListRefresh;
+          const workspaces = await storage.listWorkspaces();
+          if (!disposed) applyWorkspaceList(workspaces, listSequence);
+        },
+        onOpenWorkspace: guarded(async id => openWorkspaceCopy(id)),
+        onOpenAnnualPlan: guarded(() => navigate('annual-plan'))
+      });
+      fullBackupUI = instance;
+      instance.mount({ host: main, downloadHost, restoreHost });
+    }
+
+    async function openWorkspaceCopy(id) {
+      await persistDrafts();
+      const listSequence = ++workspaceListRefresh, workspace = workspaceGeneration;
+      const [bundle, workspaces, stages] = await Promise.all([storage.read(id), storage.listWorkspaces(), storage.listStages(id)]);
+      if (disposed || workspace !== workspaceGeneration) return;
+      await storage.setActive(id);
+      if (disposed || workspace !== workspaceGeneration) return;
+      invalidateBatchContext();
+      state.bundle = bundle; state.stage = null; state.prepared = null;
+      state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear();
+      state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
+      applyWorkspaceList(workspaces, listSequence);
+      const imports = stages.filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit');
+      state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
+      state.allStages = imports; state.stages = imports.filter(stage => stage.state === 'draft'); mergeBatches(imports);
+      connectSubscription();
+      state.mode = 'sources'; render();
+      global.scrollTo({ top: 0, behavior: 'instant' });
+      announce('복원한 새 자료공간을 열었습니다. 다른 자료공간은 그대로입니다.');
     }
 
     function renderStages(parent) {
@@ -4955,6 +5019,7 @@
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
+      fullBackupUI?.dispose(); fullBackupUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       homeRenderPromise = Promise.resolve();
@@ -4989,6 +5054,7 @@
       if (state.mode === 'public-cover') return mainRenderPromise = renderPublicCover().catch(failure);
       if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
       if (state.mode === 'preservation') return mainRenderPromise = renderPreservation().catch(failure);
+      if (state.mode === 'backup') return mainRenderPromise = renderBackupCenter().catch(failure);
       if (state.mode === 'account-blog') {
         // Reading a remote list must leave the global navigation available.
         mainRenderPromise = renderAccountBlog().catch(failure);
@@ -5033,7 +5099,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -5199,6 +5265,7 @@
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
+      fullBackupUI?.dispose(); fullBackupUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       compositionSync?.dispose();

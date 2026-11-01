@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { FakeCloud, accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, cloud, base, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, nav } = require('./unified-home-browser.cjs');
 const output = path.resolve(process.env.SOURCE_FOLDERS_OUTPUT || '.local/source-folders');
 const titleA = '익명 폴더 검수 자료 A', titleB = '익명 폴더 검수 자료 B';
@@ -71,7 +71,7 @@ async function chooseFolder(page, id = 'all') { await page.locator('#lifeFolderF
 async function visibleSources(page) { return [...new Set(await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes => nodes.map(n => n.dataset.sourceId)))].sort(); }
 async function expectSources(page, ids) { assert.deepEqual(await visibleSources(page), [...ids].sort()); }
 async function errorVisible(page) { await page.locator('#lifeFolderError:not([hidden])').waitFor(); await page.locator('#lifeFolderSave:enabled').waitFor(); }
-async function commonBackup(page) { await openManagement(page); await byName(page, '자료·구성 백업'); await page.locator('#wbBackupDownload').waitFor(); const pending = page.waitForEvent('download'); await click(page, '#wbBackupDownload'); const download = await pending, chunks = []; for await (const chunk of await download.createReadStream()) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+async function commonBackup(page) { await openBackupCenter(page); await byName(page, '자료·구성 백업'); await page.locator('#wbBackupDownload').waitFor(); const pending = page.waitForEvent('download'); await click(page, '#wbBackupDownload'); const download = await pending, chunks = []; for await (const chunk of await download.createReadStream()) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
 async function editReader(page) { await sourceOptions(page); await click(page, '#lifeSourceEdit'); await page.locator('#lifeSourceEditText').waitFor(); await page.locator('#lifeSourceEditText').fill(edited); await click(page, '#lifeSourceEditSave'); await page.locator('#lifeSourceInfoToggle').waitFor(); }
 async function prepareFolders(page, rich = false) { const f = await fixture(page, rich), parent = await saveFolder(page, { name: parentName }), child = await saveFolder(page, { name: childName, parentId: parent.id }); await assignCard(page, f.a.source.id, child.id); return { ...f, parent, child }; }
 async function waitSnapshot(page, predicate) { const deadline = Date.now() + 15000; do { const value = await snapshot(page); if (predicate(value)) return value; await page.waitForTimeout(25); } while (Date.now() < deadline); throw Error('Expected committed folder state did not arrive'); }

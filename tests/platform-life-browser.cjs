@@ -53,7 +53,7 @@ async function main(){
   }
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
-  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount,openSection}=require('./life-sync-browser.cjs');
+  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openBackupCenter,openAccount,openSection}=require('./life-sync-browser.cjs');
   if(verifyPreparedConfig)for(const directory of [site,...oldSites]){
     const source=await fs.readFile(path.join(directory,'assets/platform-config.js'),'utf8'),payload=source.match(/^window\.HAEDO_CONFIG=Object\.freeze\(([\s\S]*)\);\s*$/);
     assert.ok(payload,'Use an anonymous prepare-site output.');
@@ -83,7 +83,8 @@ async function main(){
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
   async function click(page,name){
     if(['모아보기','기록 검색','가져오기','시간 보기'].includes(name))await openSection(page,'records');
-    if(['동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(name==='동기화')await openManagement(page);
+    if(name==='내보내기·사본 복원')await openBackupCenter(page);
     if(name==='기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);

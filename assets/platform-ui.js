@@ -553,10 +553,10 @@
     document.querySelector(".haedo-page-heading h1").textContent = "백업·복원";
     document.title = "연표·목표·습관 관리 · 해도";
     const back = document.querySelector("[data-section-back]");
-    back.href = "index.html?section=manage";
-    back.setAttribute("aria-label", "설정으로 돌아가기");
+    back.href = "index.html?section=manage&view=backup";
+    back.setAttribute("aria-label", "백업·복원으로 돌아가기");
     const tip = back.querySelector(".haedo-tooltip");
-    if (tip) tip.textContent = "설정으로 돌아가기";
+    if (tip) tip.textContent = "백업·복원으로 돌아가기";
     const backups = byId("timelineBackups");
     backups.open = true;
     document.querySelector(".space-documents").before(backups);

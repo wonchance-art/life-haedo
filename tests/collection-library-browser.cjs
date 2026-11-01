@@ -2,7 +2,7 @@
 'use strict';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, ready, makeContext } = require('./unified-home-browser.cjs');
-const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, base, cloud, openBackupCenter } = require('./life-sync-browser.cjs');
 const { inspect } = require('./life-workbench-browser.cjs');
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const out = path.resolve(process.env.COLLECTION_LIBRARY_OUTPUT || '.local/collection-library');
@@ -128,7 +128,7 @@ async function main() {
       await page.locator('#clForm').dispatchEvent('submit'); assert.deepEqual(await read(page),before);
       await page.locator('#clTitle').dispatchEvent('compositionend'); await save(page); await click(page,'컬렉션 목록으로');
       const isolated=await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive();const other=await s.createWorkspace('별도 컬렉션');const items=(await s.readCollection(other.workspaceId)).items;await s.setActive(id);return {count:items.length};}); assert.equal(isolated.count,0);
-      await page.locator('[data-haedo-section=manage]').click(); await click(page,'컬렉션 백업·복구'); await page.locator('#clRestoreFile').waitFor({state:'visible'});
+      await page.locator('[data-haedo-section=manage]').click(); await openBackupCenter(page); await click(page,'컬렉션 백업·복구'); await page.locator('#clRestoreFile').waitFor({state:'visible'});
       assert.match(await page.locator('.cl-files').innerText(),/자동 동기화되지 않습니다/);
     });
     await check('Touch viewport can add, open and return to an item', async () => {
