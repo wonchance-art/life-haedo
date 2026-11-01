@@ -316,3 +316,30 @@ test('the remote client sends exact RPC arguments and refuses non-JSON data', as
   assert.equal(Remote.clean({ message: 'life_account_document_operation_mismatch', code: '22023' }).code, 'operation_mismatch');
   assert.equal(Remote.clean({ code: 'PGRST202' }).code, 'schema_missing');
 });
+
+test('material-writing travels with its output receipts; a known receipt is never dropped by an older remote plan', async t => {
+  const MaterialWriting = require('../assets/life/material-writing.js');
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), bundle = await workspaceOn(a), w = bundle.workspaceId;
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, bundle);
+  const state = MaterialWriting.empty(w), plan = MaterialWriting.create(Core.id, '2026-11-01T00:00:00.000Z'); plan.title = '준비 한 개'; state.plans.push(plan);
+  await a.saveMaterialWriting(w, state, 0);
+  const key = `material-writing:${w}`, outputKey = `material-writing-output:${w}:${plan.id}`;
+  const record = await a.readAccountDocRecord(key);
+  assert.deepEqual(Object.keys(record.value).sort(), ['outputs', 'state']); assert.deepEqual(record.value.outputs, {});
+  await engine(a, server).sync.syncNow();
+  assert.deepEqual(server.docs(accountA.userId).get(key).data.outputs, {});
+
+  // This device already holds a receipt for the plan (its post was created here).
+  ipad.rows.get('meta').set(JSON.stringify(outputKey), { key: outputKey, value: { postId: 'post-made-on-ipad' } });
+  const before = await b.readAccountDocRecord(key);
+  const applied = await b.applyAccountDoc(key, { value: server.docs(accountA.userId).get(key).data, expectedHash: before.hash, sync: { docKey: key, revision: 1, seq: 1 } });
+  assert.equal(applied.status, 'applied', JSON.stringify(applied)); assert.equal(applied.merged, true);
+  assert.deepEqual((await b.readMaterialWriting(w)).plans[0].output, { postId: 'post-made-on-ipad' });
+  assert.equal((await b.readAccountDocRecord(key)).sync.hash, null, 'the merged receipt stays pending so it reaches the server');
+  await engine(b, server).sync.syncNow();
+  assert.deepEqual(server.docs(accountA.userId).get(key).data.outputs, { [plan.id]: { postId: 'post-made-on-ipad' } });
+  await engine(a, server).sync.syncNow();
+  assert.deepEqual((await a.readMaterialWriting(w)).plans[0].output, { postId: 'post-made-on-ipad' });
+});

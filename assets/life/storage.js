@@ -4510,7 +4510,7 @@
       scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
       return transaction(['meta'], 'readonly', async tx => {
         const value = (await tx.objectStore('meta').get(accountDocCursorKey()))?.value;
-        return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+        return Number.isSafeInteger(value) && value >= 0 ? value : null; // null: this account never synced here yet
       });
     }
     async function writeAccountDocCursor(seq) {
@@ -4569,7 +4569,7 @@
             if (!plain(value.outputs) || !Array.isArray(value.state?.plans)) throw fault('invalid_material_writing', '준비 연결 형식을 확인하지 못했습니다.');
             // A created post receipt is a monotonic fact: a plan that already has
             // one here keeps it even when the other device had not seen it yet.
-            const known = { ...(local?.outputs || {}), ...value.outputs };
+            const known = { ...(await materialOutputs(meta, parsed.workspaceId)), ...value.outputs };
             for (const plan of value.state.plans) {
               if (plain(plan) && (plan.output === null || plan.output === undefined) && known[plan.id]) { plan.output = clone(known[plan.id]); merged = true; }
             }

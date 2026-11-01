@@ -108,7 +108,9 @@
       return result.status === 'changed' ? 'retry' : 'deferred';
     }
     async function pull() {
-      let cursor = await storage.readAccountDocCursor(), retry = false;
+      let cursor = await storage.readAccountDocCursor() ?? 0, retry = false;
+      // A stored cursor also records that this account has synced on this device.
+      cursor = await storage.writeAccountDocCursor(cursor);
       for (;;) {
         guard();
         const rows = await client.changes(cursor, client.PAGE_LIMIT || 200); guard();
@@ -138,7 +140,9 @@
         if (record.sync && record.hash === sync.hash) return 'clean';
         if (sync.deferred) return 'deferred';
         if (sync.pendingHash !== record.hash || !sync.changedAt) {
-          sync.changedAt = record.sync && sync.changedAt !== EPOCH ? now() : EPOCH; sync.pendingHash = record.hash;
+          // Pushes run after this cycle's pull stored the cursor, so a document
+          // without sync state here is a new edit, not pre-sync content.
+          sync.changedAt = changeTimes.get(key) || (record.sync && sync.changedAt === EPOCH ? EPOCH : now()); sync.pendingHash = record.hash;
         }
         if (!(sync.operationId && sync.operationHash === record.hash && sync.operationExpected === sync.revision)) {
           sync.operationId = uuid(); sync.operationHash = record.hash; sync.operationExpected = sync.revision;
@@ -180,11 +184,15 @@
     // offline too, so a later conflict compares real edit times.
     async function mark() {
       const docs = await storage.listAccountDocs(); guard();
+      // Before this account's first sync on this device every existing document
+      // is "pre-sync" content; afterwards a new document is a real new edit.
+      const initialized = (await storage.readAccountDocCursor()) !== null; guard();
       for (const doc of docs) {
         if (doc.sync && doc.hash === doc.sync.hash) continue;
         const sync = { ...fresh(doc.key), ...(doc.sync || {}) };
         if (doc.sync && sync.pendingHash === doc.hash && sync.changedAt) continue;
-        const seen = changeTimes.get(doc.key), stamp = !doc.sync ? EPOCH : seen || (sync.changedAt === EPOCH ? EPOCH : now());
+        const seen = changeTimes.get(doc.key);
+        const stamp = seen || (!doc.sync ? (initialized ? now() : EPOCH) : sync.changedAt === EPOCH ? EPOCH : now());
         await saveSync(doc.key, { ...sync, pendingHash: doc.hash, changedAt: stamp });
       }
       changeTimes.clear();
@@ -238,7 +246,8 @@
       });
       root.addEventListener?.('online', wake); root.addEventListener?.('focus', wake);
       root.document?.addEventListener?.('visibilitychange', visibility);
-      if (polling) { interval = root.setInterval(() => run(), intervalMs); interval?.unref?.(); }
+      // Poll only while visible; hiding the page flushes once through visibilitychange.
+      if (polling) { interval = root.setInterval(() => { if (root.document?.visibilityState !== 'hidden') run(); }, intervalMs); interval?.unref?.(); }
       run();
     }
     function dispose() {
