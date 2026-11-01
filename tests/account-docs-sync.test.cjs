@@ -337,3 +337,36 @@ test('a server without the account-document RPCs is unavailable and is not asked
   assert.notEqual(doc.hash, doc.sync?.hash, 'the local draft stays pending');
   assert.equal((await a.readPageDrafts(w)).posts[0].body, '서버 준비 전 초안');
 });
+
+test('a page in the back/forward cache flushes nothing; the hidden flush still runs for an ordinary tab switch', async t => {
+  // Work begun after a persisted pagehide runs script in the cached page (which
+  // evicts it) and starts an account check the resumed page could share. The
+  // visible change on restore precedes pageshow, so it must not start work either.
+  const page = new EventTarget(), doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+  const saved = { add: globalThis.addEventListener, remove: globalThis.removeEventListener, document: globalThis.document };
+  Object.assign(globalThis, { addEventListener: page.addEventListener.bind(page), removeEventListener: page.removeEventListener.bind(page), document: doc });
+  const server = fakeServer(), mac = device();
+  let sync;
+  t.after(() => { sync?.dispose(); mac.base.close(); Object.assign(globalThis, { addEventListener: saved.add, removeEventListener: saved.remove, document: saved.document }); });
+  const a = mac.base.forAccount(accountA), w = (await workspaceOn(a)).workspaceId;
+  await draft(a, w, '처음 초안');
+  const started = engine(a, server); sync = started.sync;
+  await sync.syncNow();
+  const puts = () => started.remote.calls.filter(call => call.type === 'put').length, calls = () => started.remote.calls.length;
+  const settle = async () => { for (let n = 0; n < 5; n++) await new Promise(done => setTimeout(done, 5)); await sync.syncNow(); };
+  const visibility = state => { doc.visibilityState = state; doc.dispatchEvent(new Event('visibilitychange')); };
+  const lifecycle = (type, persisted) => page.dispatchEvent(Object.assign(new Event(type), { persisted }));
+  await draft(a, w, '떠나기 직전 초안');
+  const before = calls();
+  lifecycle('pagehide', true); visibility('hidden'); await settle();
+  visibility('visible'); await settle();
+  assert.equal(calls(), before, 'no request from the cached page or before its pageshow');
+  lifecycle('pageshow', true);
+  await sync.syncNow();
+  assert.equal(server.docs(accountA.userId).get(`page-drafts:${w}`).data.posts[0].body, '떠나기 직전 초안');
+  const flushed = puts(), body = () => server.docs(accountA.userId).get(`page-drafts:${w}`).data.posts[0].body;
+  await draft(a, w, '탭 전환 전 초안');
+  // Only the visibility handler can send this: the debounce never fires in tests.
+  visibility('hidden'); for (let n = 0; n < 200 && body() !== '탭 전환 전 초안'; n++) await new Promise(done => setTimeout(done, 5));
+  assert.equal(body(), '탭 전환 전 초안'); assert(puts() > flushed);
+});
