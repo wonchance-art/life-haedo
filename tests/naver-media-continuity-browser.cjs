@@ -104,7 +104,13 @@ async function main() {
     const c = await device('media-failure'); await coreReady(c, ws, expected.sourceVersions.length);
     await check('Partial media failure installs no sidecar and retry restores exact originals without modifying source or old quotations', async () => {
       const failed = second.payload.photos.filter(photo => photo.status === 'stored').at(-1).storagePath; server.failedMedia.add(failed);
+      // Slow account checks: the reader opens before the sync account is first
+      // resolved. That resolution is not an account change, so the photo check
+      // must still end in its error state instead of loading forever.
+      const slowAuth = async route => { await new Promise(resolve => setTimeout(resolve, 150)); return route.fallback(); };
+      await c.context().route(cloud + '/auth/v1/user', slowAuth);
       await reader(c, ws, two.sourceId, two.sourceVersionId); await c.locator('#lifeNaverSourceMedia[data-state=error]').waitFor();
+      await c.context().unroute(cloud + '/auth/v1/user', slowAuth);
       assert.equal(await c.evaluate(({ ws, version }) => HaedoLife.Shell.storage.readNaverCapture(ws, version), { ws, version: two.sourceVersionId }), null);
       assert.deepEqual((await bundle(c, ws)).sourceVersions, expected.sourceVersions); assert.deepEqual((await bundle(c, ws)).records, expected.records);
       for (const width of [1440, 390]) { await c.setViewportSize({ width, height: 1000 }); assert(await c.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); await retrySpacing(c, '#lifeNaverSourceMediaRetry'); const name = 'media-error-' + width + '.png'; await c.screenshot({ path: path.join(output, name), fullPage: true }); report.screenshots.push(name); }

@@ -3813,7 +3813,14 @@
       if (source.origin === 'naver_blog' && storage.readNaverCapture) {
         const mediaHost = node('section', null, 'nv-source-media'); mediaHost.id = 'lifeNaverSourceMedia'; naverMediaHost = mediaHost;
         const workspaceId = state.bundle.workspaceId, generation = renderGeneration, account = state.syncAccountKey;
-        const current = () => !disposed && generation === renderGeneration && account === state.syncAccountKey && state.mode === 'source' &&
+        // The reader can open before the sync account is first resolved (null).
+        // For account-scoped storage, resolving to (or briefly from) this
+        // storage's own account is not an account change; the capture service
+        // still checks the verified Auth owner on every step.
+        const ownAccount = storage.isAccountScoped ? syncAccountKey(storage.account) : null;
+        const sameAccount = () => account === state.syncAccountKey ||
+          (ownAccount !== null && [account, state.syncAccountKey].every(key => key === null || key === ownAccount));
+        const current = () => !disposed && generation === renderGeneration && sameAccount() && state.mode === 'source' &&
           state.bundle?.workspaceId === workspaceId && state.sourceId === source.id && state.sourceVersionId === version.id;
         const mediaStatus = node('p', '', 'life-help'); mediaStatus.setAttribute('role', 'status');
         const mediaBody = node('div'), mediaActions = node('div', null, 'life-actions');
@@ -3926,6 +3933,7 @@
               mediaHost.style.marginBottom = '24px';
               mediaStatus.className = 'life-error'; mediaStatus.textContent = global.navigator?.onLine === false
                 ? '오프라인이라 사진 사본을 확인하지 못했습니다. 원문은 그대로 읽을 수 있습니다. 연결한 뒤 다시 시도해 주세요.'
+                : error?.code === 'naver_timeout' ? '응답이 늦어 사진 사본 확인을 멈췄습니다. 원문은 유지됩니다. 다시 시도해 주세요.'
                 : '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다. 다시 시도해 주세요.';
               retry.hidden = false; restoreNaverMediaReturn();
             }

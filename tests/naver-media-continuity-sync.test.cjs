@@ -6,7 +6,7 @@ const Receipt = require('../assets/life/naver-media-receipt.js'), Sync = require
 const F = require('./fixtures/naver-media.cjs'), copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; };
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const restore = F.installDecoder(); t.after(restore);
   const original = await F.fixture(), owner = { userId: F.OWNER, projectUrl: 'https://naver-continuity.invalid' };
   let bundle = Core.applyChanges(original.bundle, original.changes);
@@ -24,9 +24,9 @@ async function fixture(t) {
   const captures = new Map([a, b].map(value => [value.capture.id, copy(value.capture)]));
   const blobs = new Map([a, b].map(value => [value.capture.payload.photos[0].storagePath, value.photos[0].blob]));
   const local = new Map(), pending = new Map(), remote = new Map(descriptors.map(value => [value.sourceVersionId, copy(value)]));
-  const env = { current: true, writes: [], rpcs: [], downloads: [], installs: [], commits: [], stages: 0, rpcHook: null, downloadHook: null, loseReply: false,
+  const env = { current: true, writes: [], rpcs: [], downloads: [], signals: [], installs: [], commits: [], stages: 0, rpcHook: null, downloadHook: null, verifyHook: null, loseReply: false,
     state: { enabled: true, status: 'synced', outbox: null, conflict: null, binding: { ...owner, remoteId: ws }, remoteRevision: 4, syncedLocalRevision: bundle.revision } };
-  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner, userId: auth.user?.id }), async verify() { return auth.user; }, client: {
+  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner, userId: auth.user?.id }), async verify() { if (env.verifyHook) await env.verifyHook(); return auth.user; }, client: {
     async rpc(name, args) {
       env.rpcs.push({ name, args: copy(args) }); if (env.rpcHook) await env.rpcHook(name, args);
       if (name === 'life_naver_media_receipt_find') {
@@ -43,8 +43,8 @@ async function fixture(t) {
         return { data: env.putReply ? env.putReply(copy(value)) : value };
       }
       throw Error('Unexpected RPC ' + name);
-    }, storage: { from(bucket) { assert.equal(bucket, 'haedo-naver-originals'); return { async download(path) {
-      env.downloads.push(path); if (env.downloadHook) await env.downloadHook(path);
+    }, storage: { from(bucket) { assert.equal(bucket, 'haedo-naver-originals'); return { async download(path, _options, parameters) {
+      env.downloads.push(path); env.signals.push(parameters?.signal || null); if (env.downloadHook) await env.downloadHook(path);
       return blobs.has(path) ? { data: blobs.get(path) } : { error: new Error('missing blob') };
     } }; } }
   } };
@@ -68,7 +68,7 @@ async function fixture(t) {
       env.installs.push(copy(receipt)); local.set(receipt.sourceVersionId, checked); pending.set(receipt.sourceVersionId, { receipt: copy(receipt), pending: false }); return { status: 'stored' };
     }
   };
-  const service = Sync.create({ storage, auth, core: Core, model: Capture, identity: Identity, isCurrent: () => env.current }); t.after(() => service.dispose());
+  const service = Sync.create({ storage, auth, core: Core, model: Capture, identity: Identity, isCurrent: () => env.current, ...options }); t.after(() => service.dispose());
   return { env, auth, service, storage, ws, a, b, descriptors, captures, blobs, local, pending, remote, originalBundle: copy(bundle), changedBytes };
 }
 
@@ -151,6 +151,32 @@ test('account or screen transition while photo bytes are in flight cannot instal
     hold.resolve(); await assert.rejects(operation, { code: 'naver_cancelled' });
     assert.deepEqual(f.env.installs, []); assert.equal(f.local.size, 0);
   }
+});
+
+test('a reader restore whose account check, capture read or photo download stops answering ends with a timeout, installs nothing and retry restores exact bytes', async t => {
+  for (const kind of ['verify', 'rpc', 'download']) {
+    const f = await fixture(t, { restoreRequestLimitMs: 40 }), hold = deferred(); let stalled = false;
+    const stall = async () => { if (!stalled) { stalled = true; await hold.promise; } };
+    if (kind === 'verify') { let calls = 0; f.env.verifyHook = async () => { if (++calls === 3) await stall(); }; }
+    if (kind === 'rpc') f.env.rpcHook = async name => { if (name === 'life_naver_capture_read') await stall(); };
+    if (kind === 'download') f.env.downloadHook = stall;
+    await assert.rejects(f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId), { code: 'naver_timeout' }, kind);
+    assert.equal(stalled, true, kind); assert.deepEqual(f.env.installs, []); assert.equal(f.local.size, 0); assert.equal(f.pending.size, 0);
+    if (kind === 'download') assert.equal(f.env.signals[0]?.aborted, true, 'expired photo download is aborted');
+    hold.resolve(); await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(f.env.installs, [], kind + ' late answer installs nothing');
+    const restored = await f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId);
+    assert.equal(restored.capture.capture_hash, f.a.capture.capture_hash);
+    assert.deepEqual(new Uint8Array(await restored.photos[0].blob.arrayBuffer()), F.bytes);
+    assert.deepEqual(f.env.installs, [f.descriptors[0]]);
+  }
+});
+
+test('capture review reads are not bounded by the reader restore limit', async t => {
+  const f = await fixture(t, { restoreRequestLimitMs: 20 });
+  f.env.downloadHook = () => new Promise(resolve => setTimeout(resolve, 60));
+  const snapshot = await f.service.readCapture(f.ws, f.a.capture.id);
+  assert.deepEqual(new Uint8Array(await snapshot.photos[0].blob.arrayBuffer()), F.bytes);
 });
 
 test('late receipt publication reply after account change leaves the durable local descriptor pending', async t => {

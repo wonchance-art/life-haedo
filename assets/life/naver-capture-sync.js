@@ -12,6 +12,7 @@
     naver_cancelled: '계정이나 화면이 바뀌어 이전 작업을 중지했습니다.',
     naver_invalid_data: '받은 원문이나 사진을 확인하지 못했습니다. 기존 자료는 유지됩니다.',
     naver_network_error: '요청을 마치지 못했습니다. 기존 자료를 유지하며 다시 확인할 수 있습니다.',
+    naver_timeout: '응답이 늦어 확인을 멈췄습니다. 기존 자료는 유지됩니다. 다시 시도해 주세요.',
     naver_conflict: '자료나 연결이 바뀌었습니다. 현재 내용을 다시 확인해 주세요.',
     naver_ambiguous: '같은 글의 자료가 여러 개 있습니다. 보완할 자료를 먼저 확인해 주세요.',
     naver_source_trashed: '휴지통에 있는 자료입니다. 복원한 뒤 본문·사진을 받아 주세요.'
@@ -27,25 +28,39 @@
     if (/setup_required/i.test(error?.message || '')) return fault('naver_setup_required');
     return fault('naver_network_error');
   }
+  // A reader photo restore must end. Each of its server requests (account
+  // check, capture read, photo download) gets this limit; on expiry the attempt
+  // stops before anything is installed and the reader offers retry.
+  const RESTORE_REQUEST_LIMIT_MS = 45000;
   function create({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core,
-    model = root.HaedoLife?.NaverCapture, identity = root.HaedoLife?.NaverBlog, isCurrent = () => true } = {}) {
+    model = root.HaedoLife?.NaverCapture, identity = root.HaedoLife?.NaverBlog, isCurrent = () => true,
+    restoreRequestLimitMs = RESTORE_REQUEST_LIMIT_MS } = {}) {
     need(storage?.isAccountScoped && storage.account && auth?.client?.rpc && auth?.verify && core && model && identity, 'naver_auth_required');
+    need(Number.isSafeInteger(restoreRequestLimitMs) && restoreRequestLimitMs > 0, 'naver_invalid_data');
     const owner = { ...storage.account }, client = auth.client, controllers = new Set(), snapshots = new Map(), jobs = new Map();
     let disposed = false, generation = 0;
     function cancel() { generation++; snapshots.clear(); for (const c of controllers) c.abort(); controllers.clear(); }
     const unlisten = auth.onAccountChange?.(() => { if (auth.getAccount?.()?.userId !== owner.userId) cancel(); });
-    function context(workspaceId) { need(UUID.test(workspaceId || '')); return { workspaceId, epoch: auth.epoch, generation }; }
+    function context(workspaceId, limit = 0) { need(UUID.test(workspaceId || '')); return { workspaceId, epoch: auth.epoch, generation, limit }; }
     function guard(c) {
       need(!disposed && c.generation === generation && c.epoch === auth.epoch && isCurrent(c.workspaceId) &&
         auth.user?.id === owner.userId && auth.getAccount?.()?.userId === owner.userId && auth.getAccount?.()?.projectUrl === owner.projectUrl, 'naver_cancelled');
     }
     async function step(c, action) { guard(c); const value = await action(); guard(c); return value; }
-    async function verify(c) { const user = await step(c, () => auth.verify()); need(user?.id === owner.userId, 'naver_auth_required'); }
+    // Only a context with a limit (reader restore) is bounded. The late result
+    // of an expired request is ignored; an abortable request is also aborted.
+    function bounded(c, action, controller = null) {
+      if (!c.limit) return action();
+      let timer;
+      const expired = new Promise((_, reject) => { timer = setTimeout(() => { controller?.abort(); reject(fault('naver_timeout')); }, c.limit); });
+      return Promise.race([Promise.resolve().then(action), expired]).finally(() => clearTimeout(timer));
+    }
+    async function verify(c) { const user = await step(c, () => bounded(c, () => auth.verify())); need(user?.id === owner.userId, 'naver_auth_required'); }
     async function rpc(c, name, args) {
       await verify(c); const controller = new AbortController(); controllers.add(controller);
       try {
         let request = client.rpc(name, args); if (request?.abortSignal) request = request.abortSignal(controller.signal);
-        const result = await step(c, () => request); if (result.error) throw result.error; return result.data;
+        const result = await step(c, () => bounded(c, () => request, controller)); if (result.error) throw result.error; return result.data;
       } catch (error) { guard(c); throw clean(error); } finally { controllers.delete(controller); }
     }
     function subscription(row) {
@@ -139,8 +154,8 @@
       return subscription(await rpc(c, 'life_naver_save', { p_workspace_id: sub.workspaceId, p_blog_id: sub.blogId,
         p_expected_revision: expectedRevision, p_enabled: enabled }));
     }
-    async function readCapture(ws, id) {
-      need(UUID.test(id || '')); const c = context(ws), key = ws + ':' + id;
+    async function readCapture(ws, id, { limit = 0 } = {}) {
+      need(UUID.test(id || '')); const c = context(ws, limit), key = ws + ':' + id;
       if (snapshots.has(key)) {
         const cached = snapshots.get(key), bundle = await step(c, () => storage.read(ws));
         const fresh = { ...cached, projection: await receivedProjection(c, cached.capture, bundle) }; snapshots.set(key, fresh); return structuredClone(fresh);
@@ -150,7 +165,10 @@
       need(row.owner_id === owner.userId); const photos = [];
       for (const photo of row.payload.photos) if (photo.status === 'stored') {
         await verify(c);
-        const result = await step(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath));
+        const controller = new AbortController(); controllers.add(controller); let result;
+        try {
+          result = await step(c, () => bounded(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath, {}, { signal: controller.signal }), controller));
+        } finally { controllers.delete(controller); }
         if (result.error) throw clean(result.error); need(result.data instanceof Blob); photos.push({ index: photo.index, blob: result.data });
       }
       const bundle = await step(c, () => storage.read(ws)), projection = await receivedProjection(c, row, bundle);
@@ -252,7 +270,7 @@
       return { status: latest.find(value => value.receipt.sourceVersionId === versionId)?.pending === false ? 'confirmed' : 'pending' };
     }
     async function restoreForVersion(ws, sourceId, versionId) {
-      const c = context(ws), local = await step(c, () => storage.readNaverCapture(ws, versionId));
+      const c = context(ws, restoreRequestLimitMs), local = await step(c, () => storage.readNaverCapture(ws, versionId));
       if (local) { need(local.sourceId === sourceId); return local; }
       const bundle = await step(c, () => storage.read(ws));
       const source = bundle.sources.find(value => value.id === sourceId), version = bundle.sourceVersions.find(value => value.id === versionId);
@@ -261,7 +279,7 @@
       if (raw === null) return null;
       const receipt = receipts().validate(raw);
       need(receipt.workspaceId === ws && receipt.sourceId === sourceId && receipt.sourceVersionId === versionId);
-      const snapshot = await readCapture(ws, receipt.captureId);
+      const snapshot = await readCapture(ws, receipt.captureId, { limit: restoreRequestLimitMs });
       const attachment = { sourceId, sourceVersionId: versionId, capture: snapshot.capture, photos: snapshot.photos, localOnly: false };
       receipts().checkAttachment(receipt, attachment);
       root.HaedoLife.NaverMedia.checkTarget(bundle, attachment);
