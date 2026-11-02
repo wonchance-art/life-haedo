@@ -5,7 +5,7 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 
 # life-haedo 개발
 
-저장소 루트의 `AGENTS.md`를 따른다. 세부 설계는 `docs/architecture.md`에서 변경한 기능의 절만 읽는다.
+저장소 루트의 `AGENTS.md`를 따르고, 기능별 상세 규칙은 `docs/agents/feature-contracts.md`에서 변경할 기능의 항목만 읽는다. 세부 설계는 `docs/architecture.md`에서 변경한 기능의 절만 읽는다.
 이 스킬의 상대 프로젝트 경로와 명령은 저장소 루트 기준이다.
 
 ## 필요한 코드 찾기
