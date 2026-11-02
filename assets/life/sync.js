@@ -443,6 +443,8 @@
             const outbox = await storage.prepareSyncUpload(context.workspaceId, expected); guard(context);
             if (outbox) { if (await upload(context, expected, outbox)) continue; return getState(context.workspaceId); }
           }
+          // A cycle() view always has head; an adapter without cycle() may not
+          // (older adapters), and then the legacy full read below is used.
           if (headIfClean && remote(context).head && state.remoteRevision > 0 && !state.error) {
             const local = await storage.read(context.workspaceId); guard(context);
             if (local.revision === state.syncedLocalRevision) {

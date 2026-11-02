@@ -160,7 +160,7 @@
       }
     }
     // W4 (2026-11-02 owner approval): one server check per bounded unit of work
-    // (a sync cycle, a boot step) instead of one per remote call. A scope reuses
+    // (one sync engine operation) instead of one per remote call. A scope reuses
     // only its own completed verification, and only while nothing about the
     // account can have changed: the same epoch it opened in, no Auth event,
     // cancellation or pagehide/pageshow since (authGeneration), the same stored

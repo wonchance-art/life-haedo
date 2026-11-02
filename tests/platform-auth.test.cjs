@@ -511,6 +511,22 @@ test('W4 account switch, sign-out and another tab logout never reuse the previou
   auth.dispose();
 });
 
+test('W4 a scope never crosses an epoch, even when no Auth event or storage event marked the change', async () => {
+  // The session disappears and returns with the same token, with no SDK or
+  // storage event at all. Only the epoch advanced (a plain verify() found no
+  // session and signed the page out); the earlier scope must still recheck.
+  const { auth, state } = setup();
+  const scope = auth.verificationScope(); await scope.verify(); assert.equal(serverChecks(state), 1);
+  const saved = state.records.get(SESSION_KEY); state.records.delete(SESSION_KEY);
+  assert.equal(await auth.verify(), null); assert.equal(auth.getAccount(), null);
+  state.records.set(SESSION_KEY, saved);
+  assert.equal((await auth.verify()).id, A.id); assert.equal(serverChecks(state), 2);
+  assert.equal((await scope.verify()).id, A.id); assert.equal(serverChecks(state), 3);
+  // Nor does it keep a check obtained in the new epoch.
+  await scope.verify(); assert.equal(serverChecks(state), 4);
+  auth.dispose();
+});
+
 test('W4 a late check for the previous account is neither returned nor kept for the new account', async () => {
   const { auth, state } = setup();
   const scope = auth.verificationScope(), waiting = deferred(); state.userPromise = waiting.promise;
