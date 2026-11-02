@@ -34,7 +34,7 @@ async function fixture(t, options = {}) {
   let selected = plan.id, scope = true, state = { enabled: false, status: 'not_enabled', output: null }, post = null, editingDrafts = [], remotePost = null, outputData = null, listener, before = null, failOpen = false;
   const calls = [], received = [], hold = {}, clone = value => structuredClone(value), result = { workspaceId: Core.id(), planId: Core.id(), bundle: Core.createWorkspace() };
   const manager = {
-    getState: async (_, id) => { calls.push(['getState', id]); if (hold.getState) await hold.getState; return clone(state); },
+    getState: async (_, id) => { calls.push(['getState', id]); if (hold.getState) await hold.getState; if (hold.stateError) throw hold.stateError; return clone(state); },
     autoSync: async (ws, id) => { calls.push(['autoSync', ws, id]); if (hold.autoError) throw hold.autoError; state = { ...state, status: 'synced', error: null }; return { ...clone(state), received: hold.received || null }; },
     dismissNotice: (ws, id) => { calls.push(['dismissNotice', ws, id]); state = { ...state, notice: null }; },
     preview: async () => { calls.push(['preview']); if (hold.preview) await hold.preview; return { data: clone(data), fingerprint: 'FULL_FINGERPRINT', post: clone(post), editingDrafts: clone(editingDrafts), outputData: clone(outputData), state: clone(state), counts: { photos: post?.photos.length || 0 } }; },
@@ -78,6 +78,19 @@ test('an automatic latest-wins resolution shows one short notice that the user c
   assert.match(f.host.textContent, /다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다/);
   await f.click('#mcNoticeDone'); assert.deepEqual(f.calls.find(call => call[0] === 'dismissNotice').slice(1), [f.ws, f.plan.id]);
   assert.doesNotMatch(f.host.textContent, /복구 목록에 있습니다/);
+});
+
+test('a just-created preparation before its first save shows the waiting state, not a sticky missing-preparation error', async t => {
+  const f = await fixture(t);
+  f.hold.stateError = Object.assign(Error('선택한 글 준비를 찾지 못했습니다.'), { code: 'material_writing_missing' }); await f.ui.refresh();
+  assert.equal(f.get('#mcStatus').textContent, '동기화 준비 중'); assert.equal(f.get('#mcStatus').dataset.state, 'not_enabled');
+  assert.equal(f.get('.mc-error').hidden, true); assert.equal(f.host.querySelector('#mcSync'), null);
+  // The save's change event refreshes with kept errors; nothing stale remains.
+  f.hold.stateError = null; f.setState({ enabled: true, status: 'synced', output: null }); await f.emit();
+  assert.equal(f.get('#mcStatus').textContent, '모든 기기에 동기화됨'); assert.equal(f.get('#mcStatus').dataset.state, 'synced'); assert.equal(f.get('.mc-error').hidden, true);
+  // Any other read failure is still reported.
+  f.hold.stateError = Object.assign(Error('네트워크 확인 필요'), { code: 'network_error' }); await f.ui.refresh();
+  assert.equal(f.get('.mc-error').hidden, false); assert.match(f.get('.mc-error').textContent, /네트워크 확인 필요/);
 });
 
 test('a sync error offers one retry that runs the automatic step after flushing input and opens a received change', async t => {
