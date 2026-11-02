@@ -19,8 +19,19 @@
       renderSeq = 0;
     // Collection saves in progress or failed, by attachment identity. Shown on that attachment's
     // card, never in the post's status line (which autosave rewrites and which owns recovery).
-    const collectState = new Map();
+    // Values are { state: "saving" | "failed", reason }; collectSeq orders overlapping saves of the
+    // same identity so only the latest one paints.
+    const collectState = new Map(), collectSeq = new Map();
     const identity = (value) => JSON.stringify([value.type, value.title, value.creator, value.url]);
+    const attached = (key) => getValues().some((value) => identity(value) === key);
+    // Short, stable reasons, so a retry that keeps failing says why.
+    function failureReason(error) {
+      if (error === "read") return "컬렉션을 읽지 못함";
+      if (error === "conflict") return "다른 탭에서 컬렉션이 계속 바뀜";
+      if (error?.code === "collection_limit") return "컬렉션 한도(1,000개·2 MiB)를 넘음";
+      if (error?.code === "invalid_collection" || error?.code === "invalid_collection_url") return "항목 정보가 컬렉션 형식에 맞지 않음";
+      return "저장 중 오류";
+    }
     const node = (tag, text, cls) => {
       const n = document.createElement(tag);
       if (text != null) n.textContent = text;
@@ -185,44 +196,49 @@
     // composer), retrying only when another tab saved the collection in between. The post keeps
     // the attachment whatever happens here; a failure stays on the attachment's card with a retry.
     async function collect(value) {
-      const key = identity(value);
-      collectState.set(key, "saving");
+      const key = identity(value), seq = (collectSeq.get(key) || 0) + 1;
+      collectSeq.set(key, seq);
+      const latest = () => valid() && collectSeq.get(key) === seq;
+      // A save that finishes for an attachment no longer on the post leaves no state behind.
+      const finish = (failure) => {
+        if (!latest()) return;
+        if (failure && attached(key)) collectState.set(key, { state: "failed", reason: failureReason(failure) });
+        else collectState.delete(key);
+        if (failure) paintAll();
+        // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
+        else void annotate(renderSeq);
+      };
+      collectState.set(key, { state: "saving" });
       paintAll();
+      let failure = "conflict";
       for (let attempt = 0; attempt < 3; attempt++) {
         let collection;
         try {
           collection = await storage.readCollection(workspaceId);
         } catch (_) {
+          failure = "read";
           break;
         }
-        if (!valid()) return;
-        if (life.Collection.attachmentMatch(collection.items, value)) {
-          collectState.delete(key);
-          // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
-          void annotate(renderSeq);
-          return;
-        }
+        if (!latest()) return;
+        if (life.Collection.attachmentMatch(collection.items, value)) return finish(null);
         try {
           const item = life.Collection.fromAttachment(value, life.Core.id(), new Date().toISOString());
           await storage.saveCollection(workspaceId, { ...collection, items: collection.items.concat(item) }, collection.revision);
-          if (!valid()) return;
-          collectState.delete(key);
-          void annotate(renderSeq);
-          return;
+          return finish(null);
         } catch (error) {
-          if (error?.code !== "collection_conflict") break;
+          if (error?.code === "collection_conflict") continue;
+          failure = error;
+          break;
         }
       }
-      if (!valid()) return;
-      collectState.set(key, "failed");
-      paintAll();
+      finish(failure);
     }
     // Writes one card's collection line from the save state and the last known membership.
     function paint(row, item) {
       const line = row.querySelector(".photo-attachment-collect-state");
       if (!line) return;
-      const state = collectState.get(identity(item)), kept = row.dataset.collected;
-      const text = state === "saving" ? "컬렉션에 저장하는 중…" : state === "failed" ? "컬렉션에 저장하지 못함"
+      const entry = collectState.get(identity(item)), state = entry?.state, kept = row.dataset.collected;
+      const text = state === "saving" ? "컬렉션에 저장하는 중…" : state === "failed" ? "컬렉션에 저장하지 못함 · " + entry.reason
         : kept === "archived" ? "컬렉션에 있음 · 보관한 항목" : kept === "true" ? "컬렉션에 있음" : "";
       line.querySelector(".photo-attachment-collect-text").textContent = text;
       line.classList.toggle("photo-attachment-collected", !state && !!kept);
@@ -308,6 +324,9 @@
     function render() {
       if (!valid()) return;
       const token = ++renderSeq;
+      // A detached or re-identified attachment drops its save state, so a new card for the same
+      // target never inherits an old failure.
+      for (const key of [...collectState.keys()]) if (!attached(key)) collectState.delete(key);
       host.replaceChildren();
       const rows = node("div", null, "photo-edit-attachments");
       getValues().forEach((item, i) => {
