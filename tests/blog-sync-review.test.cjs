@@ -142,6 +142,33 @@ test('m2: a hidden page still uploads a kept conflict copy and other waiting cha
   a.remote.syncList = originalList; sync.dispose();
 });
 
+test('an upload-only request that arrives while a cycle runs stays upload-only; a full request still wins the merge', async () => {
+  // Reproduces the loaded-CI failure of the hidden-page test deterministically:
+  // a second hidden flush landing on a running cycle used to queue a full rerun
+  // (rerun was null, so `!!rerun?.uploadOnly` read false) and pulled the list.
+  const { time, a } = await pair(), timers = [];
+  const events = { document: { visibilityState: 'hidden', addEventListener() {}, removeEventListener() {} }, addEventListener() {}, removeEventListener() {} };
+  const make = () => Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote, makeId: Core.id, locks: null, now: () => time.now, events,
+    timers: { setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {} } });
+  const originalList = a.remote.syncList; let listCalls = 0; a.remote.syncList = async (...args) => { listCalls++; return originalList.apply(a.remote, args); };
+  let sync = make();
+  const first = sync.syncNow({ uploadOnly: true, flushDrafts: true }), second = sync.syncNow({ uploadOnly: true });
+  await first; await second;
+  assert.equal(listCalls, 0, 'two overlapping upload-only requests never pull the server list');
+  sync.dispose();
+  sync = make(); listCalls = 0;
+  const upload = sync.syncNow({ uploadOnly: true }), full = sync.syncNow();
+  await upload; await full;
+  assert.equal(listCalls, 1, 'a full request queued behind an upload-only cycle still pulls the list once');
+  sync.dispose();
+  sync = make(); listCalls = 0;
+  const fullFirst = sync.syncNow(), uploadAfter = sync.syncNow({ uploadOnly: true });
+  await fullFirst; await uploadAfter;
+  assert.equal(listCalls, 1, 'an upload-only request queued behind a full cycle does not pull the list again');
+  sync.dispose();
+  a.remote.syncList = originalList;
+});
+
 test('a conflict copy made during a cycle is uploaded by the next cycle at once, not after the regular interval', async () => {
   const { cloud, time, a, b } = await pair(), timers = [];
   const events = { document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} }, addEventListener() {}, removeEventListener() {} };
