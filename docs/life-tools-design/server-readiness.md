@@ -40,7 +40,7 @@ SQL의 JSONB 크기 방어는 별도로 확인됐다. 약 126 KB의 bounded 숫�
 
 ## 정리와 검증 범위
 
-익명 8행의 [정리 SQL](../../supabase/tests/cleanup-cloud-http-20261003.sql)은 저장소에도 보존했다. Cloud 원본은 `/workspace/life-haedo-handoff-results/cloud-http-cleanup-combined.sql`이다. 생성한 UUID와 실행별 검사 제목을 함께 제한하며 관리자 실행이 필요하다. 정리 편의로 앱 역할 DELETE 권한을 추가하지 않았다.
+익명 8행의 [정리 SQL](../../supabase/operations/archive/cleanup-cloud-http-20261003.sql)은 저장소에도 보존했다. Cloud 원본은 `/workspace/life-haedo-handoff-results/cloud-http-cleanup-combined.sql`이다. 생성한 UUID와 실행별 검사 제목을 함께 제한하며 관리자 실행이 필요하다. 정리 편의로 앱 역할 DELETE 권한을 추가하지 않았다.
 Local과 Cloud의 파일시스템은 별개다. Local 현황 확인과 정리 실행 인계는 총괄이 담당하며, 이 문서는 별도 전송·수신·삭제 완료를 주장하지 않는다.
 
 이번 확인은 Google 설정의 제한된 실제 조회, 기존 로그·코드 검토, Python 구문·CLI 검사, 비밀 없는 HTTP 메타데이터의 모의 응답 검사다. 새 live fixture·원천 개인 자료 조회·OAuth 설정 변경·배포는 수행하지 않았다.
