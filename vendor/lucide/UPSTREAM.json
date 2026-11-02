@@ -75,6 +75,10 @@
         "sha256": "3c534b2f66ba1f575647eb61ea2e8e75e3d90c828100304a0bd0c304ff1875c6"
       },
       {
+        "path": "icons/chart-gantt.svg",
+        "sha256": "4751acfe77e2b99e7c78389eb3bd0e5d934154ebf94a186fe7e2ffb05a3db981"
+      },
+      {
         "path": "icons/chart-spline.svg",
         "sha256": "1cff1f2d9cea5d35d9ff4388f9873ed76f315dcbef4e8b08c4f9a47de10602ed"
       },

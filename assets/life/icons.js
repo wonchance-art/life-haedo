@@ -3,7 +3,7 @@
  * upstream file and tests/icons.test.cjs keeps the geometry identical to that file.
  * 2026-11-02 soft redesign (decision 15): one stroke width 1.8, 20px for controls and 16px inside text,
  * one picture per concept: 자료 = book-open, 인용 = text-quote, 글쓰기 = pencil, 편집 = square-pen,
- * 웹 주소 = link, 일정 = calendar, AI 글 표시 = sparkle. No icon runtime, font or remote request.
+ * 웹 주소 = link, 일정 = calendar, 연표 = chart-gantt, 연간 계획 = chart-spline, AI 글 표시 = sparkle. No icon runtime, font or remote request.
  */
 (function (root) {
   'use strict';
@@ -45,6 +45,8 @@
     target: ['target', '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'],
     check: ['square-check', '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m16 9-5.5 5.5L8 12"/>'],
     workspace: ['layout-grid', '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'],
+    // 연표 (2026-11-02 review): period bars on a time axis; 연간 계획 keeps chart-spline ('timeline').
+    chronology: ['chart-gantt', '<path d="M10 6h8"/><path d="M12 16h6"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 11h7"/>'],
     calendar: ['calendar', '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>']
   };
   const STROKE = 1.8;

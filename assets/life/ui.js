@@ -1593,12 +1593,14 @@
         typeof options.searchTarget?.postId === 'string' ? 'plain.' + options.searchTarget.postId : null;
       return value && blogRoutePattern.test(value) ? value : null;
     }
-    async function openBlogRoute(workspaceId, value) {
+    // `recordedCompose` is the history entry's own 글쓰기 flag; without an entry (an address
+    // only) a post that replaces no saved post and was never saved counts as a new post.
+    async function openBlogRoute(workspaceId, value, recordedCompose) {
       if (typeof value !== 'string' || !blogRoutePattern.test(value)) return null;
       if (value === 'new') return { pageCompose: true };
       if (value === 'profile') return { pageProfileEdit: true };
       const [kind, id] = value.split('.');
-      if (kind === 'draft') return { pageDraftId: id };
+      if (kind === 'draft') return { pageDraftId: id, ...(recordedCompose === true ? { composingPost: true } : {}) };
       if (kind === 'plain') return { pagePreview: false, searchTarget: { postId: id } };
       let post;
       try { post = await storage.readPhotoPost(workspaceId, id); }
@@ -1607,8 +1609,8 @@
         if (cause?.code === 'photo_post_missing') return { pageCompose: true };
         throw cause;
       }
-      // A post never saved with 글 저장 is still a new post: 글쓰기 stays the current screen.
-      return { pagePreview: false, searchTarget: { photoPostId: id }, ...(post?.status !== 'saved' ? { composingPost: true } : {}) };
+      const composing = typeof recordedCompose === 'boolean' ? recordedCompose : post?.status !== 'saved' && !post?.replaces;
+      return { pagePreview: false, searchTarget: { photoPostId: id }, ...(composing ? { composingPost: true } : {}) };
     }
     function updateBlogRoute(context) {
       if (state.mode !== 'page' || !blogPageTask || materialWritingTask) return;
@@ -1628,7 +1630,7 @@
     function historyEntry(mode = state.mode) {
       const entry = { mode, workspaceId: state.bundle?.workspaceId || null };
       if (mode === 'source') Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
-      if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute });
+      if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
@@ -1649,7 +1651,7 @@
       const out = {}, id = key => typeof value[key] === 'string' && historyIdPattern.test(value[key]);
       for (const key of ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'focusKey', 'focusId', 'focusTag', 'folderFilter', 'blogPostId']) if (id(key)) out[key] = value[key];
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
-      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
       if (value.homeState && typeof value.homeState === 'object') {
@@ -1849,7 +1851,7 @@
       if (entry.homeState) options.homeState = entry.homeState;
       if (entry.mode === 'source' && entry.sourceId) Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null });
       if (entry.mode === 'page' && entry.blog) {
-        const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog);
+        const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
         if (blog) Object.assign(options, blog, { blogContext: true });
         else options.historyTask = null;
       } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
@@ -2144,7 +2146,7 @@
       const list = node('div', null, 'life-destinations');
       const annual = actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')); annual.dataset.focusKey = 'tools:annual-plan';
       // 2026-11-02: 연표 is part of 일정 (handoff: timeline/workspace → 일정 Y·Q·M).
-      const time = actionRow('연표', '보관한 연표 목록과 새 연표', 'timeline', () => navigate('time')); time.dataset.focusKey = 'tools:time';
+      const time = actionRow('연표', '보관한 연표 목록과 새 연표', 'chronology', () => navigate('time')); time.dataset.focusKey = 'tools:time';
       list.append(annual,
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'), time);
@@ -2684,7 +2686,7 @@
         const panel = main.querySelector('#apSettings');
         if (panel) { panel.open = true; panel.querySelector('summary')?.focus(); panel.scrollIntoView({ block: 'nearest' }); }
       }));
-      planningDestinations.append(destinationRow('연표·목표·습관 백업·복원', '연간 계획 파일과 별도 형식', 'workspace.html?section=manage#backupAll', 'timeline'));
+      planningDestinations.append(destinationRow('연표·목표·습관 백업·복원', '연간 계획 파일과 별도 형식', 'workspace.html?section=manage#backupAll', 'chronology'));
       planningFiles.append(planningDestinations);
       formats.append(materialFiles, planningFiles);
       return formats;
@@ -4986,7 +4988,7 @@
 
     function renderTime() {
       main.append(title('연표'));
-      main.append(destinationRow('연표 목록', '보관한 연표를 열거나 새로 만듭니다.', 'workspace.html', 'timeline'));
+      main.append(destinationRow('연표 목록', '보관한 연표를 열거나 새로 만듭니다.', 'workspace.html', 'chronology'));
       const list = node('div', null, 'life-card-grid');
       main.append(button('기존 연표 목록 확인', guarded(async () => {
         const documents = await legacy.listDocuments();
@@ -5523,7 +5525,9 @@
       // A reload of the blog editor or reader reopens that exact task. The old
       // `?view=page` address without `blog` keeps meaning the selected page.
       if (state.mode === 'page' && !blogPageTask && blogRoutePattern.test(startBlogRoute || '')) {
-        const opened = await openBlogRoute(active, startBlogRoute).catch(() => null);
+        // A reload keeps the entry's own 글쓰기 flag (history.state holds identifiers only).
+        const recorded = global.history.state?.haedo?.v === 1 && global.history.state.haedo.entry?.blog === startBlogRoute ? global.history.state.haedo.entry : null;
+        const opened = await openBlogRoute(active, startBlogRoute, recorded ? recorded.compose === true : undefined).catch(() => null);
         if (disposed || signal?.aborted) return { dispose };
         if (opened) {
           blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);

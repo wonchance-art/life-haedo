@@ -104,7 +104,7 @@ async function main() {
   try {
     for (const width of [1440, 820, 390]) await check('home origin, keyboard/touch return and draft resume ' + width, async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
-      for (const [destination, targetMode, title] of [['write', 'page', '글쓰기'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
+      for (const [destination, targetMode, title] of [['write', 'page', '글쓰기'], ['import', 'import', '가져오기']]) {
         page.subviewDestination = destination;
         const start = page.locator(`[data-home-destination="${destination}"]:visible`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();

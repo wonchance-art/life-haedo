@@ -185,6 +185,12 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none!important}
  .haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-accent)}
  .haedo-nav > .haedo-nav-indicator{display:none!important}
+ /* The empty 일정 list has no other emphasis on a phone (the pencil is plain), so 첫 글 쓰기 stays the primary action. */
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary{background:var(--haedo-accent);border-color:var(--haedo-accent);color:#fff}
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}
+ /* At least 8px between the 일정 title and its 보기 단위 switch. */
+ .haedo-heading-title > .life-schedule-views{margin-left:4px}
  .haedo-page-heading h1{font-size:var(--haedo-text-title-large);line-height:1.3}
  .haedo-page-heading{min-height:60px;gap:8px;margin-bottom:20px}.haedo-heading-title,.haedo-heading-actions{gap:4px}
  .haedo-account-host{top:8px;right:max(52px,calc(env(safe-area-inset-right,0px) + 44px))}.haedo-welcome{width:100%;max-width:none;min-height:calc(100svh - var(--haedo-dock-clearance));margin:0;padding:4px 24px 36px;grid-template-columns:1fr;gap:20px;border-radius:0}

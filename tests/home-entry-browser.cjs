@@ -126,7 +126,7 @@ async function main() {
       assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
       assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
-      for (const [destination, expected] of [['import', 'import'], ['write', 'page'], ['time', 'time']]) {
+      for (const [destination, expected] of [['import', 'import'], ['write', 'page']]) { // 2026-11-02: 연표 moved to 일정's 계획
         await page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`).click(); await settle(page);
         await page.waitForFunction(expected => document.querySelector('#lifeMain')?.dataset.mode === expected, expected);
         await home(page);
@@ -334,7 +334,7 @@ async function main() {
       await home(page); await recordWrite(page);
       assert.equal(await page.locator('#lifeWritingTitle').inputValue(), '오늘 다시 생각한 일');
       assert.equal(await page.locator('#lifeWritingBody').inputValue(), '내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
-      await home(page); await page.locator('[data-home-destination="time"]').click();
+      await nav(page, 'tools'); await page.getByRole('button', { name: '연표', exact: true }).click();
       await page.getByRole('link', { name: /연표 목록/ }).click();
       await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
       await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').click(); await ready(page);

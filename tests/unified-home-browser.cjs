@@ -285,35 +285,79 @@ async function main() {
       await page.locator('[data-section-back]').click(); await ready(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
       assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
     });
-    await check('phone pencil scrolls with the heading on pages whose heading does not stick and never covers their controls', async ({ page }) => {
+    await check('only a screen begun with 글쓰기 is the 글쓰기 screen, also after a reload (edit copy and draft tab stay 일정)', async ({ page }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, ws = await s.getActive(), P = HaedoLife.PhotoPost;
+        const saved = P.create(HaedoLife.Core.id); saved.status = 'saved'; saved.title = '저장해 둔 익명 글'; saved.ops = [{ insert: '저장 본문\n' }]; await s.savePhotoPost(ws, saved, 0);
+        const draft = P.create(HaedoLife.Core.id); draft.title = '예전에 남긴 익명 초안'; draft.ops = [{ insert: '초안 본문\n' }]; await s.savePhotoPost(ws, draft, 0);
+      });
+      await page.reload(); await ready(page); await settle(page); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      // (a) Editing a saved post makes a replacing copy; it is not a new post, before or after a reload.
+      await page.getByRole('button', { name: '저장해 둔 익명 글', exact: true }).first().click(); await page.locator('.photo-article').waitFor(); await settle(page);
+      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      await page.locator('#photoTitle').fill('고치는 중인 익명 글');
+      // The open editor's own post (blog=photo.<id>) is the stored copy that replaces the saved post.
+      const copy = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = new URLSearchParams(location.search).get('blog')?.split('.')[1];
+        try { const post = id && await s.readPhotoPost(await s.getActive(), id); return !!post?.replaces && post.status !== 'saved'; } catch (_) { return false; } });
+      for (const deadline = Date.now() + 10000; !await copy();) { assert(Date.now() < deadline, 'edit copy stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      assert.equal(await write.getAttribute('aria-current'), null); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      await page.reload(); await ready(page); await settle(page); await page.locator('#photoTitle').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), null, 'edit copy after reload'); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+      assert.equal(await write.getAttribute('aria-current'), 'page', '글쓰기 starts a new post from the edit copy');
+      // (b) A draft opened from the drafts tab is 일정, also after a reload.
+      await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      await page.locator('#homeTab-drafts').click(); await settle(page);
+      await page.locator('#lifeHome button:visible', { hasText: '예전에 남긴 익명 초안' }).first().click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      await page.reload(); await ready(page); await settle(page); await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '예전에 남긴 익명 초안');
+      assert.equal(await write.getAttribute('aria-current'), null, 'draft tab after reload'); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+    });
+    // Pages whose heading scrolls with the page carry the phone pencil inside that heading (review M3).
+    async function inlinePencil(page, file) {
+      const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+      const pencil = page.locator('.haedo-page-heading a[data-haedo-compose="heading"]');
+      assert.equal(await fixedPencil.isVisible(), false, file + ': no floating pencil');
+      assert.equal(await pencil.isVisible(), true, file + ': pencil in the heading');
+      assert.equal(await pencil.getAttribute('aria-label'), '글쓰기'); assert.equal(await pencil.getAttribute('href'), 'index.html?compose=1');
+      // A taller page (spacer added by the check only) shows the pencil leaving with its heading.
+      await page.evaluate(() => { const spacer = document.createElement('div'); spacer.style.height = '2400px'; document.body.append(spacer); });
+      const before = await pencil.evaluate(node => node.getBoundingClientRect().top);
+      await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' }));
+      const after = await pencil.evaluate(node => node.getBoundingClientRect().top);
+      assert(Math.abs(before - after - 300) < 2, file + ': pencil scrolls with the heading');
+      await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+      const overlaps = await pencil.evaluate(node => {
+        const p = node.getBoundingClientRect();
+        return [...document.querySelectorAll('a, button, summary, input, select')].filter(other => other !== node && !other.contains(node) && !other.closest('[data-haedo-navigation]') && other.checkVisibility()).map(other => [other, other.getBoundingClientRect()])
+          .filter(([, r]) => Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 && Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5).map(([other]) => other.getAttribute('aria-label') || other.textContent.trim());
+      });
+      assert.deepEqual(overlaps, [], file + ': pencil overlaps');
+    }
+    await check('phone pencil scrolls with the heading on pages whose heading does not stick and never covers their controls', async ({ page, context }) => {
       await page.setViewportSize({ width: 390, height: 844 });
-      for (const [file, name] of [['goals.html', 'goals'], ['habits.html', 'habits'], ['workspace.html', 'workspace'], ['privacy.html', 'privacy']]) {
+      // One anonymous timeline document so timeline.html?doc= opens the editor instead of the list.
+      await context.route(`${cloud}/rest/v1/haedo_documents**`, route => route.request().method() !== 'GET' ? route.fallback() : route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([{ id: 'abc', name: '익명 연표', updated_at: '2026-11-01T00:00:00.000Z', data: { profile: { name: '익명' }, events: [], spans: [], eras: [], happiness: [], thoughts: [], records: [] } }]) }));
+      for (const [file, name] of [['goals.html', 'goals'], ['habits.html', 'habits'], ['workspace.html', 'workspace'], ['timeline.html?doc=abc', 'timeline'], ['privacy.html', 'privacy']]) {
         await page.goto(base + '/' + file);
-        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]')?.hidden, name);
-        const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
-        const pencil = page.locator('.haedo-page-heading a[data-haedo-compose="heading"]');
-        assert.equal(await fixedPencil.isVisible(), false, file + ': no floating pencil');
-        assert.equal(await pencil.isVisible(), true, file + ': pencil in the heading');
-        assert.equal(await pencil.getAttribute('aria-label'), '글쓰기'); assert.equal(await pencil.getAttribute('href'), 'index.html?compose=1');
-        // A taller page (spacer added by the check only) shows the pencil leaving with its heading.
-        await page.evaluate(() => { const spacer = document.createElement('div'); spacer.style.height = '2000px'; document.querySelector('.p-main').append(spacer); });
-        const before = await pencil.evaluate(node => node.getBoundingClientRect().top);
-        await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' }));
-        const after = await pencil.evaluate(node => node.getBoundingClientRect().top);
-        assert(Math.abs(before - after - 300) < 2, file + ': pencil scrolls with the heading');
-        await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
-        const overlaps = await pencil.evaluate(node => {
-          const p = node.getBoundingClientRect();
-          return [...document.querySelectorAll('.p-main a, .p-main button, .p-main summary, .p-main input')].filter(other => other !== node && !other.contains(node) && other.checkVisibility()).map(other => [other, other.getBoundingClientRect()])
-            .filter(([, r]) => Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 && Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5).map(([other]) => other.getAttribute('aria-label') || other.textContent.trim());
-        });
-        assert.deepEqual(overlaps, [], file + ': pencil overlaps');
+        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]')?.hidden && !document.querySelector('#timelineAccess:not([hidden])'), name);
+        await inlinePencil(page, file);
       }
       // The app pages keep their sticky heading row and the pencil beside it.
       await page.goto(base + '/index.html'); await ready(page); await settle(page);
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-compose]').isVisible(), true);
       assert.equal(await page.locator('a[data-haedo-compose="heading"]').count(), 0);
     });
+    await check('signed-out login page carries the phone pencil in its heading', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(base + '/login.html'); await page.waitForFunction(() => document.body.dataset.page === 'login' && document.querySelector('#googleLogin'));
+      assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
+      await inlinePencil(page, 'login.html');
+    }, null);
     await check('글쓰기 keeps one place, marks the writing screen current and the 일정 views switch with history', async ({ page }) => {
       await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
       const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
