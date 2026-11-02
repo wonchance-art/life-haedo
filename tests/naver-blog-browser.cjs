@@ -12,7 +12,7 @@ const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
 const { seed, preserved } = require('./account-materials-browser.cjs');
-const { databaseSnapshot } = require('./local-post-finder-browser.cjs');
+const { databaseSnapshot, accountDocsCycled } = require('./local-post-finder-browser.cjs');
 const output = path.resolve('.local/naver-blog');
 const blogId = 'example_haedo';
 const postUrl = id => 'https://blog.naver.com/' + blogId + '/' + id;
@@ -298,7 +298,9 @@ async function main() {
       try {
         await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
         await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id); await ready(page); await settle(page); await idle(page, 'ready');
-        const bBefore = await databaseSnapshot(page); late.release(); await page.waitForFunction(() => __naverActiveLists === 0);
+        // B's first account-docs cycle legitimately records its cursor and schema in meta; the
+        // baseline for "the late A reply writes nothing" is taken after that cycle.
+        await accountDocsCycled(page, accounts.b.id); const bBefore = await databaseSnapshot(page); late.release(); await page.waitForFunction(() => __naverActiveLists === 0);
         assert.equal(await page.locator('.nv-subscription').count(), 0); assert.equal(await page.locator('.nv-item').count(), 0);
         assert.deepEqual(await databaseSnapshot(page), bBefore);
         assert.equal(await page.evaluate(async ws => { try { await HaedoLife.Shell.storage.read(ws); return null; } catch (e) { return e.code; } }, seeded.workspaceId), 'workspace_access_denied');
