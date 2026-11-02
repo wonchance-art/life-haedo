@@ -1,3 +1,7 @@
+-- one-off, already executed, never run again.
+-- 일회성 정리 SQL. 2026-10-03 Local 관리자가 이미 실행했다(docs/supabase-integration.md). 다시 실행하지 않는다.
+-- 운영 행을 지우므로 supabase/tests/에서 기록 보관용 archive/로 옮겼다. 검사나 재생 도구가 이 파일을 실행하지 않는다.
+--
 -- Local admin follow-up: only the two Cloud HTTP runs, expected 8 rows.
 -- Exact generated IDs plus generated run-title prefixes; receipts cascade.
 begin;
