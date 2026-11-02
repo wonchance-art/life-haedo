@@ -103,10 +103,20 @@
     model().validate(manifest);
     return manifest;
   }
+  // AI authorship marks stay private (owner decision 2026-11-02). A public copy
+  // drops only that attribute; text and every other format are unchanged. The
+  // server publish RPC applies the same rule to the stored document.
+  function withoutAuthorship(op) {
+    if (!op.attributes || !Object.hasOwn(op.attributes, "author")) return copy(op);
+    const { author: _private, ...rest } = op.attributes, next = { insert: copy(op.insert) };
+    if (Object.keys(rest).length) next.attributes = copy(rest);
+    return next;
+  }
   function validateSnapshot(value) {
     const code = "invalid_blog_snapshot";
     fields(value, ["format", "title", "ops", "attachments", "photos", "author"], code);
     check(value.format === "life-blog-public-v1", code);
+    check(Array.isArray(value.ops) && value.ops.every((op) => !plain(op?.attributes) || !Object.hasOwn(op.attributes, "author")), code);
     fields(value.author, ["name", "intro"], code);
     text(value.author.name, LIMITS.name, code); text(value.author.intro, LIMITS.intro, code);
     check(Array.isArray(value.photos), code);
@@ -135,7 +145,7 @@
     const crypto = root.crypto || (typeof require === "function" && require("node:crypto").webcrypto);
     const mapping = new Map(doc.photos.filter((p) => selected.has(p.id)).map((p) => [p.id, crypto.randomUUID()]));
     const snapshot = { format: "life-blog-public-v1", title: doc.title,
-      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? copy(op) :
+      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? withoutAuthorship(op) :
         { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
       // A HEIC original is never projected publicly; its derived JPEG (no
       // embedded metadata) is the public photo for that position.
