@@ -2,6 +2,7 @@
  * SDK and scoped IndexedDB; mocked Auth and synthetic Korean public metadata.
  * No production/publisher requests, actual reading, Apple or usefulness claim. */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
@@ -72,9 +73,9 @@ async function state(page) {
 async function reaction(page, id, kind, target) {
   const control = row(page, id).locator('[data-discovery-reaction="' + kind + '"]');
   await newsView(control); assert.equal(await control.isVisible(), true); if ((await control.getAttribute('aria-pressed') === 'true') !== target) await control.click();
-  await idle(page); await page.waitForFunction(async ({ address, kind, target }) => {
+  await idle(page); await awaitCondition(page, async ({ address, kind, target }) => {
     const s = HaedoLife.Shell.storage, profile = await s.readDiscoveryActions(await s.getActive()); return profile.entries.some(entry => entry.canonicalUrl === address && entry[kind] === target);
-  }, { address: url(id), kind, target });
+  }, { address: url(id), kind, target }, { timeout: 15000, label: 'news-social storage condition' });
 }
 async function main() {
   await fs.mkdir(output, { recursive: true }); report.productsBefore = await hashes(); report.runnerSHA256 = sha(await fs.readFile(__filename));
@@ -178,14 +179,14 @@ async function main() {
       await input.dispatchEvent('compositionend', { data: PRIVATE }); await page.evaluate(() => { window.__newsSocialFailTopic = true; }); const before = await state(page);
       await (await revealControl(page.locator('#discoveryTopicAdd'))).click(); await page.locator('#discoveryTopicRetry').waitFor(); await idle(page);
       assert.equal(await input.inputValue(), PRIVATE); assert.equal(await input.evaluate(element => element === __socialTopicInput), true); assert.deepEqual((await state(page)).interest, before.interest);
-      await (await revealControl(page.locator('#discoveryTopicRetry'))).click(); await idle(page); await page.waitForFunction(async term => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(item => item.label === term); }, PRIVATE);
+      await (await revealControl(page.locator('#discoveryTopicRetry'))).click(); await idle(page); await awaitCondition(page, async term => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(item => item.label === term); }, PRIVATE, { timeout: 15000, label: 'news-social storage condition' });
       assert.equal(await input.inputValue(), '');
       const topics = page.locator('#discoveryTopics'); if (await topics.evaluate(element => element.open)) await topics.locator(':scope > summary').click();
     });
     await check('three viewport feed hierarchy keeps real headlines ahead of secondary information without overflow or undersized controls', async () => {
       await click(page, '#discoveryDiscover'); await click(page, '#discoveryLatest');
       await disclose(page.locator('#discoveryLanguageOptions')); await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
-      await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; });
+      await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; }, undefined, { timeout: 15000, label: 'news-social storage condition' });
       for (const selector of ['#discoveryTopics', '#discoveryLanguageOptions', '#discoveryNewsPreferences']) { const details = page.locator(selector); if (await details.evaluate(element => element.open)) await details.locator(':scope > summary').click(); }
       await newsView(page.locator('#discoveryList'));
       for (const width of [390, 820, 1440]) {
@@ -215,11 +216,11 @@ async function main() {
         let translationOffHitTests = null;
         if (width === 390) {
           await disclose(page.locator('#discoveryLanguageOptions')); await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('original'); await idle(page);
-          await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'original'; });
+          await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'original'; }, undefined, { timeout: 15000, label: 'news-social storage condition' });
           assert.equal(await article.locator('[data-discovery-translate]').count(), 0);
           translationOffHitTests = await assertReactionHitTests(false);
           await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
-          await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; });
+          await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; }, undefined, { timeout: 15000, label: 'news-social storage condition' });
           await (await revealControl(page.locator('#discoveryLanguageOptions > summary'))).click(); await newsView(article);
         }
         await page.evaluate(() => scrollTo(0, 0));

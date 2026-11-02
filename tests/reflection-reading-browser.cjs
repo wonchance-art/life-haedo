@@ -2,6 +2,7 @@
  * All records/Auth HTTP are synthetic; no production or Apple-device access.
  * BASE_URL=http://127.0.0.1:4184 node tests/reflection-reading-browser.cjs */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -163,7 +164,7 @@ async function main() {
       const before = await current(page), downloaded = await download(page, '#wbBackupDownload'), backup = JSON.parse(downloaded.text);
       assert.deepEqual(backup.workbench.reflection, before.workbench.reflection); assert.deepEqual(Object.keys(backup.workbench.reflection).sort(), ['note', 'versionIds']);
       await page.locator('#wbRestoreFile').setInputFiles({ name: '익명-회고-구성.json', mimeType: 'application/json', buffer: Buffer.from(downloaded.text) }); await page.locator('#wbRestoreInstall').waitFor(); await page.locator('#wbRestoreInstall').click();
-      await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active !== id), f.workspaceId); await page.locator('.life-workbench[data-mode="page"]').waitFor();
+      await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active !== id), f.workspaceId, { timeout: 12000, label: 'reflection-reading storage condition' }); await page.locator('.life-workbench[data-mode="page"]').waitFor();
       const copied = await current(page); assert.notEqual(copied.bundle.workspaceId, f.workspaceId); assert.equal(copied.workbench.reflection.note, initialNote); assert.equal(copied.workbench.reflection.versionIds.length, f.selection.length);
       const chosenTexts = copied.workbench.reflection.versionIds.map(id => copied.bundle.sourceVersions.find(version => version.id === id)?.contentText); assert(chosenTexts.includes(oldBody)); assert(chosenTexts.includes(latestBody)); assert(!chosenTexts.includes(specs.at(-1).text));
       assert(copied.workbench.reflection.versionIds.every(id => !f.selection.includes(id))); assert.equal(await page.evaluate(id => HaedoLife.Shell.storage.getSyncState(id), copied.bundle.workspaceId), null);
