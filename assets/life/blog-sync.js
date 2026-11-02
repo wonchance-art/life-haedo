@@ -113,12 +113,20 @@
       const doc = { ...remoteDoc, id, revision, replaces: remoteDoc.status === 'saved' ? null : localReplaces(ws, remoteDoc.replaces, byRemote) };
       photoPost.validate(doc); return doc;
     }
-    // A copy of a copy keeps one prefix (three or more devices).
-    function recoveryTitle(title) {
-      let value = String(title || '');
+    // A copy of a copy keeps one prefix and gets the time its content was
+    // written instead, e.g. "복구 사본 · 메모 (11-02 15:04)" (the same form as
+    // a restored backup's "(11-02 복원)"), so it differs from the one it lost to.
+    function recoveryTitle(title, writtenAt) {
+      let value = String(title || ''), suffix = '';
       if (!value.startsWith(CONFLICT_PREFIX)) value = CONFLICT_PREFIX + value;
-      while (value.length > 500) value = Array.from(value).slice(0, -1).join('');
-      return value;
+      else {
+        const at = new Date(Date.parse(writtenAt)), two = number => String(number).padStart(2, '0');
+        if (Number.isFinite(at.getTime())) suffix = ' (' + two(at.getMonth() + 1) + '-' + two(at.getDate()) + ' ' + two(at.getHours()) + ':' + two(at.getMinutes()) + ')';
+      }
+      // Titles are limited to 500 UTF-16 units; cut whole characters only.
+      let head = '';
+      for (const char of value) { if (head.length + char.length + suffix.length > 500) break; head += char; }
+      return head + suffix;
     }
     // A new unbound draft holding a document's content; it syncs as its own post.
     function draftCopy(doc, title, id = makeId(), replaces = null) {
@@ -128,7 +136,7 @@
       if (Object.hasOwn(base, 'archived')) base.archived = false;
       photoPost.validate(base); return base;
     }
-    const conflictCopy = (doc, id) => draftCopy(doc, recoveryTitle(doc.title), id);
+    const conflictCopy = (doc, id) => draftCopy(doc, recoveryTitle(doc.title, doc.updatedAt), id);
     // Title, body, attachments and the exact photo bytes (digests, HEIC views);
     // identity, status and times are not content. Equal sides need no copy.
     function contentOf(doc) {
@@ -150,10 +158,24 @@
       const hex = Array.from(bytes.slice(0, 16), value => value.toString(16).padStart(2, '0')).join('');
       return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
     }
+    // The derived id, and what this device already holds under it: another
+    // device's result for the same server revision may have arrived first.
     async function conflictId(c, row, role) {
       const id = await derivedId(row.id, row.revision, role); guard(c);
       const value = await storage.listBlogSyncStates(c.ws); guard(c);
-      return value.posts.some(item => item.id === id) || value.tombstones.some(item => item.remoteId === id) || value.states.some(item => item.state.remoteId === id) ? makeId() : id;
+      const used = value.posts.some(item => item.id === id) || value.tombstones.some(item => item.remoteId === id) || value.states.some(item => item.state.remoteId === id);
+      if (!used) return { id, existing: null };
+      let existing = null;
+      if (value.posts.some(item => item.id === id)) { try { existing = await storage.readPhotoPost(c.ws, id); } catch (_) { existing = null; } guard(c); }
+      return { id, existing, used };
+    }
+    // The recovery copy of a server revision's content, unless this device
+    // already holds that same copy (made here or received from another device).
+    async function keptCopy(c, row, doc) {
+      const derived = await conflictId(c, row, 'kept');
+      if (!derived.used) return conflictCopy(doc, derived.id);
+      const copy = conflictCopy(doc);
+      return derived.existing?.status === 'draft' && derived.existing.title === copy.title && sameContent(derived.existing, copy) ? null : copy;
     }
     // Latest wins (2026-11-01 rule; 2026-11-02: saved posts are no exception).
     // Both sides are compared by the time their content was written
@@ -275,8 +297,21 @@
           // same post and, after an explicit republish, the same public
           // address), and the saved version's content is also kept as a
           // private recovery copy, so nothing is lost when the draft is finished.
-          input.edit = draftCopy(post, post.title, await conflictId(c, row, 'edit'), { id: c.id, revision: post.revision + 1 });
-          input.copy = conflictCopy(remoteDoc, await conflictId(c, row, 'kept'));
+          const exact = { id: c.id, revision: post.revision + 1 }, copies = [];
+          const kept = await keptCopy(c, row, remoteDoc); if (kept) copies.push(kept);
+          const derived = await conflictId(c, row, 'edit'), other = derived.existing;
+          if (!derived.used) input.edit = draftCopy(post, post.title, derived.id, exact);
+          else if (other?.status === 'draft' && other.replaces?.id === c.id) {
+            // Another device's later draft over the same saved revision is
+            // already here as this post's editing draft: the two drafts are
+            // decided like any conflict. The later one stays the editing draft
+            // (a tie keeps the one already here) and the other is kept.
+            if (held(c.ws, other.id)) return getState(c.ws, c.id);
+            const ours = writtenAt(post.updatedAt, now()) > writtenAt(other.updatedAt, now());
+            input.edit = ours ? { ...draftCopy(post, post.title, other.id, exact), revision: other.revision } : { ...structuredClone(other), replaces: exact };
+            if (!sameContent(post, other)) copies.push(conflictCopy(ours ? other : post));
+          } else input.edit = draftCopy(post, post.title, makeId(), exact);
+          if (copies.length) input.copy = copies;
           if (waits()) return getState(c.ws, c.id);
         }
         await storage.commitBlogSync(c.ws, input, { isCurrent: () => current(c) });
@@ -286,7 +321,7 @@
       }
       await storage.commitBlogSync(c.ws, { postId: c.id, baseRevision: post.revision,
         binding: synced(state, row, { localRevision: state.localRevision, status: 'pending' }), bindingRevision: state.revision,
-        ...(same ? {} : { copy: conflictCopy({ ...remoteDoc, id: c.id, revision: post.revision, replaces: null }, await conflictId(c, row, 'kept')) }) }, { isCurrent: () => current(c) });
+        ...(same ? {} : await keptCopy(c, row, { ...remoteDoc, id: c.id, revision: post.revision, replaces: null }).then(copy => copy ? { copy } : {})) }, { isCurrent: () => current(c) });
       guard(c); emit(c.ws, c.id); kick(1000);
       return pushLocked(c, { attempt: attempt + 1, byRemote: map });
     }
@@ -381,17 +416,22 @@
       await release(ws, [id, remoteId]);
       await forget(ws, remoteId, removed);
     }
-    // A recovery copy this account made of exactly the deleted revision (by a
-    // conflict decided before the deletion was known) goes with it, unless it
-    // was changed since or is open: the explicit deletion wins.
+    // A recovery copy this device made of exactly the deleted revision (by a
+    // conflict decided before the deletion was known) goes with it while it
+    // has never left this device, unless it was changed since or is open: the
+    // explicit deletion wins over what nobody has seen yet. A copy already
+    // uploaded may be visible on the deleting device, where the owner chose to
+    // keep it, so it stays on every device.
     async function forget(ws, remoteId, removed) {
       const copyId = await derivedId(remoteId, removed.revision, 'kept');
       await serial(ws, copyId, async () => {
         const c = context(ws, copyId);
         try {
           if (held(ws, copyId) || !(await storage.listBlogSyncStates(ws)).posts.some(row => row.id === copyId)) return;
+          const state = await readState(c);
+          if (state && (state.remoteRevision > 0 || state.pending)) return;
           const doc = await readPost(c);
-          if (doc.status !== 'draft' || doc.replaces || doc.title !== recoveryTitle(removed.post.title) || !sameContent(doc, { ...removed.post, title: doc.title })) return;
+          if (doc.status !== 'draft' || doc.replaces || doc.title !== recoveryTitle(removed.post.title, removed.post.updatedAt) || !sameContent(doc, { ...removed.post, title: doc.title })) return;
           await storage.deletePhotoPost(ws, copyId, doc.revision);
           generations.set(key(ws, copyId), (generations.get(key(ws, copyId)) || 0) + 1);
           emit(ws, copyId); kick(0);
@@ -513,7 +553,12 @@
         }
         // Saved posts first, so an editing draft can name its target's server revision.
         uploads.sort((a, b) => Number(a.post.status === 'draft') - Number(b.post.status === 'draft'));
-        await pool(uploads.map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: local.byRemote })));
+        // A recovery copy a conflict made here goes up only after this cycle's
+        // server list shows that its post still exists: if the post was
+        // deleted on another device meanwhile, the copy that nobody has seen
+        // yet is dropped with it (forget) instead of being sent first.
+        const deferred = await unseenCopies(c, local, uploads);
+        await pool(uploads.filter(item => !deferred.has(item)).map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: local.byRemote })));
         if (!uploadOnly) {
           local = await snapshot(c, owned);
           rows = await remote.syncList(); guard(c);
@@ -540,6 +585,11 @@
             if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) tasks.push(() => vanish(entry.ws, entry.localPostId, remoteId));
           }
           await pool(tasks);
+          if (deferred.size) {
+            const after = await snapshot(c, owned);
+            await pool([...deferred].filter(({ ws, post }) => after.workspaces.get(ws)?.posts.some(item => item.id === post.id))
+              .map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: after.byRemote })));
+          }
         }
         summary.lastSyncAt = new Date(now()).toISOString(); summary.lastError = null;
       } catch (error) {
@@ -550,6 +600,17 @@
         summary.running = false; publish$({ type: 'status', status: getStatus() });
       }
       return getStatus();
+    }
+    // Never-uploaded drafts that are the recovery copy of a bound post's
+    // current server revision (by their derived id).
+    async function unseenCopies(c, local, uploads) {
+      const fresh = uploads.filter(({ ws, post }) => post.status === 'draft' && !local.workspaces.get(ws).states.get(post.id));
+      const found = new Set(); if (!fresh.length) return found;
+      const ids = new Set();
+      for (const [remoteId, entry] of local.byRemote) if (entry.state.remoteRevision > 0) ids.add(entry.ws + '/' + await derivedId(remoteId, entry.state.remoteRevision, 'kept'));
+      guard(c);
+      for (const item of fresh) if (ids.has(item.ws + '/' + item.post.id)) found.add(item);
+      return found;
     }
     async function tally(c, rows) {
       const libraries = await storage.listAccountLibraries(); guard(c);

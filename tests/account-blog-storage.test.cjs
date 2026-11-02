@@ -205,6 +205,26 @@ test('a conflict keeps the server version in place with an exact editing draft a
   assert.equal(await f.a.readBlogSyncState(f.ws, later.id), null);
 });
 
+test('a conflict may rewrite an existing editing draft at its exact revision and keep two recovery copies in one transaction', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const local = await f.a.readPhotoPost(f.ws, id);
+  const other = await f.a.savePhotoPost(f.ws, { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '다른 기기 초안', replaces: { id, revision: 0 } }, 0);
+  const server = { ...copy(local), title: '저장 판' };
+  const kept = { ...copy(server), id: Core.id(), revision: 0, status: 'draft', title: '복구 사본 · 저장 판' };
+  const lost = { ...copy(other), id: Core.id(), revision: 0, replaces: null, title: '복구 사본 · 다른 기기 초안' };
+  const later = { ...copy(other), title: '이 기기 초안', replaces: { id, revision: 2 } };
+  const input = { postId: id, post: server, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: [kept, lost], edit: later };
+  for (const bad of [{ copy: [] }, { copy: [kept, lost, { ...lost, id: Core.id() }] }, { copy: [kept, kept] }, { edit: { ...later, revision: 0 } }])
+    await assert.rejects(f.a.commitBlogSync(f.ws, { ...input, ...bad }), { code: /invalid_blog_state|photo_post_conflict/ });
+  assert.equal((await f.a.readPhotoPost(f.ws, id)).revision, 1, 'refused requests change nothing');
+  await f.a.commitBlogSync(f.ws, input);
+  const rewritten = await f.a.readPhotoPost(f.ws, other.id);
+  assert.equal(rewritten.title, '이 기기 초안'); assert.equal(rewritten.revision, other.revision + 1); assert.deepEqual(rewritten.replaces, { id, revision: 2 });
+  assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).title, '복구 사본 · 저장 판');
+  assert.equal((await f.a.readPhotoPost(f.ws, lost.id)).title, '복구 사본 · 다른 기기 초안');
+});
+
 test('explicit deletion records a deletion for a stored post, refuses a published one and is never re-received', async t => {
   const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
   await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: { ...remoteBinding(f, id), publication: { token: Core.id(), blogToken: Core.id(), revision: 1, active: true } }, bindingRevision: 0 });

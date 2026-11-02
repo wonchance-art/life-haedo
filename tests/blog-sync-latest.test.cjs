@@ -240,7 +240,12 @@ test('three devices: one saved post, one editing draft (the latest) and every ot
   await cycles(a, time, 1);
   await b.storage.savePhotoPost(b.ws, { ...(await b.storage.readPhotoPost(b.ws, memo.id)), ops: [{ insert: '아이패드 본문\n' }], updatedAt: '2026-11-01T09:30:00.000Z' }, 1);
   await cycles(b, time, 2);
-  assert.deepEqual(await shown(b), [['draft', KEPT + '메모'], ['draft', KEPT + '메모']], 'no "복구 사본 · 복구 사본 · "');
+  // The losing side was written at 09:30 (UTC) on B; its copy carries that local time.
+  const lost = new Date('2026-11-01T09:30:00.000Z'), two = value => String(value).padStart(2, '0');
+  const stamp = ' (' + two(lost.getMonth() + 1) + '-' + two(lost.getDate()) + ' ' + two(lost.getHours()) + ':' + two(lost.getMinutes()) + ')';
+  assert.deepEqual(await shown(b), [['draft', KEPT + '메모'], ['draft', KEPT + '메모' + stamp]].sort(), 'one prefix, and the copy is told apart by its write time');
+  assert.equal((await byTitle(b, KEPT + '메모' + stamp)).ops[0].insert, '아이패드 본문\n');
+  assert.equal((await byTitle(b, KEPT + '메모')).ops[0].insert, '맥 본문\n');
 });
 
 test('an explicit deletion wins over a decided, not yet uploaded conflict: the deleted post is not recreated', async () => {
@@ -259,6 +264,40 @@ test('an explicit deletion wins over a decided, not yet uploaded conflict: the d
   }
   assert.equal(cloud.rows.has(id), false);
   assert.deepEqual([...cloud.rows.values()].map(row => [row.data.status, row.data.title, row.data.replaces]), [['draft', 'B 초안', null]]);
+});
+
+test('deleting only the saved post keeps its recovery copy that was already visible to the deleting device, on every device', async () => {
+  const { cloud, time, a, b } = await pair();
+  const id = await finishedOn({ time, a, others: [b], finisher: a });
+  await redraft(b, id, 'B 초안', '2026-11-01T10:05:00.000Z');
+  await cycles(b, time, 2); await cycles(a, time, 2);
+  assert.deepEqual(await shown(a), [['draft', 'B 초안'], ['draft', KEPT + '완성'], ['saved', '완성']], 'the owner sees the copy before deleting');
+  await a.sync.deletePost(a.ws, id); await cycles(a, time, 1);
+  await cycles(b, time, 2); await cycles(a, time, 2);
+  const expected = [['draft', 'B 초안'], ['draft', KEPT + '완성']];
+  assert.deepEqual(await shown(a), expected); assert.deepEqual(await shown(b), expected);
+  assert.deepEqual([...cloud.rows.values()].map(row => [row.data.status, row.data.title]).sort(), expected);
+  assert.equal(cloud.stats.deletes.filter(call => call.postId !== id).length, 0, 'only the deleted post was deleted');
+});
+
+test('a device that already received another device\'s result for the same saved revision makes no duplicates', async () => {
+  const cloud = server(), time = clock();
+  const a = await device(cloud, 'mac', { time }), b = await device(cloud, 'ipad', { time }), c = await device(cloud, 'iphone', { time });
+  const id = await finishedOn({ time, a, others: [b, c], finisher: a });
+  await redraft(b, id, 'B 초안', '2026-11-01T10:05:00.000Z');
+  await cycles(b, time, 2);
+  // C's own later draft was just written, so its first cycle receives B's results before deciding.
+  time.advance(20 * 60000); await redraft(c, id, 'C 초안', at(time, 0));
+  await c.sync.syncNow();
+  await cycles(c, time, 3); await cycles(b, time, 2); await cycles(a, time, 2); await cycles(c, time, 1);
+  const expected = [['draft', 'C 초안'], ['draft', KEPT + 'B 초안'], ['draft', KEPT + '완성'], ['saved', '완성']].sort();
+  for (const dev of [a, b, c]) assert.deepEqual(await shown(dev), expected, dev.name);
+  const later = await byTitle(c, 'C 초안');
+  assert.deepEqual(later.replaces, { id, revision: (await c.storage.readPhotoPost(c.ws, id)).revision });
+  assert.equal(cloud.rows.size, 4);
+  const saves = cloud.stats.saves.length;
+  await cycles(a, time, 1); await cycles(b, time, 1); await cycles(c, time, 1);
+  assert.equal(cloud.stats.saves.length, saves, 'settled: nothing is sent again');
 });
 
 test('a recovery copy that was changed after the conflict survives the deletion of the post it came from', async () => {

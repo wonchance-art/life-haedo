@@ -105,7 +105,9 @@ test('M1: the same refusal reached without a revision conflict is decided once, 
   assert(rows.some(r => r.status === 'draft' && r.title === '복구 사본 · 다른 기기 완성'));
   assert.notEqual(b.sync.getStatus().state, 'error');
   time.advance(20 * 60000); await b.sync.syncNow();
-  const refused = () => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id && call.data.status === 'draft').length;
+  assert.equal(cloud.rows.get(draft.id).data.title, '다른 기기 완성', 'the saved server version stays in place, unrenamed');
+  assert.equal(cloud.rows.get(draft.id).data.status, 'saved');
+  const refused =() => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id && call.data.status === 'draft').length;
   const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
   time.advance(20 * 60000); await b.sync.syncNow();
   assert.equal(count(), saves, 'nothing is sent again once decided');

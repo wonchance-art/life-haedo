@@ -2594,17 +2594,24 @@
       const { postId, baseRevision, bindingRevision } = input, remove = input.remove === true;
       requireId(postId, '글'); requireRevision(baseRevision); requireRevision(bindingRevision);
       if (remove && (input.post || input.binding || input.copy || input.edit)) throw fault('invalid_blog_state', '삭제와 갱신을 함께 처리하지 않습니다.');
-      const post = input.post ? photoPost().compact(input.post) : null, copy = input.copy ? photoPost().compact(input.copy) : null;
-      // edit: a new editing draft of the post written here, naming the exact
-      // revision this transaction stores (a conflict's later draft).
+      const post = input.post ? photoPost().compact(input.post) : null;
+      // copy: one or two new unbound drafts kept by a conflict (recovery copies).
+      const copies = (Array.isArray(input.copy) ? input.copy : input.copy ? [input.copy] : []).map(item => photoPost().compact(item));
+      if (Array.isArray(input.copy) && (!input.copy.length || input.copy.length > 2)) throw fault('invalid_blog_state', '동기화 충돌에서 나눈 글을 확인해 주세요.');
+      // edit: the post's editing draft written here, new or an existing one at
+      // its current revision, naming the exact revision this transaction stores
+      // (a conflict's later draft).
       const edit = input.edit ? photoPost().compact(input.edit) : null;
       if (edit) {
         photoPost().validate(edit);
-        if (!post || edit.id === postId || edit.id === copy?.id || edit.revision !== 0 || edit.status !== 'draft' || edit.replaces?.id !== postId || edit.replaces.revision !== baseRevision + 1)
+        if (!post || edit.id === postId || copies.some(item => item.id === edit.id) || edit.status !== 'draft' || edit.replaces?.id !== postId || edit.replaces.revision !== baseRevision + 1)
           throw fault('invalid_blog_state', '동기화 충돌에서 이어 쓸 초안을 확인해 주세요.');
       }
       if (post) { photoPost().validate(post); if (post.id !== postId) throw fault('invalid_blog_state', '글과 연결 식별자가 다릅니다.'); }
-      if (copy) { photoPost().validate(copy); if (copy.id === postId || copy.revision !== 0 || copy.status !== 'draft' || copy.replaces) throw fault('invalid_blog_state', '동기화 충돌에서 나눈 글은 새 초안이어야 합니다.'); }
+      for (const copy of copies) {
+        photoPost().validate(copy);
+        if (copy.id === postId || copy.revision !== 0 || copy.status !== 'draft' || copy.replaces || copies.filter(item => item.id === copy.id).length > 1) throw fault('invalid_blog_state', '동기화 충돌에서 나눈 글은 새 초안이어야 합니다.');
+      }
       let binding = null;
       if (input.binding) {
         binding = clone(input.binding);
@@ -2636,8 +2643,8 @@
           }
         }
         let copied = null;
-        if (copy) { copied = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects); assertCurrent(); }
-        if (edit) { await writePhotoPost(tx, workspaceId, edit, 0, null, null, effects); assertCurrent(); }
+        for (const copy of copies) { const written = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects); copied ||= written; assertCurrent(); }
+        if (edit) { await writePhotoPost(tx, workspaceId, edit, edit.revision, null, null, effects); assertCurrent(); }
         return { postId, revision: remove ? 0 : saved ? saved.revision : current?.revision || 0, copyId: copied?.id || null, removed: remove };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
