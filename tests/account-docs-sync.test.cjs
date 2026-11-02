@@ -479,3 +479,55 @@ test('a backup restore copy marker replicates to the account\'s other devices, e
   assert.equal(refused.status, 'rejected');
   await assert.rejects(a.createWorkspace('같은 공간 표시', { restoredCopy: { sourceWorkspaceId: 'not a valid id!' } }), { code: 'restored_copy_invalid' });
 });
+
+test('a device that synced on an older release, which skipped restored-copy markers, reads them once after updating; newer local edits stay', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const now = clock();
+  const a = mac.base.forAccount(accountA), original = await workspaceOn(a), w = original.workspaceId;
+  const copy = await a.createWorkspace('내 자료 (11-02 복원)', { restoredCopy: { sourceWorkspaceId: w, restoredAt: '2026-11-02T09:00:00.000Z' } });
+  const key = `restored-copy:${copy.workspaceId}`;
+  await a.saveDiscoverySettings(w, settings(w, 0, true), 0);
+  await engine(a, server, accountA, { now }).sync.syncNow();
+  assert.ok(server.docs(accountA.userId).has(key));
+
+  // The iPad runs an older release: it does not know the restored-copy kind and has no schema mark.
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, original); await workspaceOn(b, await a.read(copy.workspaceId));
+  const unknown = Object.assign(new Error('자동 저장 대상이 아닌 항목입니다.'), { code: 'account_doc_invalid_key' });
+  const older = { ...b, upgradeAccountDocSchema: undefined,
+    readAccountDocRecord: docKey => docKey.startsWith('restored-copy:') ? Promise.reject(unknown) : b.readAccountDocRecord(docKey),
+    listAccountDocs: async () => (await b.listAccountDocs()).filter(doc => !doc.key.startsWith('restored-copy:')) };
+  await engine(older, server, accountA, { now }).sync.syncNow();
+  // That release kept no schema mark (this storage records one with the first cursor).
+  const schemaRow = JSON.stringify(`accountDocSchema:${accountKey(accountA)}`);
+  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 2); ipad.rows.get('meta').delete(schemaRow);
+  assert.equal((await b.readDiscoverySettings(w)).autoRefresh, true);
+  assert.equal((await b.readAccountDocRecord(key)).exists, false, 'the older release skipped the marker');
+  const passed = await b.readAccountDocCursor();
+  assert.ok(passed >= server.docs(accountA.userId).get(key).seq, 'and moved its cursor past it');
+  // An edit made on the iPad before it updates, not yet sent.
+  now.advance();
+  const current = await b.readDiscoverySettings(w);
+  await b.saveDiscoverySettings(w, Settings.update(current, { autoRefresh: false }, { expectedRevision: current.revision, now: now() }), current.revision);
+
+  // After the update the marker arrives; the newer local edit is kept and sent.
+  const updated = engine(b, server, accountA, { now }); await updated.sync.syncNow();
+  assert.deepEqual((await b.listAccountLibraries()).find(row => row.workspaceId === copy.workspaceId).restoredCopy,
+    { sourceWorkspaceId: w, restoredAt: '2026-11-02T09:00:00.000Z' });
+  assert.equal((await b.readDiscoverySettings(w)).autoRefresh, false, 'the re-read never replaced the newer local edit');
+  assert.equal(server.docs(accountA.userId).get(settingsKey(w)).data.autoRefresh, false);
+  assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1, 'read again from the start once');
+  // Once only: later passes continue from the stored cursor.
+  await updated.sync.syncNow();
+  assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1);
+  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.ok((await b.readAccountDocCursor()) >= passed);
+  // Per account: another account on the same device has its own mark and cursor; returning to A does not re-read.
+  const other = ipad.base.forAccount(accountB);
+  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.equal(await other.readAccountDocCursor(), null);
+  assert.equal(ipad.rows.get('meta').has(JSON.stringify(`accountDocSchema:${accountKey(accountB)}`)), false);
+  const back = ipad.base.forAccount(accountA);
+  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.ok((await back.readAccountDocCursor()) >= passed);
+});

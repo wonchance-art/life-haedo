@@ -4984,7 +4984,38 @@
       return transaction(['meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), previous = (await meta.get(accountDocCursorKey()))?.value;
         const next = Math.max(Number.isSafeInteger(previous) ? previous : 0, seq);
-        await meta.put({ key: accountDocCursorKey(), value: next }); return next;
+        await meta.put({ key: accountDocCursorKey(), value: next });
+        // The first cursor of this account here: this release reads every kind it knows from the start.
+        if (!Number.isSafeInteger(previous)) await meta.put({ key: accountDocSchemaKey(), value: ACCOUNT_DOC_SCHEMA });
+        return next;
+      });
+    }
+    // Which document kinds this device understands, per account. An older
+    // release skipped rows of kinds it did not know and still moved its cursor
+    // past them, so those rows would never come again (a restored-copy marker
+    // is written once). Raise this number whenever a prefix is added above.
+    // 1: the 2026-11-01 kinds. 2: adds restored-copy.
+    const ACCOUNT_DOC_SCHEMA = 2;
+    const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
+    // Once per account and schema: a device that synced under an older schema
+    // reads the change list again from the start. Rows it already has return
+    // as known (same revision) and are not applied; only skipped ones apply,
+    // through the usual CAS and conflict rules. A device that never synced
+    // this account starts from the beginning anyway.
+    async function upgradeAccountDocSchema() {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      // Read first: the usual pass writes nothing. Only an older mark is rewritten.
+      const state = async meta => ({ stored: (await meta.get(accountDocSchemaKey()))?.value, cursor: (await meta.get(accountDocCursorKey()))?.value });
+      const current = ({ stored, cursor }) => !Number.isSafeInteger(cursor) || Number.isSafeInteger(stored) && stored >= ACCOUNT_DOC_SCHEMA;
+      const seen = await transaction(['meta'], 'readonly', async tx => state(tx.objectStore('meta')));
+      // Never synced here: the first cursor write records the schema (writeAccountDocCursor).
+      if (current(seen)) return { schema: Number.isSafeInteger(seen.stored) ? seen.stored : ACCOUNT_DOC_SCHEMA, rewound: false };
+      return transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), now = await state(meta);
+        if (current(now)) return { schema: Number.isSafeInteger(now.stored) ? now.stored : ACCOUNT_DOC_SCHEMA, rewound: false };
+        await meta.put({ key: accountDocCursorKey(), value: 0 });
+        await meta.put({ key: accountDocSchemaKey(), value: ACCOUNT_DOC_SCHEMA });
+        return { schema: ACCOUNT_DOC_SCHEMA, rewound: now.cursor > 0 };
       });
     }
     function accountDocRecoveryRow(key, value, reason) {
@@ -5160,7 +5191,7 @@
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
       listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces,
       listAccountDocs, listAccountDocKeys, readAccountDocRecord, applyAccountDoc, writeAccountDocSync,
-      readAccountDocCursor, writeAccountDocCursor, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash };
+      readAccountDocCursor, writeAccountDocCursor, upgradeAccountDocSchema, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

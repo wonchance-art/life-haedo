@@ -575,7 +575,7 @@ test('conflict recovery copies of account documents are counted as not included'
 
 test('M4: a restore into the same account names each copy with its date, marks it, and the home lists every post once', async () => {
   require('../assets/life/home.js');
-  const { listAccountPosts, accountPostLibraries } = globalThis.HaedoLife.HomeUI;
+  const { listAccountPosts } = globalThis.HaedoLife.HomeUI;
   const { storage, first, second } = await seed();
   const { built } = await fullBundle(storage);
   const at = new Date(2026, 10, 2, 9), titles = async () => (await storage.listWorkspaces()).map(row => row.title);
@@ -599,14 +599,14 @@ test('M4: a restore into the same account names each copy with its date, marks i
   assert.equal(copyOf(first).length, 2); assert.equal(copyOf(second).length, 2);
   for (const row of libraries.filter(row => row.restoredCopy)) { assert.equal(row.eligible, true); assert.equal(row.restoredCopy.restoredAt, at.toISOString()); }
   assert.equal(Object.hasOwn(libraries.find(row => row.workspaceId === lookalike), 'restoredCopy'), false);
-  // Home of the original: each post once, from the original libraries (and the unmarked look-alike).
+  // Home of the original: each post once, the originals' rows (and the unmarked look-alike's).
   const home = await listAccountPosts(storage, first);
-  assert.deepEqual(home.workspaces, [first, second, lookalike]);
+  assert.equal(home.workspaces.length, 7, 'every library is read; copies are not skipped as a whole');
   assert.deepEqual([...counts(home.posts).entries()].filter(([, n]) => n !== 1), []);
   assert.equal(home.posts.length, before.posts.length + 1);
-  // Opening a copy lists that copy in place of its original; still each post once.
+  assert.ok(home.posts.every(row => [first, second, lookalike].includes(row.workspaceId)));
+  // Opening a copy lists that copy's rows in place of the equal ones; still each post once.
   const opened = copyOf(first)[0], inCopy = await listAccountPosts(storage, opened);
-  assert.deepEqual(inCopy.workspaces, [opened, second, lookalike]);
   assert.deepEqual([...counts(inCopy.posts).entries()].filter(([, n]) => n !== 1), []);
   assert.equal(inCopy.posts.length, home.posts.length);
   assert.ok(inCopy.posts.filter(row => row.title === '저장한 사진 글').every(row => row.workspaceId === opened));
@@ -615,11 +615,80 @@ test('M4: a restore into the same account names each copy with its date, marks i
   assert.equal(again.planned.workspaces.length, 7);
   const reopened = await Full.open(again.built.blob);
   assert.ok(reopened.entries.find(entry => entry.kind === 'accountDocuments').data.documents.every(doc => doc.prefix !== 'restored-copy'));
-  // A copy of a copy, opened, hides its whole line; a copy whose original is gone is listed.
-  const rows = [{ workspaceId: 'a' }, { workspaceId: 'c', restoredCopy: { sourceWorkspaceId: 'a' } }, { workspaceId: 'cc', restoredCopy: { sourceWorkspaceId: 'c' } },
-    { workspaceId: 'orphan', restoredCopy: { sourceWorkspaceId: 'gone' } }, { workspaceId: 'r', eligible: false }];
-  assert.deepEqual(accountPostLibraries(rows, 'a'), ['a', 'orphan']);
-  assert.deepEqual(accountPostLibraries(rows, 'cc'), ['cc', 'orphan']);
-  assert.deepEqual(accountPostLibraries(rows, 'c'), ['c', 'orphan']);
-  assert.deepEqual(accountPostLibraries(rows, 'r'), ['r', 'a', 'orphan']);
+});
+
+test('M4: the home never loses a post to a restore copy: deleted, changed and later posts stay; only unchanged copies fold', async () => {
+  require('../assets/life/home.js');
+  const { listAccountPosts } = globalThis.HaedoLife.HomeUI;
+  // Independent of home.js: what a person sees as the same post (title, state, text, photo bytes in order).
+  const restoredContent = value => JSON.stringify([value.title, value.status, value.archived === true, Photo.plainText(value), value.photos.map(p => [p.digest, p.view?.digest || null])]);
+  const { storage, first, second } = await seed();
+  const at = new Date(2026, 10, 2, 9);
+  const restore = async () => { const { built } = await fullBundle(storage); const report = await Full.restore(await Full.open(built.blob), { storage, kinds: RESTORABLE, verifyPhoto: null, now: () => at });
+    assert.deepEqual(report.items.filter(item => item.status !== 'restored'), []); return report; };
+  // Every post of every eligible library: its content must be listed at least once, and an unchanged copy only once.
+  async function check(open, label) {
+    const listed = await listAccountPosts(storage, open), shown = new Map(), stored = new Map();
+    for (const row of listed.posts) { const content = restoredContent(await storage.readPhotoPost(row.workspaceId, row.id)); shown.set(content, (shown.get(content) || 0) + 1); }
+    for (const library of await storage.listAccountLibraries()) {
+      if (library.eligible === false && library.workspaceId !== open) continue;
+      for (const row of await storage.listPhotoPosts(library.workspaceId)) {
+        const content = restoredContent(await storage.readPhotoPost(library.workspaceId, row.id));
+        stored.set(content, [...(stored.get(content) || []), library.workspaceId]);
+      }
+    }
+    for (const [content, where] of stored) assert.ok(shown.get(content) >= 1, label + ': a post vanished from the home (' + JSON.parse(content)[0] + ')');
+    for (const [content, n] of shown) assert.equal(n, Math.max(1, stored.get(content).filter(ws => ws === open).length), label + ': listed twice (' + JSON.parse(content)[0] + ')');
+    return listed;
+  }
+  await check(first, 'before');
+  // 1. A post deleted from the original after the backup is restored by the copy and listed from it.
+  const { built: early } = await fullBundle(storage);
+  const lost = (await storage.listPhotoPosts(first)).find(row => row.title === '저장한 사진 글');
+  await storage.deletePhotoPost(first, lost.id, lost.revision);
+  await storage.setActive(first);
+  const report = await Full.restore(await Full.open(early.blob), { storage, kinds: RESTORABLE, verifyPhoto: null, now: () => at });
+  const copy = report.workspaces.find(ws => ws.index === 1).targetId;
+  assert.equal(await storage.getActive(), first, 'the original stays open after the restore');
+  let listed = await check(first, 'deleted then restored');
+  assert.deepEqual(listed.posts.filter(row => row.title === '저장한 사진 글').map(row => row.workspaceId), [copy], 'the recovered post is on the home');
+  assert.ok(listed.posts.filter(row => row.title === '연재 첫 글').every(row => row.workspaceId === first), 'the unchanged one is listed from the original');
+  // 2. A post written in the original after the backup stays listed when the copy is opened.
+  const later = await storage.savePhotoPost(first, postDoc({ title: '백업 뒤에 쓴 글', status: 'saved' }), 0);
+  listed = await check(copy, 'copy opened');
+  assert.ok(listed.posts.some(row => row.id === later.id && row.workspaceId === first));
+  assert.ok(listed.posts.filter(row => row.title === '연재 첫 글').every(row => row.workspaceId === copy), 'the open copy lists its own row');
+  // 3. A post changed in the original after the backup is a different post: both are listed.
+  const series = (await storage.listPhotoPosts(first)).find(row => row.title === '연재 첫 글'), doc = await storage.readPhotoPost(first, series.id);
+  await storage.savePhotoPost(first, { ...doc, ops: [{ insert: '백업 뒤에 고친 본문\n' }] }, doc.revision);
+  listed = await check(first, 'changed after backup');
+  assert.deepEqual(listed.posts.filter(row => row.title === '연재 첫 글').map(row => row.workspaceId).sort(), [first, copy].sort());
+  // A second restore of the current state folds again; the second space's draft is listed once.
+  await restore();
+  listed = await check(first, 'restored twice');
+  assert.equal(listed.posts.filter(row => row.title === '두 번째 공간 초안').length, 1);
+  assert.ok(listed.posts.filter(row => row.title === '두 번째 공간 초안').every(row => row.workspaceId === second));
+});
+
+test('M4: restore-copy folding pairs one to one, needs an eligible listed original and survives a marker loop', async () => {
+  require('../assets/life/home.js');
+  const { restoredDuplicates } = globalThis.HaedoLife.HomeUI;
+  const row = (id, title) => ({ id, title, status: 'saved', archived: false, body: title + '\n', photos: 0, attachments: 0 });
+  const doc = (id, title) => ({ id, title, status: 'saved', archived: false, ops: [{ insert: title + '\n' }], photos: [], attachments: [] });
+  const docs = new Map(), read = async (ws, id) => docs.get(ws + '/' + id);
+  const lists = new Map([['a', [row('a1', '같은 글')]], ['c', [row('c1', '같은 글'), row('c2', '같은 글')]], ['r', [row('r1', '복구 글')]], ['rc', [row('rc1', '복구 글')]],
+    ['x', [row('x1', '고리')]], ['y', [row('y1', '고리')]]]);
+  for (const [ws, rows] of lists) for (const item of rows) docs.set(ws + '/' + item.id, doc(item.id, item.title));
+  const libraries = [{ workspaceId: 'a' }, { workspaceId: 'c', restoredCopy: { sourceWorkspaceId: 'a' } }, { workspaceId: 'r', eligible: false },
+    { workspaceId: 'rc', restoredCopy: { sourceWorkspaceId: 'r' } }, { workspaceId: 'x', restoredCopy: { sourceWorkspaceId: 'y' } }, { workspaceId: 'y', restoredCopy: { sourceWorkspaceId: 'x' } }];
+  const hidden = await restoredDuplicates(libraries, lists, 'a', read);
+  // Two equal copies of one original post: one folds, the other stays (one to one).
+  assert.equal(['c/c1', 'c/c2'].filter(item => hidden.has(item)).length, 1); assert.equal(hidden.has('a/a1'), false);
+  // A copy of an ineligible (recovery) library is not folded into it (m1).
+  assert.equal(hidden.has('rc/rc1'), false);
+  // A loop of markers keeps exactly one of the pair.
+  assert.equal(['x/x1', 'y/y1'].filter(item => hidden.has(item)).length, 1);
+  // An unreadable post never folds.
+  const unreadable = await restoredDuplicates(libraries, lists, 'a', async (ws, id) => { if (ws === 'c') throw new Error('읽기 실패'); return docs.get(ws + '/' + id); });
+  assert.equal(['c/c1', 'c/c2'].some(item => unreadable.has(item)), false);
 });

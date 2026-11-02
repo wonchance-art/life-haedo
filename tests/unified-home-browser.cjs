@@ -274,10 +274,13 @@ async function main() {
       await context.route(`${cloud}/auth/v1/user`, async route => { entered(); await gate; return route.fallback(); });
       try {
         await page.evaluate(() => { window.__lateVerify = HaedoAuth.verify().then(() => null, error => error.code); }); await arrived;
-        await page.evaluate(() => { window.__lateSignOut = HaedoAuth.signOut().catch(error => error.code); });
+        // signOut ends with location.replace('index.html'). The public state below
+        // already holds on the page being replaced, so mark that document and wait
+        // for the one that replaces it; evaluating on the old one races the navigation.
+        await page.evaluate(() => { window.__signedOutDocument = true; window.__lateSignOut = HaedoAuth.signOut().catch(error => error.code); });
         await page.waitForFunction(() => document.querySelector('#lifeApp').hidden);
       } finally { release(); }
-      await page.waitForFunction(() => globalThis.HaedoLife?.Shell && !document.querySelector('#lifeWelcome').hidden && HaedoAuth.user === null);
+      await page.waitForFunction(() => !window.__signedOutDocument && globalThis.HaedoLife?.Shell && !document.querySelector('#lifeWelcome').hidden && HaedoAuth.user === null);
       assert.equal(await page.evaluate(() => HaedoAuth.user), null); assert.equal(await page.evaluate(() => HaedoLife.Shell.storage), null);
       assert.equal(await page.locator('#lifeApp').isHidden(), true);
       assert.doesNotMatch(await page.locator('body').innerText(), /늦은 응답 비공개 구절/);
