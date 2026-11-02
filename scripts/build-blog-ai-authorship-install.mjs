@@ -4,11 +4,30 @@
 // checks. Run: node scripts/build-blog-ai-authorship-install.mjs
 // Apply only after 20261101-account-sync-install.sql (it redefines the same
 // two functions); re-running that older install requires re-running this one.
+// Before changing anything it requires each function's current body (prosrc)
+// to be byte-identical (md5) to the repository's 20261101091500 definition or
+// to this migration's own (a re-run); otherwise it stops with nothing changed.
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { body } from './build-account-sync-install.mjs';
 
 export const MIGRATIONS = ['20261102110000_life_blog_ai_authorship.sql'];
+export const PREVIOUS = '20261101091500_life_blog_account_sync.sql';
+export const FUNCTIONS = [
+  { name: 'valid_document', signature: 'jsonb,uuid' },
+  { name: 'publish', signature: 'uuid,bigint,uuid,text[],jsonb,bigint' },
+];
+// The text PostgreSQL stores as prosrc: exactly what lies between the $$ quotes.
+export function prosrc(sql, name) {
+  const start = sql.indexOf('create or replace function haedo_blog_private.' + name + '(');
+  if (start < 0) throw new Error(name + ': definition not found');
+  const open = sql.indexOf('$$', start), close = open < 0 ? -1 : sql.indexOf('$$', open + 2);
+  const end = sql.indexOf('\nend $$;', start);
+  // The body of these two functions ends with "end " just before its closing quotes.
+  if (open < 0 || close < 0 || close !== end + 5) throw new Error(name + ': body quotes not found');
+  return sql.slice(open + 2, close);
+}
+const md5 = text => createHash('md5').update(text, 'utf8').digest('hex');
 export const OUTPUT = 'supabase/operations/20261102-blog-ai-authorship-install.sql';
 
 // Synthetic documents for the result checks; never stored.
@@ -23,8 +42,10 @@ export async function build(root = new URL('../', import.meta.url)) {
     const tag = `$haedo_m${index + 1}$`;
     const text = body(sql, name);
     if (text.includes(tag) || text.includes('$haedo_install$')) throw new Error(`${name}: dollar-quote tag collision`);
-    parts.push({ name, tag, sha: createHash('sha256').update(sql).digest('hex'), body: text });
+    parts.push({ name, tag, sha: createHash('sha256').update(sql).digest('hex'), body: text, sql });
   }
+  const previous = await readFile(new URL(`supabase/migrations/${PREVIOUS}`, root), 'utf8');
+  const expected = FUNCTIONS.map(f => ({ ...f, before: md5(prosrc(previous, f.name)), after: md5(prosrc(parts[0].sql, f.name)) }));
   return `-- 해도 2026-11-02 AI 글 표시 서버 검증 설치 (Supabase SQL Editor에서 한 번에 실행)
 -- 생성: node scripts/build-blog-ai-authorship-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
 -- 포함 마이그레이션(순서, 원본 sha256):
@@ -38,6 +59,8 @@ ${parts.map(p => `--   ${p.name}  ${p.sha}`).join('\n')}
 --   * 설치 전체가 DO 블록 "한 문장"이다. 어느 단계에서 실패하면 전체가 되돌려진다.
 --   * 설치 전후로 public·haedo_* 스키마의 모든 테이블과 storage.objects의 행 수를 비교하고,
 --     하나라도 달라지면 예외를 내서 전체를 되돌린다. 저장된 글은 고치지 않는다.
+--   * 바꾸기 전에 두 함수의 현재 본문(prosrc) md5가 저장소의 ${PREVIOUS} 정의 또는
+--     이 설치의 정의(다시 실행)와 같은지 확인하고, 다르면 아무것도 바꾸지 않고 멈춘다.
 --   * 다시 실행해도 된다(create or replace).
 -- 실행 후 맨 아래 결과 표에서 모든 ok 값이 true인지 확인한다.
 
@@ -45,12 +68,17 @@ do $haedo_install$
 declare
   r record;
   n bigint;
+  h text;
   before jsonb := '{}'::jsonb;
 begin
   if to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)') is null
      or to_regprocedure('haedo_blog_private.photo_media(jsonb)') is null then
     raise exception 'apply 20261101-account-sync-install.sql first';
   end if;
+${expected.map(f => `  select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.${f.name}(${f.signature})');
+  if h is null or h not in ('${f.before}', '${f.after}') then
+    raise exception 'haedo_blog_private.${f.name} differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
+  end if;`).join('\n')}
   for r in
     select format('%I.%I', ns.nspname, c.relname) as relation
     from pg_class c join pg_namespace ns on ns.oid = c.relnamespace

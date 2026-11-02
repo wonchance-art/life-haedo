@@ -133,6 +133,17 @@ async function main() {
       const result = rows[0].result;
       assert.equal(result.failures, 0); assert(result.passed >= 25, 'blog AI authorship assertions ran: ' + result.passed);
       pass(`supabase/tests/blog-ai-authorship.sql: ${result.passed} assertions on a fresh replayed copy (rolled back)`);
+      // The install's precheck: a re-run over its own definitions proceeds; a
+      // function whose body differs from the repository stops it unchanged.
+      const install = LATER_INSTALLS[0].file, body = name => authorship.query(`select prosrc from pg_proc where oid = to_regprocedure($1)`, [name]).then(r => r.rows[0].prosrc);
+      const again = [].concat(await pgStub.applyFile(authorship, install)).at(-1).rows;
+      assert(again.length === LATER_INSTALLS[0].checks && again.every(row => row.ok === true), 're-running the authorship install');
+      const definition = (await authorship.query(`select pg_get_functiondef(to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) d`)).rows[0].d;
+      await authorship.query(definition.replace('\nbegin\n', '\nbegin\n -- drifted copy\n'));
+      const drifted = await body('haedo_blog_private.valid_document(jsonb,uuid)');
+      await assert.rejects(pgStub.applyFile(authorship, install), /valid_document differs from the repository definition/);
+      assert.equal(await body('haedo_blog_private.valid_document(jsonb,uuid)'), drifted, 'a stopped install changes nothing');
+      pass('authorship install proceeds on a re-run and stops unchanged when a function body differs from the repository');
     } finally { await authorship.end(); }
 
     const clone = await pg.cloneDatabase('replay_clone');

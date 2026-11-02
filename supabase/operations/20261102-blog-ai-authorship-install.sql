@@ -11,6 +11,8 @@
 --   * 설치 전체가 DO 블록 "한 문장"이다. 어느 단계에서 실패하면 전체가 되돌려진다.
 --   * 설치 전후로 public·haedo_* 스키마의 모든 테이블과 storage.objects의 행 수를 비교하고,
 --     하나라도 달라지면 예외를 내서 전체를 되돌린다. 저장된 글은 고치지 않는다.
+--   * 바꾸기 전에 두 함수의 현재 본문(prosrc) md5가 저장소의 20261101091500_life_blog_account_sync.sql 정의 또는
+--     이 설치의 정의(다시 실행)와 같은지 확인하고, 다르면 아무것도 바꾸지 않고 멈춘다.
 --   * 다시 실행해도 된다(create or replace).
 -- 실행 후 맨 아래 결과 표에서 모든 ok 값이 true인지 확인한다.
 
@@ -18,11 +20,20 @@ do $haedo_install$
 declare
   r record;
   n bigint;
+  h text;
   before jsonb := '{}'::jsonb;
 begin
   if to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)') is null
      or to_regprocedure('haedo_blog_private.photo_media(jsonb)') is null then
     raise exception 'apply 20261101-account-sync-install.sql first';
+  end if;
+  select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)');
+  if h is null or h not in ('012fb393a74efdd11b01ae1d7dd67141', 'da3cbe336718c99fe3601ff518422555') then
+    raise exception 'haedo_blog_private.valid_document differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
+  end if;
+  select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)');
+  if h is null or h not in ('ea61d16bf42dac05db310019e965523a', '17bb2aa6befed545e6cf33158c7c2b06') then
+    raise exception 'haedo_blog_private.publish differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
   end if;
   for r in
     select format('%I.%I', ns.nspname, c.relname) as relation
