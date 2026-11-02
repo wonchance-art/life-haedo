@@ -50,7 +50,7 @@ Local 인계는 실제 DB 역할/RLS/RPC 19개·동시 트랜잭션 3개 통과�
 
 크기 제한을 넘는 JSONB는 SQL 오류 `22001/life_snapshot_too_large`로 거절됐다. 16 MiB가 넘는 큰 HTTP 본문은 비정형 401을 받았으며 원인은 확정하지 않았다. 이 응답을 SQL 제한 검증 성공으로 계산하지 않는다. [서버 준비 기록](life-tools-design/server-readiness.md).
 
-Cloud HTTP 검사의 합성 자료 8행은 2026-10-03 Local 관리자가 정리했다. [정리 SQL](../supabase/tests/cleanup-cloud-http-20261003.sql)의 정확한 생성 ID와 실행별 제목을 함께 제한하고, 실행 직전 8행이라는 조건을 확인했다. 연결된 영수증 10건은 계정·작업공간의 복합 외래키로 함께 삭제됐다. 실행 후 대상 자료·전체 `life_workspaces`·전체 `life_sync_receipts`의 잔여가 각각 0건이고 `authenticated`의 DELETE 권한은 계속 없다. 기존 플랫폼 테이블·SQL·Auth 사용자는 변경하지 않았다. 원본은 `/workspace/life-haedo-handoff-results/cloud-http-cleanup-combined.sql`에도 보존했다.
+Cloud HTTP 검사의 합성 자료 8행은 2026-10-03 Local 관리자가 정리했다. [정리 SQL](../supabase/operations/archive/cleanup-cloud-http-20261003.sql)의 정확한 생성 ID와 실행별 제목을 함께 제한하고, 실행 직전 8행이라는 조건을 확인했다. 연결된 영수증 10건은 계정·작업공간의 복합 외래키로 함께 삭제됐다. 실행 후 대상 자료·전체 `life_workspaces`·전체 `life_sync_receipts`의 잔여가 각각 0건이고 `authenticated`의 DELETE 권한은 계속 없다. 기존 플랫폼 테이블·SQL·Auth 사용자는 변경하지 않았다. 원본은 `/workspace/life-haedo-handoff-results/cloud-http-cleanup-combined.sql`에도 보존했다.
 
 ## 2026-10-03 Local 관리자 후속
 

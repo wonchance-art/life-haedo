@@ -8,7 +8,8 @@ async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();
  const context=await makeContext(browser,new FakeCloud(),'nine-recovery',accounts.a,{viewport:{width:1440,height:1000},hasTouch:true});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
- const page=await context.newPage(),other=await context.newPage();for(const p of [page,other]){p.setDefaultTimeout(12000);p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});}
+ // The later page opens as the foreground tab; Chromium runs a background tab's animation frames about once a second. Keep the page the checks drive in front.
+ const page=await context.newPage(),other=await context.newPage();await page.bringToFront();for(const p of [page,other]){p.setDefaultTimeout(12000);p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});}
  const click=name=>page.getByRole('button',{name,exact:true}).click(),review=()=>page.locator('.nb-import'),rows=()=>review().locator('.nb-import-row'),apply=()=>page.getByRole('button',{name:'선택한 구성 새 사본으로 추가',exact:true});
  const go=async p=>{await p.goto(base+'/index.html?section=records&view=page');await ready(p);await p.locator('#wbPageNine').waitFor();await p.locator('#wbPageNine').click();await p.locator('.nb-status').waitFor();};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {nine:await s.readNineBoard(w),collection:await s.readCollection(w),wb:await s.readWorkbench(w),bundle:await s.read(w),drafts:await s.readPageDrafts(w)};});

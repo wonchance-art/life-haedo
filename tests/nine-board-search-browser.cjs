@@ -16,7 +16,8 @@ async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();
  const context=await makeContext(browser,new FakeCloud(),'nine-search',accounts.a,{viewport:{width:1440,height:1000},hasTouch:true});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
- const page=await context.newPage(),other=await context.newPage();page.setDefaultTimeout(12000);
+ // The later page opens as the foreground tab; Chromium runs a background tab's animation frames about once a second. Keep the page the checks drive in front.
+ const page=await context.newPage(),other=await context.newPage();await page.bringToFront();page.setDefaultTimeout(12000);
  for(const p of [page,other]){p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});}
  const check=async(name,action)=>{await action();report.checks.push(name);console.log('PASS '+name);};
  const click=name=>page.getByRole('button',{name,exact:true}).click(),wait=()=>page.locator('#lifeFind[aria-busy=false]').waitFor(),query=text=>page.locator('#lifeFindQuery').fill(text);
