@@ -271,8 +271,12 @@ async function main() {
     });
     await check('a newer local edit wins and keeps the earlier server composition as a recovery copy', async context => {
       const { server } = context, { a, b, id } = await paired(context);
+      // B goes offline before A edits: a background pass on B (30 s poll, focus, source events) could
+      // otherwise receive A's write first, and B's edit would then be a plain update with no conflict.
+      server.compositionOffline.add('b');
       await change(a.page, id, '서버 쪽 이전 구성'); await sync(a.page, id); await b.page.waitForTimeout(20);
-      server.compositionOffline.add('b'); await change(b.page, id, '현재 기기 선택'); await sync(b.page, id); server.compositionOffline.delete('b');
+      assert.notEqual((await composition(b.page, id)).page.title, '서버 쪽 이전 구성', 'B must not have received the server edit before its own');
+      await change(b.page, id, '현재 기기 선택'); await sync(b.page, id); server.compositionOffline.delete('b');
       assert.equal(await sync(b.page, id), null); await go(b.page); await waitStatus(b.page, 'synced'); await noManualChoice(b.page);
       assert.equal((await composition(b.page, id)).page.title, '현재 기기 선택'); assert.equal(server.composition(accounts.a.id, id).data.page.title, '현재 기기 선택');
       await b.page.locator('#compositionNotice').waitFor(); await b.page.locator('#compositionNoticeDone').click(); await b.page.locator('#compositionNotice').waitFor({ state: 'detached' });
