@@ -2174,7 +2174,11 @@
         state.mode === 'source' && state.sourceId === context.origin.sourceId && state.sourceVersionId === context.origin.sourceVersionId;
       context.frame = requestAnimationFrame(() => {
         context.frame = null;
-        if (!valid() || Math.abs(global.scrollY - context.expectedScroll) > 2) {
+        // Before the first positioning, the reader's own queued restore
+        // (reading position/locator, ui.js renderSource) may still move the
+        // page in this frame; that is not the person scrolling away. Input is
+        // caught by inputGeneration in valid(); the drift check applies after.
+        if (!valid() || context.positioned && Math.abs(global.scrollY - context.expectedScroll) > 2) {
           if (naverMediaReturn === context) naverMediaReturn = null;
           return;
         }
