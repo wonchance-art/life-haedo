@@ -64,7 +64,6 @@ async function main() {
       };
       await row.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
-      await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await refused(() => page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click());
       assert.equal(await page.getByRole('link', { name: '공개한 글 열기' }).count(), 0);
