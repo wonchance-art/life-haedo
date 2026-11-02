@@ -305,7 +305,8 @@
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
         selected = value.id; sourceView = null; view = null; mark(); await render();
         // render() waits for the sources; input focused meanwhile keeps its focus.
-        if (!surface?.contains(document.activeElement)) surface?.querySelector('#mwTitle')?.focus();
+        const typing = document.activeElement; // only a field the person moved into keeps focus; a stale button does not
+        if (!(surface?.contains(typing) && (/^(input|textarea|select)$/i.test(typing?.tagName || '') || typing?.isContentEditable === true))) surface?.querySelector('#mwTitle')?.focus();
       }, { id: 'mwNew' }));
       if (typeof onClose === 'function') toolbar.append(button('돌아가기', () => navigate(onClose), { id: 'mwClose' }));
       status = el('p', '', 'life-meta mw-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
