@@ -113,12 +113,13 @@
       type.addEventListener("change", syncCreator);
       syncCreator();
       // Saving into the collection is explicit and separate from the post. New entries start
-      // checked; an edit starts checked only when the item is not in the collection yet.
+      // checked; an edit starts checked only when the item is not in the collection yet. The label
+      // says "collection", not "taste": keeping someone's work is not a statement of belief.
       const keep = node("label", null, "photo-attachment-collect"),
         keepBox = node("input");
       keepBox.type = "checkbox";
       keepBox.checked = target < 0 || seed.collected !== true;
-      keep.append(keepBox, document.createTextNode(" 취향 컬렉션에도 저장"));
+      keep.append(keepBox, document.createTextNode(" 컬렉션에도 저장"));
       form.append(keep);
       review = { composing: false, title: inputs.title };
       onDirty();
@@ -181,26 +182,27 @@
         try {
           collection = await storage.readCollection(workspaceId);
         } catch (_) {
-          if (valid()) report(new Error("취향 컬렉션을 읽지 못했습니다." + kept));
+          if (valid()) report(new Error("컬렉션을 읽지 못했습니다." + kept));
           return;
         }
         if (!valid()) return;
         const existing = life.Collection.attachmentMatch(collection.items, value);
         if (existing) {
-          report(existing.archived ? "취향 컬렉션의 보관한 항목에 이미 있습니다." : "취향 컬렉션에 이미 있습니다.");
-          render();
+          report(existing.archived ? "컬렉션의 보관한 항목에 이미 있습니다." : "컬렉션에 이미 있습니다.");
+          void annotate(renderSeq);
           return;
         }
         try {
           const item = life.Collection.fromAttachment(value, life.Core.id(), new Date().toISOString());
           await storage.saveCollection(workspaceId, { ...collection, items: collection.items.concat(item) }, collection.revision);
           if (!valid()) return;
-          report("취향 컬렉션에도 저장했습니다. 글과 별도로 보관됩니다.");
-          render();
+          report("컬렉션에도 저장했습니다. 글과 별도로 보관됩니다.");
+          // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
+          void annotate(renderSeq);
           return;
         } catch (error) {
           if (error?.code === "collection_conflict") continue;
-          if (valid()) report(new Error((error?.message || "취향 컬렉션에 저장하지 못했습니다.") + kept));
+          if (valid()) report(new Error((error?.message || "컬렉션에 저장하지 못했습니다.") + kept));
           return;
         }
       }
@@ -218,9 +220,9 @@
       getValues().forEach((item, i) => {
         const row = host.querySelector('[data-attachment-index="' + i + '"]');
         const match = life.Collection.attachmentMatch(items, item);
-        if (!row || !match) return;
+        if (!row || !match || row.dataset.collected === "true") return;
         row.dataset.collected = "true";
-        row.querySelector(".photo-edit-attachment-body")?.append(node("p", match.archived ? "취향 컬렉션에 있음 · 보관한 항목" : "취향 컬렉션에 있음", "life-meta photo-attachment-collected"));
+        row.querySelector(".photo-edit-attachment-body")?.append(node("p", match.archived ? "컬렉션에 있음 · 보관한 항목" : "컬렉션에 있음", "life-meta photo-attachment-collected"));
       });
     }
     async function choose() {

@@ -52,7 +52,7 @@ async function main() {
     await form.getByRole('textbox', { name: '출처 링크', exact: true }).fill(url);
     return form;
   }
-  const keep = form => form.getByRole('checkbox', { name: '취향 컬렉션에도 저장', exact: true });
+  const keep = form => form.getByRole('checkbox', { name: '컬렉션에도 저장', exact: true });
   const status = () => page.locator('.photo-status').innerText();
   const row = title => page.locator('.photo-edit-attachment').filter({ hasText: title });
 
@@ -70,7 +70,7 @@ async function main() {
       await keep(form).scrollIntoViewIfNeeded(); await capture('attachment-review', [390, 1440]); await keep(form).scrollIntoViewIfNeeded();
       await click('첨부');
       await row('익명 시인').locator('.photo-attachment-collected').waitFor();
-      assert.match(await status(), /취향 컬렉션에도 저장했습니다|자동 저장/);
+      assert.match(await status(), /컬렉션에도 저장했습니다|자동 저장/);
       const after = await collection();
       assert.equal(after.revision, before.revision + 1);
       const added = after.items.filter(item => !before.items.some(old => old.id === item.id));
@@ -158,6 +158,45 @@ async function main() {
       assert.equal((await collection()).items.filter(item => item.title === '읽기 실패 때 붙인 장소').length, 1);
     });
 
+    await check('Editing or detaching an attachment never deletes or rewrites the collection item', async () => {
+      await review({ type: 'tool', title: '연필' }); await click('첨부');
+      await row('연필').locator('.photo-attachment-collected').waitFor();
+      const kept = await collection(), pencil = kept.items.find(item => item.title === '연필');
+      await page.getByRole('button', { name: '연필 첨부 정보 수정', exact: true }).click();
+      const form = page.locator('.photo-attachment-review');
+      assert.equal(await keep(form).isChecked(), false, 'an attachment already in the collection starts unchecked');
+      await form.getByRole('textbox', { name: '제목 또는 이름', exact: true }).fill('연필 두 자루'); await click('수정 반영');
+      await row('연필 두 자루').waitFor();
+      assert.deepEqual(await collection(), kept, 'editing the post attachment leaves the collection as it was');
+      await page.getByRole('button', { name: '연필 두 자루 첨부 해제', exact: true }).click();
+      await awaitCondition(page, () => ![...document.querySelectorAll('.photo-edit-attachment')].some(n => n.textContent.includes('연필 두 자루')), undefined, { timeout: 15000, label: 'detached' });
+      assert.deepEqual((await collection()).items.find(item => item.id === pencil.id), pencil, 'detaching keeps the collection item');
+      assert.deepEqual(await collection(), kept);
+    });
+
+    await check('A form opened while the collection save is still running keeps its input and Korean composition', async () => {
+      await review({ type: 'book', title: '늦게 저장되는 책' });
+      // A long read-write transaction on the same store makes the save path wait; it is released
+      // only after the user has opened another form and started composing.
+      await page.evaluate(async () => {
+        const db = await new Promise((resolve, reject) => { const r = indexedDB.open('life-tools-v1'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+        const tx = db.transaction('meta', 'readwrite'), store = tx.objectStore('meta'); window.__hold = true;
+        window.__held = new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
+        (function spin() { if (window.__hold) store.get('structure-taste-link-hold').onsuccess = spin; })();
+      });
+      await click('첨부'); await row('늦게 저장되는 책').waitFor();
+      await page.getByRole('button', { name: '익명 시인 첨부 정보 수정', exact: true }).click();
+      const form = page.locator('.photo-attachment-review'), title = form.getByRole('textbox', { name: '제목 또는 이름', exact: true });
+      await form.evaluate(n => { window.__openForm = n; });
+      await title.dispatchEvent('compositionstart'); await title.fill('조합 중인 새 제목');
+      await page.evaluate(async () => { window.__hold = false; await window.__held; });
+      await row('늦게 저장되는 책').locator('.photo-attachment-collected').waitFor();
+      assert.equal(await form.evaluate(n => n === window.__openForm && n.isConnected), true, 'the open form is the same node');
+      assert.equal(await title.inputValue(), '조합 중인 새 제목');
+      await title.dispatchEvent('compositionend'); await click('입력 취소');
+      assert.equal((await collection()).items.filter(item => item.title === '늦게 저장되는 책').length, 1);
+    });
+
     await check('The collection item lists the post that attaches it and opens that post', async () => {
       await awaitCondition(page, () => document.querySelector('.photo-status')?.textContent === '자동 저장됨', undefined, { timeout: 15000, label: 'autosave' });
       const postId = (await docs()).find(d => d.attachments?.some(a => a.title === '익명 시인')).id;
@@ -171,6 +210,29 @@ async function main() {
       await awaitCondition(page, id => !!document.querySelector('[data-photo-post-id="' + id + '"], #photoTitle, .photo-article'), postId, { timeout: 15000, label: 'post opened' });
       const opened = await page.evaluate(() => document.querySelector('#photoTitle')?.value || document.querySelector('.photo-article h1, .photo-article h2')?.textContent || '');
       assert.match(opened, /시인과 호숫가를 다시 읽은 날/);
+    });
+
+    await check('Posts of another workspace and the signed-out public page never show in the list', async () => {
+      const other = await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, active = await s.getActive(), created = await s.createWorkspace('다른 자료공간');
+        if (await s.getActive() !== active) await s.setActive(active);
+        const d = HaedoLife.PhotoPost.create(HaedoLife.Core.id); d.title = '다른 자료공간의 비공개 글';
+        d.attachments = [{ type: 'person', title: '익명 시인', creator: '', url: '' }]; d.ops = [{ insert: '다른 자료공간에서 같은 시인을 붙였다.\n' }];
+        await s.savePhotoPost(created.workspaceId, d, 0);
+        return { workspaceId: created.workspaceId, active: await s.getActive() === active };
+      });
+      assert.equal(other.active, true, 'the active workspace did not change');
+      await page.goto(base + '/index.html?section=records&view=collection'); await ready(page); await page.locator('.life-collection').waitFor();
+      await page.locator('#clQuery').fill('익명 시인'); await page.locator('.cl-card').first().click();
+      const used = page.locator('.cl-used'); await used.locator('.cl-used-open').first().waitFor();
+      assert.deepEqual(await used.locator('.cl-used-open').allInnerTexts(), ['시인과 호숫가를 다시 읽은 날']);
+      const visitor = await browser.newContext(); const publicPage = await visitor.newPage();
+      await visitor.route('**/*', route => new URL(route.request().url()).origin === new URL(base).origin ? route.fallback() : route.abort());
+      await publicPage.goto(base + '/index.html', { waitUntil: 'load' });
+      const text = await publicPage.locator('body').innerText();
+      assert.equal(await publicPage.locator('.cl-used').count(), 0);
+      for (const title of ['시인과 호숫가를 다시 읽은 날', '다른 자료공간의 비공개 글', '익명 시인']) assert.equal(text.includes(title), false, title + ' must not appear signed out');
+      await visitor.close();
     });
 
     await check('An item no post attaches says so', async () => {
