@@ -111,6 +111,8 @@
       checkpointing = null,
       epoch = 0,
       busy = false,
+      // busy only because the next post or list is being read (no user input at stake).
+      loading = false,
       navigating = false,
       composing = false,
       error = null,
@@ -133,6 +135,10 @@
     let unsubscribeServer = null;
     const urls = new Set(),
       photoUrls = new Map();
+    // Feed covers can be handed to listHost, outside host, and stay on screen
+    // while a post is read or edited. They belong to the list that created
+    // them: url -> image. A newer delivered list or detach() retires them.
+    let feedCovers = new Map();
     let closeViewer = null;
     const valid = () => !disposed && isCurrent(),
       current = (t) => valid() && t === epoch && !!host?.isConnected;
@@ -147,6 +153,16 @@
       // show() may assign another src in this task. Let the final queued image
       // update cancel the previous request before retiring its URL.
       queueMicrotask(() => queueMicrotask(() => URL.revokeObjectURL(value)));
+    }
+    function retireCovers(covers, keep = () => false) {
+      for (const [u, image] of covers) {
+        if (keep(image)) continue;
+        // Never leave a connected image pointing at a revoked URL: Safari and
+        // a pending lazy request can both read it again.
+        if (image.getAttribute("src") === u) image.removeAttribute("src");
+        retireImageURL(u);
+        covers.delete(u);
+      }
     }
     function cleanup() {
       if (status) root.HaedoMotion?.cancel(status);
@@ -167,6 +183,9 @@
       });
       for (const u of urls) retireImageURL(u);
       urls.clear();
+      // Covers still inside host leave with it. Covers moved to listHost stay
+      // visible until the next delivered list replaces them.
+      retireCovers(feedCovers, (image) => !host?.contains(image));
       editor = null;
       selected = null;
       recoveryActions = null;
@@ -413,6 +432,9 @@
     async function flush() {
       attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
+      // Only reading: leaving is allowed. detach() advances the epoch, so the
+      // late read result is discarded by the existing current(token) checks.
+      if (loading && !composing && (!doc || mode !== "edit" || dirtyTick === storedTick)) return;
       if (
         !busy &&
         !composing &&
@@ -468,7 +490,7 @@
         await flush();
         await beforeOpen();
         if (!current(token)) return;
-        setBusy(true);
+        setBusy(true); loading = true;
         try {
           const rows = await storage.listPhotoPosts(workspaceId);
           if (!current(token)) return;
@@ -501,7 +523,7 @@
             empty = null;
           doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
         } finally {
-          setBusy(false);
+          loading = false; setBusy(false);
         }
         mode = "edit";
         dirtyTick = storedTick = 0;
@@ -518,7 +540,7 @@
       await flush();
       await beforeOpen();
       if (!current(token)) return;
-      setBusy(true);
+      setBusy(true); loading = true;
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
         if (!current(token)) return;
@@ -581,7 +603,7 @@
         }
         if (mode === "edit") editor?.focus();
       } finally {
-        setBusy(false);
+        loading = false; setBusy(false);
       }
     }
     async function finish(asNew = false) {
@@ -1732,6 +1754,7 @@
           .listPhotoPosts(workspaceId)
           .then((rows) => {
             if (!current(token)) return;
+            const covers = new Map();
             for (const item of rows.sort((a, b) =>
               b.updatedAt.localeCompare(a.updatedAt),
             )) {
@@ -1783,7 +1806,10 @@
                           const photo = value.photos.find(
                             (p) => p.id === first,
                           );
-                          if (photo) entry.target.src = url(shown(photo));
+                          if (!photo || covers !== feedCovers) return;
+                          const u = URL.createObjectURL(shown(photo));
+                          covers.set(u, entry.target);
+                          entry.target.src = u;
                         })
                         .catch(() => {
                           if (current(token)) entry.target.remove();
@@ -1803,7 +1829,20 @@
             draftHeading.hidden = !drafts.children.length;
             archiveHeading.hidden = archiveHelp.hidden =
               !archived.children.length;
-            feedListener?.([...list.children]);
+            const previous = feedCovers;
+            feedCovers = covers;
+            try {
+              feedListener?.([...list.children]);
+            } finally {
+              // The delivered rows replace the previous list in listHost. A
+              // previous cover still on screen joins this list instead.
+              for (const [u, image] of previous)
+                if (image.isConnected && image.getAttribute("src") === u) {
+                  covers.set(u, image);
+                  previous.delete(u);
+                }
+              retireCovers(previous);
+            }
             statusText.textContent = "";
           })
           .catch((e) => {
@@ -1950,6 +1989,8 @@
       unsubscribeServer?.(); unsubscribeServer = null;
       cancelAutosave();
       cleanup();
+      // Leaving the view: the feed rows go with it.
+      retireCovers(feedCovers);
       host = null;
       status = null;
       feedListener = null;
@@ -1972,7 +2013,7 @@
       flush,
       checkpoint,
       dirty: () =>
-        busy || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),
+        (busy && !loading) || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),
       detach,
       dispose() {
         disposed = true;

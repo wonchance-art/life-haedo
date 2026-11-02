@@ -542,6 +542,33 @@
         return result;
       });
     }
+    // A workspace made by restoring a backup carries one immutable account
+    // document `restored-copy:<copy>`. It names the workspace it was copied
+    // from, so lists can tell the copy apart without parsing its (editable)
+    // title. It is an ordinary account document: AccountDocsSync replicates it
+    // to every device of the account. It never changes sync, backup or
+    // publication of the copy itself.
+    const RESTORED_COPY_FORMAT = 'haedo-restored-copy-v1';
+    const restoredCopyKey = workspaceId => `restored-copy:${workspaceId}`;
+    function restoredCopyInput(input, workspaceId) {
+      const invalid = () => fault('restored_copy_invalid', '복원 사본 표시를 확인할 수 없습니다. 자료는 보존했습니다.');
+      if (!plain(input) || Object.keys(input).length !== 4 || input.format !== RESTORED_COPY_FORMAT || input.workspaceId !== workspaceId ||
+          !(input.sourceWorkspaceId === null || typeof input.sourceWorkspaceId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(input.sourceWorkspaceId)) ||
+          input.sourceWorkspaceId === workspaceId || typeof input.restoredAt !== 'string' || input.restoredAt.length > 40 ||
+          !/^\d{4}-\d{2}-\d{2}T/.test(input.restoredAt) || !Number.isFinite(Date.parse(input.restoredAt))) throw invalid();
+      return input;
+    }
+    async function restoredCopyValue(meta, workspaceId) {
+      const row = await meta.get(restoredCopyKey(workspaceId));
+      return row === undefined ? undefined : restoredCopyInput(row.value, workspaceId);
+    }
+    function restoredCopyRecord(workspaceId, options) {
+      if (options === undefined || options.restoredCopy === undefined) return null;
+      const info = options.restoredCopy;
+      if (!plain(info) || Object.keys(info).some(key => !['sourceWorkspaceId', 'restoredAt'].includes(key))) throw fault('restored_copy_invalid', '복원 사본 표시를 확인해 주세요.');
+      return restoredCopyInput({ format: RESTORED_COPY_FORMAT, workspaceId, sourceWorkspaceId: info.sourceWorkspaceId ?? null,
+        restoredAt: info.restoredAt ?? new Date().toISOString() }, workspaceId);
+    }
     async function listAccountLibraries() {
       scopeGuard();
       if (!account) throw fault('auth_scope_required', '확인된 계정에서 자료 목록을 열어 주세요.');
@@ -557,8 +584,13 @@
             throw fault('invalid_library_role', '자료 보관 역할을 확인할 수 없습니다. 기존 자료는 보존했습니다.');
           }
           const excluded = recoveryIds.has(bundle.workspaceId) || role?.value.kind === 'recovery';
+          // A malformed marker never hides the library: it reads as unmarked.
+          let restored = null;
+          try { restored = await restoredCopyValue(meta, bundle.workspaceId) || null; } catch (_) { restored = null; }
           result.push({ workspaceId: bundle.workspaceId, title: bundle.title, revision: bundle.revision,
-            eligible: !excluded, exclusion: excluded ? 'recovery' : null });
+            eligible: !excluded, exclusion: excluded ? 'recovery' : null,
+            // Present only on a marked copy, so other rows keep their earlier shape.
+            ...(restored ? { restoredCopy: { sourceWorkspaceId: restored.sourceWorkspaceId, restoredAt: restored.restoredAt } } : {}) });
         }
         return result;
       });
@@ -709,10 +741,11 @@
           sourceFolders: clone(await sourceFoldersValue(meta, workspaceId)) };
       });
     }
-    async function installLibraryCopy(input) {
+    async function installLibraryCopy(input, options) {
       if (!plain(input) || Object.keys(input).some(key => !['bundle', 'workbench', 'sourceFolders'].includes(key))) throw fault('source_folders_invalid', '복원할 자료와 폴더를 확인해 주세요.');
       const candidate = clone(input), { bundle, workbench: state, sourceFolders: folders } = candidate;
       privateProfileScope(bundle?.workspaceId, '자료와 폴더를');
+      const marker = restoredCopyRecord(bundle.workspaceId, options);
       core().validateWorkspace(bundle); workbench().validate(state); validateSourceFolders(folders, bundle.workspaceId);
       if (state.workspaceId !== bundle.workspaceId) throw fault('workspace_mismatch', '자료와 구성의 작업공간이 다릅니다.');
       sourceFolders().validateReferences(bundle, folders);
@@ -723,9 +756,12 @@
         await bundles.add(bundle); await saveOwner(meta, bundle.workspaceId);
         await meta.put({ key: `workbench:${bundle.workspaceId}`, value: state });
         await meta.put({ key: sourceFoldersKey(bundle.workspaceId), value: folders });
+        if (marker) await meta.put({ key: restoredCopyKey(bundle.workspaceId), value: marker });
         await meta.put({ key: activeKey, value: bundle.workspaceId }); return clone(candidate);
       });
-      changed(bundle.workspaceId, bundle.revision); workbenchChanged(state); sourceFoldersChanged(folders); return installed;
+      changed(bundle.workspaceId, bundle.revision); workbenchChanged(state); sourceFoldersChanged(folders);
+      if (marker) accountDocChanged(restoredCopyKey(bundle.workspaceId));
+      return installed;
     }
     // Annual plans are private local metadata. Birth dates and plan text never
     // enter original bundles, ordinary backups, sync payloads or broadcasts.
@@ -1325,6 +1361,23 @@
         const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
         if (!value) throw fault('photo_post_missing', '사진 글이 바뀌었거나 없습니다. 목록을 다시 확인해 주세요.');
         photoPost().validate(value); return clone(value);
+      });
+    }
+    // Several posts of one workspace in one read: the workspace is checked once
+    // (readPhotoPost checks it per post). A missing or invalid post is `null`
+    // in its place; the others are still returned.
+    async function readPhotoPosts(workspaceId, postIds) {
+      collectionScope(workspaceId);
+      if (!Array.isArray(postIds) || postIds.length > 10000) throw fault('invalid_request', '읽을 글 목록을 확인해 주세요.');
+      postIds.forEach(id => requireId(id, '사진 글'));
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const result = [];
+        for (const postId of postIds) {
+          const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
+          try { if (!value) throw new Error('missing'); photoPost().validate(value); result.push(clone(value)); } catch (_) { result.push(null); }
+        }
+        return result;
       });
     }
     async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null, nineRequest = null, naver = null) {
@@ -2746,12 +2799,12 @@
           throw fault('source_trashed', '휴지통의 자료를 새 구성에 추가하지 않았습니다. 입력과 기존 연결은 유지됩니다. 복원한 뒤 다시 선택해 주세요.');
       }
     }
-    async function installWorkbenchCopy(input) {
+    async function installWorkbenchCopy(input, options) {
       if (!plain(input) || Object.keys(input).some(key => !['bundle', 'workbench'].includes(key))) {
         throw fault('invalid_workbench', '설치할 자료와 구성을 확인해 주세요.');
       }
       core().validateWorkspace(input.bundle); workbench().validate(input.workbench);
-      const { bundle, workbench: state } = clone(input);
+      const { bundle, workbench: state } = clone(input), marker = restoredCopyRecord(bundle.workspaceId, options);
       if (bundle.workspaceId !== state.workspaceId) throw fault('workspace_mismatch', '자료와 구성의 작업공간이 다릅니다.');
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
@@ -2761,16 +2814,22 @@
         await bundles.add(bundle);
         await saveOwner(meta, bundle.workspaceId);
         await meta.put({ key: `workbench:${bundle.workspaceId}`, value: state });
+        if (marker) await meta.put({ key: restoredCopyKey(bundle.workspaceId), value: marker });
         await meta.put({ key: activeKey, value: bundle.workspaceId });
         return { bundle: clone(bundle), workbench: clone(state) };
       });
       changed(bundle.workspaceId, bundle.revision); workbenchChanged(state);
+      if (marker) accountDocChanged(restoredCopyKey(bundle.workspaceId));
       return installed;
     }
-    async function installWorkspaces(input) {
+    // `options.restoredCopy` ({sourceWorkspaceId, restoredAt}) marks a single
+    // installed workspace as a backup restore copy in the same transaction.
+    async function installWorkspaces(input, options) {
       if (!Array.isArray(input) || input.length < 1 || input.length > 2) throw fault('invalid_request', '새 사본은 한 번에 1~2개 작업공간으로 복원할 수 있습니다.');
       const copies = clone(input);
       copies.forEach(bundle => core().validateWorkspace(bundle));
+      if (options?.restoredCopy !== undefined && copies.length !== 1) throw fault('invalid_request', '복원 사본 표시는 작업공간 하나에만 붙일 수 있습니다.');
+      const marker = restoredCopyRecord(copies[0].workspaceId, options);
       if (new Set(copies.map(bundle => bundle.workspaceId)).size !== copies.length) throw fault('workspace_exists', '복원할 작업공간 식별자가 중복됩니다.');
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
@@ -2781,15 +2840,17 @@
           await bundles.add(bundle);
           await saveOwner(meta, bundle.workspaceId);
         }
+        if (marker) await meta.put({ key: restoredCopyKey(copies[0].workspaceId), value: marker });
         await meta.put({ key: activeKey, value: copies[0].workspaceId });
         return clone(copies);
       });
       for (const bundle of copies) changed(bundle.workspaceId, bundle.revision);
+      if (marker) accountDocChanged(restoredCopyKey(copies[0].workspaceId));
       return installed;
     }
-    async function installWorkspace(input) { return (await installWorkspaces([input]))[0]; }
-    async function createWorkspace(title) {
-      return installWorkspace(core().createWorkspace(title === undefined ? {} : { title }));
+    async function installWorkspace(input, options) { return (await installWorkspaces([input], options))[0]; }
+    async function createWorkspace(title, options) {
+      return installWorkspace(core().createWorkspace(title === undefined ? {} : { title }), options);
     }
     async function getActive() {
       return transaction(['meta', 'bundles'], 'readonly', async tx => {
@@ -2987,11 +3048,11 @@
       naverMedia().checkTarget(snapshot.bundle, attachment);
       return attachment;
     }
-    async function installNaverCaptureCopy(input, { isCurrent = () => true } = {}) {
+    async function installNaverCaptureCopy(input, { isCurrent = () => true, restoredCopy } = {}) {
       scopeGuard();
       if (!account) throw fault('auth_scope_required', '확인된 계정에 원문 사본을 받아 주세요.');
       const value = await naverMedia().validateSnapshot(clone(input)); scopeGuard();
-      const { bundle, attachment } = value;
+      const { bundle, attachment } = value, marker = restoredCopyRecord(bundle.workspaceId, { restoredCopy });
       if (!attachment.localOnly || bundle.revision !== 0 || bundle.sources.some(source => source.revision !== 1) ||
           bundle.sourceVersions.some(version => version.revision !== 1)) throw fault('invalid_naver_media', '새 독립 사본으로 복원해 주세요.');
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
@@ -3002,11 +3063,14 @@
         }
         await bundles.add(bundle); await saveOwner(meta, bundle.workspaceId);
         await meta.add({ key: naverCaptureKey(bundle.workspaceId, attachment.sourceVersionId), value: attachment });
+        if (marker) await meta.put({ key: restoredCopyKey(bundle.workspaceId), value: marker });
         await meta.put({ key: activeKey, value: bundle.workspaceId });
         if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 원문 복원을 중지했습니다.');
         return clone(value);
       });
-      changed(bundle.workspaceId, bundle.revision); return installed;
+      changed(bundle.workspaceId, bundle.revision);
+      if (marker) accountDocChanged(restoredCopyKey(bundle.workspaceId));
+      return installed;
     }
     // Full-backup restore: a capture file copy joins the exact source version of a
     // workspace copy restored in the same run. Writes only its own key, never
@@ -4801,7 +4865,9 @@
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
       'page-drafts': { read: (meta, ws) => pageDraftsValue(meta, ws), event: null, recovery: true },
-      'post-evidence': { read: (meta, ws, key) => postEvidenceRow(meta, ws, key), event: null, recovery: true, post: true }
+      'post-evidence': { read: (meta, ws, key) => postEvidenceRow(meta, ws, key), event: null, recovery: true, post: true },
+      // Written once when a backup restore creates the workspace; never edited.
+      'restored-copy': { read: (meta, ws) => restoredCopyValue(meta, ws), event: null, recovery: false }
     });
     const ACCOUNT_DOC_ID = /^[A-Za-z0-9_-]{1,128}$/;
     function parseAccountDocKey(key) {
@@ -4935,7 +5001,38 @@
       return transaction(['meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), previous = (await meta.get(accountDocCursorKey()))?.value;
         const next = Math.max(Number.isSafeInteger(previous) ? previous : 0, seq);
-        await meta.put({ key: accountDocCursorKey(), value: next }); return next;
+        await meta.put({ key: accountDocCursorKey(), value: next });
+        // The first cursor of this account here: this release reads every kind it knows from the start.
+        if (!Number.isSafeInteger(previous)) await meta.put({ key: accountDocSchemaKey(), value: ACCOUNT_DOC_SCHEMA });
+        return next;
+      });
+    }
+    // Which document kinds this device understands, per account. An older
+    // release skipped rows of kinds it did not know and still moved its cursor
+    // past them, so those rows would never come again (a restored-copy marker
+    // is written once). Raise this number whenever a prefix is added above.
+    // 1: the 2026-11-01 kinds. 2: adds restored-copy.
+    const ACCOUNT_DOC_SCHEMA = 2;
+    const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
+    // Once per account and schema: a device that synced under an older schema
+    // reads the change list again from the start. Rows it already has return
+    // as known (same revision) and are not applied; only skipped ones apply,
+    // through the usual CAS and conflict rules. A device that never synced
+    // this account starts from the beginning anyway.
+    async function upgradeAccountDocSchema() {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      // Read first: the usual pass writes nothing. Only an older mark is rewritten.
+      const state = async meta => ({ stored: (await meta.get(accountDocSchemaKey()))?.value, cursor: (await meta.get(accountDocCursorKey()))?.value });
+      const current = ({ stored, cursor }) => !Number.isSafeInteger(cursor) || Number.isSafeInteger(stored) && stored >= ACCOUNT_DOC_SCHEMA;
+      const seen = await transaction(['meta'], 'readonly', async tx => state(tx.objectStore('meta')));
+      // Never synced here: the first cursor write records the schema (writeAccountDocCursor).
+      if (current(seen)) return { schema: Number.isSafeInteger(seen.stored) ? seen.stored : ACCOUNT_DOC_SCHEMA, rewound: false };
+      return transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), now = await state(meta);
+        if (current(now)) return { schema: Number.isSafeInteger(now.stored) ? now.stored : ACCOUNT_DOC_SCHEMA, rewound: false };
+        await meta.put({ key: accountDocCursorKey(), value: 0 });
+        await meta.put({ key: accountDocSchemaKey(), value: ACCOUNT_DOC_SCHEMA });
+        return { schema: ACCOUNT_DOC_SCHEMA, rewound: now.cursor > 0 };
       });
     }
     function accountDocRecoveryRow(key, value, reason) {
@@ -5090,7 +5187,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
@@ -5111,7 +5208,9 @@
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
       listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces,
       listAccountDocs, listAccountDocKeys, readAccountDocRecord, applyAccountDoc, writeAccountDocSync,
-      readAccountDocCursor, writeAccountDocCursor, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash };
+      readAccountDocCursor, writeAccountDocCursor, upgradeAccountDocSchema, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash,
+      // Read-only: the document kinds of this schema, pinned by a test with ACCOUNT_DOC_SCHEMA.
+      accountDocKinds: Object.freeze({ schema: ACCOUNT_DOC_SCHEMA, account: Object.freeze(Object.keys(ACCOUNT_DOC_ACCOUNT_PREFIXES)), workspace: Object.freeze(Object.keys(ACCOUNT_DOC_WORKSPACE_PREFIXES)) }) };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

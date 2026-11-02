@@ -64,6 +64,9 @@
     const ready = validConfig(input, location.hostname) && typeof sdkFactory === 'function';
     const config = ready ? Object.freeze({ url: new URL(input.url).origin, key: input.key }) : null;
     let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null, parked = false;
+    // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
+    // A verification scope never reuses a result from an earlier generation.
+    let authGeneration = 0;
     const listeners = new Set(), controllers = new Set();
     let backingStorage;
     try { backingStorage = options.storage || env.localStorage; } catch (_) {}
@@ -97,7 +100,7 @@
       document?.querySelectorAll?.('dialog[open]').forEach(dialog => { dialog.close(); });
       if (privatePages.has(location.pathname?.split('/').pop())) document?.documentElement?.classList.add('auth-pending');
     }
-    function cancel() { epoch++; pendingUser = null; for (const controller of controllers) controller.abort(); controllers.clear(); }
+    function cancel() { epoch++; authGeneration++; pendingUser = null; for (const controller of controllers) controller.abort(); controllers.clear(); }
     function invalidate() { cancel(); user = session = null; hidePrivate(); notify(); event('haedo:signed-out'); }
     function alive(expected, uid) {
       if (closed || expected !== epoch || (uid && user?.id !== uid)) throw fault('request_cancelled');
@@ -107,6 +110,8 @@
       global: { headers: { 'X-Client-Info': 'haedo-platform' } }
     }) : null;
     const subscription = client?.auth.onAuthStateChange((name, next) => {
+      // SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, SIGNED_IN and any other event.
+      authGeneration++;
       if (closed) return;
       const id = next?.user?.id || null;
       if (name === 'SIGNED_OUT' || (observedId !== undefined && observedId !== id) || (user && user.id !== id)) {
@@ -153,6 +158,34 @@
         if (safe.code === 'auth_required') { invalidate(); return null; }
         throw safe;
       }
+    }
+    // W4 (2026-11-02 owner approval): one server check per bounded unit of work
+    // (one sync engine operation) instead of one per remote call. A scope reuses
+    // only its own completed verification, and only while nothing about the
+    // account can have changed: the same epoch it opened in, no Auth event,
+    // cancellation or pagehide/pageshow since (authGeneration), the same stored
+    // session user and exact access token, not logged out and not parked in the
+    // back/forward cache. There is no time window. Anything else, an ended
+    // scope, a null or failed check, and fresh: true all run verify() as before,
+    // so its errors, retries and late-response guards are unchanged.
+    function verificationScope() {
+      const opened = epoch; let ended = false, record = null;
+      const reusable = () => !!record && !ended && !closed && !parked && !blocked() && opened === epoch &&
+        record.generation === authGeneration && user?.id === record.uid;
+      async function check(options = {}) {
+        if (!options.fresh && reusable()) {
+          const current = await client.auth.getSession(), stored = current?.data?.session;
+          if (!current.error && reusable() && typeof stored?.access_token === 'string' && stored.access_token === record.token && stored.user?.id === record.uid) return user;
+        }
+        record = null;
+        const generation = authGeneration;
+        const verified = await verify();
+        const token = session?.access_token;
+        if (verified && !ended && !parked && opened === epoch && generation === authGeneration && user === verified &&
+            typeof token === 'string' && token && session.user?.id === verified.id) record = { uid: verified.id, token, generation };
+        return verified;
+      }
+      return Object.freeze({ verify: check, end() { ended = true; record = null; }, get ended() { return ended; } });
     }
     async function requireUser() {
       const verified = await verify();
@@ -229,6 +262,7 @@
       } catch (_) {}
     }
     const pagehide = value => {
+      authGeneration++;
       if (value?.persisted) parked = true;
       if (!hasPrivateSurface()) return;
       // Let a live workspace capture its caret/scroll before hiding changes
@@ -237,10 +271,12 @@
       cancel(); hidePrivate();
     };
     const storageChange = value => {
+      // Another tab may have rotated, replaced or removed the shared session.
+      if (value.key === null || value.key === LOGOUT_KEY || value.key?.startsWith(SESSION_KEY)) authGeneration++;
       if (value.key === LOGOUT_KEY && value.newValue === '1') invalidate();
     };
     const pageshow = async value => {
-      parked = false;
+      parked = false; authGeneration++;
       if (!value.persisted || !hasPrivateSurface()) return;
       // A workspace owns its unsaved editor and verifies the resumed account
       // before revealing it. Let that owner handle one verification, rather than
@@ -264,7 +300,7 @@
     env.addEventListener?.('pagehide', pagehide); env.addEventListener?.('pageshow', pageshow); env.addEventListener?.('storage', storageChange);
     // Let SDK PKCE initialization read the callback first, then scrub success and failure URLs.
     if (client) client.auth.getSession().then(scrubCallback, scrubCallback); else scrubCallback();
-    return Object.freeze({ ready, client, config, safeNext, verify, requireUser, login, signOut, request,
+    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, requireUser, login, signOut, request,
       get user() { return blocked() ? null : user; }, get session() { return blocked() ? null : session; }, get epoch() { return epoch; },
       getAccount: account, getClient: () => client,
       onAccountChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },

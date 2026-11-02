@@ -89,6 +89,15 @@ test('section and nested view links resolve to the same installed shell offline'
   assert.equal(await (await h.run('fetch', request('workspace.html?section=manage', 'navigate'))).text(), 'timeline management');
   assert.equal(h.state().fetches, 0);
 });
+test('blog editor and reader addresses reload from the installed shell offline', async () => {
+  // A reload of ?view=page&blog=… (2026-11-02) must not fall through to the network.
+  const h = harness({ fetchResult: new Error('offline') });
+  h.entries.set(request('index.html').url, new Response('unified home'));
+  for (const query of ['view=page&blog=new', 'view=page&blog=photo.anonymousPost_1', 'view=page&blog=plain.anonymous-2', 'view=page&blog=draft.anon3', 'view=page&blog=profile', 'compose=1']) {
+    assert.equal(await (await h.run('fetch', request('index.html?' + query, 'navigate'))).text(), 'unified home', query);
+  }
+  assert.equal(h.state().fetches, 0);
+});
 test('platform Auth and life modules use one installed bundle without online replacement', async () => {
   const h = harness({ fetchResult: new Response('different online version') });
   for (const path of ['assets/platform-auth.js', 'assets/platform-config.js', 'assets/platform-ui.js', 'assets/app.js', 'timeline.html', 'index.html', 'assets/life/core.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/icons.js', 'assets/life/ui.css', 'assets/life/remote.js', 'assets/life/sync.js', 'vendor/supabase/supabase.js', 'vendor/idb/idb.js', 'vendor/daisyui.css']) {

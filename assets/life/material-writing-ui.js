@@ -9,6 +9,9 @@
     let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
     let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
+    // An account-scoped store is synced to the account by MaterialContinuitySync; its own panel
+    // reports that state, so the save line must not claim the preparation stays in this browser.
+    const synced = storage?.isAccountScoped === true;
     const valid = token => !disposed && isCurrent() && (token == null || epoch === token);
     const mounted = token => valid(token) && !!host?.isConnected;
     const plan = () => state?.plans.find(value => value.id === selected);
@@ -18,7 +21,7 @@
     function dirty() { return acting || sourceLoading || !!saving || tick !== stored || composing.size > 0 || pendingFields.size > 0 || !!sources?.pending(); }
     function message() {
       if (!mounted() || !status) return;
-      status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? '이 브라우저에 저장 중…' : tick !== stored ? '저장 전 변경 있음' : '이 브라우저에 비공개로 저장됨';
+      status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
       for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
         const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;
@@ -69,8 +72,10 @@
       if (composing.size) throw fault('material_input_in_progress', '한글 입력을 마친 뒤 다시 시도해 주세요.');
       if (pendingFields.size) throw fault('material_input_pending', '입력은 남아 있습니다. 문자와 전체 글 길이를 확인한 뒤 다시 시도해 주세요.');
     }
-    function guard() {
-      guardLocal(); if (sourceLoading || sources?.pending()) throw fault('material_source_pending', '자료의 구절·메모 입력을 마치거나 취소한 뒤 이동해 주세요.');
+    // Leaving the screen only waits on user input: a source list that is still
+    // loading holds nothing to lose (detach() advances the epoch, discarding it).
+    function guard(leaving = false) {
+      guardLocal(); if (!leaving && sourceLoading || sources?.pending()) throw fault('material_source_pending', '자료의 구절·메모 입력을 마치거나 취소한 뒤 이동해 주세요.');
       if (transient(failure)) clear();
     }
     function mark() {
@@ -78,9 +83,9 @@
       schedule();
     }
     function schedule() { clearTimeout(timer); if (!conflict() && tick !== stored) timer = setTimeout(() => { if (mounted() && !acting && !sourceLoading && !composing.size && !pendingFields.size && !sources?.pending()) flushInternal().catch(report); }, 450); }
-    async function flushInternal() {
-      guard(); clearTimeout(timer); timer = null;
-      if (saving) { await saving; return flushInternal(); }
+    async function flushInternal(leaving = false) {
+      guard(leaving); clearTimeout(timer); timer = null;
+      if (saving) { await saving; return flushInternal(leaving); }
       if (!state || tick === stored) return;
       if (conflict()) throw failure;
       const payload = clone(state), version = tick, token = epoch;
@@ -89,9 +94,9 @@
         catch (cause) { if (valid(token)) report(cause); throw cause; }
         finally { if (saving === task) saving = null; message(); }
       }); saving = task; message(); await task;
-      if (valid(token) && tick !== stored) return flushInternal();
+      if (valid(token) && tick !== stored) return flushInternal(leaving);
     }
-    async function flush() { if (acting) throw fault('material_busy', '처리 결과를 확인한 뒤 이동해 주세요.'); return flushInternal(); }
+    async function flush() { if (acting) throw fault('material_busy', '처리 결과를 확인한 뒤 이동해 주세요.'); return flushInternal(true); }
     function button(label, task, { id, name, primary = false } = {}) {
       const node = el('button', label, 'life-button' + (primary ? ' life-primary' : '')); node.type = 'button'; if (id) node.id = id; if (name) node.setAttribute('aria-label', name);
       node.addEventListener('click', async () => {
@@ -164,7 +169,7 @@
     async function navigate(callback, context) {
       const previousAction = acting; acting = true;
       try {
-        await flushInternal(); guard(); if (!mounted()) return;
+        await flushInternal(true); guard(true); if (!mounted()) return;
         rememberView(); acting = false; navigating = true; message();
         return await callback(context);
       } finally { navigating = false; acting = previousAction; }

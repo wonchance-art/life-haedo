@@ -10,10 +10,13 @@
     let composeReview=null,composeReceipt=null,composeSequence=0;
     const composing=new Set(),pendingFields=new Set(),urls=new Set(),fresh=()=>life.Core.id(),valid=()=>isCurrent(),board=()=>state?.boards.find(b=>b.id===selected),area=()=>board()?.areas.find(a=>a.id===areaId);
     const fault=(code,message)=>Object.assign(new Error(message),{code});
+    // Account-scoped boards travel with the library metadata sync, whose own status reports the
+    // account state; only an account-less store may say the board stays in this browser.
+    const synced=storage?.isAccountScoped===true;
     function dirty(){return evidencePending||!!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
     function message(){
       if(!host?.isConnected||!status||!valid())return;
-      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?'이 브라우저에 저장 중…':tick!==stored?'저장 전 변경 있음':'이 브라우저에 저장됨';
+      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':synced?'저장됨':'이 브라우저에 저장됨';
       status.dataset.state=failure?'error':dirty()?'dirty':'saved';importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
@@ -359,7 +362,7 @@
           publishAction.append(publish);display.after(publishAction);
         }
       }
-      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','원래 구성은 이 브라우저에 보관됩니다. 선택 영역 공개는 별도로 검토하며 구성 동기화·자료 백업과 구분합니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
+      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p',(synced?'':'원래 구성은 이 브라우저에 보관됩니다. ')+'선택 영역 공개는 별도로 검토하며 구성 동기화·자료 백업과 구분합니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
       if(M.hasReferences(state.boards))files.append(el('p','직접 담은 근거 구절도 JSON과 HTML에 포함됩니다. JSON은 원문 버전의 식별자를 보존하며, 다른 작업공간으로 옮기면 자동 연결하지 않습니다. 선택하지 않은 원문 본문이나 사진 파일은 복사하지 않습니다.','life-help'));
       const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','9칸 구성 JSON 파일');let sequence=0;
       file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate={boards:value,chosen:new Set()};clear();render();const review=host.querySelector('.nb-import');review.focus({preventScroll:true});review.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});

@@ -298,10 +298,21 @@ test('a page entering the back/forward cache starts no transfer or account check
   assert.equal(a.auth.verifications, before + 1); assert.equal(cloud.rows.get(doc.id).data.title, '떠나기 직전 초안');
   // An ordinary (non-cached) pagehide still flushes the waiting draft.
   const next = await a.storage.savePhotoPost(a.ws, { ...copy(await a.storage.readPhotoPost(a.ws, doc.id)), title: '닫기 직전 초안', updatedAt: new Date(time.now).toISOString() }, 1);
+  // The flush runs in the background: the photo goes up, then the document. Wait
+  // for the end of the cycle the pagehide starts, not for a number of turns: the
+  // server's digest check of the photo completes off the main thread (WebCrypto),
+  // so under load any turn budget can run out before the document is stored.
+  const cycle = [];
+  const ended = new Promise(done => {
+    const off = sync.subscribe(event => {
+      if (event.type !== 'status') return;
+      cycle.push(event.status.running);
+      if (!event.status.running) { off(); done(); }
+    });
+  });
   page('pagehide', false);
-  // The flush is asynchronous (photo transfer, then the document); wait for the
-  // stored result itself rather than a fixed number of turns.
-  for (let n = 0; n < 2000 && cloud.rows.get(next.id)?.data.title !== '닫기 직전 초안'; n++) await new Promise(done => setImmediate(done));
+  assert.deepEqual(cycle, [true], 'the ordinary pagehide starts its flush at once');
+  await ended;
   assert.equal(cloud.rows.get(next.id).data.title, '닫기 직전 초안');
   sync.dispose();
 });

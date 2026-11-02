@@ -10,27 +10,126 @@
     if (className) element.className = className;
     return element;
   }
+  // Content of a post that a backup restore carries over unchanged. Identity,
+  // revision, times and photo IDs are new in a copy, so they are left out;
+  // photos are compared by their recorded digests, in order.
+  function restoredContent(doc) {
+    const order = new Map((doc.photos || []).map((photo, index) => [photo.id, index]));
+    const ops = (doc.ops || []).map(op => op?.insert?.photo ? { ...op, insert: { photo: { ...op.insert.photo, id: order.get(op.insert.photo.id) ?? null } } } : op);
+    const photos = (doc.photos || []).map(photo => [photo.name, photo.type, photo.width, photo.height, photo.size, photo.digest,
+      photo.view ? [photo.view.type, photo.view.width, photo.view.height, photo.view.size, photo.view.digest] : null]);
+    return JSON.stringify([doc.title, doc.status, doc.archived === true, ops, photos, doc.attachments || []]);
+  }
+  const indexKey = row => JSON.stringify([row.title, row.status, row.archived === true, row.body, row.photos, row.attachments || 0]);
+  // Which listed posts are a backup restore's unchanged copy of a post that is
+  // also listed. A copy (its restored-copy marker, never its title) is paired
+  // with the workspace it names when that workspace is listed and eligible.
+  // Posts pair one to one and only when their content is identical, so a post
+  // changed after the backup, or deleted from the original, stays listed.
+  // Each group of equal posts keeps one: the open library's, otherwise the one
+  // nearest the original. A post is only ever left out for a listed equal one.
+  //
+  // Cost: only posts whose list row (title, state, text, counts) equals a row
+  // on the other side are read, all of one workspace in one read
+  // (`readDocs(ws, ids)` → docs or null, in order). `cache` (a Map kept by
+  // the home view) holds each read post's content by ID, revision and update
+  // time, so a later pass reads only posts that changed.
+  async function restoredDuplicates(libraries, lists, workspaceId, readDocs, cache = new Map()) {
+    const byId = new Map(libraries.map(item => [item.workspaceId, item]));
+    const sourceOf = id => {
+      const source = byId.get(id)?.restoredCopy?.sourceWorkspaceId;
+      return source && source !== id && lists.has(source) && byId.get(source)?.eligible !== false ? source : null;
+    };
+    // A marker loop (A names B, B names A) ends at the first repeat.
+    const depth = (id, seen = new Set()) => { const source = sourceOf(id); if (!source || seen.has(id)) return 0; seen.add(id); return 1 + depth(source, seen); };
+    const parent = new Map(), key = (ws, id) => ws + '/' + id;
+    const find = item => { while (parent.get(item) !== item) item = parent.get(item); return item; };
+    const join = (a, b) => { for (const item of [a, b]) if (!parent.has(item)) parent.set(item, item); const x = find(a), y = find(b); if (x !== y) parent.set(x, y); };
+    const version = (ws, row) => JSON.stringify([ws, row.id, row.revision, row.updatedAt]);
+    // Rows of each pair whose list row has an equal on the other side.
+    // `known` is this pass's own view, so another pass pruning the shared cache cannot change it.
+    const pairs = [], wanted = new Map(), used = new Set(), known = new Map();
+    for (const [copy, rows] of lists) {
+      const source = sourceOf(copy); if (!source) continue;
+      const free = new Map();
+      for (const row of lists.get(source)) { const k = indexKey(row); if (!free.has(k)) free.set(k, []); free.get(k).push(row); }
+      const want = (ws, row) => { const v = version(ws, row); used.add(v); if (cache.has(v)) { known.set(v, cache.get(v)); return; } if (!wanted.has(ws)) wanted.set(ws, new Map()); wanted.get(ws).set(row.id, v); };
+      for (const row of rows) {
+        const candidates = free.get(indexKey(row)); if (!candidates?.length) continue;
+        want(copy, row); for (const candidate of candidates) want(source, candidate);
+      }
+      pairs.push({ copy, source, rows, free });
+    }
+    for (const [ws, rows] of wanted) {
+      const ids = [...rows.keys()];
+      let docs; try { docs = await readDocs(ws, ids); } catch (_) { docs = []; }
+      ids.forEach((id, i) => {
+        let value = null; try { value = docs?.[i] ? restoredContent(docs[i]) : null; } catch (_) { value = null; }
+        // An unreadable post is not remembered, so it is read again next time.
+        if (value !== null) { cache.set(rows.get(id), value); known.set(rows.get(id), value); }
+      });
+    }
+    for (const item of [...cache.keys()]) if (!used.has(item)) cache.delete(item);
+    const contentOf = (ws, row) => known.get(version(ws, row)) ?? null;
+    for (const { copy, source, rows, free } of pairs) {
+      for (const row of rows) {
+        const candidates = free.get(indexKey(row)); if (!candidates?.length) continue;
+        const mine = contentOf(copy, row); if (mine === null) continue;
+        for (let i = 0; i < candidates.length; i++) {
+          if (contentOf(source, candidates[i]) !== mine) continue;
+          join(key(copy, row.id), key(source, candidates[i].id)); candidates.splice(i, 1); break;
+        }
+      }
+    }
+    const groups = new Map();
+    for (const item of parent.keys()) { const root = find(item); if (!groups.has(root)) groups.set(root, []); groups.get(root).push(item); }
+    const order = [...lists.keys()], wsOf = item => item.slice(0, item.indexOf('/'));
+    const rank = item => [wsOf(item) === workspaceId ? 0 : 1, depth(wsOf(item)), order.indexOf(wsOf(item))];
+    const before = (a, b) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+    const hidden = new Set();
+    for (const members of groups.values()) {
+      const keep = members.slice().sort(before)[0];
+      // The open library's own posts are always listed.
+      for (const item of members) if (item !== keep && wsOf(item) !== workspaceId) hidden.add(item);
+    }
+    return hidden;
+  }
   // Posts and drafts of every library this account owns (2026-11-01: one
   // account, one blog). Each row keeps its own workspaceId. Without an account
   // scope only the open library is listed, as before. Recovery copies are left
-  // out unless one is the open library. A library that cannot be read is
-  // reported as `failed`; the readable ones are still listed.
-  async function listAccountPosts(storage, workspaceId) {
-    let ids = [workspaceId];
+  // out unless one is the open library. A backup restore's unchanged copy of a
+  // listed post is listed once (see restoredDuplicates); this changes only the
+  // list, never sync, backup or the copy itself. A library that cannot be read
+  // is reported as `failed`; the readable ones are still listed.
+  async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
+    let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
       try {
-        const libraries = await storage.listAccountLibraries();
+        libraries = await storage.listAccountLibraries();
         if (libraries.some(item => item.workspaceId === workspaceId)) ids = [...new Set([workspaceId, ...libraries.filter(item => item.eligible !== false).map(item => item.workspaceId)])];
+        else libraries = [];
       } catch (error) { if (error?.code !== 'auth_scope_required') throw error; }
     }
     const lists = await Promise.allSettled(ids.map(id => storage.listPhotoPosts(id)));
     if (lists[0].status !== 'fulfilled') throw lists[0].reason;
+    const read = new Map();
+    lists.forEach((result, index) => { if (result.status === 'fulfilled' && Array.isArray(result.value)) read.set(ids[index], result.value); });
+    let hidden = new Set();
+    if (libraries.some(item => item.restoredCopy) && (typeof storage.readPhotoPosts === 'function' || typeof storage.readPhotoPost === 'function')) {
+      const readDocs = typeof storage.readPhotoPosts === 'function' ? (ws, ids) => storage.readPhotoPosts(ws, ids)
+        : (ws, ids) => Promise.all(ids.map(id => storage.readPhotoPost(ws, id).catch(() => null)));
+      // An unexpected failure lists every post rather than hiding any.
+      try { hidden = await restoredDuplicates(libraries, read, workspaceId, readDocs, contentCache); }
+      catch (_) { hidden = new Set(); }
+    }
     const posts = [];
-    lists.forEach((result, index) => { if (result.status === 'fulfilled' && Array.isArray(result.value)) posts.push(...result.value.map(post => ({ ...post, workspaceId: ids[index] }))); });
+    for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws })));
     return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
   }
   function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
+    // Post contents compared for restore copies, by ID/revision/update time; this view's storage only.
+    const contentCache = new Map();
     let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
@@ -516,7 +615,7 @@
       void enrichDrafts(context);
     }
     async function load(context, keys = ['workbench', 'photo', 'plainDrafts', 'sourceDrafts']) {
-      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => listAccountPosts(storage, context.workspaceId),
+      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => listAccountPosts(storage, context.workspaceId, { contentCache }),
         plainDrafts: () => storage.readPageDrafts(context.workspaceId), sourceDrafts: () => storage.listStages(context.workspaceId) };
       context.area.setAttribute('aria-busy', 'true');
       const results = await Promise.allSettled(keys.map(key => Promise.resolve().then(read[key])));
@@ -674,7 +773,9 @@
     function watch(context) {
       unwatch();
       const listener = event => {
-        if (event?.type !== 'photo_posts_changed' || !showing(context)) return;
+        // A restore-copy marker received from another device changes which libraries are listed.
+        const restoredMark = event?.type === 'account_doc_applied' && typeof event.key === 'string' && event.key.startsWith('restored-copy:');
+        if ((event?.type !== 'photo_posts_changed' && !restoredMark) || !showing(context)) return;
         if (watchTimer) clearTimeout(watchTimer);
         watchTimer = setTimeout(() => { watchTimer = null; if (showing(context)) { context.photoDrafts.clear(); void load(context, ['photo']); } }, 250);
       };
@@ -695,8 +796,8 @@
       global.HaedoMotion?.cancel(host.querySelector('#homeSearchPanel'));
       generation += 1; visible = false; clearMedia();
     }
-    function dispose() { leave(); disposed = true; }
+    function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent });
 })(globalThis);

@@ -37,7 +37,8 @@ function fixture(overrides = {}) {
           state.emit('SIGNED_IN', { user: state.user }); return { data: { user: state.user }, error: null };
         },
         async signOut(options) { state.signOutOptions = options; state.user = null; state.emit('SIGNED_OUT', null); return { error: null }; },
-        stopAutoRefresh() { state.stopped++; }
+        stopAutoRefresh() { state.stopped++; },
+        ...(state.scope ? { scope: state.scope } : {})
       },
       from(table) {
         state.table = table;
@@ -265,4 +266,42 @@ test('head uses verified metadata-only SELECT, distinguishes missing and rejects
   const waiting = deferred(); f.state.readPromise = waiting.promise; f.state.eq = null;
   const pending = f.adapter.head(data.workspaceId); while (!f.state.eq) await tick();
   f.adapter.dispose(); waiting.resolve({ data: row(data), error: null }); await assert.rejects(pending);
+});
+
+test('W4 cycle(): reads share the scoped check, the snapshot overwrite asks for a fresh one, end() closes the scope', async () => {
+  const scoped = [], ends = [];
+  const f = fixture({ scope() { const id = ends.length; ends.push(false); return {
+    async getUser(options) { scoped.push({ id, fresh: !!options?.fresh }); return { data: { user: f.state.user }, error: null }; },
+    end() { ends[id] = true; } }; } });
+  const data = await bundle(); f.state.row = row(data); f.state.rows = [row(data)];
+  const cycle = f.adapter.cycle();
+  assert.equal((await cycle.getAccount()).userId, USER);
+  assert.equal((await cycle.list()).length, 1);
+  assert.equal((await cycle.head(data.workspaceId)).revision, 1);
+  assert.equal((await cycle.read(data.workspaceId)).id, data.workspaceId);
+  assert.equal((await cycle.write({ workspaceId: data.workspaceId, operationId: OP, expectedRevision: 0, data })).status, 'stored');
+  assert.deepEqual(scoped, [{ id: 0, fresh: false }, { id: 0, fresh: false }, { id: 0, fresh: false }, { id: 0, fresh: false }, { id: 0, fresh: true }]);
+  assert.equal(f.state.calls.filter(name => name === 'getUser').length, 0);
+  cycle.end(); assert.deepEqual(ends, [true]);
+  // The adapter's own methods keep a server check per call.
+  await f.adapter.head(data.workspaceId); await f.adapter.read(data.workspaceId);
+  assert.equal(f.state.calls.filter(name => name === 'getUser').length, 2);
+  // A scoped account change, a missing session and a late answer keep the same faults.
+  f.state.user = null; await assert.rejects(f.adapter.cycle().head(data.workspaceId), code('auth_required'));
+  f.state.user = { id: USER, email: 'fixture@example.invalid' };
+  const held = deferred(), late = fixture({ scope: () => ({ getUser: () => held.promise, end() {} }) });
+  late.state.emit('SIGNED_IN', { user: { id: USER } });
+  const pending = late.adapter.cycle().read(data.workspaceId); await tick();
+  late.state.emit('SIGNED_IN', { user: { id: OTHER } }); held.resolve({ data: { user: { id: USER } }, error: null });
+  await assert.rejects(pending, code('request_cancelled')); late.adapter.dispose();
+  f.adapter.dispose(); assert.throws(() => f.adapter.cycle(), code('request_cancelled'));
+});
+
+test('W4 cycle() without a platform scope verifies every call exactly as before', async () => {
+  const f = fixture(), data = await bundle(); f.state.row = row(data);
+  const cycle = f.adapter.cycle();
+  await cycle.getAccount(); await cycle.head(data.workspaceId); await cycle.read(data.workspaceId);
+  await cycle.write({ workspaceId: data.workspaceId, operationId: OP, expectedRevision: 0, data });
+  assert.equal(f.state.calls.filter(name => name === 'getUser').length, 4);
+  cycle.end(); f.adapter.dispose();
 });

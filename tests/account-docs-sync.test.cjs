@@ -448,3 +448,106 @@ test('mergeDocument keeps single-value documents out of item merging', () => {
   assert.equal(Sync.mergeDocument('discoverySettings', null, { revision: 1 }, { revision: 2 }, true), null);
   assert.equal(Sync.mergeDocument('readingPosition', null, { revision: 1 }, { revision: 2 }, true), null);
 });
+
+test('a backup restore copy marker replicates to the account\'s other devices, even before the copy itself arrives', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), original = await workspaceOn(a), w = original.workspaceId;
+  const restoredAt = '2026-11-02T09:00:00.000Z';
+  // The restore installs the copy and its marker in one transaction.
+  const copy = await a.createWorkspace('내 자료 (11-02 복원)', { restoredCopy: { sourceWorkspaceId: w, restoredAt } });
+  const key = `restored-copy:${copy.workspaceId}`, marker = { format: 'haedo-restored-copy-v1', workspaceId: copy.workspaceId, sourceWorkspaceId: w, restoredAt };
+  assert.deepEqual((await a.listAccountDocs()).find(doc => doc.key === key)?.prefix, 'restored-copy');
+  assert.deepEqual((await a.readAccountDocRecord(key)).value, marker);
+  const listed = await a.listAccountLibraries();
+  assert.deepEqual(listed.find(row => row.workspaceId === copy.workspaceId).restoredCopy, { sourceWorkspaceId: w, restoredAt });
+  assert.equal(listed.find(row => row.workspaceId === copy.workspaceId).eligible, true, 'the copy keeps syncing like any library');
+  assert.equal(Object.hasOwn(listed.find(row => row.workspaceId === w), 'restoredCopy'), false);
+  await engine(a, server).sync.syncNow();
+  assert.deepEqual(server.docs(accountA.userId).get(key).data, marker);
+
+  // The iPad receives the marker while it only has the original; it is kept and applies once the copy arrives.
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, original);
+  await engine(b, server).sync.syncNow();
+  assert.deepEqual((await b.readAccountDocRecord(key)).value, marker);
+  await workspaceOn(b, await a.read(copy.workspaceId));
+  assert.deepEqual((await b.listAccountLibraries()).find(row => row.workspaceId === copy.workspaceId).restoredCopy, { sourceWorkspaceId: w, restoredAt });
+
+  // A malformed marker is refused on receipt and never hides a library.
+  const bad = await a.createWorkspace('표시 없는 공간');
+  const refused = await b.applyAccountDoc(`restored-copy:${bad.workspaceId}`, { value: { ...marker, workspaceId: bad.workspaceId, extra: true }, expectedHash: null });
+  assert.equal(refused.status, 'rejected');
+  await assert.rejects(a.createWorkspace('같은 공간 표시', { restoredCopy: { sourceWorkspaceId: 'not a valid id!' } }), { code: 'restored_copy_invalid' });
+});
+
+test('a device that synced on an older release, which skipped restored-copy markers, reads them once after updating; newer local edits stay', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const now = clock();
+  const a = mac.base.forAccount(accountA), original = await workspaceOn(a), w = original.workspaceId;
+  const copy = await a.createWorkspace('내 자료 (11-02 복원)', { restoredCopy: { sourceWorkspaceId: w, restoredAt: '2026-11-02T09:00:00.000Z' } });
+  const key = `restored-copy:${copy.workspaceId}`;
+  await a.saveDiscoverySettings(w, settings(w, 0, true), 0);
+  await engine(a, server, accountA, { now }).sync.syncNow();
+  assert.ok(server.docs(accountA.userId).has(key));
+
+  // The iPad runs an older release: it does not know the restored-copy kind and has no schema mark.
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, original); await workspaceOn(b, await a.read(copy.workspaceId));
+  const unknown = Object.assign(new Error('자동 저장 대상이 아닌 항목입니다.'), { code: 'account_doc_invalid_key' });
+  const older = { ...b, upgradeAccountDocSchema: undefined,
+    readAccountDocRecord: docKey => docKey.startsWith('restored-copy:') ? Promise.reject(unknown) : b.readAccountDocRecord(docKey),
+    listAccountDocs: async () => (await b.listAccountDocs()).filter(doc => !doc.key.startsWith('restored-copy:')) };
+  await engine(older, server, accountA, { now }).sync.syncNow();
+  // That release kept no schema mark (this storage records one with the first cursor).
+  const schemaRow = JSON.stringify(`accountDocSchema:${accountKey(accountA)}`);
+  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 2); ipad.rows.get('meta').delete(schemaRow);
+  assert.equal((await b.readDiscoverySettings(w)).autoRefresh, true);
+  assert.equal((await b.readAccountDocRecord(key)).exists, false, 'the older release skipped the marker');
+  const passed = await b.readAccountDocCursor();
+  assert.ok(passed >= server.docs(accountA.userId).get(key).seq, 'and moved its cursor past it');
+  // An edit made on the iPad before it updates, not yet sent.
+  now.advance();
+  const current = await b.readDiscoverySettings(w);
+  await b.saveDiscoverySettings(w, Settings.update(current, { autoRefresh: false }, { expectedRevision: current.revision, now: now() }), current.revision);
+
+  // After the update the marker arrives; the newer local edit is kept and sent.
+  const updated = engine(b, server, accountA, { now }); await updated.sync.syncNow();
+  assert.deepEqual((await b.listAccountLibraries()).find(row => row.workspaceId === copy.workspaceId).restoredCopy,
+    { sourceWorkspaceId: w, restoredAt: '2026-11-02T09:00:00.000Z' });
+  assert.equal((await b.readDiscoverySettings(w)).autoRefresh, false, 'the re-read never replaced the newer local edit');
+  assert.equal(server.docs(accountA.userId).get(settingsKey(w)).data.autoRefresh, false);
+  assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1, 'read again from the start once');
+  // Once only: later passes continue from the stored cursor.
+  await updated.sync.syncNow();
+  assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1);
+  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.ok((await b.readAccountDocCursor()) >= passed);
+  // Per account: another account on the same device has its own mark and cursor; returning to A does not re-read.
+  const other = ipad.base.forAccount(accountB);
+  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.equal(await other.readAccountDocCursor(), null);
+  assert.equal(ipad.rows.get('meta').has(JSON.stringify(`accountDocSchema:${accountKey(accountB)}`)), false);
+  const back = ipad.base.forAccount(accountA);
+  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.ok((await back.readAccountDocCursor()) >= passed);
+});
+
+// Each schema number names exactly one set of document kinds. Adding a prefix
+// without raising ACCOUNT_DOC_SCHEMA (storage.js) fails here, and so does a
+// new number without its row: a device that synced under the older set
+// rereads the change list once (upgradeAccountDocSchema) only when it rises.
+test('the account document schema number is pinned to its document kinds', t => {
+  const KINDS = {
+    1: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence'] },
+    2: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] }
+  };
+  const local = device(); t.after(() => local.base.close());
+  const { schema, account, workspace } = local.base.accountDocKinds;
+  assert.ok(Object.hasOwn(KINDS, schema), 'schema ' + schema + ' has no recorded kinds: add its row here');
+  assert.deepEqual({ account: [...account], workspace: [...workspace] }, KINDS[schema],
+    'the document kinds changed: raise ACCOUNT_DOC_SCHEMA in storage.js and record the new set here');
+  const numbers = Object.keys(KINDS).map(Number);
+  assert.equal(schema, Math.max(...numbers), 'the newest recorded schema is the one in use');
+});

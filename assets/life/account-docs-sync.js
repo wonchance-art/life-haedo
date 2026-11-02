@@ -212,6 +212,9 @@
       return result.status === 'changed' ? 'retry' : 'deferred';
     }
     async function pull() {
+      // A device that synced under an older document schema skipped rows of kinds it
+      // did not know; read the list again from the start, once (storage decides).
+      if (typeof storage.upgradeAccountDocSchema === 'function') { await storage.upgradeAccountDocSchema(); guard(); }
       let cursor = await storage.readAccountDocCursor(), retry = false;
       // A stored cursor also records that this account has synced on this device.
       // Written once; later only new rows move it, so idle passes write nothing.

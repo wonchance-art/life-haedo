@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v172';
+const CACHE='haedo-v173';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -47,7 +47,8 @@ const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).hr
 const DISCOVERY_CACHE='haedo-discovery-feed-v1';
 const discoveryURL=new URL('./assets/life/discovery-feed.json',self.registration.scope).href;
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
-const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public']);
+// `blog` reopens the blog editor/reader after a reload; `compose` starts a new post.
+const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose']);
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))

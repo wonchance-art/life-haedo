@@ -207,7 +207,8 @@
   const page = root.document.body.dataset.page;
   let initialSection = root.document.body.dataset.haedoSection;
   if (page === 'home' || page === 'life') {
-    if (page === 'home' && query.get('compose') === '1') initialSection = 'home';
+    // The blog editor/reader lives in home, also when reloaded with `blog`.
+    if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) initialSection = 'home';
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
     else if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
   }
