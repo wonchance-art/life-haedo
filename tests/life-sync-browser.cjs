@@ -263,7 +263,8 @@ async function main() {
       // (workspace list/read/write, another owner) is still a failure.
       const bootReads = server.requests.filter(r => r.kind === 'account-materials-list');
       assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'),[],'authentication alone issued workspace data requests');
-      assert.deepEqual([...new Set(bootReads.map(r => r.device))].sort(),['a','b'],'each booted device lists only its own account materials');
+      const readsPerDevice = bootReads.reduce((n, r) => ({ ...n, [r.device]: (n[r.device] || 0) + 1 }), {});
+      assert.deepEqual(readsPerDevice,{ a: 1, b: 1 },'each booted device lists its own account materials exactly once');
       assert.ok(bootReads.every(r => r.owner === accounts.a.id),'account materials list crossed accounts');
       await loginUI(a.page);
       assert.equal(server.writes().length,0,'login uploaded an unbound workspace');

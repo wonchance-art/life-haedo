@@ -132,7 +132,7 @@ Storage.commitLocal({ operationId, workspaceId, baseRevision, changes })
 // 동기화 상태: not_configured | pending | syncing | synced | conflict | error
 ```
 
-로컬 커밋 완료 문구는 `이 브라우저에 저장됨`이었다(R1 당시). 2026-11-01부터 사용자가 만든 데이터는 계정에 자동 동기화되며 최신 기준은 [계정 자동 연동](../design-review/account-sync-everywhere.md)을 따른다.
+로컬 커밋 완료 문구 `이 브라우저에 저장됨`은 계정 자료함이 아닐 때의 문구다(`assets/life/ui.js:3707`, `:4328`, `assets/life/workbench-ui.js:84`, `assets/life/nine-board-ui.js:16`). 계정 자료함에서는 2026-11-01부터 사용자가 만든 데이터가 계정에 자동 동기화되며 최신 기준은 [계정 자동 연동](../design-review/account-sync-everywhere.md)을 따른다.
 성공한 작업의 같은 재제출은 한 번만 반영한다. 실패하면 검토 선택을 보존하고, 충돌로 내용/기준이 바뀌면 새 작업으로 제출한다.
 Object·Plan·Activity·Record·Thought의 기존 의미와 진도 구분은 유지하되 모든 가져오기에서 생성을 요구하지 않는다.
 

@@ -1,5 +1,7 @@
 # 구조·작업 흐름 검토 B3 — CI 밖 브라우저 검사 · 네이버 자동 수집 계약 · 공개 요청 보관 (2026-11-02)
 
+> CI 밖 브라우저 검사(1절)의 판정은 [B4](structure-workflow-review-20261102-b4.md)가 대체한다. 이 문서의 개수·원인 추정·실패 위치는 B4와 다른 부분이 있으며 당시 기록으로 남긴다.
+
 - 기준: `origin/main` `a8d4a65`. 작업자 B3. 앱 코드·마이그레이션·워크플로·운영 DB는 바꾸거나 읽지 않았다.
 - 실행 환경: Linux, Node v22.23.4, Playwright 1.63.0(`/opt/node-tools`), Chrome for Testing 153.0.8010.12, `python3 -m http.server` 정적 서버(포트 4951·4960). Apple 기기·실제 계정·운영 SQL은 다루지 않았다.
 - 고치지 않고 보고만 한다. 재현 스크립트 1개를 [repro/share-pending.cjs](evidence/structure-workflow-20261102/repro/share-pending.cjs)에 남겼다.

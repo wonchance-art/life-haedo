@@ -117,6 +117,8 @@ async function main() {
       // no request: any other ledger entry or another owner fails.
       assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'), []);
       assert.ok(server.requests.every(r => r.owner === accounts.a.id));
+      // Two authenticated boots happened (fixture goto + reload): at most one list read each.
+      const listReads = server.requests.length; assert.ok(listReads >= 1 && listReads <= 2, 'account materials list read ' + listReads + ' times for 2 boots');
       await page.locator('#wbDiscoverySeed').getByRole('button', { name: '이 원문 버전 열기', exact: true }).click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), seedOld);
       await page.getByRole('button', { name: '다시 찾기로 돌아가기', exact: true }).click(); await settle(page);
@@ -146,7 +148,7 @@ async function main() {
     await check('failed exclusion save preserves pending change and blocks navigation until explicit retry', async ({ page }) => {
       const f = await fixture(page); await discover(page); await pick(page, f.refs.seed); const before = await current(page); await abortWorkbenchWrites(page, true);
       await page.locator('.wb-discovery-exclude[data-source-id="' + f.refs.topic.sourceId + '"]').click(); await page.locator('#wbError').waitFor({ state: 'visible' }); assert.deepEqual(await current(page), before);
-      /* Since 2026-10-24 다시 찾기 lives under 자료실 (docs/design-review/feature-flow-integration.md:26), so haedo-navigation.js:105 marks <body data-haedo-section="records"> too; click the 자료실 nav link itself (feature-contracts.md:23 records ID). */ await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.locator('#wbDiscoverySeed').isVisible());
+      /* Since 2026-10-24 다시 찾기 lives under 자료실 (docs/design-review/feature-flow-integration.md:26), so assets/haedo-navigation.js:105 marks <body data-haedo-section="records"> too; click the 자료실 nav link itself (feature-contracts.md:23 records ID). */ await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.locator('#wbDiscoverySeed').isVisible());
       await abortWorkbenchWrites(page, false); await page.getByRole('button', { name: '다시 저장', exact: true }).click(); const after = await saved(page); assert.equal(after.workbench.discovery.excludedPairs.length, 1); assert.deepEqual(after.bundle, before.bundle);
     });
     await check('source exclusions travel only in composition backup and restore with remapped source identities', async ({ page }) => {

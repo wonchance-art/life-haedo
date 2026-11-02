@@ -102,7 +102,7 @@
 |---|---|
 | 실패 1 | `:110` `server.requests.length 2 !== 0`. 첫 로드와 `page.reload()`에서 각 1회 나온 `account-materials-list`다. 같은 계약(`account-materials.md:17-19`)이고 원인 커밋도 같다. 부모 `45b47ae` 트리는 통과, `bed3142` 트리는 같은 `2 !== 0`이다. |
 | 조치 1 | `account-materials-list` 외 장부 항목이 0인지, 모든 항목의 소유자가 `accounts.a`인지 단언한다. 다시 찾기 자체는 계속 요청 0이다. |
-| 실패 2 | `:140` `[data-haedo-section="records"]` strict mode 위반. `<body data-haedo-section="records">`와 자료실 링크 두 요소에 걸린다. `haedo-navigation.js:105`가 현재 영역을 body에도 표시한다. |
+| 실패 2 | `:140` `[data-haedo-section="records"]` strict mode 위반. `<body data-haedo-section="records">`와 자료실 링크 두 요소에 걸린다. `assets/haedo-navigation.js:105`가 현재 영역을 body에도 표시한다. |
 | 계약 2 | `docs/design-review/feature-flow-integration.md:26` — 자료실 메뉴에 "다시 찾기·회고·책 …". `docs/agents/feature-contracts.md:23` — records ID. 다시 찾기가 자료실 아래로 옮겨져 body 값이 `records`가 됐다. |
 | 이력 2 | 부모 `ef075e4` 트리는 통과, `54ff4b3`(10-24 "Integrate existing features into contextual workflows") 트리는 같은 strict mode 위반이다. |
 | 조치 2 | `[data-haedo-navigation] [data-haedo-section="records"]`(실제 자료실 링크)로 좁혔다. `life-sync-browser.cjs` `openSection`과 같은 선택자이고, 저장 실패 시 이동 차단 단언은 그대로다. |
@@ -140,7 +140,7 @@
 | 고정 실험 | [`record-arrange-revert.cjs`](evidence/structure-workflow-20261102/repro/record-arrange-revert.cjs)를 쓴다. 검사가 쓰던 `storage.js` route hook 방식으로 `saveWorkbench`를 감싸, 코멘트 자동 저장을 명시 해제 전까지 붙잡는다. 붙잡힌 동안 체크박스를 한 번 클릭하고, 해제 전에 checked를 읽는다. 해제한 뒤 UI 저장 완료(`#wbStatus` saved, "저장 중" 없음)를 기다려 최종 checked와 저장된 `part.enabled`를 읽는다. |
 | 실험 결과 (10회, 모두 같은 값) | 클릭 전 checked=true. 붙잡힌 동안 상태 "이 브라우저에 저장 중…", **클릭 직후(해제 전) checked=false**, 저장소는 아직 true. **해제 후 최종 checked=false, 저장 `enabled=false`**, 코멘트도 저장됐다. 체크박스 요소는 교체되지 않았고 page error는 0. 저장 시작 3회(제목 반영, 코멘트, 표시 해제). 되돌림 0/10, 클릭 미전달 0/10. |
 | 레이아웃 | 체크박스의 문서 기준 y가 코멘트 입력 전 1626px → 저장 중 1735px → 저장 완료 후 1522px로 움직인다(위치를 잰 7회 모두 동일). 저장 상태 전환마다 100–200px씩 이동한다. |
-| 판정 | **H1.** 저장 중에도 클릭이 전달되면 해제는 유지되고 저장된다(H2 반박). 원래 실패는 Playwright가 위치를 잡은 뒤 저장 상태가 바뀌어 체크박스가 100–200px 움직인 사이에 클릭이 다른 곳에 떨어진 경우와 맞는다. 제품 결함은 아니다. |
+| 판정 | **H1.** 저장 중에도 클릭이 전달되면 해제는 유지되고 저장된다(H2 반박). 원래 실패는 Playwright가 위치를 잡은 뒤 저장 상태가 바뀌어 체크박스가 100–200px 움직인 사이에 클릭이 다른 곳에 떨어진 경우와 맞는다. 입력 유실은 아니다. 레이아웃 이동은 UX 마이너 후보다([본문 7절](structure-workflow-review-20261102.md#7-결함-후보-처리-현황-2026-11-02-총괄-결정-기준)). |
 | 조치 | 검사는 코멘트 입력 뒤 UI 저장 완료(`#wbStatus[data-state=saved]`, "저장 중" 없음)와 저장된 코멘트를 기다린 다음 해제한다. "지금 저장" 뒤 대기 조건에는 저장된 `parts[1].enabled === false`를 추가했다(강화). 제한시간은 늘리지 않았고 단언도 줄이지 않았다. |
 | 결과 | 고친 뒤 전체 검사 5회 연속 14/14. 실패 로그·화면 사본은 작업 환경에 남겼다. |
 
