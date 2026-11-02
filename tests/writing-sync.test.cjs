@@ -24,7 +24,11 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
     },
     subscribe() { return () => {}; }, subscribeAll() { return () => {}; }
   };
-  const sourceSync = { async getState() { return { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; }, async syncNow() { calls.push(['sourceSync']); }, subscribe() { return () => {}; } };
+  // `source` stays mutable so a test can move the originals between states and emit their events.
+  const sourceListeners = new Set();
+  const sourceSync = { async getState() { calls.push(['sourceState']); return { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; }, async syncNow() { calls.push(['sourceSync']); },
+    subscribe(listener) { sourceListeners.add(listener); return () => sourceListeners.delete(listener); } };
+  const emitSource = event => { for (const listener of [...sourceListeners]) listener(event); };
   const remote = {
     async list(ws, after) { calls.push(['list', after]); if (listError) throw Object.assign(new Error('schema'), listError); return copy(rows); },
     async read(ws, draftId) { const row = rows.find(value => value.draft_id === draftId); return row ? { ...copy(row), source_revision: 1, data: { stageId: draftId, workspaceId: ws, kind: 'writing', state: 'draft', revision: 2 } } : null; },
@@ -39,9 +43,10 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
     };
     created.set(created.size, instance); return instance;
   } };
-  const auth = { epoch: 1, getAccount: () => copy(OWNER) };
+  let signedIn = copy(OWNER);
+  const auth = { epoch: 1, getAccount: () => copy(signedIn) };
   const manager = WritingSync.create({ storage, sourceSync, auth, remote, engine, materials: null, interval: 3600000 });
-  return { manager, calls, created, local, stateMap };
+  return { manager, calls, created, local, stateMap, source, sourceListeners, emitSource, auth, signIn: value => { signedIn = value; } };
 }
 const draft = (n, extra = {}) => ({ stageId: id(n), workspaceId: WS, kind: 'writing', state: 'draft', revision: 1, updatedAt: '2026-10-01T00:00:00.000Z', ...extra });
 
@@ -117,4 +122,48 @@ test('unchanged drafts cost one list call per cycle and no body reads', async t 
   }
   rows[2].revision = 4; await f.manager.refresh();
   assert.deepEqual(f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]), [id(3)], 'only the draft whose server revision moved is read');
+});
+
+// The originals engine connects after the page has mounted (a reopen with a cached account
+// library, or the legacy restart): the first pass finds the originals not ready. When they
+// become ready, a pass runs then; the next 30 s poll is not needed.
+const settled = () => new Promise(resolve => setTimeout(resolve, 20));
+const lists = f => f.calls.filter(call => call[0] === 'list').length;
+test('a pass that found the originals not ready runs again as soon as the originals engine connects', async t => {
+  const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }];
+  const f = fixture({ rows, source: { enabled: false, status: 'auth_required' } }); t.after(() => f.manager.dispose());
+  f.manager.start(); await f.manager.refresh(); await settled();
+  assert.equal(lists(f), 0, 'not listed while the originals read auth_required');
+  f.emitSource({ type: 'account' }); await settled();
+  assert.equal(lists(f), 0, 'an account event that still reads not ready starts nothing');
+  Object.assign(f.source, { enabled: true, status: 'synced' }); f.emitSource({ type: 'account' }); await settled();
+  assert.equal(lists(f), 1); assert.deepEqual(f.calls.filter(call => call[0] === 'install').map(call => call[1]), [id(5)]);
+  // Once ready, further originals events (edits, uploads) start no extra pass.
+  const reads = f.calls.length; for (let n = 0; n < 5; n++) f.emitSource({ type: 'state', workspaceId: WS }); f.emitSource({ type: 'account' }); await settled();
+  assert.equal(f.calls.length, reads, 'no state read or pass for a workspace that is not waiting');
+});
+
+test('a burst of originals events becomes one check and one pass; pending originals that finish uploading also start one', async t => {
+  const f = fixture({ rows: [], source: { enabled: true, status: 'pending' } }); t.after(() => f.manager.dispose());
+  f.manager.start(); await f.manager.refresh(); await settled(); assert.equal(lists(f), 0, 'listing waits for synced originals');
+  f.source.status = 'synced';
+  for (let n = 0; n < 20; n++) f.emitSource(n % 2 ? { type: 'account' } : { type: 'state', workspaceId: WS });
+  await settled();
+  assert.equal(lists(f), 1, 'one pass for the whole burst');
+  assert.ok(f.calls.filter(call => call[0] === 'sourceState').length <= 4, 'events during a check join it');
+});
+
+test('originals events never start a pass for another account, a hidden page or after dispose', async t => {
+  const f = fixture({ rows: [], source: { enabled: false, status: 'auth_required' } });
+  f.manager.start(); await f.manager.refresh(); await settled();
+  // Another signed-in account: the event is dropped by the account guard.
+  f.signIn({ ...OWNER, userId: '99999999-9999-4999-8999-999999999999' }); Object.assign(f.source, { enabled: true, status: 'synced' });
+  f.emitSource({ type: 'account' }); await settled(); assert.equal(lists(f), 0, 'no pass for a different account');
+  f.signIn(copy(OWNER));
+  // A hidden page keeps the existing rule: nothing runs until it is visible again.
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  globalThis.document = { visibilityState: 'hidden', addEventListener() {}, removeEventListener() {} };
+  try { f.emitSource({ type: 'account' }); await settled(); assert.equal(lists(f), 0, 'hidden page starts no pass'); }
+  finally { if (previous) Object.defineProperty(globalThis, 'document', previous); else delete globalThis.document; }
+  f.manager.dispose(); assert.equal(f.sourceListeners.size, 0, 'dispose unsubscribes from the originals engine');
 });

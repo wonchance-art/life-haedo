@@ -10,13 +10,24 @@ const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
+// page.waitForFunction treats a returned Promise as already true; asynchronous page state is awaited in Node.
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const out = process.env.WRITING_SYNC_REPORT_DIR ? path.resolve(process.env.WRITING_SYNC_REPORT_DIR) : path.resolve(__dirname, '../.local/writing-sync');
 const copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 const title = '산책을 마치고 돌아오는 길에서 발견한 작은 질문을 나만의 문장으로 남기고 다시 읽는 기록 — 오래된 관심과 새로운 생각을 함께 이어 쓰기';
 const body = '책을 덮고 천천히 걸었다.\n다시 읽을 문장🌱\n그때의 생각은 아직 완성되지 않았다. 내 언어로 쓰는 일은 오래 머문 자리를 확인하는 일이었다.\n<img src=x onerror="window.__writingInjected=1">';
 // Draft RPCs live in tests/helpers/writing-cloud.cjs, composed into the shared FakeCloud.
-class WritingCloud extends FakeCloud {}
+// `slowAccountCheck` answers one device's account checks (/auth/v1/user) late: the latency of a
+// loaded runner or a slow network while an opened page's originals engine connects.
+class WritingCloud extends FakeCloud {
+  async handle(route, device) {
+    const slow = this.slowAccountCheck;
+    if (slow?.device === device && new URL(route.request().url()).pathname === '/auth/v1/user') await new Promise(resolve => setTimeout(resolve, slow.ms));
+    return super.handle(route, device);
+  }
+}
+const listCount = (server, device) => server.writingRequests.filter(value => value.kind === 'writing-list' && value.device === device).length;
 async function go(page, view = 'write') {
   await page.goto(base + '/index.html?section=' + (view === 'sync' ? 'manage' : 'records') + '&view=' + view); await ready(page); await settle(page);
   await page.waitForFunction(() => !!HaedoLife.Shell.writingSync);
@@ -43,9 +54,9 @@ async function sourceOn(page, id) { await page.evaluate(async id => { await Haed
 async function receiveSources(page, id) {
   await go(page, 'sync'); await page.getByRole('button', { name: '서버 작업공간 목록 확인', exact: true }).click();
   await page.locator('#lifeRemoteList').getByRole('button', { name: '이 작업공간 받기', exact: true }).click();
-  await settle(page); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), id); await go(page);
+  await settle(page); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(value => value === id), id, { timeout: 12000, label: 'received workspace active' }); await go(page);
   // Drafts are listed only for a workspace whose originals sync is enabled and synced for this account.
-  await page.waitForFunction(id => HaedoLife.Shell.sync.getState(id).then(value => value.enabled && value.status === 'synced'), id);
+  await awaitCondition(page, id => HaedoLife.Shell.sync.getState(id).then(value => value.enabled && value.status === 'synced'), id, { timeout: 12000, label: 'received originals synced' });
 }
 async function editStored(page, id, text) { return page.evaluate(async ({ id, text }) => { const s = HaedoLife.Shell.storage, value = await s.getStage(id); return s.saveStage({ ...value, text, updatedAt: new Date().toISOString() }); }, { id, text }); }
 async function openDraft(page, id) { await go(page); const details = page.locator('#lifeWritingDrafts'); if (!await details.evaluate(value => value.open)) await details.locator('summary').click(); await details.locator('[data-stage-id="' + id + '"]').click(); await page.locator('#lifeWritingBody').waitFor(); }
@@ -130,7 +141,9 @@ async function main() {
       await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, ws, id)).outbox.operationId, operation); server.loseWriting.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal((await metadata(a.page, ws, id)).outbox, null); assert.equal(server.draft(accounts.a.id, ws, id).revision, revision);
     });
     await check('missing SQL keeps local input and never creates a remote draft; the next pass connects once it exists', async ({ server, device }) => {
-      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); await sourceOn(a.page, ws); server.writingMissing = true; await auto(a.page);
+      // The draft schema is missing before the originals connect: the pass that their connection
+      // starts must already meet it (no draft may slip through before the flag is set).
+      const a = await device('a'), draft = await fill(a.page), ws = await active(a.page); server.writingMissing = true; await sourceOn(a.page, ws); await auto(a.page);
       assert.equal((await metadata(a.page, ws, draft.stageId)).enabled, false); assert.equal((await stage(a.page, draft.stageId)).text, body); assert.equal(server.draft(accounts.a.id, ws, draft.stageId), undefined);
       await go(a.page); await panel(a.page); await status(a.page, 'not_enabled'); await capture(a.page, 'missing-installation');
       // The missing schema is not probed again every cycle; an explicit retry (force) checks it once.
@@ -177,8 +190,23 @@ async function main() {
       const saved = await stage(a.page, id); assert.equal(saved.state, 'applied'); await auto(a.page);
       const remote = server.draft(accounts.a.id, ws, id); assert.equal(remote.data.state, 'applied'); assert.deepEqual(remote.data.appliedResult, saved.appliedResult);
       assert.equal((await metadata(a.page, ws, id)).status, 'closed'); await go(a.page); await panel(a.page);
-      await receiveSources(b.page, ws); await auto(b.page); assert.equal(await stage(b.page, id), null);
+      const listed = listCount(server, 'b'); await receiveSources(b.page, ws); await auto(b.page);
+      // The absence below means something only if B's pass listed the server drafts (the closed one among them).
+      assert.ok(listCount(server, 'b') > listed, 'B listed the server drafts'); assert.equal(await stage(b.page, id), null);
       assert.ok((await bundle(b.page, ws)).sourceVersions.some(value => value.id === saved.appliedResult.sourceVersionId));
+    });
+    await check('a device that reopens while its originals still connect receives a new draft without waiting for the 30 s poll', async context => {
+      const { server } = context, { a, b, ws } = await paired(context), text = '다시 연 기기가 주기를 기다리지 않고 받는 초안.';
+      await a.page.locator('#lifeWritingNew').click(); const next = await fill(a.page, text, '다시 연 기기의 초안');
+      await auto(a.page); assert.equal(server.draft(accounts.a.id, ws, next.stageId).data.text, text);
+      // B reopens with slow account checks, so its first pass finds the originals not connected.
+      // No pass is driven on B: the draft must arrive from the open itself, well before the 30 s poll.
+      server.slowAccountCheck = { device: 'b', ms: 1500 };
+      try {
+        await go(b.page);
+        await awaitCondition(b.page, id => HaedoLife.Shell.storage.getStage(id).then(value => value?.state === 'draft'), next.stageId, { timeout: 5000, label: 'new draft installed on the reopened device' });
+        assert.equal((await stage(b.page, next.stageId)).text, text);
+      } finally { server.slowAccountCheck = null; }
     });
     await check('server-only drafts beyond one page install automatically without overwriting a local draft', async context => {
       const { server } = context, { b, ws, id } = await paired(context), original = server.draft(accounts.a.id, ws, id);

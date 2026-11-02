@@ -116,11 +116,48 @@
       const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
       availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
     }
+    // A pass lists a workspace's drafts only while its originals sync is enabled, bound to this
+    // account and synced. Workspaces a pass had to skip for that reason are remembered: when the
+    // originals engine connects (an open, a reconnect) or such a workspace's originals become ready,
+    // a pass runs then instead of at the next poll. Other originals changes start no pass.
+    const originalsReady = state => !!state?.enabled && same(state.binding) && state.status === 'synced';
+    const waiting = new Set();
+    let sourceCheck = null, sourceAgain = null, offSource = null, sourceEvents = 0;
+    function onSource(event) {
+      sourceEvents++;
+      if (disposed || !waiting.size || event?.type !== 'account' && event?.type !== 'state') return;
+      const targets = event.type === 'state' && event.workspaceId ? [event.workspaceId] : null;
+      if (targets && !waiting.has(targets[0])) return;
+      // Events that arrive during a check join it: one more check for the union of their targets.
+      if (sourceCheck) { sourceAgain = !targets || sourceAgain === true ? true : new Set([...(sourceAgain || []), ...targets]); return; }
+      sourceCheck = checkSource(targets).finally(() => { sourceCheck = null; });
+    }
+    async function checkSource(targets) {
+      try {
+        for (let next = targets; ; ) {
+          guard(); const epoch = auth.epoch; let ready = false;
+          for (const ws of next ? next.filter(value => waiting.has(value)) : [...waiting]) {
+            let state = null; try { state = await sourceSync.getState(ws); } catch (_) { /* Not ready yet. */ }
+            guard(epoch);
+            if (originalsReady(state)) { waiting.delete(ws); ready = true; }
+          }
+          // automatic() keeps the hidden/suspended/back-forward rules and joins a running pass.
+          if (ready) automatic();
+          if (!sourceAgain || disposed) return;
+          next = sourceAgain === true ? null : [...sourceAgain]; sourceAgain = null;
+        }
+      } catch (_) { sourceAgain = null; /* Another account or a disposed manager: nothing starts. */ }
+    }
     // One pass per workspace: one metadata list (100 per page) decides which draft bodies to fetch.
     // A draft whose local text is unchanged since its last exchange and whose listed server revision
     // equals the acknowledged one is skipped: no body read on cellular for unchanged drafts.
     async function workspacePass(ws, epoch) {
-      const source = await sourceSync.getState(ws); guard(epoch);
+      // An originals event that lands while this read is in flight may already be past: check again.
+      const seen = sourceEvents, wait = () => { waiting.add(ws); if (sourceEvents !== seen) onSource({ type: 'state', workspaceId: ws }); };
+      let source;
+      try { source = await sourceSync.getState(ws); } catch (error) { wait(); throw error; }
+      guard(epoch);
+      if (originalsReady(source)) waiting.delete(ws); else wait();
       if (!source?.enabled || !same(source.binding)) return;
       let listed = null;
       if (source.status === 'synced') {
@@ -207,6 +244,7 @@
       root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
       root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
       try { offAll = storage.subscribeAll?.(onStorage) || null; } catch (_) { offAll = null; }
+      try { offSource = sourceSync.subscribe?.(onSource) || null; } catch (_) { offSource = null; }
       if (materials !== null) {
         try { material = (materials || root.HaedoLife?.MaterialContinuitySync?.automatic)?.({ storage, auth }) || null; material?.start(); }
         catch (_) { material = null; }
@@ -214,7 +252,7 @@
       automatic();
     }
     function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval); root.clearTimeout(soon); soon = null;
-      offAll?.(); material?.dispose(); material = null;
+      offAll?.(); offSource?.(); offSource = null; waiting.clear(); sourceAgain = null; material?.dispose(); material = null;
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
