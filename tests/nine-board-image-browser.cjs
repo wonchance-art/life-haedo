@@ -23,7 +23,7 @@ async function main(){
    b.areas[1].items[1].reference={kind:'source',value:{format:'life-source-reference-v1',workspaceId:w,sourceId:'anonymous_source',sourceVersionId:'exact_version',locator:{start:0,end:4},quote:'개인근거',contentHash:'a'.repeat(64),title:'익명 근거',sourceKey:'anonymous',url:'https://example.org/exact'}};
    v.format='life-nine-board-v2';v.boards.push(b);await s.saveNineBoard(w,v,v.revision);
   });
-  await go();const original=await read();await page.locator('.nb-files > summary').click();await page.locator('#nbImageArea').selectOption('image_area');
+  await go();const original=await read();await page.locator('.nb-files > summary').click();{const help=await page.locator('.nb-files > p.life-help').first().textContent();assert.match(help,/^선택 영역 공개는 별도로 검토하며 구성 동기화·자료 백업과 구분합니다\./);assert(!help.includes('이 브라우저'));}await page.locator('#nbImageArea').selectOption('image_area');
   let event=page.waitForEvent('download');await click('선택 영역 PNG 받기');const image=await event,png=await fs.readFile(await image.path());await fs.writeFile(path.join(out,'selected-area.png'),png);
   assert.equal(png.subarray(1,4).toString(),'PNG');assert.equal(png.readUInt32BE(16),1800);assert.equal(png.readUInt32BE(20),2100);
   assert.deepEqual(await read(),original);report.checks.push('Actual UI downloads 1800×2100 PNG from selected second area without changing any stored data');
@@ -31,7 +31,7 @@ async function main(){
   event=page.waitForEvent('download');await click('HTML 보기 파일 받기');const html=await fs.readFile(await (await event).path(),'utf8');assert.match(html,/개인근거/);assert.match(html,/이미지에 자동 포함하지 않는 선택 이유/);
   await page.getByLabel('9칸 구성 JSON 파일',{exact:true}).setInputFiles({name:'anonymous.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});await page.locator('.nb-import input[type=checkbox]').first().check();await click('선택한 구성 새 사본으로 추가');await page.locator('.nb-import').waitFor({state:'detached'});
   const restored=await read();assert.deepEqual(restored.nine.boards[0],original.nine.boards[0]);assert.notEqual(restored.nine.boards[1].id,original.nine.boards[0].id);assert.deepEqual(restored.nine.boards[1].areas[1].items,original.nine.boards[0].areas[1].items);for(const key of ['collection','workbench','bundle','drafts'])assert.deepEqual(restored[key],original[key]);report.checks.push('JSON/HTML retain full reasons and exact evidence; JSON restores detached copy preserving originals and other stores');
-  await page.locator('.nb-files > summary').click();await page.evaluate(()=>{window.__toBlob=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(cb){cb(null);};});await click('선택 영역 PNG 받기');await page.locator('.nb-error').waitFor({state:'visible'});assert.match(await page.locator('.nb-error').textContent(),/PNG를 만들지 못했습니다/);assert.deepEqual(await read(),restored);assert.equal(await page.locator('.nb-status').textContent(),'이 브라우저에 저장됨');
+  await page.locator('.nb-files > summary').click();await page.evaluate(()=>{window.__toBlob=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(cb){cb(null);};});await click('선택 영역 PNG 받기');await page.locator('.nb-error').waitFor({state:'visible'});assert.match(await page.locator('.nb-error').textContent(),/PNG를 만들지 못했습니다/);assert.deepEqual(await read(),restored);assert.equal(await page.locator('.nb-status').textContent(),'저장됨');
   await page.evaluate(()=>HTMLCanvasElement.prototype.toBlob=__toBlob);event=page.waitForEvent('download');await click('선택 영역 PNG 받기');await event;report.checks.push('Canvas export failure preserves all data, shows useful error and retries successfully');
   for(const width of [1440,820,390]){
    await page.setViewportSize({width,height:1000});await page.locator('.nb-image-export').scrollIntoViewIfNeeded();const name='controls-'+width+'.png';await page.screenshot({path:path.join(out,name)});report.screenshots.push(name);
@@ -52,6 +52,15 @@ async function main(){
   event=page.waitForEvent('download');await click('사진 포함 백업');const zip=await fs.readFile(await (await event).path());await fs.writeFile(path.join(out,'png-post-backup.zip'),zip);const files=Z.unzipSync(zip),manifest=JSON.parse(Z.strFromU8(files['manifest.json']));
   assert.equal(manifest.photos.length,1);const photo=manifest.photos[0],originalPng=Buffer.from(files['photos/'+photo.id]);assert.equal(photo.width,1800);assert.equal(photo.height,2100);assert.deepEqual(originalPng,png);assert.deepEqual(manifest.ops,post.ops);assert.equal(photo.digest,post.photos[0].digest);assert.deepEqual(await read(),restored);
   assert.deepEqual(publicWrites,[]);assert.equal(server.requests.filter(r=>r.kind==='write').length,0);report.remoteWrites=publicWrites.length;report.syncWrites=server.requests.filter(r=>r.kind==='write').length;await page.screenshot({path:path.join(out,'png-post-reopened-820.png'),fullPage:true});report.screenshots.push('png-post-reopened-820.png');report.checks.push('Downloaded PNG attaches through home writer with editable description/source/alt, saves privately, reopens and exports ZIP with byte-identical 1800×2100 PNG; no public or remote writes');
+  // The same real editor over a store that is not account-scoped keeps the browser-only wording.
+  const nineSource=await fs.readFile('assets/life/nine-board-ui.js','utf8');
+  await context.route(base+'/assets/life/nine-board-ui.js',route=>route.fulfill({contentType:'application/javascript',body:nineSource+`
+ {const original=HaedoLife.NineBoardUI.create;HaedoLife.NineBoardUI.create=options=>original({...options,storage:{...options.storage,isAccountScoped:false}});}
+ `}));
+  await page.setViewportSize({width:1440,height:1000});await go();await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
+  assert.equal(await page.locator('.nb-status').textContent(),'이 브라우저에 저장됨');await page.locator('.nb-files > summary').click();
+  assert.match(await page.locator('.nb-files > p.life-help').first().textContent(),/^원래 구성은 이 브라우저에 보관됩니다\. 선택 영역 공개는 별도로 검토하며/);
+  await context.unroute(base+'/assets/life/nine-board-ui.js');report.checks.push('A store without an account keeps the browser-only status and file note; account stores never show them');
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);
  }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true});throw error;}
  finally{await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}

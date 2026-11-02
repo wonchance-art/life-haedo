@@ -621,6 +621,9 @@
       if (error?.code === 'pending_storage_failed') return '요청 복구 정보를 보관하지 못해 전송하지 않았습니다. 브라우저 저장 설정을 확인해 주세요.';
       return error?.message || '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.';
     }
+    // A request confirmed in another tab, or set aside because it cannot be settled, no longer blocks.
+    const settledElsewhere = error => ['pending_resolved', 'pending_set_aside', 'pending_set_aside_elsewhere', 'replay_unresolved'].includes(error?.code);
+    const setAsideText = () => life.ShareRemote?.message?.('pending_set_aside') || '읽지 못한 이전 게시 요청을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.';
     function makeShareDraft(session) {
       const share = shareState(session);
       share.consented = false; share.draft = null;
@@ -646,6 +649,7 @@
         if (!sharing(session, sequence)) return;
         share.head = head; share.loaded = true; share.phase = 'ready';
         if (!owner().pending(session.workspaceId)) makeShareDraft(session);
+        if (owner().takeSetAside?.(session.workspaceId)) share.message = setAsideText();
       } catch (error) {
         if (!sharing(session, sequence)) return;
         share.error = shareError(error); share.phase = 'error';
@@ -708,6 +712,12 @@
         announceSafe(share.error || share.message, session);
       } catch (error) {
         if (!sharing(session, sequence)) return;
+        if (settledElsewhere(error)) {
+          // The request no longer blocks this page: show what the server holds now.
+          await refreshShare(session);
+          if (session.share?.open && workspaceIs(session) && current === session) { share.message = shareError(error); announceSafe(share.message, session); redraw(); }
+          return;
+        }
         share.error = shareError(error); share.phase = 'error';
         // A transport error cannot prove whether a public change committed.
         if (error?.code === 'publish_unknown' || error?.code === 'request_cancelled') share.loaded = false;
@@ -734,9 +744,10 @@
       status.id = 'wbShareStatus'; status.setAttribute('role', 'status'); box.append(status);
       box.append(notice('새 글쓰기에서 저장한 글과 사진은 이 공개 사본에 포함되지 않습니다. 기존 기록과 첨부 글에서 선택한 내용만 검토해 공개할 수 있습니다.'));
       const error = el('p', share.error, 'wb-incoming-error'); error.id = 'wbShareError'; error.setAttribute('role', 'alert'); error.hidden = !share.error; box.append(error);
-      if (share.message) box.append(notice(share.message));
       let pending = null, pendingError = null;
       try { pending = shareRemote?.pending(session.workspaceId); } catch (cause) { pendingError = cause; error.textContent = shareError(cause); error.hidden = false; }
+      if (!pending && !pendingError && shareRemote?.takeSetAside?.(session.workspaceId)) share.message = setAsideText();
+      if (share.message) box.append(notice(share.message));
       if (pending) box.append(notice('아직 확인하지 못한 요청이 있습니다. 새 게시 대신 같은 요청의 결과를 확인해 주세요.'));
       if (share.loaded && share.head?.status === 'published' && !pending && !pendingError) {
         const link = el('a', '공개 페이지 열기', 'wb-source-link'); link.id = 'wbShareUrl';
@@ -902,7 +913,14 @@
             updateHead(latest);
           }
         }
-      } catch (error) { if (publicShowing(token, session, listing)) { listing.error = shareError(error); listing.confirm = null; } }
+      } catch (error) {
+        if (publicShowing(token, session, listing) && settledElsewhere(error)) {
+          try {
+            const head = await owner().get(row.workspaceId);
+            if (publicShowing(token, session, listing)) { updateHead(head); listing.message = shareError(error) + ' ' + listing.message; }
+          } catch (cause) { if (publicShowing(token, session, listing)) { listing.error = shareError(cause); listing.confirm = null; } }
+        } else if (publicShowing(token, session, listing)) { listing.error = shareError(error); listing.confirm = null; }
+      }
       finally { if (publicShowing(token, session, listing)) {
         listing.busy = false; redraw();
         const article = [...bodyNode.querySelectorAll('.wb-public-page')].find(item => item.dataset.workspaceId === row.workspaceId);
@@ -926,6 +944,7 @@
         actions.append(link);
         let pending = null, pendingError = null;
         try { pending = shareRemote?.pending(row.workspaceId); } catch (cause) { pendingError = cause; }
+        if (!pending && !pendingError && shareRemote?.takeSetAside?.(row.workspaceId)) article.append(notice(setAsideText()));
         if (pendingError) article.append(el('p', shareError(pendingError), 'wb-incoming-error'));
         else if (pending) {
           article.append(notice('이 페이지에 확인하지 못한 요청이 있습니다.'));

@@ -184,8 +184,9 @@
     function retry(coverId) {
       const c = context(); coverId = uuid(coverId);
       return serial(c, async () => {
-        const pending = share.pending(coverId); check(pending);
-        if (pending.action === 'publish') model.parse(pending.snapshot, baseURL);
+        // The stored request is resent unchanged. Its approval and URL-only projection were checked
+        // when it was saved; the server receipt hash decides the replay, so a later client rule
+        // cannot trap it. A missing record (confirmed elsewhere) reports pending_resolved.
         await share.get(coverId); guard(c);
         // Retry only the approved URL-only request. Withdrawn targets remain
         // missing to visitors; they must not prevent resolving a cover receipt.

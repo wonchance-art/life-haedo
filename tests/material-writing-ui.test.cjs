@@ -45,6 +45,7 @@ async function fixture(t, options = {}) {
     }, readPhotoPost: async (ws, id) => clone(docs.get(id)),
     subscribe: (ws, fn) => { changeListener = fn; return () => { changeListener = null; }; },
   };
+  if (options.accountScoped) storage.isAccountScoped = true;
   global.HaedoLife = { Core: C, MaterialWriting: M, PhotoPost: P, Discovery: require('../assets/life/discovery.js'), MaterialWritingSources: { create(value) { sourceOptions = value; return { mount: async () => { await beforeSources?.(); }, refresh: async () => {}, pending: () => sourcePending, getView: () => sourceView, dispose() {} }; } } };
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../assets/life/material-writing-ui.js'), 'utf8'));
   const host = document.createElement('main'); document.body.append(host);
@@ -251,4 +252,18 @@ test('a preparation changed on another device reloads a clean view and never rep
   assert.equal(plans.find(value => value.id === planId).title, '그사이 다시 바뀐 제목');
   assert.ok(plans.some(value => value.id !== planId && value.title === '아직 저장하지 않은 내 제목'), 'the unsaved input is kept as its own preparation copy');
   assert.equal(f.get('#mwTitle').value, '그사이 다시 바뀐 제목'); assert.equal(f.get('#mwIncoming').hidden, true);
+});
+
+test('save line states the actual store: account-synced preparations never claim to stay in this browser', async t => {
+  for (const accountScoped of [true, false]) {
+    await t.test(accountScoped ? 'account' : 'local only', async t => {
+      const f = await fixture(t, { accountScoped }), gate = deferred();
+      assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      f.setBeforeSave(() => gate.promise); await f.input('#mwTitle', '저장 위치 확인'); const flushing = f.ui.flush(); await settle();
+      assert.equal(f.get('.mw-status').textContent, accountScoped ? '저장 중…' : '이 브라우저에 저장 중…');
+      gate.resolve(); await flushing; await settle();
+      assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      if (accountScoped) assert(!/브라우저/.test(f.host.textContent), 'no browser-only storage wording while the account syncs');
+    });
+  }
 });
