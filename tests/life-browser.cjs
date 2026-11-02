@@ -60,28 +60,39 @@ async function shellChecks(browser, observe) {
 }
 
 async function delayedPrepareCheck(browser, observe) {
+  // Contract (AGENTS.md "지켜야 할 제품 규칙": "개인 화면은 공용 인증 설정과 서버 계정
+  // 확인이 필요하다"; assets/life/shell.js:206 never mounts on a read-only address;
+  // assets/life/ui.js:144 starts account BlogSync on every mount, whose remote
+  // refuses an unverified HaedoAuth at assets/life/blog-remote.js:53). The private
+  // UI therefore runs only for a verified account, so this check signs in with the
+  // anonymous fixture and lets the real Shell mount it. The delayed Core is
+  // installed before core.js runs; the Shell passes it to UI.mount unchanged.
   const context = await browser.newContext({serviceWorkers:'block'});
+  await platformContext(context,new FakeCloud(),'r-delay');
+  await context.addInitScript(() => {
+    const life = window.HaedoLife = window.HaedoLife || {};
+    let core;
+    Object.defineProperty(life,'Core',{configurable:true,enumerable:true,get:() => core,set:original => {
+      core = {...original,prepareImport:async (...args) => {
+        const prepared = await original.prepareImport(...args);
+        if (window.__delayPrepareOnce) {
+          window.__delayPrepareOnce = false;
+          window.__prepareWaiting = true;
+          await new Promise(resolve => { window.__releasePrepare = resolve; });
+        }
+        return prepared;
+      }};
+    }});
+  });
   try {
     await check('UI regression: changed input discards delayed prepare result', async () => {
       const page = await context.newPage(); observe(page);
-      await page.goto(`${base}/life.html?view-only=1`);
-      await page.waitForFunction(() => globalThis.HaedoLife?.Shell?.ready);
-      await page.evaluate(async () => {
-        await HaedoLife.Shell.ready;
-        const original = HaedoLife.Core;
-        let delayOnce = true;
-        const core = {...original,prepareImport:async (...args) => {
-          const prepared = await original.prepareImport(...args);
-          if (delayOnce) {
-            delayOnce = false;
-            window.__prepareWaiting = true;
-            await new Promise(resolve => { window.__releasePrepare = resolve; });
-          }
-          return prepared;
-        }};
-        await HaedoLife.UI.mount(document.querySelector('#lifeApp'),{core,storage:HaedoLife.Storage,legacy:HaedoLife.Legacy});
-        document.querySelector('#lifeApp').hidden=false;
-      });
+      await page.goto(`${base}/life.html`);
+      await page.waitForFunction(() => globalThis.HaedoLife?.Shell?.sync);
+      await page.evaluate(() => HaedoLife.Shell.ready);
+      await page.locator('.life-app').waitFor();
+      await openSection(page,'records');
+      await page.evaluate(() => { window.__delayPrepareOnce = true; });
       await page.getByRole('button',{name:'가져오기',exact:true}).click();
       await page.locator('#lifeImportTitle').fill('비동기 검토 경합');
       await page.locator('#lifeImportText').fill('검토 시작 때의 원문');
@@ -100,7 +111,7 @@ async function delayedPrepareCheck(browser, observe) {
       assert.equal(await page.getByRole('button',{name:'자료만 보관',exact:true}).count(),0);
       assert.match(await page.locator('#lifeError').textContent(),/입력이 바뀌어/);
       assert.equal(await page.locator('#lifeImportText').inputValue(),'기다리는 동안 바뀐 원문');
-      assert.equal(await page.evaluate(async () => (await HaedoLife.Storage.read(await HaedoLife.Storage.getActive())).sources.length),0);
+      assert.equal(await page.evaluate(async () => (await HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive())).sources.length),0);
       await page.getByRole('button',{name:'원문·출처 확인',exact:true}).click();
       await page.locator('#lifeReviewText').waitFor();
       assert.equal(await page.locator('#lifeReviewText').inputValue(),'기다리는 동안 바뀐 원문');

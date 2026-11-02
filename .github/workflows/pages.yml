@@ -43,6 +43,10 @@ jobs:
         run: node tests/run-naver-observed-baseline-postgres.cjs
       - name: Install pinned account library SQL test dependencies
         run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
+      - name: Replay every migration on a disposable PostgreSQL (account sync re-install, Naver status check, final-definition list)
+        env:
+          SQL_REPLAY_REQUIRED: "1"
+        run: npm run test:sql-replay
       - name: Verify account library ownership, default races and immutable original manifests
         run: node tests/run-account-library-postgres.cjs
       - name: Verify account documents ownership, CAS, idempotency and change cursor
@@ -496,6 +500,12 @@ jobs:
       - name: Verify private reactions, saved lists, portable copies and explicit personal recommendations
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reactions-browser.cjs
+      - name: Verify life writing flow
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-writing-browser.cjs
+      - name: Verify life workbench flow
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-workbench-browser.cjs
 
       - name: Verify retained travel writing, original photos and verified account resume
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
@@ -511,6 +521,21 @@ jobs:
       - name: Verify readonly local post finding and original preservation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/local-post-finder-browser.cjs
+      - name: Verify workbench storage boundaries in the browser
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/workbench-storage-browser.cjs
+      - name: Verify platform import into the account workspace
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/platform-import-browser.cjs
+      - name: Verify writing sync in the life view
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-writing-sync-browser.cjs
+      - name: Verify life search results and return
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-search-browser.cjs
+      - name: Verify app feel interactions
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/app-feel-browser.cjs
       - name: Stop the local server
         if: always()
         run: |

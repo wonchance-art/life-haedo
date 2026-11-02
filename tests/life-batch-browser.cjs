@@ -93,6 +93,14 @@ async function main() {
       assert.equal(await row(page, 0).getAttribute('data-batch-state'), 'applied');
       assert.equal(await row(page, 2).getAttribute('data-batch-state'), 'draft');
       await row(page, 0).getByRole('button', { name: '보관한 원문 열기', exact: true }).click(); await settle(page);
+      // Contract (docs/design-review/material-markdown-edit-delete.md:25-26, PRODUCT.md:23):
+      // "Markdown 자료의 기본은 서식 보기다" and the exact source is read through
+      // "원문 텍스트 보기". first.md is text/markdown, so the reader opens formatted;
+      // switch with the real control, then require the unchanged CRLF bytes.
+      assert.equal(await page.locator('#lifeSourceText').getAttribute('data-reading-mode'), 'formatted');
+      await page.locator('#lifeSourceInfoToggle').click();
+      await page.getByRole('button', { name: '원문 텍스트 보기', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('#lifeSourceText')?.dataset.readingMode === 'raw');
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await page.locator('#lifeBatchReturn').click(); await settle(page);
       await review(page, 1); await click(page, '원문·출처 확인');
