@@ -41,6 +41,7 @@ async function durablePhoto(page, title, status) {
   } while (Date.now() < deadline);
   throw new Error('Photo post was not stored: ' + JSON.stringify(rows));
 }
+const historyRecord = page => page.evaluate(() => ({ idx: history.state?.haedo?.idx, key: history.state?.haedo?.key }));
 async function capture(page, scene, width) {
   await page.evaluate(async () => { await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); }); await page.mouse.move(0, 0);
   const metrics = await page.evaluate(inspectHome, '#lifeApp');
@@ -332,9 +333,10 @@ async function main() {
       assert.equal(await page.locator('#lifeVersion').inputValue(), older, 'Back reopens the exact version that was read');
     }, 1440);
     for (const width of [1440, 390]) await check('history: unsaved input and Korean composition keep the screen on back ' + width, async ({ page }) => {
-      await page.goto(base + '/index.html'); await ready(page); await home(page);
+      await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+      await nav(page, 'home'); await mode(page, 'home'); await openLibrary(page);
       await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
-      const importUrl = page.url();
+      const importUrl = page.url(), importEntry = await historyRecord(page);
       await page.evaluate(() => { window.__homeFailStage = true; });
       await page.locator('#lifeImportText').fill('뒤로 가기 실패에도 남길 입력');
       await page.goBack(); await settle(page);
@@ -342,6 +344,15 @@ async function main() {
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '뒤로 가기 실패에도 남길 입력');
       assert.match(await page.locator('#lifeApp .life-error').textContent(), /초안 저장 실패/, 'The refused move keeps its failure message');
+      // Two presses in one task while the save keeps failing: the browser ends
+      // on the entry of the screen that is still shown, not further back.
+      await page.evaluate(() => { history.back(); history.back(); });
+      await page.waitForFunction(key => history.state?.haedo?.key === key && !document.querySelector('.life-app[aria-busy="true"]'), importEntry.key);
+      await page.waitForTimeout(300); // let any further traversal land before re-checking
+      assert.equal((await historyRecord(page)).key, importEntry.key);
+      assert.equal(page.url(), importUrl);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import');
+      assert.equal(await page.locator('#lifeImportText').inputValue(), '뒤로 가기 실패에도 남길 입력');
       // A failed review save is retried explicitly, as for the in-app return.
       await page.evaluate(() => { window.__homeFailStage = false; });
       await page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(page);
@@ -380,6 +391,110 @@ async function main() {
       assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '자료실로 돌아가기');
       await page.locator('[data-subview-return]').click(); await mode(page, 'sources');
     }, width);
+    await check('history: back pressed during a move is refused and positions stay exact', async ({ page }) => {
+      const f = await fixture(page); await nav(page, 'records'); await mode(page, 'sources');
+      const list = await historyRecord(page);
+      await page.locator('.life-source-open', { hasText: '전시를 보고 돌아오는 길' }).first().click(); await mode(page, 'source');
+      const older = f.refs[0].versionId;
+      await page.locator('#lifeVersion').selectOption(older); await settle(page);
+      await page.waitForFunction(id => document.querySelector('#lifeVersion')?.value === id, older);
+      const reader = await historyRecord(page);
+      // Click and browser back in the same task: the move finishes, the back press is undone.
+      // Retry only when another action made the app ignore the click itself.
+      let pressed = false;
+      for (let attempt = 0; attempt < 5 && !pressed; attempt++) {
+        await settle(page);
+        pressed = await page.evaluate(() => {
+          document.querySelector('#lifeSourceMaterialWriting').click();
+          if (document.querySelector('.life-app')?.getAttribute('aria-busy') !== 'true') return false;
+          history.back(); return true;
+        });
+      }
+      assert.equal(pressed, true, 'The move started before the back press');
+      // The shown screen always matches its entry. A back press that arrives
+      // during the move is undone (writing stays); one the browser applies after
+      // the move was recorded opens the list, with reader and writing ahead of it.
+      await settle(page);
+      await page.waitForFunction(() => { const shown = document.querySelector('#lifeMain')?.dataset.mode, entry = history.state?.haedo?.entry?.mode;
+        return !document.querySelector('.life-app[aria-busy="true"]') && ['page', 'sources'].includes(shown) && shown === entry; });
+      if (await page.locator('#lifeMain').getAttribute('data-mode') === 'sources') {
+        assert.equal((await historyRecord(page)).key, list.key);
+        await page.goForward(); await mode(page, 'source');
+        assert.equal((await historyRecord(page)).key, reader.key);
+        assert.equal(await page.locator('#lifeVersion').inputValue(), older);
+        await page.goForward();
+      }
+      await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.waitForFunction(idx => history.state?.haedo?.idx === idx + 1, reader.idx);
+      assert.equal(new URL(page.url()).searchParams.get('view'), 'page');
+      // A refused back during Korean composition returns to exactly this entry.
+      const writing = await historyRecord(page);
+      const title = page.locator('#mwTitle');
+      await title.evaluate(node => { window.__historyComposing = node; node.focus(); node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '한' })); node.value = '조합 중인 한'; node.dispatchEvent(new InputEvent('input', { bubbles: true, data: '한', inputType: 'insertCompositionText', isComposing: true })); });
+      await page.goBack(); await settle(page);
+      await page.waitForFunction(key => history.state?.haedo?.key === key, writing.key);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page');
+      assert.equal(await title.evaluate(node => node === window.__historyComposing), true);
+      assert.equal(await title.inputValue(), '조합 중인 한');
+      await title.evaluate(node => { node.value = '조합 중인 한글'; node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '글' })); node.dispatchEvent(new Event('input', { bubbles: true })); });
+      await page.goBack(); await mode(page, 'source');
+      assert.equal((await historyRecord(page)).key, reader.key, 'Back reaches the reader, not an entry before it');
+      assert.equal(await page.locator('#lifeVersion').inputValue(), older);
+      await page.goBack(); await mode(page, 'sources');
+      assert.equal((await historyRecord(page)).key, list.key);
+    }, 1440);
+    await check('history: state holds identifiers only, never titles, bodies or search text', async ({ page, context }) => {
+      await context.addInitScript(() => {
+        window.__historyWrites = [];
+        for (const name of ['pushState', 'replaceState']) {
+          const original = History.prototype[name];
+          History.prototype[name] = function (data, unused, url) { window.__historyWrites.push(JSON.stringify(data)); return original.call(this, data, unused, url); };
+        }
+      });
+      const f = await fixture(page);
+      await home(page);
+      await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
+      await page.locator('#photoTitle').fill('이력비공개제목'); await page.locator('.ql-editor').fill('이력비공개본문 문장');
+      await page.getByRole('button', { name: '글 저장', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('#lifeApp .haedo-page-heading h1')?.textContent === '글 읽기');
+      await back(page, 'home');
+      await page.locator('[aria-controls="homeSearchPanel"]').click(); await page.locator('#homePostSearch').fill('이력비공개'); await settle(page);
+      await page.locator('#lifeMain').getByText('이력비공개제목').first().click(); await mode(page, 'page');
+      await page.goBack(); await mode(page, 'home');
+      await nav(page, 'records'); if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
+      await mode(page, 'sources');
+      await page.locator('#lifeSearch').fill('산책과 공간');
+      await page.locator('#lifeSearchResults .life-source-open').first().click(); await mode(page, 'source');
+      await page.goBack(); await mode(page, 'sources');
+      const writes = await page.evaluate(() => window.__historyWrites.join('\n'));
+      assert(writes.includes('"haedo"'), 'history entries were written');
+      for (const secret of ['이력비공개제목', '이력비공개본문', '이력비공개', '산책과 공간', f.refs[0].title.slice(0, 12), 'instagram.com', 'blog.naver.com'])
+        assert.equal(writes.includes(secret), false, 'history.state must not contain ' + secret);
+    }, 1440);
+    await check('history: a blog task never follows the records tab', async ({ page }) => {
+      await fixture(page); await nav(page, 'records'); await mode(page, 'sources');
+      await openRecordsMenu(page); await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
+      await nav(page, 'home'); await mode(page, 'home'); await openLibrary(page);
+      await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
+      await page.locator('#photoTitle').fill('자료실 탭 확인용 글');
+      await nav(page, 'records'); await mode(page, 'page');
+      assert.equal(await heading(page).textContent(), '선택 자료 페이지');
+      assert.equal(await page.locator('#photoTitle').isVisible(), false);
+      const url = new URL(page.url()); assert.equal(url.searchParams.get('section'), 'records'); assert.equal(url.searchParams.get('blog'), null);
+      await page.goBack(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '자료실 탭 확인용 글');
+    }, 1440);
+    await check('history: in-app return to the previous entry does not stack the closed screen', async ({ page }) => {
+      await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+      await nav(page, 'home'); await mode(page, 'home'); await openLibrary(page);
+      const homeEntry = await historyRecord(page);
+      await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
+      await back(page, 'home');
+      await page.waitForFunction(key => history.state?.haedo?.key === key, homeEntry.key);
+      await page.goBack(); await mode(page, 'sources');
+      await page.goForward(); await mode(page, 'home');
+      await page.goForward(); await mode(page, 'import');
+    }, 390);
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
   } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(JSON.stringify({ passed: report.checks.filter(x => x.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length }));
