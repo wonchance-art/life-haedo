@@ -303,7 +303,10 @@
       toolbar.append(selector, button('새 작성 준비', async () => {
         await flushInternal(); guard(); const value = M.create(fresh); state.plans.push(value);
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
-        selected = value.id; sourceView = null; view = null; mark(); await render(); surface.querySelector('#mwTitle')?.focus();
+        selected = value.id; sourceView = null; view = null; mark();
+        // render() builds the form synchronously and then waits for the source list. Focus the new
+        // title now: focusing after that load would pull a field chosen meanwhile (and its typing) into the title.
+        const shown = render(); surface?.querySelector('#mwTitle')?.focus(); await shown;
       }, { id: 'mwNew' }));
       if (typeof onClose === 'function') toolbar.append(button('돌아가기', () => navigate(onClose), { id: 'mwClose' }));
       status = el('p', '', 'life-meta mw-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');

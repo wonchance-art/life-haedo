@@ -279,6 +279,22 @@ async function main() {
       assert.equal(await page.locator('#mwPlanSelect').inputValue(), first); assert.equal(await page.locator('#mwTitle').inputValue(), '불러오는 중 선택 첫 준비'); assert.equal(await page.locator('.mw-error').isHidden(), true);
       assert.equal((await readPreparation(page)).plans.length, 2, 'no copy or new preparation was made');
     });
+    await check('A field chosen while a new preparation\'s sources load keeps focus; later typing never moves into the title', async () => {
+      const d = await fixture('material-new-focus'); page = d.page; await enter(page);
+      // Hold only the real source list's mount, as a slow source read on a real device would.
+      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      await page.locator('#mwNew').click(); await page.waitForFunction(() => window.__mwSourcesHeld === true && !!document.querySelector('#mwTitle'));
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'mwTitle', 'the new title is focused as soon as the form exists');
+      await page.locator('#mwTitle').fill('불러오는 중 만든 준비'); await page.locator('#mwQuestion').fill('PRIVATE_QUESTION_SENTINEL');
+      await page.evaluate(() => window.__mwReleaseSources()); await page.locator('.mw-source-search').waitFor();
+      // Keystrokes after the load finishes still belong to the field the user chose.
+      await page.keyboard.type(' 계속'); await saved(page);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'mwQuestion');
+      assert.equal(await page.locator('#mwTitle').inputValue(), '불러오는 중 만든 준비'); assert.equal(await page.locator('#mwQuestion').inputValue(), 'PRIVATE_QUESTION_SENTINEL 계속');
+      const planId = await page.locator('#mwPlanSelect').inputValue(), stored = (await readPreparation(page)).plans.find(p => p.id === planId);
+      assert.equal(stored.title, '불러오는 중 만든 준비'); assert.equal(stored.question, 'PRIVATE_QUESTION_SENTINEL 계속');
+    });
     await check('A real SDK account change during exact-source hashing cancels the old account handoff and leaves both accounts free of partial posts', async () => {
       const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id));
       const d = await fixture('material-late-account'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);
