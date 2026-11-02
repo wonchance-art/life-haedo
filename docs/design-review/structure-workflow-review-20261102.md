@@ -271,13 +271,13 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 
 운영에는 있거나 운영에서만 만든 것으로, 저장소만으로 다시 만들 수 없는 항목이다. 이 작업은 운영을 조회하지 않았다. 각 항목에 총괄이 운영에서 확인할 것만 적었다.
 
-아래 표의 오른쪽 열은 모두 **총괄 확인 필요** 항목이다(작업자는 운영을 조회하지 않는다).
+아래 표의 오른쪽 열은 모두 **총괄 확인 필요** 항목이다(작업자는 운영을 조회하지 않는다). 11-02 총괄 결정·확인은 1·3행에 따로 표시했다.
 
 | # | 항목 | 저장소 쪽 근거 | 총괄이 운영에서 확인할 것 (총괄 확인 필요) |
 |---|---|---|---|
-| 1 | Edge `haedo-discovery-private` (v1, 10-29 17:50 배포) | 소스가 어느 브랜치에도 없다(`roadmap.md:13`). 앱 코드에 이 이름을 부르는 곳이 없다(`grep -rn "haedo-discovery-private" assets` 결과 0) | 함수 소스·`verify_jwt`·사용하는 비밀값 이름, 최근 호출 기록. 저장소로 옮길지 폐기할지 결정 |
+| 1 | Edge `haedo-discovery-private` (v1, 10-29 17:50 배포) | 소스가 어느 브랜치에도 없다(`roadmap.md:13`). 앱 코드에 이 이름을 부르는 곳이 없다(`grep -rn "haedo-discovery-private" assets` 결과 0) | 함수 소스·`verify_jwt`·사용하는 비밀값 이름, 최근 호출 기록. 저장소로 옮길지 폐기할지 결정. **11-02 총괄 결정:** 총괄이 운영 정의를 읽어 별도 PR로 소스를 회수한다. 실기기 확인 뒤 정리 묶음에 넣는다 |
 | 2 | 마이그레이션 이력 `20261029084926_discovery_private_reader` | 같은 이름 파일 없음(`ls supabase/migrations`) | 이력의 SQL 문, 만든 객체(함수·표·권한)와 그 객체에 의존하는 것 |
-| 3 | 이력 번호와 파일 이름 불일치 | 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`, 운영 이력 `20261102063845_…`(`roadmap.md:23`). 이전에는 파일 이름을 운영 번호에 맞췄다(`docs/life-tools-design/blog-installation.md:7-8`, `docs/design-review/account-materials.md:55`). 총괄 설명(11-02): 총괄이 MCP `apply_migration`으로 적용해 이력 버전이 적용 시각 `20261102063845`로 기록됐고, 내용은 저장소 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`과 같다. 대응: `20261102063845` ↔ `20261102100000` | 운영 이력 전체 목록과 저장소 파일 이름을 1:1 대조해 불일치 목록을 만든다 |
+| 3 | 이력 번호와 파일 이름 불일치 | 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`, 운영 이력 `20261102063845_…`(`roadmap.md:23`). 이전에는 파일 이름을 운영 번호에 맞췄다(`docs/life-tools-design/blog-installation.md:7-8`, `docs/design-review/account-materials.md:55`). 총괄 설명(11-02): 총괄이 MCP `apply_migration`으로 적용해 이력 버전이 적용 시각 `20261102063845`로 기록됐고, 내용은 저장소 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`과 같다. 대응: `20261102063845` ↔ `20261102100000` | **확인됨(총괄, 11-02).** 운영 저장 함수 본문 md5(`b2c5bd17…`)가 저장소 파일과 같다. 남은 일: 운영 이력 전체 목록과 저장소 파일 이름을 1:1 대조해 다른 불일치가 있는지 본다 |
 | 4 | 11-01 마이그레이션 6개를 SQL Editor DO 블록으로 설치 | `supabase/operations/20261101-account-sync-install.sql:1-16`, `docs/design-review/account-sync-everywhere.md:71-88` | 이 6개 버전(`20261101090000`~`20261101160000`)이 운영 이력에 있는지. 없으면 이력 행 추가 여부를 소유자에게 묻는다 |
 | 5 | `pg_cron`·`pg_net` 확장과 예약 `haedo-naver-capture-poll`, `haedo-naver-blog-poll` | 마이그레이션이 아니라 운영 SQL이 만든다(`supabase/operations/naver-collection-activation.sql:76-96`) | `cron.job`의 이름·주기·활성·명령 본문이 이 파일과 같은지, 확장 버전 |
 | 6 | Vault 비밀값 `haedo_naver_project_url`, `haedo_naver_service_role_key` | 수동 준비 전제(`naver-collection-activation.sql:8-10,66-71`) | 두 이름이 있는지(값은 꺼내지 않는다) |
@@ -317,6 +317,7 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 | 숨긴 페이지 rerun이 서버 목록을 받음 (`blog-sync.js` rerun 병합식) | 결정적 재현 | #161로 수정·병합. 부하 18회 0 fail로 해소 확인 |
 | blob URL 조기 해제(`photo-post-ui.js` `cleanup()`, 표지가 빈 이미지로 보일 수 있음) | CI 로그 근거, 로컬 미재현 | 총괄 쪽 작업자. 수정 뒤 photo-post·blog-writing-completion에 탭 앞 가져오기 재적용 |
 | life-collections 검토 화면의 네이버 연결 버튼(Tab 순서) | 제품 회귀(마이너, `c65aa4b`) | 탐색 묶음 병합 뒤 총괄. 소유자 결정: 검토 단계에서 버튼을 폼과 함께 숨김 |
-| record-arrange "selected page entry" 1회 실패 | 테스트 타이밍(H1). 저장 고정 실험 10/10 되돌림 0 | 이 PR에서 검사 수정. 저장 중 상태 문구로 체크박스가 100~200px 움직이는 것은 UX 마이너 후보 |
+| record-arrange "selected page entry" 1회 실패 | 테스트 타이밍(H1). 저장 고정 실험 10/10 되돌림 0 | 이 PR에서 검사를 수정했다 |
+| record-arrange 저장 중 상태 문구 때문에 체크박스가 100~200px 움직인다 | 결함 후보(UX 마이너). 저장 고정 실험(`repro/record-arrange-revert.cjs`)에서 관찰 | 11-02 총괄 결정: 실기기 확인 뒤 화면 개편 범위에서 처리 |
 | 네이버 구형 RSS 경로의 기준선 미확인 | 계약 위반, 운영 노출 0 | RSS 재가동 전 선행 수정(로드맵 후속, 총괄) |
 
