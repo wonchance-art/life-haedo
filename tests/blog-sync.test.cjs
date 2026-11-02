@@ -271,6 +271,27 @@ test('same-workspace devices receive into that workspace; a corrupted server ori
   assert.equal((await list(b))[0].id, doc.id);
 });
 
+test('another engine storing a post the editor is still sending waits in the automatic instance queue: one save, no binding conflict', async () => {
+  // MaterialContinuitySync stores a finished preparation post right after the editor's explicit
+  // save. Through a second instance the two pushes raced on the same binding CAS.
+  const { cloud, time, a, b } = await pair();
+  const page = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: cloud.client('mac-page'), makeId: Core.id,
+    locks: null, now: () => time.now, timers: { setTimeout: () => 0, clearTimeout() {} }, events: new EventTarget(), interval: 30000, autoSync: true });
+  assert.equal(Sync.forStorage(a.storage), page); assert.equal(Sync.forStorage(b.storage), null, 'only the automatic instance of that exact storage');
+  const doc = await save(a, await post({ title: '준비에서 완성한 글', photos: 1 }));
+  let release; cloud.control.holdUpload = { promise: new Promise(done => { release = done; }) };
+  const explicit = page.saveDefault(a.ws, doc.id, { expectedLocalRevision: doc.revision });
+  for (let n = 0; n < 200 && !(await a.storage.readBlogSyncState(a.ws, doc.id))?.pending; n++) await new Promise(done => setImmediate(done));
+  assert((await a.storage.readBlogSyncState(a.ws, doc.id)).pending, 'the explicit save is in flight');
+  const share = Sync.forStorage(a.storage).save(a.ws, doc.id, { expectedManifest: Blog.pack(Photo.compact(doc)) });
+  cloud.control.holdUpload = null; release();
+  const [first, second] = await Promise.all([explicit, share]);
+  assert.equal(first.status, 'synced'); assert.equal(second.status, 'synced'); assert.equal(second.remoteId, doc.id);
+  assert.equal(cloud.stats.saves.length, 1, 'the queued share finds the stored post and sends nothing again');
+  page.dispose(); assert.equal(Sync.forStorage(a.storage), null, 'a disposed instance is not handed out');
+  a.sync.dispose(); b.sync.dispose();
+});
+
 test('a page entering the back/forward cache starts no transfer or account check until pageshow', async () => {
   // Work begun at a persisted pagehide (or the visibility changes around it)
   // runs script in the cached page, which evicts it, and starts an account check

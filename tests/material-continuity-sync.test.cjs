@@ -6,7 +6,7 @@ const Blog = require('../assets/life/blog.js'), Photo = require('../assets/life/
 const Service = require(process.env.MATERIAL_CONTINUITY_SYNC_MODULE || '../assets/life/material-continuity-sync.js');
 const copy = value => structuredClone(value), fault = code => Object.assign(Error(code), { code });
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-async function fixture({ savedOutput = false, photos = false } = {}) {
+async function fixture({ savedOutput = false, photos = false, pageBlogSync = false } = {}) {
   let bundle = C.createWorkspace();
   const imported = await C.prepareImport({ origin: 'other', title: '합성 원문', text: '\ufeff정확 원문🌱\r\n선택 구절🌿', url: 'https://example.org/source' }, bundle);
   bundle = C.applyChanges(bundle, C.buildImportChanges(bundle, imported));
@@ -78,8 +78,9 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
     async downloadAsset(asset) { if (stats.holdPhoto) { stats.holdPhoto.started.resolve(); await stats.holdPhoto.release.promise; } return post.photos.find(photo => photo.id === asset.path).blob; }
   };
   const blogSync = { async save() { stats.saved = true; stats.existingBlogState ||= { remoteId: post.id, remoteRevision: 1, localRevision: post.revision, enabled: true }; return { status: 'synced', remoteId: post.id, remoteRevision: 1 }; } };
-  const manager = Service.create({ storage, auth, model: Model, remote, blogSync, blogRemote, blog: Blog, photoPost: Photo, makeId: C.id });
-  return { manager, stats, plan, post, bundle, ref, auth, remote, state: () => state, row: () => row,
+  // pageBlogSync: no injected instance; the engine resolves the page's BlogSync itself.
+  const manager = Service.create({ storage, auth, model: Model, remote, ...(pageBlogSync ? {} : { blogSync }), blogRemote, blog: Blog, photoPost: Photo, makeId: C.id });
+  return { manager, stats, storage, blogSync, plan, post, bundle, ref, auth, remote, state: () => state, row: () => row,
     setRow(value) { row = value; }, setPending(value) { state.pending = value; }, disconnect() { state = null; row = null; } };
 }
 test('pausing an existing preparation during original-photo receive cancels the install', async () => {
@@ -109,6 +110,27 @@ test('saved-output linkage verifies the current blog revision and exact manifest
     await assert.rejects(f.manager.shareOutput(f.bundle.workspaceId, f.plan.id, preview.fingerprint), { code: 'material_output_changed' });
     assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.writes.length, 0); assert.equal(f.state().output.state, 'writing'); f.manager.dispose();
   }
+});
+test('the saved-output share stores its post through the page automatic BlogSync queue, never through a second instance', async () => {
+  // A second instance races the editor's in-flight save of the same post on the binding CAS; its
+  // blog_state_conflict left the other device without the finished post until a later pass.
+  const life = globalThis.HaedoLife ||= {}, prior = life.BlogSync; let created = 0;
+  try {
+    let f = null; const shared = [];
+    life.BlogSync = {
+      forStorage: storage => f && storage === f.storage ? { save: (...args) => { shared.push(args[1]); return f.blogSync.save(...args); } } : null,
+      create() { created++; return { async save() { throw fault('blog_state_conflict'); }, dispose() {} }; }
+    };
+    f = await fixture({ pageBlogSync: true });
+    await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+    assert.deepEqual(shared, [f.post.id]); assert.equal(created, 0, 'no private BlogSync while the page has one');
+    assert.equal(f.row().data.output.state, 'saved'); assert.equal(f.row().data.output.revision, 1); assert.equal(f.state().error, null);
+    f.manager.dispose();
+    // Without an automatic instance for this storage (e.g. a non-account page) a private one is used.
+    let g = null; life.BlogSync = { forStorage: () => null, create() { created++; return { save: (...args) => g.blogSync.save(...args) }; } }; g = await fixture({ pageBlogSync: true });
+    await g.manager.autoSync(g.bundle.workspaceId, g.plan.id);
+    assert.equal(created, 1); assert.equal(g.row().data.output.state, 'saved'); g.manager.dispose();
+  } finally { if (prior === undefined) delete life.BlogSync; else life.BlogSync = prior; }
 });
 test('a connect queued before pause cannot later re-enable the paused preparation', async () => {
   const f = await fixture(), preview = await f.manager.preview(f.bundle.workspaceId, f.plan.id), held = { started: deferred(), release: deferred() }; f.stats.holdRead = held;
