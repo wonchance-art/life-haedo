@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>비슷한 문단 실험 실행면</title>
+<!-- 실험 전용 실행면. 제품 로더·워커 파일을 수정 없이 불러온다. 앱 저장소·계정·DB를 열지 않는다. -->
+<script src="../../../../assets/life/interest-model-loader.js"></script>
+<script src="candidate.js"></script>
+<script>
+'use strict';
+(function () {
+  const WORKER_URL = '../../../../assets/life/interest-model-worker.js';
+  const hex = buffer => [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  // A. 제품 경로: 전용 모듈 워커(interest-model-loader.js → interest-model-worker.js).
+  const workerPath = {
+    model: null, adapter: null,
+    async prepare() {
+      const started = performance.now();
+      this.model = HaedoLife.InterestModel.create();
+      this.adapter = await this.model.loadModel({});
+      return performance.now() - started;
+    },
+    async embed(texts) { return this.adapter.embed(texts); },
+    async dispose() { await this.model?.dispose(); this.model = null; this.adapter = null; }
+  };
+  // B. 감속 측정 경로: 같은 워커 소스를 같은 출처 iframe의 주 스레드에서 실행한다.
+  // CDP Emulation.setCPUThrottlingRate는 Chromium 153에서 전용 워커 대상에 적용되지 않는다
+  // ("Operation is only supported for pages, not workers"). 소스 바이트는 SHA로 대조한다.
+  const hostPath = {
+    frame: null, next: 0, pending: new Map(), sourceSHA256: null,
+    async prepareHost() {
+      const response = await fetch(WORKER_URL, { cache: 'no-store' });
+      const source = await response.text();
+      this.sourceSHA256 = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source)));
+      const frame = document.createElement('iframe');
+      frame.src = 'worker-host.html';
+      await new Promise(resolve => { frame.onload = resolve; document.body.append(frame); });
+      frame.contentWindow.__deliver = message => {
+        const job = this.pending.get(message?.id);
+        if (!job) return;
+        if (message.type === 'result') { this.pending.delete(message.id); job.resolve(message.value); }
+        else if (message.type === 'error') { this.pending.delete(message.id); job.reject(Object.assign(new Error(message.code), { code: message.code })); }
+      };
+      const script = frame.contentDocument.createElement('script');
+      script.textContent = source;
+      frame.contentDocument.head.append(script);
+      if (typeof frame.contentWindow.onmessage !== 'function') throw new Error('worker source did not install its handler');
+      this.frame = frame;
+      return this.sourceSHA256;
+    },
+    request(type, payload) {
+      return new Promise((resolve, reject) => {
+        const id = ++this.next;
+        this.pending.set(id, { resolve, reject });
+        this.frame.contentWindow.onmessage({ data: { id, type, ...payload } });
+      });
+    },
+    async prepare() {
+      const started = performance.now();
+      const manifest = HaedoLife.InterestModel.manifest;
+      await this.request('prepare', { modelId: manifest.modelId, modelRevision: manifest.modelRevision });
+      return performance.now() - started;
+    },
+    async embed(texts) { return this.request('embed', { texts }); }
+  };
+  // 제품 로더와 같은 한도(32개·4,000자·합계 32,000자)로 나눠 보낸다.
+  function batches(texts) {
+    const limits = HaedoLife.InterestModel.limits, groups = [];
+    let current = [], total = 0;
+    for (const text of texts) {
+      if (current.length && (current.length >= limits.texts || total + text.length > limits.totalCharacters)) { groups.push(current); current = []; total = 0; }
+      current.push(text); total += text.length;
+    }
+    if (current.length) groups.push(current);
+    return groups;
+  }
+  async function embedAll(path, texts) {
+    const started = performance.now(), vectors = [], batchMs = [];
+    for (const group of batches(texts)) {
+      const at = performance.now();
+      vectors.push(...await path.embed(group));
+      batchMs.push(performance.now() - at);
+    }
+    return { vectors, elapsedMs: performance.now() - started, batchMs };
+  }
+  function busyLoop() {
+    const started = performance.now(); let value = 0;
+    for (let index = 0; index < 2e8; index++) value += index % 7;
+    return { elapsedMs: performance.now() - started, value };
+  }
+  function hostBusyLoop() {
+    // iframe 안에서 같은 반복을 돌려 iframe 주 스레드에도 감속이 걸리는지 확인한다.
+    return hostPath.frame.contentWindow.eval('(' + busyLoop.toString() + ')()');
+  }
+  window.__harness = { workerPath, hostPath, embedAll, busyLoop, hostBusyLoop,
+    heap: () => performance.memory ? { usedJSHeapSize: performance.memory.usedJSHeapSize, totalJSHeapSize: performance.memory.totalJSHeapSize } : null };
+})();
+</script>
+</head>
+<body></body>
+</html>
