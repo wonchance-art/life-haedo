@@ -17,7 +17,7 @@ union all
 select 4, 'subscriptions (enabled/total)',
        (select count(*) filter (where enabled) || '/' || count(*) from public.life_naver_subscriptions)
 union all
-select 5, 'enabled subscription last check / success / error',
+select 5, 'enabled subscription RSS last check / success / error (PC-only mode stays never)',
        case when not exists(select 1 from public.life_naver_subscriptions where enabled) then 'no enabled subscription'
             else (select coalesce(to_char(max(last_checked_at) at time zone 'Asia/Seoul', 'MM-DD HH24:MI'), 'never') || ' / ' ||
                          coalesce(to_char(max(last_success_at) at time zone 'Asia/Seoul', 'MM-DD HH24:MI'), '-') || ' / ' ||
