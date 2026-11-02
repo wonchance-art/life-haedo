@@ -146,9 +146,11 @@
         area.replaceChildren(meta(errorText(e)), button('인용한 원문 목록 다시 확인', async () => showEvidence(row, area)));
       }
     }
+    // An older page mixed with newer modules (no SyncCommon) has no blog engine until it is reloaded.
+    const staleApp = () => !blogSync && !!root.HaedoLife?.BlogSync && !root.HaedoLife?.SyncCommon;
+    const refreshRequired = () => Object.assign(new Error('앱을 새로고침한 뒤 다시 시도해 주세요. 글은 이 기기에 그대로 있습니다.'), { code: 'app_refresh_required' });
     function requireSync(method) {
-      // An older page mixed with newer modules (no SyncCommon) has no blog engine until it is reloaded.
-      if (!blogSync && root.HaedoLife?.BlogSync && !root.HaedoLife?.SyncCommon) throw Object.assign(new Error('앱을 새로고침하면 계정에 올립니다. 글은 이 기기에 그대로 있습니다.'), { code: 'app_refresh_required' });
+      if (staleApp()) throw refreshRequired();
       if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 동기화를 준비하지 못했습니다. 글은 이 기기에 그대로 있습니다.'), { code: 'schema_missing' });
     }
     const syncLabels = { synced: '모든 기기에 저장됨', pending: '저장 대기', error: '오류 · 다시 시도' };
@@ -165,6 +167,8 @@
     }
     async function deletePost(row) {
       const label = row.title?.trim() || '제목 없는 글';
+      // Deleting only here would not reach the other devices (the post comes back with the next sync).
+      if (staleApp()) throw refreshRequired();
       if (typeof root.confirm === 'function' && !root.confirm(`“${label}”을 삭제할까요? 로그인한 모든 기기에서 함께 삭제됩니다.`)) return;
       if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, row.id, { expectedRevision: row.revision });
       else await storage.deletePhotoPost(workspaceId, row.id, row.revision);

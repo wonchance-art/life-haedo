@@ -7,6 +7,9 @@ const assert = require('node:assert/strict');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 
+const REFRESH = '앱을 새로고침한 뒤 다시 시도해 주세요. 글은 이 기기에 그대로 있습니다.';
+const MISSING = '동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.';
+
 async function main() {
   const browser = await playwright().chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const context = await makeContext(browser, new FakeCloud(), 'sync-common-mixed', accounts.a, { viewport: { width: 1440, height: 1000 } });
@@ -45,15 +48,71 @@ async function main() {
       assert.equal(await page.locator('#photoServerRetry').count(), 0);
     });
 
-    await check('Writing from materials keeps the page and shows the error instead of losing the page body', async () => {
+    await check('Blog management refuses publish, withdraw and delete with the refresh message and keeps the post', async () => {
+      await page.goto(base + '/index.html?section=records&view=blog'); await ready(page); await settle(page);
+      const row = page.locator('.blog-post', { hasText: '섞인 판에서 쓴 글' });
+      const postId = await row.getAttribute('data-post-id');
+      const status = page.locator('.blog-manager > [role="status"]');
+      // Each refusal must be its own message: clear the line first so an earlier one cannot pass.
+      const refused = async click => {
+        await status.evaluate(node => { node.textContent = ''; });
+        let dialogs = 0; const onDialog = dialog => { dialogs++; dialog.dismiss(); }; page.on('dialog', onDialog);
+        await click();
+        await status.filter({ hasText: REFRESH }).waitFor();
+        page.off('dialog', onDialog);
+        assert.equal(dialogs, 0, 'refused before asking to confirm');
+      };
+      await row.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
+      await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
+      await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
+      await refused(() => page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click());
+      assert.equal(await page.getByRole('link', { name: '공개한 글 열기' }).count(), 0);
+      await refused(() => page.getByRole('button', { name: '공개 철회', exact: true }).click());
+      await refused(() => row.getByRole('button', { name: '삭제', exact: true }).click());
+      const kept = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, doc = await s.readPhotoPost(await s.getActive(), id); return { title: doc.title, status: doc.status }; }, postId);
+      assert.deepEqual(kept, { title: '섞인 판에서 쓴 글', status: 'saved' });
+      assert.equal(await page.locator('.blog-post', { hasText: '섞인 판에서 쓴 글' }).count(), 1);
+    });
+
+    // After a failed open: the page body, its unsaved input and the 지금 저장 control are back, the
+    // heading is the page's, and the error is a new one with the sync_common_missing code.
+    const failedOpen = async (click, label) => {
+      const error = page.locator('#wbError');
+      const previous = await error.locator('p').elementHandle().catch(() => null);
+      await click();
+      if (previous) await page.waitForFunction(node => !node.isConnected, previous, { timeout: 15000 });
+      await error.getByText(MISSING).waitFor();
+      assert.equal(await error.getAttribute('data-code'), 'sync_common_missing', label + ': error code');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page', label + ': still on the page');
+      assert.equal((await page.locator('.life-page-title').innerText()).trim(), '선택 자료 페이지', label + ': heading');
+      assert.equal(await page.locator('#wbPageMaterialWriting').isVisible(), true, label + ': page body');
+      assert.equal(await page.getByRole('button', { name: '지금 저장', exact: true }).isVisible(), true, label + ': save control');
+      assert.equal(await page.locator('.mw-workspace').count(), 0, label + ': no preparation screen');
+    };
+
+    await check('Writing from the page keeps the page, its input and save control, and shows a new error each time', async () => {
       await page.goto(base + '/index.html?section=records&view=page'); await ready(page); await settle(page);
-      const open = page.locator('#wbPageMaterialWriting');
-      for (let attempt = 0; attempt < 2; attempt++) {
-        await open.click();
-        await page.getByText('동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.').waitFor();
-        assert.equal(await open.isVisible(), true, 'the page body is still there');
-        assert.equal(await page.locator('.mw-workspace').count(), 0);
+      if (!await page.locator('#wbPageTitle').isVisible()) await page.locator('#wbProfileEdit').click();
+      await page.locator('#wbPageTitle').fill('섞인 판의 페이지 제목');
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        await failedOpen(() => page.locator('#wbPageMaterialWriting').click(), 'page attempt ' + attempt);
+        assert.equal(await page.locator('#wbPageTitle').inputValue(), '섞인 판의 페이지 제목', 'attempt ' + attempt + ': input kept');
       }
+    });
+
+    await check('Writing from a reader shows the page with its own heading and the error', async () => {
+      const title = '섞인 판에서 읽은 자료';
+      await page.evaluate(async title => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, b = await s.read(await s.getActive());
+        const p = await c.prepareImport({ origin: 'other', title, text: '읽던 자료에서 글쓰기를 시작한다.', forceSeparate: true }, b);
+        const result = await s.commitLocal({ workspaceId: b.workspaceId, baseRevision: b.revision, operationId: c.id(), changes: c.buildImportChanges(b, p, []) });
+        if (result.status !== 'stored') throw new Error('Anonymous source rejected');
+      }, title);
+      await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
+      await page.locator('.life-source-open', { hasText: title }).first().click();
+      await page.locator('#lifeSourceMaterialWriting').waitFor();
+      await failedOpen(() => page.locator('#lifeSourceMaterialWriting').click(), 'reader');
     });
 
     assert.deepEqual(errors, []); assert.deepEqual(consoleErrors, []); assert.deepEqual(external, []);

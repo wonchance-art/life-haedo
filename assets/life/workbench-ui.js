@@ -16,7 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, onMaterialUnavailable = () => {}, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -1096,8 +1096,9 @@
         } catch (error) {
           if (error?.code !== 'sync_common_missing') throw error;
           // An older page mixed with newer modules during an update: keep the page as it was and
-          // say so, instead of leaving materialOpen set and failing again on every redraw.
-          session.materialOpen = false; renderPage(); report(error, session); return;
+          // say so, instead of leaving materialOpen set and failing again on every redraw. The host
+          // ends its material task (heading, history entry); redraw restores the page controls.
+          session.materialOpen = false; session.materialSeed = null; onMaterialUnavailable(); redraw(); report(error, session); return;
         }
       }
       const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
