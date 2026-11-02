@@ -12,7 +12,7 @@
 
 2026-10-12 현재 작업 우선순위는 [프로필·취향·기록 흐름](product-roadmap-20261012.mmd)과 [갱신한 로드맵](../life-tools-design/roadmap-archive.md#현재-실행-로드맵--2026-10-12)을 따른다. 아래 v8은 전체 통합/공개 경계의 참고 도식이며 책 확장 우선순위는 최신 요청에 따라 보류다.
 
-2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-07)을 따른다.
+2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap-archive.md#현재-실행-로드맵--2026-10-08-kst)을 따른다.
 
 ![해도 전체 제품 흐름과 다음 단계](rendered/activity_hub_v8.svg)
 
