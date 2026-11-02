@@ -7,7 +7,14 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const SyncCommon = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
+  // Resolved per engine, not at module load: a page that still lacks sync-common.js (an older
+  // index.html mixed with newer modules during an update) keeps this module registered and fails
+  // only when the engine is created, with a clear code instead of a TypeError.
+  function syncCommon() {
+    const api = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
+    if (!api?.canonical) throw Object.assign(new Error('동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.'), { code: 'sync_common_missing' });
+    return api;
+  }
   const messages = {
     material_review_required: '준비나 완성 글이 바뀌었습니다. 다음 동기화에서 최신 내용을 다시 보냅니다.',
     material_not_connected: '준비 동기화를 시작하는 중입니다. 잠시 후 다시 시도해 주세요.',
@@ -44,7 +51,6 @@
   async function reloadHeld(workspaceId, result) {
     for (const entry of [...(holds.get(workspaceId) || [])]) { try { await entry.reload?.(result); } catch (_) { /* Editor keeps its input. */ } }
   }
-  const canonical = SyncCommon.canonical; // S0 group G3: hashed into stored preparation fingerprints
   function create({ storage, auth = root.HaedoAuth, model = root.HaedoLife?.MaterialContinuity,
     remote = root.HaedoLife?.MaterialContinuityRemote?.create({ auth }),
     blogSync = root.HaedoLife?.BlogSync?.create({ storage, auth }),
@@ -52,6 +58,7 @@
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
+    const canonical = syncCommon().canonical; // S0 group G3: run-local comparisons and check hashes only
     const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });

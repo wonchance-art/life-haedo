@@ -9,7 +9,14 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const SyncCommon = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
+  // Resolved per engine, not at module load: a page that still lacks sync-common.js (an older
+  // index.html mixed with newer modules during an update) keeps this module registered and fails
+  // only when the engine is created, with a clear code instead of a TypeError.
+  function syncCommon() {
+    const api = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
+    if (!api?.canonical) throw Object.assign(new Error('동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.'), { code: 'sync_common_missing' });
+    return api;
+  }
   const CONFLICT_PREFIX = '충돌로 보관한 이전 내용 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
   // A concurrent local change (another tab) is simply decided again next cycle.
@@ -34,7 +41,7 @@
     let parked = false;
     const removers = [];
     const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, posts: null, drafts: null, lastSyncAt: null, lastError: null, running: false };
-    const canonical = SyncCommon.canonical; // S0 group G3, shared with material-continuity-sync
+    const canonical = syncCommon().canonical; // S0 group G3, shared with material-continuity-sync
     const key = (ws, id) => ws + '/' + id;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const context = (ws, id) => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
