@@ -192,8 +192,11 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await pause(page);
       const before = await editorState(page), ai = aiText(before.ops);
       const started = Date.now();
+      // 11 composition steps x 140 ms guarantee the > 1400 ms precondition by the
+      // waits alone (11 x 120 ms = 1320 ms only passed where CDP overhead added
+      // the rest, and failed on the faster CI runner).
       for (const [steps, text] of [[['ㄱ', '가', '갈'], '갈'], [['ㅁ', '매'], '매'], [['ㄱ', '기'], '기'], [['ㅇ', '아'], '아'], [['ㄹ', '래'], '래']]) {
-        for (const step of steps) { await cdp.send('Input.imeSetComposition', { text: step, selectionStart: 1, selectionEnd: 1 }); await page.waitForTimeout(120); }
+        for (const step of steps) { await cdp.send('Input.imeSetComposition', { text: step, selectionStart: 1, selectionEnd: 1 }); await page.waitForTimeout(140); }
         await cdp.send('Input.insertText', { text });
       }
       assert(Date.now() - started > 1400, 'the composition spans more than one undo grouping window');
