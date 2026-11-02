@@ -48,8 +48,8 @@ const SITES = [
   ['assets/life/interest-profile.js#canonical', 'assets/life/interest-profile.js', 'canonical'],
   ['assets/life/naver-capture.js#canonical', 'assets/life/naver-capture.js', 'canonical'],
   ['assets/life/material-continuity.js#canonical', 'assets/life/material-continuity.js', 'canonical'],
-  ['assets/life/material-continuity-sync.js#canonical', 'assets/life/material-continuity-sync.js', 'canonical'],
-  ['assets/life/blog-sync.js#canonical', 'assets/life/blog-sync.js', 'canonical'],
+  ['assets/life/material-continuity-sync.js#canonical', 'assets/life/sync-common.js', 'canonical'], // S1: now SyncCommon.canonical
+  ['assets/life/blog-sync.js#canonical', 'assets/life/sync-common.js', 'canonical'], // S1: now SyncCommon.canonical
   ['assets/life/account-docs-sync.js#canonical', 'assets/life/account-docs-sync.js', 'canonical'],
   ['assets/life/account-materials.js#canonical', 'assets/life/account-materials.js', 'canonical'],
   ['assets/life/original-attachments.js#canonical', 'assets/life/original-attachments.js', 'canonical'],
@@ -216,6 +216,14 @@ if (!PRINT) {
     assert.equal(new Set(labels).size, 20, 'SITES labels must be unique');
     assert.deepEqual(CANONICAL_GROUPS.flatMap(group => group.members).sort(), [...labels].sort(), 'every label belongs to exactly one pinned group');
     for (const group of CANONICAL_GROUPS) assert.ok(group.members.includes(group.representative), group.id + ' representative is a member');
+  });
+
+  test('S1: blog-sync and material-continuity-sync use SyncCommon.canonical and keep no local copy', () => {
+    for (const file of ['assets/life/blog-sync.js', 'assets/life/material-continuity-sync.js']) {
+      const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      assert.match(source, /const canonical = syncCommon\(\)\.canonical;/, file + ' delegates to SyncCommon');
+      assert.equal(locate(source.replace(/const canonical = syncCommon\(\)\.canonical;/, ''), 'canonical'), null, file + ' has no local canonical definition');
+    }
   });
 
   test('all 20 sorted-JSON helpers are found by name and evaluated without free variables', () => {
