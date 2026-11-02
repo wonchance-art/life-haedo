@@ -11,18 +11,12 @@
 // - The argument splitter knows strings and line comments only. A quote inside a block
 //   comment or a regex literal can cut the argument at the wrong place, and the words
 //   async/await/.then( inside a string literal are reported as a violation.
-// - PENDING entries are file:line. Each one hides any new violation written on that same
-//   line, so remove an entry as soon as its fix reaches main.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname);
-// Fixed on a separate worker branch (worktree-agent-a4ab360da380bab84). Remove this entry once that
-// fix is on main; a listed site that no longer violates is reported below, not failed, so merge order
-// between the two changes does not matter.
-const PENDING = new Set(['writing-sync-browser.cjs:42']);
 
 function files(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory()
@@ -67,15 +61,12 @@ test('scanner flags async, then and await predicates and accepts synchronous one
 });
 
 test('no browser test waits on a Promise-returning waitForFunction predicate', () => {
-  const found = [], pendingSeen = new Set();
+  const found = [];
   for (const file of files(ROOT)) {
     if (file === __filename) continue;
     for (const hit of scan(fs.readFileSync(file, 'utf8'))) {
-      const key = path.relative(ROOT, file) + ':' + hit.line;
-      if (PENDING.has(key)) { pendingSeen.add(key); continue; }
-      found.push(key + '  ' + hit.predicate);
+      found.push(path.relative(ROOT, file) + ':' + hit.line + '  ' + hit.predicate);
     }
   }
-  for (const key of PENDING) if (!pendingSeen.has(key)) console.log('# pending entry already fixed, remove it: ' + key);
   assert.deepEqual(found, [], 'use awaitCondition from tests/helpers/await-condition.cjs for async conditions');
 });
