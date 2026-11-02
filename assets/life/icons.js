@@ -3,7 +3,7 @@
  * upstream file and tests/icons.test.cjs keeps the geometry identical to that file.
  * 2026-11-02 soft redesign (decision 15): one stroke width 1.8, 20px for controls and 16px inside text,
  * one picture per concept: 자료 = book-open, 인용 = text-quote, 글쓰기 = pencil, 편집 = square-pen,
- * 웹 주소 = link, 일정 = calendar. No icon runtime, font or remote request.
+ * 웹 주소 = link, 일정 = calendar, AI 글 표시 = sparkle. No icon runtime, font or remote request.
  */
 (function (root) {
   'use strict';
@@ -12,6 +12,8 @@
     disc: ['disc', '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/>'],
     play: ['square-play', '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/>'],
     up: ['chevron-up', '<path d="m18 15-6-6-6 6"/>'],
+    // AI 글 표시 (PR #169): the unchanged vendor/lucide/icons/sparkle.svg.
+    sparkle: ['sparkle', '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>'],
     book: ['book-open', '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>'],
     search: ['search', '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>'],
     bookmark: ['bookmark', '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>'],

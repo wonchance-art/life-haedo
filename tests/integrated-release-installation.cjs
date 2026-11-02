@@ -30,6 +30,10 @@ const accountSyncMigrations = ['supabase/migrations/20261101090000_life_account_
 // 2026-11-02: saving a Naver connection as enabled schedules its first inventory
 // row. Rollback, ACL, backfill and save cases run in run-naver-observed-baseline-postgres.
 const naverEnableInventoryMigration = 'supabase/migrations/20261102100000_naver_enable_schedules_first_inventory.sql';
+// 2026-11-02: blog documents accept the private AI authorship mark and publish
+// without it. Allow/deny, publish removal and unchanged-ops cases run in
+// supabase/tests/blog-ai-authorship.sql (check-blog-backend, sql-replay).
+const blogAiAuthorshipMigration = 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -65,8 +69,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration].sort(),
-      'Exactly the ten legacy and nineteen reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration].sort(),
+      'Exactly the ten legacy and twenty reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
