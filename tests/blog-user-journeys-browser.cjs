@@ -4,6 +4,7 @@
  * BASE_URL=http://127.0.0.1:4173 node tests/blog-user-journeys-browser.cjs
  */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -219,7 +220,7 @@ async function main() {
         await openHome(page); const sample = await seed(page);
         const other = await page.evaluate(async original => { const s = HaedoLife.Shell.storage, created = await s.createWorkspace('별도의 익명 작업공간'); await s.setActive(original); return created.workspaceId; }, sample.workspaceId);
         await page.reload(); await ready(page); await nav(page, 'tools'); await page.evaluate(() => { window.__journeyHoldList = true; }); await nav(page, 'home'); await page.waitForFunction(() => window.__journeyHeldList);
-        await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), other); await settle(page);
+        await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), other, { timeout: 12000, label: 'blog-user-journeys storage condition' }); await settle(page);
         await page.evaluate(() => { window.__journeyHoldList = false; window.__journeyReleaseOldList = window.__journeyReleaseList; }); await home(page);
         const rows = () => page.locator('#homePosts .home-post').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId + '@' + node.dataset.workspaceId).sort());
         const expected = sample.ids.map(id => id + '@' + sample.workspaceId).sort();
