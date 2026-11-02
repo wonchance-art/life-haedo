@@ -85,6 +85,24 @@
     }
   }
   root.Quill.register(Photo, true);
+  // Private authorship mark: text the owner brought from an AI tool. Stored as
+  // the Delta attribute `author: "ai"` on text only; public copies drop it.
+  const Inline = root.Quill.import("blots/inline");
+  class Author extends Inline {
+    static blotName = "author";
+    static tagName = "span";
+    static className = "photo-ai-text";
+    static create() {
+      const n = super.create();
+      n.dataset.author = "ai";
+      return n;
+    }
+    static formats(n) {
+      return n.dataset?.author === "ai" ? "ai" : undefined;
+    }
+  }
+  root.Quill.register(Author, true);
+  const AI_PENDING = "다음 붙여넣기를 AI 글로 표시 · Esc로 취소";
   function create({
     storage,
     workspaceId,
@@ -129,6 +147,15 @@
       readBackText = "사진 글 목록",
       committed = false,
       standalone = false;
+    // AI authorship: a one-shot "next paste is AI text" state, a short status
+    // note, and owner-typed ranges that inherited the mark and must lose it
+    // once no IME composition is active.
+    let aiPending = false,
+      authorNote = "",
+      aiInserting = false,
+      humanRanges = [],
+      settleTimer = null,
+      authorButton = null;
     let status, statusText, inspector, captionInput, altInput, recoveryActions;
     let dismissControls = null;
     let serverStatus = null, serverActions = null, serverValue = null, serverBusy = false, serverSequence = 0;
@@ -186,6 +213,12 @@
       // Covers still inside host leave with it. Covers moved to listHost stay
       // visible until the next delivered list replaces them.
       retireCovers(feedCovers, (image) => !host?.contains(image));
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      humanRanges = [];
+      aiPending = false;
+      authorNote = "";
+      authorButton = null;
       editor = null;
       selected = null;
       recoveryActions = null;
@@ -194,9 +227,11 @@
       error = e || null;
       if (status) {
         status.hidden = mode === "read" && !e && !committed;
+        const authorText = mode === "edit" ? (aiPending ? AI_PENDING : authorNote) : "";
         const message =
           e?.message ||
           e ||
+          authorText ||
           (composing
             ? "한글 입력 중…"
             : dirtyTick !== storedTick
@@ -206,7 +241,7 @@
               : doc?.revision
                 ? "자동 저장됨"
                 : "사진 없이도 바로 쓸 수 있어요");
-        const state = e instanceof Error ? "error" : e ? "notice" :
+        const state = e instanceof Error ? "error" : e || authorText ? "notice" :
           composing || dirtyTick !== storedTick ? "pending" :
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
@@ -374,7 +409,110 @@
       // Continuous input resets only the idle timer, never this deadline.
       if (maxTimer === null) maxTimer = setTimeout(store, 2000);
     }
+    // ---- AI authorship ----------------------------------------------------
+    // Quill gives typed text the inline formats before the caret. Owner input
+    // that inherited `author` is recorded here and settled later, outside any
+    // IME composition. Undo/redo replays (history.ignoreChange) and the marked
+    // paste below keep their recorded authorship.
+    const imeActive = () => composing || !!editor?.composition?.isComposing;
+    function trackAuthorship(delta, source) {
+      if (humanRanges.length)
+        humanRanges = humanRanges
+          .map(([start, end]) => [delta.transformPosition(start), delta.transformPosition(end, true)])
+          .filter(([start, end]) => end > start);
+      if (source === "user" && !aiInserting && !editor.history?.ignoreChange) {
+        let at = 0;
+        for (const op of delta.ops) {
+          if (op.retain != null) at += typeof op.retain === "number" ? op.retain : 1;
+          else if (op.insert != null) {
+            const length = typeof op.insert === "string" ? op.insert.length : 1;
+            if (op.attributes?.author) humanRanges.push([at, at + length]);
+            at += length;
+          }
+        }
+      }
+      scheduleSettle();
+    }
+    function scheduleSettle() {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      if (!humanRanges.length || mode !== "edit") return;
+      const token = epoch;
+      settleTimer = setTimeout(() => {
+        settleTimer = null;
+        if (current(token)) settleAuthorship();
+      }, 120);
+    }
+    function settleAuthorship() {
+      if (!humanRanges.length || !editor || mode !== "edit") return;
+      if (imeActive() || !editor.isEnabled()) {
+        // Retried after compositionend / when the editor is enabled again.
+        if (!imeActive()) scheduleSettle();
+        return;
+      }
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      const ranges = humanRanges,
+        history = editor.history,
+        prior = history.lastRecorded;
+      humanRanges = [];
+      for (const [start, end] of ranges) {
+        // Fold the mark removal into the typing step it belongs to, so one undo
+        // removes the typed text instead of first re-marking it as AI text.
+        if (typeof prior === "number") history.lastRecorded = Date.now();
+        try {
+          editor.formatText(start, end - start, "author", false, "user");
+        } finally {
+          if (typeof prior === "number") history.lastRecorded = prior;
+        }
+      }
+    }
+    function syncAuthorButton() {
+      if (!authorButton?.isConnected || !editor) return;
+      const range = editor.selection?.savedRange;
+      let pressed = aiPending;
+      if (range?.length) {
+        const text = editor.getContents(range.index, range.length).ops
+          .filter((op) => typeof op.insert === "string" && /[^\n]/.test(op.insert));
+        pressed = text.length > 0 && text.every((op) => op.attributes?.author === "ai");
+      }
+      const value = String(pressed);
+      if (authorButton.getAttribute("aria-pressed") !== value)
+        authorButton.setAttribute("aria-pressed", value);
+    }
+    function setAiPending(value, announce = true) {
+      if (aiPending === value) return;
+      aiPending = value;
+      if (!value && announce) authorNote = "AI 글 붙여넣기 대기를 껐어요";
+      syncAuthorButton();
+      showStatus(error);
+    }
+    function toggleAuthorship() {
+      guard(true);
+      if (!editor || mode !== "edit") return;
+      settleAuthorship();
+      const range = editor.getSelection(true);
+      if (!range) return;
+      if (!range.length) {
+        setAiPending(!aiPending);
+        return;
+      }
+      const text = editor.getContents(range.index, range.length).ops
+        .filter((op) => typeof op.insert === "string" && /[^\n]/.test(op.insert));
+      if (!text.length) {
+        authorNote = "AI 글로 표시할 글자를 선택해 주세요";
+        showStatus(error);
+        return;
+      }
+      const marked = text.every((op) => op.attributes?.author === "ai");
+      if (aiPending) setAiPending(false, false);
+      editor.formatText(range.index, range.length, "author", marked ? false : "ai", "user");
+      authorNote = marked ? "AI 글 표시를 해제했어요" : "AI 글로 표시했어요";
+      syncAuthorButton();
+      showStatus(error);
+    }
     function mark() {
+      authorNote = "";
       dirtyTick++;
       doc.updatedAt = new Date().toISOString();
       showStatus();
@@ -388,6 +526,10 @@
         if (!valid() || doc !== target) return;
         return persist(modelOnly, target);
       }
+      // Owner-typed text inside AI text is stored as the owner's own. Never
+      // reformats during an IME composition; the next save after it does.
+      settleAuthorship();
+      if (!modelOnly && aiPending) setAiPending(false, false);
       if (!modelOnly && mode === "edit" && selected?.isConnected) changePhoto();
       if (!doc || mode !== "edit" || dirtyTick === storedTick) return;
       if (modelOnly) {
@@ -458,6 +600,7 @@
     }
     function outputSnapshot() {
       guard();
+      settleAuthorship();
       attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
       M.validate(doc);
@@ -691,6 +834,8 @@
       if (!current(token)) return;
       const next = M.upgrade(outputSnapshot()),
         now = new Date().toISOString();
+      // outputSnapshot may settle authorship marks; this copy is the write.
+      cancelAutosave();
       const previousId = doc.replaces?.id || doc.id;
       Object.assign(next, {
         id: life.Core.id(),
@@ -1341,6 +1486,15 @@
         b.title = name;
         (key === "bold" || key === "link" ? primaryFormats : formatPanel).append(b);
       }
+      // One control: a selection is marked or unmarked as AI text; without a
+      // selection it arms the next paste. Never applied automatically.
+      authorButton = iconControl(button("AI 글 표시", toggleAuthorship), "sparkle", "AI 글 표시");
+      authorButton.classList.add("photo-author-toggle");
+      authorButton.setAttribute("aria-pressed", "false");
+      authorButton.title = "AI 글 표시 · 선택이 없으면 다음 붙여넣기";
+      // In the extra formats: the one-row toolbar has no room for another
+      // 44px control at 320–393px without wrapping the photo label.
+      formatPanel.append(authorButton);
       const undo = button("실행 취소", () => editor.history.undo()),
         redo = button("다시 실행", () => editor.history.redo());
       const history = el("span", null, "photo-history");
@@ -1377,6 +1531,7 @@
           "list",
           "align",
           "link",
+          "author",
           "photo",
         ],
         modules: { toolbar, history: { userOnly: true, delay: 700 } },
@@ -1413,10 +1568,14 @@
       editor.root.setAttribute("role", "textbox");
       editor.root.setAttribute("aria-multiline", "true");
       editor.root.setAttribute("spellcheck", "true");
-      editor.on("text-change", () => {
+      editor.on("text-change", (delta, _old, source) => {
         if (!acceptsInput()) return;
+        trackAuthorship(delta, source);
         doc.ops = editor.getContents().ops;
         mark();
+      });
+      editor.on("editor-change", () => {
+        if (acceptsInput()) syncAuthorButton();
       });
       editor.root.addEventListener("compositionstart", () => {
         if (!acceptsInput()) return;
@@ -1427,6 +1586,13 @@
         if (!acceptsInput()) return;
         composing = false;
         mark();
+        scheduleSettle();
+      });
+      form.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape" || !aiPending || e.isComposing || !acceptsInput()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setAiPending(false);
       });
       editor.root.addEventListener("click", (e) => {
         if (inspector.contains(e.target)) return;
@@ -1452,6 +1618,9 @@
         (e) => {
           e.preventDefault();
           e.stopImmediatePropagation();
+          // The armed state covers exactly one paste, whatever it contains.
+          const ai = aiPending;
+          if (ai) setAiPending(false, false);
           const files = [...(e.clipboardData?.files || [])];
           if (files.length) {
             run(() => insertFiles(files));
@@ -1462,8 +1631,24 @@
           if (text) {
             if (range.length)
               editor.deleteText(range.index, range.length, "user");
-            editor.insertText(range.index, text, "user");
+            if (ai) {
+              aiInserting = true;
+              try {
+                editor.insertText(range.index, text, { author: "ai" }, "user");
+              } finally {
+                aiInserting = false;
+              }
+            } else {
+              // Unchanged plain paste. Inside AI text it inherits the mark and
+              // is settled as the owner's text like typing.
+              editor.insertText(range.index, text, "user");
+            }
             editor.setSelection(range.index + text.length, 0, "silent");
+            if (ai) {
+              authorNote = "붙여넣은 글을 AI 글로 표시했어요";
+              syncAuthorButton();
+              showStatus(error);
+            }
           }
         },
         { capture: true },
