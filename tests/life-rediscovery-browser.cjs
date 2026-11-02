@@ -12,7 +12,10 @@ const { playwright, ready, settle, makeContext, observe, nav } = require('./unif
 const { current, abortWorkbenchWrites, go } = require('./life-workbench-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve(__dirname, '../.local/rediscovery');
-const evidence = path.resolve(__dirname, '../docs/design-review/evidence');
+// Published-size copies (rediscovery-<width>.png). Default stays untracked so
+// normal and CI runs never rewrite docs; regenerate the tracked evidence on purpose with
+// REDISCOVERY_EVIDENCE_OUTPUT=docs/design-review/evidence (same pattern as WORKBENCH_OUTPUT).
+const evidence = process.env.REDISCOVERY_EVIDENCE_OUTPUT ? path.resolve(process.env.REDISCOVERY_EVIDENCE_OUTPUT) : path.resolve(__dirname, '../.local/life-rediscovery');
 const longTitle = '정원 산책 중 작은 나무의 그림자와 빛을 따라 걷다가 떠오른 질문 — 오래전에 읽은 문장과 오늘의 관찰을 천천히 이어 보는 한글 기록';
 const seedOld = '처음 정원에서 남긴 기록🌱\n정원 산책 관찰 빛 나무. 잎사귀를 오래 바라보니 걷는 속도도 달라졌다.\n다음에는 무엇을 더 자세히 볼 수 있을까?';
 const seedNew = '최신 버전에서는 여행 예산과 기차표 예약을 정리했다. 이전 정원 구절을 대체해서 보여 주면 안 된다.';
@@ -107,7 +110,15 @@ async function main() {
       }
       assert.equal(await page.locator('.wb-discovery-result[data-source-id="' + f.refs.stale.sourceId + '"]').count(), 0);
       assert.equal(await page.locator('.wb-discovery-result[data-source-id="' + f.refs.unrelated.sourceId + '"]').count(), 0);
-      assert.deepEqual(await current(page), before); assert.equal(server.requests.length, 0);
+      assert.deepEqual(await current(page), before);
+      // Contract (docs/design-review/account-materials.md:17-19, 2026-10-20): every
+      // authenticated boot (first load and the reload above) GETs only the owner's
+      // private life_account_materials pointer list. Rediscovery itself still issues
+      // no request: any other ledger entry or another owner fails.
+      assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'), []);
+      assert.ok(server.requests.every(r => r.owner === accounts.a.id));
+      // Two authenticated boots happened (fixture goto + reload): at most one list read each.
+      const listReads = server.requests.length; assert.ok(listReads >= 1 && listReads <= 2, 'account materials list read ' + listReads + ' times for 2 boots');
       await page.locator('#wbDiscoverySeed').getByRole('button', { name: '이 원문 버전 열기', exact: true }).click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), seedOld);
       await page.getByRole('button', { name: '다시 찾기로 돌아가기', exact: true }).click(); await settle(page);
@@ -137,7 +148,7 @@ async function main() {
     await check('failed exclusion save preserves pending change and blocks navigation until explicit retry', async ({ page }) => {
       const f = await fixture(page); await discover(page); await pick(page, f.refs.seed); const before = await current(page); await abortWorkbenchWrites(page, true);
       await page.locator('.wb-discovery-exclude[data-source-id="' + f.refs.topic.sourceId + '"]').click(); await page.locator('#wbError').waitFor({ state: 'visible' }); assert.deepEqual(await current(page), before);
-      await page.locator('[data-haedo-section="records"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.locator('#wbDiscoverySeed').isVisible());
+      /* Since 2026-10-24 다시 찾기 lives under 자료실 (docs/design-review/feature-flow-integration.md:26), so assets/haedo-navigation.js:105 marks <body data-haedo-section="records"> too; click the 자료실 nav link itself (feature-contracts.md:23 records ID). */ await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.locator('#wbDiscoverySeed').isVisible());
       await abortWorkbenchWrites(page, false); await page.getByRole('button', { name: '다시 저장', exact: true }).click(); const after = await saved(page); assert.equal(after.workbench.discovery.excludedPairs.length, 1); assert.deepEqual(after.bundle, before.bundle);
     });
     await check('source exclusions travel only in composition backup and restore with remapped source identities', async ({ page }) => {
