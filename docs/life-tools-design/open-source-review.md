@@ -1,5 +1,14 @@
 # 오픈소스 검토와 재사용 결정
 
+## 기기 안 비슷한 문단 — Obsidian Smart Connections 비교, 실험 후 기각 — 2026-11-02
+
+| 비교 | 확인 내용(2026-11-02 KST) | 판단 |
+| --- | --- | --- |
+| [Smart Connections](https://github.com/brianpetro/obsidian-smart-connections) | README 기준 v4다. 플러그인에 로컬 임베딩 모델이 들어 있고, 지금 보는 노트와 의미가 비슷한 노트를 점수와 함께 Connections 보기에 보여 준다(점수는 모델에 따라 달라진다고 명시). "Private and offline by default". 문단(블록) 단위 연결과 점수·순위 설정은 유료 Pro 기능이다. 라이선스는 Smart Plugins License(소스 공개, 경쟁 제품 제한)다. GitHub Releases 항목은 비어 있다. | **설계 참고만 하고 직접 도입하지 않는다.** Obsidian 플러그인 API와 라이선스 제한 때문에 해도에 코드를 가져올 수 없다. "후보와 점수만 보여 주고 연결은 사람이" 원칙만 참고했다. |
+| 기존 해도 임베딩 워커 재사용 | 해도의 워커는 Transformers.js 4.3.1 + MiniLM-L12 다국어, 고정 revision, 명시 준비 방식이다. 새 의존성 없이 문단 색인 실험에 그대로 썼다(제품 파일 무수정). | 합성 평가 세트에서 오탐 ≤ 0.20 임계값의 Hit@3가 0.229로, 기존 공통어 규칙과 같았다. 275자 문단 200개 색인이 CPU 4배 감속에서 243초였다. **기각.** 기존 `rediscovery.js` 규칙을 유지한다. 근거는 [실험 문서](../design-review/similar-paragraphs-experiment.md). |
+
+다시 검토할 조건은 실험 문서의 "바꿀 조건"을 따른다. 같은 크기 안의 문장 유사도 보정 모델과 개발 세트 선행 기준이 필요하다. 이번 조회는 README 확인이며 플러그인 설치·실행·보안 감사는 하지 않았다.
+
 ## 자료실 기본 계정 보관과 기존 CAS/outbox 재사용 — 2026-10-24
 
 사용자 요청으로 자료 영역의 기본 정책을 비공개 계정 자동 보관으로 바꾼다. 새 프레임워크보다 기존 단일 Supabase SDK/인증·Core Sync/CompositionSync의 두 엔진·owner/revision CAS·영속 operation 영수증과 IDB 캐시를 재사용하고 LibraryMeta를 도메인 adapter로 연결한다. 원본 첨부도 기존 ZIP 검증/Blob DB를 재사용한다. [대상·이관·순서·실패 복구](../design-review/account-library.md). 앱의 새 런타임 의존성은0이며 범용 복제 엔진·SDK 업그레이드는 추가하지 않았다.
