@@ -26,7 +26,7 @@ async function instrumentStorage(context) {
   });
 }
 async function home(page) {
-  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').isVisible()) {
+  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').isVisible()) {
     if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
     else await page.locator('[data-subview-return]').click();
     await settle(page);

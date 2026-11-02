@@ -28,7 +28,7 @@ async function records(page){
  if(await page.locator('.life-reader').isVisible()){
   await page.locator('.life-reader-tools > button').first().click();await settle(page);
  }
- const back=page.getByRole('button',{name:'자료실로 돌아가기',exact:true});
+ const back=page.getByRole('button',{name:'자료로 돌아가기',exact:true});
  if(await back.isVisible())await back.click();
  const heading=page.getByRole('button',{name:'자료실',exact:true});
  if(await heading.isVisible())await heading.click();
@@ -82,7 +82,7 @@ async function main(){
   await check('real staging and commit aborts preserve text, block failed navigation and retry once',async({page})=>{
    await write(page);await abortWrites(page,'staging');await page.locator('#lifeWritingTitle').fill(title);await page.locator('#lifeWritingBody').fill(body);await page.locator('#lifeWritingError').waitFor({state:'visible'});assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);assert.equal((await stored(page)).sources.length,0);assert((await page.evaluate(()=>__writingAborted))>0);
    const failedWrites=await page.evaluate(()=>__writingAborted);
-   await page.locator('[data-haedo-section="tools"]').click();
+   await page.locator('[data-haedo-section="manage"]').click();
    // The editor is already visible while navigation awaits its draft flush.
    // Keep the storage fault active until that new write has actually failed.
    await page.waitForFunction(count=>__writingAborted>count&&document.querySelector('#lifeWritingStatus')?.dataset.state==='error',failedWrites);

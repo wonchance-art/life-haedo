@@ -144,7 +144,7 @@ async function main() {
       const after = await libraryPosts(b.page);
       assert.equal(after.rows.find(row => row.id === edited).workspaceId, holder, 'saved in the post\'s own library');
       assert.equal(after.rows.length, 2, 'no extra copy'); assert.equal(after.rows.filter(row => row.workspaceId === holder).length, before.rows.filter(row => row.workspaceId === holder).length);
-      await b.page.getByRole('button', { name: '홈으로 돌아가기' }).first().click();
+      await b.page.getByRole('button', { name: '일정으로 돌아가기' }).first().click();
       await b.page.locator('#homePosts[aria-busy="false"]').waitFor();
       assert.equal(await b.page.locator('#homeTab-posts').getAttribute('aria-selected'), 'true');
       // The search survives the move between libraries; the renamed post no

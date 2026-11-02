@@ -55,8 +55,9 @@ async function main() {
         check(size.name + ' common navigation keyboard focus', focus.visible && focus.width >= 3 && focus.contrast >= 3, focus);
         assert.equal(await common.nth(1).evaluate(el => el === document.activeElement), true);
         await page.keyboard.press('Enter');
-        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
-        await clean(page); await capture(page, 'tools', size, size.name !== 'tablet');
+        // 2026-11-02 menu 뉴스·일정·자료·설정: the second control is 일정; the plan is its 계획 view.
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
+        await nav(page, 'tools'); await clean(page); await capture(page, 'tools', size, size.name !== 'tablet');
         await nav(page, 'manage'); await clean(page); await capture(page, 'manage', size, size.name === 'phone');
         await openManagement(page); await clean(page); await capture(page, 'management-options', size);
         await nav(page, 'records'); await page.getByRole('button', { name: '원천 기록', exact: true }).click(); await clean(page);

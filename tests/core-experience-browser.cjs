@@ -72,7 +72,7 @@ function experienceMetrics({ scene, title }) {
   return { firstContentY: contents[0] ? +(contents[0].getBoundingClientRect().top + scrollY).toFixed(2) : null, visibleTitleOccurrences: duplicates.length, visibleComment: !!entry && [...entry.querySelectorAll('.wb-comment-body')].some(visible), relatedSeedVersionId: document.querySelector('#wbDiscoverySeed')?.dataset.versionId || null, openDetails: [...document.querySelectorAll('details[open]')].filter(visible).map(el => el.querySelector('summary')?.textContent) };
 }
 async function importThroughUI(page, sample) {
-  const back = page.getByRole('button', { name: '자료실로 돌아가기', exact: true });
+  const back = page.getByRole('button', { name: '자료로 돌아가기', exact: true });
   if (await back.isVisible()) { await back.click(); await settle(page); }
   await page.getByRole('button', { name: '가져오기', exact: true }).click();
   await page.locator('#lifeImportOrigin').selectOption(sample.origin); await page.locator('#lifeImportTitle').fill(sample.title);
@@ -118,7 +118,7 @@ async function main() {
     if (!baseline) await check('UI import to related reading, exact pair group, page editing and reload', async ({ page }) => {
       await go(page, 'records'); const refs = {};
       for (const sample of samples) refs[sample.key] = await importThroughUI(page, sample);
-      await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).click(); await page.locator('#lifeSearch').fill('관찰의 속도');
+      await page.getByRole('button', { name: '자료로 돌아가기', exact: true }).click(); await page.locator('#lifeSearch').fill('관찰의 속도');
       await page.locator('.life-source-open[data-version-id="' + refs.walk.versionId + '"]').click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), samples[0].text);
       const original = (await current(page)).bundle;
       await page.evaluate(() => { window.__coreSeedChoices = 0; document.addEventListener('click', event => { if (event.target.closest('.wb-discovery-select')) window.__coreSeedChoices++; }); });

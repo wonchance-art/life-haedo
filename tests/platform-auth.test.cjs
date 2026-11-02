@@ -112,6 +112,11 @@ test('unified home return accepts only known sections and material views', () =>
   assert.equal(safeNext('index.html?section=manage&view=sync&code=discarded#token'), 'index.html?section=manage&view=sync');
   assert.equal(safeNext('index.html?section=tools&view=transfer'), 'index.html?section=tools&view=transfer');
   assert.equal(safeNext('index.html?section=unknown&view=public&next=https://evil.invalid'), 'index.html');
+  // 2026-11-02 menu: 일정 (schedule) and its plan view keep their exact return; old IDs stay accepted.
+  assert.equal(safeNext('index.html?section=schedule&view=tools&code=discarded#token'), 'index.html?section=schedule&view=tools');
+  assert.equal(safeNext('index.html?section=schedule&view=annual-plan&access_token=hidden'), 'index.html?section=schedule&view=annual-plan');
+  assert.equal(safeNext('index.html?section=schedule'), 'index.html?section=schedule');
+  assert.equal(safeNext('index.html?section=Schedule&view=Tools'), 'index.html');
   assert.equal(safeNext('life.html?view=sources&section=manage'), 'life.html?section=manage&view=sources');
   assert.equal(safeNext('workspace.html?doc=unrelated'), 'workspace.html');
   assert.equal(safeNext('workspace.html?section=manage#backupAll'), 'workspace.html?section=manage');

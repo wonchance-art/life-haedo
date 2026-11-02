@@ -13,7 +13,7 @@
     const live = (token, owner, element) => owns(token, owner) && isCurrent() && (!element || element.isConnected);
     function errorText(error) {
       if (/^source_folders_/.test(error?.code || '')) return error.message;
-      if (/scope|account|workspace/.test(error?.code || '')) return '계정 또는 작업공간이 바뀌었습니다. 현재 자료실에서 다시 확인하세요.';
+      if (/scope|account|workspace/.test(error?.code || '')) return '계정 또는 작업공간이 바뀌었습니다. 현재 자료에서 다시 확인하세요.';
       return '폴더를 보관하지 못했습니다. 입력은 유지됩니다. 다시 시도하거나 최신 폴더를 확인하세요.';
     }
     function nodeButton(label, id, action, token, owner, cls = 'life-button sf-button') {
@@ -106,7 +106,7 @@
       mount.remove.disabled = !loaded || children || !!owner.pending || !!owner.writing;
       mount.children.hidden = !children; mount.remove.title = children ? '하위 폴더를 먼저 이동하세요.' : '폴더만 삭제';
       const unavailable = unavailableCount(); mount.unavailable.hidden = !unavailable;
-      mount.unavailable.textContent = unavailable ? '현재 자료실에서 확인되지 않는 자료 연결 ' + unavailable + '개를 유지하고 있습니다.' : '';
+      mount.unavailable.textContent = unavailable ? '현재 자료에서 확인되지 않는 자료 연결 ' + unavailable + '개를 유지하고 있습니다.' : '';
       mount.confirm.hidden = !owner.confirm;
     }
     function updateMount(mount, graph = false) {
@@ -136,7 +136,7 @@
         try {
           const snapshot = await storage.readSourceFoldersSnapshot(scope);
           if (!owns(token, owner)) return null;
-          if (snapshot.bundle.workspaceId !== scope || snapshot.sourceFolders.workspaceId !== scope) throw uiFault('폴더와 자료실의 작업공간이 다릅니다.');
+          if (snapshot.bundle.workspaceId !== scope || snapshot.sourceFolders.workspaceId !== scope) throw uiFault('폴더와 자료의 작업공간이 다릅니다.');
           model().validate(snapshot.sourceFolders); owner.snapshot = copy(snapshot); owner.error = '';
           if (!wasDirty && owner.editor.version === editVersion) {
             const folder = snapshot.sourceFolders.folders.find(item => item.id === owner.editor.id);
@@ -171,7 +171,7 @@
       owner.writing = promise; updateMounts(); return promise;
     }
     function mountList(host, { filter = 'all', onFilter = () => {} } = {}) {
-      const owner = ensureScope(); if (!owner) throw uiFault('자료실을 연 뒤 폴더를 확인하세요.');
+      const owner = ensureScope(); if (!owner) throw uiFault('자료를 연 뒤 폴더를 확인하세요.');
       const token = epoch;
       for (const previous of [...mounts]) releaseMount(previous);
       const element = el('section', null, 'source-folders'); element.setAttribute('aria-label', '자료 폴더');
@@ -240,7 +240,7 @@
     }
     function releaseMount(mount) { if (mount.released) return; mount.released = true; mounts.delete(mount); mount.element.remove(); }
     function assignmentControl({ sourceIds, buttonLabel = '폴더로 이동', onSaved = () => {} } = {}) {
-      const owner = ensureScope(); if (!owner) throw uiFault('자료실을 연 뒤 폴더를 확인하세요.');
+      const owner = ensureScope(); if (!owner) throw uiFault('자료를 연 뒤 폴더를 확인하세요.');
       const token = epoch, details = el('details', null, 'source-folder-assignment'); details.dataset.sourceFolderAssignment = 'true';
       const summary = el('summary', null, 'sf-assignment-toggle'); summary.setAttribute('aria-label', buttonLabel); summary.title = buttonLabel;
       if (root.HaedoLife.Icons) summary.append(root.HaedoLife.Icons.create('folder')); else summary.append(el('span', '폴더'));
@@ -287,7 +287,7 @@
       details.refresh = refreshControl;
       return details;
     }
-    function refresh() { const owner = ensureScope(); return owner ? load(owner, epoch) : Promise.reject(uiFault('자료실을 먼저 열어 주세요.')); }
+    function refresh() { const owner = ensureScope(); return owner ? load(owner, epoch) : Promise.reject(uiFault('자료를 먼저 열어 주세요.')); }
     function getSnapshot() { const owner = ensureScope(); return owner?.snapshot ? copy(owner.snapshot) : null; }
     function getFolderState() { const owner = ensureScope(); return owner?.snapshot ? copy(owner.snapshot.sourceFolders) : null; }
     function dispose() { if (disposed) return; disposed = true; epoch++; unsubscribe?.(); unsubscribe = null; for (const mount of [...mounts]) releaseMount(mount); slots.clear(); slot = null; workspaceId = null; }

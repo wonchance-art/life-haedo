@@ -313,7 +313,7 @@ async function main() {
         } });
       });
       await f.page.locator('#bsImportConfirm').click(); await f.page.waitForFunction(() => __seriesHydrateHeld === true);
-      await f.page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();
+      await f.page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click();
       await f.page.getByText('모음 처리 결과를 확인한 뒤 이동해 주세요. 입력한 내용은 유지됩니다.', { exact: true }).waitFor();
       assert.equal(await f.page.locator('#bsNew').count(), 1); assert.equal(await f.page.locator('#bsImportConfirm').isDisabled(), true);
       assert.equal(await f.page.evaluate(() => HaedoLife.Shell.storage.getActive()), f.seed.workspaceId);
@@ -322,7 +322,7 @@ async function main() {
       await f.page.locator('#bsImportReview').waitFor({ state: 'detached' }); await saved(f.page);
       const committed = await state(f.page); originals(committed, before); assert.equal(committed.snapshots.length, 1);
       assert.deepEqual(content(committed.snapshots[0]), content(exportedSnapshot));
-      await f.page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();
+      await f.page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click();
       await f.page.locator('#bsNew').waitFor({ state: 'detached' }); assert.deepEqual(await state(f.page), committed);
       assert.equal(f.server.writes().length, 0);
     });

@@ -133,7 +133,7 @@ async function main() {
     await check('staging and atomic commit failures retain text and source identity for retry', 390, async page => {
       const initial = await seed(page); await reimport(page, 390); await partial(page); await fault(page, 'draft');
       await click(page, '원문·출처 확인'); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.evaluate(() => __reimportAborts > 0)); assert.equal(await page.locator('#lifeImportText').inputValue(), raw); assert.equal((await state(page)).bundle.sourceVersions.length, 1);
-      await page.locator('[data-haedo-navigation] [data-haedo-section="tools"]').click(); await settle(page); assert.equal(await page.locator('#lifeImportForm').isVisible(), true);
+      await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click(); await settle(page); assert.equal(await page.locator('#lifeImportForm').isVisible(), true);
       await fault(page, null); assert.equal((await saveDraft(page)).input.existingSourceId, initial.sourceId); await click(page, '원문·출처 확인');
       await fault(page, 'commit'); await click(page, '자료만 보관'); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert(await page.evaluate(() => __reimportAborts > 0));
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw); assert.equal((await state(page)).bundle.sourceVersions.length, 1); const draft = (await state(page)).stages.find(stage => stage.state === 'draft'); assert.equal(draft.input.existingSourceId, initial.sourceId);

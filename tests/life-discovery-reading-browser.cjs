@@ -298,7 +298,7 @@ async function main() {
       await page.evaluate(() => { window.__readingFail = true; }); await card(page, url).locator('[data-reading-save]').click();
       await page.locator('#discoveryReadingError').waitFor({ state: 'visible' });
       assert.deepEqual((await state(page)).reading, first.reading); assert.equal(await card(page, url).locator('[data-reading-field="reason"]').inputValue(), 'off_topic');
-      const location = page.url(); await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').first().click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
+      const location = page.url(); await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').first().click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal(page.url(), location); assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'no');
       const revision = (await state(page)).reading.revision; await (await revealControl(page.locator('#discoveryReadingRetry'))).click(); await saved(page, revision);
       const after = await preserved(page, before); assert.equal(reviewFor(after.reading, url).reason, 'off_topic');

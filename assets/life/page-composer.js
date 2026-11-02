@@ -401,7 +401,7 @@
       onModeChange({ mode: active ? "edit" : readId ? "read" : "list", id: active || readId });
       const bar = node("div", null, "pp-toolbar");
       if (standalone) bar.append(button("내 글로 돌아가기", returnToPosts, "back"));
-      else bar.append(button("글쓰기", onNewPost || (() => begin()), "edit"));
+      else bar.append(button("글쓰기", onNewPost || (() => begin()), "write"));
       if (onNewPost && !standalone) {
         const legacy = node("details", null, "pp-legacy-writing");
         legacy.append(node("summary", "기존 글·첨부"), button("대상 첨부 글쓰기", () => begin()));

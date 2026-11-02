@@ -24,7 +24,7 @@ async function openMenu(page, section, mode, id) {
 }
 
 const openRecordsMenu = page => openMenu(page, 'records', 'sources', 'lifeRecordsMenu');
-const openBlogMenu = page => openMenu(page, 'home', 'home', 'lifeBlogMenu');
+const openBlogMenu = page => openMenu(page, 'schedule', 'home', 'lifeBlogMenu');
 
 async function openNewsSettings(page) {
   await sectionRoot(page, 'news', 'external-discovery');
@@ -37,4 +37,7 @@ async function openNewsSettings(page) {
   await page.locator('#discoveryOpenInterests').waitFor({ state: 'visible' });
 }
 
-module.exports = { openRecordsMenu, openBlogMenu, openNewsSettings };
+// 2026-11-02: 공개 표지 and 공개한 페이지 are rows of 설정 (no longer in the blog menu).
+const openSettings = page => sectionRoot(page, 'manage', 'manage');
+
+module.exports = { openRecordsMenu, openBlogMenu, openNewsSettings, openSettings };
