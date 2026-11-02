@@ -233,6 +233,9 @@ jobs:
       - name: Verify blog attachments, archive, original gallery and portable HTML
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-writing-completion-browser.cjs
+      - name: Verify attachments saved to the collection, preserved open input and workspace boundaries
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/taste-link-browser.cjs
       - name: Verify whole Obsidian vault restore, links and private boundaries
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/obsidian-vault-browser.cjs
