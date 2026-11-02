@@ -334,7 +334,7 @@ async function main() {
       await home(page); await recordWrite(page);
       assert.equal(await page.locator('#lifeWritingTitle').inputValue(), '오늘 다시 생각한 일');
       assert.equal(await page.locator('#lifeWritingBody').inputValue(), '내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
-      await nav(page, 'tools'); await page.getByRole('button', { name: '연표', exact: true }).click();
+      await home(page); await nav(page, 'tools'); await page.getByRole('button', { name: '연표', exact: true }).click();
       await page.getByRole('link', { name: /연표 목록/ }).click();
       await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
       await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').click(); await ready(page);
