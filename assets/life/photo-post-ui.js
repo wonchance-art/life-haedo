@@ -154,6 +154,9 @@
     // once no IME composition is active.
     let aiPending = false,
       authorNote = "",
+      // A note about a state change with no edit (Esc, nothing selected) is
+      // not cleared by the save of earlier edits; the next edit clears it.
+      authorNoteKept = false,
       aiInserting = false,
       humanRanges = [],
       settleQueued = false,
@@ -485,7 +488,7 @@
     function setAiPending(value, announce = true) {
       if (aiPending === value) return;
       aiPending = value;
-      if (!value && announce) authorNote = "AI 글 붙여넣기 대기를 껐어요";
+      if (!value && announce) { authorNote = "AI 글 붙여넣기 대기를 껐어요"; authorNoteKept = true; }
       syncAuthorButton();
       showStatus(error);
     }
@@ -502,19 +505,19 @@
       const text = editor.getContents(range.index, range.length).ops
         .filter((op) => typeof op.insert === "string" && /[^\n]/.test(op.insert));
       if (!text.length) {
-        authorNote = "AI 글로 표시할 글자를 선택해 주세요";
+        authorNote = "AI 글로 표시할 글자를 선택해 주세요"; authorNoteKept = true;
         showStatus(error);
         return;
       }
       const marked = text.every((op) => op.attributes?.author === "ai");
       if (aiPending) setAiPending(false, false);
       editor.formatText(range.index, range.length, "author", marked ? false : "ai", "user");
-      authorNote = marked ? "AI 글 표시를 해제했어요" : "AI 글로 표시했어요";
+      authorNote = marked ? "AI 글 표시를 해제했어요" : "AI 글로 표시했어요"; authorNoteKept = false;
       syncAuthorButton();
       showStatus(error);
     }
     function mark() {
-      authorNote = "";
+      authorNote = ""; authorNoteKept = false;
       dirtyTick++;
       doc.updatedAt = new Date().toISOString();
       showStatus();
@@ -548,7 +551,7 @@
           target.revision = saved.revision;
           storedTick = tick;
           // A short AI-mark note gives way to the save state once saved.
-          if (storedTick === dirtyTick) authorNote = "";
+          if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
           if (current(token)) onSaved();
@@ -1649,7 +1652,7 @@
             }
             editor.setSelection(range.index + text.length, 0, "silent");
             if (ai) {
-              authorNote = "붙여넣은 글을 AI 글로 표시했어요";
+              authorNote = "붙여넣은 글을 AI 글로 표시했어요"; authorNoteKept = false;
               syncAuthorButton();
               showStatus(error);
             }
