@@ -149,7 +149,9 @@
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map(), naverBlogViews = new Map();
-    const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth, autoSync: true });
+    // An older page without sync-common.js (mixed during an update) runs without blog sync, as when
+    // the module is absent, instead of failing the whole mount.
+    const blogSync = (() => { try { return global.HaedoLife.BlogSync?.create({ storage, auth, autoSync: true }); } catch (error) { if (error?.code !== 'sync_common_missing') throw error; return undefined; } })();
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage', 'backup']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
@@ -232,7 +234,9 @@
     main.addEventListener('pointerdown', editingInput);
     main.addEventListener('keydown', editingInput);
     main.addEventListener('wheel', editingInput, { passive: true });
-    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
+    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError,
+      // A post that attaches the item opens in the same blog reader as search results do.
+      openPost: postId => navigate('page', { blogContext: true, searchTarget: { photoPostId: postId }, pagePreview: false }) });
     const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;

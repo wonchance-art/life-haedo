@@ -15,7 +15,23 @@
     let review = null,
       closePicker = null,
       disposed = false,
-      choosing = false;
+      choosing = false,
+      renderSeq = 0;
+    // Collection saves in progress or failed, by attachment identity. Shown on that attachment's
+    // card, never in the post's status line (which autosave rewrites and which owns recovery).
+    // Values are { state: "saving" | "failed", reason }; collectSeq orders overlapping saves of the
+    // same identity so only the latest one paints.
+    const collectState = new Map(), collectSeq = new Map();
+    const identity = (value) => JSON.stringify([value.type, value.title, value.creator, value.url]);
+    const attached = (key) => getValues().some((value) => identity(value) === key);
+    // Short, stable reasons, so a retry that keeps failing says why.
+    function failureReason(error) {
+      if (error === "read") return "컬렉션을 읽지 못함";
+      if (error === "conflict") return "다른 탭에서 컬렉션이 계속 바뀜";
+      if (error?.code === "collection_limit") return "컬렉션 한도(1,000개·2 MiB)를 넘음";
+      if (error?.code === "invalid_collection" || error?.code === "invalid_collection_url") return "항목 정보가 컬렉션 형식에 맞지 않음";
+      return "저장 중 오류";
+    }
     const node = (tag, text, cls) => {
       const n = document.createElement(tag);
       if (text != null) n.textContent = text;
@@ -111,6 +127,20 @@
       };
       type.addEventListener("change", syncCreator);
       syncCreator();
+      // Saving into the collection is explicit and separate from the post. Only a new attachment
+      // starts checked; an edit shows that the item is already kept, or offers saving unchecked, so
+      // fixing a typo never saves anything by surprise. The label says "collection", not "taste":
+      // keeping someone's work is not a statement of belief.
+      let keepBox = null;
+      if (target >= 0 && seed.collected === true) form.append(node("p", "컬렉션에 있음", "life-meta photo-attachment-collected"));
+      else {
+        const keep = node("label", null, "photo-attachment-collect");
+        keepBox = node("input");
+        keepBox.type = "checkbox";
+        keepBox.checked = target < 0;
+        keep.append(keepBox, document.createTextNode(" 컬렉션에도 저장"));
+        form.append(keep);
+      }
       review = { composing: false, title: inputs.title };
       onDirty();
       form.addEventListener("compositionstart", () => {
@@ -139,6 +169,7 @@
           review = null;
           render();
           onDirty();
+          if (keepBox?.checked) void collect(value);
           host
             .querySelector(
               '[data-attachment-index="' +
@@ -160,6 +191,103 @@
       form.append(actions);
       host.append(form);
       inputs.title.focus();
+    }
+    // Adds the attachment to the workspace's collection once (same matching rule as the page
+    // composer), retrying only when another tab saved the collection in between. The post keeps
+    // the attachment whatever happens here; a failure stays on the attachment's card with a retry.
+    async function collect(value) {
+      const key = identity(value), seq = (collectSeq.get(key) || 0) + 1;
+      collectSeq.set(key, seq);
+      const latest = () => valid() && collectSeq.get(key) === seq;
+      // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
+      const kept = () => {
+        collectState.delete(key);
+        void annotate(renderSeq);
+      };
+      const finish = async (failure) => {
+        if (!valid()) return;
+        // A save that kept the target wins whatever its order: the target is in the collection.
+        if (!failure) return kept();
+        // A failure shows only for the newest attempt, and only if no other attempt kept it meanwhile.
+        if (!latest()) return;
+        try {
+          if (life.Collection.attachmentMatch((await storage.readCollection(workspaceId)).items, value)) return valid() && kept();
+        } catch (_) {
+          // The failure below stands.
+        }
+        if (!latest()) return;
+        // A save that finishes for an attachment no longer on the post leaves no state behind.
+        if (attached(key)) collectState.set(key, { state: "failed", reason: failureReason(failure) });
+        else collectState.delete(key);
+        paintAll();
+      };
+      collectState.set(key, { state: "saving" });
+      paintAll();
+      let failure = "conflict";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        let collection;
+        try {
+          collection = await storage.readCollection(workspaceId);
+        } catch (_) {
+          failure = "read";
+          break;
+        }
+        if (!latest()) return;
+        if (life.Collection.attachmentMatch(collection.items, value)) return finish(null);
+        try {
+          const item = life.Collection.fromAttachment(value, life.Core.id(), new Date().toISOString());
+          await storage.saveCollection(workspaceId, { ...collection, items: collection.items.concat(item) }, collection.revision);
+          return finish(null);
+        } catch (error) {
+          if (error?.code === "collection_conflict") continue;
+          failure = error;
+          break;
+        }
+      }
+      finish(failure);
+    }
+    // Writes one card's collection line from the save state and the last known membership.
+    function paint(row, item) {
+      const line = row.querySelector(".photo-attachment-collect-state");
+      if (!line) return;
+      const entry = collectState.get(identity(item)), state = entry?.state, kept = row.dataset.collected;
+      const text = state === "saving" ? "컬렉션에 저장하는 중…" : state === "failed" ? "컬렉션에 저장하지 못함 · " + entry.reason
+        : kept === "archived" ? "컬렉션에 있음 · 보관한 항목" : kept === "true" ? "컬렉션에 있음" : "";
+      line.querySelector(".photo-attachment-collect-text").textContent = text;
+      line.classList.toggle("photo-attachment-collected", !state && !!kept);
+      line.querySelector(".photo-attachment-collect-retry")?.remove();
+      if (state === "failed") {
+        const retry = button(item.title + " 컬렉션 저장 다시 시도", () => collect(item));
+        retry.textContent = "다시 시도";
+        retry.setAttribute("aria-label", item.title + " 컬렉션 저장 다시 시도");
+        retry.classList.add("photo-attachment-collect-retry");
+        line.append(retry);
+      }
+    }
+    function paintAll() {
+      if (!valid()) return;
+      getValues().forEach((item, i) => {
+        const row = host.querySelector('[data-attachment-index="' + i + '"]');
+        if (row) paint(row, item);
+      });
+    }
+    // Reads which attachments are already in the collection and repaints their cards. Read-only.
+    async function annotate(token) {
+      let items;
+      try {
+        items = (await storage.readCollection(workspaceId)).items;
+      } catch (_) {
+        return;
+      }
+      if (!valid() || token !== renderSeq) return;
+      getValues().forEach((item, i) => {
+        const row = host.querySelector('[data-attachment-index="' + i + '"]');
+        if (!row) return;
+        const match = life.Collection.attachmentMatch(items, item);
+        if (match) row.dataset.collected = match.archived ? "archived" : "true";
+        else delete row.dataset.collected;
+        paint(row, item);
+      });
     }
     async function choose() {
       flush();
@@ -208,13 +336,23 @@
     }
     function render() {
       if (!valid()) return;
+      const token = ++renderSeq;
+      // A detached or re-identified attachment drops its save state, so a new card for the same
+      // target never inherits an old failure.
+      for (const key of [...collectState.keys()]) if (!attached(key)) collectState.delete(key);
       host.replaceChildren();
       const rows = node("div", null, "photo-edit-attachments");
       getValues().forEach((item, i) => {
         const row = node("section", null, "photo-edit-attachment"),
           actions = node("div", null, "life-actions");
         row.dataset.attachmentIndex = String(i);
-        row.append(life.PagePostsView.attachments([item], { compact: true }));
+        const body = node("div", null, "photo-edit-attachment-body"),
+          line = node("div", null, "life-meta photo-attachment-collect-state"),
+          lineText = node("span", "", "photo-attachment-collect-text");
+        lineText.setAttribute("role", "status");
+        line.append(lineText);
+        body.append(life.PagePostsView.attachments([item], { compact: true }), line);
+        row.append(body);
         const move = (direction) => {
           flush();
           const next = getValues().slice();
@@ -234,7 +372,7 @@
         down.disabled = i === getValues().length - 1;
         const editButton = button(
           item.title + " 첨부 정보 수정",
-          () => edit(item, i),
+          () => edit({ ...item, collected: !!row.dataset.collected }, i),
           "edit",
         );
         editButton.classList.add("photo-attachment-edit");
@@ -259,6 +397,8 @@
       add.classList.add("photo-attachment-add");
       add.disabled = getValues().length >= life.PagePosts.LIMITS.attachments;
       host.append(rows, add);
+      paintAll();
+      if (getValues().length) void annotate(token);
     }
     render();
     return {
