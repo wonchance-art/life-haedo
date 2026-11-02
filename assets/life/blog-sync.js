@@ -23,8 +23,16 @@
   const QUIET = new Set(['request_cancelled', 'blog_state_conflict', 'photo_post_conflict']);
   // Live instances with automatic sync. The editor reports a committed local
   // draft through the module (HaedoLife.BlogSync.noteLocalDraftSaved).
-  const live = new Set();
+  const live = new Set(), liveStorage = new WeakMap();
   function noteLocalDraftSaved(postId) { for (const instance of live) { try { instance.noteLocalDraftSaved(postId); } catch (_) {} } }
+  // The page's automatic instance for this exact storage. Other engines that store a post
+  // (MaterialContinuitySync's saved-output share) use it so every push of one post runs in this
+  // instance's per-post queue: two instances would race on the same binding CAS, and the
+  // loser's blog_state_conflict would hold back the other device's update until a later pass.
+  function forStorage(storage) {
+    for (const instance of live) if (liveStorage.get(instance) === storage) return instance;
+    return null;
+  }
   function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
     photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
     makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2,
@@ -650,8 +658,8 @@
       syncNow, start, stop, noteLocalDraftSaved, holdPost,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; stop(); disposed = true; live.delete(api); listeners.clear(); remote.dispose?.(); } });
-    if (autoSync) { live.add(api); start(); }
+    if (autoSync) { live.add(api); liveStorage.set(api, storage); start(); }
     return api;
   }
-  return Object.freeze({ create, noteLocalDraftSaved, CONFLICT_PREFIX });
+  return Object.freeze({ create, noteLocalDraftSaved, forStorage, CONFLICT_PREFIX });
 });

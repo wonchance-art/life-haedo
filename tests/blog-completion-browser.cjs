@@ -437,10 +437,19 @@ async function main() {
       // A lost save acknowledgement replays the same operation once more.
       const latestA = await until(() => currentOf(page), doc => doc?.title === laterB.title, 'A current post');
       const revisionBefore = readRemote().revision;
+      // Fixed point for the explicit save: no background cycle may start (park)
+      // or still be running (idle lock) on A. Otherwise a cycle that saw the new
+      // post replays its pending request right after the lost acknowledgement
+      // (e.g. the editor's hold release schedules one 500 ms later) and the
+      // retained error state passes before it is observed. The explicit save
+      // itself does not take the cycle lock and still sends.
+      await page.evaluate(() => { window.__parkBlogSync = true; });
+      await until(() => page.evaluate(async () => { const q = await navigator.locks.query(); return ![...q.held, ...q.pending].some(lock => String(lock.name).startsWith('haedo-blog-sync:')); }), Boolean, 'A background sync cycle idle before the lost acknowledgement');
       const editedLost = await editPhotoPost(page, latestA, 'A의 응답 유실 수정 ' + suffix, 'A의 응답 유실 문장\n', { beforeSave: () => { server.failure = 'save-ack'; }, expectedServerState: 'error' });
       assert.equal(server.failure, null); assert.equal(readRemote().revision, revisionBefore + 1); assert.equal(readRemote().data.title, editedLost.title);
       const pending = (await syncState(page, editedLost.id)).pending; assert(pending);
       const uploadsAfterSave = server.assetRequests.filter(request => request.method === 'POST').length;
+      await page.evaluate(() => { window.__parkBlogSync = false; });
       await kick(page); await until(() => syncState(page, editedLost.id), state => state && !state.pending && state.status === 'synced', 'lost receipt replayed');
       const sameSave = server.blogRequests.filter(request => request.rpc === 'life_blog_save' && request.body.p_operation_id === pending.operationId);
       assert(sameSave.length >= 2); assert(sameSave.every(request => JSON.stringify(request.body) === JSON.stringify(sameSave[0].body)));
