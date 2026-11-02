@@ -184,6 +184,20 @@ async function main(){
       const first=server.publicationWrites()[0];assert.equal(server.pages.get(accounts.a.id+':'+f.workspaceId).revision,1);assert.equal(server.publicationWrites().length,1);
       await page.locator('#wbShareRetry').click();await page.locator('#wbShareUrl').waitFor({state:'visible'});const writes=server.publicationWrites();assert.equal(writes.length,2);assert.deepEqual(writes[1].body,first.body);assert.equal(server.pages.get(accounts.a.id+':'+f.workspaceId).revision,1);
     });
+    await check('unconfirmed publish survives closing the tab and reopening resolves the same operation without a duplicate',async({page,context,server})=>{
+      // The server commits, the response is lost, then the tab closes before anyone confirms the result.
+      const f=await shareFixture(page);await openShare(page);server.loseNext=true;page.expectedShareFailure=true;await page.locator('#wbShareConsent').check();await page.locator('#wbSharePublish').click();await page.locator('#wbShareRetry').waitFor();
+      const first=server.publicationWrites()[0],rowKey=accounts.a.id+':'+f.workspaceId;assert.equal(server.publicationWrites().length,1);assert.equal(server.pages.get(rowKey).revision,1);
+      const reopen=async()=>{const tab=await context.newPage();tab.setDefaultTimeout(10000);observeShare(tab,report,'reopened tab');await go(tab,'page');await tab.locator('#wbPageShare').click();await tab.locator('#wbSharePanel').waitFor();await tab.waitForFunction(()=>document.querySelector('#wbSharePanel')?.getAttribute('aria-busy')==='false');return tab;};
+      await page.close();
+      const tab=await reopen();assert.equal(await tab.evaluate(()=>sessionStorage.length),0,'a new tab starts with its own empty sessionStorage');
+      await tab.locator('#wbShareRetry').waitFor({state:'visible'});assert.equal(await tab.locator('#wbSharePublish').count(),0);assert.equal(await tab.locator('#wbShareUrl').count(),0);
+      assert.match(await tab.locator('#wbSharePanel').textContent(),/아직 확인하지 못한 요청/);assert.equal(server.publicationWrites().length,1,'reopening never re-sends on its own');
+      await tab.locator('#wbShareRetry').click();await tab.locator('#wbShareUrl').waitFor({state:'visible'});
+      const writes=server.publicationWrites();assert.equal(writes.length,2);assert.deepEqual(writes[1].body,first.body);assert.equal(server.pages.get(rowKey).revision,1);assert.equal(server.pages.size,1);
+      assert.match(await tab.locator('#wbShareStatus').textContent(),/공개 중/);await tab.close();
+      const later=await reopen();await later.locator('#wbSharePreview').waitFor();assert.equal(await later.locator('#wbShareRetry').count(),0);assert.equal(server.publicationWrites().length,2);
+    });
     await check('historical publish retry after server revocation never revives the old publication',async({page,server})=>{
       const f=await shareFixture(page);await openShare(page);server.loseNext=true;page.expectedShareFailure=true;await page.locator('#wbShareConsent').check();await page.locator('#wbSharePublish').click();await page.locator('#wbShareRetry').waitFor();
       const row=server.pages.get(accounts.a.id+':'+f.workspaceId);row.published=false;row.snapshot=null;row.revision=2;row.lastOperationId='55555555-5555-4555-8555-555555555555';

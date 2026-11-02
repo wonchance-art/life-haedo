@@ -106,8 +106,15 @@
     const auth = options.auth || root.HaedoAuth;
     assert(auth?.ready && auth.client?.rpc && typeof auth.verify === 'function', 'auth_required');
     const connection = config(auth.config);
-    let storage = options.storage;
-    if (!storage) { try { storage = root.sessionStorage; } catch (_) {} }
+    // Unconfirmed requests must outlive the tab (closing it or iOS discarding it) so the same
+    // operation can be confirmed on its receipt later. The key already names project/account/target.
+    // Earlier builds kept them per tab in sessionStorage; such records are moved on first read.
+    let storage = options.storage, legacy = options.legacyStorage || null;
+    if (!storage) {
+      try { storage = root.localStorage; } catch (_) {}
+      try { legacy = root.sessionStorage; } catch (_) {}
+    }
+    if (legacy === storage) legacy = null;
     let disposed = false, epoch = 0, accountId = auth.user?.id || null;
     const controllers = new Set();
     function cancel() { epoch++; for (const controller of controllers) controller.abort(); controllers.clear(); }
@@ -131,14 +138,25 @@
       return { uid, epoch, authEpoch: auth.epoch };
     }
     const key = (uid, workspaceId) => PREFIX + encodeURIComponent(JSON.stringify([connection.url, uid, workspaceId]));
+    function earlier(name) { try { return legacy?.getItem?.(name) ?? null; } catch (_) { return null; } }
+    function parse(text, workspaceId) {
+      try { const value = request(JSON.parse(text)); assert(value.workspaceId === workspaceId); return value; }
+      catch (_) { throw fault('pending_corrupt'); }
+    }
     function load(context, workspaceId) {
       alive(context); workspaceId = uuid(workspaceId);
+      const name = key(context.uid, workspaceId);
       let saved;
-      try { assert(storage?.getItem && storage?.setItem && storage?.removeItem, 'pending_storage_failed'); saved = storage.getItem(key(context.uid, workspaceId)); }
+      try { assert(storage?.getItem && storage?.setItem && storage?.removeItem, 'pending_storage_failed'); saved = storage.getItem(name); }
       catch (_) { throw fault('pending_storage_failed'); }
-      if (saved === null) return null;
-      try { const value = request(JSON.parse(saved)); assert(value.workspaceId === workspaceId); return value; }
-      catch (_) { throw fault('pending_corrupt'); }
+      if (saved !== null) return parse(saved, workspaceId);
+      const previous = earlier(name);
+      if (previous === null) return null;
+      const value = parse(previous, workspaceId);
+      // Remove the tab copy only after the persistent copy reads back identically.
+      try { storage.setItem(name, previous); if (storage.getItem(name) === previous) legacy.removeItem(name); }
+      catch (_) { /* The tab copy stays authoritative; the next read retries the move. */ }
+      return value;
     }
     function pending(workspaceId) { return load(current(), workspaceId); }
     function save(context, value) {
@@ -153,10 +171,13 @@
     }
     function clear(context, value) {
       alive(context);
-      try {
-        const found = load(context, value.workspaceId);
-        if (found && JSON.stringify(found) === JSON.stringify(value)) storage.removeItem(key(context.uid, value.workspaceId));
-      } catch (_) { /* The definitive response remains valid; an identical retry is harmless. */ }
+      const name = key(context.uid, value.workspaceId), expected = JSON.stringify(value);
+      for (const area of [storage, legacy]) {
+        try {
+          const saved = area?.getItem(name);
+          if (saved != null && JSON.stringify(parse(saved, value.workspaceId)) === expected) area.removeItem(name);
+        } catch (_) { /* The definitive response remains valid; an identical retry is harmless. */ }
+      }
     }
     async function rpc(context, name, args, write = false) {
       alive(context); const controller = new AbortController(); controllers.add(controller);

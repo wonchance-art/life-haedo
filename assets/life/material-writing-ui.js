@@ -9,6 +9,9 @@
     let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
     let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
+    // An account-scoped store is synced to the account by MaterialContinuitySync; its own panel
+    // reports that state, so the save line must not claim the preparation stays in this browser.
+    const synced = storage?.isAccountScoped === true;
     const valid = token => !disposed && isCurrent() && (token == null || epoch === token);
     const mounted = token => valid(token) && !!host?.isConnected;
     const plan = () => state?.plans.find(value => value.id === selected);
@@ -18,7 +21,7 @@
     function dirty() { return acting || sourceLoading || !!saving || tick !== stored || composing.size > 0 || pendingFields.size > 0 || !!sources?.pending(); }
     function message() {
       if (!mounted() || !status) return;
-      status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? '이 브라우저에 저장 중…' : tick !== stored ? '저장 전 변경 있음' : '이 브라우저에 비공개로 저장됨';
+      status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
       for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
         const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;

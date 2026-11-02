@@ -16,7 +16,7 @@ async function main() {
   const check = async (name, fn) => { await fn(); report.checks.push(name); console.log('PASS ' + name); };
   const go = async view => { await page.goto(base + '/index.html?section=records&view=' + view); await ready(page); };
   const board = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readNineBoard(await s.getActive()); });
-  const saved = () => page.waitForFunction(() => document.querySelector('.nb-status')?.textContent === '이 브라우저에 저장됨');
+  const saved = () => page.waitForFunction(() => document.querySelector('.nb-status')?.textContent === '저장됨');
   const openSource = async () => { await go('sources'); await page.locator('#lifeSearch').fill('이전 근거'); await page.locator('.life-source-open').click(); await page.locator('#lifeSourceText').waitFor(); };
   const selectSource = async () => {
     await page.locator('#lifeSourceText').evaluate((element, quote) => { const text = element.firstChild, start = text.data.indexOf(quote), range = document.createRange(); range.setStart(text, start); range.setEnd(text, start + quote.length); const selected = getSelection(); selected.removeAllRanges(); selected.addRange(range); element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }, '이전 근거 문장\r\n둘째');
