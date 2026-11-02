@@ -6,7 +6,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
-const { databaseSnapshot } = require('./local-post-finder-browser.cjs');
+const { databaseSnapshot, accountDocsCycled } = require('./local-post-finder-browser.cjs');
 const C = require('../assets/life/core.js');
 const out = path.resolve('.local/account-materials');
 const registryId = '99999999-9999-4999-8999-999999999999';
@@ -179,7 +179,8 @@ async function main() {
       await hold.entered;
       await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
       await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id); await ready(page); await settle(page);
-      const bBefore = await databaseSnapshot(page); hold.release(); const late = await page.evaluate(() => __lateMaterial); assert.ok(late.error); assert.deepEqual(await databaseSnapshot(page), bBefore);
+      // B's own account-docs engine records B's first cursor/schema; the baseline follows that cycle.
+      await accountDocsCycled(page, accounts.b.id); const bBefore = await databaseSnapshot(page); hold.release(); const late = await page.evaluate(() => __lateMaterial); assert.ok(late.error); assert.deepEqual(await databaseSnapshot(page), bBefore);
       assert.equal(await page.locator('.life-source-open[data-source-id="' + f.start + '"]').count(), 0);
       const denied = await page.evaluate(async ws => { try { await HaedoLife.Shell.storage.read(ws); return null; } catch (e) { return e.code; } }, seeded.workspaceId);
       assert.equal(denied, 'workspace_access_denied'); assert.deepEqual(await databaseSnapshot(page), bBefore);

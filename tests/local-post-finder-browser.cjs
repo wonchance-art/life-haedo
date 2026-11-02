@@ -301,5 +301,13 @@ async function main() {
     consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, remoteWrites: 0 }));
 }
 
-module.exports = { databaseSnapshot, seed, manager, scan, candidate, ref };
+// The signed-in account's account-docs engine has finished a full cycle on this page. Its
+// first cycle for an account records that account's cursor and document schema in meta
+// (storage writeAccountDocCursor); a snapshot meant as "before" for that account is taken
+// after this point, not while the engine may still write. Synchronous predicate on purpose:
+// page.waitForFunction treats a returned Promise as already true.
+async function accountDocsCycled(page, userId) {
+  await page.waitForFunction(id => HaedoLife.Shell.storage?.account?.userId === id && ['synced', 'pending'].includes(HaedoLife.Shell.accountDocsSync?.getStatus().state), userId);
+}
+module.exports = { databaseSnapshot, accountDocsCycled, seed, manager, scan, candidate, ref };
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
