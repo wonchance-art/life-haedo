@@ -80,3 +80,22 @@ PYCODE
 4. 위 파일별 검증을 실행한다. 프로젝트용 `INSTALLATION.md`와 이 도입 기록은 공식 파일과 구분해 유지한다.
 
 업데이트 시에는 새 공식 release의 라이선스·diff·공개 advisory·Codex 경로와 추가 실행 요구를 검토한다. 새 태그만 바꾸거나 최신 main을 자동 복사하지 않는다. 검토한 ZIP 해시와 immutable commit, 변경 파일 해시를 함께 갱신하고 디자인 작업에 미치는 변경을 기록한다.
+
+## 2026-11-02 디자인 스킬 비교 재확인
+
+확인일: **2026-11-02 KST**. 사용자가 1안 개편 시안이 “사무적이고 딱딱하다”고 지적해, AI가 만든 듯한 기본값을 피하는 공개 스킬·프롬프트를 다시 비교했다. 별 수는 확인 시점 GitHub 저장소 화면 기준이며 짧은 기간에 급증한 수치라 인기 지표로만 본다. 이번 비교로 새 스킬·엔진·hook을 설치하지 않았다.
+
+| 후보 | 확인한 내용 | 해도 적합성과 결정 |
+| --- | --- | --- |
+| [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Apache-2.0, 약 99.6k stars. 명령 24개(critique·audit·typeset·colorize·delight·quieter 등), LLM 없이 도는 규칙 62개 탐지기 | **유지.** 이미 설치한 4.5.0 지침을 시안 점검표로 쓴다. 탐지기는 별도 바이너리 실행이 필요해 위 결정대로 켜지 않는다. 새 release 반영은 위 고정·해시 절차를 따른다. |
+| [anthropics/skills frontend-design](https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md) | 주제에서 나온 한 가지 미감 방향, 4–6개 색, 한두 글꼴, 사용자 행동에만 움직임. 고정폭 작은 데이터 라벨·가운뎃점 메타 줄·내용 위 불필요한 라벨·가는 선의 신문식 배치·같은 모양 카드 묶음을 피함 | **참고.** 설치하지 않고 금지 목록만 Impeccable `craft-floor.md`와 함께 점검에 쓴다. 라이선스 파일은 도입할 때 따로 확인한다. |
+| [Claude 쿡북: Prompting for frontend aesthetics](https://platform.claude.com/cookbook/coding-prompting-for-frontend-aesthetics) | 모델이 흔한 디자인으로 수렴하므로 글꼴·색·움직임·배경을 지정하고 피할 기본값을 명시하라는 프롬프트 | 원리는 위 두 지침에 포함돼 있어 별도로 쓰지 않는다. |
+| [Leonxlnx/taste-skill](https://github.com/leonxlnx/taste-skill) | MIT, 약 108k stars. 미술 방향 20개 중 3개를 뽑아 고르고, 세 폭 브라우저 캡처로 최대 3회 스스로 고침. 공개 사진을 가져오고 한 번에 30–45분과 수십만 토큰 사용 | **방법만 참고.** 여러 방향을 나란히 비교한 뒤 고르는 절차를 쓴다. 공개 사진 수집과 긴 자동 반복은 개인 기록 앱 시안에 맞지 않는다. |
+| [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | MIT, 약 143.9k stars. 스타일 79개·색 192개·글꼴 조합 74개를 검색해 고름 | **채택하지 않음.** 목록 선택이 다시 평균적인 결과를 만들고, Google Fonts 중심이라 한글 활자를 다루지 않는다. |
+| [Vercel web-design-guidelines](https://skillselion.com/skills/vercel-labs/agent-skills/web-design-guidelines) | 접근성·인터랙션 규칙을 실행 때 받아 `file:line`으로 보고 | 미감 도구가 아니다. 구현 단계의 품질 점검 후보로 둔다. 실행 시 외부 규칙을 받아 오므로 도입 전에 별도 검토한다. |
+
+어느 후보도 한글·CJK 활자를 따로 다루지 않는다. 한글 화면은 계속 [DESIGN.md](../../DESIGN.md)의 Pretendard·단어 단위 줄바꿈 기준을 따른다.
+
+### 1안 시안에 적용한 결과
+
+Impeccable `craft-floor.md`와 frontend-design 금지 목록으로 1안 시안을 점검해 다음 위반을 찾았다: 작은 날짜·개수의 고정폭 글꼴, 가운뎃점으로 이은 지표 줄, 열 머리글, 격자선 위주의 달력·표, 2–3px 색 왼쪽 테두리 인용, 아이콘 대신 쓴 ✓ 글리프, 내용 대신 보이는 진행 막대. 구조(단계·정렬·기준 날짜)는 유지하고 표면만 DESIGN.md 토큰(Pretendard, 틸 `#145b50`, 캔버스 위 흰 읽기 면)으로 다시 그린 비교판을 디자인 캔버스에 따로 두었다. 비교판은 공개 배포나 앱 구현이 아니며, 채택 여부는 사용자 비교 뒤 정한다.

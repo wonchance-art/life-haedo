@@ -1027,6 +1027,22 @@ Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 �
 후속 [글쓰기 흐름 개선](../design-review/blog-editor-flow.md)은 기존 Quill 2.0.3의 embed 갱신·Delta handler/history를 재사용해 설명 입력 DOM을 보존했다. 공식 고정 태그의 scroll/core 코드를 확인했다. UI 진입·수정일 피드·상단 저장만 연결하며 모델/ZIP/vendor 버전은 유지한다. 신규 라이브러리를 설치하거나 다른 편집기 코드를 복사하지 않았다.
 
 
+## 글쓰기 개편 시안의 편집 엔진 재확인 — 2026-11-02 KST
+
+[글쓰기·읽기 개편 시안](../design-review/write-read-redesign.md)의 Markdown 저장 + 블록 편집 가설을 확인하려고, 위 비교의 1순위인 Tiptap을 최신 배포로 다시 확인하고 임시 폴더에서 실험했다. 앱 코드는 바꾸지 않았다.
+
+- **확인한 배포 (npm 공식 메타데이터, 확인일 2026-11-02):**
+  - `@tiptap/core`·`@tiptap/markdown` 3.32.2: 2026-10-30 배포, MIT
+  - 함께 설치한 53개 패키지: 모두 MIT, `npm audit` 0건
+  - `@tiptap/markdown`은 marked ^17을 쓴다.
+  - 「직접 글쓰기 — 기본 textarea와 편집기 비교」 절에 기록한 Tiptap 공개 권고는 3.30.4·3.30.5 패치 이후 판이다. 그 절이 적은 대로 영향 범위에 상한이 없으므로 안전을 보증하지는 않는다. GitHub 권고 목록은 이번에 다시 조회하지 못했다(실험 환경은 npm만 허용).
+- **번들:** 공식 UMD가 없어 esbuild IIFE로 직접 묶었다. min 492,588B, gzip 156,167B다. 도입한다면 빌드 명령·lock·해시를 vendor 기록에 남긴다.
+- **결과:**
+  - 블록 편집, 실행 취소, 한글 조합 중 메뉴 억제(Chromium 모사), 블록을 넘는 선택은 기본 확장으로 동작했다.
+  - Obsidian 형식(`[[ ]]`, 콜아웃, HTML 주석)을 왕복하려면 직접 만든 확장이 약 150줄 필요했다.
+  - 상세 표와 채택 조건은 시안 문서의 「편집 엔진 실험」 절에 있다.
+- **선택:** 후보 유지. 지금 Quill 저장을 바꾸지 않는다. 저장 형식을 정하는 Delta 왕복 실험과 실제 기기 입력 확인 뒤에 다시 판단한다.
+
 ## 같은 작성기의 첨부·보관·읽기 파일 — 2026-10-15 KST
 
 같은 날의 위 공식 릴리스/라이선스/공개 권고 대조와 [편집기 비교](../design-review/blog-editor-comparison.md)를 재사용했다. Quill 2.0.3·fflate 0.8.3을 유지하며 새 엔진/패키지는 추가하지 않는다. 첨부는 기존 CollectionPicker·PagePosts.attachment/validateAttachments·PagePostsView를 작은 어댑터로 연결한다. 새 검색 SDK나 별도 첨부 데이터 모델은 기존 메타데이터 검토·출처·개인 메모 제외 규칙을 중복시키므로 도입하지 않았다.
