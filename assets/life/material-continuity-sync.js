@@ -53,13 +53,18 @@
   }
   function create({ storage, auth = root.HaedoAuth, model = root.HaedoLife?.MaterialContinuity,
     remote = root.HaedoLife?.MaterialContinuityRemote?.create({ auth }),
-    blogSync = root.HaedoLife?.BlogSync?.create({ storage, auth }),
+    blogSync = null,
     blogRemote = root.HaedoLife?.BlogRemote?.create({ auth }),
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
     const canonical = syncCommon().canonical; // S0 group G3: run-local comparisons and check hashes only
     const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
+    // A saved output is stored through the page's automatic BlogSync for this storage when there is
+    // one, so this share waits in the same per-post queue as the editor's explicit save and the
+    // background cycle instead of racing them on the binding CAS. Otherwise a private instance.
+    let ownBlogSync = null;
+    const posts = () => blogSync || root.HaedoLife?.BlogSync?.forStorage?.(storage) || (ownBlogSync ||= root.HaedoLife?.BlogSync?.create({ storage, auth }));
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
     function guard(c) {
@@ -248,7 +253,9 @@
           if (!state.output || state.conflict) throw fault('material_conflict');
           const current = await checkedRow(c, state.remoteId);
           if (current.revision !== state.remoteRevision || await model.fingerprint(current.data) !== await model.fingerprint(state.head.data)) { await conflict(c, state, current); throw fault('material_conflict'); }
-          const postState = await blogSync.save(ws, before.post.id, { expectedManifest: blog.pack(photoPost.compact(before.post)) }); guard(c);
+          // Re-check after the fingerprint awaits: a disposed engine must not lazily create a dedicated BlogSync.
+          guard(c);
+          const postState = await posts().save(ws, before.post.id, { expectedManifest: blog.pack(photoPost.compact(before.post)) }); guard(c);
           if (postState.status !== 'synced' || postState.remoteId !== state.output.postId) throw fault('material_output_changed');
           const storedPost = await blogRemote.read(state.output.postId); guard(c);
           const expectedPost = blog.pack(photoPost.compact(before.post)); expectedPost.id = state.output.postId; expectedPost.replaces = null;
@@ -387,7 +394,7 @@
       const result = await storage.adoptMaterialContinuity(row, completed ? { post: completed.doc, blogRow: completed.row } : {}); guard(c);
       emit(context(ws, planId)); return result;
     }
-    function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); listeners.clear(); }
+    function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); ownBlogSync?.dispose?.(); listeners.clear(); }
     return Object.freeze({ getState: (ws, id) => stateFor(context(ws, id)),
       preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle, propagateDelete,
       dismissNotice: (ws, id) => serial(ws, id, async c => { const state = await read(c); if (state?.notice) await write(c, state, { notice: null }); }),

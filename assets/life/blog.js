@@ -103,10 +103,20 @@
     model().validate(manifest);
     return manifest;
   }
+  // AI authorship marks stay private (owner decision 2026-11-02). A public copy
+  // drops only that attribute; text and every other format are unchanged. The
+  // server publish RPC applies the same rule to the stored document.
+  function withoutAuthorship(op) {
+    if (!op.attributes || !Object.hasOwn(op.attributes, "author")) return copy(op);
+    const { author: _private, ...rest } = op.attributes, next = { insert: copy(op.insert) };
+    if (Object.keys(rest).length) next.attributes = copy(rest);
+    return next;
+  }
   function validateSnapshot(value) {
     const code = "invalid_blog_snapshot";
     fields(value, ["format", "title", "ops", "attachments", "photos", "author"], code);
     check(value.format === "life-blog-public-v1", code);
+    check(Array.isArray(value.ops) && value.ops.every((op) => !plain(op?.attributes) || !Object.hasOwn(op.attributes, "author")), code);
     fields(value.author, ["name", "intro"], code);
     text(value.author.name, LIMITS.name, code); text(value.author.intro, LIMITS.intro, code);
     check(Array.isArray(value.photos), code);
@@ -124,7 +134,13 @@
     } catch (_) { throw fault(code); }
     return value;
   }
-  function publicSnapshot(doc, { photoIds = [], author = { name: "", intro: "" } } = {}) {
+  // `copies` (array or Map of {id,type,size,digest,width,height}) are the
+  // metadata-free public copies of the selected photos, one per photo in every
+  // format (HEIC/HEIF copies are made from their JPEG view); a selected photo
+  // then shows that copy's metadata, exactly as the server publishes it.
+  // Without `copies` the projection keeps the original's (or HEIC view's)
+  // metadata for private reading only; publication always supplies them.
+  function publicSnapshot(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}) {
     model().validate(doc);
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
     check(Array.isArray(photoIds) && photoIds.every((id) => typeof id === "string") && new Set(photoIds).size === photoIds.length, "invalid_blog_selection");
@@ -133,14 +149,25 @@
     const used = new Set(doc.ops.filter((op) => typeof op.insert !== "string").map((op) => op.insert.photo.id));
     check(photoIds.every((id) => used.has(id)), "invalid_blog_selection");
     const crypto = root.crypto || (typeof require === "function" && require("node:crypto").webcrypto);
+    const copied = copies === null ? null : new Map((copies instanceof Map ? [...copies.values()] : Array.isArray(copies) ? copies : [null]).map((c) => [c?.id, c]));
+    if (copied) {
+      check(!copied.has(undefined) && [...copied.keys()].every((id) => selected.has(id)), "invalid_blog_selection");
+      for (const p of doc.photos.filter((value) => selected.has(value.id))) {
+        const c = copied.get(p.id), bound = needsView(p) ? p.view : p;
+        check(!!c && ["image/jpeg", "image/png"].includes(c.type) && c.digest !== p.digest && c.digest !== p.view?.digest && Number.isSafeInteger(c.size) && c.size > 0 &&
+          Number.isSafeInteger(c.width) && c.width >= 1 && c.width <= bound.width && Number.isSafeInteger(c.height) && c.height >= 1 && c.height <= bound.height &&
+          typeof c.digest === "string" && /^[a-f0-9]{64}$/.test(c.digest), "invalid_blog_selection");
+      }
+    }
     const mapping = new Map(doc.photos.filter((p) => selected.has(p.id)).map((p) => [p.id, crypto.randomUUID()]));
     const snapshot = { format: "life-blog-public-v1", title: doc.title,
-      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? copy(op) :
+      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? withoutAuthorship(op) :
         { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
-      // A HEIC original is never projected publicly; its derived JPEG (no
-      // embedded metadata) is the public photo for that position.
+      // An original is never projected publicly when copies are given; the
+      // public photo for that position is its copy. A HEIC original is never
+      // projected even privately: its JPEG view stands in for it.
       attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map((p) => {
-        const { type, width, height, size, digest } = needsView(p) ? p.view : p;
+        const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
     validateSnapshot(snapshot);

@@ -152,6 +152,9 @@ jobs:
       - name: Verify the core experience across screen sizes
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify the structure baseline of loaded globals across signed-out and signed-in pages
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/structure-baseline-browser.cjs
       - name: Verify private collection storage and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-library-browser.cjs
@@ -224,12 +227,18 @@ jobs:
       - name: Verify frequent local draft autosave and interrupted writing recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-autosave-browser.cjs
+      - name: Verify AI authorship marks, owner edits, Korean composition and public copies without marks
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/ai-authorship-browser.cjs
       - name: Verify atomic account post receipt and repeated original recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/account-blog-receipt-browser.cjs
       - name: Verify blog attachments, archive, original gallery and portable HTML
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-writing-completion-browser.cjs
+      - name: Verify attachments saved to the collection, preserved open input and workspace boundaries
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/taste-link-browser.cjs
       - name: Verify whole Obsidian vault restore, links and private boundaries
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/obsidian-vault-browser.cjs
@@ -826,6 +835,9 @@ jobs:
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
+      - name: Verify public photo copies carry no location or capture metadata
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/public-photo-copy-browser.cjs
       - name: Verify anonymous original-photo reading
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-public-browser.cjs

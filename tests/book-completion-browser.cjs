@@ -35,7 +35,7 @@ async function openLibrary(page) {
 async function home(page) {
   // Mobile writing intentionally hides the global dock. Leave through the
   // visible book-list control before taking the normal Home navigation.
-  const homeLink = page.locator('[data-haedo-navigation] [data-haedo-section="home"]');
+  const homeLink = page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]');
   if (!await homeLink.isVisible()) {
     await page.getByRole('button', { name: '책 목록', exact: true }).click();
     await page.locator('#wbBookList').waitFor();

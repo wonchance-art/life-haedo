@@ -7,7 +7,7 @@
   'use strict';
   const FORMAT = 'life-library-meta-v1', MAX_BYTES = 8 * 1024 * 1024, CHILD_BYTES = 2 * 1024 * 1024;
   const fail = (condition, code = 'invalid_library_meta') => {
-    if (!condition) throw Object.assign(new Error(code === 'library_meta_too_large' ? '자료실 분류 정보의 보관 한도를 넘었습니다. 기존 자료는 유지했습니다.' : '자료실 분류 정보와 정확한 참조를 확인해 주세요.'), { code });
+    if (!condition) throw Object.assign(new Error(code === 'library_meta_too_large' ? '자료 분류 정보의 보관 한도를 넘었습니다. 기존 자료는 유지했습니다.' : '자료 분류 정보와 정확한 참조를 확인해 주세요.'), { code });
   };
   function model(name, file) {
     const value = root.HaedoLife?.[name] || (typeof require === 'function' && require('./' + file + '.js'));

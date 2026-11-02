@@ -60,5 +60,120 @@
       "path": "icons/sparkle.svg",
       "sha256": "b5906ce99aaa1f3894dc4d30201a267508b57646f7010d5d6ecdb019764fe0b7"
     }
-  ]
+  ],
+  "npm_subset": {
+    "package": "lucide-static",
+    "version": "1.51.0",
+    "tarball": "https://registry.npmjs.org/lucide-static/-/lucide-static-1.51.0.tgz",
+    "integrity": "sha512-ts58ApMc5w5SHHUJBtGO+mgf9lo79FApQ1LttKQoJiMrWNZt8zxWA7R6owK6DoGA3XLjJXc/7rDJh1feonl79g==",
+    "published_at": "2026-10-03T06:16:52.859Z",
+    "checked_at": "2026-11-02 Asia/Seoul",
+    "note": "Copied unchanged from package/icons/ of the official npm tarball; each file keeps its ISC license comment.",
+    "files": [
+      {
+        "path": "icons/calendar.svg",
+        "sha256": "3c534b2f66ba1f575647eb61ea2e8e75e3d90c828100304a0bd0c304ff1875c6"
+      },
+      {
+        "path": "icons/chart-gantt.svg",
+        "sha256": "4751acfe77e2b99e7c78389eb3bd0e5d934154ebf94a186fe7e2ffb05a3db981"
+      },
+      {
+        "path": "icons/chart-spline.svg",
+        "sha256": "1cff1f2d9cea5d35d9ff4388f9873ed76f315dcbef4e8b08c4f9a47de10602ed"
+      },
+      {
+        "path": "icons/chevron-left.svg",
+        "sha256": "792e9b42915914792e85034525d430df3f6faab64f8d84194d6ea75432c53a4c"
+      },
+      {
+        "path": "icons/chevron-up.svg",
+        "sha256": "80e25aea1d8e7c971c99a1239f932fdf3f5c487b5cc944ce3fa4506077eea3ff"
+      },
+      {
+        "path": "icons/cloud.svg",
+        "sha256": "a2a70d027941085e61848e8a451c80d00f071ff41bd1319d3c7b7f78bc7ac49e"
+      },
+      {
+        "path": "icons/disc.svg",
+        "sha256": "1f10d03f97f6d8e73ffa00bdf5fe79fe8b18d1b18bd9fcb67bd2ff19ac84f3ba"
+      },
+      {
+        "path": "icons/download.svg",
+        "sha256": "6b798c84bc436cd2606960b388e7a877c292f75147e057723f228979261bfea6"
+      },
+      {
+        "path": "icons/ellipsis.svg",
+        "sha256": "1b0d5e21596fd58574de5a9894ff61163c10852c1899f6c5f54367cb9f0a9be1"
+      },
+      {
+        "path": "icons/folder.svg",
+        "sha256": "68ec0bf8c59dde5e2e89cc5660bffe4ccc01ee0947167addd991cf544f97be18"
+      },
+      {
+        "path": "icons/globe.svg",
+        "sha256": "b5d5e7bca02312771565f67f3795b5cec8b36102811dfbdcaba37bb8ab422751"
+      },
+      {
+        "path": "icons/heart.svg",
+        "sha256": "b030498f08c006fbe58d2d912e5c55edf438b84d72c4d3d5c8f5f7510aa844ed"
+      },
+      {
+        "path": "icons/house.svg",
+        "sha256": "5da15cf74a3cf58b29b087d2de8af14e7c8c7a3eb74c6ab4cd13792e3b580c04"
+      },
+      {
+        "path": "icons/layout-grid.svg",
+        "sha256": "157195fc29587eddade2eeffc1f68b4c4dac81f41a543906f09f432fdcdb5d9f"
+      },
+      {
+        "path": "icons/map.svg",
+        "sha256": "9cbaa88e2a48cbb12b4beb5bbf3f44d096f69f64b6c75329d1dd11bde88cd779"
+      },
+      {
+        "path": "icons/newspaper.svg",
+        "sha256": "c77b9ae42d00bbe885485c9a4a00d1c82b65c0470bee7f9a2b56e5b23ce901dc"
+      },
+      {
+        "path": "icons/pencil.svg",
+        "sha256": "8e7ad0cf8bda894d458bae5a007acbd657d31d7b90bc76a8f2b6680a1af1aa4c"
+      },
+      {
+        "path": "icons/refresh-cw.svg",
+        "sha256": "5843566b2df88871bbaa4dc963a7da99317774989766c55f56c0bc502ebaf4e1"
+      },
+      {
+        "path": "icons/settings.svg",
+        "sha256": "1eae73e8583ae573ee331c8d41f654fc44db9bea25f7a896ad69910523139111"
+      },
+      {
+        "path": "icons/square-check.svg",
+        "sha256": "b9d89ea534a325f9137a604e6c66da413c10867cfe7d4b60ad9f9ad252fac2fa"
+      },
+      {
+        "path": "icons/square-pen.svg",
+        "sha256": "bc664b248220646191fe3cd316e84827fb1bfdd27945aca3405c35e65945f24b"
+      },
+      {
+        "path": "icons/square-play.svg",
+        "sha256": "2000ae8e19e7c17aed356faf94997f0fdac251eda258dcb22e2a8f4e95fe745d"
+      },
+      {
+        "path": "icons/target.svg",
+        "sha256": "df5acd5d2a15261c2e4fad258734224af449d5ef357f2610b96062c45e065765"
+      },
+      {
+        "path": "icons/text-quote.svg",
+        "sha256": "aed26ed85eba4c641e923d776a86265c5dcb14de033cd8dde01efa398a933618"
+      },
+      {
+        "path": "icons/trash-2.svg",
+        "sha256": "7826c2ab9a9fe98b2da284a4da86540bf94264158fd398b8df6b4e0b80331f5c"
+      },
+      {
+        "path": "icons/user.svg",
+        "sha256": "2874322e33a61fc946a00d13eb88eede65e512037fc75b25e9fd4173f8633a6c"
+      }
+    ]
+  }
 }

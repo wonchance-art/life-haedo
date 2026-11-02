@@ -20,10 +20,10 @@
       source_folders_missing_reference: '분류할 자료를 찾을 수 없습니다. 최신 자료 목록을 확인해 주세요.',
       source_folders_not_empty: '하위 폴더를 먼저 옮긴 다음 이 폴더를 삭제해 주세요.',
       workspace_mismatch: '자료와 폴더의 작업공간이 다릅니다.',
-      invalid_backup: '자료실 백업의 항목과 형식을 확인해 주세요.',
-      unsupported_backup: '지원하는 자료실 통합 백업을 선택해 주세요.',
+      invalid_backup: '자료 백업의 항목과 형식을 확인해 주세요.',
+      unsupported_backup: '지원하는 자료 통합 백업을 선택해 주세요.',
       id_collision: '새 폴더 식별자를 만들지 못했습니다. 다시 시도해 주세요.',
-      dependency_unavailable: '자료실 모듈을 불러오지 못했습니다.'
+      dependency_unavailable: '자료 모듈을 불러오지 못했습니다.'
     };
     throw Object.assign(new Error(messages[code] || messages.source_folders_invalid), { code });
   }

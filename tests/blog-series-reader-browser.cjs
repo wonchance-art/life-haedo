@@ -100,7 +100,7 @@ async function main() {
       await page.locator('#blogSeriesReaderNext').click(); await page.locator('.blog-series-reader[data-entry-id=item_1] .blog-series-reader-body[aria-busy=false]').waitFor();
       await page.locator('.blog-photo img').scrollIntoViewIfNeeded();
       await page.waitForFunction(() => { const image = document.querySelector('.blog-photo img'); return image?.complete && image.naturalWidth === 1280; });
-      await page.getByRole('button', { name: '사진 원본 크기로 보기', exact: true }).click();
+      await page.getByRole('button', { name: '사진 크게 보기', exact: true }).click();
       const original = await page.locator('.blog-photo-frame').evaluate(frame => ({ image: frame.querySelector('img').getBoundingClientRect().width, scroll: frame.scrollWidth, width: frame.clientWidth }));
       assert.equal(original.image, 1280); assert(original.scroll > original.width);
       await page.locator('#blogSeriesReaderNext').click(); await page.locator('.blog-series-reader[data-entry-id=item_2] .blog-series-reader-body[aria-busy=false]').waitFor();

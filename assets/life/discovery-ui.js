@@ -163,8 +163,8 @@
           current.personalPending = true;
           message(intent.value ? (intent.kind === 'liked' ? '좋아요한 글에 추가했습니다.' : '담은 글에 추가했습니다. 원문은 보관하지 않았습니다.') : '반응을 해제했습니다. 되돌리거나 추천·기록의 반응 해제 기록에서 다시 선택할 수 있습니다.');
         } else if (intent.type === 'merge') { blockPersonal(); current.collectionUrls = null; current.copyPreview = null; current.copyEnvelope = null; message('사본의 새 항목을 추가했습니다. 기존 선택은 유지했고 추천 반영은 껐습니다.'); }
-        else if (intent.type === 'clear') { blockPersonal(); downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); current.copyGeneration++; current.copyReading = false; current.copyPreview = null; current.copyEnvelope = null; current.lastReaction = null; current.collectionUrls = null; message('반응과 목록을 초기화했습니다. 자료실 원문은 유지했습니다.'); }
-        else if (intent.type === 'forget') { current.lastReaction = null; current.collectionUrls = current.collectionUrls?.filter(value => value !== intent.canonicalUrl) || null; message('이 글의 반응과 목록 정보를 완전히 지웠습니다. 자료실 원문은 유지했습니다.'); }
+        else if (intent.type === 'clear') { blockPersonal(); downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); current.copyGeneration++; current.copyReading = false; current.copyPreview = null; current.copyEnvelope = null; current.lastReaction = null; current.collectionUrls = null; message('반응과 목록을 초기화했습니다. 자료 원문은 유지했습니다.'); }
+        else if (intent.type === 'forget') { current.lastReaction = null; current.collectionUrls = current.collectionUrls?.filter(value => value !== intent.canonicalUrl) || null; message('이 글의 반응과 목록 정보를 완전히 지웠습니다. 자료 원문은 유지했습니다.'); }
         else if (intent.type === 'exclude') message(intent.value ? '이 반응을 추천에서 제외했습니다.' : '이 좋아요를 다음 추천의 근거로 사용할 수 있습니다.');
         else if (!intent.value) message('개인 추천을 껐습니다. 좋아요·담은 목록은 유지했습니다.');
       } catch (error) { if (valid(token)) current.actionError = /too_large/.test(error?.code || '') ? '목록 보관 한도를 넘었습니다. 기존 선택과 이번 의도는 유지했습니다. 사본을 받거나 목록을 정리한 뒤 다시 시도해 주세요.' : '반응을 저장하지 못했습니다. 이번 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
@@ -266,7 +266,7 @@
       }
       if (current.copyPreview || current.copyReading || current.copyError) details.append(button('파일 선택 취소', 'discoveryCopyDiscard', () => { current.copyGeneration++; current.copyReading = false; current.copyPreview = null; current.copyEnvelope = null; current.copyError = ''; draw(); }, 'discovery-quiet'));
       const reset = button('반응·목록 초기화', 'discoveryActionsReset', () => { current.confirmReset = true; draw(); }, 'discovery-quiet'); reset.disabled = !current.actions || !!actionWrite || !!current.actionIntent; details.append(reset);
-      if (current.confirmReset) { details.append(node('p', '좋아요·담기·반응 해제 기록과 개인 추천 설정을 지웁니다. 자료실 원문은 유지합니다.', 'life-meta'), button('반응·목록 초기화 확인', 'discoveryActionsResetConfirm', () => startAction({ type: 'clear' })), button('초기화 취소', 'discoveryActionsResetCancel', () => { current.confirmReset = false; draw(); }, 'discovery-quiet')); }
+      if (current.confirmReset) { details.append(node('p', '좋아요·담기·반응 해제 기록과 개인 추천 설정을 지웁니다. 자료 원문은 유지합니다.', 'life-meta'), button('반응·목록 초기화 확인', 'discoveryActionsResetConfirm', () => startAction({ type: 'clear' })), button('초기화 취소', 'discoveryActionsResetCancel', () => { current.confirmReset = false; draw(); }, 'discovery-quiet')); }
       return details;
     }
     function articleDetails(article, summaryText, className, kind) {
@@ -298,7 +298,7 @@
         const exclusion = button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(exclusion);
         if (current.collection !== 'discover') {
           const forget = button('목록 정보 완전히 지우기', null, () => { current.confirmForget = entry.canonicalUrl; draw(); }, 'discovery-quiet'); forget.dataset.discoveryForget = ''; forget.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(forget);
-          if (current.confirmForget === entry.canonicalUrl) moreBody.append(node('p', '좋아요·담기와 복구 정보를 모두 지웁니다. 자료실 원문은 유지합니다.', 'life-meta'), button('이 글의 반응 완전히 지우기', 'discoveryForgetConfirm', () => startAction({ type: 'forget', canonicalUrl: entry.canonicalUrl })), button('지우기 취소', 'discoveryForgetCancel', () => { current.confirmForget = null; draw(); }, 'discovery-quiet'));
+          if (current.confirmForget === entry.canonicalUrl) moreBody.append(node('p', '좋아요·담기와 복구 정보를 모두 지웁니다. 자료 원문은 유지합니다.', 'life-meta'), button('이 글의 반응 완전히 지우기', 'discoveryForgetConfirm', () => startAction({ type: 'forget', canonicalUrl: entry.canonicalUrl })), button('지우기 취소', 'discoveryForgetCancel', () => { current.confirmForget = null; draw(); }, 'discovery-quiet'));
         }
       }
       return controls;
@@ -778,7 +778,7 @@
       await action?.(selected, current.memory ? { focusKey: current.memory.focusKey, scrollY: current.memory.scrollY } : undefined);
     }
     function importButton(article, { focusKey = 'import:' + article.id, currentFeedOnly = false } = {}) {
-      const review = button(article.coverage === 'link_only' ? '링크를 자료실에 보관' : '자료실에 보관', null, () => navigate(onImport, article, focusKey, currentFeedOnly), 'discovery-review-button');
+      const review = button(article.coverage === 'link_only' ? '링크를 자료에 보관' : '자료에 보관', null, () => navigate(onImport, article, focusKey, currentFeedOnly), 'discovery-review-button');
       review.dataset.discoveryImport = ''; review.dataset.focusKey = focusKey; review.disabled = !!current.pending || !!pendingWrite; return review;
     }
     function sourceDetails(feed, result) {
