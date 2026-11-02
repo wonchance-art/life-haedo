@@ -28,13 +28,15 @@ class WritingCloud extends FakeCloud {
   }
 }
 const listCount = (server, device) => server.writingRequests.filter(value => value.kind === 'writing-list' && value.device === device).length;
+// A synchronous condition: page.waitForFunction would treat a returned Promise as already true.
+const connected = page => page.waitForFunction(() => !!HaedoLife.Shell.sync?.getAccount());
 async function go(page, view = 'write') {
   await page.goto(base + '/index.html?section=' + (view === 'sync' ? 'manage' : 'records') + '&view=' + view); await ready(page); await settle(page);
   await page.waitForFunction(() => !!HaedoLife.Shell.writingSync);
   // Each open (re)starts the originals engine after mount (legacy library path here), and until
   // its account check answers the originals read auth_required, so a draft pass then does nothing.
   // Drive passes only once the engine is connected, as on a device that finished opening.
-  await page.waitForFunction(() => !!HaedoLife.Shell.sync?.getAccount());
+  await connected(page);
   if (view === 'write') await page.locator('#lifeWritingBody').waitFor();
 }
 const active = page => page.evaluate(() => HaedoLife.Shell.storage.getActive());
@@ -138,7 +140,8 @@ async function main() {
     await check('lost acknowledgement survives reload and retries the same operation exactly once on the server', async context => {
       const { server } = context, { a, ws, id } = await paired(context); server.loseWriting.add('a'); await editStored(a.page, id, '응답을 놓쳐도 남아 있는 문장'); await sync(a.page, ws, id);
       const pending = await metadata(a.page, ws, id), revision = server.draft(accounts.a.id, ws, id).revision; assert.ok(pending.outbox); const operation = pending.outbox.operationId;
-      await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, ws, id)).outbox.operationId, operation); server.loseWriting.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal((await metadata(a.page, ws, id)).outbox, null); assert.equal(server.draft(accounts.a.id, ws, id).revision, revision);
+      // The retry needs the originals connected again after the reload, as on a device that finished opening.
+      await a.page.reload(); await ready(a.page); await connected(a.page); assert.equal((await metadata(a.page, ws, id)).outbox.operationId, operation); server.loseWriting.delete('a'); assert.equal(await sync(a.page, ws, id), null); assert.equal((await metadata(a.page, ws, id)).outbox, null); assert.equal(server.draft(accounts.a.id, ws, id).revision, revision);
     });
     await check('missing SQL keeps local input and never creates a remote draft; the next pass connects once it exists', async ({ server, device }) => {
       // The draft schema is missing before the originals connect: the pass that their connection
@@ -156,7 +159,12 @@ async function main() {
     await check('account switch rejects held draft response and opens a separate private store', async context => {
       const { server } = context, { a, b, ws, id } = await paired(context); await editStored(a.page, id, '이전 계정의 비공개 문장'); await sync(a.page, ws, id);
       const held = { device: 'b', kind: 'get', entered: deferred(), release: deferred() }; server.heldWriting = held; const pending = sync(b.page, ws, id); await held.entered.promise;
-      try { server.oauthAccounts.set('b', accounts.b); await b.page.evaluate(() => HaedoAuth.signOut()); held.release.resolve(); await pending.catch(() => {}); await b.page.goto(base + '/login.html?next=index.html'); await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page); assert.equal(await b.page.evaluate(() => HaedoAuth.user.id), accounts.b.id); assert.equal((await b.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).some(value => value.workspaceId === ws), false); await auto(b.page); assert.equal(server.draftWrites('b').some(value => value.owner === accounts.b.id), false); assert.doesNotMatch(await b.page.locator('body').innerText(), /이전 계정의 비공개 문장/); }
+      try { server.oauthAccounts.set('b', accounts.b); await b.page.evaluate(() => HaedoAuth.signOut()); held.release.resolve(); await pending.catch(() => {}); await b.page.goto(base + '/login.html?next=index.html'); await b.page.locator('#googleLogin').click(); await b.page.waitForURL('**/index.html'); await ready(b.page); assert.equal(await b.page.evaluate(() => HaedoAuth.user.id), accounts.b.id); assert.equal((await b.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).some(value => value.workspaceId === ws), false);
+        // "No write as B" is observed after a real pass: B's own originals are connected and synced,
+        // and that pass listed B's server drafts.
+        await connected(b.page); await sourceOn(b.page, await active(b.page));
+        const listsB = () => server.writingRequests.filter(value => value.kind === 'writing-list' && value.owner === accounts.b.id).length, listedB = listsB(); await auto(b.page);
+        assert.ok(listsB() > listedB, 'B listed its server drafts'); assert.equal(server.draftWrites('b').some(value => value.owner === accounts.b.id), false); assert.doesNotMatch(await b.page.locator('body').innerText(), /이전 계정의 비공개 문장/); }
       finally { held.release.resolve(); }
     });
     await check('server updates never replace an active Korean composition; applied terminal preserves exact source pair and pending input', async context => {

@@ -26,7 +26,9 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
   };
   // `source` stays mutable so a test can move the originals between states and emit their events.
   const sourceListeners = new Set();
-  const sourceSync = { async getState() { calls.push(['sourceState']); return { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; }, async syncNow() { calls.push(['sourceSync']); },
+  // hooks.afterRead runs after a state snapshot is taken and before it is returned (an event in flight).
+  const hooks = {};
+  const sourceSync = { async getState() { calls.push(['sourceState']); const value = { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; const after = hooks.afterRead; hooks.afterRead = null; after?.(); return value; }, async syncNow() { calls.push(['sourceSync']); },
     subscribe(listener) { sourceListeners.add(listener); return () => sourceListeners.delete(listener); } };
   const emitSource = event => { for (const listener of [...sourceListeners]) listener(event); };
   const remote = {
@@ -46,7 +48,7 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
   let signedIn = copy(OWNER);
   const auth = { epoch: 1, getAccount: () => copy(signedIn) };
   const manager = WritingSync.create({ storage, sourceSync, auth, remote, engine, materials: null, interval: 3600000 });
-  return { manager, calls, created, local, stateMap, source, sourceListeners, emitSource, auth, signIn: value => { signedIn = value; } };
+  return { manager, calls, created, local, stateMap, source, sourceListeners, emitSource, hooks, auth, signIn: value => { signedIn = value; } };
 }
 const draft = (n, extra = {}) => ({ stageId: id(n), workspaceId: WS, kind: 'writing', state: 'draft', revision: 1, updatedAt: '2026-10-01T00:00:00.000Z', ...extra });
 
@@ -153,6 +155,20 @@ test('a burst of originals events becomes one check and one pass; pending origin
   assert.ok(f.calls.filter(call => call[0] === 'sourceState').length <= 4, 'events during a check join it');
 });
 
+test('originals that become ready while the pass reads their state still start a pass', async t => {
+  const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }];
+  const f = fixture({ rows, source: { enabled: false, status: 'auth_required' } }); t.after(() => f.manager.dispose());
+  // The first pass reads "not ready"; the engine connects and emits before that read returns,
+  // while no workspace is waiting yet, so only the pass's own re-check can start the next pass.
+  // Only start()'s own pass runs: a joined refresh() would re-read the state by itself.
+  f.hooks.afterRead = () => { Object.assign(f.source, { enabled: true, status: 'synced' }); f.emitSource({ type: 'account' }); };
+  f.manager.start(); await settled();
+  assert.equal(lists(f), 1, 'the event that landed during the read was not lost');
+  assert.deepEqual(f.calls.filter(call => call[0] === 'install').map(call => call[1]), [id(5)]);
+});
+
+// Safety conditions only: this also passes on the code before originals events were handled
+// (it never subscribed), so it pins the guards and is not evidence for the regression fix.
 test('originals events never start a pass for another account, a hidden page or after dispose', async t => {
   const f = fixture({ rows: [], source: { enabled: false, status: 'auth_required' } });
   f.manager.start(); await f.manager.refresh(); await settled();
