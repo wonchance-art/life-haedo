@@ -158,13 +158,21 @@ async function main() {
     const existing = await existingNaver(page), sub = server.setup(existing.workspaceId); server.inbox(sub);
     const naverBody = (await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), existing.workspaceId)).sourceVersions.find(v => v.id === existing.refs['100001'].versionId).contentText;
     await entry(); await open('기존 합성 원문 100001', existing.refs['100001'].versionId); await page.locator('#lifeNaverSourceMedia[data-state=unverified]').waitFor();
-    for (const route of ['top', 'bottom']) {
+    const naverReturn = async route => {
       await page.locator('#lifeNaverMediaReview').scrollIntoViewIfNeeded(); const y = await page.evaluate(() => scrollY);
       await page.locator('#lifeNaverMediaReview').click(); await page.locator('#lifeNaverBlog').waitFor();
       if (route === 'top') await page.locator('#lifeSubviewReturn').click(); else await page.locator('#naverBlogReturn').click();
       await page.locator('#lifeNaverSourceMedia[data-state=unverified]').waitFor(); await page.waitForFunction(() => document.activeElement?.id === 'lifeNaverMediaReview');
       assert.ok(Math.abs((await page.evaluate(() => scrollY)) - y) <= 2); assert.equal(await page.locator('#lifeSourceText').textContent(), naverBody);
-    }
+    };
+    for (const route of ['top', 'bottom']) await naverReturn(route);
+    // A busy device: frames arrive after the fast local photo read, so the reader's
+    // own queued position restore scrolls after the return armed. That restore is
+    // not the person scrolling away and must not cancel the exact focus return
+    // (CI f617aee, run 41441355455). The 390x500 reader keeps the action below the fold.
+    await page.evaluate(() => { window.__naverRaf = window.requestAnimationFrame; const raf = window.__naverRaf.bind(window); window.requestAnimationFrame = callback => raf(() => setTimeout(() => callback(performance.now()), 80)); });
+    for (const route of ['top', 'bottom']) await naverReturn(route);
+    await page.evaluate(() => { window.requestAnimationFrame = window.__naverRaf; });
     await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); assert.equal(await page.locator('#lifeSearch').inputValue(), '기존 합성 원문 100001');
     report.checks.push('Naver missing-photo review returns to exact prior source from top and bottom');
     assert.deepEqual(report.errors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.externalRequests, []);
