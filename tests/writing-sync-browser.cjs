@@ -20,6 +20,10 @@ class WritingCloud extends FakeCloud {}
 async function go(page, view = 'write') {
   await page.goto(base + '/index.html?section=' + (view === 'sync' ? 'manage' : 'records') + '&view=' + view); await ready(page); await settle(page);
   await page.waitForFunction(() => !!HaedoLife.Shell.writingSync);
+  // Each open (re)starts the originals engine after mount (legacy library path here), and until
+  // its account check answers the originals read auth_required, so a draft pass then does nothing.
+  // Drive passes only once the engine is connected, as on a device that finished opening.
+  await page.waitForFunction(() => !!HaedoLife.Shell.sync?.getAccount());
   if (view === 'write') await page.locator('#lifeWritingBody').waitFor();
 }
 const active = page => page.evaluate(() => HaedoLife.Shell.storage.getActive());
@@ -40,6 +44,8 @@ async function receiveSources(page, id) {
   await go(page, 'sync'); await page.getByRole('button', { name: '서버 작업공간 목록 확인', exact: true }).click();
   await page.locator('#lifeRemoteList').getByRole('button', { name: '이 작업공간 받기', exact: true }).click();
   await settle(page); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), id); await go(page);
+  // Drafts are listed only for a workspace whose originals sync is enabled and synced for this account.
+  await page.waitForFunction(id => HaedoLife.Shell.sync.getState(id).then(value => value.enabled && value.status === 'synced'), id);
 }
 async function editStored(page, id, text) { return page.evaluate(async ({ id, text }) => { const s = HaedoLife.Shell.storage, value = await s.getStage(id); return s.saveStage({ ...value, text, updatedAt: new Date().toISOString() }); }, { id, text }); }
 async function openDraft(page, id) { await go(page); const details = page.locator('#lifeWritingDrafts'); if (!await details.evaluate(value => value.open)) await details.locator('summary').click(); await details.locator('[data-stage-id="' + id + '"]').click(); await page.locator('#lifeWritingBody').waitFor(); }
