@@ -310,6 +310,9 @@
         const previousMode = blogMode;
         blogMode = context.mode;
         if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
+        // A successful 글 저장 ends the 글쓰기 screen: later edits of the saved post are not a new post,
+        // and the shown history entry drops its compose flag (replace, not a new entry).
+        if (context.committed && blogComposing) { blogComposing = false; writeRoute('page', 'replace'); }
         renderHeader();
         const entryScroll = blogEntryScroll;
         blogEntryScroll = null;
@@ -1609,7 +1612,8 @@
         if (cause?.code === 'photo_post_missing') return { pageCompose: true };
         throw cause;
       }
-      const composing = typeof recordedCompose === 'boolean' ? recordedCompose : post?.status !== 'saved' && !post?.replaces;
+      // A copy that replaces a saved post is never a new post, whatever the entry recorded.
+      const composing = !post?.replaces && (typeof recordedCompose === 'boolean' ? recordedCompose : post?.status !== 'saved');
       return { pagePreview: false, searchTarget: { photoPostId: id }, ...(composing ? { composingPost: true } : {}) };
     }
     function updateBlogRoute(context) {

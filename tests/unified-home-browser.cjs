@@ -316,6 +316,29 @@ async function main() {
       assert.equal(await page.locator('#photoTitle').inputValue(), '예전에 남긴 익명 초안');
       assert.equal(await write.getAttribute('aria-current'), null, 'draft tab after reload'); assert.equal(await schedule.getAttribute('aria-current'), 'page');
     });
+    await check('a successful 글 저장 ends the 글쓰기 screen: editing the saved post is 일정 in the session and after a reload', async ({ page }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      const recorded = () => page.evaluate(() => history.state?.haedo?.entry?.compose ?? null);
+      for (const reload of [true, false]) {
+        await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+        await write.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+        await page.locator('#photoTitle').fill(reload ? '새로고침 전에 저장한 익명 글' : '세션 안에서 저장한 익명 글'); await page.locator('.ql-editor').fill('저장할 본문');
+        assert.equal(await write.getAttribute('aria-current'), 'page');
+        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await settle(page);
+        // The shown entry no longer claims 글쓰기 (replaced, not a new entry).
+        await page.waitForFunction(() => history.state?.haedo?.entry?.compose === undefined);
+        assert.equal(await recorded(), null);
+        if (reload) { await page.reload(); await ready(page); await settle(page); await page.locator('.photo-article').waitFor(); }
+        assert.equal(await write.getAttribute('aria-current'), null, 'saved post ' + (reload ? 'after reload' : 'in session'));
+        await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+        assert.equal(await write.getAttribute('aria-current'), null, 'editing the saved post ' + (reload ? 'after reload' : 'in session'));
+        assert.equal(await schedule.getAttribute('aria-current'), 'page');
+        const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+        await page.locator('#photoTitle').waitFor();
+        assert.equal(await page.locator('#photoTitle').inputValue(), '', '글쓰기 opens a new post');
+        assert.equal(await write.getAttribute('aria-current'), 'page');
+      }
+    });
     // Pages whose heading scrolls with the page carry the phone pencil inside that heading (review M3).
     async function inlinePencil(page, file) {
       const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');

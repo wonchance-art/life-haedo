@@ -300,6 +300,11 @@ async function main() {
       assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '계획으로 돌아가기');
       await back(page, 'tools');
       assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
+      // 계획 → 연표 → 돌아가기 returns focus to the exact 연표 row.
+      await page.getByRole('button', { name: '연표', exact: true }).click(); await mode(page, 'time');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '계획으로 돌아가기');
+      await back(page, 'tools');
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'tools:time');
     });
     // History contract (2026-11-02): a screen change adds one history entry,
     // browser back/forward reopen the exact recorded screen, and a reload keeps
