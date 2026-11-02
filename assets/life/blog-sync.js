@@ -502,7 +502,14 @@
       if (disposed || parked) return getStatus();
       // An explicit retry or a restored connection does not wait for backoff.
       if (options.force) for (const value of retries.values()) value.until = 0;
-      if (running) { rerun = { uploadOnly: !!rerun?.uploadOnly && !!options.uploadOnly, flushDrafts: !!rerun?.flushDrafts || !!options.flushDrafts }; return running; }
+      // Requests that land on a running cycle merge into one rerun: it stays
+      // upload-only only when every merged request was (a hidden page never
+      // pulls the list), and flushes drafts when any of them asked to.
+      if (running) {
+        rerun = rerun ? { uploadOnly: !!rerun.uploadOnly && !!options.uploadOnly, flushDrafts: !!rerun.flushDrafts || !!options.flushDrafts }
+          : { uploadOnly: !!options.uploadOnly, flushDrafts: !!options.flushDrafts };
+        return running;
+      }
       if (timer) { timers.clearTimeout(timer); timer = null; }
       running = (async () => {
         let next = options, result;
