@@ -154,3 +154,8 @@
 .cl-editions .life-help { line-height:1.7; font-size:13px; }
 
 .cl-edition-actions button { flex:1 1 100px; }
+/* Posts that attach this item: a plain list under the note, no new panel. */
+.cl-used { margin-block: 24px; }
+.cl-used-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.cl-used-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
+.cl-used-open { max-width: 100%; overflow-wrap: anywhere; text-align: left; }

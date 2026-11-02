@@ -108,7 +108,7 @@ async function main() {
       assert.equal(d.photos[0].digest, hash(Buffer.from(images[0].data, 'base64'))); assert.deepEqual(await originals(), original);
     });
 
-    await check('Unapplied attachment input and composition block save/export/navigation; edit, cancel and reorder preserve the body and collection', async () => {
+    await check('Unapplied attachment input and composition block save/export/navigation; edit, cancel and reorder preserve the body; the new place is saved to the collection once', async () => {
       await click('음악·책·대상 붙이기'); await page.locator('#clPickerQuery').fill('산책한 장소'); await click('직접 입력');
       const review = page.locator('.photo-attachment-review'), title = review.getByRole('textbox', { name: '제목 또는 이름', exact: true });
       await review.evaluate(n => window.__review = n); await review.getByLabel('첨부 종류', { exact: true }).selectOption('place');
@@ -121,7 +121,14 @@ async function main() {
       await page.locator('.photo-more > summary').click(); await review.scrollIntoViewIfNeeded(); await capture(page, 'attachment-review', [390, 820]); await click('첨부'); await stored();
       await page.locator('.photo-edit-attachment .photo-attachment-edit').first().click(); await page.getByRole('textbox', { name: '제목 또는 이름', exact: true }).fill('취소할 수정'); await click('입력 취소');
       await page.getByRole('button', { name: '산책한 장소 위로', exact: true }).click(); await stored();
-      const d = (await read()).docs.find(v => v.id === primaryId); assert.equal(d.attachments[0].type, 'place'); assert.match(d.attachments[1].title, /literal/); assert.match(d.ops.map(v => typeof v.insert === 'string' ? v.insert : '').join(''), /두 번째 문장/); assert.deepEqual(await originals(), original);
+      const d = (await read()).docs.find(v => v.id === primaryId); assert.equal(d.attachments[0].type, 'place'); assert.match(d.attachments[1].title, /literal/); assert.match(d.ops.map(v => typeof v.insert === 'string' ? v.insert : '').join(''), /두 번째 문장/);
+      // Taste link (owner request 2026-11-02): a newly typed attachment is also saved to the collection
+      // once, separately from the post. Everything else the originals hold stays exactly as it was.
+      const after = await originals(), added = after.collection.items.filter(item => !original.collection.items.some(old => old.id === item.id));
+      assert.equal(after.collection.revision, original.collection.revision + 1); assert.equal(added.length, 1);
+      assert.deepEqual({ type: added[0].type, title: added[0].title, creator: added[0].creator, url: added[0].url, note: added[0].note, tags: added[0].tags }, { type: 'place', title: '산책한 장소', creator: '', url: 'https://example.org/place', note: '', tags: [] });
+      assert.deepEqual(after.collection.items.filter(item => item.id !== added[0].id), original.collection.items);
+      assert.deepEqual({ ...after, collection: null }, { ...original, collection: null }); original = after;
       if (await page.locator('.photo-more').evaluate(n => n.open)) await page.locator('.photo-more > summary').click();
       await click('글 저장'); await page.locator('.photo-article').waitFor(); primary = (await read()).docs.find(v => v.id === primaryId); await capture(page, 'reading');
       primaryZip = (await getDownload(() => click('사진 포함 백업'))).bytes;
