@@ -114,7 +114,7 @@ async function main() {
       await review.evaluate(n => window.__review = n); await review.getByLabel('첨부 종류', { exact: true }).selectOption('place');
       await review.getByRole('textbox', { name: '출처 링크', exact: true }).fill('javascript:alert(1)'); await click('첨부'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await review.evaluate(n => n === __review), true);
       await title.dispatchEvent('compositionstart'); await title.fill('조합 중인 장소'); await click('글 저장'); assert.equal(await review.evaluate(n => n === __review), true);
-      await page.locator('[data-haedo-navigation] [data-haedo-section=home]').click(); assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'), 'page');
+      await page.locator('[data-haedo-navigation] [data-haedo-section=schedule]').click(); assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'), 'page');
       await title.dispatchEvent('compositionend'); await title.fill('산책한 장소'); await review.getByRole('textbox', { name: '출처 링크', exact: true }).fill('https://example.org/place');
       await more('HTML 읽기 파일 받기'); assert.match(await page.locator('.photo-status').innerText(), /첨부 입력을 먼저/); assert.equal((await read()).docs.find(v => v.id === primaryId).attachments.length, 1);
       assert.equal(await title.evaluate(n => n === document.activeElement), true);
@@ -138,7 +138,7 @@ async function main() {
       await page.evaluate(() => { window.__readData = FileReader.prototype.readAsDataURL; FileReader.prototype.readAsDataURL = function (blob) { FileReader.prototype.readAsDataURL = __readData; window.__continueExport = () => __readData.call(this, blob); }; });
       await page.locator('.photo-more > summary').click(); await capture(page, 'reading-menu', [390, 820]);
       const pending = page.waitForEvent('download'); pending.catch(() => {}); await more('HTML 읽기 파일 받기'); await page.locator('.photo-posts[aria-busy=true]').waitFor();
-      await page.locator('[data-haedo-navigation] [data-haedo-section=tools]').click(); assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'), 'page');
+      await page.locator('[data-haedo-navigation] [data-haedo-section=manage]').click(); assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'), 'page');
       await page.evaluate(() => __continueExport()); const file = await pending, bytes = await fs.readFile(await file.path()), html = bytes.toString('utf8');
       assert.equal(file.suggestedFilename(), 'haedo-post.html'); assert(!html.includes('blob:')); assert(!html.includes('<script')); assert(!html.includes('<button')); assert(html.includes('charset="utf-8"'));
       const imageData = [...html.matchAll(/src="data:image\/(?:png|jpeg|webp);base64,([^"]+)"/g)].map(v => hash(Buffer.from(v[1], 'base64')));

@@ -7,7 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
-import { stripTypeScriptTypes } from "node:module";
+import { stripTypeScriptTypes, createRequire } from "node:module";
 const run = promisify(execFile), root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const image = "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3";
 const container = `haedo-blog-postgres-${Date.now()}${process.pid}`;
@@ -15,6 +15,8 @@ const migration = "supabase/migrations/20261017144744_life_blog_originals.sql";
 const syncMigration = "supabase/migrations/20261101091500_life_blog_account_sync.sql";
 const deleteGuardMigration = "supabase/migrations/20261101160000_life_blog_delete_guard.sql";
 const authorshipMigration = "supabase/migrations/20261102110000_life_blog_ai_authorship.sql";
+const copyMigration = "supabase/migrations/20261102120000_life_blog_public_photo_copies.sql";
+const photoFixtures = createRequire(import.meta.url)("../tests/fixtures/photo-metadata.cjs");
 let owns = false;
 const keep = process.argv.slice(2).includes("--keep");
 if (process.argv.slice(2).some((arg) => arg !== "--keep")) throw new Error("Only --keep is supported");
@@ -56,11 +58,12 @@ async function concurrency() {
 }
 async function edge() {
  const source = await readFile(resolve(root, "supabase/functions/haedo-blog-media/index.ts"), "utf8");
- const { createHandler } = await import("data:text/javascript;base64," + Buffer.from(stripTypeScriptTypes(source)).toString("base64"));
+ const { createHandler, metadataFree } = await import("data:text/javascript;base64," + Buffer.from(stripTypeScriptTypes(source)).toString("base64"));
  const owner = randomUUID(), post = randomUUID(), token = randomUUID(), photo = randomUUID();
- const original = Buffer.from("Original image transport bytes\r\n\0\xff", "latin1"), digest = createHash("sha256").update(original).digest("hex");
+ // A metadata-free public copy (2026-11-02): the handler serves only these.
+ const original = photoFixtures.png(4, 3), digest = createHash("sha256").update(original).digest("hex");
  const media = { bucket: "haedo-blog-originals", path: `${owner}/${post}/private-photo-id/${digest}`, type: "image/png", size: original.length, digest };
- let active = true, reads = 0, storageReads = 0, revokeOnStorage = false, returnedSize = original.length;
+ let active = true, reads = 0, storageReads = 0, revokeOnStorage = false, returnedSize = original.length, served = original;
  const secret = "synthetic-server-only-secret";
  const handler = createHandler({ environment: (key) => key === "SUPABASE_URL" ? "https://anonymous-blog.example.invalid" : secret,
   fetcher: async (url, options) => {
@@ -68,7 +71,7 @@ async function edge() {
    if (url.includes("/rpc/")) { reads++; assert.deepEqual(JSON.parse(options.body), { p_token: token, p_photo_id: photo }); return Response.json(active ? media : null); }
    storageReads++; assert.ok(url.endsWith(media.path)); assert.equal(options.cache, "no-store");
    if (revokeOnStorage) active = false;
-   return new Response(original, { headers: { "Content-Type": "image/png", "Content-Length": String(returnedSize) } });
+   return new Response(served, { headers: { "Content-Type": "image/png", "Content-Length": String(returnedSize) } });
   },
  });
  const request = () => new Request(`https://anonymous-edge.example.invalid/?token=${token}&photo=${photo}`);
@@ -80,10 +83,20 @@ async function edge() {
  active = false; response = await handler(request()); assert.equal(response.status, 404); assert.equal(storageReads, 1);
  active = true; revokeOnStorage = true; response = await handler(request()); assert.equal(response.status, 404);
  active = true; revokeOnStorage = false; returnedSize++; response = await handler(request()); assert.equal(response.status, 502);
+ // Bytes that carry EXIF/GPS/XMP, or are not the published digest, are never sent.
+ const tainted = photoFixtures.pngWithGps(original); served = tainted; returnedSize = tainted.length;
+ Object.assign(media, { size: tainted.length, digest: createHash("sha256").update(tainted).digest("hex") }); media.path = media.path.replace(/[a-f0-9]{64}$/, media.digest);
+ response = await handler(request()); assert.equal(response.status, 502); assert.equal((await response.arrayBuffer()).byteLength, 0);
+ served = Buffer.from(original); served[served.length - 20] ^= 1; returnedSize = served.length; Object.assign(media, { size: original.length, digest }); media.path = media.path.replace(/[a-f0-9]{64}$/, digest);
+ response = await handler(request()); assert.equal(response.status, 502);
+ // The same allow list as PhotoPost.metadataFree: Apple ImageIO Exif/iDOT, GPS, text, trailing data and allow-list gaps are refused.
+ for (const item of photoFixtures.corpus()) assert.equal(metadataFree(item.type, item.bytes), item.clean, item.name);
+ assert.equal(metadataFree("image/webp", photoFixtures.WEBP_8X8), false, "public copies are JPEG or PNG only");
+ served = original;
  response = await handler(new Request("https://anonymous-edge.example.invalid/?token=invalid&photo=invalid")); assert.equal(response.status, 404);
  response = await handler(new Request(request(), { method: "POST" })); assert.equal(response.status, 405);
  response = await handler(new Request(request(), { method: "OPTIONS" })); assert.equal(response.status, 204);
- return 7;
+ return 12 + photoFixtures.corpus().length;
 }
 try {
  try { docker(["image", "inspect", image]); } catch (_) { docker(["pull", image]); }
@@ -103,9 +116,19 @@ try {
  const authorshipChecks = parsed(await fixture("supabase/tests/blog-ai-authorship.sql")); assert.equal(authorshipChecks.failures, 0);
  const installed = parsed(await fixture("supabase/tests/blog-installation.sql")); assert.equal(Object.values(installed).every((v) => v === true), true);
  await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(authorshipMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
+ // 2026-11-02 public photo copies (applied after the AI authorship migration, as in production).
+ await fixture(copyMigration); const copyChecks = parsed(await fixture("supabase/tests/blog-public-copies.sql")); assert.equal(copyChecks.failures, 0);
+ // Every publication now goes through publish_copies; AI marks must still stay private.
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-ai-authorship.sql")), authorshipChecks);
+ // Right after the 2026-11-01 files run again and authorship is re-applied (documented
+ // procedure; copy migration not re-applied) the copy rule and AI rule still hold.
+ await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(authorshipMigration);
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-ai-authorship.sql")), authorshipChecks);
+ await fixture(copyMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
  const simultaneous = await concurrency(), streams = await edge();
  const report = { pass: true, postgres: docker(["exec", container, "postgres", "--version"]).trim(),
-  sqlAssertions: sqlChecks.passed, authorshipAssertions: authorshipChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,
+  sqlAssertions: sqlChecks.passed, authorshipAssertions: authorshipChecks.passed, publicCopyAssertions: copyChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,
   network: "none", publishedHostPorts: 0, migrationReinstallPreserved: true, realStorageHttp: false, remoteDatabaseAccess: false,
   ...(keep ? { container, database: "postgres" } : {}) };
  if (keep) {

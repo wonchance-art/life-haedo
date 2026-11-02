@@ -2,29 +2,36 @@
 (function (root) {
   'use strict';
   if (root.HaedoNavigation) return;
+  // 2026-11-02 soft redesign: 뉴스·일정·자료·설정. The former home/tools IDs stay
+  // as aliases of schedule so old links and saved addresses keep opening.
   const sections = [
-    { id: 'home', label: '홈', glyph: 'home', href: 'index.html' },
     { id: 'news', label: '뉴스', glyph: 'news', href: 'index.html?section=news' },
-    { id: 'records', label: '자료실', glyph: 'quote', href: 'index.html?section=records' },
-    { id: 'tools', label: '계획', glyph: 'workspace', href: 'index.html?section=tools' },
+    { id: 'schedule', label: '일정', glyph: 'calendar', href: 'index.html' },
+    { id: 'records', label: '자료', glyph: 'book', href: 'index.html?section=records' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];
+  const aliases = Object.freeze({ home: 'schedule', tools: 'schedule' });
+  const compose = Object.freeze({ id: 'compose', label: '글쓰기', href: 'index.html?compose=1' });
+  function normalizeSection(id) {
+    const value = Object.hasOwn(aliases, id) ? aliases[id] : id;
+    return sections.some(section => section.id === value) ? value : null;
+  }
   const viewSections = Object.freeze({
-    home: 'home', blog: 'home', 'account-blog': 'home', 'public-cover': 'home', 'public-pages': 'home',
+    home: 'schedule', blog: 'schedule', 'account-blog': 'schedule', tools: 'schedule', 'annual-plan': 'schedule', time: 'schedule',
+    'public-cover': 'manage', 'public-pages': 'manage',
     'external-discovery': 'news', interests: 'news',
     sources: 'records', topics: 'records', source: 'records', 'source-edit': 'records',
-    collection: 'records', import: 'records', batch: 'records', write: 'records', time: 'records',
+    collection: 'records', import: 'records', batch: 'records', write: 'records',
     activities: 'records', page: 'records', related: 'records', find: 'records',
     'naver-blog': 'records', 'naver-capture': 'records', 'obsidian-update': 'records',
     'source-trash': 'records', discover: 'records', reflection: 'records', books: 'records',
-    tools: 'tools', 'annual-plan': 'tools',
     manage: 'manage', backup: 'manage', sync: 'manage', transfer: 'manage', 'workbench-backup': 'manage', preservation: 'manage'
   });
   function getSectionForView(view) {
     return Object.hasOwn(viewSections, view) ? viewSections[view] : null;
   }
   const planningDestinations = [
-    { id: 'annual-plan', label: '연간 계획', href: 'index.html?section=tools&view=annual-plan' },
+    { id: 'annual-plan', label: '연간 계획', href: 'index.html?section=schedule&view=annual-plan' },
     { id: 'goals', label: '목표', href: 'goals.html' },
     { id: 'habits', label: '습관', href: 'habits.html' }
   ];
@@ -100,12 +107,17 @@
       indicators.forEach(state => placeIndicator(state, false));
     });
   }
-  function activate(section) {
-    const current = sections.some(item => item.id === section) ? section : 'home';
+  // `composing` marks 글쓰기 as the current screen (decision 15); the section stays for the frame.
+  function activate(section, { composing = false } = {}) {
+    const current = normalizeSection(section) || 'schedule';
     root.document.body.dataset.haedoSection = current;
     root.document.querySelectorAll('[data-haedo-section]').forEach(node => {
       if (!node.matches('a')) return;
-      if (node.dataset.haedoSection === current) node.setAttribute('aria-current', 'page');
+      if (node.dataset.haedoSection === current && !composing) node.setAttribute('aria-current', 'page');
+      else node.removeAttribute('aria-current');
+    });
+    root.document.querySelectorAll('a[data-haedo-compose]').forEach(node => {
+      if (composing) node.setAttribute('aria-current', 'page');
       else node.removeAttribute('aria-current');
     });
     // Activation is committed by the router, never optimistically by a click.
@@ -135,9 +147,42 @@
     brand.addEventListener('click', event => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !handlers.size) return;
       event.preventDefault();
-      for (const handler of handlers) handler('home');
+      for (const handler of handlers) handler('schedule');
     });
     nav.append(brand);
+    // 글쓰기 keeps one place on every screen: top of the label menu, or the top
+    // right corner (pencil) at phone width. Pages without the app router open it by address.
+    const write = root.document.createElement('a');
+    write.className = 'haedo-nav-compose'; write.href = compose.href; write.dataset.haedoCompose = 'true';
+    write.setAttribute('aria-label', compose.label);
+    const plus = root.HaedoLife.Icons.create('plus'); plus.classList.add('haedo-compose-wide');
+    const pencil = root.HaedoLife.Icons.create('write'); pencil.classList.add('haedo-compose-narrow');
+    const writeText = root.document.createElement('span');
+    writeText.className = 'haedo-nav-text'; writeText.setAttribute('aria-hidden', 'true'); writeText.textContent = compose.label;
+    write.append(plus, pencil, writeText);
+    tooltip(write, compose.label);
+    write.addEventListener('click', event => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !handlers.size) return;
+      event.preventDefault();
+      if (write.getAttribute('aria-current') === 'page') return;
+      for (const handler of handlers) handler(compose.id);
+    });
+    nav.append(write);
+    // Pages whose heading scrolls with the page (goals, habits, workspace, timeline, login,
+    // privacy) carry the phone pencil inside that heading, so it never floats over content.
+    // The app pages keep the fixed pencil beside their sticky heading row.
+    const pageHeading = root.document.getElementById('lifeApp') ? null : root.document.querySelector('.p-main > .haedo-page-heading, header .haedo-page-heading');
+    if (pageHeading) {
+      const inline = root.document.createElement('a');
+      inline.className = 'haedo-icon-button haedo-heading-compose'; inline.href = compose.href; inline.dataset.haedoCompose = 'heading';
+      inline.setAttribute('aria-label', compose.label);
+      inline.append(root.HaedoLife.Icons.create('write'));
+      const actions = pageHeading.querySelector(':scope > .haedo-heading-actions') || (() => {
+        const group = root.document.createElement('div'); group.className = 'haedo-heading-actions'; pageHeading.append(group); return group;
+      })();
+      actions.append(inline);
+      root.document.body.dataset.haedoComposeInline = 'true';
+    }
     for (const item of sections) {
       const link = root.document.createElement('a');
       link.className = 'haedo-icon-button haedo-nav-link';
@@ -206,12 +251,16 @@
   const fromQuery = query.get('section');
   const page = root.document.body.dataset.page;
   let initialSection = root.document.body.dataset.haedoSection;
+  let composing = false;
   if (page === 'home' || page === 'life') {
-    // The blog editor/reader lives in home, also when reloaded with `blog`.
-    if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) initialSection = 'home';
+    // The blog editor/reader lives in schedule, also when reloaded with `blog`.
+    if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) {
+      initialSection = 'schedule'; composing = query.get('compose') === '1' || query.get('blog') === 'new';
+    }
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
-    else if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
+    else if (normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
   }
-  activate(initialSection);
-  root.HaedoNavigation = Object.freeze({ activate, bind, getSectionForView, createPlanningNavigation });
+  activate(initialSection, { composing });
+  root.HaedoNavigation = Object.freeze({ activate, bind, getSectionForView, normalizeSection, createPlanningNavigation,
+    sections: Object.freeze(sections.map(item => item.id)) });
 })(globalThis);

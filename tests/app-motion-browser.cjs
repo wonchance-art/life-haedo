@@ -109,9 +109,11 @@ async function main() {
     await check('failed draft flush preserves input, header and committed menu without false entrance or save feedback', async ({ page }) => {
       await open(page); await compose(page); await idle(page); await failWrites(page); await page.locator('.ql-editor').fill('저장 실패 뒤에도 그대로 남는 문장');
       await page.locator('.photo-status[role="alert"]').waitFor(); await cleanTrace(page);
-      await page.evaluate(() => document.querySelector('[data-haedo-section="tools"]').click()); await page.locator('#lifeError:not([hidden])').waitFor();
+      await page.evaluate(() => document.querySelector('[data-haedo-section="manage"]').click()); await page.locator('#lifeError:not([hidden])').waitFor();
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '저장 실패 뒤에도 그대로 남는 문장');
-      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      // The refused move keeps the writing screen current: 글쓰기 (decision 15), not the target section.
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-compose]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').getAttribute('aria-current'), null);
       assert.equal(await page.locator('.photo-status').getAttribute('data-state'), 'error');
       assert.equal(await page.locator('.photo-status-check').isVisible(), false);
       assert.deepEqual(await page.evaluate(() => __nativeMotion.calls.filter(call => call.method === 'enter' || call.options?.state === 'saved')), []);
@@ -143,10 +145,18 @@ async function main() {
     });
     await check('rapid section taps end at the last destination and indicator paints inside its selected link', async ({ page }) => {
       await open(page); await idle(page); await cleanTrace(page);
-      await page.evaluate(async () => { for (const section of ['records', 'tools', 'manage', 'home', 'tools']) { document.querySelector(`[data-haedo-section="${section}"]`).click(); await new Promise(resolve => setTimeout(resolve, 35)); } });
-      await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'tools'); await settle(page); await idle(page);
+      await page.evaluate(async () => { for (const section of ['records', 'schedule', 'manage', 'records', 'manage']) { document.querySelector(`[data-haedo-section="${section}"]`).click(); await new Promise(resolve => setTimeout(resolve, 35)); } });
+      await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'manage'); await settle(page); await idle(page);
       const result = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { selected: selected.dataset.haedoSection, left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height), hidden: marker.getAttribute('aria-hidden') }; });
-      assert.equal(result.selected, 'tools'); assert.equal(result.hidden, 'true'); for (const key of ['left', 'top', 'width', 'height']) assert(result[key] < 2, JSON.stringify(result));
+      assert.equal(result.selected, 'manage'); assert.equal(result.hidden, 'true');
+      // 2026-11-02 decision: the phone tab bar has no selected pill; colour and weight mark the tab.
+      const phone = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]');
+        return { indicator: getComputedStyle(nav.querySelector('.haedo-nav-indicator')).display, background: getComputedStyle(selected).backgroundColor, weight: getComputedStyle(selected.querySelector('.haedo-nav-text')).fontWeight, color: getComputedStyle(selected).color }; });
+      assert.deepEqual(phone, { indicator: 'none', background: 'rgba(0, 0, 0, 0)', weight: '750', color: 'rgb(20, 91, 80)' });
+      // Wider layouts keep the moving indicator, painted inside the selected link.
+      await page.setViewportSize({ width: 1440, height: 1000 }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await idle(page);
+      const wide = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height) }; });
+      for (const key of ['left', 'top', 'width', 'height']) assert(wide[key] < 2, JSON.stringify(wide));
       assert.equal(await page.locator('#lifeMain').evaluate(element => getComputedStyle(element).transform), 'none');
     });
     await check('filtered home reader returns exact query, tab, focus and scroll', async ({ page }) => {
@@ -173,10 +183,17 @@ async function main() {
     await check('main section scroll memory survives round trips without changing the filtered home list', async ({ page }) => {
       await open(page); await seed(page, 24); await page.reload(); await ready(page); await loaded(page); await search(page, '기록');
       await page.evaluate(() => scrollTo({ top: 900, behavior: 'instant' })); const y = await page.evaluate(() => scrollY); assert(y > 100);
-      // Dispatching the global control retains the actual origin scroll, as a bottom dock does on touch.
-      await page.evaluate(() => document.querySelector('[data-haedo-section="tools"]').click()); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'tools');
+      // Dispatching the control retains the actual origin scroll, as a touch does; the plan is 일정's other view.
+      await page.evaluate(() => document.querySelector('[data-schedule-view="tools"]').click()); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'tools');
       await nav(page, 'home'); await loaded(page); await idle(page); await page.waitForFunction(y => Math.abs(scrollY - y) < 2, y);
       assert.equal(await page.locator('#homePostSearch').inputValue(), '기록');
+      // Round trips through the other sections return to the same list, search and scroll.
+      for (const section of ['records', 'news', 'manage']) {
+        await page.evaluate(section => document.querySelector(`[data-haedo-section="${section}"]`).click(), section);
+        await page.waitForFunction(section => document.body.dataset.haedoSection === section && !document.querySelector('.life-app[aria-busy="true"]'), section);
+        await nav(page, 'home'); await loaded(page); await idle(page); await page.waitForFunction(y => Math.abs(scrollY - y) < 2, y);
+        assert.equal(await page.locator('#homePostSearch').inputValue(), '기록', 'search kept after ' + section);
+      }
     });
     await check('late private list work cannot animate or repaint after navigation, workspace switch or signout', async ({ page, server, device }) => {
       await open(page); const refs = await seed(page); const other = await page.evaluate(async first => { const s = HaedoLife.Shell.storage, created = await s.createWorkspace('분리된 익명 공간'); await s.setActive(first); return created.workspaceId; }, refs.workspaceId);

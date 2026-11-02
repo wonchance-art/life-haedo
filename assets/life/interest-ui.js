@@ -124,7 +124,7 @@
       for (const id of current.selected) if (!availableIds.has(id)) current.selected.delete(id);
       const count = node('p', current.selected.size + '개 선택 · 최대 50개', 'life-meta'); count.id = 'interestSelectionCount'; selection.append(count);
       selection.append(node('p', '선택 가능 ' + rows.length + '개 · 본문이 없거나 빈 자료 ' + (latest.size - rows.length) + '개 제외', 'life-meta'));
-      if (!rows.length) selection.append(node('p', '본문이 있는 자료를 자료실에 가져온 뒤 선택할 수 있습니다.', 'life-empty'));
+      if (!rows.length) selection.append(node('p', '본문이 있는 자료를 가져온 뒤 선택할 수 있습니다.', 'life-empty'));
       const list = node('div', null, 'interest-sources');
       rows.forEach(version => {
         const label = node('label', null, 'interest-source'); const box = node('input'); box.type = 'checkbox'; box.value = version.id; box.checked = current.selected.has(version.id); box.dataset.interestVersion = version.id;

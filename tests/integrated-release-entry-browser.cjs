@@ -3,7 +3,7 @@
  * production account/data, actual Google login or Apple device claim. */
 'use strict';
 const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
-const { openBlogMenu, openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { openBlogMenu, openRecordsMenu, openSettings } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4220';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { ShareCloud } = require('./life-share-browser.cjs');
@@ -121,7 +121,7 @@ async function main() {
   const report = { checks: [], visual: [], writes: [], consoleErrors: [], pageErrors: [], external: [], browser: browser.version(), node: process.version,
     scope: 'Actual app/bundled Auth SDK/IndexedDB and generated PNG bytes. Synthetic Auth PKCE and empty owner catalogues only; no SQL/RLS, production Google, Apple hardware, publication or deployment claim.' };
   try {
-    for (const file of ['index.html', 'life.html']) { const result = await oauthRoundTrip(browser, { file, report }); assert.equal(result.path, file); assert.equal(result.query, file === 'index.html' ? '?view=public-cover' : '?section=home&view=public-cover'); assert.equal(result.hash, ''); assert.equal(result.safeNext, 'index.html?section=manage&view=public-cover'); assert.equal(result.verifiedDatabaseOpens, true); report.checks.push({ name: 'Exact synthetic Google PKCE return to public cover from ' + file, pass: true, result }); }
+    for (const file of ['index.html', 'life.html']) { const result = await oauthRoundTrip(browser, { file, report }); assert.equal(result.path, file); /* 2026-11-02: the public cover is a 설정 view */ assert.equal(result.query, '?section=manage&view=public-cover'); assert.equal(result.hash, ''); assert.equal(result.safeNext, 'index.html?section=manage&view=public-cover'); assert.equal(result.verifiedDatabaseOpens, true); report.checks.push({ name: 'Exact synthetic Google PKCE return to public cover from ' + file, pass: true, result }); }
     for (const size of sizes) {
       const f = await context(browser, 'entry-compat-' + size.width, size, accounts.a, null, report);
       try {
@@ -129,9 +129,9 @@ async function main() {
         await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await page.locator('#lifeBlogManager').waitFor();
         await page.locator('.blog-post[data-post-id="' + seed.postId + '"]').getByRole('button', { name: '기존 v1 사진 글', exact: true }).click(); await page.locator('.photo-article').waitFor();
         assert.match(await page.locator('.photo-article').innerText(), /기존 설명/); await capture(page, report, 'old-v1-photo-read', size); await nav(page, 'manage');
-        await openBlogMenu(page); await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await page.locator('#pcSaveStatus[data-state="saved"]').waitFor(); await page.locator('#pcNew').click(); await page.locator('#pcTitle').waitFor();
+        await openSettings(page); await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await page.locator('#pcSaveStatus[data-state="saved"]').waitFor(); await page.locator('#pcNew').click(); await page.locator('#pcTitle').waitFor();
         await compositionGuard(page, '#pcTitle', '한글 입력을 이어 쓴 표지 ' + size.width, '#publicCoverEditor', '#pcSaveStatus[data-state="saved"]');
-        await openBlogMenu(page); await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await page.locator('#pcSaveStatus[data-state="saved"]').waitFor(); assert.equal(await page.locator('#pcTitle').inputValue(), '한글 입력을 이어 쓴 표지 ' + size.width); await capture(page, report, 'cover-reopened', size);
+        await openSettings(page); await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await page.locator('#pcSaveStatus[data-state="saved"]').waitFor(); assert.equal(await page.locator('#pcTitle').inputValue(), '한글 입력을 이어 쓴 표지 ' + size.width); await capture(page, report, 'cover-reopened', size);
         await openPage(page); await page.locator('#wbPageMaterialWriting').click(); await page.locator('#mwQuestion').waitFor(); await compositionGuard(page, '#mwQuestion', '기존 질문 뒤에 조합한 새 생각 ' + size.width, '.mw-workspace', '.mw-status[data-state="saved"]');
         await openPage(page); await page.locator('#wbPageMaterialWriting').click(); await page.locator('#mwQuestion').waitFor(); assert.equal(await page.locator('#mwQuestion').inputValue(), '기존 질문 뒤에 조합한 새 생각 ' + size.width); console.log('Preparation resumed ' + size.width);
         await openPage(page); await page.locator('#wbPageSeries').click(); await page.locator('#bsIntro').waitFor(); await compositionGuard(page, '#bsIntro', '기존 연재에 이어 적은 소개 ' + size.width, '.bs-workspace', '.bs-status[data-state="saved"]');

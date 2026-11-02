@@ -136,7 +136,7 @@ async function main() {
     });
     await check('article handoff requires review and explicit storage, preserves exact originals and returns to news', async () => {
       const before = await snapshot(page), first = page.locator('#discoveryList [data-discovery-id="first"]');
-      const action = await reveal(first.locator('[data-discovery-import]')); assert.equal(await action.innerText(), '링크를 자료실에 보관'); await action.click();
+      const action = await reveal(first.locator('[data-discovery-import]')); assert.equal(await action.innerText(), '링크를 자료에 보관'); await action.click();
       await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual((await snapshot(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); assert.deepEqual((await snapshot(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();

@@ -254,6 +254,16 @@ test('a preparation changed on another device reloads a clean view and never rep
   assert.equal(f.get('#mwTitle').value, '그사이 다시 바뀐 제목'); assert.equal(f.get('#mwIncoming').hidden, true);
 });
 
+test('a new preparation focuses its title only if the person has not already moved into a field while sources load', async t => {
+  const f = await fixture(t); const hold = deferred(); f.setBeforeSources(() => hold.promise);
+  const creating = f.get('#mwNew').emit('click'); await settle();
+  const question = f.get('#mwQuestion'); question.focus();
+  hold.resolve(); await creating; await settle();
+  assert.equal(f.document.activeElement, question, 'late new-preparation focus must not steal the field the person typed into');
+  f.setBeforeSources(null); f.document.activeElement = null;
+  await f.click('#mwNew'); assert.equal(f.document.activeElement, f.get('#mwTitle'), 'otherwise the new title is focused');
+});
+
 test('save line states the actual store: account-synced preparations never claim to stay in this browser', async t => {
   for (const accountScoped of [true, false]) {
     await t.test(accountScoped ? 'account' : 'local only', async t => {

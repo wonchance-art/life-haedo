@@ -8,4 +8,13 @@
 }
 :root {
   --haedo-font: "Pretendard Variable", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
+  /* 2026-11-02 soft redesign scale (docs/design-review/expert-design-brief.md 3-1):
+     12 badge · 13 meta · 15 control/list title · 17 reading · 24 title · 28 phone large title; inputs 16. */
+  --haedo-text-badge: 12px; --haedo-text-meta: 13px; --haedo-text-control: 15px; --haedo-text-input: 16px;
+  --haedo-text-body: 17px; --haedo-text-title: 24px; --haedo-text-title-large: 28px;
+  /* Spacing is a multiple of 4. */
+  --haedo-space-1: 4px; --haedo-space-2: 8px; --haedo-space-3: 12px; --haedo-space-4: 16px;
+  --haedo-space-5: 20px; --haedo-space-6: 24px; --haedo-space-8: 32px; --haedo-space-12: 48px;
+  /* Icons: 20px in controls, 16px inside text, one stroke width (assets/life/icons.js). */
+  --haedo-icon-control: 20px; --haedo-icon-inline: 16px;
 }

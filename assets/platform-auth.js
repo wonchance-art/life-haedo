@@ -4,8 +4,8 @@
   const SESSION_KEY = 'caeyeon_life_platform_session';
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
-  const homeSections = new Set(['home', 'news', 'records', 'tools', 'manage']);
-  const materialViews = new Set(['annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
+  const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
+  const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
   function safeNext(value) {
     try {
       const url = new URL(value || 'index.html', 'https://haedo.invalid/');

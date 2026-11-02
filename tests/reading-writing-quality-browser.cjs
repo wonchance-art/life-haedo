@@ -112,7 +112,7 @@ async function main() {
       await page.locator('#lifeWritingBody').fill(longBody); await draftSaved(page);
       await page.locator('#lifeWritingBody').evaluate(el => { el.focus(); el.setSelectionRange(610, 640, 'backward'); el.scrollTop = 970; });
       const editorPosition = await page.locator('#lifeWritingBody').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection, scrollTop: el.scrollTop }));
-      const tools = page.locator('[data-haedo-navigation] [data-haedo-section="tools"]');
+      const tools = page.locator('[data-haedo-navigation] [data-haedo-section="manage"]');
       const closeBeforeSection = !await tools.isVisible();
       // Compact writing intentionally hides the dock. Leave through the visible
       // writer close control, then revisit the same draft through the sections.

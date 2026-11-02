@@ -13,7 +13,7 @@ const { LocalSQLBlogCloud } = require('./blog-completion-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const output = path.resolve(__dirname, '../.local/account-wide-home');
-const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'];
+const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'];
 
 async function until(read, predicate, label, timeout = 45000) {
   const start = Date.now(); let value;
@@ -144,7 +144,7 @@ async function main() {
       const after = await libraryPosts(b.page);
       assert.equal(after.rows.find(row => row.id === edited).workspaceId, holder, 'saved in the post\'s own library');
       assert.equal(after.rows.length, 2, 'no extra copy'); assert.equal(after.rows.filter(row => row.workspaceId === holder).length, before.rows.filter(row => row.workspaceId === holder).length);
-      await b.page.getByRole('button', { name: '홈으로 돌아가기' }).first().click();
+      await b.page.getByRole('button', { name: '일정으로 돌아가기' }).first().click();
       await b.page.locator('#homePosts[aria-busy="false"]').waitFor();
       assert.equal(await b.page.locator('#homeTab-posts').getAttribute('aria-selected'), 'true');
       // The search survives the move between libraries; the renamed post no

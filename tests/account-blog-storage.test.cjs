@@ -169,7 +169,7 @@ test('a conflict keeps the losing side as a new draft in the same transaction as
   const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
   await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
   const local = await f.a.readPhotoPost(f.ws, id);
-  const kept = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '충돌로 보관한 이전 내용 · ' + local.title };
+  const kept = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '복구 사본 · ' + local.title };
   const remote = { ...copy(local), title: '다른 기기의 최신 글' };
   f.control.fail = write => write.id === `photo-post:${f.ws}:${kept.id}`;
   const before = copy(f.rows);
@@ -180,6 +180,49 @@ test('a conflict keeps the losing side as a new draft in the same transaction as
   assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).status, 'draft');
   assert.equal(await f.a.readBlogSyncState(f.ws, kept.id), null, 'the kept draft starts unbound and syncs as its own post');
   await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: remote, baseRevision: 1, binding: remoteBinding(f, id, 4), bindingRevision: 2 }), { code: 'photo_post_conflict' });
+});
+
+test('a conflict keeps the server version in place with an exact editing draft and a recovery copy, all in one transaction', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const local = await f.a.readPhotoPost(f.ws, id);
+  const server = { ...copy(local), title: '다른 기기 완성' };
+  const kept = { ...copy(server), id: Core.id(), revision: 0, status: 'draft', title: '복구 사본 · 다른 기기 완성' };
+  const later = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '이 기기의 최신 초안', replaces: { id, revision: 2 } };
+  const input = { postId: id, post: server, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: kept, edit: later };
+  for (const bad of [{ post: undefined }, { edit: { ...later, replaces: { id, revision: 1 } } }, { edit: { ...later, replaces: null } }, { edit: { ...later, id: kept.id } }, { edit: { ...later, status: 'saved' } }])
+    await assert.rejects(f.a.commitBlogSync(f.ws, { ...input, ...bad }), { code: 'invalid_blog_state' });
+  f.control.fail = write => write.id === `photo-post:${f.ws}:${later.id}`;
+  const before = copy(f.rows);
+  await assert.rejects(f.a.commitBlogSync(f.ws, input), { code: 'storage_quota' });
+  assert.deepEqual(f.rows, before, 'nothing is half applied');
+  await f.a.commitBlogSync(f.ws, input);
+  const placed = await f.a.readPhotoPost(f.ws, id), state = await f.a.readBlogSyncState(f.ws, id);
+  assert.equal(placed.title, '다른 기기 완성'); assert.equal(placed.revision, 2);
+  assert.equal(state.localRevision, 2, 'the post is the exact server version'); assert.equal(state.remoteRevision, 3);
+  assert.deepEqual((await f.a.readPhotoPost(f.ws, later.id)).replaces, { id, revision: 2 }, 'the later draft edits that exact revision');
+  assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).title, '복구 사본 · 다른 기기 완성');
+  assert.equal(await f.a.readBlogSyncState(f.ws, later.id), null);
+});
+
+test('a conflict may rewrite an existing editing draft at its exact revision and keep two recovery copies in one transaction', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const local = await f.a.readPhotoPost(f.ws, id);
+  const other = await f.a.savePhotoPost(f.ws, { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '다른 기기 초안', replaces: { id, revision: 0 } }, 0);
+  const server = { ...copy(local), title: '저장 판' };
+  const kept = { ...copy(server), id: Core.id(), revision: 0, status: 'draft', title: '복구 사본 · 저장 판' };
+  const lost = { ...copy(other), id: Core.id(), revision: 0, replaces: null, title: '복구 사본 · 다른 기기 초안' };
+  const later = { ...copy(other), title: '이 기기 초안', replaces: { id, revision: 2 } };
+  const input = { postId: id, post: server, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: [kept, lost], edit: later };
+  for (const bad of [{ copy: [] }, { copy: [kept, lost, { ...lost, id: Core.id() }] }, { copy: [kept, kept] }, { edit: { ...later, revision: 0 } }])
+    await assert.rejects(f.a.commitBlogSync(f.ws, { ...input, ...bad }), { code: /invalid_blog_state|photo_post_conflict/ });
+  assert.equal((await f.a.readPhotoPost(f.ws, id)).revision, 1, 'refused requests change nothing');
+  await f.a.commitBlogSync(f.ws, input);
+  const rewritten = await f.a.readPhotoPost(f.ws, other.id);
+  assert.equal(rewritten.title, '이 기기 초안'); assert.equal(rewritten.revision, other.revision + 1); assert.deepEqual(rewritten.replaces, { id, revision: 2 });
+  assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).title, '복구 사본 · 저장 판');
+  assert.equal((await f.a.readPhotoPost(f.ws, lost.id)).title, '복구 사본 · 다른 기기 초안');
 });
 
 test('explicit deletion records a deletion for a stored post, refuses a published one and is never re-received', async t => {

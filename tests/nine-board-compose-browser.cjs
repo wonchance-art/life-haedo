@@ -351,7 +351,7 @@ async function main() {
       await f.page.locator('#nbComposeReviewOpen').waitFor();
       assert.equal(await f.page.locator('.nb-area-nav [data-area-id="selected_area"]').getAttribute('aria-pressed'), 'true');
       // Navigate inside the app; a reload intentionally does not retain a UI receipt.
-      await f.page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();
+      await f.page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click();
       await f.page.locator('#homeComposition[aria-busy=false]').waitFor();
       await f.page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click();
       await f.page.waitForFunction(() => document.querySelector('#nbComposeOpen') || document.querySelector('#wbPageNine'));
