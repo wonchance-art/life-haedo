@@ -224,6 +224,9 @@ jobs:
       - name: Verify frequent local draft autosave and interrupted writing recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-autosave-browser.cjs
+      - name: Verify AI authorship marks, owner edits, Korean composition and public copies without marks
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/ai-authorship-browser.cjs
       - name: Verify atomic account post receipt and repeated original recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/account-blog-receipt-browser.cjs

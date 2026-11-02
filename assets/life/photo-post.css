@@ -241,6 +241,31 @@
   padding: 16px 0;
   border-block: 1px solid var(--line);
 }
+/* "취향 컬렉션에도 저장": a one-line choice, not a full-width field. */
+.photo-attachment-review .photo-attachment-collect {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.photo-attachment-review .photo-attachment-collect input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+}
+/* The card's own collection line: saving, kept, or failed with a retry. */
+.photo-attachment-collect-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+}
+.photo-attachment-collect-state:not(:has(button)) .photo-attachment-collect-text:empty {
+  display: none;
+}
 .photo-attachment-review label {
   display: flex;
   flex-direction: column;
@@ -413,6 +438,21 @@
 .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
 .photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
 .photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
+/* Private AI authorship mark (editor only). A dotted underline carries the
+   meaning without color; the soft fill only groups the run. Not rendered in
+   reading, HTML files or public copies. */
+.photo-posts .ql-editor .photo-ai-text {
+  background: var(--paper-2, #f4f7f5);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--ink-soft, #5d6b65);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.32em;
+}
+.photo-posts .ql-toolbar .photo-author-toggle[aria-pressed="true"] { background: #edf1ff; color: #3156d3; }
 .photo-block,
 .photo-read-image {
   margin: 28px 0;
