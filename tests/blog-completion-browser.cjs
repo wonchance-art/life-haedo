@@ -11,6 +11,8 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const output = path.resolve(__dirname, '../.local/blog-completion');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+// A photo publication uses life_blog_publish_copies (2026-11-02); text-only and HEIC-only use life_blog_publish.
+const isPublish = rpc => rpc === 'life_blog_publish' || rpc === 'life_blog_publish_copies';
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
 const copy = value => JSON.parse(JSON.stringify(value));
 
@@ -114,7 +116,7 @@ class LocalSQLBlogCloud extends ShareCloud {
         this.blogRequests.push({ rpc, device, owner, body: copy(body) });
         const response = this.rpc(owner, rpc, body);
         if (this.failure === 'save-ack' && rpc === 'life_blog_save') { this.failure = null; this.expectedFailures++; return route.abort('failed'); }
-        if (this.failure === 'publish-ack' && rpc === 'life_blog_publish') { this.failure = null; this.expectedFailures++; return route.abort('failed'); }
+        if (this.failure === 'publish-ack' && isPublish(rpc)) { this.failure = null; this.expectedFailures++; return route.abort('failed'); }
         return send(response);
       }
       assert(owner, 'Storage originals require the synthetic authenticated owner');
@@ -165,7 +167,7 @@ async function main() {
     // createdb fails on an existing database; never replace another fixture.
     server.docker(['exec', '-i', container, 'createdb', '-U', 'postgres', database]);
     const bootstrap = await fs.readFile(path.resolve(__dirname, '../supabase/tests/blog-bootstrap.sql'), 'utf8');
-    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101091500_life_blog_account_sync.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101160000_life_blog_delete_guard.sql'), 'utf8');
+    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101091500_life_blog_account_sync.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101160000_life_blog_delete_guard.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'), 'utf8');
     server.docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], bootstrap + '\n' + migration);
     migrationSha256 = digest(Buffer.from(migration));
   }
@@ -229,8 +231,6 @@ async function main() {
     await p.getByRole('textbox', { name: '공개 소개', exact: true }).fill('직접 고른 글만 보여 줍니다.');
     for (const id of selected) await p.locator('input[data-photo-id="' + id + '"]').check();
     await click(p, '공개 미리보기 갱신');
-    await p.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
-    if (selected.length) await p.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check();
     await p.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
   };
   const publishedURL = async p => { await click(p, '공개 게시·갱신'); const link = p.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); return link.getAttribute('href'); };
@@ -284,7 +284,7 @@ async function main() {
       assert.equal(privateSaves[0].body.p_workspace_id, first.workspaceId); assert.equal(privateSaves[0].body.p_expected_revision, 0);
       const firstPrivate = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: first.doc.id });
       assert.equal(firstPrivate.revision, 1); assert.deepEqual(firstPrivate.data.ops, first.doc.ops); assert.equal(firstPrivate.publication, null);
-      await manager(page); await review(page, first.doc.id); assert.equal(server.blogRequests.filter(r => r.rpc === 'life_blog_publish').length, 0);
+      await manager(page); await review(page, first.doc.id); assert.equal(server.blogRequests.filter(r => isPublish(r.rpc)).length, 0);
       firstURL = await publishedURL(page); firstToken = new URL(firstURL).searchParams.get('post'); assert.notEqual(firstToken, first.doc.id);
       await visitor.page.goto(firstURL); await publicState(visitor.page, 'published'); assert.match(await visitor.page.locator('#blogContent').innerText(), /이 글만 직접 골라 공개/);
       const payload = server.rpc(null, 'life_blog_public_read', { p_token: firstToken }); assert.equal(payload.snapshot.title, first.doc.title);
@@ -342,7 +342,7 @@ async function main() {
       assert.deepEqual(checked.map(value => value.metadata), photoManifest); assert.deepEqual(checked.map(value => value.actualHash), photoManifest.map(photo => photo.digest));
       assert.deepEqual(await preserved(page), original); report.originalPhotos = images.map(image => ({ width: image.width, height: image.height, type: image.type }));
     });
-    await check('Only the chosen original reaches the anonymous snapshot; exact high-resolution bytes remain readable and revoked direct image URLs stop serving them', async () => {
+    await check('Only the chosen photo reaches the anonymous snapshot as a full-resolution metadata-free copy; revoked direct image URLs stop serving it', async () => {
       await review(page, photoPost.doc.id, [photoPost.doc.photos[0].id]); photoURL = await publishedURL(page); photoToken = new URL(photoURL).searchParams.get('post');
       const snapshot = server.rpc(null, 'life_blog_public_read', { p_token: photoToken }).snapshot; assert.equal(snapshot.photos.length, 1); assert.notEqual(snapshot.photos[0].id, photoPost.doc.photos[0].id);
       assert(!JSON.stringify(snapshot).includes('anonymous-original-')); assert(!JSON.stringify(snapshot).includes(photoPost.doc.photos[1].digest));
@@ -353,8 +353,9 @@ async function main() {
       assert(!JSON.stringify(snapshot).includes('직접 남긴 사진 설명 1'));
       assert.deepEqual(await image.evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]); const src = await image.getAttribute('src');
       const actualHash = await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, src);
-      assert.equal(actualHash, photoPost.doc.photos[0].digest);
-      await visitor.page.getByRole('button', { name: '사진 원본 크기로 보기', exact: true }).click(); assert.equal(await visitor.page.locator('.blog-photo-original').count(), 1);
+      // 2026-11-02: the served bytes are the published copy, never the original.
+      assert.equal(actualHash, snapshot.photos[0].digest); assert.notEqual(snapshot.photos[0].digest, photoPost.doc.photos[0].digest);
+      await visitor.page.getByRole('button', { name: '사진 크게 보기', exact: true }).click(); assert.equal(await visitor.page.locator('.blog-photo-original').count(), 1);
       await visitor.page.getByRole('button', { name: '사진 화면에 맞추기', exact: true }).click(); await capture(visitor.page, 'public-original-photo', '#blogContent');
       await click(page, '공개 철회'); await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'missing'); assert.equal(await visitor.page.locator('#blogContent').innerText(), '');
       assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, src), 404);
@@ -388,14 +389,14 @@ async function main() {
       assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: photoToken }), null);
       const receivedPublic = server.rpc(null, 'life_blog_public_read', { p_token: receivedToken }).snapshot;
       assert.equal(receivedPublic.photos.length, 1); assert.notEqual(receivedPublic.photos[0].id, received.photos[0].id);
-      assert.equal(receivedPublic.photos[0].digest, received.photos[0].digest); assert(!JSON.stringify(receivedPublic).includes(received.photos[1].digest));
+      assert.notEqual(receivedPublic.photos[0].digest, received.photos[0].digest); assert(!JSON.stringify(receivedPublic).includes(received.photos[1].digest));
       await visitor.page.goto(receivedURL); await publicState(visitor.page, 'published');
       const receivedImage = visitor.page.locator('#blogContent img'); assert.equal(await receivedImage.count(), 1);
       await receivedImage.scrollIntoViewIfNeeded(); await receivedImage.evaluate(node => node.decode());
       assert.deepEqual(await receivedImage.evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
       assert.equal(await receivedImage.getAttribute('alt'), '합성 원본 풍경 0');
       const receivedSrc = await receivedImage.getAttribute('src');
-      assert.equal(await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, receivedSrc), received.photos[0].digest);
+      assert.equal(await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, receivedSrc), receivedPublic.photos[0].digest);
       await click(second.page, '공개 철회'); await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'missing');
       assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, receivedSrc), 404);
       report.continuity = [];
@@ -451,23 +452,23 @@ async function main() {
       await manager(page); await review(page, editedLost.id, [editedLost.photos[0].id]);
       const continuityURL = await publishedURL(page), continuityToken = new URL(continuityURL).searchParams.get('post');
       await click(page, '공개 검토 닫기'); await review(page, editedLost.id, [editedLost.photos[0].id]);
-      const beforePublicRace = readRemote(), publicationCalls = server.blogRequests.filter(request => request.rpc === 'life_blog_publish').length;
+      const beforePublicRace = readRemote(), publicationCalls = server.blogRequests.filter(request => isPublish(request.rpc)).length;
       const otherPublication = server.rpc(accounts.a.id, 'life_blog_publish', { p_post_id: remotePostId, p_expected_revision: beforePublicRace.revision,
-        p_operation_id: require('node:crypto').randomUUID(), p_photo_ids: [beforePublicRace.data.photos[1].id], p_author: { name: '다른 기기의 명시 공개', intro: '두 번째 사진만 직접 선택했습니다.' }, p_expected_publication_revision: beforePublicRace.publication.revision });
+        p_operation_id: require('node:crypto').randomUUID(), p_photo_ids: [], p_author: { name: '다른 기기의 명시 공개', intro: '글만 직접 공개했습니다.' }, p_expected_publication_revision: beforePublicRace.publication.revision });
       assert.equal(otherPublication.status, 'stored');
       const publicRaceWinner = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
       await click(page, '공개 게시·갱신');
-      assert.equal(server.blogRequests.filter(request => request.rpc === 'life_blog_publish').length, publicationCalls, 'A stale public preview must be rejected before another publication RPC');
+      assert.equal(server.blogRequests.filter(request => isPublish(request.rpc)).length, publicationCalls, 'A stale public preview must be rejected before another publication RPC');
       assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), publicRaceWinner);
       await click(page, '공개 검토 닫기'); await review(page, editedLost.id, [editedLost.photos[0].id]);
       server.failure = 'publish-ack'; await click(page, '공개 게시·갱신');
       const publishPending = await syncState(page, editedLost.id); assert(publishPending.publishPending);
       const committedPublic = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
       assert.equal(await publishedURL(page), continuityURL);
-      const repeatedPublish = server.blogRequests.filter(request => request.rpc === 'life_blog_publish' && request.body.p_operation_id === publishPending.publishPending.operationId);
+      const repeatedPublish = server.blogRequests.filter(request => isPublish(request.rpc) && request.body.p_operation_id === publishPending.publishPending.operationId);
       assert.equal(repeatedPublish.length, 2); assert.deepEqual(repeatedPublish[0].body, repeatedPublish[1].body);
       assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), committedPublic);
-      assert.equal(committedPublic.snapshot.photos.length, 1); assert.equal(committedPublic.snapshot.photos[0].digest, editedLost.photos[0].digest);
+      assert.equal(committedPublic.snapshot.photos.length, 1); assert.notEqual(committedPublic.snapshot.photos[0].digest, editedLost.photos[0].digest, 'the public photo is a copy');
       await visitor.page.goto(continuityURL); await publicState(visitor.page, 'published');
       const finalImage = visitor.page.locator('#blogContent img'); await finalImage.scrollIntoViewIfNeeded(); await finalImage.evaluate(node => node.decode());
       const finalSrc = await finalImage.getAttribute('src');

@@ -1,4 +1,5 @@
-/* Private rich-text documents and unchanged original photo bytes. */
+/* Private rich-text documents, unchanged original photo bytes and
+ * metadata-free public copies. */
 (function (root, factory) {
   const api = factory(root);
   (root.HaedoLife ||= {}).PhotoPost = api;
@@ -417,7 +418,7 @@
     heicQueue = result.catch(() => {});
     return result;
   }
-  async function decodeImage(blob) {
+  async function decodeImage(blob, message = HEIC_UNSUPPORTED, code = "heic_unsupported") {
     if (typeof root.createImageBitmap === "function") {
       try {
         // The default orientation applies HEIF irot/imir and EXIF rotation.
@@ -433,10 +434,10 @@
       } catch (_) {}
     }
     if (typeof root.Image !== "function" || !root.URL?.createObjectURL)
-      throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+      throw fault(message, code);
     const url = root.URL.createObjectURL(blob);
     try {
-      const img = await loadImage(url, HEIC_UNSUPPORTED);
+      const img = await loadImage(url, message);
       if (!img.naturalWidth || !img.naturalHeight) throw 0;
       return {
         image: img,
@@ -446,19 +447,23 @@
       };
     } catch (_) {
       root.URL.revokeObjectURL(url);
-      throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+      throw fault(message, code);
     }
   }
-  async function encodeJpeg(image, width, height) {
+  // Canvas re-encoding writes pixels only: no EXIF, GPS, XMP or text chunks.
+  // JPEG has no alpha, so transparent regions become white, not black.
+  async function encodeImage(image, width, height, type = "image/jpeg", message = HEIC_UNSUPPORTED, quality = 0.9, code = "heic_unsupported") {
     const paint = (ctx) => {
-      if (!ctx) throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
-      // JPEG has no alpha; transparent HEIF regions become white, not black.
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, width, height);
+      if (!ctx) throw fault(message, code);
+      if (type === "image/jpeg") {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, width, height);
+      }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(image, 0, 0, width, height);
     };
+    const options = type === "image/jpeg" ? quality : undefined;
     if (root.document?.createElement) {
       const canvas = root.document.createElement("canvas");
       canvas.width = width;
@@ -467,9 +472,9 @@
         paint(canvas.getContext("2d"));
         return await new Promise((resolve, reject) =>
           canvas.toBlob(
-            (blob) => (blob ? resolve(blob) : reject(fault(HEIC_UNSUPPORTED, "heic_unsupported"))),
-            "image/jpeg",
-            0.9,
+            (blob) => (blob ? resolve(blob) : reject(fault(message, code))),
+            type,
+            options,
           ),
         );
       } finally {
@@ -480,10 +485,13 @@
     if (typeof root.OffscreenCanvas === "function") {
       const canvas = new root.OffscreenCanvas(width, height);
       paint(canvas.getContext("2d"));
-      return canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+      return canvas.convertToBlob(
+        type === "image/jpeg" ? { type, quality } : { type },
+      );
     }
-    throw fault(HEIC_UNSUPPORTED, "heic_unsupported");
+    throw fault(message, code);
   }
+  const encodeJpeg = (image, width, height) => encodeImage(image, width, height);
   // Returns the displayed size of the original and a derived JPEG. The HEIC
   // bytes themselves are never rewritten.
   function makeView(original) {
@@ -519,6 +527,273 @@
         };
       } finally {
         source.close();
+      }
+    });
+  }
+  // Public copies (2026-11-02 owner decision): every published photo is a
+  // canvas re-encoding with EXIF rotation applied, so camera, time and
+  // location metadata never leave the private original. JPEG and opaque WebP
+  // become JPEG (quality 0.9); PNG and transparent WebP become lossless PNG.
+  // Animated PNG/WebP publish their first frame only; the dialog says so.
+  const COPY_FAILED =
+    "이 브라우저에서 공개용 사진 사본을 만들지 못했습니다. 원본은 그대로 두었습니다.";
+  const COPY_TYPES = Object.freeze(["image/jpeg", "image/png"]);
+  async function chunkWalk(blob, from, read) {
+    // Reads only chunk headers until `read` returns true or the file ends.
+    let at = from;
+    while (at + 8 <= blob.size) {
+      const header = new Uint8Array(await blob.slice(at, at + 8).arrayBuffer());
+      if (header.length < 8) return;
+      const next = await read(header, at);
+      if (next === true || next === undefined || next <= at) return;
+      at = next;
+    }
+  }
+  // Alpha and animation of an original, from its bytes (headers only).
+  async function imageTraits(blob) {
+    const type = detectType(await head(blob));
+    const traits = { type, alpha: false, animated: false };
+    if (type === "image/png") {
+      await chunkWalk(blob, 8, async (h, at) => {
+        const length = ((h[0] << 24) | (h[1] << 16) | (h[2] << 8) | h[3]) >>> 0,
+          name = String.fromCharCode(...h.subarray(4, 8));
+        if (name === "IHDR") {
+          const data = new Uint8Array(await blob.slice(at + 8, at + 8 + 13).arrayBuffer());
+          if (data[9] === 4 || data[9] === 6) traits.alpha = true;
+        } else if (name === "tRNS") traits.alpha = true;
+        else if (name === "acTL") traits.animated = true;
+        else if (name === "IDAT" || name === "IEND") return true;
+        return at + 12 + length;
+      });
+    } else if (type === "image/webp") {
+      await chunkWalk(blob, 12, async (h, at) => {
+        const name = String.fromCharCode(...h.subarray(0, 4)),
+          length = (h[4] | (h[5] << 8) | (h[6] << 16) | (h[7] << 24)) >>> 0;
+        const data = new Uint8Array(await blob.slice(at + 8, at + 8 + Math.min(length, 16)).arrayBuffer());
+        if (name === "VP8X") {
+          if (data[0] & 0x10) traits.alpha = true;
+          if (data[0] & 0x02) traits.animated = true;
+        } else if (name === "VP8L") {
+          if ((data[4] >> 4) & 1) traits.alpha = true;
+          return true;
+        } else if (name === "ALPH") traits.alpha = true;
+        else if (name === "ANIM" || name === "ANMF") traits.animated = true;
+        else if (name === "VP8 ") return true;
+        return at + 8 + length + (length & 1);
+      });
+    }
+    return traits;
+  }
+  const copyType = (traits) =>
+    traits.type === "image/png" || (traits.type === "image/webp" && traits.alpha)
+      ? "image/png"
+      : "image/jpeg";
+  // Byte-level allow list of a public copy. The same rules run in the
+  // haedo-blog-media Edge function (supabase/functions/haedo-blog-media):
+  // a copy is uploaded only when `publicBytes` would change nothing.
+  // JPEG: SOI, SOF, DHT, DQT, DRI, SOS, EOI, APP0 JFIF (16-byte, no
+  // thumbnail), APP2 ICC (profile signature), APP14 Adobe (14-byte). PNG:
+  // IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, iCCP (name/method/zlib
+  // header), pHYs. Everything else (EXIF/XMP/IPTC/comments, Apple iDOT and
+  // minimal Exif from ImageIO, text, time, animation, trailing bytes) is
+  // removed. ICC profile contents are checked structurally only.
+  const JPEG_SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+  const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "pHYs"]);
+  const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+  const bytesAre = (b, from, value) =>
+    from + value.length <= b.length && [...value].every((c, i) => b[from + i] === c.charCodeAt(0));
+  function jpegSegment(b, marker, at, length) {
+    const body = at + 2;
+    if (JPEG_SOF.has(marker) || [0xc4, 0xdb, 0xdd, 0xda].includes(marker)) return true;
+    if (marker === 0xe0) return length === 16 && bytesAre(b, body, "JFIF\0") && b[body + 12] === 0 && b[body + 13] === 0;
+    if (marker === 0xee) return length === 14 && bytesAre(b, body, "Adobe");
+    if (marker === 0xe2) {
+      if (length < 16 || !bytesAre(b, body, "ICC_PROFILE\0")) return false;
+      const seq = b[body + 12], count = b[body + 13];
+      if (seq < 1 || seq > count) return false;
+      return seq > 1 || (length >= 16 + 40 && bytesAre(b, body + 14 + 36, "acsp"));
+    }
+    return false;
+  }
+  function jpegParts(b) {
+    if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+    const keep = [b.subarray(0, 2)];
+    let at = 2, dropped = false;
+    while (at < b.length) {
+      if (b[at] !== 0xff) return null;
+      const start = at;
+      while (at < b.length && b[at] === 0xff) at++;
+      if (at >= b.length) return null;
+      const marker = b[at++];
+      if (marker === 0xd9) {
+        keep.push(b.subarray(start, at));
+        return { keep, dropped: dropped || at !== b.length };
+      }
+      if (at + 2 > b.length) return null;
+      const length = (b[at] << 8) | b[at + 1];
+      if (length < 2 || at + length > b.length) return null;
+      const end = at + length;
+      if (jpegSegment(b, marker, at, length)) keep.push(b.subarray(start, end));
+      else if (marker === 0xda) return null;
+      else dropped = true;
+      at = end;
+      if (marker === 0xda) {
+        // Entropy-coded data with stuffed 0xFF00, restart markers and fill bytes.
+        const scan = at;
+        while (at < b.length) {
+          if (b[at] !== 0xff) { at++; continue; }
+          const next = b[at + 1];
+          if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) { at += 2; continue; }
+          if (next === 0xff) { at++; continue; }
+          break;
+        }
+        keep.push(b.subarray(scan, at));
+      }
+    }
+    return null;
+  }
+  function iccpValid(b, from, length) {
+    let n = 0;
+    while (n < length && n < 80 && b[from + n] !== 0) {
+      const c = b[from + n];
+      if (!((c >= 32 && c <= 126) || c >= 161)) return false;
+      n++;
+    }
+    if (n < 1 || n > 79 || b[from] === 32 || b[from + n - 1] === 32 || n + 4 > length) return false;
+    const cmf = b[from + n + 2], flg = b[from + n + 3];
+    return b[from + n] === 0 && b[from + n + 1] === 0 && (cmf & 15) === 8 && ((cmf << 8) | flg) % 31 === 0;
+  }
+  function pngParts(b) {
+    if (b.length < 8 || PNG_SIGNATURE.some((v, i) => b[i] !== v)) return null;
+    const keep = [b.subarray(0, 8)];
+    let at = 8, dropped = false;
+    while (at + 12 <= b.length) {
+      const length = ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0,
+        name = String.fromCharCode(...b.subarray(at + 4, at + 8)), end = at + 12 + length;
+      if (end > b.length || (at === 8) !== (name === "IHDR")) return null;
+      if (PNG_KEEP.has(name) && (name !== "iCCP" || iccpValid(b, at + 8, length))) keep.push(b.subarray(at, end));
+      else dropped = true;
+      at = end;
+      if (name === "IEND") return { keep, dropped: dropped || at !== b.length };
+    }
+    return null;
+  }
+  const parts = (type, b) => (type === "image/jpeg" ? jpegParts(b) : type === "image/png" ? pngParts(b) : null);
+  const asBytes = (bytes) => (bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+  // The allow-listed bytes of a JPEG/PNG, or null when the structure is broken.
+  function publicBytes(type, bytes) {
+    const found = parts(type, asBytes(bytes));
+    if (!found) return null;
+    const out = new Uint8Array(found.keep.reduce((n, part) => n + part.length, 0));
+    let at = 0;
+    for (const part of found.keep) { out.set(part, at); at += part.length; }
+    return out;
+  }
+  function metadataFree(type, bytes) {
+    const found = parts(type, asBytes(bytes));
+    return !!found && !found.dropped;
+  }
+  // Re-encoding an image that already is canvas output can return the same
+  // bytes. A copy must still be a separate object, so such a PNG gains an
+  // sRGB chunk (canvas output is sRGB) and such a JPEG is encoded at 0.89
+  // (different quantization tables). Neither adds personal metadata.
+  const CRC = Array.from({ length: 256 }, (_, n) => {
+    for (let k = 0; k < 8; k++) n = n & 1 ? 0xedb88320 ^ (n >>> 1) : n >>> 1;
+    return n >>> 0;
+  });
+  function pngChunk(name, data) {
+    const out = new Uint8Array(12 + data.length), view = new DataView(out.buffer);
+    view.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = name.charCodeAt(i);
+    out.set(data, 8);
+    let crc = 0xffffffff;
+    for (const byte of out.subarray(4, 8 + data.length)) crc = CRC[(crc ^ byte) & 255] ^ (crc >>> 8);
+    view.setUint32(8 + data.length, (crc ^ 0xffffffff) >>> 0);
+    return out;
+  }
+  function distinctPng(b) {
+    const names = new Set();
+    for (let at = 8; at + 12 <= b.length; ) {
+      const length = ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0;
+      names.add(String.fromCharCode(...b.subarray(at + 4, at + 8)));
+      at += 12 + length;
+    }
+    const chunk = !names.has("sRGB") && !names.has("iCCP") ? pngChunk("sRGB", new Uint8Array([0]))
+      : !names.has("pHYs") ? pngChunk("pHYs", new Uint8Array([0, 0, 0, 1, 0, 0, 0, 1, 0])) : null;
+    if (!chunk) throw fault(COPY_FAILED, "public_copy_failed");
+    const ihdrEnd = 8 + 12 + (((b[8] << 24) | (b[9] << 16) | (b[10] << 8) | b[11]) >>> 0), out = new Uint8Array(b.length + chunk.length);
+    out.set(b.subarray(0, ihdrEnd));
+    out.set(chunk, ihdrEnd);
+    out.set(b.subarray(ihdrEnd), ihdrEnd + chunk.length);
+    return out;
+  }
+  function checkPublicCopy(p, copy) {
+    const bound = p.view || p;
+    if (
+      !plain(copy) ||
+      copy.id !== p.id ||
+      !COPY_TYPES.includes(copy.type) ||
+      (viewRequired(p.type) && copy.type !== "image/jpeg") ||
+      !Number.isSafeInteger(copy.size) ||
+      copy.size <= 0 ||
+      copy.size > LIMITS.file ||
+      !Number.isSafeInteger(copy.width) ||
+      copy.width < 1 ||
+      copy.width > Math.min(bound.width, LIMITS.viewEdge) ||
+      !Number.isSafeInteger(copy.height) ||
+      copy.height < 1 ||
+      copy.height > Math.min(bound.height, LIMITS.viewEdge) ||
+      !/^[a-f0-9]{64}$/.test(copy.digest) ||
+      copy.digest === p.digest ||
+      copy.digest === p.view?.digest ||
+      !(copy.blob instanceof Blob) ||
+      copy.blob.size !== copy.size ||
+      copy.blob.type !== copy.type
+    )
+      throw fault("공개용 사진 사본 정보를 확인해 주세요.");
+    return copy;
+  }
+  // `photo` is a validated document photo with its Blob. Every format gets a
+  // separate copy: JPEG/PNG/WebP from the original, HEIC/HEIF from their
+  // JPEG view (decodable everywhere, already upright). The canvas output is
+  // then reduced to the allow list above, so platform encoders that add
+  // their own Exif or iDOT (Apple ImageIO) still publish clean bytes.
+  async function publicCopy(p) {
+    photo(p);
+    const heic = viewRequired(p.type), source = heic ? p.view : p;
+    const traits = heic ? { type: "image/jpeg", alpha: false, animated: false } : await imageTraits(p.blob);
+    if (traits.type !== source.type) throw fault(COPY_FAILED, "public_copy_failed");
+    const type = copyType(traits), avoid = new Set([p.digest, p.view?.digest].filter(Boolean));
+    return oneHeicAtATime(async () => {
+      const decoded = await decodeImage(source.blob, COPY_FAILED, "public_copy_failed");
+      try {
+        // The decoder must show the same upright picture the editor showed.
+        if (decoded.width !== source.width || decoded.height !== source.height)
+          throw fault(
+            "이 브라우저에서 사진 방향을 확인하지 못했습니다. 원본은 그대로 두었습니다.",
+            "public_copy_failed",
+          );
+        const scale = Math.min(1, LIMITS.viewEdge / Math.max(source.width, source.height));
+        const width = Math.max(1, Math.min(LIMITS.viewEdge, Math.round(source.width * scale))),
+          height = Math.max(1, Math.min(LIMITS.viewEdge, Math.round(source.height * scale)));
+        const encode = async (quality) => {
+          const blob = await encodeImage(decoded.image, width, height, type, COPY_FAILED, quality, "public_copy_failed");
+          if (!(blob instanceof Blob) || blob.type !== type || !blob.size || blob.size > LIMITS.file)
+            throw fault(COPY_FAILED, "public_copy_failed");
+          const bytes = publicBytes(type, new Uint8Array(await blob.arrayBuffer()));
+          if (!bytes) throw fault(COPY_FAILED, "public_copy_failed");
+          return bytes;
+        };
+        const hash = (bytes) => digest(new Blob([bytes]));
+        let bytes = await encode(0.9);
+        if (avoid.has(await hash(bytes)))
+          bytes = type === "image/png" ? distinctPng(bytes) : await encode(0.89);
+        const blob = new Blob([bytes], { type }), value = await hash(bytes);
+        if (avoid.has(value) || !metadataFree(type, bytes) || detectType(bytes.subarray(0, 16)) !== type)
+          throw fault(COPY_FAILED, "public_copy_failed");
+        return checkPublicCopy(p, { id: p.id, type, size: blob.size, digest: value, width, height, blob, animated: traits.animated });
+      } finally {
+        decoded.close();
       }
     });
   }
@@ -715,6 +990,11 @@
     readPhoto,
     detectType,
     viewRequired,
+    imageTraits,
+    publicCopy,
+    checkPublicCopy,
+    publicBytes,
+    metadataFree,
     metadata,
     pairedView,
     digest,

@@ -98,13 +98,12 @@ async function main() {
       assert.equal(await page.evaluate(() => testData.legacy.at(-1).versionId), 'exact-version');
       assert.equal(await page.evaluate(() => testData.legacyContexts.at(-1).focusKey), 'blog:post:source:own-source');
     });
-    await check('actual public projection, explicit original-photo consent, stale revision refusal and stable URL', async page => {
+    await check('actual public projection, metadata-free photo copy with no original consent, stale revision refusal and stable URL', async page => {
       const original = await page.evaluate(() => HaedoLife.Blog.pack(testData.docs.get('saved-photo')));
       await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
       assert.equal(await page.locator('.blog-manager-public-preview img').count(), 0);
       assert.equal(await page.locator('[data-photo-id="local-photo"]').isChecked(), false);
-      await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
@@ -113,10 +112,20 @@ async function main() {
       assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isChecked(), false);
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
       await page.locator('.blog-manager-public-preview img').waitFor();
-      await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
-      await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
-      assert.equal(await page.evaluate(() => testData.publishCalls.length), 1);
-      await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check();
+      // 2026-11-02: the photo is published as a copy without camera/location
+      // metadata, so there is no separate original-metadata consent.
+      assert.equal(await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).count(), 0);
+      assert.equal(await page.locator('.blog-manager-preview input[type="checkbox"]:not([data-photo-id])').count(), 1, 'only the content consent remains');
+      assert.match(await page.locator('.blog-manager-preview fieldset').innerText(), /촬영·위치 정보를 뺀 사본으로 공개합니다/);
+      const previewed = await page.evaluate(async () => {
+        const photo = testData.docs.get('saved-photo').photos[0], shown = testData.previewSnapshots.at(-1).photos[0];
+        const src = document.querySelector('.blog-manager-public-preview img').src, bytes = new Uint8Array(await (await fetch(src)).arrayBuffer());
+        return { original: photo.digest, shown, actual: await HaedoLife.PhotoPost.digest(new Blob([bytes])) };
+      });
+      assert.notEqual(previewed.shown.digest, previewed.original, 'the preview names the copy, not the original');
+      assert.equal(previewed.actual, previewed.shown.digest, 'the preview shows the exact copy bytes');
+      assert.equal(previewed.shown.type, 'image/png');
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.evaluate(() => { testData.docs.get('saved-photo').revision++; });
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
@@ -127,6 +136,8 @@ async function main() {
       await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
       const calls = await page.evaluate(() => testData.publishCalls);
       assert.deepEqual(calls[1].photoIds, ['local-photo']); assert.equal(calls[1].expectedPublicRevision, 1);
+      assert.deepEqual(calls[1].copies.map(copy => [copy.id, copy.type, copy.digest]), [['local-photo', 'image/png', previewed.shown.digest]], 'the reviewed copy is what is published');
+      assert.deepEqual(calls[0].copies, [], 'a text-only publication names no copy');
       assert.equal(calls[1].expectedLocalRevision, original.revision); assert.equal(calls[1].expectedRemoteRevision, 1);
       assert.equal(await page.getByRole('link', { name: '공개한 글 열기' }).getAttribute('href'), base + '/blog.html?post=stable-public-token');
       await page.getByRole('button', { name: '공개 철회', exact: true }).click();
@@ -172,7 +183,6 @@ async function main() {
     await check('publication freezes editable controls, rechecks consent after await and distinguishes a completed publication from follow-up failure', async page => {
       await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
-      await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.evaluate(() => { testData.holdRead = true; });
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
