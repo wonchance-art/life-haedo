@@ -13,6 +13,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const EPOCH = '1970-01-01T00:00:00.000Z';
   // Local saves of these types may change a synced document.
   const TRIGGERS = new Set(['account_doc_changed', 'reading_position_changed', 'interest_profile_changed', 'annual_plan_changed',
@@ -103,7 +106,7 @@
     const owner = storage.account, listeners = new Set();
     const client = remote || root.HaedoLife?.AccountDocsRemote?.create({ auth, ownerId: owner.userId });
     if (!client) throw fault('dependency_unavailable', '자동 저장 연결을 준비하지 못했습니다.');
-    let disposed = false, started = false, timer = null, interval = null, unlisten = null, running = null, again = false;
+    let disposed = false, started = false, timer = null, wiring = null, unlisten = null, running = null, again = false;
     // Between a persisted pagehide and its pageshow the page sits in the
     // back/forward cache: starting work there evicts it, and an account check
     // begun before pageshow must not stand in for the resumed page's own.
@@ -364,21 +367,18 @@
         if (event.type === 'account_doc_changed' && typeof event.key === 'string' && !changeTimes.has(event.key)) changeTimes.set(event.key, now());
         schedule(debounceMs);
       });
-      root.addEventListener?.('online', wake); root.addEventListener?.('focus', wake);
-      root.document?.addEventListener?.('visibilitychange', visibility);
-      root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', ready);
-      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
       // Poll only while visible; hiding the page flushes once through visibilitychange.
-      if (polling) { interval = root.setInterval(() => { if (root.document?.visibilityState !== 'hidden') run(); }, intervalMs); interval?.unref?.(); }
+      wiring = syncLifecycle()?.attach(root, {
+        listen: [['window', 'online', wake], ['window', 'focus', wake], ['document', 'visibilitychange', visibility],
+          ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', ready],
+          ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
+        poll: polling ? [intervalMs, () => { if (root.document?.visibilityState !== 'hidden') run(); }] : null,
+      }) || null;
       run();
     }
     function dispose() {
       if (disposed) return; disposed = true;
-      root.clearTimeout(timer); root.clearInterval(interval); unlisten?.(); listeners.clear();
-      root.removeEventListener?.('online', wake); root.removeEventListener?.('focus', wake);
-      root.document?.removeEventListener?.('visibilitychange', visibility);
-      root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', ready);
-      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
+      root.clearTimeout(timer); wiring?.detach(); wiring = null; unlisten?.(); listeners.clear();
       client.dispose?.();
     }
     function subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }

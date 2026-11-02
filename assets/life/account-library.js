@@ -5,6 +5,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.',
@@ -31,7 +34,7 @@
     remote ||= transport.create({ auth });
     const listeners = new Set(), domainErrors = new Map(), stops = [];
     let disposed = false, mode = 'unavailable', reason = null, legacy = false, started = false, sourceStarted = false, ready = false;
-    let booting = false, working = false, operation = null, timer = null, interval = null, globalError = null, followup = false;
+    let booting = false, working = false, operation = null, timer = null, wiring = null, globalError = null, followup = false;
     let defaultRow = null, catalog = new Map(), originals = null, originalsStop = null, originalsStarted = false;
     let deferredBackground = false, catalogPending = false, accountCachePresented = false;
     let naverMedia = null;
@@ -204,10 +207,10 @@
         if (['changed', 'workbench_changed', 'source_folders_changed', 'collection_changed', 'nine_board_changed', 'naver_media_changed'].includes(event.type)) schedule();
       }));
       for (const manager of [sync, compositionSync, libraryMetaSync]) stops.push(manager.subscribe(event => emit('state', event?.workspaceId)));
-      root.addEventListener?.('online', lifecycle);
-      root.addEventListener?.('focus', lifecycle);
-      root.document?.addEventListener('visibilitychange', visible);
-      if (polling) { interval = root.setInterval(lifecycle, 30000); interval?.unref?.(); }
+      wiring = syncLifecycle()?.attach(root, {
+        listen: [['window', 'online', lifecycle], ['window', 'focus', lifecycle], ['document', 'visibilitychange', visible]],
+        poll: polling ? [30000, lifecycle] : null,
+      }) || null;
     }
     function visible() { if (root.document?.visibilityState !== 'hidden') lifecycle(); }
     function lifecycle() {
@@ -356,9 +359,7 @@
     function dispose() {
       if (disposed) return; disposed = true;
       naverMedia?.dispose?.(); naverMedia = null;
-      root.clearTimeout(timer); root.clearInterval(interval);
-      root.removeEventListener?.('online', lifecycle); root.removeEventListener?.('focus', lifecycle);
-      root.document?.removeEventListener('visibilitychange', visible);
+      root.clearTimeout(timer); wiring?.detach(); wiring = null;
       for (const stop of stops) stop?.(); stops.length = 0;
       originalsStop?.(); originals?.dispose?.(); remote.dispose?.(); listeners.clear();
     }

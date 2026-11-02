@@ -1,0 +1,72 @@
+# S2a 동기화 엔진 생명주기 공통화 (2026-11-02)
+
+[구조·흐름 점검](structure-workflow-review-20261102.md) 4-5절 S2의 첫 묶음이다. 기준 main은 `2a224dc`이며, #169 병합 뒤 `c03011c`, #168 병합 뒤 `eafb7cf`로 재기준했다.
+
+- 블로그 동기화(`blog-sync.js`)는 충돌 규칙 작업과 겹친다. 그래서 그 작업이 병합된 뒤 S2b로 한다(총괄 결정).
+
+## 이번 변경
+
+- **새 모듈:** `assets/life/sync-lifecycle.js`(`HaedoLife.SyncLifecycle.attach`)를 만들었다.
+  - 엔진이 넘긴 `[대상, 이벤트, 처리기]` 목록을 **주어진 순서대로** 창(`window`)이나 문서(`document`)에 등록한다.
+  - 그다음 주기 타이머를 하나 시작하고(Node에서는 `unref`), `detach()`로 등록한 것만 지우고 타이머를 멈춘다. `detach()`를 두 번 불러도 한 번만 지운다.
+  - 네트워크·저장소·DOM 조작은 없다.
+- **엔진 6개:** 직접 `addEventListener`·`setInterval`을 부르지 않고 이 모듈로 등록한다.
+  - 대상: `sync.js`, `composition-sync.js`, `writing-sync.js`, `material-continuity-sync.js`, `account-docs-sync.js`, `account-library.js`
+  - 직접 등록은 0이다(`grep addEventListener|setInterval` 결과 0).
+- **바꾸지 않은 것:** 각 엔진의 처리기(무엇을 하는지)는 그대로다.
+  - 뒤로가기 캐시(bfcache)의 `pagehide`/`pageshow` `persisted` 처리, 화면 숨김·보임 구분, `haedo:page-suspend`/`-ready`, 간격·지연·백오프, 상태 기계가 모두 그대로다.
+  - 처리기를 모듈로 옮기지 않은 이유: 여섯 엔진의 처리가 조금씩 다르다. 예를 들어 `sync.js`는 `visible`만, `account-library.js`는 `hidden`이 아니면 실행한다. 공통화하면 동작이 바뀔 위험이 커서 이번에는 등록만 모았다.
+- **로드 순서:** `index.html`·`life.html`에서 `sync.js` 바로 앞에서 불러온다. `sw.js` 오프라인 목록과 `scripts/prepare-site.mjs` 배포 허용 목록에 넣었다.
+- **캐시 이름:** `haedo-v176` → `haedo-v177`. 작업 중 main이 #169로 v175, #168로 v176이 되었다. 같은 이름에 다른 파일이 섞이지 않도록 매번 다음 번호로 올렸다.
+- **S0 기준선:** 브라우저 기준선에 `SyncLifecycle` 1개를 더했다(132개).
+
+## 이벤트 → 처리기 대응표
+
+`tests/sync-lifecycle.test.cjs`가 변경 전 main 코드에서 뽑아 고정했다. 변경 전 코드에서도, 변경 후 코드에서도 같은 표로 통과한다.
+
+| 엔진 | 창 이벤트 | 문서 이벤트 | 주기 |
+|---|---|---|---|
+| `sync.js` (`setAutomatic(true)` 때) | online→`automatic` | visibilitychange→`visible` | 60초 `visible` |
+| `composition-sync.js` | online·focus→`automatic`, pagehide→`pagehide`, pageshow→`pageshow` | visibilitychange→`automatic` | 30초 `automatic`(`polling`일 때) |
+| `writing-sync.js` | online·focus→`automatic`, pagehide·pageshow | visibilitychange→`automatic`, page-suspend→`suspend`, page-ready→`resume` | `interval`(기본 30초) `automatic` |
+| `material-continuity-sync.js` 자동 관리자 | online·focus→`pass`, pagehide·pageshow | visibilitychange→`pass`, page-suspend→`suspend`, page-ready→`resume` | `every`(기본 60초) `pass` |
+| `account-docs-sync.js` | online·focus→`wake`, pagehide·pageshow | visibilitychange→`visibility`, page-suspend→`suspend`, page-ready→`ready` | `intervalMs`(기본 30초) 숨김이 아닐 때 `run` |
+| `account-library.js` | online·focus→`lifecycle` | visibilitychange→`visible` | 30초 `lifecycle`(`polling`일 때) |
+
+- 표의 처리기 이름은 엔진 안 함수 이름이다. 같은 함수 객체가 같은 대상·이벤트에 같은 순서로 붙는지를 비교한다.
+- 해제(`dispose`, `sync.js`의 `setAutomatic(false)`) 뒤에는 남는 등록과 타이머가 0이다.
+- `pagehide`의 동기 시작 시점: 이 여섯 엔진의 `pagehide`는 모두 `persisted`일 때 멈춤 표시와 타이머 정리만 한다. 요청을 시작하는 `pagehide`(블로그의 업로드 시작)는 `blog-sync.js`에만 있고 이번 범위 밖이다.
+
+## 모듈이 없을 때 (섞인 판)
+
+- 갱신 중에 이전 HTML(이 모듈 없음)과 새 엔진이 섞이면 엔진은 자동 깨우기(online·focus·화면 전환·주기)만 하지 않는다.
+  - 시작할 때의 동기화와 명시 동기화는 그대로 돈다. 오류나 화면 중단은 없다. 새로고침하면 정상이다.
+- S1처럼 오류를 내지 않은 이유: 엔진을 만드는 곳이 `shell.js`·`ui.js`·`workbench-ui.js` 등 여러 곳이다. 오류를 내면 그 곳마다 보호 코드가 필요하고(#173의 후속 수정), `ui.js`는 #168과 겹친다.
+- 영구 누락(HTML에서 줄을 빠뜨림)은 S0 브라우저 기준선이 잡는다. `index.html`·`life.html` 모두 `SyncLifecycle` 등록을 확인한다. `npm run check`는 오프라인·배포 목록만 보므로 이 누락을 잡지 못한다.
+- 캐시 이름을 올렸으므로 서비스워커 경로에서는 섞이지 않는다.
+
+## 검사
+
+- `tests/sync-lifecycle.test.cjs`(신규, 8개)
+  - 엔진 6개의 대응표: 변경 전 main 코드에서 6/6, 변경 후 6/6
+  - 모듈 단위: 등록 순서, 타이머가 등록 뒤에 시작됨, `detach` 1회, 문서 없는 대상, 잘못된 대상·처리기 거절
+  - 모듈이 없는 판(`vm`, `require` 없음): 등록 0, 시작 동기화 1회, 오류 없음
+- `tests/life-sync.test.cjs`·`tests/composition-sync.test.cjs`는 엔진을 `vm`에서 실행한다. 페이지처럼 이 모듈을 먼저 불러오게 바꿨다.
+  - 바꾸기 전에는 `life-sync` 3개가 실패했다. 온라인·화면 보임 처리기를 실제로 부르는 검사이므로, 모듈 없이 실행하면 등록이 없어 실패한다.
+- `tests/sync-lifecycle-browser.cjs`(신규, 4개, FakeCloud 합성 계정): 실제 개인 화면에서 이벤트마다 생기는 서버 호출 묶음을 고정했다.
+  - online·focus → 준비(`life_material_list`)·계정 문서(`life_account_document_changes`)·블로그(대조군)
+  - 화면 숨김 → 계정 문서만, 다시 보임 → 셋 다
+  - persisted pagehide 뒤 online → 호출 0. persisted pageshow → 셸의 계정 재확인 뒤 `haedo:page-ready`로 준비·계정 문서. 그 뒤 online → 셋 다
+  - `haedo:page-suspend` 뒤 focus → 블로그만(블로그에는 일시 중지 처리기가 없다). `haedo:page-ready` → 준비·계정 문서
+  - 변경 전 main(`2a224dc`)에서 3회, 변경 후 3회 모두 4/4. `index.html`에서 이 모듈 줄을 빼면 첫 검사에서 실패한다.
+  - 이 화면에서 서버 호출이 없는 엔진(원문 동기화·구성·글쓰기 초안·계정 자료실)은 단위 검사의 대응표로만 확인한다.
+- 기존 브라우저 검사(이 판에서 실행): 구조 기준선 6, 블로그 자동 저장 4, 구성 동기화 8, 글쓰기 동기화 10·2·1, 계정 자료 3, 글 찾기 3, PWA v163→v175 9, v162→v175 통과
+- 로컬 PostgreSQL(UTF-8) 검사: 준비 이어쓰기 5, 계정 블로그 연속 5, 계정 전체 홈 4, 자료로 글쓰기 9
+  - 처음에는 준비 이어쓰기가 `life_material_invalid_remote_data`로 실패했다. 원인은 검사용 클러스터를 `SQL_ASCII`로 만든 것이었다. 변경 전 main도 같은 환경에서 같은 방식으로 실패했고, UTF-8로 다시 만든 뒤에는 둘 다 통과했다. 코드 결함이 아니다.
+
+## 한계
+
+- 등록 순서가 같다는 것은 같은 엔진 안에서의 순서다. 엔진끼리의 순서는 엔진을 만드는 순서(그대로)로 정해진다.
+- `writing-sync.js`·`material-continuity-sync.js`는 이전에 타이머를 이벤트 등록보다 먼저 만들었다. 지금은 등록 뒤에 만든다. 타이머 콜백은 등록이 끝난 뒤 다음 작업 단위에서만 돌기 때문에 관찰되는 차이는 없다.
+- `dispose`에서 이벤트 해제 위치가 앞당겨졌다(원격 해제·구독 해제보다 먼저). 그 사이에 동기적으로 발생하는 DOM 이벤트는 없다.
+- 실제 Mac·iPad·iPhone의 bfcache·앱 전환 확인은 하지 않았다.
