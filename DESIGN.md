@@ -96,7 +96,7 @@ components:
 
 2026-10-18 KST 사용자의 사용 흐름 개편 이후 시각 디자인 교체 요청을 반영한 현재 기준이다. 쓰기 → 초안 보관/명시 저장 → 읽기 → 출발 목록 복귀의 동작을 보존하면서 흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작·Pretendard 활자로 한국어 개인 블로그의 위계를 만든다. 실제 프로필 이름과 글 제목을 키우고 전역 프레임은 물러난다. 큰 표지나 가짜 반응 수로 정체성을 대신하지 않는다.
 
-구현된 CSS·컴포넌트에서 추출했다. [현재 시각 계약](.impeccable/blog-visual-direction.md)과 [시각 개편·검증](docs/design-review/blog-visual-redesign.md)이 이번 변경의 근거다. [제품 사실](PRODUCT.md), [저장·보존 계약](AGENTS.md), [앞선 시각 조사·구현](docs/design-review/sns-blog-experience.md), [사용 흐름 구현·검증](docs/design-review/blog-user-journeys.md)은 보존한다. 공식 Impeccable의 [문서화 지침](.agents/skills/impeccable/reference/document.md)을 수동 적용했으며 context·detect·doctor 엔진을 설치·실행하지 않았다. 과거 흰색/차콜 주 행동·시스템 글꼴과 이전 라벤더·종이색·명조·떠 있는 탐색띠는 당시의 시각 이력이다. 기존 행동·저장·공개 계약은 계속 유효하다.
+구현된 CSS·컴포넌트에서 추출했다. [현재 시각 계약](.impeccable/blog-visual-direction.md)과 [시각 개편·검증](docs/design-review/blog-visual-redesign.md)이 이번 변경의 근거다. [제품 사실](PRODUCT.md), 저장·보존 계약([공통](AGENTS.md)·[기능별](docs/agents/feature-contracts.md)), [앞선 시각 조사·구현](docs/design-review/sns-blog-experience.md), [사용 흐름 구현·검증](docs/design-review/blog-user-journeys.md)은 보존한다. 공식 Impeccable의 [문서화 지침](.agents/skills/impeccable/reference/document.md)을 수동 적용했으며 context·detect·doctor 엔진을 설치·실행하지 않았다. 과거 흰색/차콜 주 행동·시스템 글꼴과 이전 라벤더·종이색·명조·떠 있는 탐색띠는 당시의 시각 이력이다. 기존 행동·저장·공개 계약은 계속 유효하다.
 
 같은 날 후속 앱다운 UX·애니메이션 요청은 [앱 탐색·모션 계약](.impeccable/app-native-direction.md)과 [구현·검증 기록](docs/design-review/app-native-experience.md)을 따른다. 이전의 일괄적인 본문 등장 금지는 실제 화면 이동의 연속성에 한해 갱신한다. 읽던 본문과 입력은 계속 안정적으로 유지한다.
 
