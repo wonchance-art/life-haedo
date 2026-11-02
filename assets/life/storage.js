@@ -2590,14 +2590,19 @@
       const assertCurrent = () => { scopeGuard(); if (options.isCurrent && options.isCurrent() === false) throw fault('request_cancelled', '계정이나 연결이 바뀌어 글 동기화를 중단했습니다.'); };
       assertCurrent();
       if (!plain(input)) throw fault('invalid_request', '동기화할 글을 확인해 주세요.');
-      onlyFields(input, ['postId', 'post', 'baseRevision', 'binding', 'bindingRevision', 'copy', 'remove', 'upload'], 'invalid_blog_state');
+      onlyFields(input, ['postId', 'post', 'baseRevision', 'binding', 'bindingRevision', 'copy', 'remove', 'edit'], 'invalid_blog_state');
       const { postId, baseRevision, bindingRevision } = input, remove = input.remove === true;
       requireId(postId, '글'); requireRevision(baseRevision); requireRevision(bindingRevision);
-      if (remove && (input.post || input.binding || input.copy)) throw fault('invalid_blog_state', '삭제와 갱신을 함께 처리하지 않습니다.');
-      // upload: the stored post differs from the server version named by the
-      // binding (a conflict renamed it), so the next cycle uploads it.
-      if (input.upload !== undefined && (input.upload !== true || !input.post || !input.binding)) throw fault('invalid_blog_state', '올릴 글과 연결 정보를 함께 확인해 주세요.');
+      if (remove && (input.post || input.binding || input.copy || input.edit)) throw fault('invalid_blog_state', '삭제와 갱신을 함께 처리하지 않습니다.');
       const post = input.post ? photoPost().compact(input.post) : null, copy = input.copy ? photoPost().compact(input.copy) : null;
+      // edit: a new editing draft of the post written here, naming the exact
+      // revision this transaction stores (a conflict's later draft).
+      const edit = input.edit ? photoPost().compact(input.edit) : null;
+      if (edit) {
+        photoPost().validate(edit);
+        if (!post || edit.id === postId || edit.id === copy?.id || edit.revision !== 0 || edit.status !== 'draft' || edit.replaces?.id !== postId || edit.replaces.revision !== baseRevision + 1)
+          throw fault('invalid_blog_state', '동기화 충돌에서 이어 쓸 초안을 확인해 주세요.');
+      }
       if (post) { photoPost().validate(post); if (post.id !== postId) throw fault('invalid_blog_state', '글과 연결 식별자가 다릅니다.'); }
       if (copy) { photoPost().validate(copy); if (copy.id === postId || copy.revision !== 0 || copy.status !== 'draft' || copy.replaces) throw fault('invalid_blog_state', '동기화 충돌에서 나눈 글은 새 초안이어야 합니다.'); }
       let binding = null;
@@ -2625,14 +2630,14 @@
         } else {
           if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects); assertCurrent(); }
           if (binding) {
-            // Revision 0 never matches a stored post: the binding stays unsent.
-            const value = { ...binding, revision: bindingRevision + 1, localRevision: saved ? (input.upload ? 0 : saved.revision) : binding.localRevision };
+            const value = { ...binding, revision: bindingRevision + 1, localRevision: saved ? saved.revision : binding.localRevision };
             if (!blogBindingShape(value)) throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.');
             await meta.put({ key: bindingKey, value });
           }
         }
         let copied = null;
         if (copy) { copied = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects); assertCurrent(); }
+        if (edit) { await writePhotoPost(tx, workspaceId, edit, 0, null, null, effects); assertCurrent(); }
         return { postId, revision: remove ? 0 : saved ? saved.revision : current?.revision || 0, copyId: copied?.id || null, removed: remove };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}

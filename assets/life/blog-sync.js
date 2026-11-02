@@ -3,7 +3,8 @@
  * (and HEIC view renditions), is kept current on all of the owner's devices.
  * Local documents are never dropped: a post changed on two devices keeps the
  * later side and the other side as a recovery copy ("복구 사본"), with no
- * exception for saved posts (2026-11-02 owner decision). Publication stays an
+ * exception for saved posts (2026-11-02 owner decision; a later draft over a
+ * saved post becomes that post's editing draft). Publication stays an
  * explicit, separate action and selects no photos by default. */
 (function (root, factory) {
   'use strict'; const api = factory(root); (root.HaedoLife ||= {}).BlogSync = api;
@@ -112,20 +113,48 @@
       const doc = { ...remoteDoc, id, revision, replaces: remoteDoc.status === 'saved' ? null : localReplaces(ws, remoteDoc.replaces, byRemote) };
       photoPost.validate(doc); return doc;
     }
+    // A copy of a copy keeps one prefix (three or more devices).
     function recoveryTitle(title) {
-      let value = CONFLICT_PREFIX + (title || '');
+      let value = String(title || '');
+      if (!value.startsWith(CONFLICT_PREFIX)) value = CONFLICT_PREFIX + value;
       while (value.length > 500) value = Array.from(value).slice(0, -1).join('');
       return value;
     }
     // A new unbound draft holding a document's content; it syncs as its own post.
-    function draftCopy(doc, title) {
+    function draftCopy(doc, title, id = makeId(), replaces = null) {
       const base = typeof photoPost.upgrade === 'function' ? photoPost.upgrade({ ...doc, replaces: null }) : structuredClone({ ...doc, replaces: null });
       // The kept copy retains the time its content was written.
-      Object.assign(base, { id: makeId(), revision: 0, status: 'draft', replaces: null, title });
+      Object.assign(base, { id, revision: 0, status: 'draft', replaces, title });
       if (Object.hasOwn(base, 'archived')) base.archived = false;
       photoPost.validate(base); return base;
     }
-    const conflictCopy = doc => draftCopy(doc, recoveryTitle(doc.title));
+    const conflictCopy = (doc, id) => draftCopy(doc, recoveryTitle(doc.title), id);
+    // Title, body, attachments and the exact photo bytes (digests, HEIC views);
+    // identity, status and times are not content. Equal sides need no copy.
+    function contentOf(doc) {
+      const value = blog.pack(photoPost.compact(doc));
+      for (const name of ['id', 'revision', 'status', 'replaces', 'createdAt', 'updatedAt', 'format', 'archived']) delete value[name];
+      for (const photo of value.photos || []) if (photo.view) photo.view = viewMeta(photo.view);
+      return canonical(value);
+    }
+    const sameContent = (a, b) => contentOf(a) === contentOf(b);
+    // Identities for what a conflict over one exact server revision creates.
+    // Every device deciding over that same revision makes the same ids, so two
+    // devices' results meet as one post on the server and are decided there
+    // like any other conflict (latest wins, the other kept) instead of
+    // piling up as unrelated duplicates. A used or locally deleted id falls
+    // back to a fresh one.
+    async function derivedId(remoteId, revision, role) {
+      const bytes = new Uint8Array(await root.crypto.subtle.digest('SHA-256', new TextEncoder().encode(['haedo-blog-conflict', owner.userId, remoteId, revision, role].join('\n'))));
+      bytes[6] = (bytes[6] & 0x0f) | 0x50; bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes.slice(0, 16), value => value.toString(16).padStart(2, '0')).join('');
+      return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+    }
+    async function conflictId(c, row, role) {
+      const id = await derivedId(row.id, row.revision, role); guard(c);
+      const value = await storage.listBlogSyncStates(c.ws); guard(c);
+      return value.posts.some(item => item.id === id) || value.tombstones.some(item => item.remoteId === id) || value.states.some(item => item.state.remoteId === id) ? makeId() : id;
+    }
     // Latest wins (2026-11-01 rule; 2026-11-02: saved posts are no exception).
     // Both sides are compared by the time their content was written
     // (document updatedAt): the only time both sides have, since this device's
@@ -225,33 +254,39 @@
       const regression = row.data.status === 'saved' && post.status === 'draft';
       if (row.revision === state.remoteRevision && !regression) return pushLocked(c, { attempt: attempt + 1, byRemote });
       const remoteWins = remoteIsLater(row, post);
-      // Both outcomes that change this local document wait for an open editor.
-      if ((remoteWins || regression) && held(c.ws, c.id)) return getState(c.ws, c.id);
+      // Both outcomes that change this local document wait for an open editor,
+      // checked again after the downloads (it may have opened meanwhile).
+      const waits = () => (remoteWins || regression) && held(c.ws, c.id);
+      if (waits()) return getState(c.ws, c.id);
       const remoteDoc = await download(c, row);
       const map = byRemote || (await snapshot(c)).byRemote;
-      if (!remoteWins && regression) {
-        // The later draft wins, but the server identity stays saved (and keeps
-        // any publication: a public copy changes only by an explicit action).
-        // That saved version becomes the recovery copy in place: renamed, still
-        // saved, uploaded as such. The winning draft continues as a new draft
-        // with its own server identity, so nothing is lost on any device.
-        const kept = localDoc(remoteDoc, c.id, post.revision, c.ws, map); kept.title = recoveryTitle(kept.title);
-        await storage.commitBlogSync(c.ws, { postId: c.id, post: kept, baseRevision: post.revision,
-          binding: synced(state, row, { status: 'pending' }), bindingRevision: state.revision, upload: true, copy: draftCopy(post, post.title) }, { isCurrent: () => current(c) });
-        guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id));
-        kick(1000); // the renamed version and the winning draft reach the other devices promptly
-        return getState(c.ws, c.id);
-      }
-      if (remoteWins) {
-        await storage.commitBlogSync(c.ws, { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision,
-          binding: synced(state, row), bindingRevision: state.revision, copy: conflictCopy(post) }, { isCurrent: () => current(c) });
+      if (waits()) return getState(c.ws, c.id);
+      const same = sameContent(post, remoteDoc);
+      if (remoteWins || regression) {
+        const input = { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision };
+        if (same) { /* nothing differs: the server version is simply applied */ }
+        else if (remoteWins) input.copy = conflictCopy(post);
+        else {
+          // The later draft wins over a saved server version. The server never
+          // turns a saved post back into a draft, and the saved post keeps its
+          // place and publication (a public copy changes only by an explicit
+          // action). So the saved version stays in place unchanged, the later
+          // draft becomes that post's editing draft (finishing it updates the
+          // same post and, after an explicit republish, the same public
+          // address), and the saved version's content is also kept as a
+          // private recovery copy, so nothing is lost when the draft is finished.
+          input.edit = draftCopy(post, post.title, await conflictId(c, row, 'edit'), { id: c.id, revision: post.revision + 1 });
+          input.copy = conflictCopy(remoteDoc, await conflictId(c, row, 'kept'));
+          if (waits()) return getState(c.ws, c.id);
+        }
+        await storage.commitBlogSync(c.ws, input, { isCurrent: () => current(c) });
         guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id));
         kick(1000); // the kept draft reaches the other devices promptly
         return getState(c.ws, c.id);
       }
       await storage.commitBlogSync(c.ws, { postId: c.id, baseRevision: post.revision,
         binding: synced(state, row, { localRevision: state.localRevision, status: 'pending' }), bindingRevision: state.revision,
-        copy: conflictCopy({ ...remoteDoc, id: c.id, revision: post.revision, replaces: null }) }, { isCurrent: () => current(c) });
+        ...(same ? {} : { copy: conflictCopy({ ...remoteDoc, id: c.id, revision: post.revision, replaces: null }, await conflictId(c, row, 'kept')) }) }, { isCurrent: () => current(c) });
       guard(c); emit(c.ws, c.id); kick(1000);
       return pushLocked(c, { attempt: attempt + 1, byRemote: map });
     }
@@ -311,6 +346,7 @@
           const row = await remote.read(head.id); guard(c);
           if (!row || row.revision === state.remoteRevision) return null;
           const doc = localDoc(await download(c, row), id, post.revision, ws, byRemote);
+          if (held(ws, id)) return null; // an editor opened during the download
           await storage.commitBlogSync(ws, { postId: id, post: doc, baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision }, { isCurrent: () => current(c) });
           guard(c); emit(ws, id); retries.delete(key(ws, id)); return id;
         } catch (error) { await rememberError(c, error); throw explain(error); }
@@ -326,7 +362,7 @@
     // The server no longer has a post this device received or stored: it was
     // deleted on another device. A clean copy is removed; local changes recreate it.
     async function vanish(ws, id, remoteId) {
-      return serial(ws, id, async () => {
+      const removed = await serial(ws, id, async () => {
         const c = context(ws, id);
         try {
           const state = await readState(c); if (!state || state.remoteId !== remoteId || state.remoteRevision === 0) return;
@@ -338,9 +374,46 @@
           }
           if (held(ws, id)) return;
           await storage.commitBlogSync(ws, { postId: id, remove: true, baseRevision: post.revision, bindingRevision: state.revision }, { isCurrent: () => current(c) });
-          guard(c); emit(ws, id);
+          guard(c); emit(ws, id); return { post, revision: state.remoteRevision };
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
+      if (!removed) return;
+      await release(ws, [id, remoteId]);
+      await forget(ws, remoteId, removed);
+    }
+    // A recovery copy this account made of exactly the deleted revision (by a
+    // conflict decided before the deletion was known) goes with it, unless it
+    // was changed since or is open: the explicit deletion wins.
+    async function forget(ws, remoteId, removed) {
+      const copyId = await derivedId(remoteId, removed.revision, 'kept');
+      await serial(ws, copyId, async () => {
+        const c = context(ws, copyId);
+        try {
+          if (held(ws, copyId) || !(await storage.listBlogSyncStates(ws)).posts.some(row => row.id === copyId)) return;
+          const doc = await readPost(c);
+          if (doc.status !== 'draft' || doc.replaces || doc.title !== recoveryTitle(removed.post.title) || !sameContent(doc, { ...removed.post, title: doc.title })) return;
+          await storage.deletePhotoPost(ws, copyId, doc.revision);
+          generations.set(key(ws, copyId), (generations.get(key(ws, copyId)) || 0) + 1);
+          emit(ws, copyId); kick(0);
+        } catch (_) { /* The copy stays; nothing is lost. */ }
+      });
+    }
+    // The deletion wins over editing drafts of the deleted post: each one stays
+    // with its content and becomes a new post of its own (an open editor keeps
+    // its draft as it is and still offers saving it as a new post).
+    async function release(ws, targets) {
+      const value = await storage.listBlogSyncStates(ws);
+      for (const row of value.posts) {
+        if (row.status !== 'draft' || held(ws, row.id)) continue;
+        await serial(ws, row.id, async () => {
+          const c = context(ws, row.id);
+          try {
+            const doc = await readPost(c);
+            if (doc.status !== 'draft' || !doc.replaces || !targets.includes(doc.replaces.id) || held(ws, row.id)) return;
+            await storage.savePhotoPost(ws, { ...doc, replaces: null }, doc.revision); guard(c); emit(ws, row.id);
+          } catch (_) { /* The draft stays as it is; saving it as a new post remains available. */ }
+        });
+      }
     }
     // A deletion removes only the exact server revision this device last saw
     // (or its own unacknowledged request). A newer edit or a publication from
