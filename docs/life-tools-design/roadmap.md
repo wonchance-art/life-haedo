@@ -2,6 +2,50 @@
 
 > 2026-10-29 이전 절은 [roadmap-archive.md](roadmap-archive.md)에 원문 그대로 옮겼다.
 
+## 실기기 확인 전 보완 묶음 — PR164 통합·검수, 캐시 `haedo-v173` (2026-11-02 KST)
+
+소유자 결정(11-02): 실기기 확인 전에 아래를 모두 고친다. 복원 사본은 날짜 이름으로 구분하고 홈에서 글 단위로 중복 제외한다. 앱 안 뒤로 가기는 직전 화면으로 간다. 계정 확인 줄이기도 넣는다. 각 항목은 작업자 구현 → 다른 에이전트 독립 검수 → 블로커·메이저 수정 → 재검수를 거쳐 PR164 하나로 통합했다.
+
+- **복원 사본 구분:** 전체 백업 복원 사본은 "(MM-DD 복원)" 이름과 `restored-copy:<id>` 계정 문서로 표시된다. 홈은 원본과 같은 글만 글 단위로 숨기고, 회복된 글은 보인다. 계정 문서 스키마 2와 되감기를 넣어 이전 판 기기도 표식을 받는다.
+- **공개 사본 요청 보존:** 응답을 받기 전에 끊긴 게시·갱신·철회 요청을 계정별 localStorage에 원 요청 그대로 보관해 재전송한다. 읽을 수 없는 기록은 따로 치워 두어 다음 요청을 막지 않는다. 계정당 8건·150만 자로 제한하되 철회는 제한하지 않는다.
+- **탐색:**
+  - 블로그 글쓰기·읽기 주소(`blog`·`compose`)의 오프라인 새로고침
+  - 이동 중 뒤로 가기를 거부하고 보이는 화면의 기록으로 되돌리기
+  - `history.state`에는 식별자만 남기기(제목·검색어·구절은 탭 메모리)
+  - 영역을 바꿀 때 글 작업 해제
+  - 앱 안 돌아가기는 `history.back()`
+  - 불러오기만 하는 중에는 이동 허용(늦은 결과는 버림)
+- **계정 확인 줄이기:** 한 동기화 사이클 안의 서버 계정 확인을 범위로 묶어 한 번만 한다(`verificationScope`).
+- **다른 기기 초안 지연:** 원본 엔진이 연결되거나 준비되면 그 공간의 초안 패스를 바로 돌린다. 31.5초 걸리던 것이 약 1초가 됐다.
+- **CI 실패 원인 판정(재실행으로 종결한 것 0건):**
+
+  | 실패 | 판정 | 수정 |
+  |---|---|---|
+  | writing-sync 브라우저 | 검사 경쟁(Promise를 돌려주는 무효 대기) + 제품 지연 | 둘 다 |
+  | blog-sync pagehide | 검사 경쟁 | 검사 |
+  | composition 알림 | 검사 순서 | 검사 |
+  | record-arrange | 레이아웃 이동 중 클릭 | 검사 |
+  | rediscovery 툴팁 | smooth 스크롤 전 측정. main에서도 4회 중 1회 | 검사 |
+  | blog-autosave·account-materials meta +1 | 계정 문서 첫 사이클의 정당한 `accountDocSchema` 기록 | 고정점 대기 |
+  | blog continuity 삭제 | 목록·읽기 사이 삭제 | 검사 |
+  | blog-sync 재실행 병합 | 제품 결함 | PR161 |
+
+- **검사 대기 감사(PR166, 병합 `81893c0`):** Promise를 돌려주는 `waitForFunction` 22곳을 `awaitCondition`으로 바꿨고, 재발 방지 검사를 추가했다. account-materials 로컬 실패는 초안 5초 대기(`DRAFT_DELAY`) 때문이었다. 정상 동작이라 기준 시점만 옮겼다.
+- **검증:**
+  - 통합본 `npm test` 1746/1746, `npm run check` PASS
+  - 로컬 subview-navigation 27/27, external-discovery-pwa 9, writing-sync 10/10, rediscovery 10/10
+  - CI는 PR164 현재 head로 판정한다.
+- **미검증:** 실제 iPhone·iPad·Mac(스와이프 뒤로 가기, 실제 IME, 설치 PWA 갱신, HEIC 변환 중 이동). 로컬에 PostgreSQL 컨테이너가 없어 material-writing·blog continuity는 CI로만 확인했다.
+- **기록만 한 후속 후보:**
+  - 탐색: 저장 중 뒤로 가기 때 안내가 없다. 열기가 겹치면 busy 해제가 섞인다. 매개변수 순서를 정규화하지 않는다. historyWait 창이 있다.
+  - 편집기 밖에서 만든 초안의 업로드 재예약(30초 → 약 5초)
+  - `safeNext`·`loginPath`의 `blog` 보존
+  - 공유 화면(표지·9칸·연재)의 다른 곳에서 처리됨 재확인
+  - `shell.js`의 `sync.start()` 중복
+  - 레이아웃 이동(재설계로)
+  - CI 산출물에 rediscovery 캡처 경로 추가
+  - life-collections 탭 순서 수정 뒤 CI 편입
+
 ## 운영 DB 연결 확인 · 네이버 수집 상태 진단 — 읽기 전용, 개인 연결 0 (2026-11-02 KST)
 
 총괄 세션이 `.mcp.json`의 `haedo-supabase`로 운영 DB에 연결했다(public 테이블 목록 조회 성공). 실행한 것은 커밋된 읽기 전용 [`naver-status-check.sql`](../../supabase/operations/naver-status-check.sql)과 개수·상태·시각만 읽는 보조 조회뿐이다. 쓰기·마이그레이션·Edge 배포는 0건이다. 블로그 ID·제목·본문·키는 꺼내지 않았다.
