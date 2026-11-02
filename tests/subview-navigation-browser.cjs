@@ -41,6 +41,32 @@ async function durablePhoto(page, title, status) {
   } while (Date.now() < deadline);
   throw new Error('Photo post was not stored: ' + JSON.stringify(rows));
 }
+// A screen is ready for a browser move when its own content finished loading:
+// the preparation's source cards, or the post's rendered article.
+async function materialReady(page) { await page.locator('#mwTitle').waitFor(); await page.locator('.mw-material').first().waitFor(); }
+async function postReady(page) { await page.locator('.photo-article').waitFor(); }
+// Holds one real storage read (next post, or the preparation's source bundle)
+// until the test releases it; every other call uses real IndexedDB unchanged.
+async function holdStorage(context) {
+  await context.addInitScript(() => {
+    const life = window.HaedoLife = window.HaedoLife || {};
+    let stored;
+    const hold = async (flag, ready, call) => {
+      if (window[flag] && ready()) {
+        window[flag] = false; window[flag + 'Held'] = true;
+        await new Promise(resolve => { window[flag + 'Release'] = resolve; });
+      }
+      return call();
+    };
+    const wrap = original => !original || original.__historyHold ? original : Object.freeze({ ...original, __historyHold: true, forAccount(...args) {
+      const actual = original.forAccount(...args);
+      return Object.freeze({ ...actual,
+        readPhotoPost: (...a) => hold('__holdPostRead', () => document.querySelector('#lifeMain')?.dataset.mode === 'page', () => actual.readPhotoPost(...a)),
+        read: (...a) => hold('__holdBundleRead', () => !!document.querySelector('#mwTitle'), () => actual.read(...a)) });
+    } });
+    Object.defineProperty(life, 'Storage', { configurable: true, enumerable: true, get: () => stored, set: value => { stored = wrap(value); } });
+  });
+}
 const historyRecord = page => page.evaluate(() => ({ idx: history.state?.haedo?.idx, key: history.state?.haedo?.key }));
 async function capture(page, scene, width) {
   await page.evaluate(async () => { await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); }); await page.mouse.move(0, 0);
@@ -376,18 +402,18 @@ async function main() {
       const older = f.refs[0].versionId;
       await page.locator('#lifeVersion').selectOption(older); await settle(page);
       await page.waitForFunction(id => document.querySelector('#lifeVersion')?.value === id, older);
-      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await materialReady(page);
       await page.locator('#mwTitle').fill('읽던 자료로 돌아갈 준비');
       await page.locator('#mwClose').click(); await mode(page, 'source');
       assert.equal(await page.locator('#lifeVersion').inputValue(), older, '돌아가기 returns to the exact version');
       await page.waitForFunction(() => document.activeElement?.id === 'lifeSourceMaterialWriting');
       // Reopening resumes the same preparation; browser back also returns to the reader.
-      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await materialReady(page);
       assert.equal(await page.locator('#mwTitle').inputValue(), '읽던 자료로 돌아갈 준비');
       await page.goBack(); await mode(page, 'source');
       assert.equal(await page.locator('#lifeVersion').inputValue(), older);
       // The heading return keeps its existing destination: the reader's origin list.
-      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await materialReady(page);
       assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '자료실로 돌아가기');
       await page.locator('[data-subview-return]').click(); await mode(page, 'sources');
     }, width);
@@ -424,7 +450,7 @@ async function main() {
         assert.equal(await page.locator('#lifeVersion').inputValue(), older);
         await page.goForward();
       }
-      await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await mode(page, 'page'); await materialReady(page);
       await page.waitForFunction(idx => history.state?.haedo?.idx === idx + 1, reader.idx);
       assert.equal(new URL(page.url()).searchParams.get('view'), 'page');
       // A refused back during Korean composition returns to exactly this entry.
@@ -459,7 +485,7 @@ async function main() {
       await page.waitForFunction(() => document.querySelector('#lifeApp .haedo-page-heading h1')?.textContent === '글 읽기');
       await back(page, 'home');
       await page.locator('[aria-controls="homeSearchPanel"]').click(); await page.locator('#homePostSearch').fill('이력비공개'); await settle(page);
-      await page.locator('#lifeMain').getByText('이력비공개제목').first().click(); await mode(page, 'page');
+      await page.locator('#lifeMain').getByText('이력비공개제목').first().click(); await mode(page, 'page'); await postReady(page);
       await page.goBack(); await mode(page, 'home');
       await nav(page, 'records'); if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
       await mode(page, 'sources');
@@ -494,6 +520,68 @@ async function main() {
       await page.goBack(); await mode(page, 'sources');
       await page.goForward(); await mode(page, 'home');
       await page.goForward(); await mode(page, 'import');
+    }, 390);
+    await check('history: back while a post is only loading opens the previous screen and drops the late read', async ({ page, context }) => {
+      await holdStorage(context);
+      await page.goto(base + '/index.html'); await ready(page); await home(page);
+      await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
+      await page.locator('#photoTitle').fill('늦게 열리는 글'); await page.locator('.ql-editor').fill('읽는 중에 뒤로 가도 됩니다.');
+      await page.getByRole('button', { name: '글 저장', exact: true }).click(); await postReady(page);
+      await back(page, 'home');
+      const homeEntry = await historyRecord(page);
+      await page.evaluate(() => { window.__holdPostRead = true; });
+      await page.locator('#lifeMain').getByText('늦게 열리는 글').first().click(); await mode(page, 'page');
+      await page.waitForFunction(() => window.__holdPostReadHeld === true);
+      // Nothing of the user's is at stake while the post is read: the move is allowed.
+      await page.goBack(); await mode(page, 'home');
+      assert.equal((await historyRecord(page)).key, homeEntry.key);
+      await page.evaluate(() => window.__holdPostReadRelease());
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await settle(page);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
+      assert.equal(await page.locator('.photo-article').count(), 0, 'The late read does not draw the post over home');
+      assert.equal(await page.locator('#lifeApp .life-error:not([hidden])').count(), 0);
+      assert.equal((await historyRecord(page)).key, homeEntry.key);
+      await page.goForward(); await mode(page, 'page'); await postReady(page);
+      assert.match(await page.locator('.photo-article').innerText(), /늦게 열리는 글/);
+    }, 390);
+    await check('history: back while preparation sources only load returns to the reader; input still refuses', async ({ page, context }) => {
+      await holdStorage(context);
+      const f = await fixture(page); await nav(page, 'records'); await mode(page, 'sources');
+      await page.locator('.life-source-open', { hasText: '전시를 보고 돌아오는 길' }).first().click(); await mode(page, 'source');
+      const older = f.refs[0].versionId;
+      await page.locator('#lifeVersion').selectOption(older); await settle(page);
+      await page.waitForFunction(id => document.querySelector('#lifeVersion')?.value === id, older);
+      const reader = await historyRecord(page);
+      await page.evaluate(() => { window.__holdBundleRead = true; });
+      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.waitForFunction(() => window.__holdBundleReadHeld === true);
+      assert.equal(await page.locator('.mw-material').count(), 0, 'Sources are still loading');
+      await page.goBack(); await mode(page, 'source');
+      assert.equal((await historyRecord(page)).key, reader.key);
+      assert.equal(await page.locator('#lifeVersion').inputValue(), older);
+      await page.evaluate(() => window.__holdBundleReadRelease());
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await settle(page);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'source');
+      assert.equal(await page.locator('.mw-material').count(), 0, 'The late source list does not draw over the reader');
+      assert.equal(await page.locator('#lifeApp .life-error:not([hidden]), .mw-error:not([hidden])').count(), 0);
+      // While loading, Korean composition is still input at stake: back is refused.
+      await page.evaluate(() => { window.__holdBundleReadHeld = false; window.__holdBundleRead = true; });
+      await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await page.locator('#mwTitle').waitFor();
+      await page.waitForFunction(() => window.__holdBundleReadHeld === true);
+      const writing = await historyRecord(page), title = page.locator('#mwTitle');
+      await title.evaluate(node => { window.__historyComposing = node; node.focus(); node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '한' })); node.value = '불러오는 중 조합 한'; node.dispatchEvent(new InputEvent('input', { bubbles: true, data: '한', inputType: 'insertCompositionText', isComposing: true })); });
+      await page.goBack(); await settle(page);
+      await page.waitForFunction(key => history.state?.haedo?.key === key, writing.key);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page');
+      assert.equal(await title.evaluate(node => node === window.__historyComposing), true);
+      assert.equal(await title.inputValue(), '불러오는 중 조합 한');
+      await page.evaluate(() => window.__holdBundleReadRelease());
+      await title.evaluate(node => { node.value = '불러오는 중 조합 한글'; node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '글' })); node.dispatchEvent(new Event('input', { bubbles: true })); });
+      await materialReady(page);
+      await page.goBack(); await mode(page, 'source');
+      assert.equal((await historyRecord(page)).key, reader.key);
     }, 390);
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
   } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }

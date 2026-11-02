@@ -1672,8 +1672,13 @@
       let finish;
       const promise = new Promise(resolve => { finish = resolve; });
       // A traversal the browser drops must not hold navigation indefinitely.
-      const timer = global.setTimeout(() => done(), 3000);
-      const done = () => { global.clearTimeout(timer); if (historyWait?.done === done) historyWait = null; syncHistoryPosition(); finish(); };
+      // After that limit the current entry is rewritten to the shown screen, so
+      // the address and the screen agree again (after any waiting move is written).
+      const timer = global.setTimeout(() => done(true), 3000);
+      const done = (timedOut = false) => {
+        global.clearTimeout(timer); if (historyWait?.done === done) historyWait = null; syncHistoryPosition(); finish();
+        if (timedOut) Promise.resolve().then(() => { if (!disposed && !historyWait && state.bundle) writeRoute(state.mode, 'replace'); });
+      };
       historyWait = { idx, key, done, promise };
       global.history.go(idx - at.idx);
       return promise;
