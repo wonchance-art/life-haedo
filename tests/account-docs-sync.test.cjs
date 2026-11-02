@@ -448,3 +448,34 @@ test('mergeDocument keeps single-value documents out of item merging', () => {
   assert.equal(Sync.mergeDocument('discoverySettings', null, { revision: 1 }, { revision: 2 }, true), null);
   assert.equal(Sync.mergeDocument('readingPosition', null, { revision: 1 }, { revision: 2 }, true), null);
 });
+
+test('a backup restore copy marker replicates to the account\'s other devices, even before the copy itself arrives', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), original = await workspaceOn(a), w = original.workspaceId;
+  const restoredAt = '2026-11-02T09:00:00.000Z';
+  // The restore installs the copy and its marker in one transaction.
+  const copy = await a.createWorkspace('내 자료 (11-02 복원)', { restoredCopy: { sourceWorkspaceId: w, restoredAt } });
+  const key = `restored-copy:${copy.workspaceId}`, marker = { format: 'haedo-restored-copy-v1', workspaceId: copy.workspaceId, sourceWorkspaceId: w, restoredAt };
+  assert.deepEqual((await a.listAccountDocs()).find(doc => doc.key === key)?.prefix, 'restored-copy');
+  assert.deepEqual((await a.readAccountDocRecord(key)).value, marker);
+  const listed = await a.listAccountLibraries();
+  assert.deepEqual(listed.find(row => row.workspaceId === copy.workspaceId).restoredCopy, { sourceWorkspaceId: w, restoredAt });
+  assert.equal(listed.find(row => row.workspaceId === copy.workspaceId).eligible, true, 'the copy keeps syncing like any library');
+  assert.equal(Object.hasOwn(listed.find(row => row.workspaceId === w), 'restoredCopy'), false);
+  await engine(a, server).sync.syncNow();
+  assert.deepEqual(server.docs(accountA.userId).get(key).data, marker);
+
+  // The iPad receives the marker while it only has the original; it is kept and applies once the copy arrives.
+  const b = ipad.base.forAccount(accountA); await workspaceOn(b, original);
+  await engine(b, server).sync.syncNow();
+  assert.deepEqual((await b.readAccountDocRecord(key)).value, marker);
+  await workspaceOn(b, await a.read(copy.workspaceId));
+  assert.deepEqual((await b.listAccountLibraries()).find(row => row.workspaceId === copy.workspaceId).restoredCopy, { sourceWorkspaceId: w, restoredAt });
+
+  // A malformed marker is refused on receipt and never hides a library.
+  const bad = await a.createWorkspace('표시 없는 공간');
+  const refused = await b.applyAccountDoc(`restored-copy:${bad.workspaceId}`, { value: { ...marker, workspaceId: bad.workspaceId, extra: true }, expectedHash: null });
+  assert.equal(refused.status, 'rejected');
+  await assert.rejects(a.createWorkspace('같은 공간 표시', { restoredCopy: { sourceWorkspaceId: 'not a valid id!' } }), { code: 'restored_copy_invalid' });
+});

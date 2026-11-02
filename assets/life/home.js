@@ -10,17 +10,32 @@
     if (className) element.className = className;
     return element;
   }
+  // Libraries the account-wide list reads, the open one first. A backup
+  // restore copy (its restored-copy marker, never its title) repeats the posts
+  // of the workspace it was copied from, so it is left out while that original
+  // is still in this account. When the open library is such a copy it is
+  // listed instead of its original (and of that original's own original), so
+  // each post appears once. Leaving a copy out here changes only this list:
+  // the copy is synced, backed up and opened like any other library.
+  function accountPostLibraries(libraries, workspaceId) {
+    const byId = new Map(libraries.map(item => [item.workspaceId, item]));
+    const sourceOf = item => item?.restoredCopy?.sourceWorkspaceId || null;
+    const hidden = item => { const source = sourceOf(item); return !!source && source !== item.workspaceId && byId.has(source); };
+    const lineage = new Set();
+    for (let source = sourceOf(byId.get(workspaceId)); source && byId.has(source) && !lineage.has(source) && source !== workspaceId; source = sourceOf(byId.get(source))) lineage.add(source);
+    return [...new Set([workspaceId, ...libraries.filter(item => item.eligible !== false && !hidden(item) && !lineage.has(item.workspaceId)).map(item => item.workspaceId)])];
+  }
   // Posts and drafts of every library this account owns (2026-11-01: one
   // account, one blog). Each row keeps its own workspaceId. Without an account
   // scope only the open library is listed, as before. Recovery copies are left
-  // out unless one is the open library. A library that cannot be read is
-  // reported as `failed`; the readable ones are still listed.
+  // out unless one is the open library; restore copies as above. A library
+  // that cannot be read is reported as `failed`; the readable ones are still listed.
   async function listAccountPosts(storage, workspaceId) {
     let ids = [workspaceId];
     if (typeof storage.listAccountLibraries === 'function') {
       try {
         const libraries = await storage.listAccountLibraries();
-        if (libraries.some(item => item.workspaceId === workspaceId)) ids = [...new Set([workspaceId, ...libraries.filter(item => item.eligible !== false).map(item => item.workspaceId)])];
+        if (libraries.some(item => item.workspaceId === workspaceId)) ids = accountPostLibraries(libraries, workspaceId);
       } catch (error) { if (error?.code !== 'auth_scope_required') throw error; }
     }
     const lists = await Promise.allSettled(ids.map(id => storage.listPhotoPosts(id)));
@@ -674,7 +689,9 @@
     function watch(context) {
       unwatch();
       const listener = event => {
-        if (event?.type !== 'photo_posts_changed' || !showing(context)) return;
+        // A restore-copy marker received from another device changes which libraries are listed.
+        const restoredMark = event?.type === 'account_doc_applied' && typeof event.key === 'string' && event.key.startsWith('restored-copy:');
+        if ((event?.type !== 'photo_posts_changed' && !restoredMark) || !showing(context)) return;
         if (watchTimer) clearTimeout(watchTimer);
         watchTimer = setTimeout(() => { watchTimer = null; if (showing(context)) { context.photoDrafts.clear(); void load(context, ['photo']); } }, 250);
       };
@@ -698,5 +715,5 @@
     function dispose() { leave(); disposed = true; }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, accountPostLibraries });
 })(globalThis);

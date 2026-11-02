@@ -99,6 +99,17 @@ async function accountState(page) {
     return { active: await s.getActive(), rows };
   });
 }
+// Post IDs the home "내 글" tab lists, in screen order.
+async function homePosts(page) {
+  await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+  return page.locator('#homePosts [data-photo-post-id]').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId));
+}
+async function until(read, predicate, label, timeout = 45000) {
+  const start = Date.now(); let value;
+  do { value = await read(); if (predicate(value)) return value; await new Promise(resolve => setTimeout(resolve, 200)); }
+  while (Date.now() - start < timeout);
+  assert.fail(label + ': last observation ' + JSON.stringify(value));
+}
 async function openBackup(page) {
   await nav(page, 'manage');
   await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await settle(page);
@@ -133,7 +144,7 @@ async function main() {
   const a = await makeContext(browser, server, 'full-backup-a', accounts.a, { viewport: { width: 1440, height: 1000 } });
   await guardExternal(a);
   const page = await a.newPage(); page.setDefaultTimeout(30000); watch(page);
-  let fixture, archive, manifest, original;
+  let fixture, archive, manifest, original, homeBefore, sameAccount;
   try {
     await page.goto(base + '/index.html'); await ready(page); fixture = await seed(page);
     await page.reload(); await ready(page);
@@ -201,7 +212,10 @@ async function main() {
 
     await check('Restoring into the same account: the button stays off after the restore, and reopening the same file warns and needs a confirmation', async () => {
       const before = await accountState(page);
-      await page.goto(base + '/index.html'); await ready(page); await openBackup(page);
+      await page.goto(base + '/index.html'); await ready(page);
+      homeBefore = await homePosts(page);
+      assert.ok(homeBefore.length >= 1, 'the original account shows its post at home');
+      await openBackup(page);
       await page.locator('#fbRestoreFile').setInputFiles({ name: 'haedo-backup.zip', mimeType: 'application/zip', buffer: archive });
       await page.locator('#fbRestoreHeading').waitFor();
       assert.equal(await page.locator('#fbRepeatWarning').count(), 0, 'a first restore has no warning');
@@ -210,6 +224,7 @@ async function main() {
       const statuses = await page.locator('#fbRestoreReport [data-status]').evaluateAll(rows => rows.map(row => row.dataset.status));
       assert.deepEqual(statuses.filter(status => status !== 'restored'), []);
       assert.equal(await page.locator('#fbRestoreRun').isDisabled(), true, 'the same opened file cannot run again');
+      const buttons = await page.locator('#fbRestoreResult button[data-workspace-id]').allTextContents();
       const after = await accountState(page);
       assert.equal(after.rows.length, before.rows.length + 2, 'one new copy per original workspace');
       for (const row of before.rows) assert.deepEqual(after.rows.find(item => item.workspaceId === row.workspaceId), row, 'existing workspaces unchanged');
@@ -226,6 +241,42 @@ async function main() {
       assert.equal(await page.locator('#fbRestoreRun').isDisabled(), true);
       assert.deepEqual(await accountState(page), after, 'opening the file again writes nothing');
       await capture(page, 'repeat-warning', [390]);
+      sameAccount = { before, after, buttons };
+    });
+
+    await check('M4: same-account copies are named with the restore date, the home lists each post once, and the copy syncs with its marker', async () => {
+      const { before, after, buttons } = sameAccount, day = await page.evaluate(() => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+      const copies = after.rows.filter(row => !before.rows.some(item => item.workspaceId === row.workspaceId));
+      assert.deepEqual(copies.map(row => row.title).sort(), before.rows.map(row => row.title + ' (' + day + ' 복원)').sort(), 'each copy is its original name with the restore date');
+      // The result buttons follow the new names.
+      assert.deepEqual([...buttons].sort(), copies.map(row => row.title + ' 열기').sort());
+      // The workspace list names every space differently.
+      await nav(page, 'manage');
+      const options = await page.locator('#lifeWorkspace option').allTextContents();
+      assert.equal(options.length, after.rows.length); assert.equal(new Set(options).size, options.length, 'no two workspaces share a name: ' + options.join(' / '));
+      // The marker, not the title, says which libraries are copies; the home lists the originals' posts only.
+      const marks = await page.evaluate(async () => (await HaedoLife.Shell.storage.listAccountLibraries()).map(row => [row.workspaceId, row.restoredCopy?.sourceWorkspaceId || null, row.eligible]));
+      for (const row of copies) { const [, source, eligible] = marks.find(([id]) => id === row.workspaceId); assert.ok(before.rows.some(item => item.workspaceId === source)); assert.equal(eligible, true); }
+      assert.deepEqual(marks.filter(([, source]) => source).map(([, source]) => source).sort(), before.rows.map(row => row.workspaceId).sort());
+      assert.deepEqual(await homePosts(page), homeBefore, 'home "내 글" is unchanged by the restore: no post twice');
+      // Hidden from the home only: the copy and its posts still go to the account, with the marker.
+      const copyIds = new Set(copies.map(row => row.workspaceId)), copyPosts = copies.flatMap(row => row.posts.map(post => post.id));
+      await until(async () => { await page.evaluate(() => dispatchEvent(new Event('online')));
+        const uploaded = [...server.posts.values()].filter(row => copyIds.has(row.workspace_id)).map(row => row.id);
+        const docs = [...server.accountDocs.values()].flatMap(map => [...map.keys()]).filter(key => key.startsWith('restored-copy:'));
+        return { uploaded: uploaded.length, docs: docs.length };
+      }, value => value.uploaded === copyPosts.length && value.docs === copies.length, 'copy posts and markers reach the account');
+      // Opening a copy: the home lists that copy's posts in place of its original's.
+      const firstCopy = copies.find(row => row.posts.some(post => post.status === 'saved'));
+      await page.evaluate(id => HaedoLife.Shell.storage.setActive(id), firstCopy.workspaceId);
+      await page.reload(); await ready(page);
+      const inCopy = await homePosts(page);
+      assert.equal(inCopy.length, homeBefore.length);
+      assert.deepEqual(inCopy.filter(id => !homeBefore.includes(id)).sort(), firstCopy.posts.filter(post => post.status === 'saved').map(post => post.id).sort());
+      await capture(page, 'restored-copy-home');
+      await page.evaluate(id => HaedoLife.Shell.storage.setActive(id), before.active);
+      await page.reload(); await ready(page);
+      assert.deepEqual(await homePosts(page), homeBefore);
     });
   } finally { await a.close(); }
 

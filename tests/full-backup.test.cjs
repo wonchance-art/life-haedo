@@ -224,15 +224,19 @@ test('restore into another account: new copies only, exact versions, byte-identi
   const summary = Full.summarize(opened);
   assert.deepEqual(summary.map(row => row.kind), ['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals', 'timeline']);
   assert.equal(summary.find(row => row.kind === 'timeline').restorable, false);
-  const report = await Full.restore(opened, { storage: target, kinds: RESTORABLE, verifyPhoto: null, originals });
+  const report = await Full.restore(opened, { storage: target, kinds: RESTORABLE, verifyPhoto: null, originals, now: () => new Date(2026, 10, 2, 9) });
   assert.equal(report.items.filter(item => item.status !== 'restored').length, 0, JSON.stringify(report.items.filter(item => item.status !== 'restored')));
   assert.equal(await target.getActive(), existing, 'the workspace in use stays active');
   const after = JSON.parse(await snapshotAll(target)), old = JSON.parse(before)[0];
   assert.deepEqual(after.find(row => row.ws.workspaceId === existing), old, 'existing workspace unchanged');
   // One copy per original workspace; the capture joins its library copy instead of making another workspace.
   assert.equal(after.length, 4); assert.equal(report.extraCopies.length, 0);
-  const copy = after.find(row => row.ws.title === '첫 자료공간');
+  // Copies carry the restore date in their name and a restored-copy marker naming the original.
+  const copy = after.find(row => row.ws.title === '첫 자료공간 (11-02 복원)');
   assert.ok(copy && copy.ws.workspaceId !== seeded.first);
+  const libraries = await target.listAccountLibraries();
+  assert.deepEqual(libraries.find(row => row.workspaceId === copy.ws.workspaceId).restoredCopy, { sourceWorkspaceId: seeded.first, restoredAt: new Date(2026, 10, 2, 9).toISOString() });
+  assert.equal(Object.hasOwn(libraries.find(row => row.workspaceId === existing), 'restoredCopy'), false);
   const source = await seeded.storage.read(seeded.first);
   assert.deepEqual(copy.bundle.sourceVersions.map(v => [v.contentHash, v.contentText]), source.sourceVersions.map(v => [v.contentHash, v.contentText]));
   const oldCopy = copy.bundle.sourceVersions.find(v => v.contentText === '옛 문장 그대로 남긴다.');
@@ -257,7 +261,7 @@ test('restore into another account: new copies only, exact versions, byte-identi
   const restoredCapture = await target.readNaverCapture(captureCopy.ws.workspaceId, captureCopy.bundle.sourceVersions[0].id);
   assert.equal(sha(Buffer.from(await restoredCapture.photos[0].blob.arrayBuffer())), sha(NaverFixture.bytes));
   assert.equal(originals.rows.size, 1); assert.equal(sha(Buffer.from(await [...originals.rows.values()][0].blob.arrayBuffer())), sha(seeded.partZip));
-  const second = after.find(row => row.ws.title === '두 번째 자료공간');
+  const second = after.find(row => row.ws.title === '두 번째 자료공간 (11-02 복원)');
   assert.equal(second.posts[0].status, 'draft'); assert.equal(second.bundle.sources.length, 1);
   assert.equal((await seeded.storage.listWorkspaces()).length, 3, 'the source account is untouched');
 });
@@ -567,4 +571,55 @@ test('conflict recovery copies of account documents are counted as not included'
   const planned = await Full.plan({ storage });
   const row = planned.notIncluded.find(item => item.kind === 'accountDocRecoveries');
   assert.equal(row.count, 1); assert.ok(row.reason && row.whereToSave);
+});
+
+test('M4: a restore into the same account names each copy with its date, marks it, and the home lists every post once', async () => {
+  require('../assets/life/home.js');
+  const { listAccountPosts, accountPostLibraries } = globalThis.HaedoLife.HomeUI;
+  const { storage, first, second } = await seed();
+  const { built } = await fullBundle(storage);
+  const at = new Date(2026, 10, 2, 9), titles = async () => (await storage.listWorkspaces()).map(row => row.title);
+  const before = await listAccountPosts(storage, first);
+  const counts = posts => posts.reduce((map, row) => map.set(row.title, (map.get(row.title) || 0) + 1), new Map());
+  assert.ok([...counts(before.posts).values()].every(n => n === 1));
+  // A workspace that only looks like a copy by name is not one: the marker decides.
+  const lookalike = (await storage.createWorkspace('첫 자료공간 (11-02 복원)')).workspaceId;
+  await storage.savePhotoPost(lookalike, postDoc({ title: '이름만 비슷한 공간의 글', status: 'saved' }), 0);
+  await storage.setActive(first);
+  const run = async () => Full.restore(await Full.open(new Blob([await built.blob.arrayBuffer()])), { storage, kinds: RESTORABLE, verifyPhoto: null, now: () => at });
+  const once = await run(), twice = await run();
+  for (const report of [once, twice]) assert.deepEqual(report.items.filter(item => item.status !== 'restored'), []);
+  // Same day twice: every name differs from the original, the look-alike and each other.
+  assert.deepEqual(once.workspaces.map(ws => ws.targetTitle), ['첫 자료공간 (11-02 복원 2)', '두 번째 자료공간 (11-02 복원)']);
+  assert.deepEqual(twice.workspaces.map(ws => ws.targetTitle), ['첫 자료공간 (11-02 복원 3)', '두 번째 자료공간 (11-02 복원 2)']);
+  const names = await titles(); assert.equal(new Set(names).size, names.length, 'no two workspaces share a name');
+  assert.equal(await storage.getActive(), first);
+  const libraries = await storage.listAccountLibraries();
+  const copyOf = id => libraries.filter(row => row.restoredCopy?.sourceWorkspaceId === id).map(row => row.workspaceId);
+  assert.equal(copyOf(first).length, 2); assert.equal(copyOf(second).length, 2);
+  for (const row of libraries.filter(row => row.restoredCopy)) { assert.equal(row.eligible, true); assert.equal(row.restoredCopy.restoredAt, at.toISOString()); }
+  assert.equal(Object.hasOwn(libraries.find(row => row.workspaceId === lookalike), 'restoredCopy'), false);
+  // Home of the original: each post once, from the original libraries (and the unmarked look-alike).
+  const home = await listAccountPosts(storage, first);
+  assert.deepEqual(home.workspaces, [first, second, lookalike]);
+  assert.deepEqual([...counts(home.posts).entries()].filter(([, n]) => n !== 1), []);
+  assert.equal(home.posts.length, before.posts.length + 1);
+  // Opening a copy lists that copy in place of its original; still each post once.
+  const opened = copyOf(first)[0], inCopy = await listAccountPosts(storage, opened);
+  assert.deepEqual(inCopy.workspaces, [opened, second, lookalike]);
+  assert.deepEqual([...counts(inCopy.posts).entries()].filter(([, n]) => n !== 1), []);
+  assert.equal(inCopy.posts.length, home.posts.length);
+  assert.ok(inCopy.posts.filter(row => row.title === '저장한 사진 글').every(row => row.workspaceId === opened));
+  // Hidden from the home list only: a later backup still contains every copy and opens cleanly.
+  const again = await fullBundle(storage);
+  assert.equal(again.planned.workspaces.length, 7);
+  const reopened = await Full.open(again.built.blob);
+  assert.ok(reopened.entries.find(entry => entry.kind === 'accountDocuments').data.documents.every(doc => doc.prefix !== 'restored-copy'));
+  // A copy of a copy, opened, hides its whole line; a copy whose original is gone is listed.
+  const rows = [{ workspaceId: 'a' }, { workspaceId: 'c', restoredCopy: { sourceWorkspaceId: 'a' } }, { workspaceId: 'cc', restoredCopy: { sourceWorkspaceId: 'c' } },
+    { workspaceId: 'orphan', restoredCopy: { sourceWorkspaceId: 'gone' } }, { workspaceId: 'r', eligible: false }];
+  assert.deepEqual(accountPostLibraries(rows, 'a'), ['a', 'orphan']);
+  assert.deepEqual(accountPostLibraries(rows, 'cc'), ['cc', 'orphan']);
+  assert.deepEqual(accountPostLibraries(rows, 'c'), ['c', 'orphan']);
+  assert.deepEqual(accountPostLibraries(rows, 'r'), ['r', 'a', 'orphan']);
 });
