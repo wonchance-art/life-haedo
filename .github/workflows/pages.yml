@@ -398,6 +398,21 @@ jobs:
       - name: Verify public nine-slot reading, exact focus return and opt-in covers
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-public-reader-browser.cjs
+      - name: Verify batch import keeps exact CRLF originals and backups
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-batch-browser.cjs
+      - name: Verify the legacy life view through the account shell
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-browser.cjs
+      - name: Verify account sync boot requests and device recovery
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-sync-browser.cjs
+      - name: Verify rediscovery candidates and save-failure navigation
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-rediscovery-browser.cjs
+      - name: Verify record arrangement, selected page entry and backup restore
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/record-arrange-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
