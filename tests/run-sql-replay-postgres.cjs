@@ -5,10 +5,12 @@
  *    filename order (tests/helpers/supabase-pg-stub.cjs). The first failing file stops
  *    the run with its name, SQLSTATE and line.
  * 2. Applies supabase/operations/20261101-account-sync-install.sql on top (its six
- *    migrations then run a second time) and requires every result check to be true and
- *    the schema/grant/policy/bucket catalog to be unchanged.
+ *    migrations then run a second time), then the later installs that redefine the same
+ *    functions (20261102-blog-ai-authorship-install.sql), and requires every result check
+ *    to be true and the schema/grant/policy/bucket catalog to be unchanged.
  * 3. Runs supabase/operations/naver-status-check.sql and requires its 12 rows (1-11 plus 5.5).
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
+ * 4.5 Runs supabase/tests/blog-ai-authorship.sql (rolled back) on a fresh replayed copy.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -22,6 +24,12 @@ const pgStub = require('./helpers/supabase-pg-stub.cjs');
 const ROOT = pgStub.ROOT;
 const INSTALL = path.join(ROOT, 'supabase/operations/20261101-account-sync-install.sql');
 const STATUS = path.join(ROOT, 'supabase/operations/naver-status-check.sql');
+// Installs applied after INSTALL, in order. Each redefines functions INSTALL also
+// defines, so the replayed catalog is only restored once all of them have run.
+const LATER_INSTALLS = [
+  { file: path.join(ROOT, 'supabase/operations/20261102-blog-ai-authorship-install.sql'), checks: 5 },
+];
+const AUTHORSHIP_SQL = path.join(ROOT, 'supabase/tests/blog-ai-authorship.sql');
 const STUB_SCHEMAS = ['auth', 'storage', 'cron', 'vault', 'net', 'extensions'];
 
 function extraFiles() {
@@ -90,9 +98,14 @@ async function main() {
       const checks = results[results.length - 1].rows;
       assert.equal(checks.length, 4, 'account sync install result table');
       for (const row of checks) assert.equal(row.ok, true, `install check failed: ${row.check_name}`);
+      for (const later of LATER_INSTALLS) {
+        const rows = [].concat(await pgStub.applyFile(client, later.file)).at(-1).rows;
+        assert.equal(rows.length, later.checks, path.basename(later.file) + ' result table');
+        for (const row of rows) assert.equal(row.ok, true, `${path.basename(later.file)} check failed: ${row.check_name}`);
+      }
       const changed = diff(before, await catalog(client));
       assert.deepEqual(changed, [], 'account sync install changed the replayed catalog:\n' + changed.slice(0, 40).join('\n'));
-      pass(`account sync install re-applied on top in ${Date.now() - installStart}ms: ${checks.length} checks true, ${before.length} catalog entries unchanged`);
+      pass(`account sync install + ${LATER_INSTALLS.length} later install(s) re-applied on top in ${Date.now() - installStart}ms: ${checks.length}+${LATER_INSTALLS.reduce((n, l) => n + l.checks, 0)} checks true, ${before.length} catalog entries unchanged`);
 
       const status = [].concat(await pgStub.applyFile(client, STATUS));
       const rows = status[status.length - 1].rows;
@@ -112,6 +125,15 @@ async function main() {
       for (const [name, count] of parsed) assert.equal(inDb.get(name), count, `${name}: overload count differs from the scan`);
       pass(`final-definition scan matches the replayed catalog (${parsed.size} functions, ${summary.redefinedFunctions.length} redefined)`);
     } finally { await client.end(); }
+
+    const authorshipDb = await pg.cloneDatabase('replay_ai_authorship');
+    const authorship = await pg.connect(authorshipDb);
+    try {
+      const rows = [].concat(await pgStub.applyFile(authorship, AUTHORSHIP_SQL)).filter(result => result.rows?.length).at(-1).rows;
+      const result = rows[0].result;
+      assert.equal(result.failures, 0); assert(result.passed >= 25, 'blog AI authorship assertions ran: ' + result.passed);
+      pass(`supabase/tests/blog-ai-authorship.sql: ${result.passed} assertions on a fresh replayed copy (rolled back)`);
+    } finally { await authorship.end(); }
 
     const clone = await pg.cloneDatabase('replay_clone');
     const copy = await pg.connect(clone);
