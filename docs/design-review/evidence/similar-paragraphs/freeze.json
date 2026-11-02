@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "status": "frozen_before_eval_run",
-  "createdAtUTC": "2026-11-02T16:24:24.897Z",
-  "gitHead": "ba4f4a09e90de32b593fb7e46dd9fc45df54b88d",
+  "createdAtUTC": "2026-11-02T16:25:33.117Z",
+  "gitHead": "2025c6ffe813e9aa88e2024280a361f471f1b7d9",
   "productGitStatus": "clean",
   "parameters": {
     "variant": "TP",
@@ -12,8 +12,8 @@
     "seal.json": "5f453484dbda279fc598c260c4c7f8dfb6e61fde942e3d18aaececdadd7738b2",
     "preregistration.md": "251a08d6342cde447049684657e9a3aaa74d756cebd1789b0e21e6bd1ec96320",
     "candidate.js": "a3bdc3a22123f7b130d5285a47141d9ff05e860d9a52891d8334b803414f8f5b",
-    "run-experiment.cjs": "f553f9181117ee33ac5e52eafac2c97e0e4f1f5a7cbdc39398509d84c26ed461",
-    "evaluate.cjs": "e38b803c7d6566029a01a14075f32d7b1f545003eda9152ee7d6d796c99197d4",
+    "run-experiment.cjs": "c5d6211ce22f453125c505d7fd758b36694cd1e57a244ee8ea522e4d3d5b8ac1",
+    "evaluate.cjs": "642f6f89267cfbbef2dd679d88f30c133539253ecc9e6ae87b17f3e494e13b40",
     "harness.html": "6c2d51f537383a103b37f511937e3d8aa9bbed01f190a424dc06c6db9ca27c5f",
     "worker-host.html": "6c6eccb9faac864b738fde9b619af9a48a3c1b7554bb8e95446cf12b3d88f42a",
     "dev-output.json": "7442658268a4599e496217b22a111e8143f5506652e1c7dc6a0614f0c141b90c",

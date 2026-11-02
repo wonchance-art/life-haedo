@@ -1,7 +1,7 @@
 /* 비슷한 문단 실험 실행기. 정답(gold) 파일을 읽지 않는다.
  * node run-experiment.cjs --mode smoke [--fresh 1]
  * node run-experiment.cjs --mode dev
- * node run-experiment.cjs --mode eval --freeze-sha <freeze.json SHA-256>
+ * node run-experiment.cjs --mode heldout --freeze-sha <freeze.json SHA-256>   (평가 세트 1회 실행)
  * 실제 Linux Chromium(Playwright) 실행이며 Apple 기기 측정이 아니다. 개발 서버는 127.0.0.1:4189에서
  * 이 저장소를 그대로 제공한다. 모델·캐시는 커밋 제외 경로 .local/similar-paragraphs/에 둔다. */
 'use strict';
@@ -32,7 +32,7 @@ function args() {
     if (!process.argv[index].startsWith('--') || process.argv[index + 1] === undefined) throw new Error('--key value 형식이어야 합니다');
     values[process.argv[index].slice(2)] = process.argv[index + 1];
   }
-  if (!['smoke', 'dev', 'evaldry', 'eval'].includes(values.mode)) throw new Error('--mode smoke|dev|evaldry|eval');
+  if (!['smoke', 'dev', 'evaldry', 'heldout'].includes(values.mode)) throw new Error('--mode smoke|dev|evaldry|heldout');
   return values;
 }
 const options = args();
@@ -320,4 +320,4 @@ async function evaluation() {
   console.log(write(dry ? 'evaldry-output.json' : 'eval-output.json', output));
 }
 
-({ smoke, dev, evaldry: evaluation, eval: evaluation })[options.mode]().catch(error => { report.errors.push({ type: 'runner', message: error.message }); write(options.mode + '-failure' + (options.mode === 'eval' ? '-' + Date.now() : '') + '.json', report); console.error(error); process.exitCode = 1; });
+({ smoke, dev, evaldry: evaluation, heldout: evaluation })[options.mode]().catch(error => { report.errors.push({ type: 'runner', message: error.message }); write(options.mode === 'heldout' ? 'eval-failure-' + Date.now() + '.json' : options.mode + '-failure.json', report); console.error(error); process.exitCode = 1; });

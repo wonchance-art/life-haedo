@@ -1,7 +1,7 @@
 {
   "set": "dryrun",
   "freezeSHA256": null,
-  "evaluatorSHA256": "e38b803c7d6566029a01a14075f32d7b1f545003eda9152ee7d6d796c99197d4",
+  "evaluatorSHA256": "642f6f89267cfbbef2dd679d88f30c133539253ecc9e6ae87b17f3e494e13b40",
   "parameters": {
     "variant": "TP",
     "threshold": 0.61

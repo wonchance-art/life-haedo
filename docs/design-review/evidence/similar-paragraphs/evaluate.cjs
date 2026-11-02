@@ -1,6 +1,6 @@
 /* 비슷한 문단 실험 평가기. 실행기 결과(벡터)와 gold로 채점한다. 모델·브라우저·네트워크를 쓰지 않는다.
  * node evaluate.cjs --set dev    → dev-report.json (변형·임계값 선택. 개발 세트에서만)
- * node evaluate.cjs --set eval --freeze-sha <SHA>  → eval-report.json (봉인한 값으로 한 번 채점)
+ * node evaluate.cjs --set heldout --freeze-sha <SHA>  → eval-report.json (봉인한 값으로 평가 세트 채점)
  * 기반선은 제품 assets/life/rediscovery.js의 related()를 수정 없이 문단 단위로 호출한다. */
 'use strict';
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
@@ -18,7 +18,7 @@ const CRITERIA = Object.freeze({ hit3: 0.70, marginOverBaseline: 0.15, unrelated
 function args() {
   const values = {};
   for (let index = 2; index < process.argv.length; index += 2) values[process.argv[index].slice(2)] = process.argv[index + 1];
-  if (!['dev', 'eval', 'dryrun'].includes(values.set)) throw new Error('--set dev|eval|dryrun');
+  if (!['dev', 'heldout', 'dryrun'].includes(values.set)) throw new Error('--set dev|heldout|dryrun');
   return values;
 }
 const round = value => Math.round(value * 10000) / 10000;
