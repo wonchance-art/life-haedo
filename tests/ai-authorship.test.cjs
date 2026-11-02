@@ -137,7 +137,7 @@ test('the full backup bundle and the preservation ZIP restore the marks exactly'
   const draft = await storage.savePhotoPost(ws, doc([{ insert: '초안의 AI 문장', attributes: { author: 'ai' } }, { insert: '\n' }], { status: 'draft' }), 0);
   const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: { getItem: () => null }, uid: owner.userId });
   const context = { storage, timeline, originals: null };
-  const writer = Full.writer(await Full.plan(context), context, { appVersion: 'haedo-v174' });
+  const writer = Full.writer(await Full.plan(context), context, { appVersion: 'haedo-v175' });
   assert.deepEqual(await writer.collect(), []);
   const built = writer.finish({ partial: false });
   const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: { ...owner, userId: '99999999-2222-4333-8444-555555555555' } });
