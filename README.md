@@ -173,7 +173,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 | `sw.js` | 버전별 오프라인 앱 셸 |
 | `tests/` | Node 표준 테스트 러너를 사용하는 회귀 검사 |
 
-- [AGENTS.md](AGENTS.md): Claude/Codex 공통 규칙
+- [AGENTS.md](AGENTS.md): Claude/Codex 공통 규칙과 운영 체계(Claude 총괄). 기능별 상세는 [기능별 작업 계약](docs/agents/feature-contracts.md)
 - [프로젝트 스킬](.agents/skills/life-haedo-dev/SKILL.md): 실행·검증 절차
 - [현재 구조와 과거 설계](docs/architecture.md)
 - [GPT-6 설정 조사](docs/codex-setup.md)
