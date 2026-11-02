@@ -31,9 +31,9 @@
 | `life-sync` | T | `bed3142` (10-20) 계정 자료 목록 | 소유자 범위 부팅 GET만 허용하고 나머지 요청 0을 유지 | 3/3 통과 |
 | `life-collections` | **P** | `c65aa4b` (10-21) 네이버 연결 진입 버튼 | 수정하지 않음. 재현 절차는 아래 | — |
 | `life-rediscovery` | T + T | `bed3142` (10-20), `54ff4b3` (10-24) | 부팅 GET 범위 단언, 자료실 탐색 링크로 선택자 한정 | 3/3 통과 |
-| `record-arrange` | T | `a6cefb3` (10-23) 폴더로 이동 | 선택 목록 자신의 summary로 선택자 한정 | 연속 3/3 통과. 다른 검사의 미해결 1회 실패는 아래 |
+| `record-arrange` | T | `a6cefb3` (10-23) 폴더로 이동 | 선택 목록 자신의 summary로 선택자 한정. 저장 중 클릭 위치 이동(H1)도 고침 | 5/5 통과 |
 
-검사 실행이 덮어쓴 추적 스크린샷 `docs/design-review/evidence/rediscovery-{390,820,1440}.png`는 되돌렸다.
+검사 실행이 덮어쓴 추적 스크린샷 `docs/design-review/evidence/rediscovery-{390,820,1440}.png`는 되돌렸다. 이후 `life-rediscovery`의 게시용 사본 기본 위치를 `.local/life-rediscovery/`로 옮겼다. 추적 증거는 `REDISCOVERY_EVIDENCE_OUTPUT=docs/design-review/evidence`로 실행할 때만 다시 만든다.
 
 ## 검사별 근거
 
@@ -127,20 +127,22 @@
 | `life` | 23/23 ×3 | 40–62초 |
 | `life-sync` | 14/14 ×3 | 약 60초 |
 | `life-rediscovery` | 10/10 ×3 | 107–134초 |
-| `record-arrange` | 전체 5회 중 4회 14/14, 1회 13/14(아래 **미해결**). 마지막 연속 3회(y1–y3)는 14/14 | 94–191초 |
+| `record-arrange` | 선택자만 고친 상태: 5회 중 4회 14/14, 1회 13/14(아래 절). 저장 대기까지 고친 뒤: 14/14 ×5 | 93–191초 |
 
-### 미해결: record-arrange "selected page entry …" 1회 실패
+### 해결: record-arrange "selected page entry …" 1회 실패 — H1(검사 타이밍)
 
 이 실패는 이번에 고친 선택자(`:132` 부근)와 다른 검사다.
 
 | 항목 | 내용 |
 |---|---|
-| 실패 | 전체 실행 x2에서 1회 났다. `tests/record-arrange-browser.cjs:178` `uncheck()`이 "Clicking the checkbox did not change its state"로 실패했다. 대상은 두 번째 조각의 "전시에서 가장 오래 머문 빛 표시" 체크박스다. 호출 로그에는 클릭 직전 "element is not stable"이 두 번 나온다. |
-| 실패 화면 | 체크박스는 여전히 checked이고, 하단 상태는 "이 브라우저에 저장 중…"이었다. 바로 앞의 `내 코멘트` 입력이 저장을 시작한 시점과 겹친다. |
-| 재현 시도 | 이 검사만 단독 6회, 3개 병렬 부하로 12회 실행했다. 모두 통과해 0/18이다. 전체 검사 연속 3회도 통과했다. |
-| 가설 (미확인) | 하나는 저장 상태 갱신으로 레이아웃이 흔들리는 사이 클릭이 체크박스를 벗어났다는 것이다(검사 타이밍). 다른 하나는 저장 완료 후 다시 그리기가 저장 시점의 판으로 방금 바꾼 표시 선택을 되돌렸다는 것이다(제품의 입력 유실, P 후보). 관련 코드는 `assets/life/workbench-ui.js:1582`(코멘트 change → refresh)와 `:1590`(조각 표시 toggle → `mark(session)`·refresh)이다. |
-| 보존 | 실패 로그와 화면은 작업 환경에 보존했다. `record-arrange-x2.log`, `.local/record-arrange/failure-5.png` 사본. |
-| 처리 | 근본 원인을 확정하지 못했다. "간헐 실패"로 종결하지 않고 미해결로 남긴다. CI에 추가하기 전에 두 가설을 구분하는 실험이 필요하다. 저장 지연을 고정하는 모의 저장으로 코멘트 저장 중에 표시를 해제하고 저장 뒤 `part.enabled`를 확인한다. |
+| 실패 | 전체 실행 x2에서 1회 났다. `tests/record-arrange-browser.cjs:178` `uncheck()`이 "Clicking the checkbox did not change its state"로 실패했다. 대상은 두 번째 조각의 "전시에서 가장 오래 머문 빛 표시" 체크박스다. 호출 로그에는 클릭 직전 "element is not stable"이 두 번 나온다. 실패 화면의 상태는 "이 브라우저에 저장 중…"이었다. |
+| 가설 | H1(검사 타이밍): 저장 중 레이아웃 이동으로 클릭이 빗나간다. H2(제품 입력 유실): 저장 완료 후 다시 그리기가 방금 해제한 표시를 되돌린다(`workbench-ui.js:1582`, `:1590`). |
+| 고정 실험 | [`record-arrange-revert.cjs`](evidence/structure-workflow-20261102/repro/record-arrange-revert.cjs)를 쓴다. 검사가 쓰던 `storage.js` route hook 방식으로 `saveWorkbench`를 감싸, 코멘트 자동 저장을 명시 해제 전까지 붙잡는다. 붙잡힌 동안 체크박스를 한 번 클릭하고, 해제 전에 checked를 읽는다. 해제한 뒤 UI 저장 완료(`#wbStatus` saved, "저장 중" 없음)를 기다려 최종 checked와 저장된 `part.enabled`를 읽는다. |
+| 실험 결과 (10회, 모두 같은 값) | 클릭 전 checked=true. 붙잡힌 동안 상태 "이 브라우저에 저장 중…", **클릭 직후(해제 전) checked=false**, 저장소는 아직 true. **해제 후 최종 checked=false, 저장 `enabled=false`**, 코멘트도 저장됐다. 체크박스 요소는 교체되지 않았고 page error는 0. 저장 시작 3회(제목 반영, 코멘트, 표시 해제). 되돌림 0/10, 클릭 미전달 0/10. |
+| 레이아웃 | 체크박스의 문서 기준 y가 코멘트 입력 전 1626px → 저장 중 1735px → 저장 완료 후 1522px로 움직인다(위치를 잰 7회 모두 동일). 저장 상태 전환마다 100–200px씩 이동한다. |
+| 판정 | **H1.** 저장 중에도 클릭이 전달되면 해제는 유지되고 저장된다(H2 반박). 원래 실패는 Playwright가 위치를 잡은 뒤 저장 상태가 바뀌어 체크박스가 100–200px 움직인 사이에 클릭이 다른 곳에 떨어진 경우와 맞는다. 제품 결함은 아니다. |
+| 조치 | 검사는 코멘트 입력 뒤 UI 저장 완료(`#wbStatus[data-state=saved]`, "저장 중" 없음)와 저장된 코멘트를 기다린 다음 해제한다. "지금 저장" 뒤 대기 조건에는 저장된 `parts[1].enabled === false`를 추가했다(강화). 제한시간은 늘리지 않았고 단언도 줄이지 않았다. |
+| 결과 | 고친 뒤 전체 검사 5회 연속 14/14. 실패 로그·화면 사본은 작업 환경에 남겼다. |
 
 ## CI 추가용 명령 (갱신 후 통과하는 검사)
 
@@ -163,8 +165,8 @@
 | life-batch (갱신) | `node tests/life-batch-browser.cjs` | 없음(stdout) | 8/8 |
 | life (갱신) | `node tests/life-browser.cjs` | 없음(stdout) | 23/23 |
 | life-sync (갱신) | `node tests/life-sync-browser.cjs` | 없음(stdout) | 14/14 |
-| life-rediscovery (갱신) | `node tests/life-rediscovery-browser.cjs` | `.local/rediscovery/`, **추적 파일** `docs/design-review/evidence/rediscovery-{390,820,1440}.png` | 10/10. CI 작업 공간에서만 덮어씀 |
-| record-arrange (갱신) | `node tests/record-arrange-browser.cjs` | `.local/record-arrange/` | 14/14. 단, 위 미해결 실패를 정리한 뒤에 추가 |
+| life-rediscovery (갱신) | `node tests/life-rediscovery-browser.cjs` | `.local/rediscovery/`, 게시용 사본 `.local/life-rediscovery/`(`REDISCOVERY_EVIDENCE_OUTPUT`로 변경) | 10/10. 추적 파일을 건드리지 않음 |
+| record-arrange (갱신) | `node tests/record-arrange-browser.cjs` | `.local/record-arrange/` | 14/14 ×5 |
 
 `life-collections`는 P 판정이므로 제품 수정 뒤에 추가한다.
 
@@ -192,5 +194,4 @@ Chromium은 5060·5061 포트를 unsafe port로 거부한다. 다른 포트를 �
 - 실제 Apple 기기, 실제 Google OAuth, 운영 Supabase RLS.
 - `life` 검사의 예외가 처음 생긴 커밋. 저장소가 얕아(`bde6d4e` 경계) 그 이전 이력은 보지 않았다. 공용 저장소의 shallow 상태를 바꾸지 않으려고 `--unshallow`도 하지 않았다.
 - `life-collections` P의 의도 여부. 네이버 진입을 검토 화면에 남길지는 제품 결정이다. 현재 문서에는 근거가 없어 회귀로 판정했다.
-- `record-arrange` "selected page entry"의 1회 실패 원인(위 미해결 절).
 - CI 러너(`scripts/dev-server.py`, Ubuntu, Noto CJK)에서의 실행. 로컬에서는 `python3 -m http.server`로만 확인했다.

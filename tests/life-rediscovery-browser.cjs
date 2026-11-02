@@ -12,7 +12,10 @@ const { playwright, ready, settle, makeContext, observe, nav } = require('./unif
 const { current, abortWorkbenchWrites, go } = require('./life-workbench-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve(__dirname, '../.local/rediscovery');
-const evidence = path.resolve(__dirname, '../docs/design-review/evidence');
+// Published-size copies (rediscovery-<width>.png). Default stays untracked so
+// normal and CI runs never rewrite docs; regenerate the tracked evidence on purpose with
+// REDISCOVERY_EVIDENCE_OUTPUT=docs/design-review/evidence (same pattern as WORKBENCH_OUTPUT).
+const evidence = process.env.REDISCOVERY_EVIDENCE_OUTPUT ? path.resolve(process.env.REDISCOVERY_EVIDENCE_OUTPUT) : path.resolve(__dirname, '../.local/life-rediscovery');
 const longTitle = '정원 산책 중 작은 나무의 그림자와 빛을 따라 걷다가 떠오른 질문 — 오래전에 읽은 문장과 오늘의 관찰을 천천히 이어 보는 한글 기록';
 const seedOld = '처음 정원에서 남긴 기록🌱\n정원 산책 관찰 빛 나무. 잎사귀를 오래 바라보니 걷는 속도도 달라졌다.\n다음에는 무엇을 더 자세히 볼 수 있을까?';
 const seedNew = '최신 버전에서는 여행 예산과 기차표 예약을 정리했다. 이전 정원 구절을 대체해서 보여 주면 안 된다.';

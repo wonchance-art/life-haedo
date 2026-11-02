@@ -175,8 +175,15 @@ async function main() {
       const entry = page.locator(`article[data-entry-id="${entryId}"]`);
       for (const details of await entry.locator('details').all()) if (!(await details.evaluate(el => el.open))) await details.locator('summary').first().click();
       await entry.getByLabel('내 코멘트', { exact: true }).fill('내가 고른 조각에서 이어진 질문');
+      // The comment autosave moves this form by 100-200px when it starts and ends
+      // (docs/design-review/structure-workflow-review-20261102-b4.md, held-save
+      // experiment). A click positioned before that move can land elsewhere, so act
+      // only after the save has completed in the UI and in storage.
+      await page.waitForFunction(() => { const s = document.querySelector('#wbStatus'); return s?.dataset.state === 'saved' && !/저장 중/.test(s.textContent); });
+      await waitSaved(page, w => w.page.entries[0].note === '내가 고른 조각에서 이어진 질문');
       await entry.locator(`[data-part-version-id="${f.refs[1].versionId}"] input[type=checkbox]`).uncheck();
-      await page.getByRole('button', { name: '지금 저장', exact: true }).click(); await waitSaved(page, w => w.page.entries[0].note === '내가 고른 조각에서 이어진 질문');
+      await page.getByRole('button', { name: '지금 저장', exact: true }).click();
+      await waitSaved(page, w => w.page.entries[0].note === '내가 고른 조각에서 이어진 질문' && w.page.entries[0].parts[1].enabled === false);
       await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor(); let text = await page.locator('#wbVisitor').textContent();
       assert(text.includes(oldBody)); assert(!text.includes(newBody)); assert(!text.includes('오후 네 시의 빛.')); assert(text.includes('내가 고른 조각에서 이어진 질문'));
       await page.reload(); await ready(page); await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor(); assert((await page.locator('#wbVisitor').textContent()).includes(oldBody));
