@@ -232,7 +232,9 @@
     main.addEventListener('pointerdown', editingInput);
     main.addEventListener('keydown', editingInput);
     main.addEventListener('wheel', editingInput, { passive: true });
-    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
+    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError,
+      // A post that attaches the item opens in the same blog reader as search results do.
+      openPost: postId => navigate('page', { blogContext: true, searchTarget: { photoPostId: postId }, pagePreview: false }) });
     const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
