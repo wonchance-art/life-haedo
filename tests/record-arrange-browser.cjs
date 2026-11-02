@@ -129,12 +129,16 @@ async function main() {
       assert.match(await page.locator('.life-status').textContent(),/100/);
       await page.locator('#lifeSearch').fill('검색되지 않는 말');
       assert.match(await page.locator('#lifeSelectionStatus').textContent(),/100/);
-      await page.locator('#lifeSelectionBar summary').click();
+      // Since 2026-10-23 (docs/design-review/material-folders.md:3,14 "선택 자료 이동") the
+      // selection bar also holds the folder-move <summary> (assets/life/ui.js:3016-3021).
+      // Address the selection list's own summary exactly; the 100/99/0 counts stay.
+      const selectionSummary = page.locator('#lifeSelectionBar .life-selection-details > summary');
+      await selectionSummary.click();
       assert.equal(await page.locator('#lifeSelectionBar .life-selection-list li').count(),100);
       await page.locator('#lifeSelectionBar .life-selection-list li').first().getByRole('button').click();
-      assert.match(await page.locator('#lifeSelectionBar summary').textContent(),/99/);
+      assert.match(await selectionSummary.textContent(),/99/);
       await page.getByRole('button',{name:'선택 모두 해제',exact:true}).click();
-      assert.match(await page.locator('#lifeSelectionBar summary').textContent(),/0/);
+      assert.match(await selectionSummary.textContent(),/0/);
       assert(await page.locator('#lifeSelectionBar .life-arrange-page').isDisabled());
       assert.deepEqual(await current(page),before);
     });

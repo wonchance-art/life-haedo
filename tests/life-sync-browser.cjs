@@ -257,7 +257,14 @@ async function main() {
     const id = await a.page.evaluate(() => HaedoLife.Shell.storage.getActive());
     await check('login alone never uploads local work; explicit opt-in uploads',async () => {
       await append(a.page,id,'익명 첫 자료');
-      assert.equal(server.requests.length,0,'authentication alone issued workspace data requests');
+      // Contract (docs/design-review/account-materials.md:17-19, 2026-10-20): "인증된
+      // 내 자료 부팅 시 현재 계정의 목록을 GET" — an owner-scoped read of the private
+      // life_account_materials pointer list, once per booted device. Anything else
+      // (workspace list/read/write, another owner) is still a failure.
+      const bootReads = server.requests.filter(r => r.kind === 'account-materials-list');
+      assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'),[],'authentication alone issued workspace data requests');
+      assert.deepEqual([...new Set(bootReads.map(r => r.device))].sort(),['a','b'],'each booted device lists only its own account materials');
+      assert.ok(bootReads.every(r => r.owner === accounts.a.id),'account materials list crossed accounts');
       await loginUI(a.page);
       assert.equal(server.writes().length,0,'login uploaded an unbound workspace');
       assert.equal(await state(a.page,id),null);
