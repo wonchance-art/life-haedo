@@ -5,6 +5,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {execFileSync}=require('node:child_process'),{randomUUID,createHash}=require('node:crypto');
 if(process.argv.length!==2)throw Error('No endpoint, credential or SQL options are accepted.');
 const root=path.resolve(__dirname,'..'),migration='supabase/migrations/20261029112456_naver_observed_inventory_baseline.sql';
+const enableMigration='supabase/migrations/20261102100000_naver_enable_schedules_first_inventory.sql',enableSource=fs.readFileSync(path.join(root,enableMigration),'utf8');
+const conflictSource=fs.readFileSync(path.join(root,'supabase/migrations/20261021094614_naver_conflict_http409.sql'),'utf8');
 const source=fs.readFileSync(path.join(root,migration),'utf8'),image='postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const label='haedo.naver-observed-owner',owner=randomUUID(),container='haedo-naver-observed-'+process.pid+'-'+owner,database='haedo_naver_observed',env={...process.env};
 for(const key of Object.keys(env))if(/^(PG|DATABASE_URL$|SUPABASE|HAEDO_TEST_|DOCKER_HOST$|DOCKER_CONTEXT$|DOCKER_TLS$|DOCKER_TLS_VERIFY$|DOCKER_CERT_PATH$)/.test(key))delete env[key];
@@ -15,7 +17,7 @@ const json=x=>JSON.parse(x.split('\n').findLast(line=>/^(?:\{|\[|null|true|false
 const actor=(who,q)=>json(sql("set role authenticated;select set_config('request.jwt.claims',"+lit(JSON.stringify({sub:who,role:'authenticated'}))+",false);"+q));
 const worker=q=>json(sql('set role service_role;'+q));
 const entry=n=>({logNo:String(n),title:'합성 관측 '+n,publishedAt:null});
-const A=randomUUID(),B=randomUUID(),checks=[],report={pass:false,image,migration,checks,hostedDatabaseAccess:false,realNaverAccess:false,cronActivated:false};
+const A=randomUUID(),B=randomUUID(),checks=[],report={pass:false,image,migration,enableMigration,checks,hostedDatabaseAccess:false,realNaverAccess:false,cronActivated:false};
 let started=false,counter=0;
 const check=(name,fn)=>{fn();checks.push(name);console.log('PASS '+name);};
 const fresh=()=>{const sub=actor(A,`select public.life_naver_save('${randomUUID()}','observed_${++counter}',0,false);`);sub.owner=A;actor(A,`select public.life_naver_inventory_start('${sub.id}',${sub.revision});`);return sub;};
@@ -74,6 +76,117 @@ async function main(){
    assert.equal(sql("select has_function_privilege('anon','public.life_naver_inventory_finish_observed(uuid,uuid,bigint,integer,jsonb,integer,integer,text,jsonb)','execute') or has_function_privilege('authenticated','public.life_naver_inventory_finish_observed(uuid,uuid,bigint,integer,jsonb,integer,integer,text,jsonb)','execute');"),'f');
   });
   check('old lease receipts cannot be retroactively converted into new witnesses',()=>errorLike(()=>finish(lease,rows32.slice(30),31,null,probe(rows32.slice(0,30),rows32.slice(30),31)),'observation_legacy_receipt'));
+  // 2026-11-02: saving a connection as enabled schedules its first inventory row.
+  const saveBody=/create or replace function haedo_naver_private\.save\([^$]+?as \$\$([\s\S]*?)\$\$;/,oldSaveBody=conflictSource.match(saveBody)[1].trim(),newSaveBody=enableSource.match(saveBody)[1].trim();
+  const anchor=" end if;\n return (to_jsonb(sub)";assert.equal(oldSaveBody.split(anchor).length,2);
+  const saveMeta=()=>sql("select jsonb_agg(jsonb_build_array(p.oid::regprocedure::text,pg_get_userbyid(p.proowner),p.proacl::text,p.prosecdef,p.proconfig,p.provolatile,pg_get_function_result(p.oid)) order by p.oid) from pg_proc p where p.oid in ('haedo_naver_private.save(uuid,text,bigint,boolean)'::regprocedure,'public.life_naver_save(uuid,text,bigint,boolean)'::regprocedure);");
+  const saveSrc=()=>sql("select prosrc from pg_proc where oid='haedo_naver_private.save(uuid,text,bigint,boolean)'::regprocedure;");
+  const allInventory=()=>sql('select coalesce(jsonb_agg(to_jsonb(i) order by subscription_id),\'[]\') from haedo_naver_private.inventory i;');
+  const rowCount=sub=>Number(sql(`select count(*) from haedo_naver_private.inventory where subscription_id='${sub.id}';`));
+  const save=(workspace,blog,revision,enabled)=>{const s=actor(A,`select public.life_naver_save('${workspace}','${blog}',${revision},${enabled});`);s.owner=A;return s;};
+  const serviceClaim=()=>worker('select public.life_naver_inventory_claim(2);');
+  const legacyOn=save(randomUUID(),'legacy_enabled',0,true),legacyOff=save(randomUUID(),'legacy_disabled',0,false);
+  // Backfill conflict paths: enabled connections whose rows already exist (complete baseline / running lease).
+  const legacyComplete=save(randomUUID(),'legacy_complete',0,true);start(legacyComplete);finish(claim(legacyComplete),[entry(17),entry(16)],2,null);
+  const legacyRunning=save(randomUUID(),'legacy_running',0,true);start(legacyRunning);const runningLease=claim(legacyRunning);
+  const rowText=sub=>sql(`select to_jsonb(i)::text from haedo_naver_private.inventory i where subscription_id='${sub.id}';`);
+  const completeText=rowText(legacyComplete),runningText=rowText(legacyRunning);
+  const naverCounts=()=>sql(`select jsonb_build_object(${['haedo_naver_private.inventory','haedo_naver_private.inventory_entries','haedo_naver_private.inventory_seen','haedo_naver_private.capture_jobs','haedo_naver_private.capture_receipts','haedo_naver_private.inventory_scan_observations','haedo_naver_private.inventory_observation_receipts','public.life_naver_subscriptions','public.life_naver_captures'].map(t=>`'${t}',(select count(*) from ${t})`).join(',')});`);
+  const inventoryBefore=allInventory(),saveMetaBefore=saveMeta(),countsBefore=naverCounts();
+  check('pre-change save leaves an enabled connection without inventory, so the service claim skips it',()=>{
+   assert.equal(saveSrc(),oldSaveBody);assert.equal(rowCount(legacyOn),0);assert.deepEqual(serviceClaim(),[]);
+   const complete=inv(legacyComplete),running=inv(legacyRunning);
+   assert.equal(complete.status,'complete');assert.ok(complete.baseline_completed_at);assert.equal(complete.baseline_count,2);
+   assert.equal(running.status,'running');assert.ok(running.lease_token);assert.equal(running.lease_token,runningLease.lease_token);
+  });
+  const unchangedSinceBefore=()=>{assert.equal(saveSrc(),oldSaveBody);assert.equal(saveMeta(),saveMetaBefore);assert.equal(allInventory(),inventoryBefore);assert.equal(naverCounts(),countsBefore);assert.equal(rowCount(legacyOn),0);};
+  check('enable-schedule migration failure rolls back the save replacement and the backfill',()=>{
+   errorLike(()=>sql(enableSource.replace(/commit;\s*$/,'select 1/0;commit;')),'division by zero');unchangedSinceBefore();
+  });
+  check('row guard violations during the backfill roll back the whole install with a fixed code',()=>{
+   // Test-only trigger outside the migration forces each guarded mismatch while the backfill inserts.
+   sql(`create function public.haedo_test_force_guard() returns trigger language plpgsql as $$begin
+     if pg_trigger_depth()>1 then return null;end if;
+     case current_setting('haedo_test.violation',true)
+      when 'prior_row' then update haedo_naver_private.inventory set last_error='forced_guard' where subscription_id<>new.subscription_id;
+      when 'other_table' then insert into haedo_naver_private.inventory_seen values(new.subscription_id,gen_random_uuid(),'1');
+      when 'extra_inventory' then insert into haedo_naver_private.inventory(subscription_id,owner_id) select s.id,s.owner_id from public.life_naver_subscriptions s
+        where not s.enabled and not exists(select 1 from haedo_naver_private.inventory i where i.subscription_id=s.id) limit 1;
+      else null;
+     end case;return null;end$$;
+    create trigger haedo_test_force_guard after insert on haedo_naver_private.inventory for each row execute function public.haedo_test_force_guard();`);
+   try{
+    for(const mode of ['prior_row','other_table','extra_inventory']){
+     errorLike(()=>sql(`set haedo_test.violation='${mode}';`+enableSource),'life_naver_enable_guard_mismatch');unchangedSinceBefore();
+    }
+   }finally{sql('drop trigger haedo_test_force_guard on haedo_naver_private.inventory;drop function public.haedo_test_force_guard();');}
+   assert.equal(sql("select count(*) from pg_trigger where tgrelid='haedo_naver_private.inventory'::regclass and not tgisinternal;"),'0');unchangedSinceBefore();
+  });
+  sql(enableSource);
+  check('install changes only the save body, keeps ACL/definer/search_path and backfills only enabled connections without rows',()=>{
+   assert.equal(newSaveBody,oldSaveBody.replace(anchor," end if;\n if sub.enabled then\n  insert into haedo_naver_private.inventory(subscription_id,owner_id) values(sub.id,sub.owner_id) on conflict (subscription_id) do nothing;\n end if;\n return (to_jsonb(sub)"));
+   assert.equal(saveSrc(),newSaveBody);assert.equal(saveMeta(),saveMetaBefore);
+   const after=JSON.parse(allInventory()),before=JSON.parse(inventoryBefore);
+   assert.deepEqual(after.filter(row=>row.subscription_id!==legacyOn.id),before,'existing inventory rows stay byte-exact');
+   assert.equal(rowText(legacyComplete),completeText,'enabled complete-baseline row is byte-exact after the backfill conflict');
+   assert.equal(rowText(legacyRunning),runningText,'enabled running/leased row is byte-exact after the backfill conflict');
+   const counts=JSON.parse(naverCounts()),prior=JSON.parse(countsBefore);assert.equal(counts['haedo_naver_private.inventory'],prior['haedo_naver_private.inventory']+1);
+   assert.deepEqual({...counts,'haedo_naver_private.inventory':0},{...prior,'haedo_naver_private.inventory':0});
+   assert.equal(rowCount(legacyOff),0);const row=inv(legacyOn);assert.equal(row.status,'pending');assert.equal(row.page,1);assert.equal(row.baseline_completed_at,null);
+   const reinstalled=allInventory();sql(enableSource);assert.equal(allInventory(),reinstalled,'reinstall is idempotent');assert.equal(saveMeta(),saveMetaBefore);
+   assert.equal(rowText(legacyRunning),runningText);assert.equal(finish(runningLease,[entry(19)],1,null).inventory.status,'complete');
+   const claimed=serviceClaim();assert.deepEqual(claimed.map(l=>l.subscription_id),[legacyOn.id]);assert.equal(claimed[0].page,1);
+   finish(claimed[0],[entry(7)],1,null);assert.equal(inv(legacyOn).status,'complete');
+  });
+  let enabledNew;
+  check('case1 new connection saved enabled gets a pending page-1 inventory row and the service claim picks it',()=>{
+   enabledNew=save(randomUUID(),'enabled_new',0,true);const row=inv(enabledNew);
+   assert.equal(row.status,'pending');assert.equal(row.page,1);assert.equal(row.revision,1);assert.equal(row.owner_id,A);assert.ok(row.scan_id);
+   assert.equal(row.baseline_completed_at,null);assert.equal(row.lease_token,null);assert.equal(row.last_error,null);
+   assert.equal(sql(`select next_check_at<=clock_timestamp() from haedo_naver_private.inventory where subscription_id='${enabledNew.id}';`),'t');
+   const claimed=serviceClaim();assert.deepEqual(claimed.map(l=>l.subscription_id),[enabledNew.id]);assert.equal(claimed[0].page,1);assert.equal(claimed[0].scan_id,row.scan_id);
+   assert.equal(claimed[0].subscription_revision,enabledNew.revision);
+   const r=finish(claimed[0],[entry(9),entry(8)],2,null);assert.equal(r.inventory.status,'complete');assert.equal(inv(enabledNew).baseline_method,'count_exact');
+  });
+  let disabledNew;
+  check('case2 new connection saved disabled still gets no inventory row',()=>{
+   disabledNew=save(randomUUID(),'disabled_new',0,false);assert.equal(disabledNew.enabled,false);assert.equal(rowCount(disabledNew),0);assert.deepEqual(serviceClaim(),[]);
+  });
+  check('case3 enabling a disabled connection without a row creates the pending row',()=>{
+   toggle(disabledNew,true);assert.equal(disabledNew.enabled,true);assert.equal(rowCount(disabledNew),1);
+   const row=inv(disabledNew);assert.equal(row.status,'pending');assert.equal(row.page,1);assert.equal(row.baseline_completed_at,null);
+   const claimed=serviceClaim();assert.deepEqual(claimed.map(l=>l.subscription_id),[disabledNew.id]);finish(claimed[0],[entry(11)],1,null);
+  });
+  check('case4 disabling and re-enabling a connection with a complete baseline never overwrites its row',()=>{
+   const before=inv(enabledNew);assert.equal(before.status,'complete');assert.ok(before.baseline_completed_at);assert.ok(before.baseline_scan_id);assert.equal(before.baseline_count,2);
+   toggle(enabledNew,false);assert.deepEqual(inv(enabledNew),before);toggle(enabledNew,true);const after=inv(enabledNew);
+   for(const key of ['baseline_completed_at','baseline_scan_id','baseline_count','baseline_method','status','page','scan_id'])assert.deepEqual(after[key],before[key],key);
+   assert.deepEqual(after,before,'the whole existing row is unchanged');
+  });
+  check('case5 CAS conflicts stay life_naver_conflict and create no subscription or inventory row',()=>{
+   const workspace=randomUUID(),rows=allInventory();
+   errorLike(()=>save(workspace,'conflict_new',1,true),'life_naver_conflict');
+   assert.equal(sql(`select count(*) from public.life_naver_subscriptions where workspace_id='${workspace}';`),'0');
+   const off=save(randomUUID(),'conflict_existing',0,false),stored=allInventory();
+   errorLike(()=>save(off.workspace_id,off.blog_id,off.revision+1,true),'life_naver_conflict');
+   assert.equal(rowCount(off),0);assert.equal(allInventory(),stored);assert.equal(JSON.parse(stored).length,JSON.parse(rows).length);
+   assert.equal(sql(`select enabled::text||':'||revision from public.life_naver_subscriptions where id='${off.id}';`),'false:'+off.revision);
+  });
+  check('case6 inventory_start on the automatically created pending row returns it unchanged',()=>{
+   const sub=save(randomUUID(),'start_after_auto',0,true),before=inv(sub),view=start(sub);
+   assert.equal(view.status,'pending');assert.equal(view.page,1);assert.equal(view.scan_id,before.scan_id);assert.equal(view.revision,before.revision);
+   assert.deepEqual(inv(sub),before);const claimed=serviceClaim();assert.deepEqual(claimed.map(l=>l.subscription_id),[sub.id]);finish(claimed[0],[entry(13)],1,null);
+  });
+  check('case7 runtime ready=false still rejects enabling with setup_required and creates no row',()=>{
+   const off=save(randomUUID(),'setup_existing',0,false),rows=allInventory(),workspace=randomUUID();
+   sql('update haedo_naver_private.runtime set ready=false;');
+   try{
+    errorLike(()=>save(workspace,'setup_new',0,true),'life_naver_setup_required');
+    errorLike(()=>save(off.workspace_id,off.blog_id,off.revision,true),'life_naver_setup_required');
+    assert.equal(sql(`select count(*) from public.life_naver_subscriptions where workspace_id='${workspace}';`),'0');
+    assert.equal(rowCount(off),0);assert.equal(allInventory(),rows);
+   }finally{sql('update haedo_naver_private.runtime set ready=true;');}
+  });
   const observed=fresh();let first;
   check('one complete witnessed mismatched scan remains partial and does not auto-collect baseline posts',()=>{
    first=scan(observed,rows32,31);assert.equal(first.result.observed_verified,true);assert.equal(first.result.baseline_promoted,false);
@@ -178,7 +291,7 @@ async function main(){
   report.pass=true;
  }finally{
   if(started){const info=JSON.parse(docker(['inspect',container,'--format','{{json .}}']));assert.equal(info.Config.Labels[label],owner);docker(['rm','--force','--volumes',info.Id]);report.containerRemoved=true;}
-  report.migrationSHA256=createHash('sha256').update(source).digest('hex');fs.mkdirSync(path.join(root,'.local/naver-observed-baseline'),{recursive:true});fs.writeFileSync(path.join(root,'.local/naver-observed-baseline/report.json'),JSON.stringify(report,null,2)+'\n');
+  report.migrationSHA256=createHash('sha256').update(source).digest('hex');report.enableMigrationSHA256=createHash('sha256').update(enableSource).digest('hex');fs.mkdirSync(path.join(root,'.local/naver-observed-baseline'),{recursive:true});fs.writeFileSync(path.join(root,'.local/naver-observed-baseline/report.json'),JSON.stringify(report,null,2)+'\n');
  }
  console.log(checks.length+' observed baseline PostgreSQL checks passed; owned container removed.');
 }

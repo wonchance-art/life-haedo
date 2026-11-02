@@ -7,7 +7,7 @@
  * 2. Applies supabase/operations/20261101-account-sync-install.sql on top (its six
  *    migrations then run a second time) and requires every result check to be true and
  *    the schema/grant/policy/bucket catalog to be unchanged.
- * 3. Runs supabase/operations/naver-status-check.sql and requires its 11 rows.
+ * 3. Runs supabase/operations/naver-status-check.sql and requires its 12 rows (1-11 plus 5.5).
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
@@ -96,7 +96,7 @@ async function main() {
 
       const status = [].concat(await pgStub.applyFile(client, STATUS));
       const rows = status[status.length - 1].rows;
-      assert.deepEqual(rows.map(row => Number(row.ord)), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'naver status check rows');
+      assert.deepEqual(rows.map(row => Number(row.ord)), [1, 2, 3, 4, 5, 5.5, 6, 7, 8, 9, 10, 11], 'naver status check rows');
       assert(rows.every(row => typeof row.item === 'string' && row.value !== null), 'every status row has a value');
       pass(`naver status check returned ${rows.length} rows (${rows.map(row => `${row.ord}=${row.value}`).join('; ')})`);
 

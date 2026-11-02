@@ -2,7 +2,7 @@
 
 <!-- 생성: node scripts/sql-final-definitions.mjs — 직접 고치지 않는다. 마이그레이션을 바꾼 뒤 다시 생성한다. -->
 
-`supabase/migrations/`의 28개 파일을 파일 이름 순서로 읽어, 뒤 마이그레이션이 다시 정의하는 함수·테이블을 모았다.
+`supabase/migrations/`의 29개 파일을 파일 이름 순서로 읽어, 뒤 마이그레이션이 다시 정의하는 함수·테이블을 모았다.
 **최종** 열의 파일이 현재 정의를 담는다. 새 변경은 그 파일의 정의에서 출발한다. 이 문서는 목록만 보여 주며 마이그레이션을 고치지 않는다.
 
 - 함수: `create [or replace] function`이 둘 이상의 파일에 있는 경우. 같은 파일 안의 반복은 한 번으로 센다.
@@ -15,6 +15,7 @@
 | --- | ---: | --- | --- |
 | `public.life_composition_valid(jsonb)` | 6 | `20261101140000_life_sync_edit_times`<br>이전 본문은 `public.life_composition_valid_content`로 이름을 바꿔 유지 | `20261006010000_life_compositions`, `20261008010000_life_composition_books`, `20261008020000_life_composition_insights`, `20261008030000_life_composition_editions`, `20261012010000_life_page_posts` |
 | `haedo_naver_private.inventory_claim(integer, uuid, uuid)` | 3 | `20261029112456_naver_observed_inventory_baseline` | `20261021113658_life_naver_captures`, `20261029040646_naver_inventory_automatic_rescan` |
+| `haedo_naver_private.save(uuid, text, bigint, boolean)` | 3 | `20261102100000_naver_enable_schedules_first_inventory` | `20261021093111_life_naver_subscriptions`, `20261021094614_naver_conflict_http409` |
 | `haedo_blog_private.delete_post(uuid, bigint)` | 2 | `20261101160000_life_blog_delete_guard` | `20261101091500_life_blog_account_sync` |
 | `haedo_blog_private.list(uuid)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.prepare_asset(uuid, text, text, bigint, text, integer, integer)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
@@ -28,7 +29,6 @@
 | `haedo_material_private.put(uuid, uuid, bigint, jsonb)` | 2 | `20261022031304_life_material_edited_copy_markers` | `20261019005829_life_material_continuity` |
 | `haedo_material_private.valid(jsonb)` | 2 | `20261022031304_life_material_edited_copy_markers` | `20261019005829_life_material_continuity` |
 | `haedo_naver_private.inventory_finish(uuid, uuid, bigint, integer, jsonb, integer, integer, text)` | 2 | `20261029112456_naver_observed_inventory_baseline` | `20261021113658_life_naver_captures` |
-| `haedo_naver_private.save(uuid, text, bigint, boolean)` | 2 | `20261021094614_naver_conflict_http409` | `20261021093111_life_naver_subscriptions` |
 | `public.life_account_document_put(text, bigint, uuid, jsonb, boolean, timestamp with time zone)` | 2 | `20261101150000_life_account_documents_owner_lock` | `20261101090000_life_account_documents` |
 | `public.life_library_meta_valid(jsonb, uuid, jsonb)` | 2 | `20261101140000_life_sync_edit_times` | `20261023160149_account_library_default_and_metadata` |
 | `public.life_library_original_put(uuid, uuid, jsonb)` | 2 | `20261023163156_account_library_original_owner_variable` | `20261023160149_account_library_default_and_metadata` |
