@@ -6,7 +6,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
-const { databaseSnapshot } = require('./local-post-finder-browser.cjs');
+const { databaseSnapshot, accountDocsCycled } = require('./local-post-finder-browser.cjs');
 const PhotoPost = require('../assets/life/photo-post.js');
 const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
 const output = path.resolve('.local/blog-autosave');
@@ -150,7 +150,8 @@ async function main() {
       await accepted(p, '전환 뒤 쓰면 안 되는 입력', '이 입력은 이전 계정의 지연 작업\n'); await p.waitForFunction(() => window.__autosaveHeld === true);
       await p.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
       await p.waitForFunction(id => HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id); await ready(p); await settle(p);
-      const bBefore = await databaseSnapshot(p); await p.evaluate(() => __autosaveRelease()); await p.waitForFunction(() => !!window.__autosaveHeldResult);
+      // B's own account-docs engine records B's first cursor/schema; the baseline follows that cycle.
+      await accountDocsCycled(p, accounts.b.id); const bBefore = await databaseSnapshot(p); await p.evaluate(() => __autosaveRelease()); await p.waitForFunction(() => !!window.__autosaveHeldResult);
       assert.equal(await p.evaluate(() => __autosaveHeldResult), 'storage_scope_closed'); assert.deepEqual(await databaseSnapshot(p), bBefore);
       assert(!(await p.locator('#lifeApp').innerText()).includes('전환 뒤 쓰면 안 되는 입력'));
       const denied = await p.evaluate(async ws => { try { await HaedoLife.Shell.storage.read(ws); return null; } catch (e) { return e.code; } }, baseline.workspaceId); assert.equal(denied, 'workspace_access_denied');
