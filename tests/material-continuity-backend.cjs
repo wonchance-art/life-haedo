@@ -54,7 +54,7 @@ async function main() {
   }
   try {
     await fs.mkdir(out, { recursive: true }); server.docker(['exec', server.container, 'createdb', '-U', 'postgres', database]); created = true;
-    for (const file of ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration, 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql']) psql(await fs.readFile(path.resolve(__dirname, '..', file), 'utf8'));
+    for (const file of ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration, 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql']) psql(await fs.readFile(path.resolve(__dirname, '..', file), 'utf8'));
     psql(await fs.readFile(path.resolve(__dirname, '..', migration), 'utf8'));
     remote = Remote.create({ auth, model: Model, clientFactory: Platform.clientFactory });
     let bundle = Core.createWorkspace();

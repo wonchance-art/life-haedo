@@ -14,7 +14,7 @@ class LocalSQLSeriesCloud extends LocalSQLBlogCloud {
       'create table auth.users(id uuid primary key); create function public.life_composition_valid(jsonb) returns boolean language sql immutable as $$select true$$;',
       await read('supabase/migrations/20261005120000_life_public_pages.sql'),
       await read('supabase/migrations/20261012010000_life_page_posts.sql'),
-      await read('supabase/migrations/20261017144744_life_blog_originals.sql'), await read('supabase/migrations/20261101091500_life_blog_account_sync.sql'), await read('supabase/migrations/20261101160000_life_blog_delete_guard.sql'), await read('supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'),
+      await read('supabase/migrations/20261017144744_life_blog_originals.sql'), await read('supabase/migrations/20261101091500_life_blog_account_sync.sql'), await read('supabase/migrations/20261101160000_life_blog_delete_guard.sql'), await read('supabase/migrations/20261102110000_life_blog_ai_authorship.sql'), await read('supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'),
       'insert into auth.users(id) values ' + Object.values(accounts).map(account => '(' + literal(account.id) + '::uuid)').join(',') + ';'].join('\n');
     this.docker(['exec', '-i', this.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', this.database], source);
   }

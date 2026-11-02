@@ -12,7 +12,7 @@ const { LocalSQLBlogCloud, digest } = require('./blog-completion-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const output = path.resolve(__dirname, '../.local/account-blog-continuity');
-const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'];
+const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'];
 const runtime = ['assets/life/account-blog-ui.js', 'assets/life/blog-sync.js', 'assets/life/blog-remote.js', 'assets/life/storage.js',
   'assets/life/photo-post-ui.js', 'assets/life/blog-manager.js', 'assets/life/ui.js', 'assets/life/home.js', 'assets/platform-auth.js', 'assets/life/home.css', 'sw.js'];
 
