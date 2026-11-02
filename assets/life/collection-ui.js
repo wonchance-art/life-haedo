@@ -3,7 +3,7 @@
   'use strict';
   const C = root.HaedoLife.Collection, Media = root.HaedoLife.CollectionMedia;
   const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined && text !== null) n.textContent = text; if (cls) n.className = cls; return n; };
-  function create({ storage, host, getBundle, isDisposed, onSaved }) {
+  function create({ storage, host, getBundle, isDisposed, onSaved, openPost }) {
     let alive = true, active = false, sequence = 0, workspaceId = null, state = null, unsubscribe = null;
     let draft = null, baseline = '', selected = null, busy = false, conflict = null, restore = null, status = '', error = '', screen;
     let query = '', category = 'all', type = 'all', tag = '', archived = false, mode = 'cover', limit = 40, position = 0;
@@ -200,11 +200,48 @@
       if (item.tags.length) dl.append(node('dt', '주제'), node('dd', item.tags.join(' · '))); screen.append(dl);
       if (item.url) { const a = node('a', '원래 출처 열기', 'life-button'); a.href = item.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; screen.append(a); }
       screen.append(node('h3', '비공개 메모'), node('p', item.note || '남긴 메모가 없습니다.', 'cl-note'));
+      screen.append(usedIn(item));
       const manage = node('details', null, 'cl-files'); manage.append(node('summary', '항목 관리'), node('p', '보관한 항목은 목록에서 숨기며 백업에는 계속 포함됩니다.', 'life-help'));
       manage.append(button(item.archived ? '목록에 다시 표시' : '항목 보관', async () => {
         const next = C.clone(state); const target = next.items.find(i => i.id === item.id); target.archived = !item.archived; target.updatedAt = now(item.createdAt);
         await commit(next, () => { status = target.archived ? '항목을 보관했습니다.' : '목록에 다시 표시했습니다.'; back(); });
       })); screen.append(manage);
+    }
+    // Posts of this workspace whose attachments match the item (same rule that keeps the collection
+    // free of duplicates). Read-only: nothing is written to posts or to the collection.
+    function usedIn(item) {
+      const section = node('section', null, 'cl-used'), heading = node('h3', '이 항목을 붙인 글'), body = node('p', '글을 찾는 중…', 'life-help');
+      section.setAttribute('aria-labelledby', 'clUsedHeading'); heading.id = 'clUsedHeading'; body.setAttribute('role', 'status'); section.append(heading, body);
+      const token = sequence, ws = workspaceId;
+      (async () => {
+        const found = [];
+        try {
+          for (const summary of await storage.listPhotoPosts(ws)) {
+            if (!summary.attachments || summary.archived) continue;
+            const doc = await storage.readPhotoPost(ws, summary.id);
+            // A draft that edits a saved post repeats that post's attachments; list the post once.
+            if (!doc.replaces && (doc.attachments || []).some(value => C.attachmentMatch([item], value))) found.push(summary);
+          }
+        } catch (_) {
+          if (current(token) && section.isConnected) body.textContent = '글 목록을 읽지 못했습니다. 컬렉션 항목은 그대로입니다.';
+          return;
+        }
+        if (!current(token) || !section.isConnected || selected !== item.id) return;
+        if (!found.length) { body.textContent = '아직 이 항목을 붙인 글이 없습니다.'; return; }
+        found.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+        body.remove();
+        const list = node('ul', null, 'cl-used-list');
+        for (const post of found) {
+          const row = node('li'), label = (post.title || '').trim() || '제목 없는 글', meta = node('span', (post.status === 'draft' ? '초안 · ' : '') + post.updatedAt.slice(0, 10), 'life-meta');
+          if (openPost) {
+            const link = button(label, async () => { flush(); await openPost(post.id); });
+            link.classList.add('cl-used-open'); row.append(link, meta);
+          } else row.append(node('span', label), meta);
+          list.append(row);
+        }
+        section.append(list);
+      })();
+      return section;
     }
     function now(createdAt = '') { const date = new Date().toISOString(); return date < createdAt ? createdAt : date; }
     function pick() {

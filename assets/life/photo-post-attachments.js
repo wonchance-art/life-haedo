@@ -15,7 +15,8 @@
     let review = null,
       closePicker = null,
       disposed = false,
-      choosing = false;
+      choosing = false,
+      renderSeq = 0;
     const node = (tag, text, cls) => {
       const n = document.createElement(tag);
       if (text != null) n.textContent = text;
@@ -111,6 +112,14 @@
       };
       type.addEventListener("change", syncCreator);
       syncCreator();
+      // Saving into the collection is explicit and separate from the post. New entries start
+      // checked; an edit starts checked only when the item is not in the collection yet.
+      const keep = node("label", null, "photo-attachment-collect"),
+        keepBox = node("input");
+      keepBox.type = "checkbox";
+      keepBox.checked = target < 0 || seed.collected !== true;
+      keep.append(keepBox, document.createTextNode(" 취향 컬렉션에도 저장"));
+      form.append(keep);
       review = { composing: false, title: inputs.title };
       onDirty();
       form.addEventListener("compositionstart", () => {
@@ -139,6 +148,7 @@
           review = null;
           render();
           onDirty();
+          if (keepBox.checked) void collect(value);
           host
             .querySelector(
               '[data-attachment-index="' +
@@ -160,6 +170,58 @@
       form.append(actions);
       host.append(form);
       inputs.title.focus();
+    }
+    // Adds the attachment to the workspace's collection once (same matching rule as the page
+    // composer), retrying only when another tab saved the collection in between. The post keeps
+    // the attachment whatever happens here.
+    async function collect(value) {
+      const kept = " 첨부는 글에 남아 있으며, 첨부 정보 수정에서 다시 저장할 수 있습니다.";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        let collection;
+        try {
+          collection = await storage.readCollection(workspaceId);
+        } catch (_) {
+          if (valid()) report(new Error("취향 컬렉션을 읽지 못했습니다." + kept));
+          return;
+        }
+        if (!valid()) return;
+        const existing = life.Collection.attachmentMatch(collection.items, value);
+        if (existing) {
+          report(existing.archived ? "취향 컬렉션의 보관한 항목에 이미 있습니다." : "취향 컬렉션에 이미 있습니다.");
+          render();
+          return;
+        }
+        try {
+          const item = life.Collection.fromAttachment(value, life.Core.id(), new Date().toISOString());
+          await storage.saveCollection(workspaceId, { ...collection, items: collection.items.concat(item) }, collection.revision);
+          if (!valid()) return;
+          report("취향 컬렉션에도 저장했습니다. 글과 별도로 보관됩니다.");
+          render();
+          return;
+        } catch (error) {
+          if (error?.code === "collection_conflict") continue;
+          if (valid()) report(new Error((error?.message || "취향 컬렉션에 저장하지 못했습니다.") + kept));
+          return;
+        }
+      }
+      if (valid()) report(new Error("다른 탭에서 컬렉션을 계속 바꾸고 있습니다." + kept));
+    }
+    // Marks the rows whose attachment is already in the collection. Read-only.
+    async function annotate(token) {
+      let items;
+      try {
+        items = (await storage.readCollection(workspaceId)).items;
+      } catch (_) {
+        return;
+      }
+      if (!valid() || token !== renderSeq) return;
+      getValues().forEach((item, i) => {
+        const row = host.querySelector('[data-attachment-index="' + i + '"]');
+        const match = life.Collection.attachmentMatch(items, item);
+        if (!row || !match) return;
+        row.dataset.collected = "true";
+        row.querySelector(".photo-edit-attachment-body")?.append(node("p", match.archived ? "취향 컬렉션에 있음 · 보관한 항목" : "취향 컬렉션에 있음", "life-meta photo-attachment-collected"));
+      });
     }
     async function choose() {
       flush();
@@ -208,13 +270,16 @@
     }
     function render() {
       if (!valid()) return;
+      const token = ++renderSeq;
       host.replaceChildren();
       const rows = node("div", null, "photo-edit-attachments");
       getValues().forEach((item, i) => {
         const row = node("section", null, "photo-edit-attachment"),
           actions = node("div", null, "life-actions");
         row.dataset.attachmentIndex = String(i);
-        row.append(life.PagePostsView.attachments([item], { compact: true }));
+        const body = node("div", null, "photo-edit-attachment-body");
+        body.append(life.PagePostsView.attachments([item], { compact: true }));
+        row.append(body);
         const move = (direction) => {
           flush();
           const next = getValues().slice();
@@ -234,7 +299,7 @@
         down.disabled = i === getValues().length - 1;
         const editButton = button(
           item.title + " 첨부 정보 수정",
-          () => edit(item, i),
+          () => edit({ ...item, collected: row.dataset.collected === "true" }, i),
           "edit",
         );
         editButton.classList.add("photo-attachment-edit");
@@ -259,6 +324,7 @@
       add.classList.add("photo-attachment-add");
       add.disabled = getValues().length >= life.PagePosts.LIMITS.attachments;
       host.append(rows, add);
+      if (getValues().length) void annotate(token);
     }
     render();
     return {
