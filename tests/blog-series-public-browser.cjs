@@ -35,7 +35,7 @@ async function main() {
   const busy = async () => page.waitForFunction(() => document.getElementById('bsShare')?.getAttribute('aria-busy') === 'false');
   const button = async name => { await page.getByRole('button', { name, exact: true }).click(); await busy(); };
   const state = value => visitor.waitForFunction(value => document.getElementById('seriesStatus')?.dataset.state === value, value);
-  const writeCounts = () => ({ saves: server.blogRequests.filter(r => r.rpc === 'life_blog_save').length, posts: server.blogRequests.filter(r => r.rpc === 'life_blog_publish').length, uploads: server.assetRequests.filter(r => r.method === 'POST').length });
+  const writeCounts = () => ({ saves: server.blogRequests.filter(r => r.rpc === 'life_blog_save').length, posts: server.blogRequests.filter(r => /^life_blog_publish(_copies|_prepare_copy)?$/.test(r.rpc)).length, uploads: server.assetRequests.filter(r => r.method === 'POST').length });
   async function capture(target, scene, selector) {
     for (const width of [1440, 820, 390]) {
       await target.setViewportSize({ width, height: 1000 }); await target.evaluate(() => document.fonts.ready);
@@ -139,7 +139,9 @@ async function main() {
       assert.equal(await visitor.locator('.bs-public-contents').evaluate(node => node.open), false);
       const image = visitor.locator('.blog-document img'); await image.scrollIntoViewIfNeeded(); await image.evaluate(node => node.decode()); assert.deepEqual(await image.evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
       const src = await image.getAttribute('src'); const actualHash = await visitor.evaluate(async url => [...new Uint8Array(await crypto.subtle.digest('SHA-256', await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer()))].map(value => value.toString(16).padStart(2, '0')).join(''), src);
-      assert.equal(actualHash, fixture.docs[1].photos[0].digest);
+      // 2026-11-02: the served photo is the published metadata-free copy, never the original.
+      const publicPhoto = server.rpc(null, 'life_blog_public_read', { p_token: fixture.publications[1].token }).snapshot.photos[0];
+      assert.equal(actualHash, publicPhoto.digest); assert.notEqual(actualHash, fixture.docs[1].photos[0].digest);
       await visitor.evaluate(() => { window.__sameArticle = document.querySelector('.blog-document'); const text = document.querySelector('.blog-line').firstChild, range = document.createRange(); range.setStart(text, 2); range.setEnd(text, 9); getSelection().removeAllRanges(); getSelection().addRange(range); window.__selectedText = getSelection().toString(); window.__scrollBeforePoll = scrollY; });
       await visitor.evaluate(async () => __seriesPolls.at(-1)());
       assert.equal(await visitor.evaluate(() => document.querySelector('.blog-document') === __sameArticle && getSelection().toString() === __selectedText && Math.abs(scrollY - __scrollBeforePoll) < 2), true);

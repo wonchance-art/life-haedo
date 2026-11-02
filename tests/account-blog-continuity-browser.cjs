@@ -12,7 +12,7 @@ const { LocalSQLBlogCloud, digest } = require('./blog-completion-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const output = path.resolve(__dirname, '../.local/account-blog-continuity');
-const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'];
+const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'];
 const runtime = ['assets/life/account-blog-ui.js', 'assets/life/blog-sync.js', 'assets/life/blog-remote.js', 'assets/life/storage.js',
   'assets/life/photo-post-ui.js', 'assets/life/blog-manager.js', 'assets/life/ui.js', 'assets/life/home.js', 'assets/platform-auth.js', 'assets/life/home.css', 'sw.js'];
 
@@ -207,20 +207,19 @@ async function main() {
       await a.page.getByRole('textbox', { name: '공개 이름', exact: true }).fill('합성 여행 블로그');
       await preview.locator('input[data-photo-id="' + first.photos[0].id + '"]').check();
       await a.page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await a.page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
-      await a.page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check();
-      await a.page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check();
       await a.page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await a.page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       const link = a.page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href'); token = new URL(url).searchParams.get('post');
       const exposed = server.rpc(null, 'life_blog_public_read', { p_token: token });
-      assert.equal(exposed.snapshot.photos.length, 1); assert.equal(exposed.snapshot.photos[0].digest, originalBytes.map(digest)[0]);
+      // 2026-11-02: the public photo is a metadata-free copy, never the original.
+      assert.equal(exposed.snapshot.photos.length, 1); assert.notEqual(exposed.snapshot.photos[0].digest, originalBytes.map(digest)[0]);
       for (const hidden of [draftB.title, 'B_UNFINISHED_BODY', first.photos[1].digest, first.id]) assert(!JSON.stringify(exposed).includes(hidden));
       const visitor = await device('account-visitor', null); active = visitor.page; await visitor.page.goto(url);
       await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published');
       const image = visitor.page.locator('#blogContent img'); assert.equal(await image.count(), 1); await image.evaluate(n => n.decode());
       assert.deepEqual(await image.evaluate(n => [n.naturalWidth, n.naturalHeight]), [4032, 3024]);
       const src = await image.getAttribute('src');
-      assert.equal(await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, src), originalBytes.map(digest)[0]);
+      assert.equal(await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, src), exposed.snapshot.photos[0].digest);
       assert.deepEqual(await visitor.page.evaluate(() => __homeDbOpens), []);
       await a.page.getByRole('button', { name: '공개 철회', exact: true }).click();
       await a.page.locator('.blog-manager-preview').getByText('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.', { exact: true }).waitFor();

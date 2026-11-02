@@ -1,5 +1,10 @@
 /* Only currently published photo IDs are readable. Original objects remain
- * private; this function never redirects or exposes a Storage URL or secret. */
+ * private; this function never redirects or exposes a Storage URL or secret.
+ * 2026-11-02: published photos are metadata-free copies. Before any byte is
+ * sent, the whole object is read, its SHA-256 must equal the published digest
+ * and its structure must carry no EXIF, GPS, XMP, IPTC, comment or text
+ * metadata. Anything else (an original, trailing data, an unknown chunk) is
+ * refused, so a client mistake cannot publish camera or location data. */
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const MAX_BYTES = 64 * 1024 * 1024;
 const TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -24,6 +29,96 @@ function validMedia(input: unknown): input is Media {
   return path.length === 4 && UUID.test(path[0]) && UUID.test(path[1]) &&
     /^[A-Za-z0-9_-]{1,128}$/.test(path[2]) && path[3] === value.digest;
 }
+
+const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.subarray(from, to));
+const starts = (b: Uint8Array, at: number, text: string) => at + text.length <= b.length && ascii(b, at, at + text.length) === text;
+// JPEG: only JFIF/JFXX (APP0), ICC colour profile (APP2) and Adobe colour
+// transform (APP14) application segments; no APP1 (EXIF/XMP), APP13 (IPTC),
+// comments, MPF secondary images or bytes after the end marker.
+function cleanJpeg(b: Uint8Array): boolean {
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return false;
+  let at = 2;
+  while (at < b.length) {
+    if (b[at] !== 0xff) return false;
+    while (at < b.length && b[at] === 0xff) at++;
+    if (at >= b.length) return false;
+    const marker = b[at++];
+    if (marker === 0xd9) return at === b.length;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (at + 2 > b.length) return false;
+    const length = (b[at] << 8) | b[at + 1];
+    if (length < 2 || at + length > b.length) return false;
+    if (marker === 0xfe) return false;
+    if (marker >= 0xe0 && marker <= 0xef) {
+      const body = at + 2;
+      const allowed = (marker === 0xe0 && (starts(b, body, "JFIF\0") || starts(b, body, "JFXX\0"))) ||
+        (marker === 0xe2 && starts(b, body, "ICC_PROFILE\0")) || (marker === 0xee && starts(b, body, "Adobe"));
+      if (!allowed) return false;
+    }
+    at += length;
+    if (marker === 0xda) {
+      // Entropy-coded data: stuffed 0xFF00, restart markers and fill bytes stay inside the scan.
+      while (at < b.length) {
+        if (b[at] !== 0xff) { at++; continue; }
+        const next = b[at + 1];
+        if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) { at += 2; continue; }
+        if (next === 0xff) { at++; continue; }
+        break;
+      }
+    }
+  }
+  return false;
+}
+// PNG: still images with pixel and colour chunks only. No eXIf, tEXt, zTXt,
+// iTXt, tIME, animation or unknown chunks; nothing after IEND.
+const PNG_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "cHRM", "gAMA", "iCCP", "sBIT", "sRGB", "cICP", "bKGD", "pHYs"]);
+function cleanPng(b: Uint8Array): boolean {
+  if (b.length < 8 || ascii(b, 0, 8) !== "\x89PNG\r\n\x1a\n") return false;
+  let at = 8;
+  while (at + 12 <= b.length) {
+    const length = ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0, name = ascii(b, at + 4, at + 8);
+    if (!PNG_CHUNKS.has(name) || at + 12 + length > b.length) return false;
+    at += 12 + length;
+    if (name === "IEND") return at === b.length;
+  }
+  return false;
+}
+// WebP: still image data, alpha and colour profile only. No EXIF or XMP.
+const WEBP_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ICCP"]);
+function cleanWebp(b: Uint8Array): boolean {
+  if (b.length < 20 || ascii(b, 0, 4) !== "RIFF" || ascii(b, 8, 12) !== "WEBP") return false;
+  const riff = (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
+  if (riff + 8 !== b.length) return false;
+  let at = 12;
+  while (at + 8 <= b.length) {
+    const name = ascii(b, at, at + 4), length = (b[at + 4] | (b[at + 5] << 8) | (b[at + 6] << 16) | (b[at + 7] << 24)) >>> 0;
+    if (!WEBP_CHUNKS.has(name) || at + 8 + length > b.length) return false;
+    if (name === "VP8X" && (length < 1 || (b[at + 8] & 0x0e))) return false; // EXIF, XMP or animation flags
+    at += 8 + length + (length & 1);
+  }
+  return at === b.length;
+}
+export function metadataFree(type: string, bytes: Uint8Array): boolean {
+  if (type === "image/jpeg") return cleanJpeg(bytes);
+  if (type === "image/png") return cleanPng(bytes);
+  if (type === "image/webp") return cleanWebp(bytes);
+  return false;
+}
+async function readExact(body: ReadableStream<Uint8Array>, size: number): Promise<Uint8Array | null> {
+  const reader = body.getReader(), bytes = new Uint8Array(size);
+  let received = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (received + value.byteLength > size) { await reader.cancel(); return null; }
+      bytes.set(value, received); received += value.byteLength;
+    }
+  } finally { reader.releaseLock(); }
+  return received === size ? bytes : null;
+}
+const hex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer), (n) => n.toString(16).padStart(2, "0")).join("");
+
 export function createHandler({ fetcher = fetch, environment = (name: string) => Deno.env.get(name) }: {
   fetcher?: typeof fetch; environment?: (name: string) => string | undefined;
 } = {}) {
@@ -72,23 +167,14 @@ export function createHandler({ fetcher = fetch, environment = (name: string) =>
       if (type !== media.type || (length !== null && Number(length) !== media.size)) {
         await stored.body.cancel(); return failed(502);
       }
-      // A withdrawal or update while Storage was opening must not admit an old
-      // public photo. Requests already streaming cannot recall received bytes.
+      const bytes = await readExact(stored.body, media.size);
+      if (!bytes || hex(await crypto.subtle.digest("SHA-256", bytes)) !== media.digest || !metadataFree(media.type, bytes)) return failed(502);
+      // A withdrawal or update while Storage was being read must not admit an
+      // old public photo. Nothing has been sent before this check.
       const current = await authorize();
-      if (!current || (["bucket", "path", "type", "size", "digest"] as const).some((field) => current[field] !== media[field])) {
-        await stored.body.cancel(); return failed(404);
-      }
-      let received = 0;
-      const body = stored.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-        transform(chunk, controller) {
-          received += chunk.byteLength;
-          if (received > media.size || received > MAX_BYTES) throw new Error("original size mismatch");
-          controller.enqueue(chunk);
-        },
-        flush() { if (received !== media.size) throw new Error("original size mismatch"); },
-      }));
+      if (!current || (["bucket", "path", "type", "size", "digest"] as const).some((field) => current[field] !== media[field])) return failed(404);
       const suffix = media.type === "image/jpeg" ? "jpg" : media.type === "image/png" ? "png" : "webp";
-      return new Response(body, { status: 200, headers: {
+      return new Response(bytes, { status: 200, headers: {
         ...HEADERS, "Content-Type": media.type, "Content-Length": String(media.size),
         "Content-Disposition": `inline; filename="photo.${suffix}"`,
       } });

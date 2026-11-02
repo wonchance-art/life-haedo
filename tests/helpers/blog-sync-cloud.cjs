@@ -2,8 +2,9 @@
 /* Two or more synthetic devices of one account: each has its own real Storage
  * (serialized in-memory IndexedDB adapter) and BlogSync; they share only a
  * synthetic private blog server that follows the SQL CAS/receipt/deletion
- * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql and
- * 20261101160000_life_blog_delete_guard.sql. */
+ * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql,
+ * 20261101160000_life_blog_delete_guard.sql and the public photo copies of
+ * 20261102120000_life_blog_public_photo_copies.sql. */
 const assert = require('node:assert/strict');
 const { createStorage } = require('../../assets/life/storage.js');
 const Core = require('../../assets/life/core.js'), Photo = require('../../assets/life/photo-post.js'), Blog = require('../../assets/life/blog.js');
@@ -57,7 +58,7 @@ function memoryIdb() {
 }
 
 function server() {
-  const rows = new Map(), assets = new Map(), receipts = new Map(), stats = { saves: [], uploads: [], downloads: 0, deletes: [], removed: [], publishes: [] };
+  const rows = new Map(), assets = new Map(), receipts = new Map(), stats = { saves: [], uploads: [], copyUploads: [], downloads: 0, deletes: [], removed: [], publishes: [] };
   const control = { failUpload: null, failSave: null, loseSave: false, holdUpload: null };
   let tick = 0;
   const stamp = () => new Date(Date.UTC(2026, 10, 1) + (++tick) * 1000).toISOString();
@@ -98,6 +99,15 @@ function server() {
         if (!asset.exists) { assets.get(asset.path).blob = blob; stats.uploads.push({ device: name, postId, id: item.id, digest: item.digest, type: item.type }); }
         return asset;
       },
+      // A registered public copy: JPEG/PNG of a stored JPEG/PNG/WebP photo, never the original.
+      async uploadPublicCopy(postId, item, blob) {
+        const row = rows.get(postId), photo = row?.data.photos.find(value => value.id === item.id);
+        if (!photo || photo.view || item.digest === photo.digest || !['image/jpeg', 'image/png'].includes(item.type)) throw fault('invalid_request');
+        assert.equal(blob.size, item.size); assert.equal(blob.type, item.type); assert.equal(await Photo.digest(blob), item.digest);
+        const at = path(postId, item.id, item.digest);
+        if (!assets.has(at)) { assets.set(at, { meta: { size: item.size, type: item.type }, blob, deleted: false, copy: true }); stats.copyUploads.push({ device: name, postId, id: item.id, digest: item.digest, type: item.type }); }
+        return { bucket: 'haedo-blog-originals', path: at, exists: true };
+      },
       async downloadAsset(asset) { stats.downloads++; const value = assets.get(asset.path); if (!value?.blob || value.deleted) throw fault('remote_missing'); return value.blob; },
       async save(request) {
         stats.saves.push({ device: name, ...copy(request) });
@@ -128,8 +138,13 @@ function server() {
       },
       async removeAssets(postId, list) { for (const at of list) { assert(assets.get(at)?.deleted); assets.delete(at); stats.removed.push(at); } return list.length; },
       async publish(id, revision, operation, options) {
-        stats.publishes.push({ id, revision, options: copy(options) }); const row = rows.get(id);
+        stats.publishes.push({ id, revision, operation, options: copy(options) }); const row = rows.get(id);
         if (row.revision !== revision || (row.publication?.revision || 0) !== options.expectedPublicRevision) throw fault('blog_conflict');
+        // Every selected JPEG/PNG/WebP photo needs its uploaded copy; HEIC uses its view.
+        for (const id of options.photoIds || []) {
+          const photo = row.data.photos.find(value => value.id === id), named = (options.copies || []).find(item => item.id === id);
+          if (photo.view ? named : !named || !assets.get(path(row.id, id, named.digest))?.copy) throw fault('invalid_request');
+        }
         row.publication = { token: row.publication?.token || Core.id(), blogToken: Core.id(), revision: options.expectedPublicRevision + 1, active: true };
         return { status: 'stored', ...row.publication };
       },

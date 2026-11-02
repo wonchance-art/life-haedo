@@ -9,6 +9,7 @@
   const BUCKET = 'haedo-blog-originals';
   const ORIGINAL_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
   const VIEW_REQUIRED = ['image/heic', 'image/heif'];
+  const COPY_TYPES = ['image/jpeg', 'image/png'];
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.', request_cancelled: '계정이나 연결이 바뀌어 이전 요청을 중단했습니다.',
     schema_missing: '서버에 블로그 동기화 준비가 필요합니다. 이 기기의 글은 유지됩니다.',
@@ -176,6 +177,27 @@
       try { const result = await client.storage.from(asset.bucket).download(asset.path); guard(context); if (result.error) throw result.error; if (!(result.data instanceof Blob)) throw fault('invalid_remote_data'); return result.data; }
       catch (error) { guard(context); throw clean(error); }
     }
+    // A metadata-free public copy of one JPEG/PNG/WebP photo of a stored post
+    // (2026-11-02). Registered by its own RPC, so the server can tell it from
+    // the private original; same immutable private bucket and path pattern.
+    function checkCopy(value) {
+      if (!PHOTO.test(value?.id || '') || !media(value) || !COPY_TYPES.includes(value.type)) throw fault('invalid_request');
+    }
+    async function uploadPublicCopy(postId, item, blob) {
+      identity(postId); checkCopy(item);
+      if (!(blob instanceof Blob) || blob.size !== item.size || blob.type !== item.type) throw fault('invalid_request');
+      const expected = clone({ id: item.id, digest: item.digest, size: item.size, type: item.type, width: item.width, height: item.height });
+      const context = capture(); guard(context);
+      const digest = await root.crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); guard(context);
+      if (Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('') !== expected.digest) throw fault('invalid_remote_data');
+      const asset = await rpc('life_blog_publish_prepare_copy', { p_post_id: postId, p_photo_id: expected.id, p_digest: expected.digest, p_bytes: expected.size, p_type: expected.type, p_width: expected.width, p_height: expected.height }); guard(context);
+      if (asset?.bucket !== BUCKET || asset.path !== assetPath(context.userId, postId, expected.id, expected.digest) || typeof asset.exists !== 'boolean') throw fault('invalid_remote_data');
+      if (!asset.exists) {
+        try { const result = await client.storage.from(asset.bucket).upload(asset.path, blob, { contentType: expected.type, upsert: false }); guard(context); if (result.error) throw result.error; }
+        catch (error) { guard(context); throw clean(error); }
+      }
+      return asset;
+    }
     // Explicit owner deletion of one private post. Returns the exact original
     // paths that became removable; `removeAssets` deletes only those objects.
     async function deletePost(postId, expectedRevision = null) {
@@ -195,10 +217,22 @@
       try { const result = await client.storage.from(BUCKET).remove(clone(paths)); guard(context); if (result.error) throw result.error; return Array.isArray(result.data) ? result.data.length : 0; }
       catch (error) { guard(context); throw clean(error); }
     }
+    // `copies` names the uploaded public copy of every selected JPEG/PNG/WebP
+    // photo; HEIC/HEIF photos publish their JPEG view. Without copies the
+    // earlier RPC is used unchanged (text-only and HEIC-only selections).
     async function publish(postId, expectedRevision, operationId, options = {}) {
       identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1 || !Array.isArray(options.photoIds || []) || (options.photoIds || []).some(value => !PHOTO.test(value))) throw fault('invalid_request');
       if (!rev(options.expectedPublicRevision ?? 0)) throw fault('invalid_request');
-      const result = await rpc('life_blog_publish', { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(options.author || { name: '', intro: '' }) }, { commit: true });
+      const copies = options.copies || [];
+      if (!Array.isArray(copies) || copies.length > 20) throw fault('invalid_request');
+      const named = {};
+      for (const item of copies) {
+        checkCopy(item);
+        if (Object.hasOwn(named, item.id) || !(options.photoIds || []).includes(item.id)) throw fault('invalid_request');
+        named[item.id] = { type: item.type, size: item.size, digest: item.digest, width: item.width, height: item.height };
+      }
+      const params = { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(options.author || { name: '', intro: '' }) };
+      const result = copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true }) : await rpc('life_blog_publish', params, { commit: true });
       if (result?.status !== 'published' && result?.status !== 'stored') { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       if (!id(result.token) || !id(result.blogToken) || !rev(result.revision) || result.revision < 1) throw fault('invalid_remote_data');
       return result;
@@ -209,7 +243,7 @@
       if (!['unpublished', 'stored'].includes(result?.status) || !rev(result.revision)) { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       return result;
     }
-    return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, downloadAsset, deletePost, removeAssets, publish, unpublish,
+    return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
   return Object.freeze({ create, clean, fault, checkViews });

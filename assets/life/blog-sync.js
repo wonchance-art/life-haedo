@@ -558,7 +558,8 @@
     // ---- publication (explicit only) --------------------------------------------
     async function finishPublication(c, state) {
       let result;
-      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
+      const copies = state.publishPending.copies?.length ? { copies: state.publishPending.copies } : {};
+      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, ...copies, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
       catch (error) {
         if (error.code === 'blog_conflict') {
           const row = await remote.read(state.remoteId); guard(c);
@@ -571,6 +572,23 @@
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
+    // Public copies (2026-11-02): every selected JPEG/PNG/WebP photo is
+    // published only as a metadata-free re-encoding. `provided` are the copies
+    // the reviewer previewed; missing ones are made here. HEIC/HEIF photos use
+    // their JPEG view and need none. Copies are uploaded before the durable
+    // publication request names them.
+    const copyMeta = ({ id, type, size, digest, width, height }) => ({ id, type, size, digest, width, height });
+    async function publicCopies(c, post, photoIds, provided) {
+      const given = new Map((Array.isArray(provided) ? provided : []).map(copy => [copy?.id, copy])), copies = [];
+      for (const photoId of photoIds) {
+        const photo = post.photos.find(item => item.id === photoId);
+        if (!photo || photoPost.viewRequired(photo.type)) continue;
+        const copy = given.has(photoId) ? photoPost.checkPublicCopy(photo, given.get(photoId)) : await photoPost.publicCopy(photo); guard(c);
+        if (await photoPost.digest(copy.blob) !== copy.digest) throw Object.assign(new Error('공개용 사진 사본 정보를 확인해 주세요.'), { code: 'invalid_photo_post' });
+        guard(c); copies.push(copy);
+      }
+      return copies;
+    }
     async function publish(ws, id, options = {}) {
       const choices = structuredClone(options), c = context(ws, id); await verified(c);
       const initial = await readPost(c);
@@ -578,7 +596,11 @@
       if (initial.status !== 'saved') throw fault('invalid_request');
       const before = await readState(c);
       const selection = { photoIds: choices.photoIds || [], author: choices.author || { name: '', intro: '' } };
-      if (before?.publishPending) {
+      const needsCopies = selection.photoIds.some(photoId => { const photo = initial.photos.find(item => item.id === photoId); return photo && !photoPost.viewRequired(photo.type); });
+      // A request recorded before public copies existed would publish an
+      // original; it is replaced by a new request with copies.
+      const usable = pending => !!pending && (!needsCopies || !!pending.copies);
+      if (usable(before?.publishPending)) {
         if (before.publishPending.localRevision !== initial.revision || canonical(before.publishPending.selection) !== canonical(selection)) throw fault('local_changed');
         return serial(ws, id, async () => {
           const state = await readState(c), latest = await readPost(c);
@@ -587,7 +609,8 @@
         });
       }
       if (choices.expectedRemoteRevision !== undefined && choices.expectedRemoteRevision !== (before?.remoteRevision || 0) || choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (before?.publication?.revision || 0)) throw fault('local_changed');
-      await blog.publicSnapshot(initial, selection); guard(c);
+      const copies = await publicCopies(c, initial, selection.photoIds, choices.copies);
+      await blog.publicSnapshot(initial, { ...selection, copies: copies.map(copyMeta) }); guard(c);
       const stored = await push(ws, id, { verify: false }); guard(c); if (stored.status !== 'synced') throw fault('blog_conflict');
       return serial(ws, id, async () => {
         let state = await readState(c); const latest = await readPost(c);
@@ -600,8 +623,12 @@
           if (canonical(head.publication ?? null) !== canonical(state.publication ?? null)) state = await writeState(c, state, { publication: head.publication ?? null });
         }
         if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
-        if (state.publishPending && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
-        if (!state.publishPending) state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection } });
+        if (usable(state.publishPending) && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
+        if (!usable(state.publishPending)) {
+          for (const copy of copies) { await remote.uploadPublicCopy(state.remoteId, copyMeta(copy), copy.blob); guard(c); }
+          state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection,
+            ...(copies.length ? { copies: copies.map(copyMeta) } : {}) } });
+        }
         return finishPublication(c, state);
       });
     }

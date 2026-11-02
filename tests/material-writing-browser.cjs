@@ -99,7 +99,7 @@ async function main() {
   const server = new LocalSQLBlogCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
   if (process.argv.includes('--prepare-database')) {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
     server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], files.join('\n'));
   }
   await server.initialize();
@@ -199,7 +199,7 @@ async function main() {
       await page.locator('#mwManageOutput').click(); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       await page.locator('.blog-post[data-post-id="' + finished.doc.id + '"]').getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       await page.locator('input[data-photo-id="' + finished.doc.photos[0].id + '"]').check(); await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
-      await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
+      await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const link = page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href'), token = new URL(url, base).searchParams.get('post');
       const publicDoc = server.rpc(null, 'life_blog_public_read', { p_token: token }); assert.equal(publicDoc.snapshot.photos.length, 1);
       assert(finished.sync.remoteId, 'The saved replacement must retain its established server identity');
@@ -209,7 +209,7 @@ async function main() {
       const visitor = await device('material-visitor', null); await visitor.page.goto(url); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published'); assert.match(await visitor.page.locator('#blogContent').innerText(), /완성 편집기에서 덧붙인 마지막 문단/);
       assert.equal(await visitor.page.evaluate(() => __homeDbOpens.length), 0); assert.equal(await visitor.page.locator('#blogContent img').count(), 1);
       await visitor.page.locator('#blogContent img').evaluate(node => node.decode()); assert.deepEqual(await visitor.page.locator('#blogContent img').evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
-      const image = await visitor.page.locator('#blogContent img').getAttribute('src'); const response = await visitor.page.evaluate(async url => { const response = await fetch(url); return { status: response.status, bytes: Array.from(new Uint8Array(await response.arrayBuffer())) }; }, image); assert.equal(response.status, 200); assert.equal(digest(Buffer.from(response.bytes)), finished.doc.photos[0].digest); await capture(visitor.page, 'anonymous-selected');
+      const image = await visitor.page.locator('#blogContent img').getAttribute('src'); const response = await visitor.page.evaluate(async url => { const response = await fetch(url); return { status: response.status, bytes: Array.from(new Uint8Array(await response.arrayBuffer())) }; }, image); assert.equal(response.status, 200); assert.equal(digest(Buffer.from(response.bytes)), publicDoc.snapshot.photos[0].digest); assert.notEqual(publicDoc.snapshot.photos[0].digest, finished.doc.photos[0].digest, 'the public photo is a metadata-free copy'); await capture(visitor.page, 'anonymous-selected');
       await page.getByRole('button', { name: '공개 철회', exact: true }).click();
       await page.getByText('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.', { exact: true }).waitFor();
       assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: token }), null);

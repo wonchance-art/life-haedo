@@ -179,27 +179,31 @@
       preview = { doc, photoIds: [], snapshot: null, revision: doc.revision, remoteRevision, publicRevision };
       const panel = el('section', null, 'blog-manager-preview'); panel.setAttribute('aria-label', '공개 내용 검토');
       panel.append(el('h3', '공개 내용 검토'), meta('이 화면에서 고른 본문과 첨부만 공개합니다. 선택하지 않은 사진은 공개 본문에서도 빠집니다.'));
-      const privateLabel = el('label', null, 'blog-manager-check'), privateConsent = el('input'); privateConsent.type = 'checkbox';
-      privateConsent.setAttribute('aria-label', '글 전체와 모든 사진 원본의 비공개 서버 보관 동의');
-      privateLabel.append(privateConsent, document.createTextNode('게시할 때 이 글의 전체 본문과 모든 사진 원본·내장 메타데이터를 내 계정 서버에 비공개로 보관합니다. 공개에는 아래에서 선택한 사진만 포함합니다.')); panel.append(privateLabel);
       const authorLabel = el('label', '공개 이름'), author = el('input'); author.type = 'text'; author.maxLength = 100; author.setAttribute('aria-label', '공개 이름'); authorLabel.append(author); panel.append(authorLabel);
       const introLabel = el('label', '공개 소개'), intro = el('textarea'); intro.maxLength = 500; intro.rows = 2; intro.setAttribute('aria-label', '공개 소개'); introLabel.append(intro); panel.append(introLabel);
       const photos = el('fieldset'); photos.append(el('legend', '공개할 사진'));
       const selected = new Map();
+      // 2026-11-02 owner decision: every published photo is a re-encoded copy
+      // without camera or location metadata; originals stay private.
+      const animated = new Set();
+      for (const p of doc.photos) {
+        try { if (!life.PhotoPost.viewRequired(p.type) && (await life.PhotoPost.imageTraits(p.blob)).animated) animated.add(p.id); } catch (_) { /* The copy step reports unreadable photos. */ }
+      }
+      if (!valid()) return;
       doc.photos.forEach(p => {
         const label = el('label', null, 'blog-manager-check'), check = el('input'); check.type = 'checkbox'; check.dataset.photoId = p.id;
-        label.append(check, document.createTextNode(`${p.name} · ${p.width}×${p.height} · ${p.size.toLocaleString('ko-KR')}바이트`)); photos.append(label); selected.set(p.id, check);
+        label.append(check, document.createTextNode(`${p.name} · ${p.width}×${p.height} · ${p.size.toLocaleString('ko-KR')}바이트` + (animated.has(p.id) ? ' · 움직이는 사진은 첫 장면만 공개' : ''))); photos.append(label); selected.set(p.id, check);
       });
-      if (!doc.photos.length) photos.append(meta('이 글에는 사진이 없습니다.')); panel.append(photos);
-      const originalLabel = el('label', null, 'blog-manager-check'), original = el('input'); original.type = 'checkbox';
-      original.setAttribute('aria-label', '선택한 사진 원본과 포함된 메타데이터 공개 동의');
-      originalLabel.append(original, document.createTextNode('선택한 사진의 원본 파일과 그 안의 촬영·위치 등 메타데이터도 공개될 수 있음을 확인했습니다.')); panel.append(originalLabel);
+      if (doc.photos.length) photos.append(meta('고른 사진은 촬영·위치 정보를 뺀 사본으로 공개합니다. 원본은 비공개로 남습니다.'));
+      else photos.append(meta('이 글에는 사진이 없습니다.'));
+      panel.append(photos);
       const result = el('div', null, 'blog-manager-public-preview'); panel.append(result);
       const consentLabel = el('label', null, 'blog-manager-check'), consent = el('input'); consent.type = 'checkbox'; consent.setAttribute('aria-label', '이 내용을 공개합니다'); consentLabel.append(consent, document.createTextNode('미리보기의 내용을 공개합니다.')); panel.append(consentLabel);
       let changed = true;
+      // Copies made for this review, reused while the same photos stay selected.
+      const copies = new Map();
       function invalidate() { changed = true; consent.checked = false; result.replaceChildren(meta('공개할 내용을 바꿨습니다. 미리보기를 갱신해 확인해 주세요.')); preview.snapshot = null; }
       author.addEventListener('input', invalidate); intro.addEventListener('input', invalidate); selected.forEach(check => check.addEventListener('change', invalidate));
-      original.addEventListener('change', () => { consent.checked = false; });
       panel.append(button('공개 미리보기 갱신', async () => {
         if (!valid() || preview?.doc.id !== doc.id) return;
         if (blogSync?.getState) {
@@ -208,24 +212,31 @@
           remoteRevision = state?.remoteRevision || 0; publicRevision = state?.publication?.revision || 0;
         }
         const photoIds = [...selected].filter(([, check]) => check.checked).map(([id]) => id);
-        const snapshot = await life.Blog.publicSnapshot(doc, { photoIds, author: { name: author.value, intro: intro.value } });
+        const included = doc.photos.filter(p => photoIds.includes(p.id));
+        if (included.some(p => !copies.has(p.id))) announce('공개할 사진의 사본을 만드는 중입니다.');
+        for (const p of included) {
+          if (!copies.has(p.id)) copies.set(p.id, await life.PhotoPost.publicCopy(p));
+          if (!valid() || preview?.doc.id !== doc.id) return;
+        }
+        const shown = included.map(p => copies.get(p.id)), uploaded = shown.filter(copy => !copy.view);
+        const snapshot = await life.Blog.publicSnapshot(doc, { photoIds, author: { name: author.value, intro: intro.value }, copies: uploaded });
         if (!valid() || preview?.doc.id !== doc.id) return;
         urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
-        const included = doc.photos.filter(p => photoIds.includes(p.id)), photoUrls = new Map();
-        snapshot.photos.forEach((p, index) => { const url = URL.createObjectURL(included[index].view?.blob ?? included[index].blob); urls.push(url); photoUrls.set(p.id, url); });
+        // The preview shows the exact bytes that become public.
+        const photoUrls = new Map();
+        snapshot.photos.forEach((p, index) => { const url = URL.createObjectURL(shown[index].blob); urls.push(url); photoUrls.set(p.id, url); });
         result.replaceChildren(life.BlogPublicUI.render(snapshot, { document, photoUrl: p => photoUrls.get(p.id) || null, allowOriginal: true }));
-        preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, author: { name: author.value, intro: intro.value } }; changed = false; consent.checked = false;
+        preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, copies: uploaded, author: { name: author.value, intro: intro.value } }; changed = false; consent.checked = false;
         announce('이 미리보기와 같은 본문·선택 사진으로 공개합니다.');
       }));
       panel.append(button('공개 게시·갱신', async () => {
         if (changed || !preview?.snapshot) throw new Error('공개 미리보기를 먼저 갱신해 주세요.');
-        if (!privateConsent.checked) throw new Error('이 글 전체와 모든 사진 원본의 비공개 서버 보관 범위를 확인해 주세요.');
-        if (!consent.checked || (preview.photoIds.length && !original.checked)) throw new Error('공개 내용과 선택한 사진 원본 공개 여부를 확인해 주세요.');
+        if (!consent.checked) throw new Error('미리보기의 공개 내용을 확인해 주세요.');
         requireSync('publish'); const current = await storage.readPhotoPost(workspaceId, doc.id);
         if (!valid()) return;
-        if (changed || !preview?.snapshot || !consent.checked || !privateConsent.checked || (preview.photoIds.length && !original.checked)) throw new Error('공개 내용이 바뀌었습니다. 미리보기를 갱신하고 공개 범위를 다시 확인해 주세요.');
+        if (changed || !preview?.snapshot || !consent.checked) throw new Error('공개 내용이 바뀌었습니다. 미리보기를 갱신하고 공개 범위를 다시 확인해 주세요.');
         if (current.revision !== preview.revision || current.archived || current.status !== 'saved') throw new Error('글이 바뀌었습니다. 공개 내용 검토를 다시 열어 최신 글을 확인해 주세요.');
-        const published = await blogSync.publish(workspaceId, doc.id, { photoIds: [...preview.photoIds], author: { ...preview.author }, expectedLocalRevision: preview.revision,
+        const published = await blogSync.publish(workspaceId, doc.id, { photoIds: [...preview.photoIds], author: { ...preview.author }, copies: preview.copies, expectedLocalRevision: preview.revision,
           expectedRemoteRevision: preview.remoteRevision, expectedPublicRevision: preview.publicRevision });
         if (!valid()) return;
         const url = published?.url || published?.publicUrl || published?.public?.url;
