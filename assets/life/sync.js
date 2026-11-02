@@ -86,6 +86,14 @@
         (!context.workspaceId || context.spaceEpoch === (spaceEpochs.get(context.workspaceId) || 0));
     }
     function guard(context) { if (!current(context)) throw fault('stale_session'); localAccount(context.account); }
+    // W4: one operation (sync cycle, enable, download, adoption) shares one
+    // server account check through the adapter's cycle(); it ends with the
+    // operation. Adapters without cycle() keep a server check per call.
+    function remote(context) {
+      if (context.cycle === undefined) context.cycle = typeof context.adapter.cycle === 'function' ? context.adapter.cycle() : null;
+      return context.cycle || context.adapter;
+    }
+    function endCycle(context) { const cycle = context.cycle; context.cycle = null; cycle?.end?.(); }
     function binding(context, remoteId) { return { projectUrl: context.account.projectUrl, userId: context.account.userId, remoteId }; }
     function checkedBinding(context, state) {
       guard(context);
@@ -96,7 +104,7 @@
     }
     async function verified(context) {
       guard(context);
-      const value = await context.adapter.getAccount();
+      const value = await remote(context).getAccount();
       guard(context);
       const actual = accountCopy(value, { url: context.account.projectUrl });
       if (!actual || actual.userId !== context.account.userId || actual.projectUrl !== context.account.projectUrl) {
@@ -112,14 +120,14 @@
     }
     async function readRemote(context, remoteId) {
       guard(context);
-      const row = await context.adapter.read(remoteId);
+      const row = await remote(context).read(remoteId);
       guard(context);
       return row === null ? null : validateRow(row, remoteId);
     }
     function serial(context, action) {
       const key = context.epoch + ':' + context.spaceEpoch + ':' + context.workspaceId;
       const previous = locks.get(key) || Promise.resolve();
-      const next = previous.catch(() => {}).then(() => { guard(context); return action(); });
+      const next = previous.catch(() => {}).then(() => { guard(context); return action(); }).finally(() => endCycle(context));
       locks.set(key, next);
       next.then(() => { if (locks.get(key) === next) locks.delete(key); }, () => { if (locks.get(key) === next) locks.delete(key); });
       return next;
@@ -337,9 +345,12 @@
       return getState(workspaceId);
     }
     async function listRemote() {
-      const context = scope(); await verified(context);
-      const rows = await context.adapter.list(); guard(context); await verified(context);
-      return clone(rows);
+      const context = scope();
+      try {
+        await verified(context);
+        const rows = await remote(context).list(); guard(context); await verified(context);
+        return clone(rows);
+      } finally { endCycle(context); }
     }
     function downloadOptions(options) {
       if (!options || typeof options !== 'object' || Array.isArray(options) ||
@@ -406,7 +417,7 @@
     }
     async function upload(context, expected, outbox) {
       await verified(context);
-      const reply = await context.adapter.write({ workspaceId: expected.remoteId, expectedRevision: outbox.expectedRevision, operationId: outbox.operationId, data: clone(outbox.data) });
+      const reply = await remote(context).write({ workspaceId: expected.remoteId, expectedRevision: outbox.expectedRevision, operationId: outbox.operationId, data: clone(outbox.data) });
       guard(context); await verified(context);
       if (reply?.status === 'stored') {
         if (!Number.isSafeInteger(reply.revision) || reply.revision !== outbox.expectedRevision + 1) throw fault('remote_invalid');
@@ -432,10 +443,10 @@
             const outbox = await storage.prepareSyncUpload(context.workspaceId, expected); guard(context);
             if (outbox) { if (await upload(context, expected, outbox)) continue; return getState(context.workspaceId); }
           }
-          if (headIfClean && context.adapter.head && state.remoteRevision > 0 && !state.error) {
+          if (headIfClean && remote(context).head && state.remoteRevision > 0 && !state.error) {
             const local = await storage.read(context.workspaceId); guard(context);
             if (local.revision === state.syncedLocalRevision) {
-              const head = await context.adapter.head(expected.remoteId); guard(context); await verified(context);
+              const head = await remote(context).head(expected.remoteId); guard(context); await verified(context);
               if (head === null) return observeConflict(context, expected, null);
               if (head?.id !== expected.remoteId || !Number.isSafeInteger(head.revision) || head.revision < 1) throw fault('remote_invalid');
               if (head.revision < state.remoteRevision) throw fault('remote_revision_regressed');
@@ -487,7 +498,7 @@
     }
     async function resolve(workspaceId, choice, expectedVersions = {}) {
       if (!['local', 'remote'].includes(choice)) throw fault('stale_conflict');
-      const context = scope(workspaceId);
+      const context = scope(workspaceId); context.cycle = null; // explicit choice: every call checks the server
       return serial(context, async () => {
         await verified(context);
         const state = await storage.getSyncState(workspaceId); guard(context);

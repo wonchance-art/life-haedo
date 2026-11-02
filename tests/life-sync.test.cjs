@@ -92,6 +92,12 @@ function fixture(t, options = {}) {
       state.headCalls++; assert.equal(!!state.meta.outbox, false);
       return state.row && { id: state.row.id, revision: state.row.revision, title: state.row.title, updated_at: state.row.updated_at };
     };
+    // W4: an adapter may offer cycle(), one scoped view per engine operation.
+    if (options.cycles) adapter.cycle = () => {
+      const view = { ended: false, calls: [], end() { view.ended = true; } };
+      for (const name of ['getAccount', 'list', 'read', 'write', 'head']) if (adapter[name]) view[name] = (...args) => { assert.equal(view.ended, false, 'no call after end()'); view.calls.push(name); return adapter[name](...args); };
+      (state.cycles ||= []).push(view); return view;
+    };
     assert.equal(settings.url, CONFIG.url); state.adapters.push(adapter); return adapter;
   };
   factory.loadConfig = () => copy(options.shared ? CONFIG : state.saved);
@@ -390,4 +396,25 @@ test('optional head optimization still replays the exact durable request before 
   await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true });
   assert.equal(f.state.sent[0].operationId, original.operationId); assert.deepEqual(f.state.sent[0].data, original.data);
   assert.equal(f.state.headCalls, 1); assert.equal(f.state.readCalls, 0); assert.equal(f.state.meta.outbox, null);
+});
+
+test('W4 each sync operation uses one adapter cycle that ends with it, on success and on failure; conflict choice keeps per-call checks', async t => {
+  const f = fixture(t, { shared: true, automatic: false, head: true, cycles: true, successfulWrites: true }); await f.manager.start(); f.bind();
+  const id = f.state.local.workspaceId;
+  f.state.meta.remoteRevision = 1; f.state.meta.outbox = { operationId: Core.id(), expectedRevision: 1, localRevision: 0, data: copy(f.state.local) };
+  const start = f.state.calls;
+  await f.manager.syncNow(id, { headIfClean: true });
+  assert.equal(f.state.cycles.length, 1); assert.equal(f.state.cycles[0].ended, true);
+  assert.deepEqual(f.state.cycles[0].calls, ['getAccount', 'getAccount', 'write', 'getAccount', 'head', 'getAccount']);
+  assert.equal(f.state.calls - start, 4, 'the engine still asks for its account before and after each step');
+  f.state.offline = true;
+  await assert.rejects(f.manager.syncNow(id, { headIfClean: true }), code('network_error'));
+  assert.equal(f.state.cycles.length, 2); assert.equal(f.state.cycles[1].ended, true);
+  f.state.offline = false;
+  await Promise.all([f.manager.syncNow(id, { headIfClean: true }), f.manager.syncNow(id, { headIfClean: true })]);
+  assert.equal(f.state.cycles.length, 4); assert.ok(f.state.cycles.every(cycle => cycle.ended));
+  const c = await conflictFixture(t, { cycles: true });
+  const reviewed = copy(c.state.local);
+  await c.manager.resolve(reviewed.workspaceId, 'remote', { expectedLocalRevision: reviewed.revision, expectedRemoteRevision: 2 });
+  assert.deepEqual(c.state.cycles || [], [], 'explicit conflict resolution verifies every call on the server');
 });
