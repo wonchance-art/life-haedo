@@ -151,7 +151,7 @@ async function main() {
       const saved = await save(f);
       assert.equal(saved.doc.title, '현재 기기의 새 제목'); assert.equal(saved.doc.photos[0].digest, initial.doc.photos[0].digest);
       assert.equal(f.server.posts.get(key).data.title, '현재 기기의 새 제목'); assert.equal(f.server.posts.get(key).revision, bumped + 1);
-      const kept = saved.docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · 다른 기기에서 쓴 제목');
+      const kept = saved.docs.find(doc => doc.status === 'draft' && doc.title === '복구 사본 · 다른 기기에서 쓴 제목');
       assert(kept, 'the other device body is kept, never silently dropped'); assert.equal(kept.ops[0].insert, 'REMOTE_BODY_SENTINEL\n');
       assert.equal(kept.photos[0].digest, initial.doc.photos[0].digest);
     });

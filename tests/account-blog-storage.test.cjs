@@ -169,7 +169,7 @@ test('a conflict keeps the losing side as a new draft in the same transaction as
   const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
   await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
   const local = await f.a.readPhotoPost(f.ws, id);
-  const kept = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '충돌로 보관한 이전 내용 · ' + local.title };
+  const kept = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '복구 사본 · ' + local.title };
   const remote = { ...copy(local), title: '다른 기기의 최신 글' };
   f.control.fail = write => write.id === `photo-post:${f.ws}:${kept.id}`;
   const before = copy(f.rows);
@@ -180,6 +180,25 @@ test('a conflict keeps the losing side as a new draft in the same transaction as
   assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).status, 'draft');
   assert.equal(await f.a.readBlogSyncState(f.ws, kept.id), null, 'the kept draft starts unbound and syncs as its own post');
   await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: remote, baseRevision: 1, binding: remoteBinding(f, id, 4), bindingRevision: 2 }), { code: 'photo_post_conflict' });
+});
+
+test('a conflict that renames the server version in place leaves the binding unsent, in the same transaction as the kept draft', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const local = await f.a.readPhotoPost(f.ws, id);
+  const renamed = { ...copy(local), title: '복구 사본 · ' + local.title }, winner = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '이 기기의 최신 초안' };
+  for (const bad of [{ upload: false }, { upload: true, post: undefined }, { upload: true, binding: undefined }])
+    await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: renamed, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: winner, ...bad }), { code: 'invalid_blog_state' });
+  f.control.fail = write => write.id === `photo-post:${f.ws}:${winner.id}`;
+  const before = copy(f.rows);
+  await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: renamed, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: winner, upload: true }), { code: 'storage_quota' });
+  assert.deepEqual(f.rows, before, 'nothing is half applied');
+  await f.a.commitBlogSync(f.ws, { postId: id, post: renamed, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: winner, upload: true });
+  assert.equal((await f.a.readPhotoPost(f.ws, id)).title, '복구 사본 · ' + local.title);
+  const state = await f.a.readBlogSyncState(f.ws, id);
+  assert.equal(state.localRevision, 0, 'no stored revision matches the server version: the rename is uploaded next');
+  assert.equal(state.remoteRevision, 3);
+  assert.equal((await f.a.readPhotoPost(f.ws, winner.id)).title, '이 기기의 최신 초안');
 });
 
 test('explicit deletion records a deletion for a stored post, refuses a published one and is never re-received', async t => {

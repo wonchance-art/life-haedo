@@ -751,7 +751,7 @@
         not_enabled: "저장됨 · 곧 모든 기기에 올립니다.",
         pending: "저장됨 · 계정에 올리기 대기 중",
         paused: "저장됨 · 곧 모든 기기에 올립니다.",
-        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 별도 초안으로 남습니다.",
+        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 복구 사본으로 남습니다.",
         error: "저장됨 · 계정에 올리지 못했습니다. 자동으로 다시 시도합니다.",
       };
       serverStatus.textContent = labels[state] || labels.error;

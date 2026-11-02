@@ -59,8 +59,14 @@ function memoryIdb() {
 function server() {
   const rows = new Map(), assets = new Map(), receipts = new Map(), stats = { saves: [], uploads: [], downloads: 0, deletes: [], removed: [], publishes: [] };
   const control = { failUpload: null, failSave: null, loseSave: false, holdUpload: null };
-  let tick = 0;
-  const stamp = () => new Date(Date.UTC(2026, 10, 1) + (++tick) * 1000).toISOString();
+  // The server commit time (updated_at) follows the devices' shared test
+  // clock once a device joins, like clock_timestamp() on the real server; it
+  // only ever moves forward.
+  let tick = 0, last = 0, serverClock = null;
+  const stamp = () => {
+    last = Math.max(serverClock ? serverClock.now : Date.UTC(2026, 10, 1) + (++tick) * 1000, last + 1);
+    return new Date(last).toISOString();
+  };
   const path = (postId, photoId, digest) => USER + '/' + postId + '/' + photoId + '/' + digest;
   function media(item) { return [item, ...(item.view ? [{ id: item.id, ...item.view }] : [])]; }
   function ready(postId, data) {
@@ -137,7 +143,7 @@ function server() {
       dispose() { disposed = true; }, get disposed() { return disposed; }
     };
   }
-  return { rows, assets, receipts, stats, control, client };
+  return { rows, assets, receipts, stats, control, client, useClock(time) { serverClock ||= time; } };
 }
 
 function clock(start = Date.UTC(2026, 10, 1, 12)) { const value = { now: start }; value.advance = ms => { value.now += ms; }; return value; }
@@ -149,6 +155,7 @@ async function device(cloud, name, { time = clock(), workspace = null, auth = nu
   if (workspace) { await storage.installWorkspace(workspace); workspaceId = workspace.workspaceId; }
   else workspaceId = (await storage.createWorkspace(name + ' 공간')).workspaceId;
   const account = auth || { epoch: 0, verifications: 0, getAccount: () => owner, async verify() { account.verifications++; return { id: USER }; } };
+  cloud.useClock?.(time);
   const remote = cloud.client(name);
   const sync = Sync.create({ storage, auth: account, blog: Blog, photoPost: Photo, remote, makeId: Core.id, locks: null, now: () => time.now, timers: { setTimeout: () => 0, clearTimeout() {} }, interval: 30000 });
   return { name, memory, storage, ws: workspaceId, sync, remote, auth: account, time };

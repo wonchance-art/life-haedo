@@ -2,14 +2,15 @@
  * Every saved post and draft of the signed-in owner, with its original photos
  * (and HEIC view renditions), is kept current on all of the owner's devices.
  * Local documents are never dropped: a post changed on two devices keeps the
- * older side as a separate local draft ("충돌로 보관한 이전 내용"). Publication
- * stays an explicit, separate action and selects no photos by default. */
+ * later side and the other side as a recovery copy ("복구 사본"), with no
+ * exception for saved posts (2026-11-02 owner decision). Publication stays an
+ * explicit, separate action and selects no photos by default. */
 (function (root, factory) {
   'use strict'; const api = factory(root); (root.HaedoLife ||= {}).BlogSync = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const CONFLICT_PREFIX = '충돌로 보관한 이전 내용 · ';
+  const CONFLICT_PREFIX = '복구 사본 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
   // A concurrent local change (another tab) is simply decided again next cycle.
   const QUIET = new Set(['request_cancelled', 'blog_state_conflict', 'photo_post_conflict']);
@@ -111,15 +112,35 @@
       const doc = { ...remoteDoc, id, revision, replaces: remoteDoc.status === 'saved' ? null : localReplaces(ws, remoteDoc.replaces, byRemote) };
       photoPost.validate(doc); return doc;
     }
-    function conflictCopy(doc) {
+    function recoveryTitle(title) {
+      let value = CONFLICT_PREFIX + (title || '');
+      while (value.length > 500) value = Array.from(value).slice(0, -1).join('');
+      return value;
+    }
+    // A new unbound draft holding a document's content; it syncs as its own post.
+    function draftCopy(doc, title) {
       const base = typeof photoPost.upgrade === 'function' ? photoPost.upgrade({ ...doc, replaces: null }) : structuredClone({ ...doc, replaces: null });
-      let title = CONFLICT_PREFIX + (base.title || '');
-      while (title.length > 500) title = Array.from(title).slice(0, -1).join('');
       // The kept copy retains the time its content was written.
       Object.assign(base, { id: makeId(), revision: 0, status: 'draft', replaces: null, title });
       if (Object.hasOwn(base, 'archived')) base.archived = false;
       photoPost.validate(base); return base;
     }
+    const conflictCopy = doc => draftCopy(doc, recoveryTitle(doc.title));
+    // Latest wins (2026-11-01 rule; 2026-11-02: saved posts are no exception).
+    // Both sides are compared by the time their content was written
+    // (document updatedAt): the only time both sides have, since this device's
+    // unsent edit has no server time and the operation receipt carries none.
+    // A server document cannot have been written after the server stored it,
+    // so a device clock running ahead is bounded by the server commit time;
+    // this device's own time is bounded by its current clock. An unreadable
+    // time counts as oldest, and a tie keeps the server version: the server
+    // orders commits, so every device decides the same way.
+    function writtenAt(value, limit) {
+      const at = typeof value === 'string' ? Date.parse(value) : NaN;
+      if (!Number.isFinite(at)) return -Infinity;
+      return Number.isFinite(limit) ? Math.min(at, limit) : at;
+    }
+    const remoteIsLater = (row, post) => writtenAt(row.data?.updatedAt, typeof row.updated_at === 'string' ? Date.parse(row.updated_at) : NaN) >= writtenAt(post.updatedAt, now());
     const synced = (state, row, extra = {}) => ({ ...state, enabled: true, enableOnSave: false, remoteRevision: row.revision, remoteManifest: row.data,
       remoteWorkspaceId: row.workspace_id, publication: row.publication ?? null, pending: null, conflict: null, status: 'synced', error: null, ...extra });
     const held = (ws, id) => (holds.get(key(ws, id)) || 0) > 0;
@@ -146,7 +167,7 @@
           expectedRevision: pending.expectedRevision, operationId: pending.operationId, data: pending.manifest }); guard(c);
       } catch (error) {
         // The server refuses to turn a saved post back into a draft. Decide it
-        // as a conflict (the saved version wins) instead of retrying forever.
+        // as a conflict (by the latest-wins rule) instead of retrying forever.
         if (error?.code !== 'invalid_request' || pending.manifest.status !== 'draft' || attempt >= 2) throw error;
         const head = await remote.read(latest.remoteId); guard(c);
         if (head?.data.status !== 'saved') throw error;
@@ -191,23 +212,36 @@
       return send(c, state, post, attempt, byRemote);
     }
     // Both this device and the server changed the post since the last sync.
-    // The later document (by its own updatedAt) stays in place; the other side
-    // is kept as a separate local draft that itself syncs to every device.
+    // The later document (remoteIsLater) stays and the other side is kept as a
+    // recovery copy that itself syncs to every device.
     async function resolveConflict(c, state, post, attempt = 0, byRemote = null) {
       const row = await remote.read(state.remoteId); guard(c);
       if (!row) {
         await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
-      // A post finished on another device (draft -> saved) never returns to a
-      // draft: the saved server version stays and this device's later draft
-      // text is kept as its own draft, whatever the edit times are.
-      const finishedElsewhere = row.data.status === 'saved' && post.status === 'draft';
-      if (row.revision === state.remoteRevision && !finishedElsewhere) return pushLocked(c, { attempt: attempt + 1, byRemote });
-      const remoteWins = finishedElsewhere || Date.parse(row.data.updatedAt) > Date.parse(post.updatedAt);
-      if (remoteWins && held(c.ws, c.id)) return getState(c.ws, c.id);
+      // The server never turns a saved post back into a draft, so this
+      // device's draft cannot simply be sent over a saved server version.
+      const regression = row.data.status === 'saved' && post.status === 'draft';
+      if (row.revision === state.remoteRevision && !regression) return pushLocked(c, { attempt: attempt + 1, byRemote });
+      const remoteWins = remoteIsLater(row, post);
+      // Both outcomes that change this local document wait for an open editor.
+      if ((remoteWins || regression) && held(c.ws, c.id)) return getState(c.ws, c.id);
       const remoteDoc = await download(c, row);
       const map = byRemote || (await snapshot(c)).byRemote;
+      if (!remoteWins && regression) {
+        // The later draft wins, but the server identity stays saved (and keeps
+        // any publication: a public copy changes only by an explicit action).
+        // That saved version becomes the recovery copy in place: renamed, still
+        // saved, uploaded as such. The winning draft continues as a new draft
+        // with its own server identity, so nothing is lost on any device.
+        const kept = localDoc(remoteDoc, c.id, post.revision, c.ws, map); kept.title = recoveryTitle(kept.title);
+        await storage.commitBlogSync(c.ws, { postId: c.id, post: kept, baseRevision: post.revision,
+          binding: synced(state, row, { status: 'pending' }), bindingRevision: state.revision, upload: true, copy: draftCopy(post, post.title) }, { isCurrent: () => current(c) });
+        guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id));
+        kick(1000); // the renamed version and the winning draft reach the other devices promptly
+        return getState(c.ws, c.id);
+      }
       if (remoteWins) {
         await storage.commitBlogSync(c.ws, { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision,
           binding: synced(state, row), bindingRevision: state.revision, copy: conflictCopy(post) }, { isCurrent: () => current(c) });
