@@ -1,7 +1,9 @@
 -- Isolated local PostgreSQL only (blog-bootstrap.sql + blog migrations).
 -- 20261102120000_life_blog_public_photo_copies: every published photo, in every
 -- format, is a registered public copy (HEIC/HEIF copies come from their view).
--- Synthetic Storage metadata and digests; everything is rolled back.
+-- Synthetic Storage metadata and digests; everything is rolled back. Runs after
+-- 20261102110000_life_blog_ai_authorship (production order): the post carries
+-- private AI authorship marks that no public snapshot may contain.
 begin;
 create temporary table blog_copy_results(label text primary key);
 create function pg_temp.copy_assert(ok boolean,label text) returns void language plpgsql security definer set search_path=pg_catalog as $$
@@ -25,7 +27,8 @@ begin
   'view',jsonb_build_object('type','image/jpeg','size',105,'digest',repeat('5',64),'width',4032,'height',3024));
  d:=jsonb_build_object('format','life-photo-post-v2','id',p::text,'revision',1,'title','사진 네 장','status','saved','replaces',null,
   'createdAt','2026-11-02T00:00:00.000Z','updatedAt','2026-11-02T00:00:00.000Z','photos',jsonb_build_array(jpeg,png,webp,heic),'attachments','[]'::jsonb,'archived',false,
-  'ops',jsonb_build_array(jsonb_build_object('insert',E'네 형식\n'),
+  'ops',jsonb_build_array(jsonb_build_object('insert','AI로 다듬은 문장','attributes',jsonb_build_object('author','ai','bold',true)),
+   jsonb_build_object('insert',' 그리고 AI 표시만 있는 문장','attributes',jsonb_build_object('author','ai')),jsonb_build_object('insert',E'네 형식\n'),
    jsonb_build_object('insert',jsonb_build_object('photo',jsonb_build_object('id','jpeg-photo','caption','JPEG','alt',''))),
    jsonb_build_object('insert',jsonb_build_object('photo',jsonb_build_object('id','png-photo','caption','PNG','alt',''))),
    jsonb_build_object('insert',jsonb_build_object('photo',jsonb_build_object('id','webp-photo','caption','WebP','alt',''))),
@@ -105,6 +108,10 @@ begin
  perform pg_temp.copy_assert(position(repeat('1',64) in pub::text)=0 and position(repeat('2',64) in pub::text)=0 and position(repeat('3',64) in pub::text)=0 and position(repeat('4',64) in pub::text)=0
   and position(repeat('5',64) in pub::text)=0,'no original or HEIC view digest is public');
  perform pg_temp.copy_assert(position('private' in pub::text)=0 and position('image/webp' in pub::text)=0 and position('image/heic' in pub::text)=0,'no private file name or original type is public');
+ perform pg_temp.copy_assert(not exists(select 1 from jsonb_array_elements(pub->'snapshot'->'ops') o where o->'attributes' ? 'author')
+  and position('"ai"' in (pub->'snapshot'->'ops')::text)=0,'a publication with photos carries no AI authorship mark');
+ perform pg_temp.copy_assert(pub->'snapshot'->'ops'->0=jsonb_build_object('insert','AI로 다듬은 문장','attributes',jsonb_build_object('bold',true))
+  and pub->'snapshot'->'ops'->1=jsonb_build_object('insert',' 그리고 AI 표시만 있는 문장'),'only the author attribute is dropped; other formats and text stay, emptied attributes disappear');
  execute 'set local role service_role';
  n:=0;
  for item in select * from jsonb_array_elements(pub->'snapshot'->'photos') loop
@@ -140,6 +147,12 @@ begin
  perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
  r:=public.life_blog_publish(p,1,'00000000-0000-4000-8000-000000000002','{}','{"name":"익명","intro":"글만"}',1);
  perform pg_temp.copy_assert(r->>'token'=tok::text and r->'revision'='2','the earlier RPC still publishes text and keeps the URL');
+ execute 'set local role anon'; perform set_config('request.jwt.claims','{}',true);
+ pub:=public.life_blog_public_read(tok);
+ perform pg_temp.copy_assert(jsonb_array_length(pub->'snapshot'->'photos')=0 and not exists(select 1 from jsonb_array_elements(pub->'snapshot'->'ops') o where o->'attributes' ? 'author'),
+  'a text-only publication through the earlier RPC carries no AI authorship mark');
+ execute 'set local role authenticated'; perform set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ perform pg_temp.copy_assert(public.life_blog_read(p)->'data'->'ops'->0->'attributes'->>'author'='ai','the private copy keeps its AI mark');
  perform pg_temp.copy_assert(public.life_blog_publish_copies(p,1,'00000000-0000-4000-8000-000000000002','{}','{"name":"익명","intro":"글만"}',1,'{}')=r,'without copies both RPCs share one receipt format');
 
  -- Withdrawal and deletion include the copies.

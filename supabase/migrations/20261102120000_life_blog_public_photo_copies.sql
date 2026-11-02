@@ -13,6 +13,10 @@
 --  * the earlier public.life_blog_publish keeps its signature and receipts for
 --    text-only selections and refuses any photo without a copy (outdated
 --    clients fail closed).
+-- AI authorship marks (20261102110000) stay private on this path too: text ops
+-- lose only their author attribute, exactly as that migration's publish does.
+-- valid_document and the private publish are not redefined here, so the md5
+-- guard of 20261102-blog-ai-authorship-install.sql is unaffected.
 -- Functions of the 2026-11-01 install bundle (valid_document, save, ready,
 -- prepare_asset, private publish, delete_post) are not redefined, so
 -- re-running that bundle cannot undo this change. Originals, views, documents,
@@ -70,6 +74,17 @@ begin
  if a.deleted_at is not null then update haedo_blog_private.assets set deleted_at=null where owner_id=who and post_id=p_post_id and photo_id=p_photo_id and digest=p_digest; end if;
  return jsonb_build_object('bucket','haedo-blog-originals','path',object_path,'exists',exists(select 1 from storage.objects where bucket_id='haedo-blog-originals' and name=object_path));
 end $$;
+
+-- A public text op: the private AI authorship mark (author) is dropped and an
+-- emptied attributes object removed; text and every other format unchanged.
+-- Same rule as the publish of 20261102110000_life_blog_ai_authorship.sql.
+create or replace function haedo_blog_private.public_text_op(op jsonb)
+returns jsonb language sql immutable set search_path=pg_catalog as $$
+ select case when jsonb_typeof(op->'attributes')='object' and op->'attributes' ? 'author'
+  then case when (op->'attributes')-'author'='{}'::jsonb then op-'attributes' else jsonb_set(op,'{attributes}',(op->'attributes')-'author') end
+  else op end
+$$;
+revoke all on function haedo_blog_private.public_text_op(jsonb) from public,anon,authenticated,service_role;
 
 -- Same CAS, receipts and snapshot as the earlier publish, except that the
 -- public bytes of every chosen photo are its registered public copy, named in
@@ -130,7 +145,7 @@ begin
   media:=media||jsonb_build_object(public_id,jsonb_build_object('bucket','haedo-blog-originals','path',a.path,'type',a.mime,'size',a.bytes,'digest',a.digest,'copy',true));
  end loop;
  for op in select * from jsonb_array_elements(p.data->'ops') loop
-  if jsonb_typeof(op->'insert')='string' then ops:=ops||jsonb_build_array(op);
+  if jsonb_typeof(op->'insert')='string' then ops:=ops||jsonb_build_array(haedo_blog_private.public_text_op(op));
   elsif mapping ? (op->'insert'->'photo'->>'id') then
     ops:=ops||jsonb_build_array(jsonb_set(op,'{insert,photo,id}',mapping->(op->'insert'->'photo'->>'id')));
   end if;

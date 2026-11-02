@@ -64,6 +64,8 @@ CI는 별도 `blog` 작업에서 이 흐름과 글 관리·익명 읽기·정확
     - 11-01 설치 묶음이 이전 private `publish`를 다시 만들거나 다시 grant해도, 그 함수는 사진이 든 공개본을 쓸 수 없다.
     - 철회(active=false)는 막지 않는다.
   - `public_media`: 표시된 미디어만 돌려준다. 이 마이그레이션 전의 공개본 사진은 내보내지 않는다.
+  - AI 표시(`20261102110000_life_blog_ai_authorship`)도 이 경로에서 비공개로 남는다. `publish_copies`는 문자열 op에서 `author` 속성 하나만 지우고, 속성이 비면 `attributes`를 없앤다(도우미 `public_text_op`, AI 마이그레이션의 `publish`와 같은 규칙). 사진이 있든 없든, 기존 `life_blog_publish`로 들어오든 같다.
+  - `valid_document`와 private `publish`는 다시 정의하지 않는다. 그래서 `20261102-blog-ai-authorship-install.sql`의 md5 가드(이 두 함수 본문 확인)에 영향이 없고, 이 마이그레이션 뒤에도 AI 설치 묶음은 그대로 진행된다(`npm run test:sql-replay`가 확인).
   - 11-01 묶음의 함수(valid_document·save·ready·prepare_asset·private publish·delete_post)는 다시 정의하지 않는다. `npm run test:sql-replay`와 `tests/run-blog-sql-postgres.cjs`가 묶음 재실행 직후에도 규칙이 유지되는지 확인한다.
   - 행 수 보호: public·haedo_*·storage.objects 모든 테이블의 행 수와 블로그 자산·글·공개본 행의 해시를 먼저 기록하고, 다르면 전체를 되돌린다.
 - **Edge `haedo-blog-media`**: 응답 전에 객체 전체를 읽어 확인한다. 하나라도 어긋나면 502로 아무 바이트도 보내지 않는다.
@@ -89,6 +91,7 @@ CI는 별도 `blog` 작업에서 이 흐름과 글 관리·익명 읽기·정확
 
 ### 운영 적용 순서 (총괄)
 
+0. **선행 조건:** AI 표시 마이그레이션 `20261102110000_life_blog_ai_authorship`이 운영에 이미 적용돼 있어야 한다(2026-11-02 PR #169로 적용됨). 이 마이그레이션은 그 위에 적용한다. 11-01 설치 묶음을 다시 실행했다면, 그 문서 절차대로 AI 설치 SQL을 먼저 다시 적용한 뒤 이 마이그레이션을 적용한다. 이 마이그레이션은 두 설치 묶음이 다시 실행돼도 되돌아가지 않는다.
 1. **적용 전 기록**
    - `haedo_blog_private.publish`·`public_media`·`public.life_blog_publish`의 정의 해시
    - assets/posts/publications/receipts 행 수
@@ -96,6 +99,7 @@ CI는 별도 `blog` 작업에서 이 흐름과 글 관리·익명 읽기·정확
    - 현재 Edge `haedo-blog-media` 버전 번호
 2. **마이그레이션 `20261102120000_life_blog_public_photo_copies` 적용.** 확인할 것:
    - `assets.public_copy` 열
+   - `haedo_blog_private.public_text_op` 함수(AI 표시 제거)와 `publish_copies`가 그것을 쓰는지(`prosrc like '%public_text_op%'`)
    - 새 함수와 두 공개 래퍼의 invoker·권한
    - 트리거 `blog_publications_copies_only` 사용 중
    - 행 수 동일

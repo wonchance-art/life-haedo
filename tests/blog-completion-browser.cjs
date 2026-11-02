@@ -167,7 +167,7 @@ async function main() {
     // createdb fails on an existing database; never replace another fixture.
     server.docker(['exec', '-i', container, 'createdb', '-U', 'postgres', database]);
     const bootstrap = await fs.readFile(path.resolve(__dirname, '../supabase/tests/blog-bootstrap.sql'), 'utf8');
-    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101091500_life_blog_account_sync.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101160000_life_blog_delete_guard.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'), 'utf8');
+    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101091500_life_blog_account_sync.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101160000_life_blog_delete_guard.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102110000_life_blog_ai_authorship.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'), 'utf8');
     server.docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], bootstrap + '\n' + migration);
     migrationSha256 = digest(Buffer.from(migration));
   }
@@ -502,6 +502,41 @@ async function main() {
       await capture(second.page, 'continuity-after-delete', '#lifeHome'); await second.page.setViewportSize({ width: 1440, height: 1000 });
       assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
       phase('Explicit deletion reaches the server, its originals and the other device');
+    });
+    await check('AI authorship marks stay private when a marked post is published with and without a photo through real SQL', async () => {
+      // 20261102110000 (AI marks) and 20261102120000 (photo copies): every
+      // publication goes through publish_copies, which must drop author too.
+      const made = await page.evaluate(async () => {
+        const L = HaedoLife, s = L.Shell.storage, ws = await s.getActive(), out = [];
+        for (const withPhoto of [true, false]) {
+          const doc = L.PhotoPost.create(L.Core.id); doc.status = 'saved'; doc.title = withPhoto ? 'AI 표시와 사진이 있는 글' : 'AI 표시만 있는 글';
+          doc.ops = [{ insert: 'AI로 다듬은 문장', attributes: { author: 'ai', bold: true } }, { insert: ' AI 표시만 있는 구간', attributes: { author: 'ai' } }, { insert: ' 내가 쓴 문장\n' }];
+          if (withPhoto) {
+            const c = document.createElement('canvas'); c.width = 64; c.height = 48; const x = c.getContext('2d'); x.fillStyle = '#5a7a6a'; x.fillRect(0, 0, 64, 48);
+            const blob = await new Promise(resolve => c.toBlob(resolve, 'image/png'));
+            const photo = await L.PhotoPost.readPhoto(new File([blob], 'ai-side.png', { type: 'image/png' }), L.Core.id);
+            doc.photos = [photo]; doc.ops.push({ insert: { photo: { id: photo.id, caption: 'AI 표시 옆 사진', alt: '합성 풍경' } } }, { insert: '\n' });
+          }
+          const saved = await s.savePhotoPost(ws, doc, 0); out.push({ id: saved.id, photoId: saved.photos[0]?.id || null });
+        }
+        return out;
+      });
+      for (const item of made) {
+        await kick(page); const state = await until(() => syncState(page, item.id), value => value?.status === 'synced' && value.remoteRevision > 0, 'AI-marked post reaches the private server');
+        assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: state.remoteId }).data.ops[0].attributes.author, 'ai', 'the private server copy keeps the AI mark');
+        await manager(page); await review(page, item.id, item.photoId ? [item.photoId] : []);
+        const url = await publishedURL(page), token = new URL(url).searchParams.get('post');
+        const snapshot = server.rpc(null, 'life_blog_public_read', { p_token: token }).snapshot;
+        assert.equal(snapshot.photos.length, item.photoId ? 1 : 0);
+        assert.equal(snapshot.ops.filter(op => op.attributes && Object.hasOwn(op.attributes, 'author')).length, 0, 'no author attribute in the public snapshot');
+        assert(!JSON.stringify(snapshot.ops).includes('"ai"'));
+        assert.deepEqual(snapshot.ops.slice(0, 2), [{ insert: 'AI로 다듬은 문장', attributes: { bold: true } }, { insert: ' AI 표시만 있는 구간' }], 'only the AI mark is dropped');
+        await visitor.page.goto(url); await publicState(visitor.page, 'published');
+        assert.match(await visitor.page.locator('#blogContent').innerText(), /AI로 다듬은 문장 AI 표시만 있는 구간 내가 쓴 문장/);
+        assert.equal(await visitor.page.locator('#blogContent .photo-ai-text, #blogContent [data-author], #blogContent [class*="ai-"]').count(), 0, 'the anonymous reader shows no AI mark');
+        assert.equal(await visitor.page.locator('#blogContent strong').innerText(), 'AI로 다듬은 문장');
+        await click(page, '공개 철회'); await click(page, '공개 검토 닫기');
+      }
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []);
     report.pass = true;

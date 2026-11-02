@@ -14,6 +14,7 @@ const container = `haedo-blog-postgres-${Date.now()}${process.pid}`;
 const migration = "supabase/migrations/20261017144744_life_blog_originals.sql";
 const syncMigration = "supabase/migrations/20261101091500_life_blog_account_sync.sql";
 const deleteGuardMigration = "supabase/migrations/20261101160000_life_blog_delete_guard.sql";
+const authorshipMigration = "supabase/migrations/20261102110000_life_blog_ai_authorship.sql";
 const copyMigration = "supabase/migrations/20261102120000_life_blog_public_photo_copies.sql";
 const photoFixtures = createRequire(import.meta.url)("../tests/fixtures/photo-metadata.cjs");
 let owns = false;
@@ -110,18 +111,24 @@ try {
  if (!ready) throw new Error("isolated PostgreSQL did not start");
  const isolation = JSON.parse(docker(["inspect", container, "--format", "{{json .HostConfig}}"]));
  assert.equal(isolation.NetworkMode, "none"); assert.equal(Object.keys(isolation.PortBindings || {}).length, 0);
- await fixture("supabase/tests/blog-bootstrap.sql"); await fixture(migration); await fixture(syncMigration); await fixture(deleteGuardMigration);
+ await fixture("supabase/tests/blog-bootstrap.sql"); await fixture(migration); await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(authorshipMigration);
  const sqlChecks = parsed(await fixture("supabase/tests/blog-originals.sql")); assert.equal(sqlChecks.failures, 0);
+ const authorshipChecks = parsed(await fixture("supabase/tests/blog-ai-authorship.sql")); assert.equal(authorshipChecks.failures, 0);
  const installed = parsed(await fixture("supabase/tests/blog-installation.sql")); assert.equal(Object.values(installed).every((v) => v === true), true);
- await fixture(syncMigration); await fixture(deleteGuardMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
- // 2026-11-02 public photo copies; re-running the 2026-11-01 files must not undo them.
+ await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(authorshipMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
+ // 2026-11-02 public photo copies (applied after the AI authorship migration, as in production).
  await fixture(copyMigration); const copyChecks = parsed(await fixture("supabase/tests/blog-public-copies.sql")); assert.equal(copyChecks.failures, 0);
- // Right after the 2026-11-01 files run again (copy migration not re-applied) the copy rule still holds.
- await fixture(syncMigration); await fixture(deleteGuardMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
+ // Every publication now goes through publish_copies; AI marks must still stay private.
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-ai-authorship.sql")), authorshipChecks);
+ // Right after the 2026-11-01 files run again and authorship is re-applied (documented
+ // procedure; copy migration not re-applied) the copy rule and AI rule still hold.
+ await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(authorshipMigration);
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
+ assert.deepEqual(parsed(await fixture("supabase/tests/blog-ai-authorship.sql")), authorshipChecks);
  await fixture(copyMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
  const simultaneous = await concurrency(), streams = await edge();
  const report = { pass: true, postgres: docker(["exec", container, "postgres", "--version"]).trim(),
-  sqlAssertions: sqlChecks.passed, publicCopyAssertions: copyChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,
+  sqlAssertions: sqlChecks.passed, authorshipAssertions: authorshipChecks.passed, publicCopyAssertions: copyChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,
   network: "none", publishedHostPorts: 0, migrationReinstallPreserved: true, realStorageHttp: false, remoteDatabaseAccess: false,
   ...(keep ? { container, database: "postgres" } : {}) };
  if (keep) {

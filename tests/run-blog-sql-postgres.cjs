@@ -26,6 +26,9 @@ if (process.argv.length !== 2) throw Error('No endpoint, account, SQL, or creden
 const ROOT = pgStub.ROOT, file = name => path.join(ROOT, name);
 const BEFORE = ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql',
   'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'];
+// Applied in production before the copy migration (PR #169). Its own install file
+// is re-applied after the 2026-11-01 bundle (documented procedure).
+const AUTHORSHIP = 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql';
 const COPIES = 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pass = name => console.log('PASS ' + name);
@@ -41,8 +44,13 @@ async function main() {
     const db = await pg.connect();
     try {
       for (const name of BEFORE) await pgStub.applyFile(db, file(name));
+      const authorshipPresent = fs.existsSync(file(AUTHORSHIP));
+      if (authorshipPresent) await pgStub.applyFile(db, file(AUTHORSHIP));
       const originals = result(await pgStub.applyFile(db, file('supabase/tests/blog-originals.sql')));
       assert.equal(originals.failures, 0);
+      const ai = authorshipPresent ? result(await pgStub.applyFile(db, file('supabase/tests/blog-ai-authorship.sql'))) : null;
+      if (ai) { assert.equal(ai.failures, 0); pass(`blog-ai-authorship.sql ${ai.passed} assertions`); }
+      const aiStillPrivate = async label => { if (ai) { assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-ai-authorship.sql'))), ai, label); } };
       const installed = result(await pgStub.applyFile(db, file('supabase/tests/blog-installation.sql')));
       assert.deepEqual(Object.entries(installed).filter(([, ok]) => ok !== true), [], 'installation checks');
       pass(`blog-originals.sql ${originals.passed} assertions, blog-installation.sql ${Object.keys(installed).length} checks`);
@@ -52,14 +60,20 @@ async function main() {
         const copies = result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql')));
         assert.equal(copies.failures, 0);
         pass(`blog-public-copies.sql ${copies.passed} assertions`);
-        // The 2026-11-01 install bundle re-runs these two files; right after that
-        // (copy migration not re-applied) the copy rule must still hold.
+        // Every publication now goes through publish_copies: AI marks must still stay private.
+        await aiStillPrivate('after the copy migration');
+        if (ai) pass('blog-ai-authorship.sql still passes after the copy migration (no AI mark reaches a public snapshot)');
+        // The 2026-11-01 install bundle re-runs these two files (and authorship is re-applied
+        // after it); right after that (copy migration not re-applied) both rules must hold.
         for (const name of BEFORE.slice(2)) await pgStub.applyFile(db, file(name));
+        if (authorshipPresent) await pgStub.applyFile(db, file(AUTHORSHIP));
         assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql'))), copies);
         assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-installation.sql'))), installed);
-        pass('re-running the 2026-11-01 blog migrations does not undo the copy rule');
+        await aiStillPrivate('after re-running the 2026-11-01 files');
+        pass('re-running the 2026-11-01 blog migrations does not undo the copy rule or the AI rule');
         await pgStub.applyFile(db, file(COPIES));
         assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql'))), copies);
+        await aiStillPrivate('after re-applying the copy migration');
         pass('re-applying the copy migration keeps every result');
       } else console.log('NOTE ' + COPIES + ' is absent: checking the earlier contract only');
       await servedBytes(db, copiesPresent);
