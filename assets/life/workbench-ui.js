@@ -1091,7 +1091,14 @@
       // teardown disposes its own handle only, never the background instance.
       if (!session.materialContinuity) {
         const background = life.MaterialContinuitySync.managerFor?.(storage);
-        session.materialContinuity = background ? Object.freeze({ ...background, dispose() {} }) : life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
+        try {
+          session.materialContinuity = background ? Object.freeze({ ...background, dispose() {} }) : life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
+        } catch (error) {
+          if (error?.code !== 'sync_common_missing') throw error;
+          // An older page mixed with newer modules during an update: keep the page as it was and
+          // say so, instead of leaving materialOpen set and failing again on every redraw.
+          session.materialOpen = false; renderPage(); report(error, session); return;
+        }
       }
       const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
       const continuityHost = el('section', null, 'mw-continuity');

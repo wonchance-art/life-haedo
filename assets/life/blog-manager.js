@@ -146,7 +146,11 @@
         area.replaceChildren(meta(errorText(e)), button('인용한 원문 목록 다시 확인', async () => showEvidence(row, area)));
       }
     }
-    function requireSync(method) { if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 동기화를 준비하지 못했습니다. 글은 이 기기에 그대로 있습니다.'), { code: 'schema_missing' }); }
+    function requireSync(method) {
+      // An older page mixed with newer modules (no SyncCommon) has no blog engine until it is reloaded.
+      if (!blogSync && root.HaedoLife?.BlogSync && !root.HaedoLife?.SyncCommon) throw Object.assign(new Error('앱을 새로고침하면 계정에 올립니다. 글은 이 기기에 그대로 있습니다.'), { code: 'app_refresh_required' });
+      if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 동기화를 준비하지 못했습니다. 글은 이 기기에 그대로 있습니다.'), { code: 'schema_missing' });
+    }
     const syncLabels = { synced: '모든 기기에 저장됨', pending: '저장 대기', error: '오류 · 다시 시도' };
     function showSyncState(id, node) {
       const value = syncStates[id] || 'pending';

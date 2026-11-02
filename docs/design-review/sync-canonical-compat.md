@@ -10,7 +10,10 @@
 - **엔진 연결:** `blog-sync.js`와 `material-continuity-sync.js`는 엔진을 만들 때(`create()`) 공통 모듈을 꺼내 쓴다.
   - 공통 모듈이 없으면 `sync_common_missing` 오류를 낸다. 이때도 모듈 등록은 유지된다.
   - `ui.js`의 블로그 동기화 생성 한 곳은 이 오류일 때 블로그 동기화 없이 화면을 연다. 모듈이 없을 때와 같은 동작이다.
-  - 갱신 중에 이전 `index.html`과 새 모듈이 섞인 상태를 탐침했다. 결과는 pageerror·콘솔 오류 0, 화면 정상이고, 블로그 동기화만 시작하지 않았다.
+  - 갱신 중에 이전 `index.html`과 새 모듈이 섞인 상태를 탐침했다. 결과는 pageerror·콘솔 오류 0, 화면 정상이다.
+    - 블로그 동기화와 준비(자료로 글쓰기) 동기화는 시작하지 않는다.
+    - 블로그 상태는 `저장됨 · 앱을 새로고침하면 계정에 올립니다.`로 표시한다. 글 관리의 서버 작업은 같은 뜻의 안내(`app_refresh_required`)를 낸다.
+    - `자료로 글쓰기`를 열면 페이지는 그대로 두고 오류 안내만 보인다(후속 검수 m-a). 이전에는 `materialOpen`이 남아, 다시 그릴 때마다 같은 예외로 본문이 사라졌다.
 - **로드 순서:** `index.html`·`life.html`에서 `blog-sync.js` 바로 앞에서 불러온다.
 - **목록:** `sw.js` 오프라인 목록과 `scripts/prepare-site.mjs` 배포 허용 목록에 넣었다.
 - **캐시 이름:** `haedo-v173` → `haedo-v174`로 올렸다.
@@ -34,10 +37,10 @@
 
 | 묶음·위치 | 쓰임 | 저장 |
 |---|---|---|
-| G4 `material-continuity.js:111-116` `fingerprint()` | 준비 내용의 SHA-256 | **예, 기기.** `storage.js:1755-1757`의 `pending.fingerprint`, `material-continuity-sync.js`의 전송 기준·서버 판 비교(`model.fingerprint`)에 쓰인다. 서버로는 보내지 않는다(`material-continuity-remote.js`에 0건) |
+| G4 `material-continuity.js:111-116` `fingerprint()` | 준비 내용의 SHA-256 | **예, 기기.** `storage.js:1755-1757`의 `pending.fingerprint`, 충돌 때의 `conflict.localFingerprint`(`material-continuity-sync.js:123`·`:382`, `storage.js:1760-1762`), `material-continuity-sync.js`의 전송 기준·서버 판 비교(`model.fingerprint`)에 쓰인다. 서버로는 보내지 않는다(`material-continuity-remote.js`에 0건) |
 | G3 `naver-capture.js:111-115` `hashInput` → `fingerprint()` | 수집 본문의 SHA-256 | **예, 서버.** Edge `harvest-worker.mjs:165`가 같은 파일로 계산해 `p_capture_hash`에 저장하고, 클라이언트가 같은 함수로 대조한다 |
 | G6 `account-materials.js:55-56` | 계정 자료 등록 그래프의 SHA-256 | **예, 영수증.** `account-materials.js:133`의 `accountMaterialRegistration.fingerprint`, `storage.js:3142`·`:3159` |
-| G3 `material-continuity-sync.js` `canonical`(지금은 `SyncCommon.canonical`) | 검토 기준 비교와 확인용 해시(`:104-106`) | 아니오. 한 번 실행되는 동안만 비교하고 버린다 |
+| G3 `material-continuity-sync.js` `canonical`(지금은 `SyncCommon.canonical`) | 검토 기준 비교와 확인용 해시(`:111-113`) | 아니오. 한 번 실행되는 동안만 비교하고 버린다 |
 | G3 `blog-sync.js` `canonical`(지금은 `SyncCommon.canonical`) | 매니페스트·공개 상태 동등 비교 | 아니오 |
 | G5 `account-docs-sync.js:44-92` | 목록 항목 키, 내용 동등 비교 | 아니오 |
 | G2 `core.js:225-227, 343, 409-411, 414-526` | 원문 버전 정체성, 발췌 중복 키, 불변·휴지통·백업 목록 대조 | 아니오. 메모리에서 같은 함수로 양쪽을 계산한다 |
@@ -72,6 +75,11 @@
 - 총괄 결정(2026-11-02):
   - `naver-capture`·`obsidian-decisions`는 공유하지 않는다.
   - 지문 정규화는 하지 않는다.
+
+## 한계 (후속 검수 m-e)
+
+- 섞임 판별은 "블로그 모듈은 있는데 `SyncCommon`이 없다"는 조건 하나로 한다. 이것은 #171 이후의 섞임만 가리킨다. 다른 모듈 조합이 섞이는 경우는 이 문구가 아니라 기존 오류 안내가 나온다.
+- 캐시 이름을 올렸으므로(`haedo-v174`) 서비스워커 경로에서는 섞임이 생기지 않는다. 남는 경로는 서비스워커 없이 처음 방문할 때의 HTTP 캐시(최대 600초)뿐이다.
 
 ## 미검증
 

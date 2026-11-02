@@ -753,6 +753,8 @@
         paused: "저장됨 · 곧 모든 기기에 올립니다.",
         conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 별도 초안으로 남습니다.",
         error: "저장됨 · 계정에 올리지 못했습니다. 자동으로 다시 시도합니다.",
+        // An older page mixed with newer modules (no SyncCommon) has no blog engine until reloaded.
+        refresh: "저장됨 · 앱을 새로고침하면 계정에 올립니다.",
       };
       serverStatus.textContent = labels[state] || labels.error;
       serverStatus.dataset.state = state;
@@ -770,6 +772,8 @@
       }
       serverActions.hidden = !serverActions.children.length;
     }
+    // No blog engine because this page lacks sync-common.js while the blog module is the newer one.
+    const staleApp = () => !blogSync && !!life.BlogSync && !life.SyncCommon;
     async function readServerState() {
       if (mode !== "read" || doc?.status !== "saved" || serverBusy) return;
       const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
@@ -781,7 +785,7 @@
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
-        serverValue = { id, revision, status: "error" };
+        serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       }
       showServerStatus();
     }
@@ -796,7 +800,7 @@
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
-        serverValue = { id, revision, status: "error" };
+        serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       } finally {
         if (sequence === serverSequence) {
           serverBusy = false;
