@@ -200,7 +200,7 @@ async function main() {
       const scopeNotice = await page.locator('#preservationNaverPhotos').innerText();
       assert.match(scopeNotice, /자료 JSON과 이 근거 ZIP에는 네이버 원문의 사진 사본이 포함되지 않습니다/);
       assert.match(scopeNotice, /원문을 열어 ‘글·사진 ZIP 저장’/);
-      assert.match(scopeNotice, /자료실 → 자료 메뉴 → 가져오기·관리 → 네이버 블로그 연결/);
+      assert.match(scopeNotice, /자료 → 자료 메뉴 → 가져오기·관리 → 네이버 블로그 연결/);
       assert.match(scopeNotice, /원문·사진 사본 ZIP 불러오기/);
       assert.equal(await page.locator('#preservationPostSelection input[data-post-id]').count(), 3, 'Unsaved drafts must not be export candidates');
       assert.equal(await page.locator('#preservationBoardSelection input[data-board-id]').count(), 2);

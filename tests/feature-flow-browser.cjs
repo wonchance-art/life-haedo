@@ -102,7 +102,7 @@ async function main() {
       assert.equal(await page.locator('#lifeBlogMenu').evaluate(node => node.open), true);
 
       await nav(page, 'tools'); await mode(page, 'tools');
-      assert.deepEqual(await page.locator('#lifeMain .life-destination').evaluateAll(nodes => nodes.map(node => node.querySelector('strong')?.textContent)), ['연간 계획', '목표', '습관']);
+      assert.deepEqual(await page.locator('#lifeMain .life-destination').evaluateAll(nodes => nodes.map(node => node.querySelector('strong')?.textContent)), ['연간 계획', '목표', '습관', '연표']);
       await capture(page, 'tools', size);
       await nav(page, 'manage'); await mode(page, 'manage');
       for (const label of ['글 공개·보관', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);

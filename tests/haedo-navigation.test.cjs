@@ -46,7 +46,7 @@ test('old section addresses open the new sections and only the four menu IDs or 
   for (const [id, expected] of [['home', 'schedule'], ['tools', 'schedule'], ['schedule', 'schedule'], ['news', 'news'], ['records', 'records'],
     ['manage', 'manage'], ['compose', null], ['hasOwnProperty', null], ['__proto__', null], [undefined, null]]) assert.equal(api.normalizeSection(id), expected, String(id));
   for (const [view, expected] of [['home', 'schedule'], ['blog', 'schedule'], ['account-blog', 'schedule'], ['tools', 'schedule'], ['annual-plan', 'schedule'],
-    ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'records'], ['backup', 'manage'], ['external-discovery', 'news']]) assert.equal(api.getSectionForView(view), expected, view);
+    ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'schedule'], ['backup', 'manage'], ['external-discovery', 'news']]) assert.equal(api.getSectionForView(view), expected, view);
 });
 
 test('planning links wait for saved input, suppress duplicate clicks and navigate once', async () => {

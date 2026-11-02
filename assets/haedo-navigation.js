@@ -17,11 +17,11 @@
     return sections.some(section => section.id === value) ? value : null;
   }
   const viewSections = Object.freeze({
-    home: 'schedule', blog: 'schedule', 'account-blog': 'schedule', tools: 'schedule', 'annual-plan': 'schedule',
+    home: 'schedule', blog: 'schedule', 'account-blog': 'schedule', tools: 'schedule', 'annual-plan': 'schedule', time: 'schedule',
     'public-cover': 'manage', 'public-pages': 'manage',
     'external-discovery': 'news', interests: 'news',
     sources: 'records', topics: 'records', source: 'records', 'source-edit': 'records',
-    collection: 'records', import: 'records', batch: 'records', write: 'records', time: 'records',
+    collection: 'records', import: 'records', batch: 'records', write: 'records',
     activities: 'records', page: 'records', related: 'records', find: 'records',
     'naver-blog': 'records', 'naver-capture': 'records', 'obsidian-update': 'records',
     'source-trash': 'records', discover: 'records', reflection: 'records', books: 'records',
@@ -168,6 +168,21 @@
       for (const handler of handlers) handler(compose.id);
     });
     nav.append(write);
+    // Pages whose heading scrolls with the page (goals, habits, workspace, timeline, login,
+    // privacy) carry the phone pencil inside that heading, so it never floats over content.
+    // The app pages keep the fixed pencil beside their sticky heading row.
+    const pageHeading = root.document.getElementById('lifeApp') ? null : root.document.querySelector('.p-main > .haedo-page-heading, header .haedo-page-heading');
+    if (pageHeading) {
+      const inline = root.document.createElement('a');
+      inline.className = 'haedo-icon-button haedo-heading-compose'; inline.href = compose.href; inline.dataset.haedoCompose = 'heading';
+      inline.setAttribute('aria-label', compose.label);
+      inline.append(root.HaedoLife.Icons.create('write'));
+      const actions = pageHeading.querySelector(':scope > .haedo-heading-actions') || (() => {
+        const group = root.document.createElement('div'); group.className = 'haedo-heading-actions'; pageHeading.append(group); return group;
+      })();
+      actions.append(inline);
+      root.document.body.dataset.haedoComposeInline = 'true';
+    }
     for (const item of sections) {
       const link = root.document.createElement('a');
       link.className = 'haedo-icon-button haedo-nav-link';

@@ -103,8 +103,7 @@
 html.auth-pending body > :not(.timeline-access):not(script):not(noscript) { visibility: hidden; }
 @media (max-width:760px) {
   .p-main { width: 100%; margin: 0; border-radius: 0; padding: 0 max(20px, env(safe-area-inset-right)) 48px max(20px, env(safe-area-inset-left)); }
-  /* The right end keeps room for the top-right 글쓰기 pencil (assets/haedo-shell.css). */
-  .p-main > .haedo-page-heading { margin-inline: min(-20px, calc(-1 * env(safe-area-inset-left))) min(-20px, calc(-1 * env(safe-area-inset-right))); padding-inline: max(20px, env(safe-area-inset-left)) max(52px, calc(env(safe-area-inset-right) + 44px)); }
+  .p-main > .haedo-page-heading { margin-inline: min(-20px, calc(-1 * env(safe-area-inset-left))) min(-20px, calc(-1 * env(safe-area-inset-right))); padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); }
   .p-footer { width: 100%; margin: 0; border-radius: 0; padding: 0 max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left)); }
   .document-title,.goal-copy strong,.habit-copy strong { font-size: var(--haedo-text-control); }
   .habit-week { width: 100%; grid-template-columns: repeat(7,minmax(44px,1fr)); gap: 0; }

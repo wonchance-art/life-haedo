@@ -245,7 +245,7 @@ async function main() {
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
       }
-      await openRecordsMenu(page); await button(page, '연표');
+      await nav(page, 'tools'); await button(page, '연표'); // 2026-11-02: 연표 is in 일정's 계획
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
       await assertCommonNavigation(page);
@@ -283,7 +283,36 @@ async function main() {
       }
       // The former 계획 back link of goals/habits still lands on 일정's plan view.
       await page.locator('[data-section-back]').click(); await ready(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
-      assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
+    });
+    await check('phone pencil scrolls with the heading on pages whose heading does not stick and never covers their controls', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      for (const [file, name] of [['goals.html', 'goals'], ['habits.html', 'habits'], ['workspace.html', 'workspace'], ['privacy.html', 'privacy']]) {
+        await page.goto(base + '/' + file);
+        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]')?.hidden, name);
+        const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+        const pencil = page.locator('.haedo-page-heading a[data-haedo-compose="heading"]');
+        assert.equal(await fixedPencil.isVisible(), false, file + ': no floating pencil');
+        assert.equal(await pencil.isVisible(), true, file + ': pencil in the heading');
+        assert.equal(await pencil.getAttribute('aria-label'), '글쓰기'); assert.equal(await pencil.getAttribute('href'), 'index.html?compose=1');
+        // A taller page (spacer added by the check only) shows the pencil leaving with its heading.
+        await page.evaluate(() => { const spacer = document.createElement('div'); spacer.style.height = '2000px'; document.querySelector('.p-main').append(spacer); });
+        const before = await pencil.evaluate(node => node.getBoundingClientRect().top);
+        await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' }));
+        const after = await pencil.evaluate(node => node.getBoundingClientRect().top);
+        assert(Math.abs(before - after - 300) < 2, file + ': pencil scrolls with the heading');
+        await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+        const overlaps = await pencil.evaluate(node => {
+          const p = node.getBoundingClientRect();
+          return [...document.querySelectorAll('.p-main a, .p-main button, .p-main summary, .p-main input')].filter(other => other !== node && !other.contains(node) && other.checkVisibility()).map(other => [other, other.getBoundingClientRect()])
+            .filter(([, r]) => Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 && Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5).map(([other]) => other.getAttribute('aria-label') || other.textContent.trim());
+        });
+        assert.deepEqual(overlaps, [], file + ': pencil overlaps');
+      }
+      // The app pages keep their sticky heading row and the pencil beside it.
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-compose]').isVisible(), true);
+      assert.equal(await page.locator('a[data-haedo-compose="heading"]').count(), 0);
     });
     await check('글쓰기 keeps one place, marks the writing screen current and the 일정 views switch with history', async ({ page }) => {
       await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
@@ -295,17 +324,38 @@ async function main() {
       await page.waitForFunction(() => new URLSearchParams(location.search).has('blog'));
       const url = page.url(), posts = await page.evaluate(() => document.querySelectorAll('.ql-editor').length);
       await write.click(); await settle(page); assert.equal(page.url(), url); assert.equal(await page.evaluate(() => document.querySelectorAll('.ql-editor').length), posts);
+      // A reload keeps a never-saved new post as the 글쓰기 screen, and 글쓰기 still opens no second post.
+      await page.locator('#photoTitle').fill('새로고침 뒤에도 쓰는 중인 글');
+      const stored = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.listPhotoPosts(await s.getActive())).map(post => post.status); });
+      // Poll the awaited IDB read (a pending Promise is truthy inside waitForFunction).
+      for (const deadline = Date.now() + 10000; (await stored()).length !== 1;) { assert(Date.now() < deadline, 'draft stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      await page.reload(); await ready(page); await settle(page); await page.locator('#lifeMain[data-mode="page"]').waitFor(); await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '새로고침 뒤에도 쓰는 중인 글');
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+      const reloaded = page.url(); await write.click(); await settle(page);
+      assert.equal(page.url(), reloaded); assert.deepEqual(await stored(), ['draft']);
       await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="sources"]').waitFor();
       assert.equal(await write.getAttribute('aria-current'), null);
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       await nav(page, 'home'); await page.locator('#lifeHome').waitFor();
+      // The 보기 단위 switch keeps one place in both views (review M1).
+      const switchX = () => page.locator('#lifeApp nav[aria-label="보기 단위"]').evaluate(node => Math.round(node.getBoundingClientRect().left));
+      for (const width of [1440, 820, 390]) {
+        await page.setViewportSize({ width, height: 900 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
+        const list = await switchX();
+        await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+        assert.equal(await switchX(), list, 'switch x at ' + width);
+        assert.equal(await page.locator('#lifeApp .life-toolbar [role="toolbar"][aria-label="화면 동작"]').count(), 1);
+      }
+      await page.setViewportSize({ width: 820, height: 1000 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
       const views = page.locator('#lifeApp nav[aria-label="보기 단위"] a');
-      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-current')])), [['목록', 'page'], ['계획', null]]);
+      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-current')])), [['목록', 'true'], ['계획', null]]);
       await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
       assert.equal(await page.evaluate(() => document.activeElement?.dataset.scheduleView), 'tools');
       assert.equal(await page.evaluate(() => location.search), '?section=schedule&view=tools');
       await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="home"]').waitFor();
       await page.goForward(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('[aria-current="page"]').count(), 1, 'one current page per document');
       await page.locator('[data-schedule-view="home"]').focus(); await page.keyboard.press('Enter'); await settle(page); await page.locator('#lifeHome').waitFor();
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
     });

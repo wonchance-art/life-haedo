@@ -290,10 +290,16 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','backup'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','backup'], ['public-pages','공개 페이지 관리','manage']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','tools'], ['annual-plan','연간 계획','tools'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','backup'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','backup'], ['public-pages','공개 페이지 관리','manage']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }
+      // A reloaded plan subview returns to 일정's 계획, not to the list (review M2).
+      await page.goto(base + '/index.html?section=schedule&view=annual-plan'); await ready(page); await mode(page, 'annual-plan');
+      await page.reload(); await ready(page); await mode(page, 'annual-plan');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '계획으로 돌아가기');
+      await back(page, 'tools');
+      assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
     });
     // History contract (2026-11-02): a screen change adds one history entry,
     // browser back/forward reopen the exact recorded screen, and a reload keeps

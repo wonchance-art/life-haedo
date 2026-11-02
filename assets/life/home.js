@@ -291,9 +291,9 @@
       area.open = libraryOpen;
       area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
       const summary = el('summary');
-      summary.append(el('span', '자료실'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
+      summary.append(el('span', '자료'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
       area.append(summary);
-      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료실');
+      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료');
       [['자료 가져오기', 'import'], ['자료 목록', 'sources'], ['컬렉션', 'collection'], ['연표', 'time']].forEach(([label, mode]) => {
         const button = action(context, label, () => navigate(mode));
         button.dataset.homeDestination = mode;

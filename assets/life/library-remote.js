@@ -9,14 +9,14 @@
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.', request_cancelled: '계정 또는 연결이 바뀌어 이전 요청을 중단했습니다.',
     schema_missing: '서버의 계정 자료 보관 기능을 확인해 주세요. 저장 대기 자료는 유지됩니다.',
-    invalid_remote_data: '서버 자료실 정보의 형식을 확인하지 못했습니다. 기존 자료는 유지됩니다.',
-    invalid_request: '자료실 전송의 버전과 형식을 확인해 주세요.', operation_mismatch: '이전 전송 작업과 내용이 달라 적용하지 않았습니다.',
-    composition_source_pending: '원문 저장이 완료되면 자료실 분류를 이어서 저장합니다.',
-    payload_too_large: '자료실 분류 정보의 전송 한도를 넘었습니다. 기존 자료는 유지됩니다.',
-    permission_denied: '현재 계정으로 자료실 정보에 접근하지 못했습니다.', network_error: '연결을 확인해 주세요. 전송 대기 자료는 유지됩니다.',
+    invalid_remote_data: '서버 자료 정보의 형식을 확인하지 못했습니다. 기존 자료는 유지됩니다.',
+    invalid_request: '자료 전송의 버전과 형식을 확인해 주세요.', operation_mismatch: '이전 전송 작업과 내용이 달라 적용하지 않았습니다.',
+    composition_source_pending: '원문 저장이 완료되면 자료 분류를 이어서 저장합니다.',
+    payload_too_large: '자료 분류 정보의 전송 한도를 넘었습니다. 기존 자료는 유지됩니다.',
+    permission_denied: '현재 계정으로 자료 정보에 접근하지 못했습니다.', network_error: '연결을 확인해 주세요. 전송 대기 자료는 유지됩니다.',
     remote_missing: '연결된 계정 자료를 찾을 수 없습니다. 자동으로 다시 만들지 않았습니다.',
-    not_enabled: '계정 자료 연결을 준비하고 있습니다.', sync_paused: '자료실 정보 전송이 중지되어 있습니다.',
-    account_mismatch: '현재 계정의 자료실 연결을 확인해 주세요.', composition_conflict_changed: '비교 후 분류가 바뀌었습니다. 다시 확인해 주세요.',
+    not_enabled: '계정 자료 연결을 준비하고 있습니다.', sync_paused: '자료 정보 전송이 중지되어 있습니다.',
+    account_mismatch: '현재 계정의 자료 연결을 확인해 주세요.', composition_conflict_changed: '비교 후 분류가 바뀌었습니다. 다시 확인해 주세요.',
     stale_sync_result: '더 최신 서버 상태가 있습니다. 현재 자료는 유지했습니다.', remote_revision_mismatch: '같은 서버 버전의 내용이 달라 적용하지 않았습니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });

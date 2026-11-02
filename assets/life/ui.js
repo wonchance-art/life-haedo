@@ -1346,7 +1346,7 @@
         // task of the screen being left.
         if (Object.hasOwn(options, 'historyTask')) {
           blogPageTask = options.historyTask === 'blog'; materialWritingTask = options.historyTask === 'material';
-          blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!options.pageCompose;
+          blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!(options.pageCompose || options.composingPost);
         }
         if (blogPageTask && !materialWritingTask) {
           const target = blogRouteFrom(options);
@@ -1355,7 +1355,7 @@
         materialHistorySeed = options.materialWritingSeed ? historyClone(options.materialWritingSeed) : materialWritingTask ? materialHistorySeed : null;
         materialReaderOrigin = !materialWritingTask ? null : readerOrigin || (Object.hasOwn(options, 'materialReader') ? options.materialReader || null : materialReaderOrigin);
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
-        if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!options.pageCompose; }
+        if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!(options.pageCompose || options.composingPost); }
       }
       if (mode === 'home') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
       // A previous excerpt/record save does not describe the draft being opened.
@@ -1365,7 +1365,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
@@ -1600,13 +1600,15 @@
       const [kind, id] = value.split('.');
       if (kind === 'draft') return { pageDraftId: id };
       if (kind === 'plain') return { pagePreview: false, searchTarget: { postId: id } };
-      try { await storage.readPhotoPost(workspaceId, id); }
+      let post;
+      try { post = await storage.readPhotoPost(workspaceId, id); }
       catch (cause) {
         // A new editor that was left before its first save has nothing stored.
         if (cause?.code === 'photo_post_missing') return { pageCompose: true };
         throw cause;
       }
-      return { pagePreview: false, searchTarget: { photoPostId: id } };
+      // A post never saved with 글 저장 is still a new post: 글쓰기 stays the current screen.
+      return { pagePreview: false, searchTarget: { photoPostId: id }, ...(post?.status !== 'saved' ? { composingPost: true } : {}) };
     }
     function updateBlogRoute(context) {
       if (state.mode !== 'page' || !blogPageTask || materialWritingTask) return;
@@ -1713,7 +1715,7 @@
       url.searchParams.delete('blog');
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) url.searchParams.set('blog', blogRoute);
       // 일정's list keeps the plain index.html address; its plan views name the section.
-      if (section === 'schedule' && !['tools', 'annual-plan'].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
+      if (section === 'schedule' && !['tools', 'annual-plan', 'time'].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
@@ -1807,7 +1809,7 @@
       for (const [mode, label, href] of [['home', '목록', 'index.html'], ['tools', '계획', 'index.html?section=schedule&view=tools']]) {
         const link = node('a', label, 'life-schedule-view');
         link.href = href; link.dataset.scheduleView = mode; link.dataset.focusKey = 'schedule:view:' + mode;
-        if (state.mode === mode) link.setAttribute('aria-current', 'page');
+        if (state.mode === mode) link.setAttribute('aria-current', 'true');
         link.addEventListener('click', event => {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
@@ -1917,6 +1919,9 @@
       // Old direct addresses of a file format return to 백업·복원 with that format's row focused.
       if (['transfer', 'workbench-backup', 'preservation'].includes(state.mode))
         return { mode: 'backup', workspaceId: state.bundle?.workspaceId, scrollY: 0, focusKey: 'backup:' + state.mode };
+      // 일정's plan subviews (a reload or direct address) return to 계획, not to the list.
+      if (planningModes.has(state.mode) && state.mode !== 'tools' || state.mode === 'time')
+        return { mode: 'tools', workspaceId: state.bundle?.workspaceId, scrollY: 0, focusKey: 'tools:' + state.mode };
       return { mode: sectionRootMode(sectionFor(state.mode)), workspaceId: state.bundle?.workspaceId, scrollY: 0 };
     }
 
@@ -2036,8 +2041,10 @@
         headingGroup.append(back);
       }
       headingGroup.append(heading);
+      if (state.mode === 'home' || state.mode === 'tools') headingGroup.append(scheduleViews());
       if (state.mode !== 'source') toolbar.append(headingGroup);
-      if (state.mode === 'home' || state.mode === 'tools') toolbar.append(scheduleViews());
+      const actions = node('div', null, 'haedo-heading-actions');
+      actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (section === 'records') {
         if (state.mode === 'sources') {
           const select = iconButton('기록 선택', 'check', guarded(() => {
@@ -2048,7 +2055,7 @@
           }));
           select.id = 'lifeSelectionToggle';
           select.setAttribute('aria-pressed', String(state.selecting));
-          toolbar.append(select);
+          actions.append(select);
         }
       }
       if (!focused && (section === 'records' || section === 'schedule' && !planningModes.has(state.mode))) {
@@ -2060,17 +2067,17 @@
         }));
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
         // Home exposes these actions with labels in its shortcut row.
-        if (section === 'records') nav.append(add);
-        toolbar.append(nav);
+        if (section === 'records') { nav.append(add); actions.append(nav); }
       }
       if (!['source', 'find'].includes(state.mode)) {
-        const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; toolbar.append(find);
+        const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; actions.append(find);
       }
       if (section === 'records' && (!focused || state.mode === 'collection') || state.mode === 'home') {
         const menu = featureMenu(state.mode === 'home');
         menu.open = menu.id === openMenuId;
-        toolbar.append(menu);
+        actions.append(menu);
       }
+      if (actions.childElementCount) toolbar.append(actions);
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
@@ -2135,9 +2142,12 @@
 
     function renderTools() {
       const list = node('div', null, 'life-destinations');
-      list.append(actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')),
+      const annual = actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')); annual.dataset.focusKey = 'tools:annual-plan';
+      // 2026-11-02: 연표 is part of 일정 (handoff: timeline/workspace → 일정 Y·Q·M).
+      const time = actionRow('연표', '보관한 연표 목록과 새 연표', 'timeline', () => navigate('time')); time.dataset.focusKey = 'tools:time';
+      list.append(annual,
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
-        destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
+        destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'), time);
       main.append(list);
     }
 
@@ -2170,7 +2180,7 @@
       if (blog) group('글·공개', [['글 공개·보관', 'edit', 'blog']]);
       else {
         group('모아 보기', [['컬렉션', 'bookmark', 'collection'], ['묶음', 'link', 'activities'], ['선택 자료 페이지', 'user', 'page']]);
-        group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books'], ['연표', 'timeline', 'time']]);
+        group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
         const management = group('가져오기·관리', [
           ['자료 작성', 'write', 'write'],
           ['네이버 블로그 연결', 'link', 'naver-blog'], ['Obsidian 갱신', 'refresh', 'obsidian-update', 'lifeObsidianUpdateOpen']
@@ -3725,7 +3735,7 @@
       const source = sourceFor(state.sourceId);
       const versions = state.bundle.sourceVersions.filter(v => v.sourceId === state.sourceId);
       const version = state.sourceVersionId ? versions.find(v => v.id === state.sourceVersionId) : versions.slice(-1)[0];
-      if (!source || !version) { main.append(title('요청한 원문 버전을 찾을 수 없습니다.'), node('p', '다른 버전으로 자동 전환하지 않았습니다. 최신 내용 확인 후 다시 찾아 주세요.', 'life-help'), state.returnContext ? searchReturnButton() : button('자료실로 돌아가기', guarded(() => navigate('sources')))); state.locator = null; return; }
+      if (!source || !version) { main.append(title('요청한 원문 버전을 찾을 수 없습니다.'), node('p', '다른 버전으로 자동 전환하지 않았습니다. 최신 내용 확인 후 다시 찾아 주세요.', 'life-help'), state.returnContext ? searchReturnButton() : button('자료로 돌아가기', guarded(() => navigate('sources')))); state.locator = null; return; }
       state.sourceVersionId = version.id;
       const lifecycle = core.sourceState(state.bundle, source.id), sourceActive = lifecycle.status === 'active';
       let changeReaderMode = null, currentReaderOffset = () => null, optionOffset = null;
@@ -5315,7 +5325,7 @@
       parent.hidden = !view || view.workspaceId !== state.bundle.workspaceId || view.accountKey !== state.syncAccountKey;
       if (parent.hidden) return;
       parent.append(node('h3', '양쪽 변경 비교'));
-      if (view.remote.missing || !view.remote.row) { parent.append(empty(managedLibrary ? '계정의 자료실을 찾을 수 없습니다. 보관한 자료는 유지됩니다. 백업을 내려받아 복구해 주세요.' : '서버의 작업공간을 찾을 수 없습니다. 자동으로 다시 생성하지 않습니다. 로컬 백업 또는 연결 중지를 선택해 주세요.')); return; }
+      if (view.remote.missing || !view.remote.row) { parent.append(empty(managedLibrary ? '계정의 자료를 찾을 수 없습니다. 보관한 자료는 유지됩니다. 백업을 내려받아 복구해 주세요.' : '서버의 작업공간을 찾을 수 없습니다. 자동으로 다시 생성하지 않습니다. 로컬 백업 또는 연결 중지를 선택해 주세요.')); return; }
       const row = view.remote.row;
       parent.append(node('p', '선택하지 않은 쪽도 이 브라우저의 별도 작업공간 사본으로 보관합니다.', 'life-help'));
       const comparison = node('details', null, 'life-details');
@@ -5516,7 +5526,7 @@
         const opened = await openBlogRoute(active, startBlogRoute).catch(() => null);
         if (disposed || signal?.aborted) return { dispose };
         if (opened) {
-          blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!opened.pageCompose;
+          blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);
           blogRoute = blogRouteFrom(opened);
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
           viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
