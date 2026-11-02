@@ -261,8 +261,11 @@ async function main() {
       assert.equal(server.composition(accounts.a.id, id).revision, revision); assert.ok(server.compositionWrites('a').filter(value => value.operation === operation).length >= 2);
     });
     await check('paused originals stop composition upload; missing SQL stays an actionable preserved-local error', async ({ server, device }) => {
-      const a = await device('a'), { id } = await seed(a.page), before = await composition(a.page, id); await sourcesOn(a.page, id);
-      server.compositionMissing = true; await enable(a.page); await a.page.locator('#compositionError').waitFor();
+      const a = await device('a'), { id } = await seed(a.page), before = await composition(a.page, id);
+      // The missing SQL is a server precondition, so it holds before the originals sync: their
+      // first synced state starts the background composition enable at once, and that enable must
+      // meet the missing schema too instead of binding against a still-installed one.
+      server.compositionMissing = true; await sourcesOn(a.page, id); await enable(a.page); await a.page.locator('#compositionError').waitFor();
       assert.match(await a.page.locator('#compositionError').innerText(), /준비/); assert.equal((await metadata(a.page, id)).enabled, false); assert.deepEqual(await composition(a.page, id), before);
       await capture(a.page, 'missing-installation'); server.compositionMissing = false; await enable(a.page); await waitStatus(a.page, 'synced');
       await a.page.evaluate(id => HaedoLife.Shell.sync.pause(id), id); const writes = server.compositionWrites().length;
