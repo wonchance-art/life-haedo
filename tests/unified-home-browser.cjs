@@ -401,6 +401,16 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await settle(page);
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-compose]').isVisible(), true);
       assert.equal(await page.locator('a[data-haedo-compose="heading"]').count(), 0);
+      // Wider layouts: one 글쓰기 (the menu's), white on teal on every page, whatever the page's link rules.
+      for (const width of [1440, 820]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const [file, name] of [['goals.html', 'goals'], ['workspace.html', 'workspace'], ['timeline.html?doc=abc', 'timeline'], ['privacy.html', 'privacy'], ['index.html', 'home']]) {
+          await page.goto(base + '/' + file); await page.waitForFunction(name => document.body.dataset.page === name, name);
+          const write = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation] a[data-haedo-compose]'), cs = getComputedStyle(nav);
+            return { visible: nav.checkVisibility(), color: cs.color, background: cs.backgroundColor, heading: !!document.querySelector('a[data-haedo-compose="heading"]')?.checkVisibility() }; });
+          assert.deepEqual(write, { visible: true, color: 'rgb(255, 255, 255)', background: 'rgb(20, 91, 80)', heading: false }, file + ' ' + width);
+        }
+      }
     });
     await check('signed-out login page carries the phone pencil in its heading', async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });

@@ -3,7 +3,7 @@
 :root {
   --haedo-paper:#fff; --haedo-ink:#182522; --haedo-muted:#5d6b65;
   --haedo-canvas:#f4f6f5; --haedo-selected:#eaf1ed; --haedo-soft:#f4f7f5;
-  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-accent-hover:#104a41; --haedo-accent-active:#0c3d35; --haedo-link:#145b50; --haedo-focus:#267a69;
+  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-on-accent:#fff; --haedo-accent-hover:#104a41; --haedo-accent-active:#0c3d35; --haedo-link:#145b50; --haedo-focus:#267a69;
   --haedo-radius:16px; --haedo-control-radius:12px; --haedo-nav-width:216px;
   --haedo-dock-clearance:0px; --haedo-header-height:64px;
   --life-font:var(--haedo-font); --field-line:#86968d; --color-primary:var(--haedo-accent);
@@ -48,20 +48,23 @@ body.haedo-shell::before{display:none}
 }
 .haedo-nav-compose{
   position:relative;display:flex;align-items:center;gap:8px;min-height:44px;margin:0 0 16px;padding:0 16px;
-  border-radius:var(--haedo-control-radius);background:var(--haedo-accent);color:#fff;
+  border-radius:var(--haedo-control-radius);background:var(--haedo-accent);
   font-size:var(--haedo-text-control);font-weight:650;text-decoration:none;
   transition:background-color 150ms ease-out,color 150ms ease-out;
 }
+/* The 글쓰기 colour is a token on every page; page link rules (e.g. .platform a{color:inherit}) cannot reach it. */
+.haedo-shell a.haedo-nav-compose{color:var(--haedo-on-accent)}
 .haedo-nav-compose>.life-glyph{flex:none;width:var(--haedo-icon-control);height:var(--haedo-icon-control)}
 .haedo-nav-compose>.haedo-compose-narrow{display:none}
 .haedo-nav-compose>.haedo-nav-text{font-weight:inherit}
 .haedo-nav-compose>.haedo-tooltip{display:none}
-.haedo-heading-compose{display:none}
-.haedo-shell .haedo-nav-compose:hover{background:var(--haedo-accent-hover);color:#fff}
-.haedo-shell .haedo-nav-compose:active{background:var(--haedo-accent-active)}
+.haedo-icon-button.haedo-heading-compose{display:none}
+.haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-accent-hover);color:var(--haedo-on-accent)}
+.haedo-shell a.haedo-nav-compose:active{background:var(--haedo-accent-active)}
 /* While writing a new post, 글쓰기 is the current screen (decision 15). */
-.haedo-shell .haedo-nav-compose[aria-current=page]{background:var(--haedo-selected);color:var(--haedo-accent)}
+.haedo-shell a.haedo-nav-compose[aria-current=page]{background:var(--haedo-selected);color:var(--haedo-accent)}
 .haedo-brand-mark{display:none;width:28px;height:28px;flex:none}
+.haedo-shell a.haedo-brand{color:var(--haedo-ink)}
 .haedo-icon-button{
   position:relative;display:inline-flex;align-items:center;justify-content:center;
   flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;
@@ -170,15 +173,16 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-nav-compose{position:fixed;z-index:61;top:calc(8px + env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));width:44px;height:44px;min-height:44px;margin:0;padding:12px;justify-content:center;border-radius:var(--haedo-control-radius);background:transparent;color:var(--haedo-ink)}
  .haedo-nav-compose>.haedo-compose-wide,.haedo-nav-compose>.haedo-nav-text{display:none}
  .haedo-nav-compose>.haedo-compose-narrow{display:block}
- .haedo-shell .haedo-nav-compose:hover{background:var(--haedo-selected);color:var(--haedo-ink)}
- .haedo-shell .haedo-nav-compose:active{background:var(--haedo-selected)}
- .haedo-shell .haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent)}
+ .haedo-shell a.haedo-nav-compose{color:var(--haedo-ink)}
+ .haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-selected);color:var(--haedo-ink)}
+ .haedo-shell a.haedo-nav-compose:active{background:var(--haedo-selected)}
+ .haedo-shell a.haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent)}
  .haedo-nav-compose:focus-visible>.haedo-tooltip{display:block;top:calc(100% + 4px);right:0;left:auto;transform:none}
  /* Screens with their own top bar (e.g. the source reader) keep it; the pencil sits only in the shared heading row. */
  body.haedo-shell:has(.life-toolbar[hidden]) .haedo-nav-compose{display:none}
  /* The timeline editor's heading row shares the pencil's row and keeps room for it. */
  body.haedo-shell[data-haedo-compose-inline] > .haedo-nav > .haedo-nav-compose{display:none}
- .haedo-heading-compose{display:inline-flex}
+ .haedo-icon-button.haedo-heading-compose{display:inline-flex}
 
  .haedo-nav .haedo-brand{display:none}.haedo-nav .haedo-nav-link{flex:1 1 0;min-width:44px;width:auto;height:56px;min-height:56px;flex-direction:column;justify-content:center;gap:4px;padding:8px 8px;border-radius:12px;background:none!important;font-size:var(--haedo-text-badge)}
  .haedo-nav-text{display:block;font-weight:500}.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:750}
