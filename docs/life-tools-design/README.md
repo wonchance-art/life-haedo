@@ -40,7 +40,7 @@ R1에서 직접 입력은 빠진 설명·연결 이유·정정을 보완했다. 
 | [화면과 사용 흐름](experience.md) | 가져오기·출처 대조·검토·모아보기, iPad에서 읽기와 재방문 |
 | [데이터와 권한](data-model.md) | 원문 버전·발췌 위치·가져오기 검토·원자 적용·복원·공유본 |
 | [AI와 자동화](ai-workflows.md) | 근거가 있는 추출·연결 제안, 깊은 대화와 선택 적용 |
-| [Notion AI 적용 검토](notion-ai-review.md) | Notion의 AI 통합 방식 조사와 해도에 먼저 넣을 범위·보류 항목 |
+| [글쓰기·메모 AI 적용 검토](writing-ai-review.md) | Notion·Apple·iA Writer·NotebookLM·Day One·Obsidian 플러그인의 AI 통합 방식과 해도에 먼저 넣을 범위·보류 항목 |
 | [기술 구조](architecture.md) | 원천별 도입 경로·parser·검토·저장·기존 앱 연결 |
 | [오픈소스 검토](open-source-review.md) | 최신 공식 근거·재사용 후보·지원 제약·미확인 사항 |
 | [구현 로드맵](roadmap.md) | 첫 흐름·단계별 완료 조건·팀과 모델/effort 배치 |
