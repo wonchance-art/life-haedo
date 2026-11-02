@@ -44,11 +44,13 @@ async function main(){
  const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();report.node=process.version;
  const contexts=[];let active,primaryError=null;const routes=sourceRouting(report);
  const writeReport=()=>fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
- // Reduced motion: the shell's html{scroll-behavior:smooth} turns Playwright's own scroll-into-view
- // into an animation. Under load a pointer press then lands on the target while the release lands
- // after the page moved, so the click goes to a common ancestor and silently does nothing
- // (step 1 .mw-candidate-version timeout). Motion itself is verified by app-motion-browser.
- async function device(name,account=accounts.a){const context=await makeContext(browser,server,name,account,{viewport:{width:1440,height:1000},reducedMotion:'reduce'});contexts.push(context);context.on('page',p=>{p.setDefaultTimeout(25000);p.on('pageerror',e=>report.pageErrors.push(e.message));p.__log=[];p.on('console',m=>{p.__log.push(m.type()+': '+m.text().slice(0,300));if(p.__log.length>60)p.__log.shift();});p.on('console',m=>{if(m.type()!=='error')return;if(m.location().url.startsWith(cloud)&&/Failed to load resource:.*(?:ERR_FAILED|404|503)/.test(m.text()))report.expectedErrors++;else report.consoleErrors.push(m.text());});});
+ // Instant scrolling only: assets/life/ui.css html{scroll-behavior:smooth} turns Playwright's own
+ // scroll-into-view into an animation. Under load a pointer press then lands on the target while the
+ // release lands after the page moved, so the click goes to a common ancestor and silently does
+ // nothing (step 1 .mw-candidate-version timeout). Transitions, animations and HaedoMotion stay on.
+ async function device(name,account=accounts.a){const context=await makeContext(browser,server,name,account,{viewport:{width:1440,height:1000}});
+  // CSSOM, not a <style> element: public pages' CSP (style-src 'self') blocks inline styles.
+  await context.addInitScript(()=>{const set=()=>document.documentElement.style.setProperty('scroll-behavior','auto','important');if(document.documentElement)set();else document.addEventListener('DOMContentLoaded',set,{once:true});});contexts.push(context);context.on('page',p=>{p.setDefaultTimeout(25000);p.on('pageerror',e=>report.pageErrors.push(e.message));p.__log=[];p.on('console',m=>{p.__log.push(m.type()+': '+m.text().slice(0,300));if(p.__log.length>60)p.__log.shift();});p.on('console',m=>{if(m.type()!=='error')return;if(m.location().url.startsWith(cloud)&&/Failed to load resource:.*(?:ERR_FAILED|404|503)/.test(m.text()))report.expectedErrors++;else report.consoleErrors.push(m.text());});});
   await routes.install(context,name);
   await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.href);return route.abort();});
   // Diagnostic only: the preparation status transitions (read on a save timeout).

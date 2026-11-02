@@ -61,7 +61,7 @@
         if (!alive() || busy || token !== refreshId || getPlanId() !== id) return;
         // A just-created preparation is shown before its first save. That is not a sync
         // failure: show the waiting state, and the save's own change event refreshes again.
-        if (cause?.code === 'material_writing_missing') { state = { status: 'not_enabled' }; clear(); renderState(); return; }
+        if (cause?.code === 'material_writing_missing') { state = { status: 'not_enabled' }; if (!keepError) clear(); renderState(); if (failure) report(failure); return; }
         state = null; renderState(); report(cause);
       }
     }

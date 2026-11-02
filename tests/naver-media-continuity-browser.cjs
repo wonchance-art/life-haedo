@@ -110,11 +110,11 @@ async function main() {
       const slowAuth = async route => { await new Promise(resolve => setTimeout(resolve, 150)); return route.fallback(); };
       await c.context().route(cloud + '/auth/v1/user', slowAuth);
       await reader(c, ws, two.sourceId, two.sourceVersionId); await c.locator('#lifeNaverSourceMedia[data-state=error]').waitFor();
-      await c.context().unroute(cloud + '/auth/v1/user', slowAuth);
       assert.equal(await c.evaluate(({ ws, version }) => HaedoLife.Shell.storage.readNaverCapture(ws, version), { ws, version: two.sourceVersionId }), null);
       assert.deepEqual((await bundle(c, ws)).sourceVersions, expected.sourceVersions); assert.deepEqual((await bundle(c, ws)).records, expected.records);
       for (const width of [1440, 390]) { await c.setViewportSize({ width, height: 1000 }); assert(await c.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); await retrySpacing(c, '#lifeNaverSourceMediaRetry'); const name = 'media-error-' + width + '.png'; await c.screenshot({ path: path.join(output, name), fullPage: true }); report.screenshots.push(name); }
       server.failedMedia.delete(failed); await c.locator('#lifeNaverSourceMediaRetry').click(); await c.locator('#lifeNaverSourceMedia[data-state=ready]').waitFor();
+      await c.context().unroute(cloud + '/auth/v1/user', slowAuth);
       assert.equal((await storedMedia(c, ws, two.sourceVersionId)).capture.capture_hash, second.capture_hash);
       const beforeCalls = server.captureCalls.filter(value => value.rpc === 'media').length; await c.reload({ waitUntil: 'domcontentloaded' }); await ready(c); await reader(c, ws, two.sourceId, two.sourceVersionId); await c.locator('#lifeNaverSourceMedia[data-state=ready]').waitFor(); assert.equal(server.captureCalls.filter(value => value.rpc === 'media').length, beforeCalls, 'Verified local media is reused');
     });
@@ -171,6 +171,26 @@ async function main() {
       server.failedReceiptWrites.delete('media-a'); await a.locator('#lifeNaverMediaSyncRetry').click();
       await a.waitForFunction(() => document.querySelector('#lifeNaverMediaSyncStatus')?.dataset.state === 'confirmed' && document.querySelector('#lifeNaverMediaSyncStatus').hidden);
       const saved = await a.evaluate(ws => HaedoLife.Shell.storage.listNaverMediaReceipts(ws), ws); assert.equal(saved.find(value => value.receipt.sourceVersionId === local.sourceVersionId).pending, false); assert.deepEqual(await bundle(a, ws), before);
+    });
+    await check('A capture read that never answers ends after the request limit with the timeout message; nothing is installed and retry restores', async () => {
+      const d = await device('media-timeout'); await coreReady(d, ws, (await bundle(a, ws)).sourceVersions.length); const graph = await bundle(d, ws);
+      // Fake page clock: the 45 s request limit is reached by fast-forwarding, not by waiting.
+      await d.clock.install();
+      let release; const gate = new Promise(resolve => { release = resolve; }); let held = 0;
+      const hold = async route => { held++; await gate; return route.fallback().catch(() => {}); };
+      await d.context().route(cloud + '/rest/v1/rpc/life_naver_capture_read', hold);
+      try {
+        await reader(d, ws, one.sourceId, one.sourceVersionId); await d.locator('#lifeNaverSourceMedia[data-state=loading]').waitFor();
+        await until(async () => held, count => count === 1, 'held capture read');
+        await d.clock.fastForward(46000);
+        await d.locator('#lifeNaverSourceMedia[data-state=error]').waitFor();
+        assert.equal(await d.locator('#lifeNaverSourceMedia [role=status]').first().innerText(), '응답이 늦어 사진 사본 확인을 멈췄습니다. 원문은 유지됩니다. 다시 시도해 주세요.');
+        assert.equal(await d.evaluate(({ ws, version }) => HaedoLife.Shell.storage.readNaverCapture(ws, version), { ws, version: one.sourceVersionId }), null);
+      } finally { await d.context().unroute(cloud + '/rest/v1/rpc/life_naver_capture_read', hold); release(); }
+      assert.equal(await d.evaluate(({ ws, version }) => HaedoLife.Shell.storage.readNaverCapture(ws, version), { ws, version: one.sourceVersionId }), null, 'the late answer installs nothing');
+      await d.locator('#lifeNaverSourceMediaRetry').click(); await d.locator('#lifeNaverSourceMedia[data-state=ready]').waitFor();
+      assert.equal((await storedMedia(d, ws, one.sourceVersionId)).capture.capture_hash, first.capture_hash);
+      assert.deepEqual((await bundle(d, ws)).sourceVersions, graph.sourceVersions); assert.deepEqual((await bundle(d, ws)).records, graph.records);
     });
     assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.externalRequests, []); assert.deepEqual(server.receiptErrors, []); assert.deepEqual(server.libraryRouteErrors, []); assert.equal(server.blogCalls.filter(value => /publish|unpublish/.test(value.rpc)).length, 0);
     report.hashesAfter = await hashes(); assert.deepEqual(report.hashesAfter, report.hashesBefore); report.pass = true;

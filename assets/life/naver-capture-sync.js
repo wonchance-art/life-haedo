@@ -28,10 +28,15 @@
     if (/setup_required/i.test(error?.message || '')) return fault('naver_setup_required');
     return fault('naver_network_error');
   }
-  // A reader photo restore must end. Each of its server requests (account
-  // check, capture read, photo download) gets this limit; on expiry the attempt
-  // stops before anything is installed and the reader offers retry.
+  // A reader photo restore must end. Its account checks and RPCs (small JSON)
+  // get a fixed limit; a photo download gets a limit that grows with the
+  // photo's recorded size (30 s plus 64 KiB/s, about 17 minutes for 64 MiB), so
+  // a slow cellular link still finishes while a stalled request cannot wait
+  // forever. On expiry the attempt stops before anything is installed and the
+  // reader offers retry.
   const RESTORE_REQUEST_LIMIT_MS = 45000;
+  const DOWNLOAD_BASE_MS = 30000, DOWNLOAD_MIN_BYTES_PER_SECOND = 64 * 1024;
+  const downloadLimitMs = bytes => DOWNLOAD_BASE_MS + Math.ceil((Number.isSafeInteger(bytes) && bytes > 0 ? bytes : 0) * 1000 / DOWNLOAD_MIN_BYTES_PER_SECOND);
   function create({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core,
     model = root.HaedoLife?.NaverCapture, identity = root.HaedoLife?.NaverBlog, isCurrent = () => true,
     restoreRequestLimitMs = RESTORE_REQUEST_LIMIT_MS } = {}) {
@@ -49,10 +54,10 @@
     async function step(c, action) { guard(c); const value = await action(); guard(c); return value; }
     // Only a context with a limit (reader restore) is bounded. The late result
     // of an expired request is ignored; an abortable request is also aborted.
-    function bounded(c, action, controller = null) {
+    function bounded(c, action, controller = null, limit = c.limit) {
       if (!c.limit) return action();
       let timer;
-      const expired = new Promise((_, reject) => { timer = setTimeout(() => { controller?.abort(); reject(fault('naver_timeout')); }, c.limit); });
+      const expired = new Promise((_, reject) => { timer = setTimeout(() => { controller?.abort(); reject(fault('naver_timeout')); }, limit); });
       return Promise.race([Promise.resolve().then(action), expired]).finally(() => clearTimeout(timer));
     }
     async function verify(c) { const user = await step(c, () => bounded(c, () => auth.verify())); need(user?.id === owner.userId, 'naver_auth_required'); }
@@ -167,7 +172,7 @@
         await verify(c);
         const controller = new AbortController(); controllers.add(controller); let result;
         try {
-          result = await step(c, () => bounded(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath, {}, { signal: controller.signal }), controller));
+          result = await step(c, () => bounded(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath, {}, { signal: controller.signal }), controller, downloadLimitMs(photo.bytes)));
         } finally { controllers.delete(controller); }
         if (result.error) throw clean(result.error); need(result.data instanceof Blob); photos.push({ index: photo.index, blob: result.data });
       }
@@ -292,5 +297,5 @@
       publishPending, registerForVersion, restoreForVersion,
       dispose() { disposed = true; cancel(); unlisten?.(); } });
   }
-  return Object.freeze({ create, fault });
+  return Object.freeze({ create, fault, downloadLimitMs });
 });
