@@ -186,6 +186,39 @@ async function main() {
       assert.equal(await page.getByRole('button', { name: '해제할 장소 컬렉션 저장 다시 시도', exact: true }).count(), 0);
     });
 
+    await check('A save that kept the target wins over a newer attempt for it that failed', async () => {
+      await review({ type: 'artwork', title: '겹쳐 저장한 그림' });
+      // Readonly reads of the collection key after this point: 1 the row mark, 2 save A. On A's read the
+      // store is held (a read-write transaction on a connection opened in advance), so A's write waits.
+      // Save B for the same target then reads 3 (row mark) and 4 (its own read); both fail. After the
+      // release A keeps the target and B fails: the card must say it is kept.
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), get = IDBObjectStore.prototype.get; let reads = 0;
+        const db = await new Promise((resolve, reject) => { const r = indexedDB.open('life-tools-v1'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+        IDBObjectStore.prototype.get = function (key) {
+          if (this.name !== 'meta' || key !== 'collection:' + w || this.transaction.mode !== 'readonly') return get.call(this, key);
+          reads++;
+          if (reads >= 3) { if (reads === 4) IDBObjectStore.prototype.get = get; throw new DOMException('synthetic collection read failure', 'UnknownError'); }
+          const request = get.call(this, key);
+          if (reads === 2) request.addEventListener('success', () => {
+            const tx = db.transaction('meta', 'readwrite'), store = tx.objectStore('meta'); window.__hold = true;
+            window.__held = new Promise(resolve => { tx.oncomplete = () => { db.close(); resolve(); }; });
+            (function spin() { if (window.__hold) store.get('taste-link-hold').onsuccess = spin; })();
+          });
+          return request;
+        };
+      });
+      await click('첨부');
+      await awaitCondition(page, () => window.__hold === true, undefined, { timeout: 15000, label: 'save A holding' });
+      await page.getByRole('button', { name: '겹쳐 저장한 그림 첨부 정보 수정', exact: true }).click();
+      await keep(page.locator('.photo-attachment-review')).check(); await click('수정 반영');
+      await page.evaluate(async () => { window.__hold = false; await window.__held; });
+      const card = row('겹쳐 저장한 그림');
+      await card.locator('.photo-attachment-collected').waitFor();
+      assert.equal(await card.getByText(/저장하지 못함/).count(), 0, 'the kept target shows no failure');
+      assert.equal((await collection()).items.filter(item => item.title === '겹쳐 저장한 그림').length, 1);
+    });
+
     await check('Editing or detaching an attachment never deletes or rewrites the collection item', async () => {
       await review({ type: 'tool', title: '연필' }); await click('첨부');
       await row('연필').locator('.photo-attachment-collected').waitFor();
@@ -286,6 +319,9 @@ async function main() {
       await row('한도를 넘는 장소').getByText('컬렉션에 저장하지 못함 · 컬렉션 한도(1,000개·2 MiB)를 넘음', { exact: true }).waitFor();
       assert.equal((await collection()).items.length, 1000);
       await page.getByRole('button', { name: '한도를 넘는 장소 컬렉션 저장 다시 시도', exact: true }).waitFor();
+      await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage, w = await s.getActive();
+        for (const r of await s.listPhotoPosts(w)) { const d = await s.readPhotoPost(w, r.id); if (d.attachments?.some(a => a.title === '한도를 넘는 장소')) return true; } return false; },
+        undefined, { timeout: 15000, label: 'the post keeps the attachment' });
     });
 
     assert.deepEqual(report.errors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []);

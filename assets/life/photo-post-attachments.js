@@ -199,14 +199,27 @@
       const key = identity(value), seq = (collectSeq.get(key) || 0) + 1;
       collectSeq.set(key, seq);
       const latest = () => valid() && collectSeq.get(key) === seq;
-      // A save that finishes for an attachment no longer on the post leaves no state behind.
-      const finish = (failure) => {
+      // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
+      const kept = () => {
+        collectState.delete(key);
+        void annotate(renderSeq);
+      };
+      const finish = async (failure) => {
+        if (!valid()) return;
+        // A save that kept the target wins whatever its order: the target is in the collection.
+        if (!failure) return kept();
+        // A failure shows only for the newest attempt, and only if no other attempt kept it meanwhile.
         if (!latest()) return;
-        if (failure && attached(key)) collectState.set(key, { state: "failed", reason: failureReason(failure) });
+        try {
+          if (life.Collection.attachmentMatch((await storage.readCollection(workspaceId)).items, value)) return valid() && kept();
+        } catch (_) {
+          // The failure below stands.
+        }
+        if (!latest()) return;
+        // A save that finishes for an attachment no longer on the post leaves no state behind.
+        if (attached(key)) collectState.set(key, { state: "failed", reason: failureReason(failure) });
         else collectState.delete(key);
-        if (failure) paintAll();
-        // Marks rows in place: a re-render here would drop an attachment form opened meanwhile.
-        else void annotate(renderSeq);
+        paintAll();
       };
       collectState.set(key, { state: "saving" });
       paintAll();
