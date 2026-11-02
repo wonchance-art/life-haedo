@@ -82,6 +82,25 @@ async function register(page, workspaceId) {
     try { return await m.register(ws); } catch (e) { return { error: e.code || e.message }; } finally { m.dispose(); }
   }, workspaceId);
 }
+// The page's own BlogSync (autoSync) uploads the seeded photo posts on its own schedule and records
+// each as a blog-sync:<workspace>:<post> meta row. A draft is skipped until DRAFT_DELAY (5000ms,
+// assets/life/blog-sync.js:13, draftWaiting at :371) has passed since its updatedAt, so the seeded
+// draft goes up only in a later cycle, which can land between two database snapshots. Before a
+// baseline snapshot, settle that upload: wait out DRAFT_DELAY, kick a cycle with focus, wait until
+// every photo post has a non-dirty state (same test as blog-sync.js:58), and wait until no cycle
+// holds or queues the 'haedo-blog-sync:' Web Lock (blog-sync.js withLock). The snapshot comparison
+// itself still covers every store, blog-sync rows included.
+const BLOG_DRAFT_DELAY = 5000;
+async function blogSeedSettled(page, workspaceId) {
+  const timeout = 20000;
+  await awaitCondition(page, async ({ ws, delay }) => { const s = HaedoLife.Shell.storage, posts = await s.listPhotoPosts(ws); return posts.every(post => Date.now() > Date.parse(post.updatedAt) + delay); }, { ws: workspaceId, delay: BLOG_DRAFT_DELAY }, { timeout, label: 'seeded drafts past DRAFT_DELAY' });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await awaitCondition(page, async ws => {
+    const s = HaedoLife.Shell.storage, posts = await s.listPhotoPosts(ws), states = new Map((await s.listBlogSyncStates(ws)).states.map(entry => [entry.localPostId, entry.state]));
+    return posts.length > 0 && posts.every(post => { const state = states.get(post.id); return !!state && state.enabled && state.enableOnSave !== true && !state.conflict && !state.pending && state.remoteRevision !== 0 && state.localRevision === post.revision; });
+  }, workspaceId, { timeout, label: 'every seeded photo post synced' });
+  await awaitCondition(page, async () => { const q = await navigator.locks.query(); return ![...q.held, ...q.pending].some(lock => String(lock.name).startsWith('haedo-blog-sync:')); }, undefined, { timeout, label: 'BlogSync idle before database snapshot' });
+}
 async function sources(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
 async function main() {
   await fs.mkdir(out, { recursive: true });
@@ -128,7 +147,7 @@ async function main() {
       await awaitCondition(page, async q => { const s = HaedoLife.Shell.storage; return (await s.read(await s.getActive())).records.some(r => r.text === q); }, quote, { timeout: 20000, label: 'account-materials storage condition' });
       const saved = await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.read(await s.getActive()); });
       const record = saved.records.find(r => r.text === quote); assert.ok(record); assert.equal(record.sourceRefs[0].sourceVersionId, f.oldVersion); assert.equal(oldText.slice(record.sourceRefs[0].locator.start, record.sourceRefs[0].locator.end), quote);
-      const snapshot = await databaseSnapshot(page), reads = server.requests.filter(r => r.kind === 'materials-read').length;
+      await blogSeedSettled(page, seeded.workspaceId); const snapshot = await databaseSnapshot(page), reads = server.requests.filter(r => r.kind === 'materials-read').length;
       const again = await register(page, seeded.workspaceId); assert.equal(again.status, 'already_registered'); await sources(page);
       assert.deepEqual(await databaseSnapshot(page), snapshot); assert.equal(server.requests.filter(r => r.kind === 'materials-read').length, reads, 'Durable registration skips corpus reads');
       const newOperation = await page.evaluate(async ({ ws, id }) => { const s = HaedoLife.Shell.storage, b = await s.read(ws), marker = await s.readAccountMaterialRegistration(ws, id); return s.commitLocal({ workspaceId: ws, baseRevision: b.revision, operationId: HaedoLife.Core.id(), changes: {}, accountMaterialRegistration: marker.descriptor }); }, { ws: seeded.workspaceId, id: registryId });
@@ -137,7 +156,7 @@ async function main() {
       report.originalPhoto = seeded.original;
     });
     await check('Actual IDB abort rolls back registration, same input retries once, and a second tab winning CAS is preserved', async ({ page, context, server, seeded }) => {
-      const before = await databaseSnapshot(page); server.enabled = true;
+      await blogSeedSettled(page, seeded.workspaceId); const before = await databaseSnapshot(page); server.enabled = true;
       await page.evaluate(() => { window.__materialsAbort = true; window.__materialsAbortCount = 0; for (const method of ['put', 'add']) { const original = IDBObjectStore.prototype[method]; IDBObjectStore.prototype[method] = function(v, ...args) { const r = original.call(this, v, ...args); if (__materialsAbort && this.name === 'meta' && v?.key?.startsWith('account-material:')) { __materialsAbortCount++; this.transaction.abort(); } return r; }; } });
       const aborted = await register(page, seeded.workspaceId); assert.equal(aborted.error, 'storage_aborted'); assert.equal(await page.evaluate(() => __materialsAbortCount), 1); assert.deepEqual(await databaseSnapshot(page), before);
       await page.evaluate(() => { __materialsAbort = false; });
