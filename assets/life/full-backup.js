@@ -64,6 +64,9 @@
   const ACCOUNT_PREFIXES = Object.freeze(['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings',
     'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading']);
   const WORKSPACE_PREFIXES = Object.freeze(['public-cover', 'page-drafts', 'post-evidence']);
+  // `restored-copy` describes how one workspace was made. It is not written to
+  // the file: every restore marks its own new copies (see restoredCopyOf).
+  const DOC_PREFIXES = new Set([...ACCOUNT_PREFIXES, ...WORKSPACE_PREFIXES]);
   // Public-cover state describes publication; restoring it into a copy could
   // pair two workspaces with one public page. It stays in the file, unrestored.
   const NOT_RESTORED = Object.freeze({ 'public-cover': '공개 표지 설정은 공개 상태와 연결돼 있어 새 사본에 복원하지 않습니다.' });
@@ -236,7 +239,7 @@
     if (storage.listAccountDocs && storage.listAccountDocRecoveries) try {
       const known = new Set(workspaces.map(row => row.workspaceId));
       let count = 0;
-      for (const row of await storage.listAccountDocs()) if (known.has(row.workspaceId)) count += (await storage.listAccountDocRecoveries(row.key)).length;
+      for (const row of await storage.listAccountDocs()) if (DOC_PREFIXES.has(row.prefix) && known.has(row.workspaceId)) count += (await storage.listAccountDocRecoveries(row.key)).length;
       if (count) excluded.push(notIncluded('accountDocRecoveries', count));
     } catch (_) { excluded.push(notIncluded('accountDocRecoveries')); }
     if (originals) {
@@ -283,6 +286,7 @@
     if (task.kind === 'accountDocuments') {
       const known = new Set(workspaces.map(row => row.workspaceId)), documents = [], others = new Map();
       for (const row of await storage.listAccountDocs()) {
+        if (!DOC_PREFIXES.has(row.prefix)) continue;
         if (!known.has(row.workspaceId)) { others.set(row.workspaceId, (others.get(row.workspaceId) || 0) + 1); continue; }
         const record = await storage.readAccountDocRecord(row.key);
         if (!record.exists) continue;
@@ -688,16 +692,35 @@
     }
     return map;
   }
-  async function installLibrary(storage, data) {
+  // A restored copy gets the original title with the restore date, e.g.
+  // "내 자료 (11-02 복원)"; a second copy made the same day is "(11-02 복원 2)".
+  // The title is only a label: the copy is identified by its restored-copy
+  // marker, never by this text, since the person may rename it.
+  function restoredTitle(base, taken, date) {
+    const day = String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    const name = String(base || '').trim() || '복원한 자료공간';
+    for (let n = 1; ; n++) {
+      const suffix = ' (' + day + ' 복원' + (n > 1 ? ' ' + n : '') + ')';
+      // Titles are limited to 500 UTF-16 units; cut whole characters only.
+      let head = '';
+      for (const char of name) { if (head.length + char.length + suffix.length > 500) break; head += char; }
+      const title = head + suffix;
+      if (!taken.has(title)) { taken.add(title); return title; }
+    }
+  }
+  async function installLibrary(storage, data, { title, restoredCopy } = {}) {
+    const options = restoredCopy ? { restoredCopy } : undefined;
     if (data.format === 'life-tools-backup-v1') {
       const bundle = await dep('Core').restoreBackup(clone(data));
-      const installed = await storage.installWorkspace(bundle);
+      if (title) bundle.title = title;
+      const installed = await storage.installWorkspace(bundle, options);
       return { bundle: installed, map: libraryMapping(data.workspace, installed) };
     }
     const material = data.format === dep('SourceFolders').BACKUP_FORMAT;
     const candidate = material ? await dep('SourceFolders').restoreBackup(clone(data)) : await dep('Workbench').restoreBackup(clone(data));
+    if (title) candidate.bundle.title = title;
     // Same choice as the 자료·구성 screen: folders and library commit together.
-    const installed = candidate.sourceFolders && storage.installLibraryCopy ? await storage.installLibraryCopy(candidate) : await storage.installWorkbenchCopy({ bundle: candidate.bundle, workbench: candidate.workbench });
+    const installed = candidate.sourceFolders && storage.installLibraryCopy ? await storage.installLibraryCopy(candidate, options) : await storage.installWorkbenchCopy({ bundle: candidate.bundle, workbench: candidate.workbench }, options);
     const original = material ? data.libraryBackup.sourceBackup.workspace : data.sourceBackup.workspace;
     return { bundle: installed.bundle, map: libraryMapping(original, installed.bundle) };
   }
@@ -728,7 +751,7 @@
   // `select(kind, workspaceIndex, entry)` decides what to restore; `targets`
   // carries copies made by an earlier run so a retry fills the same new copy.
   async function restore(opened, { storage, kinds, select = null, targets = new Map(), makeId = () => dep('Core').id(), originals = null,
-    verifyPhoto = defaultVerifyPhoto(), onProgress = () => {}, isCurrent = () => true } = {}) {
+    verifyPhoto = defaultVerifyPhoto(), onProgress = () => {}, isCurrent = () => true, now = () => new Date() } = {}) {
     if (!storage?.isAccountScoped || !storage.account) throw fault('auth_scope_required', '로그인한 계정에서 복원해 주세요.');
     if (opened.type !== 'bundle' && opened.type !== 'single') throw fault('unsupported_backup', '이 화면에서 복원할 수 없는 파일입니다.');
     const wanted = (kind, ws, entry) => kinds.has(kind) && (!select || select(kind, ws, entry));
@@ -737,6 +760,12 @@
     const documents = docsEntry ? (await entryData(docsEntry)).documents : [];
     const previousActive = await storage.getActive().catch(() => null);
     const report = { workspaces: [], items: [], extraCopies: [] };
+    // Titles already in use on this device, so a copy never shares a name.
+    const taken = new Set((storage.listWorkspaces ? await storage.listWorkspaces() : []).map(row => row.title));
+    const startedAt = now(), restoredAt = startedAt.toISOString();
+    // The marker names the original workspace (when the file says which one), so the
+    // home can leave the copy out while that original is in this account.
+    const restoredCopyOf = workspaceId => ({ sourceWorkspaceId: ID.test(workspaceId || '') ? workspaceId : null, restoredAt });
     const record = (kind, ws, status, details = {}) => { const item = { kind, label: KINDS[kind].label, workspace: ws.index, workspaceTitle: ws.title, status, ...details }; report.items.push(item); return item; };
     const work = opened.workspaces.map(ws => {
       const own = opened.entries.filter(entry => entry.workspace === ws.index && wanted(entry.kind, ws.index, entry));
@@ -752,6 +781,8 @@
         guard();
         const target = targets.get(ws.index) || { workspaceId: null, title: ws.title, map: new Map(), posts: new Map(), postDocs: new Map(), library: false, appliedDocs: new Set() };
         targets.set(ws.index, target);
+        // One planned name per copy, chosen when the copy is made; a retry keeps it.
+        const copyTitle = () => (target.copyTitle ||= restoredTitle(ws.title, taken, startedAt));
         const summary = { index: ws.index, title: ws.title, targetId: target.workspaceId, targetTitle: target.title };
         report.workspaces.push(summary);
         const library = own.find(entry => entry.kind === 'library');
@@ -759,7 +790,7 @@
           step(KINDS.library.label);
           try {
             const data = await entryData(library); guard();
-            const installed = await installLibrary(storage, data);
+            const installed = await installLibrary(storage, data, { title: copyTitle(), restoredCopy: restoredCopyOf(ws.workspaceId) });
             target.workspaceId = installed.bundle.workspaceId; target.title = installed.bundle.title;
             for (const [from, to] of installed.map) target.map.set(from, to);
             target.library = true;
@@ -779,7 +810,7 @@
         // A lone capture file restores into its own new workspace; captures from a ZIP need the library copy.
         const nonCopy = own.every(entry => entry.kind === 'naverCaptures') && !docs.length;
         if (!target.workspaceId && !nonCopy) {
-          const created = await storage.createWorkspace(ws.title);
+          const created = await storage.createWorkspace(copyTitle(), { restoredCopy: restoredCopyOf(ws.workspaceId) });
           target.workspaceId = created.workspaceId; target.title = created.title;
           if (ws.workspaceId) target.map.set(ws.workspaceId, target.workspaceId);
         }
@@ -870,7 +901,8 @@
             const Media = dep('NaverMedia'), snapshot = await Media.read(entry.blob);
             if (opened.type === 'single') {
               // A single capture file: the existing restore makes one new workspace with its version and photos.
-              const installed = await storage.installNaverCaptureCopy(await Media.copy(snapshot), { isCurrent });
+              const installed = await storage.installNaverCaptureCopy(await Media.copy(snapshot, { title: restoredTitle(snapshot.bundle.title, taken, startedAt) }),
+                { isCurrent, restoredCopy: restoredCopyOf(null) });
               report.extraCopies.push({ workspaceId: installed.bundle.workspaceId, title: installed.bundle.title });
               record('naverCaptures', ws, 'restored', { targetId: installed.bundle.workspaceId, title: installed.bundle.title, counts: entry.counts });
               continue;
