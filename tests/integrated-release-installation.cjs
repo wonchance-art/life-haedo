@@ -27,6 +27,9 @@ const observedBaselineMigration = ['supabase/migrations/20261029112456_naver_obs
 // migrations are verified by their own disposable PostgreSQL suites
 // (run-account-docs-postgres, blog-originals.sql, material tombstones).
 const accountSyncMigrations = ['supabase/migrations/20261101090000_life_account_documents.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101130000_life_material_tombstones.sql', 'supabase/migrations/20261101140000_life_sync_edit_times.sql', 'supabase/migrations/20261101150000_life_account_documents_owner_lock.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql'];
+// 2026-11-02: saving a Naver connection as enabled schedules its first inventory
+// row. Rollback, ACL, backfill and save cases run in run-naver-observed-baseline-postgres.
+const naverEnableInventoryMigration = 'supabase/migrations/20261102100000_naver_enable_schedules_first_inventory.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -62,8 +65,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations].sort(),
-      'Exactly the ten legacy and eighteen reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration].sort(),
+      'Exactly the ten legacy and nineteen reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);

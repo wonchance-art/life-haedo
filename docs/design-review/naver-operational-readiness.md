@@ -256,3 +256,10 @@ Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL�
 - **보여 주지 않는 것:** 블로그 ID·제목·URL·본문·키.
 - **검증:** 전체 마이그레이션을 적용한 일회용 PostgreSQL 16에서 빈 상태와 예약 행이 있는 상태로 실행했다. 운영 결과는 소유자 실행 뒤에 기록한다.
 
+
+## 켜기 저장이 첫 목록 확인을 예약 (2026-11-02)
+
+- **문제:** 15분 예약의 목록 claim은 `inventory` 행이 있는 연결만 고른다. 그 행은 소유자 버튼(`inventory_start`)으로만 생겼다. 그래서 11-02 운영에서 새로 켠 연결을 예약이 건너뛰었다.
+- **변경:** [20261102100000_naver_enable_schedules_first_inventory.sql](../../supabase/migrations/20261102100000_naver_enable_schedules_first_inventory.sql)이 `haedo_naver_private.save`를 같은 시그니처로 다시 정의한다. 저장 결과가 켜짐이면 같은 트랜잭션에서 `inventory` 행(pending, page 1)을 추가한다. 이미 켜져 있는데 행이 없는 연결에도 같은 행을 한 번 추가한다(멱등).
+- **보존:** 입력 검사, `life_naver_setup_required`, 잠금, CAS(`life_naver_conflict`), 응답 형태, 함수 ACL·definer·search_path는 그대로다. 이미 있는 행은 덮지 않으므로 기준선·scan·page·상태가 유지된다. 끄기 저장은 행을 만들지 않는다. 버튼 경로 `inventory_start`는 pending 행을 그대로 반환한다. claim·finish·관측 기준선·사진 보관·예약 주기는 바꾸지 않았다.
+- **검증:** `tests/run-naver-observed-baseline-postgres.cjs`의 격리 PostgreSQL에서 설치 실패 롤백, 본문 외 메타데이터 불변, backfill, 켜짐/꺼짐 새 연결, 다시 켜기, 완료된 기준선 보존, CAS 충돌, 버튼 경로, 준비 꺼짐 거부를 확인한다. 운영 적용 결과는 총괄의 적용 기록에 남긴다.
