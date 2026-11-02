@@ -1,7 +1,8 @@
-# 구조·작업 흐름 점검 (2026-11-02 초안)
+# 구조·작업 흐름 점검 (2026-11-02)
 
 - 기준: `origin/main` `a8d4a65`. 읽기 전용 분석이며 앱 코드·마이그레이션·운영 DB는 건드리지 않았다.
-- 이 초안은 1·2·4·5절이다. 3절은 다른 작업자 담당이다.
+- 구성: 1·2·4·5절은 이 문서. 3절 상세는 [사용 흐름 6개 점검](structure-workflow-review-20261102-flows.md), CI 밖 검사와 계약 판정은 [B3](structure-workflow-review-20261102-b3.md)·[B4](structure-workflow-review-20261102-b4.md)에 있다. 6절은 문서 정합 정리, 7절은 결함 후보 처리 현황이다.
+- 작업 방식: 총괄 세션의 작업 지시서에 따라 작업자 세션이 조사했다(AGENTS.md 운영 체계). 결함 수정 담당과 착수는 총괄이 정한다.
 - 근거 표기: `파일:줄`, 커밋 SHA, 또는 이 문서 안의 명령 결과. 확인하지 못한 것은 "미확인"과 확인 방법을 적었다.
 - 이전 점검 [structure-review-2026-11.md](structure-review-2026-11.md)(`c3b60aa` 기준)의 숫자는 다시 셌다. 달라진 값은 그 자리에 표시했다.
 
@@ -144,9 +145,24 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 ### 2-5. 표에서 드러난 확인 필요 사항
 
 - **게시 대기가 sessionStorage다.** 비교 대상 이름은 "Share localStorage"였지만 실제 기본값은 `root.sessionStorage`이고(`share-remote.js:110`) 호출부는 저장소를 넘기지 않는다(`workbench-ui.js:21`). 탭을 닫으면 결과를 모르는 게시 요청 기록이 사라진다. 서버 영수증이 같은 operationId 재전송을 막지만, 기록이 사라지면 재전송 자체가 일어나지 않는다. 의도인지 미확인이다. 확인 방법: `docs/design-review/page-publication.md`의 결정 기록과 `git log -S "sessionStorage" -- assets/life/share-remote.js`.
-- **CI에서 돌지 않는 브라우저 검사 14개.** `tests/*-browser.cjs` 151개 중 `pages.yml`이 부르지 않는 것: `life-sync-browser.cjs`, `life-writing-sync-browser.cjs`, `platform-life-browser.cjs`, `workbench-storage-browser.cjs`, `life-browser.cjs`, `life-batch-browser.cjs`, `life-collections-browser.cjs`, `life-rediscovery-browser.cjs`, `life-search-browser.cjs`, `life-workbench-browser.cjs`, `life-writing-browser.cjs`, `platform-import-browser.cjs`, `record-arrange-browser.cjs`, `app-feel-browser.cjs`. 지금 통과하는지는 미확인이다. 확인 방법: CI와 같은 Playwright 설치(`pages.yml:89-114`) 뒤 각 파일 실행.
+- **CI에서 돌지 않는 브라우저 검사 14개.** `tests/*-browser.cjs` 151개 중 `pages.yml`이 부르지 않는 것: `life-sync-browser.cjs`, `life-writing-sync-browser.cjs`, `platform-life-browser.cjs`, `workbench-storage-browser.cjs`, `life-browser.cjs`, `life-batch-browser.cjs`, `life-collections-browser.cjs`, `life-rediscovery-browser.cjs`, `life-search-browser.cjs`, `life-workbench-browser.cjs`, `life-writing-browser.cjs`, `platform-import-browser.cjs`, `record-arrange-browser.cjs`, `app-feel-browser.cjs`. 실행 결과와 판정은 [B3](structure-workflow-review-20261102-b3.md)·[B4](structure-workflow-review-20261102-b4.md)에 있다. 요약: `platform-life`는 `scripts/verify-prepared-site.mjs:59`가 간접 실행하므로 실제 미실행은 13개다. 7개는 그대로 통과하고, 실패 6개 중 5개는 바뀐 계약을 반영하지 않은 낡은 검사로 판정해 이 PR에서 갱신했으며 1개(`life-collections`)는 제품 회귀다.
 
-## 3. (다른 작업자 담당)
+## 3. 사용 흐름 6개 점검 (요약)
+
+상세 재현 순서·근거·캡처는 [사용 흐름 6개 점검](structure-workflow-review-20261102-flows.md)에 있다. 가짜 서버와 익명 합성 데이터, Chromium 390/1440 모사로 확인했고 실제 Apple 기기 확인이 아니다. 6개 흐름 모두 pageerror 0건, 블로커 없음.
+
+| ID | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| M1 | 메이저 | 글쓰기·글 읽기 화면 새로고침 시 자료실 `선택 자료 페이지`로 간다 | `assets/life/ui.js:1491`, `:1501` |
+| M2 | 메이저 | 앱 안 이동이 기록을 덮어써 브라우저 뒤로 가기가 직전 화면이 아닌 곳으로 간다 | `assets/life/ui.js:1355` (`replaceState`) |
+| M3 | 메이저 | 자료 읽기 → `이 자료로 글쓰기` → `돌아가기`가 읽던 자료로 돌아가지 않는다 | `ui.js:3441`, `workbench-ui.js:1128` |
+| M4 | 메이저 | 같은 계정에 백업을 복원하면 홈 `내 글`에 글이 두 번 보이고 공간 이름이 같다 | `f5-home-duplicates-390.jpg` |
+| m1~m7 | 마이너 | 자료 새로고침 위치 유실, 저장 위치 문구, 네이버 켜기 문구·상태, 복원 미리보기 유실 등 | 흐름 문서 |
+
+## 3-1. 네이버 자동 수집과 공개 요청 보관 판정 (B3)
+
+- **네이버 `자동 수집 켜기`(m3):** 실제 클라이언트의 구형 RSS 경로가 계약을 어긴다. `naver-blog-sync.js:94-106`은 구독이 켜지면 `life_naver_items`의 `new` 항목을 기준선 확인 없이 현재 공간에 반영한다. 서버 수집 파이프라인(observed_set 기준선 + 검증 scan의 새 글만 `auto_eligible`)은 계약대로다(`20261029112456_…sql:188-223`). 운영 `life_naver_items`는 0행이고(총괄 조회, 11-02 17:00 KST) RSS는 robots로 막혀 있어 당장 노출은 없다. RSS를 다시 켜는 경우의 선행 수정으로 기록한다.
+- **공개 요청 보관(sessionStorage):** 탭을 닫으면 요청 기록만 사라지고 게시는 고아·중복이 되지 않는다(공간당 1행, operation_id 영수증, revision CAS). 재현: `evidence/structure-workflow-20261102/repro/share-pending.cjs`. 남는 위험은 응답 전 탭을 닫으면 공개 사실을 늦게 알 수 있다는 것이다.
 
 ## 4. 큰 정리 설계안
 
@@ -184,7 +200,9 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 | B. 가장 독립된 두 덩어리만 | 동기화 표시와 백업·사본 이동만 뺀다 | 위험이 작다 | 라우팅·복귀의 복잡도는 그대로다 |
 | C. 프레임워크·상태 저장소 도입 | 다시 작성 | 구조가 가장 깔끔하다 | 빌드·프레임워크 추가 금지(`AGENTS.md` 작업 방식)와 충돌한다. 채택하지 않는다 |
 
-### 4-4. 디자인 세션과의 충돌 위험
+### 4-4. 파일 담당과 충돌 위험
+
+- 2026-11-02 총괄 결정: 이 저장소에 활성 디자인 세션이 없어 파일 담당은 총괄이 정한다. 아래 "디자인 세션" 대목은 작성 당시 전제이며, 지금은 "그 파일을 맡은 작업자"로 읽는다.
 
 - 디자인 세션은 `*-ui.js`, CSS, HTML을 맡는다. 이 설계의 모든 분할 단계는 새 `<script>` 줄을 `index.html`·`life.html`에 넣어야 한다. HTML은 디자인 세션 담당이다.
 - `ui.js`는 이름이 `*-ui.js`와 맞지 않지만 화면 코드다. 10-26 이후 `ui.js` 11개, `storage.js` 20개, `index.html`·`life.html` 4개, `sw.js` 10개 커밋이 있었다(`git log --since=2026-10-26 --oneline -- <파일> | wc -l`). 줄 이동이 큰 분할 커밋은 이 파일들과 거의 확실히 충돌한다.
@@ -253,11 +271,13 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 
 운영에는 있거나 운영에서만 만든 것으로, 저장소만으로 다시 만들 수 없는 항목이다. 이 작업은 운영을 조회하지 않았다. 각 항목에 총괄이 운영에서 확인할 것만 적었다.
 
-| # | 항목 | 저장소 쪽 근거 | 총괄이 운영에서 확인할 것 |
+아래 표의 오른쪽 열은 모두 **총괄 확인 필요** 항목이다(작업자는 운영을 조회하지 않는다).
+
+| # | 항목 | 저장소 쪽 근거 | 총괄이 운영에서 확인할 것 (총괄 확인 필요) |
 |---|---|---|---|
 | 1 | Edge `haedo-discovery-private` (v1, 10-29 17:50 배포) | 소스가 어느 브랜치에도 없다(`roadmap.md:13`). 앱 코드에 이 이름을 부르는 곳이 없다(`grep -rn "haedo-discovery-private" assets` 결과 0) | 함수 소스·`verify_jwt`·사용하는 비밀값 이름, 최근 호출 기록. 저장소로 옮길지 폐기할지 결정 |
 | 2 | 마이그레이션 이력 `20261029084926_discovery_private_reader` | 같은 이름 파일 없음(`ls supabase/migrations`) | 이력의 SQL 문, 만든 객체(함수·표·권한)와 그 객체에 의존하는 것 |
-| 3 | 이력 번호와 파일 이름 불일치 | 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`, 운영 이력 `20261102063845_…`(`roadmap.md:23`). 이전에는 파일 이름을 운영 번호에 맞췄다(`docs/life-tools-design/blog-installation.md:7-8`, `docs/design-review/account-materials.md:55`) | 운영 이력 전체 목록과 저장소 파일 이름을 1:1 대조해 불일치 목록을 만든다 |
+| 3 | 이력 번호와 파일 이름 불일치 | 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`, 운영 이력 `20261102063845_…`(`roadmap.md:23`). 이전에는 파일 이름을 운영 번호에 맞췄다(`docs/life-tools-design/blog-installation.md:7-8`, `docs/design-review/account-materials.md:55`). 총괄 설명(11-02): 총괄이 MCP `apply_migration`으로 적용해 이력 버전이 적용 시각 `20261102063845`로 기록됐고, 내용은 저장소 파일 `20261102100000_naver_enable_schedules_first_inventory.sql`과 같다. 대응: `20261102063845` ↔ `20261102100000` | 운영 이력 전체 목록과 저장소 파일 이름을 1:1 대조해 불일치 목록을 만든다 |
 | 4 | 11-01 마이그레이션 6개를 SQL Editor DO 블록으로 설치 | `supabase/operations/20261101-account-sync-install.sql:1-16`, `docs/design-review/account-sync-everywhere.md:71-88` | 이 6개 버전(`20261101090000`~`20261101160000`)이 운영 이력에 있는지. 없으면 이력 행 추가 여부를 소유자에게 묻는다 |
 | 5 | `pg_cron`·`pg_net` 확장과 예약 `haedo-naver-capture-poll`, `haedo-naver-blog-poll` | 마이그레이션이 아니라 운영 SQL이 만든다(`supabase/operations/naver-collection-activation.sql:76-96`) | `cron.job`의 이름·주기·활성·명령 본문이 이 파일과 같은지, 확장 버전 |
 | 6 | Vault 비밀값 `haedo_naver_project_url`, `haedo_naver_service_role_key` | 수동 준비 전제(`naver-collection-activation.sql:8-10,66-71`) | 두 이름이 있는지(값은 꺼내지 않는다) |
@@ -269,8 +289,34 @@ allow js not in shell: [ 'assets/life/share-page.js' ]
 | 12 | API 노출 스키마 | `haedo_*_private`은 클라이언트 직접 접근이 없어야 한다(`blog-installation.md:9`). 노출 스키마 목록은 대시보드 설정 | 노출 스키마에 `haedo_*_private`이 없는지 |
 | 13 | 이전 연표 표 `charts` | 앱이 쓰지만(`app.js:2905`) 마이그레이션은 만들지 않는다(`20261002061709:1` 주석) | 해도 프로젝트에 `charts`가 있는지. 없으면 이 경로가 이전 프로젝트 전용인지 확인 |
 | 14 | `life_composition_valid` 정의 6번 | `20261006010000`, `20261008010000`, `20261008020000`, `20261008030000`, `20261012010000`, `20261101140000` | 운영 함수 본문 해시가 마지막 정의(`20261101140000`)와 같은지 |
-| 15 | 일회성 운영 삭제 SQL이 tests에 있음 | `supabase/tests/cleanup-cloud-http-20261003.sql:1-15` | 실행 여부(해당 ID 행 개수만). 실행됐으면 `operations/` 기록으로 옮길지 결정 |
+| 15 | 일회성 운영 삭제 SQL (#157에서 `supabase/operations/archive/`로 이동, "다시 실행 금지" 표시) | `supabase/operations/archive/cleanup-cloud-http-20261003.sql` | 실행 여부(해당 ID 행 개수만). 실행됐으면 `operations/` 기록으로 옮길지 결정 |
 | 16 | 배포 비밀값 `HAEDO_SUPABASE_URL`·`HAEDO_SUPABASE_KEY` | GitHub 저장소 비밀값(`.github/workflows/pages.yml:868-869`) | 공개 키(`sb_publishable_`)인지(`scripts/prepare-site.mjs:10`) |
 
 - 마이그레이션·Edge 배포는 CI가 하지 않는다. `pages.yml`은 격리 PostgreSQL 검사만 돌린다(`pages.yml:41-51`). 그래서 위 항목은 모두 수동 적용 기록에 의존한다.
 - 운영 읽기 감사에 쓸 수 있는 저장소 SQL: `supabase/tests/*-installation.sql`(예: `blog-installation.sql`, `account-library-installation.sql`), `supabase/operations/naver-status-check.sql`.
+
+## 6. 문서 정합 정리 (총괄 지시 5건)
+
+| # | 항목 | 확인 | 처리 |
+|---|---|---|---|
+| 1 | 로드맵 10-27·10-29 절 제목이 "출시 관문" 상태로 남음 | PR139 `ab6aef5`, PR141 `30e94f0` 모두 main 조상(`git merge-base --is-ancestor`) | **고침.** 원문은 두고 제목 끝에 "→ 병합 완료(PR…)"만 덧붙임. 10-27은 `roadmap-archive.md`, 10-29는 `roadmap.md`에 있다. 이 제목을 가리키는 링크는 없다 |
+| 2 | PRODUCT.md 네이버 "수집 gate 비활성", 자료 흐름 "자동 계정 연결은 후속" | 운영 ready=true, PC 전용 15분 예약 1개, RSS 예약 0(`roadmap.md` 11-02 절) | **고침.** 현재 운영 상태와 네이버 자동 보관 운영 중으로 바꾸고, 다른 서비스는 후속으로 남김 |
+| 3 | "이 브라우저 보관"과 옛 메뉴 "기록·도구·관리" | 9칸·컬렉션·폴더는 `library-meta.js:43-57`로 자료 분류 메타와 함께 동기화(`account-sync-everywhere.md:20`), 글쓰기 초안은 `writing-sync.js`, 다시 찾기 제외는 구성 동기화 | **고침.** PRODUCT.md 직접 글쓰기·다시 찾기·9칸(날짜 이력은 보존하고 현재 상태 덧붙임)·컬렉션, `lifestyle-blog.md`, `life-tools-design/README.md` |
+| 4 | 도식의 "연간 계획 로컬 보관"·"단일 백업 아님", v8 "Local 담당" | 11-01 계정 자동 연동, 11-01 백업·복원 한 화면, 11-02 운영 체계 | **고침(안내만).** 도식은 이력이라 그대로 두고 `docs/diagrams/README.md` 머리에 최신 기준 안내 한 줄 |
+| 5 | 시각 기준이 문서마다 다름 | `AGENTS.md:136` "흰색/차콜", `DESIGN.md:5` primary `#145b50`, `core-experience.md` "옅은 라벤더·민트" | `core-experience.md`에 "시각 기준은 DESIGN.md" 안내 **고침**. `AGENTS.md`는 작업자 금지 범위라 **수정안만** PR 본문에 적음 |
+
+추가로 찾은 불일치: 로드맵 "사용 뒤 결정할 새 기능 후보"의 "9칸 동기화"는 이미 구현돼 있다(9칸은 자료 분류 메타와 함께 동기화). 후보 문구를 "9칸 공개·배치" 등으로 다시 정하는 것은 총괄의 로드맵 갱신 때 판단한다.
+
+## 7. 결함 후보 처리 현황 (2026-11-02 총괄 결정 기준)
+
+| 후보 | 판정 | 담당·상태 |
+|---|---|---|
+| M1·M2·M3 (새로고침·뒤로 가기·돌아가기) | 재현됨 | 총괄 쪽 작업자. 소유자 결정: 뒤로 가기는 앱 안 직전 화면 |
+| M4 (같은 계정 복원 중복) | 재현됨 | 총괄 쪽 작업자. 소유자 결정: 사본 공간 이름에 복원 날짜, 홈 계정 전체 목록에서 사본 제외 |
+| m2 (작성 준비 저장 위치 문구), 공개 요청 보관 | 재현됨/확인됨 | 총괄 쪽 작업자 |
+| 숨긴 페이지 rerun이 서버 목록을 받음 (`blog-sync.js` rerun 병합식) | 결정적 재현 | #161로 수정·병합. 부하 18회 0 fail로 해소 확인 |
+| blob URL 조기 해제(`photo-post-ui.js` `cleanup()`, 표지가 빈 이미지로 보일 수 있음) | CI 로그 근거, 로컬 미재현 | 총괄 쪽 작업자. 수정 뒤 photo-post·blog-writing-completion에 탭 앞 가져오기 재적용 |
+| life-collections 검토 화면의 네이버 연결 버튼(Tab 순서) | 제품 회귀(마이너, `c65aa4b`) | 탐색 묶음 병합 뒤 총괄. 소유자 결정: 검토 단계에서 버튼을 폼과 함께 숨김 |
+| record-arrange "selected page entry" 1회 실패 | 테스트 타이밍(H1). 저장 고정 실험 10/10 되돌림 0 | 이 PR에서 검사 수정. 저장 중 상태 문구로 체크박스가 100~200px 움직이는 것은 UX 마이너 후보 |
+| 네이버 구형 RSS 경로의 기준선 미확인 | 계약 위반, 운영 노출 0 | RSS 재가동 전 선행 수정(로드맵 후속, 총괄) |
+
