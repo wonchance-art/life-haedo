@@ -130,7 +130,7 @@
     // the entry of the shown screen; idx grows by one per push in this document.
     let blogRoute = null, materialHistorySeed = null, materialReaderOrigin = null;
     // A post begun with 글쓰기 (until another post opens); the nav marks 글쓰기 current while it is edited.
-    let blogComposing = false;
+    let blogComposing = false, composingRead = 0, composeClearPending = false;
     let historyIndex = 0, historyKey = null, historyWait = null, historyPending = null, lastRouteBase = null;
     const historyDoc = core.id();
     // Full entries (focus labels, search text) stay in memory only.
@@ -310,10 +310,9 @@
         const previousMode = blogMode;
         blogMode = context.mode;
         if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
-        // A successful 글 저장 ends the 글쓰기 screen: later edits of the saved post are not a new post,
-        // and the shown history entry drops its compose flag (replace, not a new entry).
-        if (context.committed && blogComposing) { blogComposing = false; writeRoute('page', 'replace'); }
         renderHeader();
+        // Every read/edit/save switch re-applies the one 글쓰기 rule to the post now shown.
+        refreshComposing(context);
         const entryScroll = blogEntryScroll;
         blogEntryScroll = null;
         if (entryScroll) requestAnimationFrame(entryScroll);
@@ -1612,8 +1611,7 @@
         if (cause?.code === 'photo_post_missing') return { pageCompose: true };
         throw cause;
       }
-      // A copy that replaces a saved post is never a new post, whatever the entry recorded.
-      const composing = !post?.replaces && (typeof recordedCompose === 'boolean' ? recordedCompose : post?.status !== 'saved');
+      const composing = composingPost(typeof recordedCompose === 'boolean' ? recordedCompose : true, post);
       return { pagePreview: false, searchTarget: { photoPostId: id }, ...(composing ? { composingPost: true } : {}) };
     }
     function updateBlogRoute(context) {
@@ -1700,6 +1698,7 @@
       const timer = global.setTimeout(() => done(true), 3000);
       const done = (timedOut = false) => {
         global.clearTimeout(timer); if (historyWait?.done === done) historyWait = null; syncHistoryPosition(); finish();
+        if (composeClearPending) Promise.resolve().then(() => { if (disposed || historyWait || !composeClearPending) return; composeClearPending = false; if (state.bundle && state.mode === 'page') writeRoute('page', 'replace'); });
         if (timedOut) Promise.resolve().then(() => { if (!disposed && !historyWait && state.bundle) writeRoute(state.mode, 'replace'); });
       };
       historyWait = { idx, key, done, promise };
@@ -1843,6 +1842,26 @@
       }
       if (composingNewPost()) return;
       await navigate('page', { blogContext: true, pageCompose: true });
+    }
+    // The one 글쓰기 rule: begun with 글쓰기 (the history entry's compose flag, or for a bare address
+    // the fallback) AND never saved (status !== 'saved') AND not a copy replacing a saved post.
+    function composingPost(intent, post) {
+      return !!intent && !!post && post.status !== 'saved' && !post.replaces;
+    }
+    async function refreshComposing(context) {
+      if (!blogComposing) return;
+      const token = ++composingRead, workspaceId = state.bundle?.workspaceId;
+      let post = null;
+      if (context.kind === 'photo' && typeof context.id === 'string') {
+        try { post = await storage.readPhotoPost(workspaceId, context.id); } catch (cause) { if (cause?.code !== 'photo_post_missing') return; post = { status: 'draft' }; }
+      } else if (context.kind === 'photo' && !context.id) post = { status: 'draft' };
+      if (disposed || token !== composingRead || state.mode !== 'page' || !blogPageTask || workspaceId !== state.bundle?.workspaceId) return;
+      const next = composingPost(blogComposing, post);
+      if (next === blogComposing) return;
+      blogComposing = next;
+      renderHeader();
+      // The shown entry drops its compose flag; while the browser is moving, after it arrives.
+      if (historyWait) composeClearPending = true; else writeRoute('page', 'replace');
     }
     // Editing the post begun with 글쓰기 is the 글쓰기 screen; editing another saved post or draft is not.
     function composingNewPost() {

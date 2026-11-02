@@ -339,6 +339,33 @@ async function main() {
         assert.equal(await write.getAttribute('aria-current'), 'page');
       }
     });
+    await check('a new post saved in another tab is no longer the 글쓰기 screen here after a reload', async ({ page, context }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+      await write.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      await page.locator('#photoTitle').fill('다른 탭에서 저장할 익명 글'); await page.locator('.ql-editor').fill('두 탭 본문');
+      await page.waitForFunction(() => /^photo\./.test(new URLSearchParams(location.search).get('blog') || ''));
+      const draft = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = new URLSearchParams(location.search).get('blog').split('.')[1];
+        try { return (await s.readPhotoPost(await s.getActive(), id)).title; } catch (_) { return null; } });
+      for (const deadline = Date.now() + 10000; await draft() !== '다른 탭에서 저장할 익명 글';) { assert(Date.now() < deadline, 'draft stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      assert.equal(await page.evaluate(() => history.state?.haedo?.entry?.compose), true);
+      // The second tab opens the same address and saves the post.
+      const other = await context.newPage(); other.setDefaultTimeout(15000);
+      await other.goto(page.url()); await ready(other); await settle(other); await other.locator('#photoTitle').waitFor();
+      await other.getByRole('button', { name: '글 저장', exact: true }).click(); await other.locator('.photo-article').waitFor(); await settle(other);
+      await other.close();
+      // This tab still carries compose: true in its entry; the saved post decides.
+      await page.reload(); await ready(page); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null, 'saved elsewhere, after reload');
+      const edit = page.getByRole('button', { name: '글 수정', exact: true });
+      if (!await edit.isVisible()) { await page.locator('.photo-article').waitFor(); }
+      await edit.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null, 'editing the post saved elsewhere');
+      assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+      await page.locator('#photoTitle').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '');
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+    });
     // Pages whose heading scrolls with the page carry the phone pencil inside that heading (review M3).
     async function inlinePencil(page, file) {
       const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
