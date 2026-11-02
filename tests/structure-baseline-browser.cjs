@@ -67,7 +67,7 @@ async function main() {
   }
 }
 
-// Pinned values (main c108dbb).
+// Pinned values (main c108dbb; S1 added SyncCommon).
 const PINNED = {
   haedoLife: [
     "AccountBlogUI",
@@ -190,6 +190,7 @@ const PINNED = {
     "SourceReference",
     "Storage",
     "Sync",
+    "SyncCommon", // S1: shared sync helpers (assets/life/sync-common.js)
     "UI",
     "UnifiedSearch",
     "UnifiedSearchUI",
