@@ -2,7 +2,8 @@
 // S0 structure baseline, part B (docs/design-review/structure-workflow-review-20261102.md 4-5/4-6):
 // the HaedoLife.* names and the extra top-level globals that index.html and life.html register in a
 // real page: the public home signed out, and both pages signed in (FakeCloud, synthetic account A).
-// life.html is private, so signed out it only redirects to login.html. Loading the same scripts in node:vm is not enough: shell.js, haedo-navigation.js,
+// life.html is private, so signed out it only redirects to login.html.
+// Loading the same scripts in node:vm is not enough: shell.js, haedo-navigation.js,
 // haedo-motion.js, photo-post-ui.js, full-backup.js and the vendored Quill touch the DOM or browser-only
 // globals while loading, and shell.js is the one that registers HaedoLife.Shell.
 //
@@ -221,4 +222,6 @@ const PINNED = {
   ]
 };
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+
+module.exports = { SCENES, PINNED };
