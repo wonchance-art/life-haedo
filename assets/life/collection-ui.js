@@ -216,12 +216,14 @@
       (async () => {
         const found = [];
         try {
-          for (const summary of await storage.listPhotoPosts(ws)) {
-            if (!summary.attachments || summary.archived) continue;
-            const doc = await storage.readPhotoPost(ws, summary.id);
+          const candidates = (await storage.listPhotoPosts(ws)).filter(summary => summary.attachments && !summary.archived);
+          // One read for all candidates; a post that is missing or unreadable comes back null and is skipped.
+          const docs = candidates.length ? await storage.readPhotoPosts(ws, candidates.map(summary => summary.id)) : [];
+          candidates.forEach((summary, index) => {
+            const doc = docs[index];
             // A draft that edits a saved post repeats that post's attachments; list the post once.
-            if (!doc.replaces && (doc.attachments || []).some(value => C.attachmentMatch([item], value))) found.push(summary);
-          }
+            if (doc && !doc.replaces && (doc.attachments || []).some(value => C.attachmentMatch([item], value))) found.push(summary);
+          });
         } catch (_) {
           if (current(token) && section.isConnected) body.textContent = '글 목록을 읽지 못했습니다. 컬렉션 항목은 그대로입니다.';
           return;

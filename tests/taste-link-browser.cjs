@@ -70,7 +70,9 @@ async function main() {
       await keep(form).scrollIntoViewIfNeeded(); await capture('attachment-review', [390, 1440]); await keep(form).scrollIntoViewIfNeeded();
       await click('첨부');
       await row('익명 시인').locator('.photo-attachment-collected').waitFor();
-      assert.match(await status(), /컬렉션에도 저장했습니다|자동 저장/);
+      // The collection result lives on the card; the post's status line and its recovery actions stay out of it.
+      assert.equal(await page.locator('.photo-recovery-actions:visible').count(), 0);
+      assert.doesNotMatch(await status(), /컬렉션/);
       const after = await collection();
       assert.equal(after.revision, before.revision + 1);
       const added = after.items.filter(item => !before.items.some(old => old.id === item.id));
@@ -86,7 +88,7 @@ async function main() {
       await row('산책한 호숫가').locator('.photo-attachment-collected').waitFor();
       const once = await collection();
       form = await review({ type: 'place', title: '산책한 호숫가', url: 'https://example.org/lake' }); await click('첨부');
-      await awaitCondition(page, () => /이미 있습니다/.test(document.querySelector('.photo-status')?.textContent || ''), undefined, { timeout: 15000, label: 'duplicate notice' });
+      await row('산책한 호숫가').nth(1).locator('.photo-attachment-collected').waitFor();
       assert.deepEqual(await collection(), once, 'a duplicate attachment adds nothing to the collection');
       form = await review({ type: 'artwork', title: '익명 그림' }); await keep(form).uncheck(); await click('첨부');
       await row('익명 그림').waitFor();
@@ -95,12 +97,13 @@ async function main() {
       await capture('attachments-marked', [390, 1440]);
     });
 
-    await check('An edit of an attachment not yet in the collection offers saving it, and an item already there starts unchecked', async () => {
+    await check('An edit offers collection saving unchecked when the item is not kept yet, and only shows that it is kept otherwise', async () => {
       await page.getByRole('button', { name: '익명 그림 첨부 정보 수정', exact: true }).click();
-      let form = page.locator('.photo-attachment-review'); assert.equal(await keep(form).isChecked(), true);
+      let form = page.locator('.photo-attachment-review'); assert.equal(await keep(form).isChecked(), false, 'fixing a typo never saves by surprise');
       await click('입력 취소');
       await page.getByRole('button', { name: '익명 시인 첨부 정보 수정', exact: true }).click();
-      form = page.locator('.photo-attachment-review'); assert.equal(await keep(form).isChecked(), false);
+      form = page.locator('.photo-attachment-review'); assert.equal(await keep(form).count(), 0);
+      assert.equal(await form.locator('.photo-attachment-collected').innerText(), '컬렉션에 있음');
       await click('입력 취소');
     });
 
@@ -147,14 +150,17 @@ async function main() {
         };
       });
       await click('첨부');
-      await page.locator('.photo-status[role=alert]').waitFor();
-      assert.match(await status(), /첨부는 글에 남아 있으며/);
-      await row('읽기 실패 때 붙인 장소').waitFor();
+      const failed = row('읽기 실패 때 붙인 장소');
+      await failed.getByText('컬렉션에 저장하지 못함', { exact: true }).waitFor();
       assert.equal((await collection()).items.some(item => item.title === '읽기 실패 때 붙인 장소'), false);
-      await page.getByRole('button', { name: '읽기 실패 때 붙인 장소 첨부 정보 수정', exact: true }).click();
-      assert.equal(await keep(page.locator('.photo-attachment-review')).isChecked(), true);
-      await click('수정 반영');
-      await row('읽기 실패 때 붙인 장소').locator('.photo-attachment-collected').waitFor();
+      // Autosave rewrites the post's status line; the failure must outlive it on the card.
+      await awaitCondition(page, () => document.querySelector('.photo-status')?.textContent === '자동 저장됨', undefined, { timeout: 15000, label: 'autosave after the failure' });
+      assert.equal(await failed.getByText('컬렉션에 저장하지 못함', { exact: true }).count(), 1, 'the failure stays on the card');
+      assert.equal(await page.locator('.photo-recovery-actions:visible').count(), 0);
+      assert.doesNotMatch(await status(), /컬렉션/);
+      await capture('attachment-collect-failed', [390, 1440]);
+      await page.getByRole('button', { name: '읽기 실패 때 붙인 장소 컬렉션 저장 다시 시도', exact: true }).click();
+      await failed.locator('.photo-attachment-collected').waitFor();
       assert.equal((await collection()).items.filter(item => item.title === '읽기 실패 때 붙인 장소').length, 1);
     });
 
@@ -164,7 +170,7 @@ async function main() {
       const kept = await collection(), pencil = kept.items.find(item => item.title === '연필');
       await page.getByRole('button', { name: '연필 첨부 정보 수정', exact: true }).click();
       const form = page.locator('.photo-attachment-review');
-      assert.equal(await keep(form).isChecked(), false, 'an attachment already in the collection starts unchecked');
+      assert.equal(await keep(form).count(), 0, 'an attachment already in the collection offers no second save');
       await form.getByRole('textbox', { name: '제목 또는 이름', exact: true }).fill('연필 두 자루'); await click('수정 반영');
       await row('연필 두 자루').waitFor();
       assert.deepEqual(await collection(), kept, 'editing the post attachment leaves the collection as it was');
@@ -199,7 +205,7 @@ async function main() {
 
     await check('The collection item lists the post that attaches it and opens that post', async () => {
       await awaitCondition(page, () => document.querySelector('.photo-status')?.textContent === '자동 저장됨', undefined, { timeout: 15000, label: 'autosave' });
-      const postId = (await docs()).find(d => d.attachments?.some(a => a.title === '익명 시인')).id;
+      assert.ok((await docs()).some(d => d.attachments?.some(a => a.title === '익명 시인')));
       await page.goto(base + '/index.html?section=records&view=collection'); await ready(page); await page.locator('.life-collection').waitFor();
       await page.locator('#clQuery').fill('익명 시인'); await page.locator('.cl-card').first().click();
       const used = page.locator('.cl-used');
@@ -207,9 +213,11 @@ async function main() {
       assert.match(await used.innerText(), /초안 · \d{4}-\d\d-\d\d/);
       await capture('collection-used', [390, 1440]);
       await used.getByRole('button', { name: '시인과 호숫가를 다시 읽은 날', exact: true }).click();
-      await awaitCondition(page, id => !!document.querySelector('[data-photo-post-id="' + id + '"], #photoTitle, .photo-article'), postId, { timeout: 15000, label: 'post opened' });
-      const opened = await page.evaluate(() => document.querySelector('#photoTitle')?.value || document.querySelector('.photo-article h1, .photo-article h2')?.textContent || '');
-      assert.match(opened, /시인과 호숫가를 다시 읽은 날/);
+      // The opened post is the editor (a draft) or the reader; wait for its title, not for any row
+      // carrying the post id, which can appear before the post itself has rendered.
+      await awaitCondition(page, title => (document.querySelector('#photoTitle')?.value || '') === title
+        || [...document.querySelectorAll('.photo-article h1, .photo-article h2')].some(n => n.textContent.trim() === title), '시인과 호숫가를 다시 읽은 날', { timeout: 15000, label: 'post opened with its title' });
+      assert.equal(await page.locator('.cl-used').count(), 0, 'the collection screen was left for the post');
     });
 
     await check('Posts of another workspace and the signed-out public page never show in the list', async () => {

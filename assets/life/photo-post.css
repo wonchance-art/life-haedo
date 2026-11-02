@@ -255,8 +255,16 @@
   min-height: 0;
   padding: 0;
 }
-.photo-attachment-collected {
+/* The card's own collection line: saving, kept, or failed with a retry. */
+.photo-attachment-collect-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin: 4px 0 0;
+}
+.photo-attachment-collect-state:not(:has(button)) .photo-attachment-collect-text:empty {
+  display: none;
 }
 .photo-attachment-review label {
   display: flex;
