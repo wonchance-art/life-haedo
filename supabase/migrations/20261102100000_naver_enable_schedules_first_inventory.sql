@@ -4,6 +4,9 @@
 -- lock, CAS and response; the only addition is an insert that never overwrites an existing
 -- row (baseline, scan and page stay exact). The backfill only adds missing rows for
 -- connections that are already enabled. Claim/finish/observed baseline/capture are unchanged.
+-- Row guard: counts and the prior inventory hash are recorded before the backfill; afterwards
+-- inventory must be exactly +N (N = enabled connections without a row), every other Naver
+-- table count and every prior inventory row must be unchanged, or the whole install rolls back.
 begin;
 create or replace function haedo_naver_private.save(p_workspace_id uuid,p_blog_id text,p_expected_revision bigint,p_enabled boolean)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
@@ -31,9 +34,42 @@ begin
  return (to_jsonb(sub)-'lease_token'-'lease_until'-'owner_id')||jsonb_build_object('ready',coalesce(ready,false));
 end $$;
 
+create temp table naver_enable_guard on commit drop as select
+ (select count(*) from public.life_naver_subscriptions s where s.enabled and not exists(select 1 from haedo_naver_private.inventory i where i.subscription_id=s.id)) missing,
+ (select count(*) from haedo_naver_private.inventory) inventory_rows,
+ (select count(*) from haedo_naver_private.inventory_entries) entry_rows,
+ (select count(*) from haedo_naver_private.inventory_seen) seen_rows,
+ (select count(*) from haedo_naver_private.capture_jobs) job_rows,
+ (select count(*) from haedo_naver_private.capture_receipts) receipt_rows,
+ (select count(*) from haedo_naver_private.inventory_scan_observations) observation_rows,
+ (select count(*) from haedo_naver_private.inventory_observation_receipts) observation_receipt_rows,
+ (select count(*) from public.life_naver_subscriptions) subscription_rows,
+ (select count(*) from public.life_naver_captures) capture_rows,
+ (select encode(sha256(convert_to(coalesce(string_agg(to_jsonb(i)::text,',' order by i.subscription_id),''),'UTF8')),'hex') from haedo_naver_private.inventory i) inventory_hash;
+create temp table naver_enable_prior on commit drop as select subscription_id from haedo_naver_private.inventory;
+
 insert into haedo_naver_private.inventory(subscription_id,owner_id)
  select s.id,s.owner_id from public.life_naver_subscriptions s where s.enabled
  on conflict (subscription_id) do nothing;
+
+do $$
+declare g record;
+begin
+ select * into g from pg_temp.naver_enable_guard;
+ if (select count(*) from haedo_naver_private.inventory)<>g.inventory_rows+g.missing
+  or exists(select 1 from public.life_naver_subscriptions s where s.enabled and not exists(select 1 from haedo_naver_private.inventory i where i.subscription_id=s.id))
+  or (select count(*) from haedo_naver_private.inventory_entries)<>g.entry_rows
+  or (select count(*) from haedo_naver_private.inventory_seen)<>g.seen_rows
+  or (select count(*) from haedo_naver_private.capture_jobs)<>g.job_rows
+  or (select count(*) from haedo_naver_private.capture_receipts)<>g.receipt_rows
+  or (select count(*) from haedo_naver_private.inventory_scan_observations)<>g.observation_rows
+  or (select count(*) from haedo_naver_private.inventory_observation_receipts)<>g.observation_receipt_rows
+  or (select count(*) from public.life_naver_subscriptions)<>g.subscription_rows
+  or (select count(*) from public.life_naver_captures)<>g.capture_rows
+  or (select encode(sha256(convert_to(coalesce(string_agg(to_jsonb(i)::text,',' order by i.subscription_id),''),'UTF8')),'hex')
+       from haedo_naver_private.inventory i join pg_temp.naver_enable_prior p on p.subscription_id=i.subscription_id) is distinct from g.inventory_hash
+ then raise exception using errcode='P0001',message='life_naver_enable_guard_mismatch'; end if;
+end $$;
 
 notify pgrst,'reload schema';
 commit;

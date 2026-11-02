@@ -256,10 +256,11 @@ Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL�
 - **보여 주지 않는 것:** 블로그 ID·제목·URL·본문·키.
 - **검증:** 전체 마이그레이션을 적용한 일회용 PostgreSQL 16에서 빈 상태와 예약 행이 있는 상태로 실행했다. 운영 결과는 소유자 실행 뒤에 기록한다.
 
-
 ## 켜기 저장이 첫 목록 확인을 예약 (2026-11-02)
 
 - **문제:** 15분 예약의 목록 claim은 `inventory` 행이 있는 연결만 고른다. 그 행은 소유자 버튼(`inventory_start`)으로만 생겼다. 그래서 11-02 운영에서 새로 켠 연결을 예약이 건너뛰었다.
 - **변경:** [20261102100000_naver_enable_schedules_first_inventory.sql](../../supabase/migrations/20261102100000_naver_enable_schedules_first_inventory.sql)이 `haedo_naver_private.save`를 같은 시그니처로 다시 정의한다. 저장 결과가 켜짐이면 같은 트랜잭션에서 `inventory` 행(pending, page 1)을 추가한다. 이미 켜져 있는데 행이 없는 연결에도 같은 행을 한 번 추가한다(멱등).
 - **보존:** 입력 검사, `life_naver_setup_required`, 잠금, CAS(`life_naver_conflict`), 응답 형태, 함수 ACL·definer·search_path는 그대로다. 이미 있는 행은 덮지 않으므로 기준선·scan·page·상태가 유지된다. 끄기 저장은 행을 만들지 않는다. 버튼 경로 `inventory_start`는 pending 행을 그대로 반환한다. claim·finish·관측 기준선·사진 보관·예약 주기는 바꾸지 않았다.
+- **행 수 보호:** backfill 전에 켜짐+행 없음 연결 수 N, 네이버 테이블 9개의 행 수, 기존 inventory 행 전체의 해시를 기록한다. backfill 뒤 inventory가 정확히 +N이 아니거나, 다른 행 수나 기존 행 해시가 다르면 `life_naver_enable_guard_mismatch`로 설치 전체를 되돌린다. 적용 중 다른 쓰기가 끼어들어도 이 보호에 걸려 아무것도 바뀌지 않는다. 그때는 다시 적용한다.
+- **시작과 기준선 완료는 다르다:** 켜기 저장은 자동 수집을 시작할 뿐이다. 예약 실행은 15분마다 목록 1페이지(30개)를 처리하므로, 기준선 완료는 글 수에 따라 여러 번의 실행 뒤다. 총 개수가 목록과 맞지 않는 블로그는 관측 두 번이 일치해야 기준선이 된다. 기준선 전 글은 자동 보관 대상이 아니다.
 - **검증:** `tests/run-naver-observed-baseline-postgres.cjs`의 격리 PostgreSQL에서 설치 실패 롤백, 본문 외 메타데이터 불변, backfill, 켜짐/꺼짐 새 연결, 다시 켜기, 완료된 기준선 보존, CAS 충돌, 버튼 경로, 준비 꺼짐 거부를 확인한다. 운영 적용 결과는 총괄의 적용 기록에 남긴다.
