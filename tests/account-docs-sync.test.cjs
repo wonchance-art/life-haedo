@@ -531,3 +531,23 @@ test('a device that synced on an older release, which skipped restored-copy mark
   assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 2, rewound: false });
   assert.ok((await back.readAccountDocCursor()) >= passed);
 });
+
+// Each schema number names exactly one set of document kinds. Adding a prefix
+// without raising ACCOUNT_DOC_SCHEMA (storage.js) fails here, and so does a
+// new number without its row: a device that synced under the older set
+// rereads the change list once (upgradeAccountDocSchema) only when it rises.
+test('the account document schema number is pinned to its document kinds', t => {
+  const KINDS = {
+    1: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence'] },
+    2: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] }
+  };
+  const local = device(); t.after(() => local.base.close());
+  const { schema, account, workspace } = local.base.accountDocKinds;
+  assert.ok(Object.hasOwn(KINDS, schema), 'schema ' + schema + ' has no recorded kinds: add its row here');
+  assert.deepEqual({ account: [...account], workspace: [...workspace] }, KINDS[schema],
+    'the document kinds changed: raise ACCOUNT_DOC_SCHEMA in storage.js and record the new set here');
+  const numbers = Object.keys(KINDS).map(Number);
+  assert.equal(schema, Math.max(...numbers), 'the newest recorded schema is the one in use');
+});

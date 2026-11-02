@@ -1363,6 +1363,23 @@
         photoPost().validate(value); return clone(value);
       });
     }
+    // Several posts of one workspace in one read: the workspace is checked once
+    // (readPhotoPost checks it per post). A missing or invalid post is `null`
+    // in its place; the others are still returned.
+    async function readPhotoPosts(workspaceId, postIds) {
+      collectionScope(workspaceId);
+      if (!Array.isArray(postIds) || postIds.length > 10000) throw fault('invalid_request', '읽을 글 목록을 확인해 주세요.');
+      postIds.forEach(id => requireId(id, '사진 글'));
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const result = [];
+        for (const postId of postIds) {
+          const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
+          try { if (!value) throw new Error('missing'); photoPost().validate(value); result.push(clone(value)); } catch (_) { result.push(null); }
+        }
+        return result;
+      });
+    }
     async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null, nineRequest = null, naver = null) {
       collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
       const value = photoPost().compact(input);
@@ -5170,7 +5187,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
@@ -5191,7 +5208,9 @@
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
       listUnownedWorkspaces, importUnownedWorkspace, adoptUnownedWorkspaces,
       listAccountDocs, listAccountDocKeys, readAccountDocRecord, applyAccountDoc, writeAccountDocSync,
-      readAccountDocCursor, writeAccountDocCursor, upgradeAccountDocSchema, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash };
+      readAccountDocCursor, writeAccountDocCursor, upgradeAccountDocSchema, saveAccountDocRecovery, listAccountDocRecoveries, accountDocHash,
+      // Read-only: the document kinds of this schema, pinned by a test with ACCOUNT_DOC_SCHEMA.
+      accountDocKinds: Object.freeze({ schema: ACCOUNT_DOC_SCHEMA, account: Object.freeze(Object.keys(ACCOUNT_DOC_ACCOUNT_PREFIXES)), workspace: Object.freeze(Object.keys(ACCOUNT_DOC_WORKSPACE_PREFIXES)) }) };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

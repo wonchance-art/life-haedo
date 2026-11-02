@@ -28,7 +28,13 @@
   // changed after the backup, or deleted from the original, stays listed.
   // Each group of equal posts keeps one: the open library's, otherwise the one
   // nearest the original. A post is only ever left out for a listed equal one.
-  async function restoredDuplicates(libraries, lists, workspaceId, readDoc) {
+  //
+  // Cost: only posts whose list row (title, state, text, counts) equals a row
+  // on the other side are read, all of one workspace in one read
+  // (`readDocs(ws, ids)` → docs or null, in order). `cache` (a Map kept by
+  // the home view) holds each read post's content by ID, revision and update
+  // time, so a later pass reads only posts that changed.
+  async function restoredDuplicates(libraries, lists, workspaceId, readDocs, cache = new Map()) {
     const byId = new Map(libraries.map(item => [item.workspaceId, item]));
     const sourceOf = id => {
       const source = byId.get(id)?.restoredCopy?.sourceWorkspaceId;
@@ -39,21 +45,38 @@
     const parent = new Map(), key = (ws, id) => ws + '/' + id;
     const find = item => { while (parent.get(item) !== item) item = parent.get(item); return item; };
     const join = (a, b) => { for (const item of [a, b]) if (!parent.has(item)) parent.set(item, item); const x = find(a), y = find(b); if (x !== y) parent.set(x, y); };
-    const content = new Map();
-    const contentOf = (ws, id) => {
-      const k = key(ws, id);
-      if (!content.has(k)) content.set(k, Promise.resolve().then(() => readDoc(ws, id)).then(restoredContent, () => null));
-      return content.get(k);
-    };
+    const version = (ws, row) => JSON.stringify([ws, row.id, row.revision, row.updatedAt]);
+    // Rows of each pair whose list row has an equal on the other side.
+    // `known` is this pass's own view, so another pass pruning the shared cache cannot change it.
+    const pairs = [], wanted = new Map(), used = new Set(), known = new Map();
     for (const [copy, rows] of lists) {
       const source = sourceOf(copy); if (!source) continue;
       const free = new Map();
       for (const row of lists.get(source)) { const k = indexKey(row); if (!free.has(k)) free.set(k, []); free.get(k).push(row); }
+      const want = (ws, row) => { const v = version(ws, row); used.add(v); if (cache.has(v)) { known.set(v, cache.get(v)); return; } if (!wanted.has(ws)) wanted.set(ws, new Map()); wanted.get(ws).set(row.id, v); };
       for (const row of rows) {
         const candidates = free.get(indexKey(row)); if (!candidates?.length) continue;
-        const mine = await contentOf(copy, row.id); if (mine === null) continue;
+        want(copy, row); for (const candidate of candidates) want(source, candidate);
+      }
+      pairs.push({ copy, source, rows, free });
+    }
+    for (const [ws, rows] of wanted) {
+      const ids = [...rows.keys()];
+      let docs; try { docs = await readDocs(ws, ids); } catch (_) { docs = []; }
+      ids.forEach((id, i) => {
+        let value = null; try { value = docs?.[i] ? restoredContent(docs[i]) : null; } catch (_) { value = null; }
+        // An unreadable post is not remembered, so it is read again next time.
+        if (value !== null) { cache.set(rows.get(id), value); known.set(rows.get(id), value); }
+      });
+    }
+    for (const item of [...cache.keys()]) if (!used.has(item)) cache.delete(item);
+    const contentOf = (ws, row) => known.get(version(ws, row)) ?? null;
+    for (const { copy, source, rows, free } of pairs) {
+      for (const row of rows) {
+        const candidates = free.get(indexKey(row)); if (!candidates?.length) continue;
+        const mine = contentOf(copy, row); if (mine === null) continue;
         for (let i = 0; i < candidates.length; i++) {
-          if ((await contentOf(source, candidates[i].id)) !== mine) continue;
+          if (contentOf(source, candidates[i]) !== mine) continue;
           join(key(copy, row.id), key(source, candidates[i].id)); candidates.splice(i, 1); break;
         }
       }
@@ -78,7 +101,7 @@
   // listed post is listed once (see restoredDuplicates); this changes only the
   // list, never sync, backup or the copy itself. A library that cannot be read
   // is reported as `failed`; the readable ones are still listed.
-  async function listAccountPosts(storage, workspaceId) {
+  async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
     let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
       try {
@@ -92,9 +115,11 @@
     const read = new Map();
     lists.forEach((result, index) => { if (result.status === 'fulfilled' && Array.isArray(result.value)) read.set(ids[index], result.value); });
     let hidden = new Set();
-    if (libraries.some(item => item.restoredCopy) && typeof storage.readPhotoPost === 'function') {
+    if (libraries.some(item => item.restoredCopy) && (typeof storage.readPhotoPosts === 'function' || typeof storage.readPhotoPost === 'function')) {
+      const readDocs = typeof storage.readPhotoPosts === 'function' ? (ws, ids) => storage.readPhotoPosts(ws, ids)
+        : (ws, ids) => Promise.all(ids.map(id => storage.readPhotoPost(ws, id).catch(() => null)));
       // An unexpected failure lists every post rather than hiding any.
-      try { hidden = await restoredDuplicates(libraries, read, workspaceId, (ws, id) => storage.readPhotoPost(ws, id)); }
+      try { hidden = await restoredDuplicates(libraries, read, workspaceId, readDocs, contentCache); }
       catch (_) { hidden = new Set(); }
     }
     const posts = [];
@@ -103,6 +128,8 @@
   }
   function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
+    // Post contents compared for restore copies, by ID/revision/update time; this view's storage only.
+    const contentCache = new Map();
     let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
@@ -588,7 +615,7 @@
       void enrichDrafts(context);
     }
     async function load(context, keys = ['workbench', 'photo', 'plainDrafts', 'sourceDrafts']) {
-      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => listAccountPosts(storage, context.workspaceId),
+      const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => listAccountPosts(storage, context.workspaceId, { contentCache }),
         plainDrafts: () => storage.readPageDrafts(context.workspaceId), sourceDrafts: () => storage.listStages(context.workspaceId) };
       context.area.setAttribute('aria-busy', 'true');
       const results = await Promise.allSettled(keys.map(key => Promise.resolve().then(read[key])));

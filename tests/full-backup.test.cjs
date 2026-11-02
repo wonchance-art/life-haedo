@@ -675,7 +675,7 @@ test('M4: restore-copy folding pairs one to one, needs an eligible listed origin
   const { restoredDuplicates } = globalThis.HaedoLife.HomeUI;
   const row = (id, title) => ({ id, title, status: 'saved', archived: false, body: title + '\n', photos: 0, attachments: 0 });
   const doc = (id, title) => ({ id, title, status: 'saved', archived: false, ops: [{ insert: title + '\n' }], photos: [], attachments: [] });
-  const docs = new Map(), read = async (ws, id) => docs.get(ws + '/' + id);
+  const docs = new Map(), read = async (ws, ids) => ids.map(id => docs.get(ws + '/' + id) || null);
   const lists = new Map([['a', [row('a1', '같은 글')]], ['c', [row('c1', '같은 글'), row('c2', '같은 글')]], ['r', [row('r1', '복구 글')]], ['rc', [row('rc1', '복구 글')]],
     ['x', [row('x1', '고리')]], ['y', [row('y1', '고리')]]]);
   for (const [ws, rows] of lists) for (const item of rows) docs.set(ws + '/' + item.id, doc(item.id, item.title));
@@ -689,6 +689,66 @@ test('M4: restore-copy folding pairs one to one, needs an eligible listed origin
   // A loop of markers keeps exactly one of the pair.
   assert.equal(['x/x1', 'y/y1'].filter(item => hidden.has(item)).length, 1);
   // An unreadable post never folds.
-  const unreadable = await restoredDuplicates(libraries, lists, 'a', async (ws, id) => { if (ws === 'c') throw new Error('읽기 실패'); return docs.get(ws + '/' + id); });
+  const unreadable = await restoredDuplicates(libraries, lists, 'a', async (ws, ids) => { if (ws === 'c') throw new Error('읽기 실패'); return ids.map(id => docs.get(ws + '/' + id)); });
   assert.equal(['c/c1', 'c/c2'].some(item => unreadable.has(item)), false);
+});
+
+// Review P1 (bench: 100 posts, 50 sources of 20,000 characters per workspace).
+// Before: every compared post read and re-validated its whole workspace, one
+// read at a time (2.3-3.3 s here, about 30x the unmarked list). Now one read
+// per workspace, and the view cache reads nothing again for unchanged posts.
+test('M4 cost: folding a restore copy reads each workspace once, the view cache reads nothing again, and stays near the unmarked list time', async () => {
+  require('../assets/life/home.js');
+  const { listAccountPosts } = globalThis.HaedoLife.HomeUI;
+  const N = 100, SOURCES = 50, SIZE = 20000;
+  // About 1 MB of sources per workspace, built once in memory; each library installs a copy with new IDs.
+  let template = Core.createWorkspace({ title: '원문 묶음' });
+  for (let s = 0; s < SOURCES; s++) {
+    const prepared = await Core.prepareImport({ origin: 'obsidian', title: '원문 ' + s, text: '가'.repeat(SIZE), authorRelation: 'self' }, template);
+    template = Core.applyChanges(template, Core.buildImportChanges(template, prepared, []));
+  }
+  async function library(storage, title, options) {
+    const bundle = await Core.restoreBackup(Core.makeBackup(template));
+    const ws = (await storage.installWorkspace({ ...bundle, title }, options)).workspaceId;
+    for (let i = 0; i < N; i++) await storage.savePhotoPost(ws, postDoc({ title: '글 ' + i, status: 'saved' }), 0);
+    return ws;
+  }
+  async function account(marked) {
+    const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+    const a = await library(storage, '내 자료');
+    const b = await library(storage, '내 자료 (11-02 복원)', marked ? { restoredCopy: { sourceWorkspaceId: a, restoredAt: '2026-11-02T00:00:00.000Z' } } : undefined);
+    await storage.setActive(a);
+    const calls = { many: 0, one: 0 };
+    const counted = Object.create(storage, {
+      readPhotoPosts: { value: (ws, ids) => { calls.many++; return storage.readPhotoPosts(ws, ids); } },
+      readPhotoPost: { value: (ws, id) => { calls.one++; return storage.readPhotoPost(ws, id); } } });
+    return { storage: counted, a, b, calls };
+  }
+  const median = values => values.slice().sort((x, y) => x - y)[1];
+  const timed = async (f, options) => { const out = []; for (let r = 0; r < 3; r++) { const t = process.hrtime.bigint(); await listAccountPosts(f.storage, f.a, options); out.push(Number(process.hrtime.bigint() - t) / 1e6); } return out; };
+  const plain = await account(false), marked = await account(true);
+  // Same decision as before: every copy post equals its original and folds; none of A's rows go.
+  const listed = await listAccountPosts(marked.storage, marked.a);
+  assert.equal(listed.posts.length, N); assert.ok(listed.posts.every(row => row.workspaceId === marked.a));
+  assert.equal((await listAccountPosts(plain.storage, plain.a)).posts.length, 2 * N, 'without a marker nothing folds');
+  // One read per workspace, never one per post.
+  marked.calls.many = marked.calls.one = 0;
+  await listAccountPosts(marked.storage, marked.a);
+  assert.deepEqual(marked.calls, { many: 2, one: 0 });
+  // With the view cache, a later pass over unchanged posts reads none.
+  const contentCache = new Map();
+  await listAccountPosts(marked.storage, marked.a, { contentCache });
+  assert.equal(contentCache.size, 2 * N);
+  marked.calls.many = 0; await listAccountPosts(marked.storage, marked.a, { contentCache });
+  assert.equal(marked.calls.many, 0);
+  // An edited post is read again (its revision changed); only it.
+  const edited = (await marked.storage.listPhotoPosts(marked.b))[0], doc = await marked.storage.readPhotoPost(marked.b, edited.id);
+  await marked.storage.savePhotoPost(marked.b, doc, doc.revision);
+  let asked = 0; const watch = Object.create(marked.storage, { readPhotoPosts: { value: (ws, ids) => { asked += ids.length; return marked.storage.readPhotoPosts(ws, ids); } } });
+  assert.equal((await listAccountPosts(watch, marked.a, { contentCache })).posts.length, N);
+  assert.equal(asked, 1);
+  // Time: the uncached fold stays within 4x of the unmarked list (100 ms floor for
+  // timer noise on a fast machine). The earlier per-post reads were about 30x.
+  const base = median(await timed(plain)), folded = median(await timed(marked));
+  assert.ok(folded <= Math.max(4 * base, 100), 'folding took ' + Math.round(folded) + ' ms against ' + Math.round(base) + ' ms unmarked');
 });
