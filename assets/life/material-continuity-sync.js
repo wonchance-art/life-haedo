@@ -7,6 +7,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  const SyncCommon = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
   const messages = {
     material_review_required: '준비나 완성 글이 바뀌었습니다. 다음 동기화에서 최신 내용을 다시 보냅니다.',
     material_not_connected: '준비 동기화를 시작하는 중입니다. 잠시 후 다시 시도해 주세요.',
@@ -43,7 +44,7 @@
   async function reloadHeld(workspaceId, result) {
     for (const entry of [...(holds.get(workspaceId) || [])]) { try { await entry.reload?.(result); } catch (_) { /* Editor keeps its input. */ } }
   }
-  const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}' : JSON.stringify(value);
+  const canonical = SyncCommon.canonical; // S0 group G3: hashed into stored preparation fingerprints
   function create({ storage, auth = root.HaedoAuth, model = root.HaedoLife?.MaterialContinuity,
     remote = root.HaedoLife?.MaterialContinuityRemote?.create({ auth }),
     blogSync = root.HaedoLife?.BlogSync?.create({ storage, auth }),

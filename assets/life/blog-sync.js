@@ -9,6 +9,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  const SyncCommon = root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
   const CONFLICT_PREFIX = '충돌로 보관한 이전 내용 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
   // A concurrent local change (another tab) is simply decided again next cycle.
@@ -33,7 +34,7 @@
     let parked = false;
     const removers = [];
     const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, posts: null, drafts: null, lastSyncAt: null, lastError: null, running: false };
-    const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(name => JSON.stringify(name) + ':' + canonical(value[name])).join(',') + '}' : JSON.stringify(value);
+    const canonical = SyncCommon.canonical; // S0 group G3, shared with material-continuity-sync
     const key = (ws, id) => ws + '/' + id;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const context = (ws, id) => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
