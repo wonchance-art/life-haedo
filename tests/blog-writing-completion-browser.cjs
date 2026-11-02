@@ -24,9 +24,7 @@ async function main() {
   });
   let currentCheck = 'setup'; report.consoleDetails = []; report.requestFailures = [];
   const resourceLabel = value => { const u = new URL(value); return u.protocol === 'blob:' ? 'blob:' + u.origin + '/<object-url>' : u.origin + u.pathname; };
-  // The later page opens as the foreground tab; Chromium runs a background tab's animation frames about once a second. Keep the page the checks drive in front.
   const page = await context.newPage(), other = await context.newPage();
-  await page.bringToFront();
   const observe = p => {
     p.setDefaultTimeout(15000); p.setDefaultNavigationTimeout(30000);
     p.on('pageerror', e => report.errors.push(e.message));
