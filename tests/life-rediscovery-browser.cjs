@@ -73,6 +73,13 @@ async function pick(page, ref, query = '처음 정원에서') {
 }
 const candidates = page => page.locator('#wbDiscoveryRelated .wb-discovery-result');
 async function saved(page) { await page.locator('#wbStatus[data-state="saved"]').waitFor(); return current(page); }
+// Return paths restore the origin control on the next animation frame after they render
+// (assets/life/ui.js:1601 source return, ui.js:2467 arrange cancel). Wait for that frame's
+// result instead of reading focus the moment the list reappears, then assert it exactly.
+async function returnedFocus(page, field, expected) {
+  await page.waitForFunction(({ field, expected }) => (field === 'id' ? document.activeElement?.id : document.activeElement?.dataset[field]) === expected, { field, expected }).catch(() => {});
+  return page.evaluate(field => field === 'id' ? document.activeElement?.id : document.activeElement?.dataset[field], field);
+}
 async function excluded(page, sourceId) {
   const details = page.locator('#wbDiscoveryExcluded');
   if (!await details.evaluate(el => el.open)) await details.locator('summary').click();
@@ -167,16 +174,21 @@ async function main() {
       await page.locator('#wbDiscoverQuery').evaluate(el => el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
       const choose = page.locator('.wb-discovery-select[data-version-id="' + f.refs.seed.versionId + '"]'); await choose.focus(); await page.keyboard.press('Enter'); await page.locator('#wbDiscoverySeed').waitFor();
       assert.equal(await page.evaluate(() => document.activeElement.id), 'wbDiscoverySeed');
-      const book = page.locator('.wb-discovery-result[data-version-id="' + f.refs.term.versionId + '"]').getByRole('button', { name: '이 원문 버전 열기', exact: true }); await book.focus();
+      const book = page.locator('.wb-discovery-result[data-version-id="' + f.refs.term.versionId + '"]').getByRole('button', { name: '이 원문 버전 열기', exact: true });
+      /* The candidate starts below the fold, so focus scrolls it into view. html { scroll-behavior: smooth } (assets/life/ui.css:14) makes
+         that scroll land on a later frame while the CSS-only tooltip (ui.css:59-60, workbench.css:164) is display:block at once at the old
+         position (CI run 41425017532). Measure the settled layout: wait for the scrollend that moved the page, never a fixed delay. */
+      const focusScroll = await book.evaluate(el => { const rect = el.getBoundingClientRect(), start = scrollY; window.__tooltipScrollEnded = false; const offscreen = rect.top < 0 || rect.bottom > innerHeight; if (offscreen) addEventListener('scrollend', function ended() { if (scrollY === start) return; window.__tooltipScrollEnded = true; removeEventListener('scrollend', ended); }); return { offscreen, start }; });
+      await book.focus(); if (focusScroll.offscreen) await page.waitForFunction(() => window.__tooltipScrollEnded);
       const tooltip = book.locator('.life-tooltip'); await tooltip.waitFor({ state: 'visible' });
       const tooltipBounds = await tooltip.evaluate(el => { const rect = el.getBoundingClientRect(), dock = document.querySelector('[data-haedo-navigation]').getBoundingClientRect(); return { viewportWidth: innerWidth, viewportHeight: innerHeight, documentWidth: document.documentElement.scrollWidth, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, overlapsDock: rect.left < dock.right && rect.right > dock.left && rect.top < dock.bottom && rect.bottom > dock.top, visible: getComputedStyle(el).display !== 'none' && rect.width > 0 }; });
-      assert.equal(tooltipBounds.visible, true); assert(tooltipBounds.left >= 0 && tooltipBounds.right <= tooltipBounds.viewportWidth, 'Focused source tooltip escaped the 390px viewport'); assert(tooltipBounds.documentWidth <= tooltipBounds.viewportWidth, 'Focused source tooltip caused document overflow'); assert.equal(tooltipBounds.overlapsDock, false, 'Focused source tooltip overlaps the bottom navigation'); assert(tooltipBounds.top >= 0 && tooltipBounds.bottom <= tooltipBounds.viewportHeight, 'Focused source tooltip escaped viewport height'); report.focusedTooltip = tooltipBounds;
+      assert.equal(tooltipBounds.visible, true); assert(tooltipBounds.left >= 0 && tooltipBounds.right <= tooltipBounds.viewportWidth, 'Focused source tooltip escaped the 390px viewport'); assert(tooltipBounds.documentWidth <= tooltipBounds.viewportWidth, 'Focused source tooltip caused document overflow'); assert.equal(tooltipBounds.overlapsDock, false, 'Focused source tooltip overlaps the bottom navigation'); assert(tooltipBounds.top >= 0 && tooltipBounds.bottom <= tooltipBounds.viewportHeight, 'Focused source tooltip escaped viewport height'); report.focusedTooltip = { ...tooltipBounds, focusScroll };
       await page.screenshot({ path: path.join(out, 'focused-tooltip-390.png') });
       await page.keyboard.press('Enter'); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), f.refs.term.text);
       await page.getByRole('button', { name: '다시 찾기로 돌아가기', exact: true }).click(); await page.locator('#wbDiscoverySeed').waitFor();
-      assert.equal(await page.evaluate(() => document.activeElement.dataset.focusKey), 'discover:related:' + f.refs.term.versionId);
+      assert.equal(await returnedFocus(page, 'focusKey', 'discover:related:' + f.refs.term.versionId), 'discover:related:' + f.refs.term.versionId);
       await page.locator('.wb-discovery-exclude[data-source-id="' + f.refs.topic.sourceId + '"]').tap(); await saved(page); await page.locator('#wbDiscoveryExcluded > summary').tap(); await page.locator('.wb-discovery-restore[data-source-id="' + f.refs.topic.sourceId + '"]').tap(); await saved(page);
-      const arrange = page.locator('#wbDiscoveryArrange-' + f.refs.term.versionId); await arrange.focus(); await page.keyboard.press('Escape'); assert.equal(await arrange.getAttribute('data-tooltip-dismissed'), 'true'); await page.keyboard.press('Enter'); await page.locator('#wbIncomingSelection').waitFor(); await page.locator('#wbIncomingCancel').click(); await page.locator('#wbDiscoverySeed').waitFor(); assert.equal(await page.evaluate(() => document.activeElement.id), 'wbDiscoveryArrange-' + f.refs.term.versionId);
+      const arrange = page.locator('#wbDiscoveryArrange-' + f.refs.term.versionId); await arrange.focus(); await page.keyboard.press('Escape'); assert.equal(await arrange.getAttribute('data-tooltip-dismissed'), 'true'); await page.keyboard.press('Enter'); await page.locator('#wbIncomingSelection').waitFor(); await page.locator('#wbIncomingCancel').click(); await page.locator('#wbDiscoverySeed').waitFor(); assert.equal(await returnedFocus(page, 'id', 'wbDiscoveryArrange-' + f.refs.term.versionId), 'wbDiscoveryArrange-' + f.refs.term.versionId);
     }, { viewport: { width: 390, height: 844 }, hasTouch: true });
     await check('account switch exposes neither former seed nor exclusions', async ({ page, server, device }) => {
       const f = await fixture(page); await discover(page); await pick(page, f.refs.seed); await page.locator('.wb-discovery-exclude[data-source-id="' + f.refs.topic.sourceId + '"]').click(); await saved(page);
