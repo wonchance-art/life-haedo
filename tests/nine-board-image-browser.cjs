@@ -52,6 +52,15 @@ async function main(){
   event=page.waitForEvent('download');await click('사진 포함 백업');const zip=await fs.readFile(await (await event).path());await fs.writeFile(path.join(out,'png-post-backup.zip'),zip);const files=Z.unzipSync(zip),manifest=JSON.parse(Z.strFromU8(files['manifest.json']));
   assert.equal(manifest.photos.length,1);const photo=manifest.photos[0],originalPng=Buffer.from(files['photos/'+photo.id]);assert.equal(photo.width,1800);assert.equal(photo.height,2100);assert.deepEqual(originalPng,png);assert.deepEqual(manifest.ops,post.ops);assert.equal(photo.digest,post.photos[0].digest);assert.deepEqual(await read(),restored);
   assert.deepEqual(publicWrites,[]);assert.equal(server.requests.filter(r=>r.kind==='write').length,0);report.remoteWrites=publicWrites.length;report.syncWrites=server.requests.filter(r=>r.kind==='write').length;await page.screenshot({path:path.join(out,'png-post-reopened-820.png'),fullPage:true});report.screenshots.push('png-post-reopened-820.png');report.checks.push('Downloaded PNG attaches through home writer with editable description/source/alt, saves privately, reopens and exports ZIP with byte-identical 1800×2100 PNG; no public or remote writes');
+  // The same real editor over a store that is not account-scoped keeps the browser-only wording.
+  const nineSource=await fs.readFile('assets/life/nine-board-ui.js','utf8');
+  await context.route(base+'/assets/life/nine-board-ui.js',route=>route.fulfill({contentType:'application/javascript',body:nineSource+`
+ {const original=HaedoLife.NineBoardUI.create;HaedoLife.NineBoardUI.create=options=>original({...options,storage:{...options.storage,isAccountScoped:false}});}
+ `}));
+  await page.setViewportSize({width:1440,height:1000});await go();await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
+  assert.equal(await page.locator('.nb-status').textContent(),'이 브라우저에 저장됨');await page.locator('.nb-files > summary').click();
+  assert.match(await page.locator('.nb-files > p.life-help').first().textContent(),/^원래 구성은 이 브라우저에 보관됩니다\. 선택 영역 공개는 별도로 검토하며/);
+  await context.unroute(base+'/assets/life/nine-board-ui.js');report.checks.push('A store without an account keeps the browser-only status and file note; account stores never show them');
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);
  }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true});throw error;}
  finally{await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}

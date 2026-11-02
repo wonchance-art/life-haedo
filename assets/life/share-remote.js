@@ -8,6 +8,10 @@
   'use strict';
   const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
   const PREFIX = 'life_share_pending_v1:';
+  // Records this build cannot read are moved here unchanged, so they never block a target again.
+  const SET_ASIDE = 'life_share_pending_unread_v1:';
+  // localStorage is shared with charts and the Auth session. New requests stop at these bounds.
+  const PENDING_LIMITS = Object.freeze({ count: 8, characters: 1500000 });
   const messages = {
     auth_required: '게시 상태를 확인하려면 다시 로그인해 주세요.', request_cancelled: '계정 또는 화면이 바뀌어 이전 요청을 중단했습니다.',
     invalid_config: '공개 페이지 연결 설정을 확인해 주세요.', invalid_request: '게시 요청의 형식을 확인해 주세요.',
@@ -15,7 +19,12 @@
     invalid_remote_data: '서버의 게시 결과를 확인하지 못했습니다.', network_error: '서버에 연결하지 못했습니다. 다시 시도해 주세요.',
     schema_missing: '공개 페이지 저장소가 아직 준비되지 않았습니다.', permission_denied: '이 계정의 게시 권한을 확인하지 못했습니다.',
     pending_storage_failed: '게시 시도 보관에 실패해 전송하지 않았습니다. 브라우저 저장 공간을 확인해 주세요.',
-    pending_corrupt: '이 브라우저의 미확인 게시 요청을 읽지 못했습니다. 기존 요청을 보존했습니다.',
+    pending_corrupt: '이 브라우저의 미확인 게시 요청을 읽지 못했고 따로 보관하지도 못했습니다. 기존 요청을 보존했습니다. 브라우저 저장 공간을 확인해 주세요.',
+    pending_set_aside: '읽지 못한 이전 게시 요청을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.',
+    replay_unresolved: '같은 요청으로 결과를 확인하지 못해 요청 기록을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.',
+    pending_resolved: '이 요청의 결과는 다른 화면에서 이미 확인했습니다. 서버의 현재 공개 상태를 표시합니다.',
+    pending_limit_count: '결과를 확인하지 못한 게시 요청이 많아 새 요청을 보내지 않았습니다. 기존 요청을 먼저 다시 확인해 주세요.',
+    pending_limit_size: '게시 요청 복구 정보가 브라우저 저장 한도를 넘어 보내지 않았습니다. 공개할 본문·인용을 줄이거나 기존 요청을 먼저 확인해 주세요.',
     pending_operation: '결과를 확인하지 못한 게시 요청이 있습니다. 같은 요청을 다시 확인해 주세요.',
     publish_unknown: '게시 요청의 결과를 확인하지 못했습니다. 상태를 조회하거나 같은 요청을 재시도해 주세요.',
     operation_mismatch: '서버에 보관한 작업과 요청 내용이 다릅니다. 게시 상태를 다시 확인해 주세요.'
@@ -138,10 +147,29 @@
       return { uid, epoch, authEpoch: auth.epoch };
     }
     const key = (uid, workspaceId) => PREFIX + encodeURIComponent(JSON.stringify([connection.url, uid, workspaceId]));
+    const setAsideKey = (uid, workspaceId) => SET_ASIDE + encodeURIComponent(JSON.stringify([connection.url, uid, workspaceId,
+      new Date().toISOString(), Math.random().toString(36).slice(2)]));
+    const notices = new Set();
     function earlier(name) { try { return legacy?.getItem?.(name) ?? null; } catch (_) { return null; } }
-    function parse(text, workspaceId) {
-      try { const value = request(JSON.parse(text)); assert(value.workspaceId === workspaceId); return value; }
-      catch (_) { throw fault('pending_corrupt'); }
+    // Only what a replay needs. Snapshot rules of a later build are not re-applied: the server
+    // compares the replay with its receipt hash and validates any write itself.
+    function stored(text, workspaceId) {
+      let value;
+      try { value = JSON.parse(text); } catch (_) { return null; }
+      if (!plain(value) || !['workspaceId', 'expectedRevision', 'operationId', 'action', 'snapshot'].every(name => Object.hasOwn(value, name))) return null;
+      if (typeof value.workspaceId !== 'string' || !UUID.test(value.workspaceId) || value.workspaceId.toLowerCase() !== workspaceId) return null;
+      if (typeof value.operationId !== 'string' || !UUID.test(value.operationId) || !Number.isSafeInteger(value.expectedRevision) || value.expectedRevision < 0) return null;
+      if (value.action === 'revoke' ? value.snapshot !== null : value.action !== 'publish' || !plain(value.snapshot)) return null;
+      return value;
+    }
+    // Move an unreadable or unresolvable record unchanged so it stays available but no longer blocks.
+    function setAside(context, workspaceId, text, area) {
+      const name = key(context.uid, workspaceId), target = setAsideKey(context.uid, workspaceId);
+      try {
+        storage.setItem(target, text); assert(storage.getItem(target) === text, 'pending_storage_failed');
+        if (area.getItem(name) === text) area.removeItem(name);
+      } catch (_) { throw fault('pending_corrupt'); }
+      notices.add(name);
     }
     function load(context, workspaceId) {
       alive(context); workspaceId = uuid(workspaceId);
@@ -149,23 +177,43 @@
       let saved;
       try { assert(storage?.getItem && storage?.setItem && storage?.removeItem, 'pending_storage_failed'); saved = storage.getItem(name); }
       catch (_) { throw fault('pending_storage_failed'); }
-      if (saved !== null) return parse(saved, workspaceId);
-      const previous = earlier(name);
-      if (previous === null) return null;
-      const value = parse(previous, workspaceId);
+      const area = saved !== null ? storage : legacy, text = saved ?? earlier(name);
+      if (text === null) return null;
+      const value = stored(text, workspaceId);
+      if (!value) { setAside(context, workspaceId, text, area); return null; }
       // Remove the tab copy only after the persistent copy reads back identically.
-      try { storage.setItem(name, previous); if (storage.getItem(name) === previous) legacy.removeItem(name); }
-      catch (_) { /* The tab copy stays authoritative; the next read retries the move. */ }
+      if (area === legacy) {
+        try { storage.setItem(name, text); if (storage.getItem(name) === text) legacy.removeItem(name); }
+        catch (_) { /* The tab copy stays authoritative; the next read retries the move. */ }
+      }
       return value;
     }
     function pending(workspaceId) { return load(current(), workspaceId); }
+    function takeSetAside(workspaceId) {
+      const name = key(current().uid, uuid(workspaceId)), found = notices.has(name); notices.delete(name); return found;
+    }
+    function usage(except) {
+      if (typeof storage.key !== 'function' || !Number.isSafeInteger(storage.length)) return { count: 0, characters: 0 };
+      let count = 0, characters = 0;
+      for (let index = 0; index < storage.length; index++) {
+        const name = storage.key(index);
+        if (typeof name !== 'string' || !name.startsWith(PREFIX) || name === except) continue;
+        count++; characters += name.length + (storage.getItem(name)?.length || 0);
+      }
+      return { count, characters };
+    }
     function save(context, value) {
-      const previous = load(context, value.workspaceId);
-      if (previous) assert(JSON.stringify(previous) === JSON.stringify(value), 'pending_operation');
-      const serialized = JSON.stringify(value);
+      const name = key(context.uid, value.workspaceId), previous = load(context, value.workspaceId), serialized = JSON.stringify(value);
+      if (previous) assert(JSON.stringify(previous) === serialized, 'pending_operation');
+      else {
+        let used;
+        try { used = usage(name); } catch (_) { throw fault('pending_storage_failed'); }
+        assert(used.count + 1 <= PENDING_LIMITS.count, 'pending_limit_count');
+        assert(used.characters + name.length + serialized.length <= PENDING_LIMITS.characters, 'pending_limit_size');
+      }
       try {
-        storage.setItem(key(context.uid, value.workspaceId), serialized);
-        assert(storage.getItem(key(context.uid, value.workspaceId)) === serialized, 'pending_storage_failed');
+        storage.setItem(name, serialized);
+        assert(storage.getItem(name) === serialized, 'pending_storage_failed');
       } catch (_) { throw fault('pending_storage_failed'); }
       alive(context);
     }
@@ -173,10 +221,8 @@
       alive(context);
       const name = key(context.uid, value.workspaceId), expected = JSON.stringify(value);
       for (const area of [storage, legacy]) {
-        try {
-          const saved = area?.getItem(name);
-          if (saved != null && JSON.stringify(parse(saved, value.workspaceId)) === expected) area.removeItem(name);
-        } catch (_) { /* The definitive response remains valid; an identical retry is harmless. */ }
+        try { if (area?.getItem(name) === expected) area.removeItem(name); }
+        catch (_) { /* The definitive response remains valid; an identical retry is harmless. */ }
       }
     }
     async function rpc(context, name, args, write = false) {
@@ -217,35 +263,62 @@
         return Object.freeze({ pages: Object.freeze(pages), nextCursor: value.nextCursor?.toLowerCase() || null });
       } catch (error) { throw remoteError(error); }
     }
-    async function put(input) {
-      const value = request(input), context = await authorized(); alive(context); save(context, value);
+    async function send(value, replay) {
+      const context = await authorized(); alive(context);
+      if (replay) {
+        // Another tab may have confirmed it meanwhile; never write a resolved request back.
+        const latest = load(context, value.workspaceId);
+        assert(latest, 'pending_resolved'); assert(JSON.stringify(latest) === JSON.stringify(value), 'pending_operation');
+      } else save(context, value);
+      const unresolved = () => {
+        // The server answered, but this build cannot settle the request by replaying it.
+        // Keep the record unchanged under the set-aside key so the target is not blocked forever.
+        const text = JSON.stringify(value), name = key(context.uid, value.workspaceId);
+        for (const area of [storage, legacy]) {
+          let found = null; try { found = area?.getItem(name) ?? null; } catch (_) { /* Unreadable area holds nothing to move. */ }
+          if (found === text) setAside(context, value.workspaceId, text, area);
+        }
+        notices.delete(name); throw fault('replay_unresolved');
+      };
       let data;
       try {
-        data = await rpc(context, 'life_public_page_put', { p_workspace_id: value.workspaceId,
-          p_expected_revision: value.expectedRevision, p_operation_id: value.operationId,
+        data = await rpc(context, 'life_public_page_put', { p_workspace_id: value.workspaceId.toLowerCase(),
+          p_expected_revision: value.expectedRevision, p_operation_id: value.operationId.toLowerCase(),
           p_action: value.action, p_snapshot: value.snapshot }, true);
       } catch (error) {
         // These exact PostgreSQL exceptions roll the transaction back, or the RPC does not exist.
         // They are safe to replace with a corrected request; ambiguous transport errors are not.
         if (error.definitiveNoWrite) clear(context, value);
+        else if (replay && error.code === 'operation_mismatch') unresolved();
         throw error;
       }
       let result;
-      try { result = writeResult(data); }
-      catch (_) { throw fault('publish_unknown'); }
-      if (result.status === 'stored' && result.action !== value.action) throw fault('publish_unknown');
-      if (result.status === 'stored' && result.revision !== value.expectedRevision + 1) throw fault('publish_unknown');
+      try {
+        result = writeResult(data);
+        assert(result.status !== 'stored' || result.action === value.action && result.revision === value.expectedRevision + 1, 'publish_unknown');
+      } catch (_) {
+        if (replay) unresolved();
+        throw fault('publish_unknown');
+      }
       clear(context, value);
       return result;
     }
+    function put(input) { let value; try { value = request(input); } catch (error) { return Promise.reject(error); } return send(value, false); }
     async function retryPending(workspaceId) {
-      const value = pending(workspaceId); assert(value, 'invalid_request'); return put(value);
+      const context = current(); workspaceId = uuid(workspaceId);
+      const value = load(context, workspaceId);
+      if (!value) {
+        // Reading it just now may have set an unreadable record aside; say so instead of "resolved".
+        const name = key(context.uid, workspaceId), setAsideNow = notices.delete(name);
+        throw fault(setAsideNow ? 'pending_set_aside' : 'pending_resolved');
+      }
+      return send(value, true);
     }
     function dispose() {
       if (disposed) return; disposed = true; cancel(); unsubscribe?.(); subscription?.unsubscribe();
       // The common SDK, tokens and account remain owned by HaedoAuth.
     }
-    return Object.freeze({ get, readOwner: get, list, put, pending, retryPending, dispose });
+    return Object.freeze({ get, readOwner: get, list, put, pending, retryPending, takeSetAside, dispose, LIMITS: PENDING_LIMITS });
   }
   function createReader(options = {}) {
     const connection = config(options.config || root.HAEDO_CONFIG), fetcher = options.fetch || root.fetch?.bind(root);
@@ -280,5 +353,5 @@
     function dispose() { if (disposed) return; disposed = true; epoch++; for (const controller of controllers) controller.abort(); controllers.clear(); }
     return Object.freeze({ read, dispose });
   }
-  return Object.freeze({ createOwner, createReader });
+  return Object.freeze({ createOwner, createReader, message: code => Object.hasOwn(messages, code) ? messages[code] : null });
 });
