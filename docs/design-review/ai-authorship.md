@@ -25,11 +25,13 @@
 - Quill 인라인 포맷 `author`(`span.photo-ai-text`, `data-author="ai"`)를 등록하고 작성기의 `formats`에 추가했다.
 - **AI 글 표시** 아이콘 버튼(Lucide `sparkle`, 접근 가능한 이름 `AI 글 표시`, `title`, `aria-pressed`)은 `서식` 펼침 안에 있다.
   - 선택이 있으면: 선택한 글자가 모두 AI 글이면 표시 해제, 아니면 선택 전체를 AI 글로 표시. 줄바꿈·사진만 고르면 "AI 글로 표시할 글자를 선택해 주세요".
-  - 선택이 없으면: "다음 붙여넣기를 AI 글로" 1회 대기를 켜고 끈다. 다음 붙여넣기 한 번(사진 붙여넣기 포함)·Esc·다른 글로 이동·명시 저장 때 꺼진다.
-  - 상태는 기존 상태 줄(`role=status`)에 짧게 알린다: `다음 붙여넣기를 AI 글로 표시 · Esc로 취소`, `AI 글로 표시했어요`, `AI 글 표시를 해제했어요`, `붙여넣은 글을 AI 글로 표시했어요`, `AI 글 붙여넣기 대기를 껐어요`. 오류가 있으면 오류가 우선한다.
-- **사람이 고친 부분은 사람 글:** Quill은 커서 앞 글자의 서식을 이어받는다. `text-change`에서 사용자 입력이 물려받은 `author` 구간을 기록하고(이후 변경은 `Delta.transformPosition`으로 위치를 따라감) 120ms 뒤 표시를 지운다. 대상은 직접 입력, 대기 없는 붙여넣기, OS 치환 입력(`insertReplacementText`·선택 치환)이다. 대기 붙여넣기와 실행 취소/다시 실행 재생(`history.ignoreChange`)은 기록된 작성 주체를 그대로 둔다. AI 글 일부를 지우는 것은 그대로 둔다.
-- **한글 조합:** 조합 중(`compositionstart`~`compositionend`, Quill `composition.isComposing`)에는 서식을 바꾸지 않는다. 조합이 끝난 뒤 정리한다. 조합 중 입력·커서·상태 문구(`한글 입력 중…`)·자동 임시저장 규칙(300ms 유휴/최대 2000ms, hidden/pagehide flush, 조합 중 강제 확정 없음)은 그대로다. 명시 저장·백업·사본 저장 직전에도 조합 중이 아니면 정리한다.
-- **실행 취소:** 정리(표시 지우기)는 그 입력이 속한 실행 취소 단계에 합친다(`history.lastRecorded`를 그 순간만 조정). 그래서 실행 취소 한 번에 입력한 글자가 사라지고, 먼저 "AI 글로 다시 표시"되는 중간 단계가 없다. 표시·해제 자체도 실행 취소·다시 실행된다.
+  - 선택이 없으면: "다음 붙여넣기를 AI 글로" 1회 대기를 켜고 끈다. 버튼을 다시 누르면 취소되고(터치·키보드 공통), 다음 붙여넣기 한 번(사진 붙여넣기 포함)·Esc·다른 글로 이동·명시 저장 때도 꺼진다.
+  - 상태는 기존 상태 줄(`role=status`)에 짧게 알린다: 대기 `AI 붙여넣기 대기`(320px 상태 폭 108px에 들어감, 화면 낭독기에는 "다음 붙여넣기 한 번을 AI 글로 표시합니다. AI 글 표시 버튼을 다시 누르면 취소합니다."를 함께 읽음), `AI 글로 표시했어요`, `AI 글 표시를 해제했어요`, `붙여넣은 글을 AI 글로 표시했어요`, `AI 글 붙여넣기 대기를 껐어요`.
+  - 문구 순서: 오류 > `한글 입력 중…` > AI 대기·알림 > 저장 상태. 알림은 다음 입력이나 자동 저장 완료 때 지워져 `자동 저장됨`이 다시 보인다.
+- **사람이 고친 부분은 사람 글:** Quill은 커서 앞 글자의 서식을 이어받는다. `text-change`에서 사용자 입력이 물려받은 `author` 구간을 기록하고(이후 변경은 `Delta.transformPosition`으로 위치를 따라감) 그 변경 직후의 마이크로태스크에서 표시를 지운다. 다음 입력보다 먼저 끝나므로 다른 입력과 묶이지 않는다. 대상은 직접 입력, 대기 없는 붙여넣기, OS 치환 입력(`insertReplacementText`·선택 치환)이다. 대기 붙여넣기와 실행 취소/다시 실행 재생(`history.ignoreChange`)은 기록된 작성 주체를 그대로 둔다. AI 글 일부를 지우는 것은 그대로 둔다.
+- **한글 조합:** 조합 중(`compositionstart`~`compositionend`, Quill `composition.isComposing`)에는 서식을 바꾸지 않는다. Quill은 조합 결과를 `compositionend` 뒤 마이크로태스크에서 한 번의 변경으로 내보내고, 그 조합분만 바로 뒤에 정리한다(다음 음절의 조합이 시작되기 전). 정리할 때 조합이 열려 있으면 다음 `compositionend`까지 미룬다. 조합 중 입력·커서·상태 문구(`한글 입력 중…`)·자동 임시저장 규칙(300ms 유휴/최대 2000ms, hidden/pagehide flush, 조합 중 강제 확정 없음)은 그대로다. 명시 저장·백업·사본 저장 직전에도 조합 중이 아니면 정리한다.
+- **실행 취소:** 정리는 입력 변경마다 바로 뒤에 하므로 Quill 실행 취소 스택의 맨 위는 항상 그 입력의 단계다. 정리는 그 단계에 합친다(700ms 묶음 시간이 막 지난 경우에도 `history.lastRecorded`를 그 순간만 조정해 같은 단계에 둔다). 그래서 입력이 여러 단계(700ms 이상, 쉼 없는 타이핑·여러 음절 조합)에 걸쳐도 실행 취소 한 번은 그 단계의 글자만 지우고, 앞 단계의 사람 글을 AI 글로 되돌리지 않는다. 다시 실행은 사람 글을 사람 글로 되살린다. 표시·해제 자체도 실행 취소·다시 실행된다.
+  - 2026-11-02 독립 검수 M1: 이전 구현은 120ms 쉼 뒤 모든 구간을 한꺼번에 정리해 맨 위 단계에 합쳤다. 입력이 여러 단계에 걸치면 실행 취소 한 번에 앞 단계의 사람 글이 통째로 AI 글로 돌아갔다(재현: 90ms 간격 16키). 변경마다 바로 정리하도록 고쳤다.
 - 화면: 옅은 바탕(`--paper-2`)과 점선 밑줄(`--ink-soft`, 흰 바탕 대비 5.6:1)로 구분한다. 색만으로 구분하지 않는다. 앱은 밝은 테마 하나(`color-scheme: light`)라 어두운 테마 대비는 해당 없음.
 - 버튼 위치 결정: 처음에는 굵게·링크 옆 한 줄 도구에 두었으나 실측에서 390px·393px에 `사진` 글자가 두 줄로 꺾이고 320px에 가로 넘침(316px > 280px)이 생겼다. 그래서 `서식` 펼침 안으로 옮겼다. 한 줄 도구의 폭은 이전과 같다(320~768px 측정).
 
@@ -52,6 +54,7 @@
 
 - 새 마이그레이션 `supabase/migrations/20261102110000_life_blog_ai_authorship.sql`: `valid_document`(author 규칙 한 줄 추가)와 `publish`(공개 사본에서 author 제거)만 다시 정의한다. 나머지 본문은 `20261101091500`과 글자 단위로 같다(`tests/blog-ai-authorship-install-bundle.test.cjs`). 저장된 글을 고치지 않는다.
 - 운영 설치 파일 `supabase/operations/20261102-blog-ai-authorship-install.sql`(생성기 `scripts/build-blog-ai-authorship-install.mjs`): 한 DO 문, 행 수 비교 보호, 결과 확인 5개. **실행하지 않았다.**
+  - 선행 확인: 바꾸기 전에 두 함수의 현재 본문(`prosrc`) md5가 저장소 `20261101091500` 정의(`valid_document` `012fb393…`, `publish` `ea61d16b…`) 또는 이 설치의 정의(다시 실행)와 같아야 한다. 다르면 예외로 멈추고 아무것도 바꾸지 않는다. PostgreSQL은 `$$` 사이 본문을 그대로 보관하므로 마이그레이션·기존 설치(EXECUTE)로 적용한 정의는 같은 값이다. 운영 정의가 다른 경로로 고쳐졌다면 이 설치는 멈추며, 그때는 운영 본문과 차이를 먼저 확인한다. SQL 재생 검사가 다시 실행 통과와 본문이 다를 때 멈춤·무변경을 확인한다.
 - **서버를 클라이언트보다 먼저 적용해야 한다.** 서버가 이전 정의면 표시가 있는 글의 서버 보관이 `life_blog_invalid_document`로 거부된다. 글은 기기에 남고 BlogSync가 재시도하지만, 다른 기기로 가지 않는다.
 - `20261101-account-sync-install.sql`을 다시 실행하면 두 함수가 이전 정의로 돌아간다. 그때는 이 설치도 다시 실행한다. SQL 재생 검사가 이 순서로 두 설치를 적용해 카탈로그가 같음을 확인한다.
 
@@ -59,15 +62,17 @@
 
 - `npm test` 1754/1754, `npm run check` 통과.
 - 단위: `tests/ai-authorship.test.cjs` 6개 — 검증 허용/거부, 공개 사본 제거·거부, 글 ZIP·pack/hydrate 왕복, 두 기기 BlogSync 왕복, 이전 클라이언트 보존, 전체 백업·보존 ZIP 왕복.
-- SQL: `npm run test:sql-replay`(PostgreSQL 16.15, 격리 클러스터) — 30개 마이그레이션 재생, 두 설치 재적용 후 카탈로그 783항목 동일, `supabase/tests/blog-ai-authorship.sql` 28개 단언. 이전 정의로 되돌리면 첫 단언에서 실패함을 확인. `scripts/check-blog-backend.mjs`는 Docker 데몬이 없어 실행하지 못했고, 같은 SQL 고정물(blog-bootstrap → 마이그레이션 → `blog-originals.sql` 114개 → `blog-ai-authorship.sql` 28개 → `blog-installation.sql` 15개 → 재적용 비교)을 로컬 PostgreSQL 16으로 실행했다.
-- 브라우저: `tests/ai-authorship-browser.cjs`(Chromium, 1440×1000과 390×844 터치) — 선택 표시·저장·재열기, 표시 안 직접 입력, CDP `Input.imeSetComposition` 한글 조합(조합 중 서식 불변·조합 뒤 정리·임시저장), 대기 붙여넣기/대기 없는 붙여넣기/Esc, 해제, 실행 취소·다시 실행, 치환 입력, 공개 사본에 표시 없음, 서버 비공개 사본 표시 유지, 두 번째 브라우저의 동기화 수신, 콘솔·페이지 오류 0, 외부 요청 0. 정리 로직과 조합 보호를 각각 끄면 해당 단계가 실패함을 확인했다.
+- SQL: `npm run test:sql-replay`(PostgreSQL 16.15, 격리 클러스터) — 30개 마이그레이션 재생, 두 설치 재적용 후 카탈로그 783항목 동일, `supabase/tests/blog-ai-authorship.sql` 28개 단언. 이전 정의로 되돌리면 두 번째 단언(`author=ai on text validates`, 첫 단언은 표시 없는 글)에서 실패함을 확인. `scripts/check-blog-backend.mjs`는 Docker 데몬이 없어 실행하지 못했고, 같은 SQL 고정물(blog-bootstrap → 마이그레이션 → `blog-originals.sql` 114개 → `blog-ai-authorship.sql` 28개 → `blog-installation.sql` 15개 → 재적용 비교)을 로컬 PostgreSQL 16으로 실행했다.
+- 브라우저: `tests/ai-authorship-browser.cjs`(Chromium, 1440×1000과 390×844 터치) — 선택 표시·저장·재열기, 표시 안 직접 입력, CDP `Input.imeSetComposition` 한글 조합(조합 중 서식 불변·조합 뒤 정리·임시저장), 대기 붙여넣기/대기 없는 붙여넣기/Esc, 해제, 실행 취소·다시 실행, 치환 입력, 공개 사본에 표시 없음, 서버 비공개 사본 표시 유지, 두 번째 브라우저의 동기화 수신, 여러 실행 취소 단계에 걸친 입력(⑨ 90ms 간격 16키, ⑩ 1.4초 넘는 다섯 음절 조합)의 실행 취소·다시 실행 반복, 700ms 경계 직후 정리의 단계 합침(⑪, 시계를 800ms 건너뛰어 재현), 콘솔·페이지 오류 0, 외부 요청 0. 변이 확인(커밋하지 않음): 정리를 이전 120ms 일괄로 되돌리면 ⑨·⑩이 실패하고, 단계 합침(`lastRecorded` 조정)을 지우면 ⑪이 실패한다. 정리 호출을 끄면 ②가 실패한다.
 - 회귀 브라우저 검사(같은 컨테이너, BASE_URL 로컬 서버): `photo-post-browser` 16, `blog-writing-completion-browser` 10, `blog-autosave-browser` 4, `blog-default-server-browser` 8, `blog-public-browser` 6, `blog-manager-browser` 4, `account-blog-receipt-browser` 4, `photo-post-evidence-browser` 6, `full-backup-browser` 8, `life-external-discovery-pwa-browser` 9(캐시 `haedo-v174`) 모두 통과.
 
 ## 미검증·후속
 
 - 실제 Apple 기기(iPhone·iPad·Mac Safari)의 글쓰기 도구·한글 IME·붙여넣기 동작, 실제 기기 시각 확인.
 - 운영 DB 적용(총괄 관문), 배포 후 라이브 확인.
-- 새 브라우저 검사는 CI 목록(`.github/workflows/pages.yml`)에 아직 없다. 작업자는 워크플로를 바꾸지 않는다.
+- (해결) 새 브라우저 검사는 총괄이 CI 목록(`.github/workflows/pages.yml`)에 넣었다(`92d906d`).
+- 화면 낭독기 실제 안내(VoiceOver 등)로 대기·표시 상태를 듣는 확인은 하지 않았다(검수 마이너 6, 후속).
+- 같은 기기의 업데이트 전 탭이 표시가 있는 글을 열면 형식 오류로 멈춘다. 지우지는 않지만 업데이트 안내가 없다(검수 마이너 7, 후속).
 - 후속 후보: 표시 구간 수 요약, AI 글 안에서 잘라 옮긴 문장의 표시 유지(현재는 대기 없는 붙여넣기라 내 글이 된다), 묶음 B의 수락한 제안 구간에 같은 표시 사용.
 
 ## 반대 검토
