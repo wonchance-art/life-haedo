@@ -28,7 +28,13 @@ async function state(page) {
   return page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws), docs = [];
     for (const row of rows) {
-      const doc = await s.readPhotoPost(ws, row.id), photos = [];
+      // listPhotoPosts and readPhotoPost are separate reads. A post that the page's own BlogSync
+      // removes between them (the deletion journey polls exactly for that) is absent, not an
+      // error; any other read fault still fails the observation.
+      let doc;
+      try { doc = await s.readPhotoPost(ws, row.id); }
+      catch (error) { if (error?.code === 'photo_post_missing') continue; throw error; }
+      const photos = [];
       for (const { blob, ...meta } of doc.photos) {
         const image = await createImageBitmap(blob);
         photos.push({ ...meta, actualHash: await HaedoLife.PhotoPost.digest(blob), actualSize: blob.size, actualWidth: image.width, actualHeight: image.height }); image.close();
