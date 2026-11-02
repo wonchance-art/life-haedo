@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "haedo-supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=${HAEDO_SUPABASE_PROJECT_REF}&features=database,docs,debugging,functions",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

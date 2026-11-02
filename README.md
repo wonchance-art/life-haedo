@@ -152,6 +152,11 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - 실제 편집과 모바일 화면은 프로젝트 스킬의 격리 브라우저 절차로 검증한다.
 - 이전 기능 통합 검사에서 여러 파일 검토와 정확한 원문 검색을 포함해 Node 181개·브라우저 60개가 통과했다. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이다. 해당 기능 PR #17/#19는 병합되었으며 이번 디자인 변경의 검증과 적용 상태는 [최신 기록](docs/design-review/feed-refinement.md)을 따른다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.
 - `main` 푸시는 GitHub Pages 배포로 이어진다.
+- 운영 DB 조회용 MCP는 `.mcp.json`의 `haedo-supabase`다. 해도 프로젝트 하나에만 연결하며 조회와 운영 SQL·마이그레이션·Edge 함수 적용이 가능하다. 운영 쓰기는 `AGENTS.md` 운영 체계의 운영 DB 절차를 따른다. 클라우드 환경에 아래 두 가지를 넣는다.
+  - 환경 변수 `HAEDO_SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`(Supabase 개인 액세스 토큰)
+  - 네트워크 허용 도메인 `mcp.supabase.com`
+
+  토큰 값은 저장소·대화에 넣지 않는다. 개인 글 본문은 조회 결과로 꺼내지 않는다.
 
 ## 코드와 작업 지침
 
