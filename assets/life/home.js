@@ -796,7 +796,7 @@
       global.HaedoMotion?.cancel(host.querySelector('#homeSearchPanel'));
       generation += 1; visible = false; clearMedia();
     }
-    function dispose() { leave(); disposed = true; }
+    function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
   life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent });
