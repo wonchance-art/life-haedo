@@ -3,6 +3,16 @@
 // and a Promise object is truthy: `async () => false` or `() => x.then(v => false)` returns at
 // once without waiting (checked on Playwright 1.63.0: Promise.resolve(false) resolved in ~12ms).
 // Conditions that read async storage must use tests/helpers/await-condition.cjs instead.
+//
+// Limits of this guard (a text scan, deliberately without a parser dependency):
+// - It reads only the literal first argument. A predicate passed by reference
+//   (`const c = async () => …; waitForFunction(c)`) or an arrow that returns a Promise
+//   without these words (`() => s.getActive()`) is not caught; review those by hand.
+// - The argument splitter knows strings and line comments only. A quote inside a block
+//   comment or a regex literal can cut the argument at the wrong place, and the words
+//   async/await/.then( inside a string literal are reported as a violation.
+// - PENDING entries are file:line. Each one hides any new violation written on that same
+//   line, so remove an entry as soon as its fix reaches main.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
