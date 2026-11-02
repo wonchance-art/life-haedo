@@ -532,6 +532,9 @@ async function main() {
       await page.evaluate(() => { window.__holdPostRead = true; });
       await page.locator('#lifeMain').getByText('늦게 열리는 글').first().click(); await mode(page, 'page');
       await page.waitForFunction(() => window.__holdPostReadHeld === true);
+      // The held read must be the reader's own open(): its post is not drawn yet. (A background
+      // reader such as BlogSync catching the hold would leave this check testing only the idle path.)
+      assert.equal(await page.locator('.photo-article').count(), 0, 'The held read is the open of the post, not another reader');
       // Nothing of the user's is at stake while the post is read: the move is allowed.
       await page.goBack(); await mode(page, 'home');
       assert.equal((await historyRecord(page)).key, homeEntry.key);
