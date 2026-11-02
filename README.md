@@ -152,7 +152,13 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - `npm run test:sql-replay`: 일회용 로컬 PostgreSQL에 테스트 전용 Supabase 대역(`tests/helpers/supabase-pg-stub.cjs`)과 `supabase/migrations/` 전체를 파일 이름 순서로 적용한다. 계정 동기화 설치 SQL 재실행의 무변경, 네이버 상태 확인 12행(5.5 포함), [SQL 최종 정의 목록](docs/design-review/sql-final-definitions.md)을 함께 확인한다. 검토할 운영 SQL은 `npm run test:sql-replay -- 경로.sql`로 재생한 DB의 새 사본에 먼저 적용해 본다. PostgreSQL이 없으면 건너뛰고(`SQL_REPLAY_REQUIRED=1`이면 실패), `npm ci --prefix tests/sql-ci`가 필요하다. 실제 Supabase(Auth·Storage·pg_cron·pg_net·Vault)와 같다는 증명은 아니다.
 - 마이그레이션을 추가하거나 고치면 `node scripts/sql-final-definitions.mjs`로 최종 정의 목록을 다시 만든다.
 - 실제 편집과 모바일 화면은 프로젝트 스킬의 격리 브라우저 절차로 검증한다.
-- 이전 기능 통합 검사에서 여러 파일 검토와 정확한 원문 검색을 포함해 Node 181개·브라우저 60개가 통과했다. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이다. 해당 기능 PR #17/#19는 병합되었으며 이번 디자인 변경의 검증과 적용 상태는 [최신 기록](docs/design-review/feed-refinement.md)을 따른다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.
+- 브라우저 검사는 `tests/*-browser.cjs`를 하나씩 `node`로 실행한다. 먼저 `npm run dev`(4173) 또는 `python3 scripts/dev-server.py --port 4184`(CI와 같은 서버)를 띄우고 `BASE_URL`을 그 주소로 맞춘다. 설치된 Playwright와 Chromium은 `PW_MODULE_PATH`·`CHROMIUM_PATH`로 지정한다. 예: `BASE_URL=http://127.0.0.1:4173 node tests/structure-baseline-browser.cjs`.
+- CI가 실제로 실행하는 검사의 목록과 순서는 [`.github/workflows/pages.yml`](.github/workflows/pages.yml)이 기준이다. 이 README에는 실행 방법만 적는다.
+- `--prepare-database`를 받는 스위트는 실제 PostgreSQL에 마이그레이션을 설치한 뒤 검사한다. CI는 네트워크 없는 `postgres:17` 컨테이너(`haedo-blog-postgres-N`)를 쓴다. 로컬에서는 소켓 전용 일회용 클러스터를 `BLOG_POSTGRES_SOCKET`(소켓 디렉터리 절대 경로)으로 지정할 수 있다.
+  - DB 이름(`BLOG_POSTGRES_DATABASE`)은 `haedo_blog_qa` 또는 `haedo_blog_qa_…` 형식이어야 한다. 다른 이름은 거절한다.
+  - 클러스터는 UTF-8로 만든다(`initdb -E UTF8`). `SQL_ASCII`이면 한글·이모지 길이 검사가 바이트로 계산되어 준비 이어쓰기 등이 `life_material_invalid_remote_data`로 실패한다.
+  - 소켓 파일 경로(`디렉터리/.s.PGSQL.5432`)는 107바이트 이하여야 한다. `postgres` 사용자가 그 디렉터리까지 들어갈 수 있어야 하며, 서버가 도는 동안 권한을 다시 좁히면 서버가 멈춘다.
+- (당시 기준) 이전 기능 통합 검사에서 여러 파일 검토와 정확한 원문 검색을 포함해 Node 181개·브라우저 60개가 통과했다. 현재 검사 수와 다르다. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이다. 해당 기능 PR #17/#19는 병합되었으며 이번 디자인 변경의 검증과 적용 상태는 [최신 기록](docs/design-review/feed-refinement.md)을 따른다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.
 - `main` 푸시는 GitHub Pages 배포로 이어진다.
 - 운영 DB 조회용 MCP는 `.mcp.json`의 `haedo-supabase`다. 해도 프로젝트 하나에만 연결하며 조회와 운영 SQL·마이그레이션·Edge 함수 적용이 가능하다. 운영 쓰기는 `AGENTS.md` 운영 체계의 운영 DB 절차를 따른다. 클라우드 환경에 아래 두 가지를 넣는다.
   - 환경 변수 `HAEDO_SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`(Supabase 개인 액세스 토큰)
