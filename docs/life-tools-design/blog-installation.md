@@ -94,6 +94,7 @@ CI는 별도 `blog` 작업에서 이 흐름과 글 관리·익명 읽기·정확
 0. **선행 조건:** AI 표시 마이그레이션 `20261102110000_life_blog_ai_authorship`이 운영에 이미 적용돼 있어야 한다(2026-11-02 PR #169로 적용됨). 이 마이그레이션은 그 위에 적용한다. 11-01 설치 묶음을 다시 실행했다면, 그 문서 절차대로 AI 설치 SQL을 먼저 다시 적용한 뒤 이 마이그레이션을 적용한다. 이 마이그레이션은 두 설치 묶음이 다시 실행돼도 되돌아가지 않는다.
 1. **적용 전 기록**
    - `haedo_blog_private.publish`·`public_media`·`public.life_blog_publish`의 정의 해시
+   - 선행 조건 확인: `md5(prosrc)`가 `haedo_blog_private.publish` = `17bb2aa6befed545e6cf33158c7c2b06`, `haedo_blog_private.valid_document` = `da3cbe336718c99fe3601ff518422555`(AI판)인지 본다. 다르면 적용하지 않고 멈춘다(2026-11-02 운영 읽기에서 두 값 일치 확인).
    - assets/posts/publications/receipts 행 수
    - 사진이 있는 활성 공개본 수(0 예상)
    - 현재 Edge `haedo-blog-media` 버전 번호
