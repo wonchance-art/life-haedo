@@ -39,8 +39,21 @@ async function durable(page, predicate, label) {
 }
 const sameOps = expected => doc => JSON.stringify(doc.ops) === JSON.stringify(expected);
 async function settled(page) {
-  // The owner-typed text loses an inherited mark 120 ms after input outside IME.
-  await page.waitForTimeout(250);
+  // Owner text loses an inherited mark right after its change (a microtask)
+  // and a composition right after it ends; this only lets the page catch up.
+  await page.waitForTimeout(150);
+}
+const aiText = ops => aiRuns(ops).join('');
+// Walk the undo (or redo) stack until `done`, checking every step: the AI text
+// never grows, so no owner character is ever re-marked as AI text.
+async function walk(page, key, expectedAi, done, label) {
+  for (let step = 0; step < 40; step++) {
+    const s = await editorState(page);
+    assert.equal(aiText(s.ops), expectedAi, label + ' step ' + step + ': ' + JSON.stringify(s.ops));
+    if (done(s)) return step;
+    await page.keyboard.press(key);
+  }
+  assert.fail(label + ': did not reach the expected state');
 }
 // Quill history groups user changes made within 700 ms (history.delay). A
 // person pausing before the next step starts a separate undo step.
@@ -98,8 +111,10 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       assert.equal(await status(page), 'AI 글로 표시했어요');
       const style = await page.locator('.ql-editor .photo-ai-text').evaluate(n => { const c = getComputedStyle(n); return { line: c.textDecorationLine, style: c.textDecorationStyle, color: c.color, background: c.backgroundColor }; });
       assert.equal(style.style, 'dotted'); assert.match(style.line, /underline/);
-      await durable(page, d => d.status === 'draft' && aiRuns(d.ops).join('') === 'AI suggested sentence.', 'autosaved mark');
       await shot('marked');
+      await durable(page, d => d.status === 'draft' && aiRuns(d.ops).join('') === 'AI suggested sentence.', 'autosaved mark');
+      // The short note gives way to the save state once the autosave completes.
+      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent === '자동 저장됨', null, { timeout: 5000, label: 'save state shown again after the note' });
     });
     await check('② owner typing inside AI text is the owner\'s; one undo removes it', async () => {
       const before = await editorState(page);
@@ -123,16 +138,13 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await page.evaluate(() => { window.__ime = { start: 0, end: 0 }; const root = document.querySelector('.ql-editor'); root.addEventListener('compositionstart', () => __ime.start++); root.addEventListener('compositionend', () => __ime.end++); });
       const at = await indexOf(page, 'sentence');
       await setSelection(page, at, 0);
-      // 'Z' inherits the mark and is due to be settled; the composition that
-      // starts at once must not be reformatted while it is open.
-      await page.keyboard.type('Z');
       await cdp.send('Input.imeSetComposition', { text: 'ㅎ', selectionStart: 1, selectionEnd: 1 });
       await cdp.send('Input.imeSetComposition', { text: '하', selectionStart: 1, selectionEnd: 1 });
       await cdp.send('Input.imeSetComposition', { text: '한', selectionStart: 1, selectionEnd: 1 });
       await page.waitForTimeout(400);
       const during = await page.evaluate(() => ({ ime: { ...__ime }, spans: [...document.querySelectorAll('.ql-editor .photo-ai-text')].map(n => n.textContent), status: document.querySelector('.photo-commandbar .photo-status-text').textContent }));
       assert.deepEqual(during.ime, { start: 1, end: 0 }, 'a real composition is open');
-      assert(during.spans.some(text => text.includes('Z한sentence')), 'no reformat during composition: ' + JSON.stringify(during.spans));
+      assert(during.spans.some(text => text.includes('한sentence')), 'no reformat during composition: ' + JSON.stringify(during.spans));
       assert.equal(during.status, '한글 입력 중…');
       await cdp.send('Input.insertText', { text: '한' });
       await cdp.send('Input.imeSetComposition', { text: 'ㄱ', selectionStart: 1, selectionEnd: 1 });
@@ -141,17 +153,97 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await settled(page);
       assert.equal(await page.evaluate(() => __ime.end), 2, 'both syllables were composed');
       const s = await editorState(page);
-      assert.equal(s.text.includes('XY suggested Z한글sentence.'), true, s.text);
+      assert.equal(s.text.includes('XY suggested 한글sentence.'), true, s.text);
       assert.deepEqual(aiRuns(s.ops), ['AI ', 'suggested ', 'sentence.'], JSON.stringify(s.ops));
       await durable(page, sameOps(s.ops), 'autosaved composed text');
       await cdp.detach();
+    });
+    await check('⑨ owner typing that spans several undo steps stays the owner\'s through undo/redo', async () => {
+      // 16 keys 90 ms apart: never idle, about 1.4 s, more than Quill's 700 ms grouping.
+      const end = (await editorState(page)).text.length - 1;
+      await setSelection(page, end, 0);
+      await pause(page);
+      await clickToggle();
+      await paste(page, ' AIAIAIAIAI');
+      await pause(page);
+      await setSelection(page, (await indexOf(page, 'AIAIAIAIAI')) + 4, 0);
+      await pause(page);
+      const before = await editorState(page), ai = aiText(before.ops);
+      await page.keyboard.type('ownerownerowner!', { delay: 90 });
+      await settled(page);
+      const typed = await editorState(page);
+      assert.equal(typed.text.includes(' AIAIownerownerowner!AIAIAI'), true, typed.text);
+      assert.equal(aiText(typed.ops), ai, 'typed characters are the owner\'s: ' + JSON.stringify(typed.ops));
+      await durable(page, sameOps(typed.ops), 'autosaved multi-step typing');
+      const undos = await walk(page, 'Control+z', ai, s => s.text === before.text, 'undo');
+      assert(undos >= 2, 'the typing spanned several undo steps: ' + undos);
+      assert.deepEqual((await editorState(page)).ops, before.ops);
+      await walk(page, 'Control+Shift+z', ai, s => s.text === typed.text, 'redo');
+      assert.deepEqual((await editorState(page)).ops, typed.ops, 'redo restores the owner text as owner text');
+      await walk(page, 'Control+z', ai, s => s.text === before.text, 'second undo');
+      await walk(page, 'Control+Shift+z', ai, s => s.text === typed.text, 'second redo');
+    });
+    await check('⑩ a Korean composition over several syllables (> 700 ms) stays the owner\'s through undo/redo', async () => {
+      const cdp = await context.newCDPSession(page);
+      await setSelection(page, (await indexOf(page, 'owner!AIAIAI')) + 'owner!A'.length, 0);
+      await pause(page);
+      const before = await editorState(page), ai = aiText(before.ops);
+      const started = Date.now();
+      for (const [steps, text] of [[['ㄱ', '가', '갈'], '갈'], [['ㅁ', '매'], '매'], [['ㄱ', '기'], '기'], [['ㅇ', '아'], '아'], [['ㄹ', '래'], '래']]) {
+        for (const step of steps) { await cdp.send('Input.imeSetComposition', { text: step, selectionStart: 1, selectionEnd: 1 }); await page.waitForTimeout(120); }
+        await cdp.send('Input.insertText', { text });
+      }
+      assert(Date.now() - started > 1400, 'the composition spans more than one undo grouping window');
+      await settled(page);
+      const typed = await editorState(page);
+      assert.equal(typed.text.includes('owner!A갈매기아래IAIAI'), true, typed.text);
+      assert.equal(aiText(typed.ops), ai, 'composed syllables are the owner\'s: ' + JSON.stringify(typed.ops));
+      await durable(page, sameOps(typed.ops), 'autosaved multi-syllable composition');
+      const undos = await walk(page, 'Control+z', ai, s => s.text === before.text, 'undo');
+      assert(undos >= 2, 'the composition spanned several undo steps: ' + undos);
+      await walk(page, 'Control+Shift+z', ai, s => s.text === typed.text, 'redo');
+      assert.deepEqual((await editorState(page)).ops, typed.ops);
+      await cdp.detach();
+    });
+    await check('⑪ a removal that lands just after the 700 ms grouping window still joins the input\'s undo step', async () => {
+      await setSelection(page, (await indexOf(page, 'IAIAI\n')) + 2, 0);
+      await pause(page);
+      const before = await editorState(page), ai = aiText(before.ops);
+      // Deterministic edge: the clock jumps 800 ms between Quill recording the
+      // key and the mark removal that follows it in the same task.
+      await page.evaluate(() => {
+        const q = Quill.find(document.querySelector('.photo-quill')), real = Date.now.bind(Date);
+        let skew = 0; Date.now = () => real() + skew;
+        const once = () => { skew += 800; q.off('text-change', once); };
+        q.on('text-change', once); window.__restoreNow = () => { Date.now = real; };
+      });
+      try {
+        await page.keyboard.type('K');
+        await settled(page);
+        const typed = await editorState(page);
+        assert.equal(aiText(typed.ops), ai, JSON.stringify(typed.ops));
+        await page.keyboard.press('Control+z');
+        const undone = await editorState(page);
+        assert.deepEqual(undone.ops, before.ops, 'one undo removes the key; it is never re-marked as AI text first');
+      } finally { await page.evaluate(() => __restoreNow()); }
     });
     await check('④ the armed paste is AI text once; a plain paste is the owner\'s; Esc disarms', async () => {
       const end = (await editorState(page)).text.length - 1;
       await setSelection(page, end, 0);
       await clickToggle();
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
-      assert.match(await status(page), /다음 붙여넣기를 AI 글로 표시/);
+      assert.equal(await status(page), 'AI 붙여넣기 대기');
+      const announced = await page.locator('.photo-commandbar .photo-status').textContent();
+      assert.match(announced, /다음 붙여넣기 한 번을 AI 글로 표시합니다\. AI 글 표시 버튼을 다시 누르면 취소합니다\./);
+      const fits = await page.locator('.photo-commandbar .photo-status-text').evaluate(t => { const r = document.createRange(); r.selectNodeContents(t); return r.getBoundingClientRect().width <= t.parentElement.clientWidth + 1; });
+      assert.equal(fits, true, 'the short waiting text fits the one-line status');
+      // Pressing the control again cancels on any input method.
+      await clickToggle();
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+      assert.equal(await status(page), 'AI 글 붙여넣기 대기를 껐어요');
+      assert.doesNotMatch(await page.locator('.photo-commandbar .photo-status').textContent(), /다시 누르면 취소/);
+      await clickToggle();
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
       await page.keyboard.press('Escape');
       assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
       assert.equal(await status(page), 'AI 글 붙여넣기 대기를 껐어요');

@@ -102,7 +102,9 @@
     }
   }
   root.Quill.register(Author, true);
-  const AI_PENDING = "다음 붙여넣기를 AI 글로 표시 · Esc로 취소";
+  // Fits the one-line status at 320px (108px); the full sentence is announced.
+  const AI_PENDING = "AI 붙여넣기 대기";
+  const AI_PENDING_DETAIL = " · 다음 붙여넣기 한 번을 AI 글로 표시합니다. AI 글 표시 버튼을 다시 누르면 취소합니다.";
   function create({
     storage,
     workspaceId,
@@ -154,9 +156,9 @@
       authorNote = "",
       aiInserting = false,
       humanRanges = [],
-      settleTimer = null,
+      settleQueued = false,
       authorButton = null;
-    let status, statusText, inspector, captionInput, altInput, recoveryActions;
+    let status, statusText, statusDetail, inspector, captionInput, altInput, recoveryActions;
     let dismissControls = null;
     let serverStatus = null, serverActions = null, serverValue = null, serverBusy = false, serverSequence = 0;
     let unsubscribeServer = null;
@@ -213,8 +215,7 @@
       // Covers still inside host leave with it. Covers moved to listHost stay
       // visible until the next delivered list replaces them.
       retireCovers(feedCovers, (image) => !host?.contains(image));
-      clearTimeout(settleTimer);
-      settleTimer = null;
+      settleQueued = false;
       humanRanges = [];
       aiPending = false;
       authorNote = "";
@@ -227,7 +228,7 @@
       error = e || null;
       if (status) {
         status.hidden = mode === "read" && !e && !committed;
-        const authorText = mode === "edit" ? (aiPending ? AI_PENDING : authorNote) : "";
+        const authorText = mode === "edit" && !composing ? (aiPending ? AI_PENDING : authorNote) : "";
         const message =
           e?.message ||
           e ||
@@ -246,6 +247,8 @@
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
         if (statusText.textContent !== message) statusText.textContent = message;
+        const detail = !e && authorText === AI_PENDING ? AI_PENDING_DETAIL : "";
+        if (statusDetail && statusDetail.textContent !== detail) statusDetail.textContent = detail;
         status.dataset.state = state;
         const role = e instanceof Error ? "alert" : "status";
         if (status.getAttribute("role") !== role) status.setAttribute("role", role);
@@ -374,6 +377,7 @@
         }
       }
       editor?.enable(!value);
+      if (!value) scheduleSettle();
       onDirty();
       if (
         !value &&
@@ -411,9 +415,12 @@
     }
     // ---- AI authorship ----------------------------------------------------
     // Quill gives typed text the inline formats before the caret. Owner input
-    // that inherited `author` is recorded here and settled later, outside any
-    // IME composition. Undo/redo replays (history.ignoreChange) and the marked
-    // paste below keep their recorded authorship.
+    // that inherited `author` is recorded from each text-change and settled in
+    // a microtask right after that change, so the mark removal always joins
+    // the undo step of the input it belongs to. A composition is settled right
+    // after it ends (Quill emits it from compositionend), never while open.
+    // Undo/redo replays (history.ignoreChange) and the marked paste below keep
+    // their recorded authorship.
     const imeActive = () => composing || !!editor?.composition?.isComposing;
     function trackAuthorship(delta, source) {
       if (humanRanges.length)
@@ -434,31 +441,26 @@
       scheduleSettle();
     }
     function scheduleSettle() {
-      clearTimeout(settleTimer);
-      settleTimer = null;
-      if (!humanRanges.length || mode !== "edit") return;
+      if (settleQueued || !humanRanges.length || mode !== "edit") return;
+      settleQueued = true;
       const token = epoch;
-      settleTimer = setTimeout(() => {
-        settleTimer = null;
+      queueMicrotask(() => {
+        settleQueued = false;
         if (current(token)) settleAuthorship();
-      }, 120);
+      });
     }
     function settleAuthorship() {
-      if (!humanRanges.length || !editor || mode !== "edit") return;
-      if (imeActive() || !editor.isEnabled()) {
-        // Retried after compositionend / when the editor is enabled again.
-        if (!imeActive()) scheduleSettle();
-        return;
-      }
-      clearTimeout(settleTimer);
-      settleTimer = null;
+      // Deferred while composing (retried from compositionend) or while the
+      // editor is disabled for photo work (retried from setBusy(false)).
+      if (!humanRanges.length || !editor || mode !== "edit" || imeActive() || !editor.isEnabled()) return;
       const ranges = humanRanges,
         history = editor.history,
         prior = history.lastRecorded;
       humanRanges = [];
       for (const [start, end] of ranges) {
-        // Fold the mark removal into the typing step it belongs to, so one undo
-        // removes the typed text instead of first re-marking it as AI text.
+        // The top undo step is the input's own step (settled right after it);
+        // keep the removal in it even when the 700 ms grouping window has just
+        // closed, so one undo removes the typed text without re-marking it.
         if (typeof prior === "number") history.lastRecorded = Date.now();
         try {
           editor.formatText(start, end - start, "author", false, "user");
@@ -545,6 +547,8 @@
           if (!valid() || doc !== target) return;
           target.revision = saved.revision;
           storedTick = tick;
+          // A short AI-mark note gives way to the save state once saved.
+          if (storedTick === dirtyTick) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
           if (current(token)) onSaved();
@@ -1816,7 +1820,8 @@
       const check = glyph("check");
       check.classList.add("photo-status-check");
       statusText = el("span", "", "photo-status-text");
-      status.append(check, statusText);
+      statusDetail = el("span", "", "life-sr-only");
+      status.append(check, statusText, statusDetail);
       host.append(status);
       if (mode === "list") {
         const toolbar = el("div", null, "life-actions");
