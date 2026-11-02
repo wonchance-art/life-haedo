@@ -44,7 +44,7 @@ function browser() {
 }
 function server() {
   const pages = new Map(), receipts = new Map(), applied = [], calls = [];
-  let loseNext = false, dropNext = false, malformNext = 0;
+  let loseNext = false, dropNext = false, malformNext = 0, rejectNext = null;
   function metadata(owner) {
     const row = pages.get(owner);
     return row ? { status: row.published ? 'published' : 'revoked', revision: row.revision, publicId: row.published ? row.publicId : null,
@@ -68,13 +68,14 @@ function server() {
     return result;
   }
   return {
-    pages, applied, calls, loseResponse() { loseNext = true; }, dropRequest() { dropNext = true; }, malformResponses(count) { malformNext = count; },
+    pages, applied, calls, loseResponse() { loseNext = true; }, dropRequest() { dropNext = true; }, malformResponses(count) { malformNext = count; }, rejectWith(error) { rejectNext = error; },
     // The transaction commits, then the response is lost (tab closed, iOS discarded it, network cut).
     client(auth) {
       return { auth: {}, rpc(name, args) {
         const snapshotArgs = JSON.parse(JSON.stringify(args));
         return { abortSignal() { return this; }, then(resolve, reject) {
           return Promise.resolve().then(() => {
+            if (name === 'life_public_page_put' && rejectNext) { const error = rejectNext; rejectNext = null; calls.push({ owner: auth.user.id, name, operationId: snapshotArgs.p_operation_id, rejected: true }); return { data: null, error }; }
             if (name === 'life_public_page_put' && dropNext) { dropNext = false; throw new TypeError('Failed to fetch'); }
             const data = handle(auth.user.id, name, snapshotArgs);
             if (name === 'life_public_page_put' && loseNext) { loseNext = false; throw new TypeError('Failed to fetch'); }
@@ -298,4 +299,70 @@ test('new requests stop at the pending count and size bounds without touching ex
   assert.deepEqual(env.profile.backing, sized); assert.equal(cloud.calls.length, 0);
   env.profile.removeItem(keyOf(target(1)));
   assert.equal((await o.put(publish())).status, 'stored'); o.dispose();
+});
+
+test('bounds count only this account and never block a revocation', async t => {
+  const env = browser(); t.after(() => env.restore());
+  const cloud = server(), a = owner(cloud, ids.a), { count } = a.LIMITS;
+  const target = index => '77777777-7777-4777-8777-' + String(index).padStart(12, '0');
+  const keyOf = (uid, id) => PREFIX + encodeURIComponent(JSON.stringify([config.url, uid, id]));
+  // Account B's records (unresolvable from A) fill the browser-wide count.
+  for (let index = 0; index < count; index++) env.profile.setItem(keyOf(ids.b, target(index)), JSON.stringify({ ...publish(target(index)), workspaceId: target(index) }));
+  assert.equal((await a.put(publish())).status, 'stored', 'A publishes although B has the maximum number of records');
+  // A's own records reach the bound: a new publish stops, a revocation still goes through.
+  for (let index = 0; index < count; index++) env.profile.setItem(keyOf(ids.a, target(index)), JSON.stringify({ ...publish(target(index)), workspaceId: target(index) }));
+  const before = new Map(env.profile.backing);
+  await assert.rejects(a.put(publish(ids.other, '한도 초과 게시', 1)), { code: 'pending_limit_count' });
+  assert.deepEqual(env.profile.backing, before);
+  const revoked = await a.put({ workspaceId: ids.workspace, expectedRevision: 1, operationId: ids.other, action: 'revoke', snapshot: null });
+  assert.equal(revoked.status, 'stored'); assert.equal(revoked.published, false);
+  for (const [key, value] of before) assert.equal(env.profile.getItem(key), value, 'existing records are kept');
+  a.dispose();
+});
+
+test('setting aside repeatedly keeps only the latest copy per account and target', async t => {
+  const env = browser(); t.after(() => env.restore());
+  const cloud = server(), b = owner(cloud, ids.b);
+  env.profile.setItem(keyFor(ids.b), '{"b broken"'); assert.equal(b.pending(ids.workspace), null); b.dispose();
+  const other = setAsideOf(env.profile.backing, ids.b); assert.equal(other.length, 1);
+  const a = owner(cloud, ids.a);
+  for (let round = 1; round <= 5; round++) {
+    env.profile.setItem(keyFor(ids.a), '{"broken round ' + round + '"');
+    assert.equal(a.pending(ids.workspace), null); a.takeSetAside(ids.workspace);
+  }
+  const kept = setAsideOf(env.profile.backing, ids.a);
+  assert.equal(kept.length, 1); assert.equal(kept[0][1], '{"broken round 5"', 'the copy is the latest original');
+  assert.deepEqual(setAsideOf(env.profile.backing, ids.b), other, 'another account keeps its own copy'); a.dispose();
+});
+
+test('a replay rejected by a server rule is set aside unchanged, while a missing RPC keeps the request', async t => {
+  const env = browser(); t.after(() => env.restore());
+  const cloud = server(), o = owner(cloud, ids.a);
+  cloud.loseResponse(); await assert.rejects(o.put(publish()), { code: 'publish_unknown' });
+  const text = env.profile.getItem(keyFor(ids.a));
+  cloud.rejectWith({ code: 'PGRST202', message: 'Could not find the function' });
+  await assert.rejects(o.retryPending(ids.workspace), { code: 'schema_missing' });
+  assert.equal(env.profile.getItem(keyFor(ids.a)), text, 'a temporarily absent RPC proves nothing about the request');
+  cloud.rejectWith({ code: '22023', message: 'life_share_invalid_snapshot' });
+  await assert.rejects(o.retryPending(ids.workspace), { code: 'replay_unresolved' });
+  assert.equal(env.profile.getItem(keyFor(ids.a)), null);
+  assert.deepEqual(setAsideOf(env.profile.backing, ids.a).map(([, value]) => value), [text], 'the original is preserved, not deleted');
+  assert.equal(o.pending(ids.workspace), null); o.dispose();
+});
+
+test('a stale screen whose request another screen set aside says so instead of "already confirmed"', async t => {
+  const env = browser(); t.after(() => env.restore());
+  const cloud = server(), a = owner(cloud, ids.a), b = owner(cloud, ids.a);
+  cloud.loseResponse(); await assert.rejects(a.put(publish()), { code: 'publish_unknown' });
+  assert(a.pending(ids.workspace)); assert(b.pending(ids.workspace));
+  cloud.malformResponses(1); await assert.rejects(b.retryPending(ids.workspace), { code: 'replay_unresolved' });
+  const error = await a.retryPending(ids.workspace).catch(cause => cause);
+  assert.equal(error.code, 'pending_set_aside_elsewhere'); assert.match(error.message, /따로 보관했습니다/);
+  // A request truly confirmed elsewhere still reads as confirmed.
+  const c = owner(cloud, ids.a), d = owner(cloud, ids.a), other = '88888888-8888-4888-8888-888888888888';
+  const head = await c.get(ids.workspace);
+  cloud.loseResponse(); await assert.rejects(c.put({ workspaceId: ids.workspace, expectedRevision: head.revision, operationId: other, action: 'revoke', snapshot: null }), { code: 'publish_unknown' });
+  assert(d.pending(ids.workspace)); assert.equal((await d.retryPending(ids.workspace)).status, 'stored');
+  assert.equal((await c.retryPending(ids.workspace).catch(cause => cause)).code, 'pending_resolved');
+  for (const value of [a, b, c, d]) value.dispose();
 });

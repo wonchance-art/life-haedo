@@ -622,7 +622,7 @@
       return error?.message || '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.';
     }
     // A request confirmed in another tab, or set aside because it cannot be settled, no longer blocks.
-    const settledElsewhere = error => ['pending_resolved', 'pending_set_aside', 'replay_unresolved'].includes(error?.code);
+    const settledElsewhere = error => ['pending_resolved', 'pending_set_aside', 'pending_set_aside_elsewhere', 'replay_unresolved'].includes(error?.code);
     const setAsideText = () => life.ShareRemote?.message?.('pending_set_aside') || '읽지 못한 이전 게시 요청을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.';
     function makeShareDraft(session) {
       const share = shareState(session);

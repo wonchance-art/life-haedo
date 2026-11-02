@@ -23,6 +23,7 @@
     pending_set_aside: '읽지 못한 이전 게시 요청을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.',
     replay_unresolved: '같은 요청으로 결과를 확인하지 못해 요청 기록을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.',
     pending_resolved: '이 요청의 결과는 다른 화면에서 이미 확인했습니다. 서버의 현재 공개 상태를 표시합니다.',
+    pending_set_aside_elsewhere: '다른 화면에서 이 요청의 결과를 확인하지 못해 요청 기록을 따로 보관했습니다. 서버의 현재 공개 상태를 표시합니다.',
     pending_limit_count: '결과를 확인하지 못한 게시 요청이 많아 새 요청을 보내지 않았습니다. 기존 요청을 먼저 다시 확인해 주세요.',
     pending_limit_size: '게시 요청 복구 정보가 브라우저 저장 한도를 넘어 보내지 않았습니다. 공개할 본문·인용을 줄이거나 기존 요청을 먼저 확인해 주세요.',
     pending_operation: '결과를 확인하지 못한 게시 요청이 있습니다. 같은 요청을 다시 확인해 주세요.',
@@ -149,7 +150,20 @@
     const key = (uid, workspaceId) => PREFIX + encodeURIComponent(JSON.stringify([connection.url, uid, workspaceId]));
     const setAsideKey = (uid, workspaceId) => SET_ASIDE + encodeURIComponent(JSON.stringify([connection.url, uid, workspaceId,
       new Date().toISOString(), Math.random().toString(36).slice(2)]));
-    const notices = new Set();
+    const notices = new Set(), seen = new Map();
+    // [project, account, target] of a pending or set-aside key; null for any other key.
+    function owned(name, prefix) {
+      if (typeof name !== 'string' || !name.startsWith(prefix)) return null;
+      try { const parts = JSON.parse(decodeURIComponent(name.slice(prefix.length))); return Array.isArray(parts) ? parts : null; }
+      catch (_) { return null; }
+    }
+    function keys(prefix) {
+      if (typeof storage?.key !== 'function' || !Number.isSafeInteger(storage.length)) return [];
+      const result = [];
+      for (let index = 0; index < storage.length; index++) { const name = storage.key(index); if (owned(name, prefix)) result.push(name); }
+      return result;
+    }
+    const sameTarget = (parts, uid, workspaceId) => parts[0] === connection.url && parts[1] === uid && parts[2] === workspaceId;
     function earlier(name) { try { return legacy?.getItem?.(name) ?? null; } catch (_) { return null; } }
     // Only what a replay needs. Snapshot rules of a later build are not re-applied: the server
     // compares the replay with its receipt hash and validates any write itself.
@@ -170,6 +184,11 @@
         if (area.getItem(name) === text) area.removeItem(name);
       } catch (_) { throw fault('pending_corrupt'); }
       notices.add(name);
+      // Keep only the latest set-aside copy of this account's target: the new copy is written and
+      // read back above before any older copy is removed.
+      try {
+        for (const older of keys(SET_ASIDE)) if (older !== target && sameTarget(owned(older, SET_ASIDE), context.uid, workspaceId)) storage.removeItem(older);
+      } catch (_) { /* An older copy that stays is harmless; the latest one is already stored. */ }
     }
     function load(context, workspaceId) {
       alive(context); workspaceId = uuid(workspaceId);
@@ -186,18 +205,20 @@
         try { storage.setItem(name, text); if (storage.getItem(name) === text) legacy.removeItem(name); }
         catch (_) { /* The tab copy stays authoritative; the next read retries the move. */ }
       }
+      seen.set(name, value.operationId.toLowerCase());
       return value;
     }
     function pending(workspaceId) { return load(current(), workspaceId); }
     function takeSetAside(workspaceId) {
       const name = key(current().uid, uuid(workspaceId)), found = notices.has(name); notices.delete(name); return found;
     }
-    function usage(except) {
-      if (typeof storage.key !== 'function' || !Number.isSafeInteger(storage.length)) return { count: 0, characters: 0 };
+    // The bounds count this account's pending records only: another account's records, which this
+    // account cannot resolve, never decide whether it may publish.
+    function usage(uid, except) {
       let count = 0, characters = 0;
-      for (let index = 0; index < storage.length; index++) {
-        const name = storage.key(index);
-        if (typeof name !== 'string' || !name.startsWith(PREFIX) || name === except) continue;
+      for (const name of keys(PREFIX)) {
+        const parts = owned(name, PREFIX);
+        if (name === except || parts[0] !== connection.url || parts[1] !== uid) continue;
         count++; characters += name.length + (storage.getItem(name)?.length || 0);
       }
       return { count, characters };
@@ -205,9 +226,10 @@
     function save(context, value) {
       const name = key(context.uid, value.workspaceId), previous = load(context, value.workspaceId), serialized = JSON.stringify(value);
       if (previous) assert(JSON.stringify(previous) === serialized, 'pending_operation');
-      else {
+      // A revocation carries no snapshot and is how a public page is closed; bounds never block it.
+      else if (value.action !== 'revoke') {
         let used;
-        try { used = usage(name); } catch (_) { throw fault('pending_storage_failed'); }
+        try { used = usage(context.uid, name); } catch (_) { throw fault('pending_storage_failed'); }
         assert(used.count + 1 <= PENDING_LIMITS.count, 'pending_limit_count');
         assert(used.characters + name.length + serialized.length <= PENDING_LIMITS.characters, 'pending_limit_size');
       }
@@ -288,8 +310,9 @@
       } catch (error) {
         // These exact PostgreSQL exceptions roll the transaction back, or the RPC does not exist.
         // They are safe to replace with a corrected request; ambiguous transport errors are not.
-        if (error.definitiveNoWrite) clear(context, value);
-        else if (replay && error.code === 'operation_mismatch') unresolved();
+        // A replay keeps the original: a server rule that now rejects it moves the record aside instead.
+        if (replay && error.definitiveNoWrite && error.code !== 'schema_missing' || replay && error.code === 'operation_mismatch') unresolved();
+        if (error.definitiveNoWrite && !replay) clear(context, value);
         throw error;
       }
       let result;
@@ -309,8 +332,15 @@
       const value = load(context, workspaceId);
       if (!value) {
         // Reading it just now may have set an unreadable record aside; say so instead of "resolved".
-        const name = key(context.uid, workspaceId), setAsideNow = notices.delete(name);
-        throw fault(setAsideNow ? 'pending_set_aside' : 'pending_resolved');
+        const name = key(context.uid, workspaceId), setAsideNow = notices.delete(name), operationId = seen.get(name);
+        if (setAsideNow) throw fault('pending_set_aside');
+        // Another screen may have set the request this screen showed aside rather than resolved it.
+        let elsewhere = false;
+        try {
+          elsewhere = !!operationId && keys(SET_ASIDE).some(other => sameTarget(owned(other, SET_ASIDE), context.uid, workspaceId) &&
+            stored(storage.getItem(other), workspaceId)?.operationId?.toLowerCase() === operationId);
+        } catch (_) { elsewhere = false; }
+        throw fault(elsewhere ? 'pending_set_aside_elsewhere' : 'pending_resolved');
       }
       return send(value, true);
     }
