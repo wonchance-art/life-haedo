@@ -32,7 +32,7 @@ function args() {
     if (!process.argv[index].startsWith('--') || process.argv[index + 1] === undefined) throw new Error('--key value 형식이어야 합니다');
     values[process.argv[index].slice(2)] = process.argv[index + 1];
   }
-  if (!['smoke', 'dev', 'eval'].includes(values.mode)) throw new Error('--mode smoke|dev|eval');
+  if (!['smoke', 'dev', 'evaldry', 'eval'].includes(values.mode)) throw new Error('--mode smoke|dev|evaldry|eval');
   return values;
 }
 const options = args();
@@ -144,10 +144,10 @@ async function embedUnique(page, pathName, texts) {
   const unique = [...new Set(texts)];
   const result = await page.evaluate(async ({ pathName, unique }) => {
     const out = await __harness.embedAll(__harness[pathName], unique);
-    return { vectors: out.vectors, elapsedMs: out.elapsedMs, batchMs: out.batchMs };
+    return { vectors: out.vectors, elapsedMs: out.elapsedMs, batchMs: out.batchMs, batchSizes: out.batchSizes };
   }, { pathName, unique });
   const map = new Map(unique.map((text, index) => [text, result.vectors[index]]));
-  return { map, uniqueCount: unique.length, elapsedMs: result.elapsedMs, batchMs: result.batchMs };
+  return { map, unique, uniqueCount: unique.length, elapsedMs: result.elapsedMs, batchMs: result.batchMs, batchSizes: result.batchSizes };
 }
 function readSealed(name, expected) {
   const bytes = fs.readFileSync(path.join(HERE, name));
@@ -241,19 +241,25 @@ async function costPool(page, cdp, entries, threshold, variant) {
 }
 
 async function evaluation() {
-  const freezeBytes = fs.readFileSync(path.join(HERE, 'freeze.json'));
-  if (!/^[a-f0-9]{64}$/.test(options['freeze-sha'] || '') || sha(freezeBytes) !== options['freeze-sha']) throw new Error('freeze.json SHA가 주어지지 않았거나 다릅니다');
-  const freeze = JSON.parse(freezeBytes.toString('utf8'));
-  for (const [name, expected] of Object.entries(freeze.files)) if (shaFile(path.join(HERE, name)) !== expected) throw new Error(name + ' 동결 SHA 불일치');
-  for (const [name, expected] of Object.entries(freeze.product)) if (shaFile(path.join(REPO, name)) !== expected) throw new Error(name + ' 제품 파일 SHA 불일치');
-  // 성공한 평가 실행은 한 번뿐이다. 실행 오류로 끝난 시도는 eval-failure-*.json으로 남기고 같은 동결 값으로만 다시 시도한다.
-  if (fs.existsSync(path.join(HERE, 'eval-output.json'))) throw new Error('평가 세트는 한 번만 실행합니다: eval-output.json이 이미 있습니다');
+  // --mode evaldry: 동결 전 점검. 평가 말뭉치를 열지 않고 개발 말뭉치로 같은 경로를 실행한다(판정 근거 아님).
+  const dry = options.mode === 'evaldry';
   const seal = JSON.parse(fs.readFileSync(path.join(HERE, 'seal.json'), 'utf8'));
-  const evalCorpus = readSealed('eval-corpus.json', seal.files['eval-corpus.json']);
+  let freeze;
+  if (dry) freeze = { parameters: JSON.parse(fs.readFileSync(path.join(HERE, 'dev-report.json'), 'utf8')).chosen, product: seal.product };
+  else {
+    const freezeBytes = fs.readFileSync(path.join(HERE, 'freeze.json'));
+    if (!/^[a-f0-9]{64}$/.test(options['freeze-sha'] || '') || sha(freezeBytes) !== options['freeze-sha']) throw new Error('freeze.json SHA가 주어지지 않았거나 다릅니다');
+    freeze = JSON.parse(freezeBytes.toString('utf8'));
+    for (const [name, expected] of Object.entries(freeze.files)) if (shaFile(path.join(HERE, name)) !== expected) throw new Error(name + ' 동결 SHA 불일치');
+    // 성공한 평가 실행은 한 번뿐이다. 실행 오류로 끝난 시도는 eval-failure-*.json으로 남기고 같은 동결 값으로만 다시 시도한다.
+    if (fs.existsSync(path.join(HERE, 'eval-output.json'))) throw new Error('평가 세트는 한 번만 실행합니다: eval-output.json이 이미 있습니다');
+  }
+  for (const [name, expected] of Object.entries(freeze.product)) if (shaFile(path.join(REPO, name)) !== expected) throw new Error(name + ' 제품 파일 SHA 불일치');
   const devCorpus = readSealed('dev-corpus.json', seal.files['dev-corpus.json']);
+  const evalCorpus = dry ? devCorpus : readSealed('eval-corpus.json', seal.files['eval-corpus.json']);
   const { variant, threshold } = freeze.parameters;
   const profile = path.join(LOCAL, 'profile'); fs.mkdirSync(profile, { recursive: true });
-  const output = { mode: 'eval', freezeSHA256: options['freeze-sha'], parameters: freeze.parameters, productBefore: productState() };
+  const output = { mode: options.mode, freezeSHA256: options['freeze-sha'] || null, parameters: freeze.parameters, productBefore: productState() };
   const session = await open(profile);
   try {
     const { page, cdp } = session;
@@ -276,18 +282,29 @@ async function evaluation() {
     output.cost = { cpuThrottlingRate: 4, viewport: '390x844', deviceScaleFactor: 3,
       hostPrepareMsThrottled: await page.evaluate(() => __harness.hostPath.prepare()) };
     await throttle(cdp, 1);
+    // 유효성: 같은 배치 입력(품질 경로의 첫 배치)을 iframe 경로로 다시 임베딩해 워커 경로와 같은지 본다.
+    // q8 모델은 활성값을 배치 단위로 동적 양자화하므로 배치 구성이 다르면 같은 문장도 값이 조금 달라진다(개발 점검에서 확인).
+    const firstBatch = quality.unique.slice(0, quality.batchSizes[0]);
+    const hostFirst = await page.evaluate(async texts => (await __harness.embedAll(__harness.hostPath, texts)).vectors, firstBatch);
+    output.cost.sameBatchInputs = firstBatch.length;
+    output.cost.sameBatchMaxAbsDifference = Math.max(...firstBatch.flatMap((text, i) => quality.map.get(text).map((value, j) => Math.abs(value - hostFirst[i][j]))));
     const corpusPool = [...evalEntries, ...corpusEntries(devCorpus, variant)].slice(0, 200);
     const longPool = longEntries([evalCorpus, devCorpus], variant).slice(0, 200);
-    if (corpusPool.length !== 200 || longPool.length !== 200) throw new Error('비용 측정 문단이 200개가 아닙니다');
+    if (!dry && (corpusPool.length !== 200 || longPool.length !== 200)) throw new Error('비용 측정 문단이 200개가 아닙니다');
     setPhase('cost-corpus-throttled');
     const corpusCost = await costPool(page, cdp, corpusPool, threshold, variant);
     setPhase('cost-long-throttled');
     const longCost = await costPool(page, cdp, longPool, threshold, variant);
-    // 같은 소스의 두 경로가 같은 벡터를 내는지(평가 문단) 대조한다.
-    let diff = 0, cursor = 0;
-    for (const entry of evalEntries) for (const input of entry.inputs) { const a = quality.map.get(input), b = corpusCost.vectors[cursor++]; for (let j = 0; j < a.length; j++) diff = Math.max(diff, Math.abs(a[j] - b[j])); }
+    // 사실 보고: 배치 구성이 다른 색인(중복 제거 없음, 개발 문단과 섞인 배치)과 품질 벡터의 차이.
+    let diff = 0, minCosine = 1, cursor = 0;
+    for (const entry of evalEntries) for (const input of entry.inputs) {
+      const a = quality.map.get(input), b = corpusCost.vectors[cursor++];
+      let dot = 0; for (let j = 0; j < a.length; j++) { diff = Math.max(diff, Math.abs(a[j] - b[j])); dot += a[j] * b[j]; }
+      minCosine = Math.min(minCosine, dot);
+    }
     delete corpusCost.vectors; delete longCost.vectors;
-    output.cost.corpusPool = corpusCost; output.cost.longPool = longCost; output.cost.workerVsHostMaxAbsDifference = diff;
+    output.cost.corpusPool = corpusCost; output.cost.longPool = longCost;
+    output.cost.batchComposition = { maxAbsDifference: diff, minCosine };
     output.cost.storageFormat = 'JSON {schemaVersion, modelId, modelRevision, variant, dimensions, entries:[{id, docId, textSHA256, vectors: Float32 LE base64}]}';
     // 새로 쓴 문단 하나를 질의할 때의 임베딩 1회(사실 보고, 판정 기준 아님). 감속 상태 5회 중앙값.
     setPhase('single-embed-throttled');
@@ -300,7 +317,7 @@ async function evaluation() {
   } finally { await session.close(); }
   output.productAfter = productState();
   output.run = report; output.finishedAt = new Date().toISOString();
-  console.log(write('eval-output.json', output));
+  console.log(write(dry ? 'evaldry-output.json' : 'eval-output.json', output));
 }
 
-({ smoke, dev, eval: evaluation })[options.mode]().catch(error => { report.errors.push({ type: 'runner', message: error.message }); write(options.mode + '-failure' + (options.mode === 'eval' ? '-' + Date.now() : '') + '.json', report); console.error(error); process.exitCode = 1; });
+({ smoke, dev, evaldry: evaluation, eval: evaluation })[options.mode]().catch(error => { report.errors.push({ type: 'runner', message: error.message }); write(options.mode + '-failure' + (options.mode === 'eval' ? '-' + Date.now() : '') + '.json', report); console.error(error); process.exitCode = 1; });

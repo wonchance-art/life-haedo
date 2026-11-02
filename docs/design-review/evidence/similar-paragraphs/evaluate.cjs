@@ -18,7 +18,7 @@ const CRITERIA = Object.freeze({ hit3: 0.70, marginOverBaseline: 0.15, unrelated
 function args() {
   const values = {};
   for (let index = 2; index < process.argv.length; index += 2) values[process.argv[index].slice(2)] = process.argv[index + 1];
-  if (!['dev', 'eval'].includes(values.set)) throw new Error('--set dev|eval');
+  if (!['dev', 'eval', 'dryrun'].includes(values.set)) throw new Error('--set dev|eval|dryrun');
   return values;
 }
 const round = value => Math.round(value * 10000) / 10000;
@@ -142,15 +142,28 @@ function tune() {
   console.log(JSON.stringify({ chosen: report.chosen, perVariant: Object.fromEntries(Object.entries(variants).map(([k, v]) => [k, { t: v.selectedThreshold, ...v.dev }])), baselines, lexical: report.lexicalOverlap }, null, 1));
 }
 
+// 동결 전 점검용(--set dryrun): 개발 세트 벡터와 가짜 비용 값으로 최종 채점 경로만 실행한다. 판정 근거가 아니다.
+function dryrunInputs() {
+  const dev = read('dev-report.json'), product = read('seal.json').product;
+  const fake = { indexMs: 1, batchMs: [1], storageBytes: 1, query: { maxMs: 1, medianMs: 1, p95Ms: 1, decodeMs: 1 } };
+  return { freeze: { parameters: dev.chosen, product }, gold: read('dev-gold.json'), corpus: read('dev-corpus.json'),
+    output: { quality: { entries: read('dev-output.json').variants[dev.chosen.variant].entries }, workerPrepareMs: 1, calibration: { iframeRatio: 4 },
+      cost: { corpusPool: fake, longPool: fake, sameBatchMaxAbsDifference: 0, sameBatchInputs: 1, batchComposition: { maxAbsDifference: 0, minCosine: 1 }, hostPrepareMsThrottled: 1, singleLongParagraphEmbedMedianMs: 1 },
+      run: { network: { violations: [], externalBytes: 0 }, memory: {} }, productBefore: product, productAfter: product } };
+}
 function final(options) {
-  const freezeBytes = fs.readFileSync(path.join(HERE, 'freeze.json'));
-  if (sha(freezeBytes) !== options['freeze-sha']) throw new Error('freeze.json SHA 불일치');
-  const freeze = JSON.parse(freezeBytes.toString('utf8'));
-  for (const [name, expected] of Object.entries(freeze.files)) if (shaFile(path.join(HERE, name)) !== expected) throw new Error(name + ' 동결 SHA 불일치');
-  const seal = read('seal.json');
-  for (const name of ['eval-gold.json', 'eval-corpus.json', 'preregistration.md']) if (shaFile(path.join(HERE, name)) !== seal.files[name]) throw new Error(name + ' 봉인 불일치');
-  const gold = read('eval-gold.json'), corpus = read('eval-corpus.json'), output = read('eval-output.json');
-  if (output.freezeSHA256 !== options['freeze-sha']) throw new Error('평가 실행의 동결 SHA 불일치');
+  let freeze, gold, corpus, output;
+  if (options.set === 'dryrun') ({ freeze, gold, corpus, output } = dryrunInputs());
+  else {
+    const freezeBytes = fs.readFileSync(path.join(HERE, 'freeze.json'));
+    if (sha(freezeBytes) !== options['freeze-sha']) throw new Error('freeze.json SHA 불일치');
+    freeze = JSON.parse(freezeBytes.toString('utf8'));
+    for (const [name, expected] of Object.entries(freeze.files)) if (shaFile(path.join(HERE, name)) !== expected) throw new Error(name + ' 동결 SHA 불일치');
+    const seal = read('seal.json');
+    for (const name of ['eval-gold.json', 'eval-corpus.json', 'preregistration.md']) if (shaFile(path.join(HERE, name)) !== seal.files[name]) throw new Error(name + ' 봉인 불일치');
+    gold = read('eval-gold.json'); corpus = read('eval-corpus.json'); output = read('eval-output.json');
+    if (output.freezeSHA256 !== options['freeze-sha']) throw new Error('평가 실행의 동결 SHA 불일치');
+  }
   const table = paragraphTable(corpus); checkGold(gold, table);
   const { variant, threshold } = freeze.parameters;
   const embedded = embeddingOutputs(output.quality.entries, gold, threshold);
@@ -167,7 +180,7 @@ function final(options) {
     queryMs: { corpusPoolMax: round(cost.corpusPool.query.maxMs), longPoolMax: round(cost.longPool.query.maxMs), limit: '≤ ' + CRITERIA.queryMs, pass: cost.corpusPool.query.maxMs <= CRITERIA.queryMs && cost.longPool.query.maxMs <= CRITERIA.queryMs },
     storageBytes: { corpusPool: cost.corpusPool.storageBytes, longPool: cost.longPool.storageBytes, limit: '≤ ' + CRITERIA.storageBytes, pass: cost.corpusPool.storageBytes <= CRITERIA.storageBytes && cost.longPool.storageBytes <= CRITERIA.storageBytes },
     throttleApplied: { iframeRatio: round(output.calibration.iframeRatio), note: '판정 조건이 아니라 측정 유효성 확인: iframe 주 스레드 감속비', valid: output.calibration.iframeRatio >= 3 },
-    sameVectors: { maxAbsDifference: cost.workerVsHostMaxAbsDifference, valid: cost.workerVsHostMaxAbsDifference === 0 },
+    sameVectors: { maxAbsDifference: cost.sameBatchMaxAbsDifference, inputs: cost.sameBatchInputs, note: '같은 배치 입력에서 워커 경로와 iframe 경로 비교', valid: cost.sameBatchMaxAbsDifference === 0 },
     networkViolations: { count: output.run.network.violations.length, valid: output.run.network.violations.length === 0 },
     productUnchanged: { valid: JSON.stringify(output.productBefore) === JSON.stringify(output.productAfter) && JSON.stringify(output.productBefore) === JSON.stringify(freeze.product) }
   };
@@ -175,16 +188,30 @@ function final(options) {
   const valid = ['throttleApplied', 'sameVectors', 'networkViolations', 'productUnchanged'].every(key => checks[key].valid);
   const decision = !valid ? 'invalid_run' : quality.every(key => checks[key].pass) ? 'adopt' : 'reject';
   const scores = Object.fromEntries([...embedded.scores]);
-  const report = { set: 'eval', freezeSHA256: options['freeze-sha'], evaluatorSHA256: shaFile(__filename), parameters: freeze.parameters, decision, checks,
+  // 서술 지표(판정 미사용, 동결 전에 추가): 임계값 없이 순위만 쓴 경우와 점수 분포.
+  const rankOnly = strip(score(gold, embeddingOutputs(output.quality.entries, gold, -1).outputs));
+  const index = output.quality.entries.map(entry => ({ ...entry, vectors: candidate.decodeFloat32(entry.vectors, 384) }));
+  const byId = new Map(index.map(entry => [entry.id, entry]));
+  const best = id => candidate.similar(index, byId.get(id), -1, 1)[0]?.score ?? null;
+  const goldBest = gold.relatedSeeds.map(seed => Math.max(...seed.related.map(id => candidate.score(byId.get(seed.seed).vectors, byId.get(id).vectors))));
+  const unrelatedBest = gold.unrelatedSeeds.map(best);
+  const summary = values => { const sorted = [...values].sort((a, b) => a - b); return { min: round(sorted[0]), median: round(sorted[Math.floor(sorted.length / 2)]), max: round(sorted.at(-1)) }; };
+  const distribution = { goldPairBestScore: summary(goldBest), unrelatedSeedTopScore: summary(unrelatedBest),
+    goldAboveThreshold: goldBest.filter(value => value >= threshold).length, unrelatedAboveThreshold: unrelatedBest.filter(value => value >= threshold).length };
+  // 감속비가 4보다 낮게 관측되면 4배 기기에 맞춘 환산값을 함께 적는다(사실 보고, 판정은 측정값).
+  const scale = 4 / output.calibration.iframeRatio;
+  const adjusted = { factor: round(scale), corpusPoolIndexMs: round(cost.corpusPool.indexMs * scale), longPoolIndexMs: round(cost.longPool.indexMs * scale),
+    corpusPoolQueryMaxMs: round(cost.corpusPool.query.maxMs * scale), longPoolQueryMaxMs: round(cost.longPool.query.maxMs * scale) };
+  const report = { set: options.set, freezeSHA256: options['freeze-sha'] || null, evaluatorSHA256: shaFile(__filename), parameters: freeze.parameters, decision, checks,
     method: { ...strip(method), perSeed: method.perSeed.map(row => ({ ...row, scores: scores[row.seed] })), unrelated: method.unrelated.map(row => ({ ...row, scores: scores[row.seed] })) },
     baselines: { paragraphNoTitle: b1, paragraphDocumentTitle: b2, documentLevelReference: { ...strip(reference), note: '현재 제품 동작(문서 단위). 문단을 짚지 못해 후하게 센 참고값이며 판정에 쓰지 않는다.' } },
     byType: Object.fromEntries(['question', 'experience', 'topic'].map(type => { const rows = method.perSeed.filter(row => row.type === type); const base = b1.hit3 >= b2.hit3 ? b1 : b2;
       return [type, { seeds: rows.length, methodHits: rows.filter(row => row.hit).length, baselineHits: base.perSeed.filter(row => row.type === type && row.hit).length }]; })),
-    lexicalOverlap: lexicalOverlap(table, gold),
+    lexicalOverlap: lexicalOverlap(table, gold), descriptive: { rankOnly, distribution, adjustedTo4x: adjusted },
     cost: { workerPrepareMsUnthrottled: output.workerPrepareMs, hostPrepareMsThrottled: cost.hostPrepareMsThrottled, corpusPool: cost.corpusPool, longPool: cost.longPool,
-      singleLongParagraphEmbedMedianMs: cost.singleLongParagraphEmbedMedianMs, memory: output.run.memory, externalBytes: output.run.network.externalBytes, calibration: output.calibration } };
-  write('eval-report.json', report);
-  console.log(JSON.stringify({ decision, checks, method: strip(method), b1: strip(b1), b2: strip(b2), reference: strip(reference), byType: report.byType, lexical: report.lexicalOverlap }, null, 1));
+      singleLongParagraphEmbedMedianMs: cost.singleLongParagraphEmbedMedianMs, batchComposition: cost.batchComposition, memory: output.run.memory, externalBytes: output.run.network.externalBytes, calibration: output.calibration } };
+  write(options.set === 'dryrun' ? 'dryrun-report.json' : 'eval-report.json', report);
+  console.log(JSON.stringify({ decision, checks, method: strip(method), b1: strip(b1), b2: strip(b2), reference: strip(reference), byType: report.byType, lexical: report.lexicalOverlap, descriptive: report.descriptive }, null, 1));
 }
 
 const options = args();

@@ -76,13 +76,13 @@
     return groups;
   }
   async function embedAll(path, texts) {
-    const started = performance.now(), vectors = [], batchMs = [];
+    const started = performance.now(), vectors = [], batchMs = [], batchSizes = [];
     for (const group of batches(texts)) {
       const at = performance.now();
       vectors.push(...await path.embed(group));
-      batchMs.push(performance.now() - at);
+      batchMs.push(performance.now() - at); batchSizes.push(group.length);
     }
-    return { vectors, elapsedMs: performance.now() - started, batchMs };
+    return { vectors, elapsedMs: performance.now() - started, batchMs, batchSizes };
   }
   function busyLoop() {
     const started = performance.now(); let value = 0;
