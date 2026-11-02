@@ -188,11 +188,17 @@ async function main() {
       await click('사진 글 목록'); await click('글쓰기'); await page.locator('.ql-editor').fill('잠시 썼다 지울 문장'); await stored(); await page.locator('.ql-editor').fill(''); await stored();
       const before = await read(), empty = before.docs.find(v => v.status === 'draft' && !v.title.trim() && !v.photos.length && !v.attachments.length && !v.ops.some(op => typeof op.insert === 'string' && op.insert.trim()));
       assert(empty); await click('닫기'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-draft-list [data-photo-post-id="' + empty.id + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + empty.id + '"]').count(), 0);
-      await click('글쓰기'); await page.locator('.ql-editor').waitFor(); await page.locator('#photoTitle').fill('같은 초안에서 이어 쓴 글'); await stored(); const after = await read(); assert.equal(after.index.length, before.index.length); assert.equal(after.docs.find(v => v.title === '같은 초안에서 이어 쓴 글').id, empty.id); await click('닫기');
+      await click('글쓰기'); await page.locator('.ql-editor').waitFor(); await page.locator('#photoTitle').fill('같은 초안에서 이어 쓴 글'); await stored(); const after = await read(); assert.equal(after.index.length, before.index.length); assert.equal(after.docs.find(v => v.title === '같은 초안에서 이어 쓴 글').id, empty.id);
+      // Closing re-reads the list; until that read lands, the feed still shows the rows from before the editor opened
+      // (their object URLs already retired) and then replaces them. Check the covers of the list the close produced.
+      const previous = await page.evaluateHandle(() => [...document.querySelectorAll('.photo-entry-cover')]);
+      assert(await previous.evaluate(nodes => nodes.length > 0)); await click('닫기');
+      await page.waitForFunction(nodes => nodes.every(node => !node.isConnected), previous); await previous.dispose();
       // Exercise the quick list -> draft -> list path before forcing lazy
       // covers to load, so decode waits cannot hide premature URL revocation.
-      const covers = page.locator('.photo-entry-cover[src^="blob:"]:visible'); await covers.first().waitFor();
-      for (const cover of await covers.all()) {
+      const covers = page.locator('.photo-entry-cover:visible'), count = await covers.count(); assert(count > 0);
+      for (let index = 0; index < count; index++) {
+        const cover = covers.nth(index); await cover.scrollIntoViewIfNeeded(); await cover.and(page.locator('[src^="blob:"]')).waitFor();
         const decoded = await cover.evaluate(async image => {
           image.scrollIntoView({ block: 'center', behavior: 'instant' }); await image.decode();
           return image.isConnected && image.complete && image.naturalWidth > 0;
