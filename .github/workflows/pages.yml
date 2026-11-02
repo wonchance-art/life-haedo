@@ -832,6 +832,9 @@ jobs:
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
+      - name: Verify public photo copies carry no location or capture metadata
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/public-photo-copy-browser.cjs
       - name: Verify anonymous original-photo reading
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-public-browser.cjs
