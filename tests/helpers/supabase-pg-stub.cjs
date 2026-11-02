@@ -184,6 +184,10 @@ async function startCluster({ label = 'sql' } = {}) {
     fs.rmSync(dir, { recursive: true, force: true });
   };
   process.once('exit', stopSync);
+  // An interrupted run (Ctrl-C, CI cancellation) must not leave the disposable
+  // cluster or its /tmp directory behind. Clean up, then exit as the signal would.
+  const onSignal = signal => { stopSync(); process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); process.kill(process.pid, signal); };
+  process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal);
   try {
     run(bin('initdb'), ['-D', data, '-U', 'postgres', '--auth=trust', '--no-sync', '-E', 'UTF8', '--locale=C']);
     run(bin('pg_ctl'), ['-D', data, '-w', '-l', log, '-o', `-p ${port} -c listen_addresses=127.0.0.1 -k ${socket} -c fsync=off`, 'start']);
@@ -201,7 +205,7 @@ async function startCluster({ label = 'sql' } = {}) {
   };
   return {
     host: '127.0.0.1', port, user: 'postgres', binDir, connect,
-    async stop() { stopSync(); process.removeListener('exit', stopSync); },
+    async stop() { stopSync(); process.removeListener('exit', stopSync); process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); },
   };
 }
 

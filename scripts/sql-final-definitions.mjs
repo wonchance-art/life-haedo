@@ -160,14 +160,14 @@ export function render(files, summary) {
     '',
     '<!-- 생성: node scripts/sql-final-definitions.mjs — 직접 고치지 않는다. 마이그레이션을 바꾼 뒤 다시 생성한다. -->',
     '',
-    `\`supabase/migrations/\`의 ${files.length}개 파일을 파일 이름 순서로 읽어, 뒤 마이그레이션이 다시 정의하는 함수·테이블을 모았다.`,
+    '`supabase/migrations/`의 모든 파일을 파일 이름 순서로 읽어, 뒤 마이그레이션이 다시 정의하는 함수·테이블을 모았다.',
     '**최종** 열의 파일이 현재 정의를 담는다. 새 변경은 그 파일의 정의에서 출발한다. 이 문서는 목록만 보여 주며 마이그레이션을 고치지 않는다.',
     '',
     '- 함수: `create [or replace] function`이 둘 이상의 파일에 있는 경우. 같은 파일 안의 반복은 한 번으로 센다.',
     '- 테이블: 만든 파일보다 뒤 파일의 `alter table`이 열·제약을 바꾸는 경우. RLS 켜기·소유자 변경은 제외한다.',
     '- 인자 목록이 바뀌어 오버로드가 남는지는 `npm run test:sql-replay`가 재생한 DB 카탈로그와 대조한다.',
     '',
-    `## 함수 (${summary.redefinedFunctions.length}개 재정의 / 전체 ${summary.functions.length}개)`,
+    `## 함수 (${summary.redefinedFunctions.length}개 재정의)`,
     '',
     '| 함수 | 정의한 파일 수 | 최종 | 이전 정의 |',
     '| --- | ---: | --- | --- |',
@@ -183,7 +183,7 @@ export function render(files, summary) {
       '| 함수 | 이전 이름 | 이름 바꾼 파일 | 본문 정의 |', '| --- | --- | --- | --- |');
     for (const f of renamed) lines.push(`| \`${f.name}(${f.live.join('; ')})\` | \`${f.renamedFrom}\` | \`${short(f.finalFile)}\` | \`${short(f.bodyFile)}\` |`);
   }
-  lines.push('', `## 테이블 (${summary.redefinedTables.length}개 변경 / 전체 ${summary.tableCount}개)`, '',
+  lines.push('', `## 테이블 (${summary.redefinedTables.length}개 변경)`, '',
     '| 테이블 | 만든 파일 | 뒤 변경 (파일: 종류) |', '| --- | --- | --- |');
   for (const t of summary.redefinedTables) {
     const byFile = new Map();

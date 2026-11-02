@@ -149,7 +149,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 
 - `npm run check`: JavaScript 구문, 로컬 리소스와 PWA 셸.
 - `npm test`: 날짜·데이터 보존·동기화 충돌·서비스워커 회귀 검사.
-- `npm run test:sql-replay`: 일회용 로컬 PostgreSQL에 테스트 전용 Supabase 대역(`tests/helpers/supabase-pg-stub.cjs`)과 `supabase/migrations/` 전체를 파일 이름 순서로 적용한다. 계정 동기화 설치 SQL 재실행의 무변경, 네이버 상태 확인 11행, [SQL 최종 정의 목록](docs/design-review/sql-final-definitions.md)을 함께 확인한다. 검토할 운영 SQL은 `npm run test:sql-replay -- 경로.sql`로 재생한 DB의 새 사본에 먼저 적용해 본다. PostgreSQL이 없으면 건너뛰고(`SQL_REPLAY_REQUIRED=1`이면 실패), `npm ci --prefix tests/sql-ci`가 필요하다. 실제 Supabase(Auth·Storage·pg_cron·pg_net·Vault)와 같다는 증명은 아니다.
+- `npm run test:sql-replay`: 일회용 로컬 PostgreSQL에 테스트 전용 Supabase 대역(`tests/helpers/supabase-pg-stub.cjs`)과 `supabase/migrations/` 전체를 파일 이름 순서로 적용한다. 계정 동기화 설치 SQL 재실행의 무변경, 네이버 상태 확인 12행(5.5 포함), [SQL 최종 정의 목록](docs/design-review/sql-final-definitions.md)을 함께 확인한다. 검토할 운영 SQL은 `npm run test:sql-replay -- 경로.sql`로 재생한 DB의 새 사본에 먼저 적용해 본다. PostgreSQL이 없으면 건너뛰고(`SQL_REPLAY_REQUIRED=1`이면 실패), `npm ci --prefix tests/sql-ci`가 필요하다. 실제 Supabase(Auth·Storage·pg_cron·pg_net·Vault)와 같다는 증명은 아니다.
 - 마이그레이션을 추가하거나 고치면 `node scripts/sql-final-definitions.mjs`로 최종 정의 목록을 다시 만든다.
 - 실제 편집과 모바일 화면은 프로젝트 스킬의 격리 브라우저 절차로 검증한다.
 - 이전 기능 통합 검사에서 여러 파일 검토와 정확한 원문 검색을 포함해 Node 181개·브라우저 60개가 통과했다. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이다. 해당 기능 PR #17/#19는 병합되었으며 이번 디자인 변경의 검증과 적용 상태는 [최신 기록](docs/design-review/feed-refinement.md)을 따른다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.

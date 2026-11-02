@@ -119,9 +119,14 @@ module.exports = { check, slug, headingText, linksOf, keyOf, listMarkdown };
 
 if (require.main === module) {
   const broken = check();
+  // Known pre-existing breaks live in the test allowlist; anything else fails the run.
+  const allowPath = path.join(ROOT, 'tests/fixtures/markdown-links-allowlist.json');
+  const allowed = new Set(fs.existsSync(allowPath) ? JSON.parse(fs.readFileSync(allowPath, 'utf8')) : []);
+  const unexpected = broken.filter(item => !allowed.has(keyOf(item)));
   if (process.argv.includes('--json')) console.log(JSON.stringify([...new Set(broken.map(keyOf))].sort(), null, 2));
   else {
-    for (const item of broken) console.log(`${item.file}:${item.line} ${item.reason}: ${item.target}`);
-    console.log(`${broken.length} broken relative markdown link(s) in ${listMarkdown().length} files`);
+    for (const item of broken) console.log(`${item.file}:${item.line} ${item.reason}: ${item.target}${allowed.has(keyOf(item)) ? ' (allowlisted)' : ''}`);
+    console.log(`${broken.length} broken relative markdown link(s) in ${listMarkdown().length} files; ${unexpected.length} not in the allowlist`);
   }
+  if (unexpected.length) process.exitCode = 1;
 }
