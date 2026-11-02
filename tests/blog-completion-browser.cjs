@@ -425,7 +425,7 @@ async function main() {
       // A comes back online while its tab is still in the background: its kept
       // conflict copy must reach the account without the tab in front.
       server.offlineDevices.delete(owner.name); await kick(page);
-      const keptA = await until(async () => (await data(page)).docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · ' + editedA.title), Boolean, 'A keeps its earlier edit as a draft');
+      const keptA = await until(async () => (await data(page)).docs.find(doc => doc.status === 'draft' && doc.title === '복구 사본 · ' + editedA.title), Boolean, 'A keeps its earlier edit as a draft');
       assert((await data(page)).docs.some(doc => doc.status === 'saved' && doc.title === laterB.title), 'the later B edit is in place on A');
       assert.equal(readRemote().data.title, laterB.title); assert(keptA.ops[0].insert.startsWith('A의 오프라인 문장\n'));
       await until(async () => server.sql("select count(*) from haedo_blog_private.posts where data->>'status'='draft' and data->>'title'=" + literal(keptA.title) + ';'), count => count === 1, 'the kept draft reaches the account');

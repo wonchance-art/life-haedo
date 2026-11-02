@@ -1,7 +1,8 @@
 'use strict';
 // 2026-11-01 independent review of automatic account blog sync: deletion only
 // of the exact revision a device saw (B1), a draft finished on another device
-// (M1), conflict state cleared when the server wins (M2), no hidden polling (m2).
+// (M1, decided by latest wins since 2026-11-02), conflict state cleared when
+// the server wins (M2), no hidden polling (m2).
 const test = require('node:test'), assert = require('node:assert/strict');
 const { server, device, clock, post, edit, finish, Core, Photo, Blog, Sync } = require('./helpers/blog-sync-cloud.cjs');
 
@@ -54,7 +55,15 @@ test('B1: the deleting device\'s own unacknowledged revision is still deleted', 
   assert.deepEqual(cloud.stats.deletes.map(call => call.expected), [1, 2]);
 });
 
-test('M1: a draft finished on another device stays saved; this device\'s later draft text is kept as its own draft without an error loop', async () => {
+// 2026-11-02 owner decision: latest wins with no exception for saved posts.
+// These two cases used to assert the removed exception (a post finished on
+// another device always beat a later draft, `finishedElsewhere`). They now
+// assert the latest-wins outcome for the same situations: the saved post stays
+// in place, the later draft becomes its editing draft and the saved content is
+// also kept as a recovery copy. They keep their original purpose: the server's
+// refusal to turn a saved post back into a draft is decided once, without an
+// error or a retry loop.
+test('M1: a later draft wins over a post finished on another device as that post\'s editing draft, without an error loop', async () => {
   const { cloud, time, a, b } = await pair();
   const draft = await save(a, await post({ title: '쓰는 중', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
   time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow();
@@ -64,14 +73,21 @@ test('M1: a draft finished on another device stays saved; this device\'s later d
   const bCur = await b.storage.readPhotoPost(b.ws, draft.id);
   await b.storage.savePhotoPost(b.ws, { ...bCur, title: '맥에서 더 쓴 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
   for (let i = 0; i < 3; i++) { time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true }); }
-  const rows = await list(b), x = rows.find(row => row.id === draft.id);
-  assert.equal(x.status, 'saved'); assert.equal(x.title, '완성');
-  assert(rows.some(row => row.status === 'draft' && row.title === Sync.CONFLICT_PREFIX + '맥에서 더 쓴 초안'), 'the later draft text is kept');
+  const rows = await list(b), x = await b.storage.readPhotoPost(b.ws, draft.id);
+  assert.deepEqual(rows.map(row => [row.status, row.title]).sort(), [['draft', '맥에서 더 쓴 초안'], ['draft', '복구 사본 · 완성'], ['saved', '완성']]);
+  assert.equal(x.status, 'saved', 'the server identity never returns to a draft'); assert.equal(x.title, '완성', 'the saved post keeps its place and title');
+  const winner = await b.storage.readPhotoPost(b.ws, rows.find(row => row.title === '맥에서 더 쓴 초안').id);
+  assert.deepEqual(winner.replaces, { id: draft.id, revision: x.revision }, 'the later draft edits the saved post');
   assert.equal((await b.sync.getState(b.ws, draft.id)).status, 'synced'); assert.equal(b.sync.getStatus().state, 'synced');
   assert.equal(cloud.rows.get(draft.id).data.status, 'saved'); assert.equal(cloud.rows.get(draft.id).data.title, '완성');
-  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id).length, saves = count();
+  assert.deepEqual(cloud.rows.get(winner.id).data.replaces, { id: draft.id, revision: cloud.rows.get(draft.id).revision }, 'the server copy of the draft names the exact saved revision');
+  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
   time.advance(20 * 60000); await b.sync.syncNow();
   assert.equal(count(), saves, 'no repeated rejected request');
+  await a.sync.syncNow({ flushDrafts: true });
+  assert.deepEqual((await list(a)).map(row => [row.status, row.title]).sort(), [['draft', '맥에서 더 쓴 초안'], ['draft', '복구 사본 · 완성'], ['saved', '완성']], 'the finishing device ends with the same posts');
+  const atA = await a.storage.readPhotoPost(a.ws, winner.id);
+  assert.deepEqual(atA.replaces, { id: draft.id, revision: (await a.storage.readPhotoPost(a.ws, draft.id)).revision }, 'and the same editing link');
 });
 
 test('M1: the same refusal reached without a revision conflict is decided once, not retried forever', async () => {
@@ -84,9 +100,18 @@ test('M1: the same refusal reached without a revision conflict is decided once, 
   await b.storage.savePhotoPost(b.ws, { ...bCur, title: '이 기기 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
   time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true });
   const rows = await list(b);
-  assert.equal(rows.find(r => r.id === draft.id).status, 'saved');
-  assert(rows.some(r => r.status === 'draft' && r.title === Sync.CONFLICT_PREFIX + '이 기기 초안'));
+  assert.equal(rows.find(r => r.id === draft.id).status, 'saved'); assert.equal(rows.find(r => r.id === draft.id).title, '다른 기기 완성');
+  assert(rows.some(r => r.status === 'draft' && r.title === '이 기기 초안'), 'the later draft stays current');
+  assert(rows.some(r => r.status === 'draft' && r.title === '복구 사본 · 다른 기기 완성'));
   assert.notEqual(b.sync.getStatus().state, 'error');
+  time.advance(20 * 60000); await b.sync.syncNow();
+  assert.equal(cloud.rows.get(draft.id).data.title, '다른 기기 완성', 'the saved server version stays in place, unrenamed');
+  assert.equal(cloud.rows.get(draft.id).data.status, 'saved');
+  const refused =() => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id && call.data.status === 'draft').length;
+  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
+  time.advance(20 * 60000); await b.sync.syncNow();
+  assert.equal(count(), saves, 'nothing is sent again once decided');
+  assert.equal(refused(), 1, 'the refused draft request was sent once');
 });
 
 test('M2: when the server version wins, the conflict clears its retry state and ends synced', async () => {
