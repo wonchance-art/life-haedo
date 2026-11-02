@@ -241,6 +241,31 @@
   padding: 16px 0;
   border-block: 1px solid var(--line);
 }
+/* "취향 컬렉션에도 저장": a one-line choice, not a full-width field. */
+.photo-attachment-review .photo-attachment-collect {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.photo-attachment-review .photo-attachment-collect input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+}
+/* The card's own collection line: saving, kept, or failed with a retry. */
+.photo-attachment-collect-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+}
+.photo-attachment-collect-state:not(:has(button)) .photo-attachment-collect-text:empty {
+  display: none;
+}
 .photo-attachment-review label {
   display: flex;
   flex-direction: column;
