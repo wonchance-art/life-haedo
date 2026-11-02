@@ -116,7 +116,7 @@ async function main() {
           assert.equal(await page.getByRole('button', { name: '닫기', exact: true }).count(), 1);
         } else {
           assert.equal(await page.locator('[data-subview-return]').count(), 1);
-          assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+          assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '일정으로 돌아가기');
         }
         if (destination === 'write') { await page.locator('#photoTitle').fill('산책 뒤 남긴 생각'); await page.locator('.ql-editor').fill('홈으로 돌아갔다가 다시 이어 쓸 한글 초안.'); }
         if (destination === 'import') { await page.locator('#lifeImportTitle').fill('아직 검토 중인 기록'); await page.locator('#lifeImportText').fill('원문을 자동 확정하지 않습니다.'); }
@@ -204,7 +204,7 @@ async function main() {
       await page.locator('[data-home-destination="import"]').focus();
       assert.equal(await page.evaluate(() => document.activeElement?.dataset.homeDestination), 'import');
       await page.keyboard.press('Enter'); await mode(page, 'import');
-      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '일정으로 돌아가기');
       await back(page, 'home');
       await page.waitForFunction(() => document.activeElement?.dataset.homeDestination === 'import');
       assert.deepEqual(await current(page), before);
@@ -290,7 +290,7 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','backup'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','backup'], ['public-pages','공개 페이지 관리','home']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','backup'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','backup'], ['public-pages','공개 페이지 관리','manage']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }
@@ -307,7 +307,7 @@ async function main() {
       await page.reload(); await ready(page); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       assert.equal(await heading(page).textContent(), '글쓰기');
       assert.equal(new URL(page.url()).searchParams.get('section'), null, 'The blog editor stays in home');
-      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#photoTitle').inputValue(), '새로고침 뒤에도 이어 쓸 글');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '한글 본문은 다시 불러와도 같은 편집기에 남습니다.');
       assert.equal((await photoPosts(page)).length, 1, 'Reload reopens the same draft instead of adding a copy');
@@ -338,9 +338,12 @@ async function main() {
       await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await mode(page, 'backup');
       await page.goBack(); await mode(page, 'manage');
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '백업·복원' || document.activeElement?.textContent?.includes('백업·복원'));
-      await nav(page, 'tools'); await mode(page, 'tools');
+      // 2026-11-02: the plan is 일정's second view, so it is two screens away from 설정.
+      await nav(page, 'home'); await mode(page, 'home');
+      await page.locator('[data-schedule-view="tools"]').click(); await mode(page, 'tools');
       await page.getByRole('button', { name: /^연간 계획/ }).first().click(); await mode(page, 'annual-plan');
       await page.goBack(); await mode(page, 'tools');
+      await page.goBack(); await mode(page, 'home');
       await page.goBack(); await mode(page, 'manage');
     }, width);
     await check('history: back keeps the exact reader version, search and position', async ({ page }) => {
@@ -354,7 +357,7 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '산책');
       await page.goForward(); await mode(page, 'source');
       assert.equal(await page.locator('#lifeVersion').inputValue(), older, 'Forward reopens the exact version that was read');
-      await nav(page, 'tools'); await mode(page, 'tools');
+      await nav(page, 'home'); await mode(page, 'home');
       await page.goBack(); await mode(page, 'source');
       assert.equal(await page.locator('#lifeVersion').inputValue(), older, 'Back reopens the exact version that was read');
     }, 1440);
@@ -414,7 +417,7 @@ async function main() {
       assert.equal(await page.locator('#lifeVersion').inputValue(), older);
       // The heading return keeps its existing destination: the reader's origin list.
       await page.locator('#lifeSourceMaterialWriting').click(); await mode(page, 'page'); await materialReady(page);
-      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '자료실로 돌아가기');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '자료로 돌아가기');
       await page.locator('[data-subview-return]').click(); await mode(page, 'sources');
     }, width);
     await check('history: back pressed during a move is refused and positions stay exact', async ({ page }) => {

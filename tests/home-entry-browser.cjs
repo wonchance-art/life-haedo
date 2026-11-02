@@ -48,7 +48,7 @@ async function recordActions(page) {
   return [selection, ...destinations];
 }
 async function home(page) {
-  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').isVisible()) {
+  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').isVisible()) {
     if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
     else await page.locator('[data-subview-return]').click();
     await settle(page);
@@ -122,9 +122,9 @@ async function main() {
     await check('index starts at home, legacy life stays records, and quick links enter working sections', async ({ page }) => {
       await freshHome(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 5);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4); // 2026-11-02: 뉴스·일정·자료·설정
       assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
-      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
       for (const [destination, expected] of [['import', 'import'], ['write', 'page'], ['time', 'time']]) {
         await page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`).click(); await settle(page);
@@ -190,7 +190,7 @@ async function main() {
       const key = await open.getAttribute('data-focus-key'); await open.click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), expectedText);
       assert.equal(await page.locator('#lifeVersion').inputValue(), expectedId);
-      assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '홈으로 돌아가기');
+      assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '일정으로 돌아가기');
       await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#homeRecent').waitFor();
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
       await nav(page, 'records'); await settle(page);
@@ -244,7 +244,7 @@ async function main() {
       await nav(page, 'tools'); const completed = await page.evaluate(() => window.__homeReadFinished || 0);
       await page.evaluate(() => __homeReleaseRead()); await page.waitForFunction(n => __homeReadFinished > n, completed);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools'); assert.equal(await page.locator('#lifeHome').count(), 0);
-      assert.equal(await page.locator('a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
     });
     await check('late home composition cannot replace a newly selected workspace', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs); await setPage(page, `w.page.title='이전작업공간의페이지';`);
@@ -337,7 +337,7 @@ async function main() {
       await home(page); await page.locator('[data-home-destination="time"]').click();
       await page.getByRole('link', { name: /연표 목록/ }).click();
       await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
-      await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').click(); await ready(page);
+      await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').click(); await ready(page);
       await page.locator('#homePosts[aria-busy="false"]').waitFor();
       await nav(page, 'tools'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
       await nav(page, 'manage'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'manage');

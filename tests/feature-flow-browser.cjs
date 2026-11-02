@@ -92,22 +92,25 @@ async function main() {
       assert.deepEqual(await current(page), before, 'Opening features does not rewrite source versions, excerpts or saved composition');
 
       const blogMenu = await openBlogMenu(page);
-      for (const label of ['글 공개·보관', '공개 표지', '공개한 페이지']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      // 2026-11-02: the public cover and published pages moved to 설정 → 공개 페이지.
+      assert.equal(await blogMenu.getByRole('button', { name: '글 공개·보관', exact: true }).isVisible(), true);
+      for (const label of ['공개 표지', '공개한 페이지']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).count(), 0, 'The blog menu no longer lists ' + label);
       assert.equal(await page.getByRole('button', { name: '글 공개·보관', exact: true }).count(), 1, 'Home exposes one manager entry');
       await capture(page, 'blog-menu', size);
       await blogMenu.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await mode(page, 'blog'); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       await back(page, 'home'); await expectFocus(page, '글 공개·보관');
       assert.equal(await page.locator('#lifeBlogMenu').evaluate(node => node.open), true);
-      await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await mode(page, 'public-cover'); await page.locator('#publicCoverEditor').waitFor();
-      await back(page, 'home'); await expectFocus(page, '공개 표지');
-      await page.getByRole('button', { name: '공개한 페이지', exact: true }).click(); await mode(page, 'public-pages');
-      await back(page, 'home'); await expectFocus(page, '공개한 페이지');
 
       await nav(page, 'tools'); await mode(page, 'tools');
       assert.deepEqual(await page.locator('#lifeMain .life-destination').evaluateAll(nodes => nodes.map(node => node.querySelector('strong')?.textContent)), ['연간 계획', '목표', '습관']);
       await capture(page, 'tools', size);
       await nav(page, 'manage'); await mode(page, 'manage');
-      for (const label of ['글 공개·보관', '공개 표지', '공개한 페이지', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
+      for (const label of ['글 공개·보관', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
+      await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await mode(page, 'public-cover'); await page.locator('#publicCoverEditor').waitFor();
+      assert.equal(await page.locator('[data-haedo-section="manage"][aria-current="page"]').count(), 1);
+      await back(page, 'manage'); await expectFocus(page, '공개 표지');
+      await page.getByRole('button', { name: '공개한 페이지', exact: true }).click(); await mode(page, 'public-pages');
+      await back(page, 'manage'); await expectFocus(page, '공개한 페이지');
       for (const label of ['현재 자료공간', '백업·복원']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
       // 2026-11-01: the file formats live together on 설정 → 백업·복원.
       for (const label of ['자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings lists ' + label + ' only inside 백업·복원');
@@ -128,15 +131,16 @@ async function main() {
       const cases = [
         ['tools', 'records', 'discover'], ['tools', 'records', 'reflection'], ['tools', 'records', 'books'],
         ['manage', 'records', 'obsidian-update'], ['manage', 'records', 'source-trash'],
-        ['tools', 'news', 'interests'], ['manage', 'home', 'blog'],
-        ['manage', 'home', 'public-cover'], ['manage', 'home', 'public-pages']
+        ['tools', 'news', 'interests'], ['manage', 'schedule', 'blog'], ['home', 'schedule', 'blog'],
+        // 2026-11-02: public cover/pages are 설정 views; the old home links still open them.
+        ['home', 'manage', 'public-cover'], ['home', 'manage', 'public-pages'], ['tools', 'schedule', 'annual-plan']
       ];
       for (const file of ['index.html', 'life.html']) for (const [legacy, canonical, view] of cases) {
         for (const section of new Set([legacy, canonical])) {
           await page.goto(base + '/' + file + '?section=' + section + '&view=' + view); await ready(page); await mode(page, view);
           assert.equal(await page.locator('[data-haedo-section="' + canonical + '"][aria-current="page"]').count(), 1, file + ':' + section + ':' + view);
           assert.equal(new URL(page.url()).searchParams.get('view'), view);
-          assert.equal(new URL(page.url()).searchParams.get('section'), canonical === 'home' && file === 'index.html' ? null : canonical);
+          assert.equal(new URL(page.url()).searchParams.get('section'), canonical === 'schedule' && view !== 'annual-plan' && file === 'index.html' ? null : canonical);
         }
       }
     });
@@ -229,14 +233,14 @@ async function main() {
       Object.assign(report.planningFlushProbe, { annualCommitObservedBeforeGate: true, inputsDisabledDuringGate: true, failurePreservedInputAndURL: true, retryReopenedExactText: true });
     });
 
-    for (const [view, section] of [['books', 'records'], ['source-trash', 'records'], ['public-pages', 'home']]) await check('signed-out exact feature return ' + view, async ({ page, server }) => {
+    for (const [view, section, opened = section] of [['books', 'records'], ['source-trash', 'records'], ['public-pages', 'home', 'manage'], ['annual-plan', 'tools', 'schedule']]) await check('signed-out exact feature return ' + view, async ({ page, server }) => {
       const device = 'feature-flow-' + report.checks.length; server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html?section=' + section + '&view=' + view + '&token=discarded#discarded-fragment');
       await shellReady(page); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
       await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page); await mode(page, view);
       assert.equal(new URL(page.url()).hash, ''); assert.equal(new URL(page.url()).searchParams.has('token'), false);
-      assert.equal(await page.locator('[data-haedo-section="' + section + '"][aria-current="page"]').count(), 1);
+      assert.equal(await page.locator('[data-haedo-section="' + opened + '"][aria-current="page"]').count(), 1);
       assert.equal(await page.evaluate(() => __homeDbOpens.every(row => row.verified)), true);
     }, sizes[1], null);
   } finally {

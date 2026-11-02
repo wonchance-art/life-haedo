@@ -36,10 +36,10 @@ const excludedStatement = '초기에 적었지만 이번 원고에서는 제외�
 const button = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Book workshop::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
 async function records(page) {
-  if (await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).isVisible()) await button(page, '자료실로 돌아가기');
+  if (await page.getByRole('button', { name: '자료로 돌아가기', exact: true }).isVisible()) await button(page, '자료로 돌아가기');
   else if (await page.locator('#lifeSearchReturn').isVisible()) { await page.locator('#lifeSearchReturn').click(); await settle(page); }
   await nav(page, 'records');
-  if (await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).isVisible()) await button(page, '자료실로 돌아가기');
+  if (await page.getByRole('button', { name: '자료로 돌아가기', exact: true }).isVisible()) await button(page, '자료로 돌아가기');
   if (await page.getByRole('button', { name: '자료실', exact: true }).isVisible()) await button(page, '자료실');
   await page.locator('#lifeSearch').waitFor();
 }
@@ -78,7 +78,7 @@ async function arrangeReflection(page, refs, keys = samples.map(sample => sample
   if (failApply) {
     await page.locator('#wbError').waitFor({ state: 'visible' }); assert.deepEqual((await current(page)).workbench, before.workbench);
     const pending = JSON.parse((await download(page, '#wbError button:has-text("초안 JSON 받기")')).text); assert.deepEqual(new Set(pending.workbench.reflection.versionIds), new Set(selected));
-    await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).click(); await settle(page); assert.equal(await page.locator('#wbReflectionNote').isVisible(), true, 'Unsaved incoming selection blocks departure');
+    await page.getByRole('button', { name: '자료로 돌아가기', exact: true }).click(); await settle(page); assert.equal(await page.locator('#wbReflectionNote').isVisible(), true, 'Unsaved incoming selection blocks departure');
     await abortWorkbenchWrites(page, false); await page.locator('#wbError').getByRole('button', { name: '다시 저장', exact: true }).click(); await page.waitForFunction(() => document.querySelector('#wbStatus')?.dataset.state === 'saved');
     await records(page); assert.equal(await page.locator('#lifeSelectionBar').isVisible(), false, 'Durable retry consumes the source selection'); assert.equal(await page.locator('.life-source-select').count(), 0); await tools(page, '회고');
   }

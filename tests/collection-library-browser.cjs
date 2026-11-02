@@ -58,7 +58,7 @@ async function main() {
     await check('Storage failure keeps form input and blocks navigation until saved', async () => {
       await page.locator('.cl-card').first().click(); await click(page,'항목 수정'); await page.locator('#clNote').fill('실패해도 지킬 입력');
       await abortWrites(page,true); await click(page,'저장'); await page.locator('#clError:not([hidden])').waitFor(); assert.equal(await page.locator('#clNote').inputValue(),'실패해도 지킬 입력'); assert.equal((await read(page)).items[0].note,'수정한 생각\n🌱');
-      await page.locator('[data-haedo-section=home]').click(); assert.equal(await page.locator('#clNote').inputValue(),'실패해도 지킬 입력');
+      await page.locator('[data-haedo-section=schedule]').click(); assert.equal(await page.locator('#clNote').inputValue(),'실패해도 지킬 입력');
       await snap(page,'save-error',390); await abortWrites(page,false); await save(page); assert.equal((await read(page)).items[0].note,'실패해도 지킬 입력');
     });
     await check('Two-tab conflict compares latest and saves input as a separate copy', async () => {
@@ -110,14 +110,14 @@ async function main() {
       await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,c=HaedoLife.Collection,value=await s.readCollection(await s.getActive());const first=value.items[0];for(let i=0;i<100;i++)value.items.push({...c.clone(first),id:HaedoLife.Core.id(),title:'많은 자료 '+i});await s.saveCollection(value.workspaceId,value,value.revision);});await go(page);assert.equal(await page.locator('.cl-card').count(),40);await click(page,'40개 더 보기');assert.equal(await page.locator('.cl-card').count(),80);
     });
     await check('Pending reads cannot block navigation or paint into another section; failed reads allow retry', async () => {
-      await click(page,'자료실로 돌아가기'); await openRecordsMenu(page); await page.evaluate(()=>{window.__clHoldRead=true;});
+      await click(page,'자료로 돌아가기'); await openRecordsMenu(page); await page.evaluate(()=>{window.__clHoldRead=true;});
       await click(page,'컬렉션'); await page.waitForFunction(()=>window.__clReadEntered);
       await page.getByText('컬렉션을 불러오는 중…',{exact:true}).waitFor();
       for(const width of [1440,820,390]) { await page.setViewportSize({width,height:900}); await page.screenshot({path:path.join(out,`loading-${width}.png`)}); }
-      await page.locator('[data-haedo-section=home]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='home');
+      await page.locator('[data-haedo-section=schedule]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='home');
       await page.evaluate(()=>window.__clReleaseRead()); assert.equal(await page.locator('.life-collection').count(),0);
       await page.locator('[data-haedo-section=records]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='collection');
-      await page.locator('#clGrid').waitFor(); await click(page,'자료실로 돌아가기');
+      await page.locator('#clGrid').waitFor(); await click(page,'자료로 돌아가기');
       await openRecordsMenu(page); await page.evaluate(()=>{window.__clReadFailure=true;}); await click(page,'컬렉션'); await page.getByRole('button',{name:'컬렉션 다시 불러오기',exact:true}).waitFor();
       for(const width of [1440,820,390]) await snap(page,'read-error',width);
       await page.evaluate(()=>{window.__clReadFailure=false;}); await click(page,'컬렉션 다시 불러오기'); await page.locator('#clGrid').waitFor();

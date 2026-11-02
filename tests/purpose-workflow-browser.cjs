@@ -172,7 +172,7 @@ async function main() {
         await reveal(page.locator('button[aria-label="자료·구성 백업"]')); await capture(page, 'settings-files', size);
       }
       assert.deepEqual(await exact(page), before, 'Navigation leaves source versions, saved composition and folders exact');
-      if (!baseline) { assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="tools"]').getAttribute('aria-label'), '계획'); assert.equal(report.visual.find(row => row.scene === 'records' && row.width === size.width).auxiliaryRowVisible, false); }
+      if (!baseline) { assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-label'), '일정'); assert.equal(report.visual.find(row => row.scene === 'records' && row.width === size.width).auxiliaryRowVisible, false); }
     }, size);
 
     if (!baseline) await check('three material lists preserve filtered origin, keyboard and native back', async ({ page }) => {

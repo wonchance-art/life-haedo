@@ -163,7 +163,7 @@ async function main() {
       await page.locator('.photo-block').first().focus(); await page.keyboard.press('Enter'); const caption = page.getByRole('textbox',{name:'사진 설명',exact:true}), accepted = await caption.inputValue();
       await caption.evaluate(node => { node.focus();node.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:'한'}));node.value='조합 중인 설명 아직 확정하지 않음';node.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true,inputType:'insertCompositionText',data:'한'}));node.setSelectionRange(3,6); });
       await retain(); await hide(); await resume(); assert.equal(await caption.inputValue(),'조합 중인 설명 아직 확정하지 않음'); assert((await doc()).ops.some(op=>op.insert?.photo?.caption===accepted));
-      await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click(); assert.equal(await caption.isVisible(),true); assert.equal(await caption.evaluate(node=>node===__travelDOM.input),true);
+      await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); assert.equal(await caption.isVisible(),true); assert.equal(await caption.evaluate(node=>node===__travelDOM.input),true);
       await caption.dispatchEvent('compositionend',{data:'확정'}); await saved(); assert((await doc()).ops.some(op=>op.insert?.photo?.caption==='조합 중인 설명 아직 확정하지 않음'));
     });
     await check('An aborted checkpoint keeps accepted input and originals available for explicit save retry', async () => {

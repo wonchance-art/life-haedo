@@ -19,23 +19,30 @@ async function ready(page) {
   await page.evaluate(() => HaedoLife.Shell.ready);
 }
 async function shellReady(page) { await page.waitForFunction(() => globalThis.HaedoLife?.Shell); await page.evaluate(() => HaedoLife.Shell.ready); }
+// 2026-11-02 menu 뉴스·일정·자료·설정: the former home is 일정's list and the former
+// tools (계획) its plan view, opened from the list's 보기 단위 switch as a person does.
 async function nav(page, section) {
-  const control = page.locator('[data-haedo-navigation] [data-haedo-section="' + section + '"]');
-  await control.click(); await settle(page);
+  const control = page.locator('[data-haedo-navigation] [data-haedo-section="' + (section === 'home' || section === 'tools' ? 'schedule' : section) + '"]');
+  const planSwitch = page.locator('#lifeApp [data-schedule-view="tools"]');
+  if (section !== 'tools' || !await planSwitch.isVisible()) { await control.click(); await settle(page); }
+  if (section === 'tools') { await planSwitch.click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor(); }
   assert.equal(await control.getAttribute('aria-current'), 'page');
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
 async function assertCommonNavigation(page) {
-  // The brand is another home link, separate from the five section controls.
+  // The brand is another link to the first screen, separate from the four section
+  // controls (2026-11-02: 뉴스·일정·자료·설정); 글쓰기 is its own control above them.
   assert.deepEqual(await page.locator('[data-haedo-navigation] a[data-haedo-section]').evaluateAll(links => links.map(link => ({
     section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
   }))), [
-    { section: 'home', href: 'index.html', label: '홈' },
     { section: 'news', href: 'index.html?section=news', label: '뉴스' },
-    { section: 'records', href: 'index.html?section=records', label: '자료실' },
-    { section: 'tools', href: 'index.html?section=tools', label: '계획' },
+    { section: 'schedule', href: 'index.html', label: '일정' },
+    { section: 'records', href: 'index.html?section=records', label: '자료' },
     { section: 'manage', href: 'index.html?section=manage', label: '설정' }
   ]);
+  const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+  assert.equal(await write.count(), 1); assert.equal(await write.getAttribute('href'), 'index.html?compose=1');
+  assert.equal(await write.getAttribute('aria-label'), '글쓰기'); assert.equal(await write.getAttribute('data-haedo-section'), null);
   const brand = page.locator('[data-haedo-navigation] .haedo-brand');
   assert.equal(await brand.count(), 1); assert.equal(await brand.getAttribute('href'), 'index.html');
   assert.equal(await brand.getAttribute('aria-label'), '해도 홈');
@@ -131,7 +138,8 @@ async function main() {
         await page.goto(base + '/index.html?section=tools', { waitUntil: 'domcontentloaded' }); await arrived;
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
       } finally { release(); }
-      await ready(page); assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
+      await ready(page); assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
       assert.ok((await page.evaluate(() => __homeDbOpens)).length > 0);
       assert.ok((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
     });
@@ -164,7 +172,7 @@ async function main() {
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       await page.locator('#lifeHome').waitFor();
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(new URL(page.url()).searchParams.has('code'), false);
     }, null);
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
@@ -214,7 +222,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
       await nav(page, 'records'); await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료실로 돌아가기');
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.
@@ -233,7 +241,7 @@ async function main() {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
         await assertCommonNavigation(page);
-        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
       }
@@ -242,6 +250,64 @@ async function main() {
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
       await assertCommonNavigation(page);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
+    });
+    await check('old section addresses and standalone pages open the new 뉴스·일정·자료·설정 screens', async ({ page }) => {
+      // 2026-11-02: home/tools are aliases of 일정 and addresses are normalized to the new IDs.
+      // The old home links to the public cover/pages (now 설정 views) are covered by feature-flow-browser.
+      const cases = [
+        ['index.html', 'schedule', 'home', '/index.html'],
+        ['index.html?section=home', 'schedule', 'home', '/index.html'],
+        ['index.html?section=schedule', 'schedule', 'home', '/index.html'],
+        ['index.html?section=tools', 'schedule', 'tools', '/index.html?section=schedule&view=tools'],
+        ['index.html?section=tools&view=annual-plan', 'schedule', 'annual-plan', '/index.html?section=schedule&view=annual-plan'],
+        ['index.html?section=records', 'records', 'sources', '/index.html?section=records'],
+        ['index.html?section=manage', 'manage', 'manage', '/index.html?section=manage'],
+        ['index.html?section=manage&view=backup', 'manage', 'backup', '/index.html?section=manage&view=backup'],
+        ['index.html?section=news', 'news', 'external-discovery', '/index.html?section=news'],
+        ['life.html', 'records', 'sources', '/life.html?section=records'],
+        ['life.html?section=tools', 'schedule', 'tools', '/life.html?section=schedule&view=tools']
+      ];
+      for (const [suffix, section, mode, address] of cases) {
+        await page.goto(base + '/' + suffix); await ready(page); await settle(page);
+        await page.locator('#lifeMain[data-mode="' + mode + '"]').waitFor();
+        assert.equal(await page.locator('[data-haedo-navigation] a[aria-current="page"]').evaluateAll(links => links.map(link => link.dataset.haedoSection)).then(list => list.join()), section, suffix);
+        assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), section, suffix);
+        assert.equal(await page.evaluate(() => location.pathname + location.search), address, suffix);
+        await assertCommonNavigation(page);
+      }
+      for (const [file, pageName] of [['timeline.html', 'workspace'], ['workspace.html', 'workspace'], ['goals.html', 'goals'], ['habits.html', 'habits']]) {
+        await page.goto(base + '/' + file);
+        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]').hidden, pageName);
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', file);
+        await assertCommonNavigation(page);
+      }
+      // The former 계획 back link of goals/habits still lands on 일정's plan view.
+      await page.locator('[data-section-back]').click(); await ready(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'page');
+    });
+    await check('글쓰기 keeps one place, marks the writing screen current and the 일정 views switch with history', async ({ page }) => {
+      await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+      await write.click(); await settle(page); await page.locator('#lifeMain[data-mode="page"]').waitFor(); await page.locator('.ql-editor').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section][aria-current]').count(), 0);
+      // A second press on the current 글쓰기 neither opens another post nor moves.
+      await page.waitForFunction(() => new URLSearchParams(location.search).has('blog'));
+      const url = page.url(), posts = await page.evaluate(() => document.querySelectorAll('.ql-editor').length);
+      await write.click(); await settle(page); assert.equal(page.url(), url); assert.equal(await page.evaluate(() => document.querySelectorAll('.ql-editor').length), posts);
+      await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="sources"]').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), null);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
+      await nav(page, 'home'); await page.locator('#lifeHome').waitFor();
+      const views = page.locator('#lifeApp nav[aria-label="보기 단위"] a');
+      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-current')])), [['목록', 'page'], ['계획', null]]);
+      await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset.scheduleView), 'tools');
+      assert.equal(await page.evaluate(() => location.search), '?section=schedule&view=tools');
+      await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="home"]').waitFor();
+      await page.goForward(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      await page.locator('[data-schedule-view="home"]').focus(); await page.keyboard.press('Enter'); await settle(page); await page.locator('#lifeHome').waitFor();
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {
       await page.goto(base + '/index.html?section=manage&view=transfer'); await ready(page);
