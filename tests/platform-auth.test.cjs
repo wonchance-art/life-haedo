@@ -445,3 +445,171 @@ test('actual bundled SDK online logout uses shared session and offline failure c
   assert.ok(paths.includes('/auth/v1/logout')); assert.equal(records.has(SESSION_KEY), false); assert.equal(records.get(LOGOUT_KEY), '1');
   assert.equal(auth.getAccount(), null); auth.dispose();
 });
+
+// W4 (2026-11-02): a verification scope shares one server check across one
+// bounded unit of work. These cases pin every condition that discards it.
+const serverChecks = state => state.calls.filter(name => name === 'getUser').length;
+
+test('W4 a verification scope contacts Auth once; other scopes, plain verify, ended scopes and fresh checks stay server-side', async () => {
+  const { auth, state } = setup();
+  const scope = auth.verificationScope();
+  for (let n = 0; n < 5; n++) assert.equal((await scope.verify()).id, A.id);
+  assert.equal(serverChecks(state), 1);
+  const other = auth.verificationScope(); assert.equal((await other.verify()).id, A.id); assert.equal(serverChecks(state), 2);
+  await auth.verify(); await auth.verify(); assert.equal(serverChecks(state), 4);
+  scope.end(); assert.equal(scope.ended, true);
+  await scope.verify(); await scope.verify(); assert.equal(serverChecks(state), 6);
+  await other.verify({ fresh: true }); assert.equal(serverChecks(state), 7);
+  await other.verify(); assert.equal(serverChecks(state), 7);
+  auth.dispose();
+});
+
+test('W4 every SDK Auth event discards the scope result before the next call', async () => {
+  const { auth, state, sdkListeners } = setup();
+  const scope = auth.verificationScope(); await scope.verify();
+  let expected = 1;
+  for (const name of ['TOKEN_REFRESHED', 'USER_UPDATED', 'SIGNED_IN', 'INITIAL_SESSION', 'PASSWORD_RECOVERY', 'MFA_CHALLENGE_VERIFIED']) {
+    for (const listener of [...sdkListeners]) listener(name, { user: A, access_token: 'synthetic-a' });
+    assert.equal((await scope.verify()).id, A.id, name); expected++;
+    assert.equal(serverChecks(state), expected, name + ' must contact Auth again');
+    await scope.verify(); assert.equal(serverChecks(state), expected, name + ': the new check is reused');
+  }
+  auth.dispose();
+});
+
+test('W4 a token changed without an event, a cross-tab session write and a session read failure are never reused', async () => {
+  const { auth, state, pageHandlers } = setup();
+  const scope = auth.verificationScope(); await scope.verify();
+  state.records.set(SESSION_KEY, JSON.stringify({ user: A, access_token: 'synthetic-rotated-elsewhere' }));
+  assert.equal((await scope.verify()).id, A.id); assert.equal(serverChecks(state), 2);
+  await scope.verify(); assert.equal(serverChecks(state), 2);
+  pageHandlers.get('storage')({ key: SESSION_KEY, newValue: state.records.get(SESSION_KEY) });
+  await scope.verify(); assert.equal(serverChecks(state), 3);
+  state.sessionError = { name: 'AuthRetryableFetchError' };
+  await assert.rejects(scope.verify(), errorCode('network_error')); assert.equal(serverChecks(state), 3);
+  state.sessionError = null; await scope.verify(); assert.equal(serverChecks(state), 4);
+  auth.dispose();
+});
+
+test('W4 account switch, sign-out and another tab logout never reuse the previous account check', async () => {
+  const { auth, state, pageHandlers } = setup();
+  const scope = auth.verificationScope(); await scope.verify();
+  state.change(B);
+  assert.equal((await scope.verify()).id, B.id); assert.equal(serverChecks(state), 2);
+  // A check obtained after the switch is not kept by the scope opened for A.
+  assert.equal((await scope.verify()).id, B.id); assert.equal(serverChecks(state), 3);
+  const second = auth.verificationScope(); await second.verify(); await second.verify(); assert.equal(serverChecks(state), 4);
+  state.change(null);
+  assert.equal(await second.verify(), null); assert.equal(serverChecks(state), 4);
+  state.change(A);
+  const third = auth.verificationScope(); assert.equal((await third.verify()).id, A.id); assert.equal(serverChecks(state), 5);
+  // Another tab's logout marker blocks reuse even before its storage event arrives.
+  state.records.set(LOGOUT_KEY, '1');
+  assert.equal(await third.verify(), null); assert.equal(serverChecks(state), 5);
+  pageHandlers.get('storage')({ key: LOGOUT_KEY, newValue: '1' });
+  assert.equal(await third.verify(), null); assert.equal(serverChecks(state), 5); assert.equal(auth.getAccount(), null);
+  auth.dispose();
+});
+
+test('W4 a scope never crosses an epoch, even when no Auth event or storage event marked the change', async () => {
+  // The session disappears and returns with the same token, with no SDK or
+  // storage event at all. Only the epoch advanced (a plain verify() found no
+  // session and signed the page out); the earlier scope must still recheck.
+  const { auth, state } = setup();
+  const scope = auth.verificationScope(); await scope.verify(); assert.equal(serverChecks(state), 1);
+  const saved = state.records.get(SESSION_KEY); state.records.delete(SESSION_KEY);
+  assert.equal(await auth.verify(), null); assert.equal(auth.getAccount(), null);
+  state.records.set(SESSION_KEY, saved);
+  assert.equal((await auth.verify()).id, A.id); assert.equal(serverChecks(state), 2);
+  assert.equal((await scope.verify()).id, A.id); assert.equal(serverChecks(state), 3);
+  // Nor does it keep a check obtained in the new epoch.
+  await scope.verify(); assert.equal(serverChecks(state), 4);
+  auth.dispose();
+});
+
+test('W4 a late check for the previous account is neither returned nor kept for the new account', async () => {
+  const { auth, state } = setup();
+  const scope = auth.verificationScope(), waiting = deferred(); state.userPromise = waiting.promise;
+  const pending = scope.verify(); await tick();
+  state.change(B); state.userPromise = null;
+  waiting.resolve({ data: { user: A }, error: null });
+  await assert.rejects(pending, errorCode('request_cancelled'));
+  const next = auth.verificationScope(); assert.equal((await next.verify()).id, B.id);
+  const before = serverChecks(state);
+  assert.equal((await scope.verify()).id, B.id); assert.equal(serverChecks(state), before + 1);
+  auth.dispose();
+});
+
+test('W4 bfcache: a parked page uses no scope result, and after pageshow every scope checks Auth again', async () => {
+  for (const pathname of ['/life.html', '/blog.html']) {
+    const { auth, state, env, pageHandlers } = setup({ pathname });
+    env.document.dispatchEvent = event => { state.events.push(event); if (event.type === 'haedo:page-resume') event.preventDefault(); return !event.defaultPrevented; };
+    const scope = auth.verificationScope(); await scope.verify(); await scope.verify();
+    const before = serverChecks(state);
+    pageHandlers.get('pagehide')({ persisted: true });
+    await assert.rejects(scope.verify(), errorCode('request_cancelled'), pathname);
+    assert.equal(serverChecks(state), before, pathname + ': no check while parked');
+    await pageHandlers.get('pageshow')({ persisted: true });
+    assert.equal((await scope.verify()).id, A.id); assert.equal(serverChecks(state), before + 1, pathname + ': resumed page checks again');
+    // An ordinary pagehide and pageshow are boundaries too.
+    pageHandlers.get('pagehide')({ persisted: false });
+    const after = auth.verificationScope(); await after.verify(); assert.equal(serverChecks(state), before + 2);
+    await after.verify(); await pageHandlers.get('pageshow')({ persisted: false });
+    await after.verify(); assert.equal(serverChecks(state), before + 3, pathname);
+    auth.dispose();
+  }
+});
+
+test('W4 failed and offline checks are not kept: each later call retries the server with the same errors', async () => {
+  const { auth, state } = setup();
+  const scope = auth.verificationScope();
+  state.user = null; state.verifyError = { name: 'AuthRetryableFetchError' };
+  await assert.rejects(scope.verify(), errorCode('network_error'));
+  await assert.rejects(scope.verify(), errorCode('network_error'));
+  assert.equal(serverChecks(state), 2);
+  state.verifyError = { name: 'TypeError' };
+  await assert.rejects(scope.verify(), errorCode('network_error')); assert.equal(serverChecks(state), 3);
+  state.user = A; state.verifyError = null;
+  assert.equal((await scope.verify()).id, A.id); await scope.verify(); assert.equal(serverChecks(state), 4);
+  // A server rejection signs the page out exactly as before and keeps nothing.
+  state.user = null; state.verifyError = { status: 401, code: 'session_not_found' };
+  const rejected = auth.verificationScope();
+  assert.equal(await rejected.verify(), null); assert.equal(auth.getAccount(), null); assert.equal(serverChecks(state), 5);
+  state.user = A; state.verifyError = null;
+  assert.equal((await rejected.verify()).id, A.id); assert.equal(serverChecks(state), 6);
+  auth.dispose();
+});
+
+test('W4 the public home exposes no account before its first server check, scoped or not', async () => {
+  const { auth, state } = setup({ pathname: '/index.html', publicHome: true });
+  const waiting = deferred(); state.userPromise = waiting.promise;
+  const scope = auth.verificationScope(), pending = scope.verify(); await tick();
+  assert.equal(auth.user, null); assert.equal(auth.getAccount(), null);
+  waiting.resolve({ data: { user: A }, error: null });
+  assert.equal((await pending).id, A.id); assert.equal(auth.getAccount().userId, A.id);
+  auth.dispose();
+});
+
+test('W4 actual bundled SDK: one user HTTP request per scope, read against the real stored session', async () => {
+  const { env, auth: fake } = setup(); fake.dispose();
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const token = 'fixture.' + Buffer.from(JSON.stringify({ sub: A.id, exp })).toString('base64url') + '.fixture';
+  const records = new Map([[SESSION_KEY, JSON.stringify({ user: A, access_token: token, refresh_token: 'synthetic-refresh', expires_at: exp, expires_in: 3600, token_type: 'bearer' })]]);
+  env.localStorage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) };
+  const paths = [];
+  const factory = (url, key, options) => sdk().createClient(url, key, { ...options, global: { fetch: async input => {
+    const path = new URL(input).pathname; paths.push(path); assert.equal(path, '/auth/v1/user');
+    return new Response(JSON.stringify(A), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } } });
+  const auth = createAuth(env, { config, clientFactory: factory });
+  try {
+    // The SDK's own start-up events (SIGNED_IN from session recovery,
+    // INITIAL_SESSION) are boundaries as well; the boot check precedes scopes.
+    assert.equal((await auth.verify()).id, A.id); assert.equal(paths.length, 1);
+    const scope = auth.verificationScope();
+    for (let n = 0; n < 4; n++) assert.equal((await scope.verify()).id, A.id);
+    assert.equal(paths.length, 2);
+    const next = auth.verificationScope(); await next.verify(); assert.equal(paths.length, 3);
+    scope.end(); await scope.verify(); assert.equal(paths.length, 4);
+  } finally { auth.dispose(); }
+});

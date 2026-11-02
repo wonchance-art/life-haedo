@@ -146,10 +146,12 @@
         for (const listener of [...listeners]) { try { listener(current && { ...current }); } catch (_) {} }
       }, 0);
     }).data.subscription;
-    async function getAccount() {
+    // Every call contacts the account server unless a cycle() supplies a scoped check.
+    const serverCheck = () => client.auth.getUser();
+    async function accountWith(check) {
       assertAlive(); const expected = epoch;
       try {
-        const result = await client.auth.getUser(); assertAlive(expected);
+        const result = await check(); assertAlive(expected);
         if (result.error?.name === 'AuthSessionMissingError') return null;
         if (result.error) throw result.error;
         return account(result.data?.user);
@@ -186,26 +188,26 @@
       }
       return snapshot;
     }
-    async function authorized() { const current = await getAccount(); if (!current) throw fault('auth_required', '로그인이 필요합니다.'); return current; }
+    async function authorized(check) { const current = await accountWith(check); if (!current) throw fault('auth_required', '로그인이 필요합니다.'); return current; }
     function metadata(row) {
       identifier(row?.id); revision(row.revision, 1);
       if (typeof row.title !== 'string' || row.title.length > 2000 || typeof row.updated_at !== 'string' || !Number.isFinite(Date.parse(row.updated_at))) throw fault('invalid_remote_data', '서버 자료 목록의 형식이 올바르지 않습니다.');
       return { id: row.id, title: row.title, revision: row.revision, updated_at: row.updated_at };
     }
-    async function list() {
+    async function listWith(check) {
       assertAlive(); const expected = epoch;
       try {
-        await authorized(); assertAlive(expected);
+        await authorized(check); assertAlive(expected);
         const result = await client.from('life_workspaces').select('id,title,revision,updated_at').order('updated_at', { ascending: false });
         assertAlive(expected); if (result.error) throw result.error;
         if (!Array.isArray(result.data)) throw fault('invalid_remote_data', '서버 목록을 읽을 수 없습니다.');
         cloneSized(result.data); return result.data.map(metadata);
       } catch (error) { assertAlive(expected); throw cleanError(error); }
     }
-    async function read(workspaceId) {
+    async function readWith(workspaceId, check) {
       identifier(workspaceId); assertAlive(); const expected = epoch;
       try {
-        await authorized(); assertAlive(expected);
+        await authorized(check); assertAlive(expected);
         const result = await client.from('life_workspaces').select('id,title,revision,data,updated_at').eq('id', workspaceId).maybeSingle();
         assertAlive(expected); if (result.error) throw result.error;
         if (result.data === null) return null;
@@ -215,10 +217,10 @@
         return { ...meta, data };
       } catch (error) { assertAlive(expected); throw cleanError(error); }
     }
-    async function head(workspaceId) {
+    async function headWith(workspaceId, check) {
       identifier(workspaceId); assertAlive(); const expected = epoch;
       try {
-        await authorized(); assertAlive(expected);
+        await authorized(check); assertAlive(expected);
         const result = await client.from('life_workspaces').select('id,title,revision,updated_at').eq('id', workspaceId).maybeSingle();
         assertAlive(expected); if (result.error) throw result.error;
         if (result.data === null) return null;
@@ -227,14 +229,14 @@
         return value;
       } catch (error) { assertAlive(expected); throw cleanError(error); }
     }
-    async function write(request) {
+    async function writeWith(request, check) {
       const workspaceId = request?.workspaceId, operationId = request?.operationId, expectedRevision = request?.expectedRevision;
       identifier(workspaceId); identifier(operationId); revision(expectedRevision);
       assertAlive(); const expected = epoch;
       try {
         const data = await verifyData(request.data); assertAlive(expected);
         if (data.workspaceId !== workspaceId) throw fault('invalid_request', '전송 대상과 자료의 작업공간 식별자가 다릅니다.');
-        await authorized(); assertAlive(expected);
+        await authorized(check); assertAlive(expected);
         const result = await client.rpc('life_sync_put', { p_workspace_id: workspaceId,
           p_expected_revision: expectedRevision, p_operation_id: operationId, p_data: data });
         assertAlive(expected); if (result.error) throw result.error;
@@ -243,6 +245,21 @@
         revision(result.data.revision, 1);
         return { status: result.data.status, revision: result.data.revision };
       } catch (error) { assertAlive(expected); throw cleanError(error); }
+    }
+    const getAccount = () => accountWith(serverCheck);
+    const list = () => listWith(serverCheck);
+    const read = workspaceId => readWith(workspaceId, serverCheck);
+    const head = workspaceId => headWith(workspaceId, serverCheck);
+    const write = request => writeWith(request, serverCheck);
+    // W4: one sync operation shares one server account check. Reads reuse it
+    // through the platform scope's local epoch/event/token guards; the snapshot
+    // overwrite always checks the server again. end() discards the result.
+    function cycle() {
+      assertAlive();
+      const scope = typeof client.auth.scope === 'function' ? client.auth.scope() : null;
+      const check = scope ? () => scope.getUser() : serverCheck, fresh = scope ? () => scope.getUser({ fresh: true }) : serverCheck;
+      return Object.freeze({ getAccount: () => accountWith(check), list: () => listWith(check), read: workspaceId => readWith(workspaceId, check),
+        head: workspaceId => headWith(workspaceId, check), write: request => writeWith(request, fresh), end() { scope?.end(); } });
     }
     function onAuthChange(listener) {
       assertAlive(); if (typeof listener !== 'function') throw fault('invalid_request', '계정 변경 알림을 확인해주세요.');
@@ -254,7 +271,7 @@
       const cleanup = typeof client.auth.dispose === 'function' ? client.auth.dispose() : client.auth.stopAutoRefresh();
       Promise.resolve(cleanup).catch(() => {});
     }
-    return Object.freeze({ getAccount, signIn, signOut, onAuthChange, list, read, head, write, dispose });
+    return Object.freeze({ getAccount, signIn, signOut, onAuthChange, list, read, head, write, cycle, dispose });
   }
   return Object.freeze({ create, loadConfig, saveConfig, MAX_BYTES, CONFIG_KEY, SESSION_PREFIX });
 });

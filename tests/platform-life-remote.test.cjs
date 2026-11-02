@@ -145,6 +145,30 @@ test("verification completing after bridge disposal cannot restore its account",
   assert.equal(s.auth.user.id, "A"); assert.equal(s.disposed, 0);
 });
 
+test("W4 a borrowed scope verifies through one platform scope, keeps the account guards and falls back once ended", async () => {
+  const s = setup(), seen = [];
+  let opened = 0, ended = 0;
+  s.auth.verificationScope = () => { opened++; return { async verify(options) { seen.push(options || null); return s.auth.user; }, end() { ended++; } }; };
+  const scope = s.client.auth.scope();
+  assert.equal((await scope.getUser()).data.user.id, "A");
+  assert.equal((await scope.getUser({ fresh: true })).data.user.id, "A");
+  assert.deepEqual(seen, [null, { fresh: true }]); assert.equal(opened, 1); assert.equal(s.verified, 0);
+  // A scoped answer for another account than the platform's current one is rejected.
+  s.auth.verificationScope = () => ({ async verify() { return { id: "B" }; }, end() {} });
+  await assert.rejects(s.client.auth.scope().getUser(), { code: "request_cancelled" });
+  // An account change while the scoped check is pending rejects its late answer.
+  let finish; s.auth.verificationScope = () => ({ verify: () => new Promise(resolve => { finish = resolve; }), end() {} });
+  const late = s.client.auth.scope().getUser(); s.change({ id: "B" }); finish({ id: "A" });
+  await assert.rejects(late, { code: "request_cancelled" });
+  scope.end(); assert.equal(ended, 1);
+  assert.equal((await scope.getUser()).data.user.id, "B"); assert.equal(s.verified, 1);
+  // Without a platform scope every call verifies on the server, as before W4.
+  delete s.auth.verificationScope;
+  const plain = s.client.auth.scope(); await plain.getUser(); await plain.getUser(); assert.equal(s.verified, 3);
+  s.client.auth.dispose();
+  assert.throws(() => s.client.auth.scope(), { code: "request_cancelled" });
+});
+
 test("platform account notifications are verified and all borrowed subscriptions are removed", () => {
   const s = setup(), accountListeners = new Set(), events = [];
   s.auth.onAccountChange = listener => { accountListeners.add(listener); return () => accountListeners.delete(listener); };

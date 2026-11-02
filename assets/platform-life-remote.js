@@ -83,17 +83,29 @@
           },
         });
       }
+      async function checkedUser(verify) {
+        alive();
+        const expected = epoch, authEpoch = auth.epoch;
+        const user = await verify();
+        alive(undefined, expected);
+        if (authEpoch !== auth.epoch) throw fault("request_cancelled");
+        if (user && auth.user?.id !== user.id) throw fault("request_cancelled");
+        accountId = user?.id || null;
+        observedAccount = true;
+        return { data: { user }, error: user ? null : { name: "AuthSessionMissingError" } };
+      }
       const borrowedAuth = {
-        async getUser() {
+        getUser() { return checkedUser(() => auth.verify()); },
+        // One platform verification scope for one unit of transport work (W4).
+        // Without platform support, or once ended, every call verifies as before.
+        scope() {
           alive();
-          const expected = epoch, authEpoch = auth.epoch;
-          const user = await auth.verify();
-          alive(undefined, expected);
-          if (authEpoch !== auth.epoch) throw fault("request_cancelled");
-          if (user && auth.user?.id !== user.id) throw fault("request_cancelled");
-          accountId = user?.id || null;
-          observedAccount = true;
-          return { data: { user }, error: user ? null : { name: "AuthSessionMissingError" } };
+          const verification = typeof auth.verificationScope === "function" ? auth.verificationScope() : null;
+          let ended = false;
+          return Object.freeze({
+            getUser(options) { return checkedUser(() => verification && !ended ? verification.verify(options) : auth.verify()); },
+            end() { ended = true; verification?.end(); },
+          });
         },
         async signInWithPassword() { throw fault("auth_required"); },
         async signOut() {
