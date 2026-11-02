@@ -46,8 +46,10 @@ async function waitForState(page, predicate, value, label) {
 }
 const idle = page => page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false');
 async function reveal(control) {
-  const page = control.page(), inSettings = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
-  const settings = page.locator('#discoveryNewsSettingsPanel');
+  const page = control.page(), settings = page.locator('#discoveryNewsSettingsPanel');
+  // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
+  await control.waitFor({ state: 'attached' });
+  const inSettings = await settings.locator(control).count() > 0;
   if (inSettings && !await settings.isVisible()) await page.locator('#discoveryNewsSettings').click();
   else if (!inSettings && await settings.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
   const count = await control.locator('xpath=ancestor::details').count();
