@@ -123,6 +123,14 @@
     const sectionPositions = new Map();
     let homeRenderPromise = Promise.resolve();
     let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null, materialWritingTask = false;
+    // Browser history (2026-11-02): one entry per screen change. `blogRoute`
+    // names the blog task in the address. `historyIndex`/`historyKey` describe
+    // the entry of the shown screen; idx grows by one per push in this document.
+    let blogRoute = null, materialHistorySeed = null, materialReaderOrigin = null;
+    let historyIndex = 0, historyKey = null, historyWait = null, historyPending = null, lastRouteBase = null;
+    const historyDoc = core.id();
+    // Full entries (focus labels, search text) stay in memory only.
+    const historyDetails = new Map();
     const sourceWritingRequests = new Map(), sourceStateRequests = new Map();
     let blogEntryScroll = null;
     let navigationTrigger = null;
@@ -268,9 +276,22 @@
         state.bundle = bundle; state.remoteChanged = false; resetSearchContext(); renderHeader();
       },
       onBlogReturn: returnFromBlog,
+      // Material writing opened from a reader closes back to that reader.
+      onMaterialReturn: async () => {
+        const origin = materialReaderOrigin;
+        if (disposed || state.mode !== 'page' || !materialWritingTask || origin?.workspaceId !== state.bundle?.workspaceId || !origin.sourceId) return false;
+        // Another action is running: report it instead of a silently lost return.
+        if (state.busy) throw new Error('다른 작업을 처리하는 중입니다. 끝난 뒤 다시 돌아가기를 눌러 주세요.');
+        await guarded(async () => {
+          if (await navigate('source', { preserveContext: true, navigationMotion: 'back', sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
+            returnContext: origin.returnContext || null, locator: null }) !== false) restoreOriginView(origin);
+        })();
+        return true;
+      },
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
         restorePostReturn(context);
+        updateBlogRoute(context);
         if (materialWritingTask) {
           blogMode = ['edit', 'read'].includes(context.mode) ? context.mode : null;
           renderHeader(); global.requestAnimationFrame(syncWritingFocus); return;
@@ -1242,6 +1263,9 @@
       const requestedTrigger = options?.originFocusKey && Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === options.originFocusKey);
       const trigger = requestedTrigger || (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
+      // The screen being left keeps its scroll and trigger for browser back.
+      const leaving = { key: historyKey, entry: historyLeaving(control) };
+      const fromSourceId = state.sourceId;
       const origin = options.viewOrigin?.workspaceId === workspaceId ? options.viewOrigin : (parentViews.has(from) || options.featureNavigation === true || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: typeof options.originFocusKey === 'string' ? options.originFocusKey : control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
@@ -1250,6 +1274,11 @@
         from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } :
         from === 'source' && mode === 'page' && options.materialWritingSeed && state.returnContext?.workspaceId === state.bundle?.workspaceId
           ? (state.returnContext.mode === 'page' ? viewOrigins.get('page') : { ...state.returnContext }) : null;
+      // The preparation's own 돌아가기 returns to the exact reader it was opened
+      // from; the heading return keeps going to that reader's origin.
+      const readerOrigin = from === 'source' && mode === 'page' && options.materialWritingSeed ? { mode: 'source', workspaceId, sourceId: state.sourceId, sourceVersionId: state.sourceVersionId,
+        returnContext: state.returnContext?.workspaceId === workspaceId ? state.returnContext : null, scrollY: global.scrollY,
+        focusKey: control?.dataset.focusKey, focusId: control?.id, focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await annualPlanUI?.flush();
@@ -1294,6 +1323,8 @@
         if (origin || inherited) viewOrigins.set(mode, origin || inherited);
         else viewOrigins.delete(mode);
       }
+      // Leaving for another section ends the blog task; its entry keeps it.
+      if (options.endTask === true) { blogPageTask = false; blogRoute = null; blogMode = null; blogCommitted = null; }
       if (mode === 'page') {
         materialWritingTask = !!options.materialWritingSeed || (options.preserveContext === true || returningFromReader) && materialWritingTask;
         blogPageTask = options.blogContext === true || options.preserveContext === true && blogPageTask;
@@ -1301,6 +1332,18 @@
           materialWritingTask = options.restorePostOrigin.materialWritingTask;
           blogPageTask = options.restorePostOrigin.blogPageTask;
         }
+        // A browser history entry states its own task; it never inherits the
+        // task of the screen being left.
+        if (Object.hasOwn(options, 'historyTask')) {
+          blogPageTask = options.historyTask === 'blog'; materialWritingTask = options.historyTask === 'material';
+          blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null;
+        }
+        if (blogPageTask && !materialWritingTask) {
+          const target = blogRouteFrom(options);
+          if (target) blogRoute = target; else if (!options.preserveContext) blogRoute = null;
+        } else blogRoute = null;
+        materialHistorySeed = options.materialWritingSeed ? historyClone(options.materialWritingSeed) : materialWritingTask ? materialHistorySeed : null;
+        materialReaderOrigin = !materialWritingTask ? null : readerOrigin || (Object.hasOwn(options, 'materialReader') ? options.materialReader || null : materialReaderOrigin);
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; }
       }
@@ -1312,7 +1355,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
@@ -1352,7 +1395,23 @@
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
-      writeRoute(mode, false);
+      // Push only when the screen changes; the same screen's updates replace.
+      const screenChanged = mode !== from || mode === 'source' && options.sourceId !== undefined && options.sourceId !== fromSourceId ||
+        mode !== 'source' && changedTask || mode === 'page' && !!options.materialWritingSeed;
+      // A browser move being undone or completed finishes before this one is
+      // recorded; nothing is awaited between this wait and the write below.
+      while (historyWait) { await historyWait.promise; if (!current()) return false; }
+      let action = options.historyAction || (screenChanged ? 'push' : 'replace');
+      // An in-app return to exactly the previous entry moves the browser back
+      // instead of adding the closed screen's parent again.
+      const previous = global.history.state?.haedo?.back;
+      if (action === 'push' && !options.historyAction && navigationMotion === 'back' && previous?.doc === historyDoc && sameHistoryScreen(previous, historyPublic(historyEntry(mode)))) action = 'pop';
+      if (action === 'pop') {
+        historyDetails.set(leaving.key, historyClone(leaving.entry));
+        await historyAim(global.history.state.haedo.idx - 1, previous.key);
+        if (!current()) return false;
+        writeRoute(mode, 'replace');
+      } else writeRoute(mode, action, leaving);
       // Incoming records are only a review. A slow configuration read must not
       // lock the global navigation; Workbench owns stale-response guards.
       const resetEntryScroll = changedTask && !options.preserveContext && navigationMotion !== 'back' && !sectionPosition &&
@@ -1509,11 +1568,135 @@
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
-    function writeRoute(mode, push) {
+    // `blog` names the open blog task so a reload reopens the same editor or
+    // post: new, profile, photo.<id>, plain.<id> (saved page post) or draft.<id>.
+    const blogRoutePattern = /^(?:new|profile|(?:photo|plain|draft)\.[A-Za-z0-9_-]{1,128})$/;
+    function blogRouteFrom(options) {
+      const value = options.pageCompose ? 'new' : options.pageProfileEdit ? 'profile' :
+        typeof options.pageDraftId === 'string' ? 'draft.' + options.pageDraftId :
+        typeof options.searchTarget?.photoPostId === 'string' ? 'photo.' + options.searchTarget.photoPostId :
+        typeof options.searchTarget?.postId === 'string' ? 'plain.' + options.searchTarget.postId : null;
+      return value && blogRoutePattern.test(value) ? value : null;
+    }
+    async function openBlogRoute(workspaceId, value) {
+      if (typeof value !== 'string' || !blogRoutePattern.test(value)) return null;
+      if (value === 'new') return { pageCompose: true };
+      if (value === 'profile') return { pageProfileEdit: true };
+      const [kind, id] = value.split('.');
+      if (kind === 'draft') return { pageDraftId: id };
+      if (kind === 'plain') return { pagePreview: false, searchTarget: { postId: id } };
+      try { await storage.readPhotoPost(workspaceId, id); }
+      catch (cause) {
+        // A new editor that was left before its first save has nothing stored.
+        if (cause?.code === 'photo_post_missing') return { pageCompose: true };
+        throw cause;
+      }
+      return { pagePreview: false, searchTarget: { photoPostId: id } };
+    }
+    function updateBlogRoute(context) {
+      if (state.mode !== 'page' || !blogPageTask || materialWritingTask) return;
+      const id = typeof context.id === 'string' ? context.id : null;
+      const value = context.mode === 'profile' ? 'profile' : id && ['edit', 'read'].includes(context.mode)
+        ? (context.kind === 'photo' ? 'photo.' : context.mode === 'edit' ? 'draft.' : 'plain.') + id : null;
+      if (!value || !blogRoutePattern.test(value) || value === blogRoute) return;
+      blogRoute = value;
+      writeRoute('page', false);
+    }
+    function historyClone(value) {
+      try { return value == null ? null : JSON.parse(JSON.stringify(value)); } catch (_) { return null; }
+    }
+    // What reopens a screen: its mode, exact reader version or blog task and
+    // the in-app return origin. The full entry stays in memory (historyDetails);
+    // history.state receives only historyPublic(entry).
+    function historyEntry(mode = state.mode) {
+      const entry = { mode, workspaceId: state.bundle?.workspaceId || null };
+      if (mode === 'source') Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+      if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute });
+      if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
+      const origin = viewOrigins.get(mode);
+      if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
+      return entry;
+    }
+    function historyLeaving(control) {
+      const focused = control || (main.contains(document.activeElement) ? document.activeElement : null);
+      const entry = { ...historyEntry(state.mode), scrollY: global.scrollY, focusKey: focused?.dataset?.focusKey, focusId: focused?.id || undefined,
+        focusName: focused?.getAttribute?.('aria-label') || focused?.textContent || undefined, focusTag: focused?.tagName };
+      if (state.mode === 'home') entry.homeState = home?.captureState();
+      return entry;
+    }
+    // Only identifiers, tabs and positions: no titles, labels, quotes, search
+    // text or URLs (unified-search contract: queries are never persisted).
+    const historyIdPattern = /^[A-Za-z0-9_:.-]{1,200}$/;
+    function historyPublic(value, depth = 0) {
+      if (!value || typeof value !== 'object' || depth > 4) return null;
+      const out = {}, id = key => typeof value[key] === 'string' && historyIdPattern.test(value[key]);
+      for (const key of ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'focusKey', 'focusId', 'focusTag', 'folderFilter', 'blogPostId']) if (id(key)) out[key] = value[key];
+      if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
+        out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
+      if (value.homeState && typeof value.homeState === 'object') {
+        const home = value.homeState, tab = typeof home.tab === 'string' && historyIdPattern.test(home.tab) ? home.tab : 'posts';
+        out.homeState = { workspaceId: typeof home.workspaceId === 'string' && historyIdPattern.test(home.workspaceId) ? home.workspaceId : null, tab, query: '',
+          ...(Number.isSafeInteger(home.limit) ? { limit: home.limit } : {}) };
+      }
+      for (const key of ['returnContext', 'viewOrigin', 'parentOrigin', 'materialReader']) {
+        const nested = historyPublic(value[key], depth + 1);
+        if (nested) out[key] = nested;
+      }
+      return out;
+    }
+    function historyRecord(entry, idx, key, back) {
+      historyDetails.delete(key); historyDetails.set(key, historyClone(entry));
+      while (historyDetails.size > 300) historyDetails.delete(historyDetails.keys().next().value);
+      return { haedo: { v: 1, idx, key, doc: historyDoc, entry: historyPublic(entry), back: back || null } };
+    }
+    function historyBack(entry, key) {
+      const value = historyPublic(entry) || {};
+      return { key, doc: historyDoc, mode: value.mode, workspaceId: value.workspaceId, sourceId: value.sourceId, sourceVersionId: value.sourceVersionId, task: value.task, blog: value.blog };
+    }
+    function sameHistoryScreen(a, b) {
+      return !!a && !!b && ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog'].every(key => (a[key] ?? null) === (b[key] ?? null));
+    }
+    function syncHistoryPosition() {
+      const recorded = global.history.state?.haedo;
+      if (recorded?.v === 1 && Number.isSafeInteger(recorded.idx) && typeof recorded.key === 'string') { historyIndex = recorded.idx; historyKey = recorded.key; }
+    }
+    // Sends the browser to the entry (idx, key) and resolves when it is shown.
+    // Each arrival is compared with the goal and re-aimed from the actual
+    // position, so extra presses during the move cannot strand it elsewhere.
+    function historyAim(idx, key) {
+      if (historyWait) { historyWait.idx = idx; historyWait.key = key; return historyWait.promise; }
+      const at = global.history.state?.haedo;
+      if (at?.key === key || !Number.isSafeInteger(at?.idx) || at.idx === idx) return Promise.resolve();
+      let finish;
+      const promise = new Promise(resolve => { finish = resolve; });
+      // A traversal the browser drops must not hold navigation indefinitely.
+      // After that limit the current entry is rewritten to the shown screen, so
+      // the address and the screen agree again (after any waiting move is written).
+      const timer = global.setTimeout(() => done(true), 3000);
+      const done = (timedOut = false) => {
+        global.clearTimeout(timer); if (historyWait?.done === done) historyWait = null; syncHistoryPosition(); finish();
+        if (timedOut) Promise.resolve().then(() => { if (!disposed && !historyWait && state.bundle) writeRoute(state.mode, 'replace'); });
+      };
+      historyWait = { idx, key, done, promise };
+      global.history.go(idx - at.idx);
+      return promise;
+    }
+    const oauthKeys = ['code', 'access_token', 'refresh_token', 'token', 'token_hash', 'id_token', 'provider_token', 'provider_refresh_token', 'error', 'error_code', 'error_description', 'token_type', 'expires_in', 'expires_at'];
+    // push: a different screen. replace: the same screen's state or address.
+    function writeRoute(mode, action, leaving) {
       if (!global.HaedoNavigation) return;
+      // While the browser is moving, its current entry is not this screen's.
+      if (historyWait) return;
+      const push = action === true || action === 'push';
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
       url.searchParams.delete('compose');
+      // OAuth callback values never enter a history entry.
+      for (const key of oauthKeys) url.searchParams.delete(key);
+      url.searchParams.delete('blog');
+      if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) url.searchParams.set('blog', blogRoute);
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
@@ -1521,8 +1704,35 @@
       else if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'backup', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
-      if (destination !== global.location.pathname + global.location.search + global.location.hash)
-        global.history[push ? 'pushState' : 'replaceState'](null, '', destination);
+      const here = global.location.pathname + global.location.search + global.location.hash;
+      const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo : null;
+      // Re-read the shown entry's position before writing (no drift after a
+      // browser move); an unrecorded entry at our address is a fragment link
+      // opened after the previous entry.
+      if (recorded) syncHistoryPosition();
+      else if (historyKey && lastRouteBase === global.location.pathname + global.location.search) { historyIndex += 1; historyKey = null; }
+      const entry = historyEntry(mode);
+      try {
+        if (push && !(destination === here && recorded && sameHistoryScreen(recorded.entry, historyPublic(entry)))) {
+          const leftKey = historyKey || core.id();
+          const left = leaving && leaving.key === historyKey ? leaving.entry : historyDetails.get(leftKey) || recorded?.entry || entry;
+          // Update the entry being left only while it is still this screen's entry.
+          if (leaving && leaving.key === historyKey) global.history.replaceState(historyRecord(leaving.entry, historyIndex, leftKey, recorded?.back), '', here);
+          const key = core.id();
+          historyIndex += 1; historyKey = key;
+          global.history.pushState(historyRecord(entry, historyIndex, key, historyBack(left, leftKey)), '', destination);
+        } else {
+          const key = historyKey || core.id();
+          const next = historyRecord(entry, historyIndex, key, recorded?.back);
+          historyKey = key;
+          if (destination !== here || JSON.stringify(recorded) !== JSON.stringify(next.haedo)) global.history.replaceState(next, '', destination);
+        }
+      } catch (_) {
+        // A state that cannot be stored still keeps the address correct.
+        if (push) global.history.pushState(null, '', destination);
+        else if (destination !== here) global.history.replaceState(null, '', destination);
+      }
+      lastRouteBase = url.pathname + url.search;
     }
 
     async function navigateSection(section, push = true) {
@@ -1562,20 +1772,81 @@
       if (section !== previousSection) sectionPositions.set(previousSection, position);
       const saved = section !== previousSection ? sectionPositions.get(section) : null;
       const sectionPosition = saved?.mode === next ? saved : section !== previousSection && next !== 'source' ? { scrollY: 0 } : null;
-      writeRoute(next, push);
-      await navigate(next, { preserveContext: true, navigationMotion: section === previousSection ? 'back' : 'tab',
+      await navigate(next, { preserveContext: true, navigationMotion: section === previousSection ? 'back' : 'tab', historyAction: push ? 'push' : 'replace',
+        // Another section ends the blog task; the records page never inherits it.
+        ...(section !== previousSection ? { endTask: true } : {}), ...(next === 'page' && section === 'records' ? { historyTask: null } : {}),
         ...(sectionPosition ? { sectionPosition, homeState: sectionPosition.homeState } : {}) });
     }
 
-    const popstate = guarded(async () => {
+    async function historyOptions(entry, backward) {
+      const options = { preserveContext: true, historyAction: 'replace', navigationMotion: backward ? 'back' : 'push',
+        restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
+      if (entry.homeState) options.homeState = entry.homeState;
+      if (entry.mode === 'source' && entry.sourceId) Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null });
+      if (entry.mode === 'page' && entry.blog) {
+        const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog);
+        if (blog) Object.assign(options, blog, { blogContext: true });
+        else options.historyTask = null;
+      } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
+      return options;
+    }
+
+    // Browser back/forward reopen the recorded screen with the same flush and
+    // input rules as in-app navigation. A refused move restores the address.
+    const restoreHistory = guarded(async () => {
       if (!state.bundle) return;
-      let mode = routeMode();
-      if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
-      if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
-      if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
-      try { await navigate(mode, { preserveContext: true, navigationMotion: 'tab' }); }
-      catch (cause) { writeRoute(state.mode, false); throw cause; }
+      const record = global.history.state?.haedo;
+      const from = historyIndex, fromKey = historyKey;
+      const entry = record?.v === 1 && Number.isSafeInteger(record.idx) && typeof record.key === 'string' && record.entry?.workspaceId === state.bundle.workspaceId && typeof record.entry.mode === 'string' ? record.entry : null;
+      if (!entry) {
+        // Entries without a record (hash links, addresses from older versions).
+        let mode = routeMode();
+        if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
+        if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
+        if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
+        try { await navigate(mode, { preserveContext: true, navigationMotion: 'tab', historyAction: 'replace' }); }
+        catch (cause) { writeRoute(state.mode, 'replace'); throw cause; }
+        return;
+      }
+      if (record.key === fromKey) return;
+      // Memory holds the full entry (focus label, search text); after a reload
+      // only the identifiers in history.state are available.
+      const full = historyDetails.get(record.key);
+      const view = full?.mode === entry.mode && full.workspaceId === entry.workspaceId ? full : entry;
+      if (fromKey) historyDetails.set(fromKey, historyClone(historyLeaving(null)));
+      // Until it opens, the shown screen keeps its entry; further presses aim
+      // the browser at the entry being opened.
+      historyPending = { idx: record.idx, key: record.key };
+      let opened;
+      try { opened = await navigate(view.mode, await historyOptions(view, record.idx < from)); }
+      catch (cause) {
+        // Saving failed or input is still composing: stay, and move the
+        // browser back to the entry of the screen that is still shown.
+        historyPending = null;
+        if (fromKey && global.history.state?.haedo?.key !== fromKey) { historyIndex = from; historyKey = fromKey; historyAim(from, fromKey); }
+        throw cause;
+      } finally { historyPending = null; }
+      if (opened && !view.blog && !view.material) restoreOriginView(view);
     });
+    // The browser moved while a save or move was running: return it to the
+    // entry of the screen that is still shown. The back press is not applied.
+    function refuseHistoryMove() {
+      const record = global.history.state?.haedo, goal = historyPending || { idx: historyIndex, key: historyKey };
+      if (record?.v !== 1 || !Number.isSafeInteger(record.idx) || !goal.key || record.key === goal.key || record.doc !== historyDoc) return;
+      historyAim(goal.idx, goal.key);
+    }
+    const popstate = () => {
+      if (disposed) return;
+      if (historyWait) {
+        // The browser reached the entry it was sent to; this is not a navigation.
+        const at = global.history.state?.haedo;
+        if (at?.key === historyWait.key) historyWait.done();
+        else if (Number.isSafeInteger(at?.idx) && at.idx !== historyWait.idx) global.history.go(historyWait.idx - at.idx);
+        return;
+      }
+      if (state.busy) { refuseHistoryMove(); return; }
+      restoreHistory();
+    };
 
     function subviewOrigin() {
       const origin = viewOrigins.get(state.mode);
@@ -1597,6 +1868,10 @@
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
       if (origin.postTarget) return;
+      restoreOriginView(origin, anchor);
+    }
+
+    function restoreOriginView(origin, anchor = null) {
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
@@ -1609,7 +1884,7 @@
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
-        if (!anchor) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
@@ -5147,8 +5422,10 @@
     }
     if (disposed) return { dispose };
     state.mode = routeMode();
+    syncHistoryPosition();
+    const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
-      blogPageTask = true; blogMode = 'edit';
+      blogPageTask = true; blogMode = 'edit'; blogRoute = 'new';
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
       viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
@@ -5158,6 +5435,18 @@
       state.bundle = await storage.read(active);
       if (!managedLibrary) await registerAccountMaterials(active);
       if (disposed || signal?.aborted) return { dispose };
+      // A reload of the blog editor or reader reopens that exact task. The old
+      // `?view=page` address without `blog` keeps meaning the selected page.
+      if (state.mode === 'page' && !blogPageTask && blogRoutePattern.test(startBlogRoute || '')) {
+        const opened = await openBlogRoute(active, startBlogRoute).catch(() => null);
+        if (disposed || signal?.aborted) return { dispose };
+        if (opened) {
+          blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null;
+          blogRoute = blogRouteFrom(opened);
+          workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
+          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+        } else state.mode = 'home';
+      }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();

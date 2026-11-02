@@ -16,7 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -1144,7 +1144,12 @@
         onOpenPost: context => session.materialCallbacks.openPost(context),
         onCreatePost: context => session.materialContinuity.handoff(session.workspaceId, context.planId, context.expectedRevision),
         onPlanChange: ({ planId }) => { if (active()) { session.materialPlanId = planId; if (session.materialSeed?.requestId === planId) session.materialSeed = null; continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); } },
-        onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; session.materialSeed = null; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
+        onClose: async () => {
+          if (!session.materialOpen || !workspaceIs(session)) return;
+          // Opened from a reader: the host returns to that exact version. The
+          // preparation stays saved; only a completed move closes it here.
+          if (await onMaterialReturn()) { if (!visible || mode !== 'page') { session.materialOpen = false; session.materialSeed = null; } return; }
+          if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; session.materialSeed = null; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
       session.materialCallbacks = { source, openPost };
       const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null, seed: session.materialSeed || null });
       mount.catch(error => { if (active()) report(error, session); });

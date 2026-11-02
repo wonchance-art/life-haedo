@@ -111,6 +111,8 @@
       checkpointing = null,
       epoch = 0,
       busy = false,
+      // busy only because the next post or list is being read (no user input at stake).
+      loading = false,
       navigating = false,
       composing = false,
       error = null,
@@ -430,6 +432,9 @@
     async function flush() {
       attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
+      // Only reading: leaving is allowed. detach() advances the epoch, so the
+      // late read result is discarded by the existing current(token) checks.
+      if (loading && !composing && (!doc || mode !== "edit" || dirtyTick === storedTick)) return;
       if (
         !busy &&
         !composing &&
@@ -485,7 +490,7 @@
         await flush();
         await beforeOpen();
         if (!current(token)) return;
-        setBusy(true);
+        setBusy(true); loading = true;
         try {
           const rows = await storage.listPhotoPosts(workspaceId);
           if (!current(token)) return;
@@ -518,7 +523,7 @@
             empty = null;
           doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
         } finally {
-          setBusy(false);
+          loading = false; setBusy(false);
         }
         mode = "edit";
         dirtyTick = storedTick = 0;
@@ -535,7 +540,7 @@
       await flush();
       await beforeOpen();
       if (!current(token)) return;
-      setBusy(true);
+      setBusy(true); loading = true;
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
         if (!current(token)) return;
@@ -598,7 +603,7 @@
         }
         if (mode === "edit") editor?.focus();
       } finally {
-        setBusy(false);
+        loading = false; setBusy(false);
       }
     }
     async function finish(asNew = false) {
@@ -2008,7 +2013,7 @@
       flush,
       checkpoint,
       dirty: () =>
-        busy || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),
+        (busy && !loading) || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),
       detach,
       dispose() {
         disposed = true;
