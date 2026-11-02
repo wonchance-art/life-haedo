@@ -79,7 +79,8 @@ async function main() {
     // heading is the page's, and the error is a new one with the sync_common_missing code.
     const failedOpen = async (click, label) => {
       const error = page.locator('#wbError');
-      const previous = await error.locator('p').elementHandle().catch(() => null);
+      // Count first: elementHandle() on a missing node waits out the whole default timeout.
+      const shown = error.locator('p'), previous = await shown.count() ? await shown.elementHandle() : null;
       await click();
       if (previous) await page.waitForFunction(node => !node.isConnected, previous, { timeout: 15000 });
       await error.getByText(MISSING).waitFor();
