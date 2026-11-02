@@ -133,7 +133,10 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await page.keyboard.press('Control+Shift+z');
       assert.deepEqual((await editorState(page)).ops, s.ops, 'redo restores the owner text as owner text');
     });
-    await check('③ IME composition inside AI text keeps the format until it ends, then the result is the owner\'s', async () => {
+    // The DOM stays unsplit while a composition is open and the composed syllables
+    // end as the owner's. This does not exercise the defensive imeActive() guard
+    // on its own: no owner range is pending when this composition opens.
+    await check('③ IME composition inside AI text leaves the AI span unsplit while composing, then the result is the owner\'s', async () => {
       const cdp = await context.newCDPSession(page);
       await page.evaluate(() => { window.__ime = { start: 0, end: 0 }; const root = document.querySelector('.ql-editor'); root.addEventListener('compositionstart', () => __ime.start++); root.addEventListener('compositionend', () => __ime.end++); });
       const at = await indexOf(page, 'sentence');

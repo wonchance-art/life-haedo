@@ -63,12 +63,13 @@
 - `npm test` 1754/1754, `npm run check` 통과.
 - 단위: `tests/ai-authorship.test.cjs` 6개 — 검증 허용/거부, 공개 사본 제거·거부, 글 ZIP·pack/hydrate 왕복, 두 기기 BlogSync 왕복, 이전 클라이언트 보존, 전체 백업·보존 ZIP 왕복.
 - SQL: `npm run test:sql-replay`(PostgreSQL 16.15, 격리 클러스터) — 30개 마이그레이션 재생, 두 설치 재적용 후 카탈로그 783항목 동일, `supabase/tests/blog-ai-authorship.sql` 28개 단언. 이전 정의로 되돌리면 두 번째 단언(`author=ai on text validates`, 첫 단언은 표시 없는 글)에서 실패함을 확인. `scripts/check-blog-backend.mjs`는 Docker 데몬이 없어 실행하지 못했고, 같은 SQL 고정물(blog-bootstrap → 마이그레이션 → `blog-originals.sql` 114개 → `blog-ai-authorship.sql` 28개 → `blog-installation.sql` 15개 → 재적용 비교)을 로컬 PostgreSQL 16으로 실행했다.
-- 브라우저: `tests/ai-authorship-browser.cjs`(Chromium, 1440×1000과 390×844 터치) — 선택 표시·저장·재열기, 표시 안 직접 입력, CDP `Input.imeSetComposition` 한글 조합(조합 중 서식 불변·조합 뒤 정리·임시저장), 대기 붙여넣기/대기 없는 붙여넣기/Esc, 해제, 실행 취소·다시 실행, 치환 입력, 공개 사본에 표시 없음, 서버 비공개 사본 표시 유지, 두 번째 브라우저의 동기화 수신, 여러 실행 취소 단계에 걸친 입력(⑨ 90ms 간격 16키, ⑩ 1.4초 넘는 다섯 음절 조합)의 실행 취소·다시 실행 반복, 700ms 경계 직후 정리의 단계 합침(⑪, 시계를 800ms 건너뛰어 재현), 콘솔·페이지 오류 0, 외부 요청 0. 변이 확인(커밋하지 않음): 정리를 이전 120ms 일괄로 되돌리면 ⑨·⑩이 실패하고, 단계 합침(`lastRecorded` 조정)을 지우면 ⑪이 실패한다. 정리 호출을 끄면 ②가 실패한다.
+- 브라우저: `tests/ai-authorship-browser.cjs`(Chromium, 1440×1000과 390×844 터치) — 선택 표시·저장·재열기, 표시 안 직접 입력, CDP `Input.imeSetComposition` 한글 조합(조합 중 AI 구간이 나뉘지 않음·조합 뒤 정리·임시저장. 조합 중 정리를 막는 방어 분기 `imeActive()` 자체는 이 검사로 따로 증명되지 않는다 — 재검수 변이 확인), 대기 붙여넣기/대기 없는 붙여넣기/Esc, 해제, 실행 취소·다시 실행, 치환 입력, 공개 사본에 표시 없음, 서버 비공개 사본 표시 유지, 두 번째 브라우저의 동기화 수신, 여러 실행 취소 단계에 걸친 입력(⑨ 90ms 간격 16키, ⑩ 1.4초 넘는 다섯 음절 조합)의 실행 취소·다시 실행 반복, 700ms 경계 직후 정리의 단계 합침(⑪, 시계를 800ms 건너뛰어 재현), 콘솔·페이지 오류 0, 외부 요청 0. 변이 확인(커밋하지 않음): 정리를 이전 120ms 일괄로 되돌리면 ⑨·⑩이 실패하고, 단계 합침(`lastRecorded` 조정)을 지우면 ⑪이 실패한다. 정리 호출을 끄면 ②가 실패한다.
 - 회귀 브라우저 검사(같은 컨테이너, BASE_URL 로컬 서버): `photo-post-browser` 16, `blog-writing-completion-browser` 10, `blog-autosave-browser` 4, `blog-default-server-browser` 8, `blog-public-browser` 6, `blog-manager-browser` 4, `account-blog-receipt-browser` 4, `photo-post-evidence-browser` 6, `full-backup-browser` 8, `life-external-discovery-pwa-browser` 9(캐시 `haedo-v174`) 모두 통과.
 
 ## 미검증·후속
 
 - 실제 Apple 기기(iPhone·iPad·Mac Safari)의 글쓰기 도구·한글 IME·붙여넣기 동작, 실제 기기 시각 확인.
+  - 소유자 실기기 확인 항목: AI 글 가운데에서 한글을 쉬지 않고 여러 음절 입력 → 자모 누락·중복이 없고 입력한 글자가 내 글이 되는지. 정리는 앞 음절의 compositionend 직후에 일어나며, Safari·Chrome이 compositionend와 다음 compositionstart를 같은 태스크에서 보내면 그 사이에 서식이 바뀐다(Chromium CDP 모사로는 재현 불가, 재검수 마이너 1). 문제가 나오면 조합분 정리를 조합이 없는 첫 순간으로 미룬다.
 - 운영 DB 적용(총괄 관문), 배포 후 라이브 확인.
 - (해결) 새 브라우저 검사는 총괄이 CI 목록(`.github/workflows/pages.yml`)에 넣었다(`92d906d`).
 - 화면 낭독기 실제 안내(VoiceOver 등)로 대기·표시 상태를 듣는 확인은 하지 않았다(검수 마이너 6, 후속).
