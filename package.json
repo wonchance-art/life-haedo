@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "python3 scripts/dev-server.py",
     "check": "node scripts/check.mjs",
-    "test": "node --test tests/*.test.cjs"
+    "test": "node --test tests/*.test.cjs",
+    "test:sql-replay": "node tests/run-sql-replay-postgres.cjs"
   },
   "engines": {
     "node": ">=20"
