@@ -313,7 +313,9 @@ async function main() {
       await page.reload(); await ready(page); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       assert.equal(await heading(page).textContent(), '글쓰기');
       assert.equal(new URL(page.url()).searchParams.get('section'), null, 'The blog editor stays in home');
-      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
+      // A never-saved new post reopens as the 글쓰기 screen (review minor 1); the section frame stays 일정.
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-compose]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), 'schedule');
       assert.equal(await page.locator('#photoTitle').inputValue(), '새로고침 뒤에도 이어 쓸 글');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '한글 본문은 다시 불러와도 같은 편집기에 남습니다.');
       assert.equal((await photoPosts(page)).length, 1, 'Reload reopens the same draft instead of adding a copy');
