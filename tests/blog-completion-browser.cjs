@@ -355,7 +355,7 @@ async function main() {
       const actualHash = await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, src);
       // 2026-11-02: the served bytes are the published copy, never the original.
       assert.equal(actualHash, snapshot.photos[0].digest); assert.notEqual(snapshot.photos[0].digest, photoPost.doc.photos[0].digest);
-      await visitor.page.getByRole('button', { name: '사진 원본 크기로 보기', exact: true }).click(); assert.equal(await visitor.page.locator('.blog-photo-original').count(), 1);
+      await visitor.page.getByRole('button', { name: '사진 크게 보기', exact: true }).click(); assert.equal(await visitor.page.locator('.blog-photo-original').count(), 1);
       await visitor.page.getByRole('button', { name: '사진 화면에 맞추기', exact: true }).click(); await capture(visitor.page, 'public-original-photo', '#blogContent');
       await click(page, '공개 철회'); await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'missing'); assert.equal(await visitor.page.locator('#blogContent').innerText(), '');
       assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, src), 404);

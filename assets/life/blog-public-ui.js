@@ -37,10 +37,10 @@
         image.width = photo.width; image.height = photo.height; image.loading = "lazy"; image.decoding = "async"; image.referrerPolicy = "no-referrer"; image.crossOrigin = "anonymous";
         let url = photoUrl(photo);
         try { const parsed = new URL(url); if (!["https:", "blob:"].includes(parsed.protocol)) url = null; } catch (_) { url = null; }
-        const expand = node("button", "사진 원본 크기로 보기", "life-button blog-photo-expand"); expand.type = "button"; expand.setAttribute("aria-pressed", "false");
+        const expand = node("button", "사진 크게 보기", "life-button blog-photo-expand"); expand.type = "button"; expand.setAttribute("aria-pressed", "false");
         expand.addEventListener("click", () => {
           const original = frame.classList.toggle("blog-photo-original"); expand.setAttribute("aria-pressed", String(original));
-          expand.textContent = original ? "사진 화면에 맞추기" : "사진 원본 크기로 보기";
+          expand.textContent = original ? "사진 화면에 맞추기" : "사진 크게 보기";
         });
         const missing = () => { image.hidden = true; image.removeAttribute("src"); fallback.hidden = false; expand.disabled = true; };
         image.addEventListener("error", missing, { once: true });

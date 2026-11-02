@@ -1,16 +1,18 @@
 -- Public photos are metadata-free copies (2026-11-02 owner decision).
 -- Before: HEIC/HEIF published their JPEG view, but JPEG/PNG/WebP published the
 -- private original, so EXIF/GPS/XMP could become public.
--- After:
---  * a JPEG/PNG/WebP photo is published only through a separately registered
---    public copy (canvas re-encoding, JPEG or PNG) of that photo; HEIC/HEIF
---    keep publishing their JPEG view. An original is never public media.
+-- After: one rule for every format, "public = a registered public copy".
+--  * every photo, JPEG/PNG/WebP/HEIC/HEIF, is published only through a
+--    separately registered public copy (canvas re-encoding reduced to an allow
+--    list, JPEG or PNG; HEIC/HEIF copies are made from their JPEG view). An
+--    original or a HEIC view is never public media.
 --  * publication media carry a copy marker; the media resolver serves only
---    marked media, so a publication made by the earlier function stops
---    serving its photos instead of serving an original.
+--    marked media, and a trigger refuses any active publication whose photos
+--    are not all marked copies, whichever function writes it (including the
+--    earlier private publish, which the 2026-11-01 bundle may re-create).
 --  * the earlier public.life_blog_publish keeps its signature and receipts for
---    text-only and HEIC-only selections and refuses JPEG/PNG/WebP photos
---    without a copy (outdated clients fail closed).
+--    text-only selections and refuses any photo without a copy (outdated
+--    clients fail closed).
 -- Functions of the 2026-11-01 install bundle (valid_document, save, ready,
 -- prepare_asset, private publish, delete_post) are not redefined, so
 -- re-running that bundle cannot undo this change. Originals, views, documents,
@@ -39,12 +41,13 @@ create temp table blog_copy_hash on commit drop as select
 -- Existing rows are originals or HEIC views; only prepare_copy sets true.
 alter table haedo_blog_private.assets add column if not exists public_copy boolean not null default false;
 
--- Registers the public copy of one JPEG/PNG/WebP photo of a stored post. The
--- copy is a separate immutable private object; its digest differs from the
--- original and its size is at most the original's displayed size.
+-- Registers the public copy of one photo of a stored post. The copy is a
+-- separate immutable private object; its digest differs from the original and
+-- from a HEIC view, and its size is at most the displayed size (the view's for
+-- HEIC/HEIF, whose copy is a JPEG).
 create or replace function haedo_blog_private.prepare_copy(p_post_id uuid,p_photo_id text,p_digest text,p_bytes bigint,p_type text,p_width integer,p_height integer)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
-declare who uuid:=auth.uid(); post haedo_blog_private.posts%rowtype; item jsonb; a haedo_blog_private.assets%rowtype; object_path text;
+declare who uuid:=auth.uid(); post haedo_blog_private.posts%rowtype; item jsonb; bound jsonb; a haedo_blog_private.assets%rowtype; object_path text;
 begin
  if who is null then raise exception using errcode='42501',message='life_auth_required'; end if;
  if p_post_id is null or p_photo_id is null or p_photo_id !~ '^[A-Za-z0-9_-]{1,128}$' or p_digest is null or p_digest !~ '^[a-f0-9]{64}$'
@@ -54,8 +57,10 @@ begin
  select * into post from haedo_blog_private.posts where owner_id=who and id=p_post_id;
  if not found then raise exception using errcode='22023',message='life_blog_unknown_photo'; end if;
  select j into item from jsonb_array_elements(post.data->'photos') j where j->>'id'=p_photo_id;
- if item is null or item ? 'view' or item->>'type' not in ('image/jpeg','image/png','image/webp') then raise exception using errcode='22023',message='life_blog_unknown_photo'; end if;
- if p_digest=item->>'digest' or p_width>(item->>'width')::integer or p_height>(item->>'height')::integer then raise exception using errcode='22023',message='life_blog_invalid_asset'; end if;
+ if item is null then raise exception using errcode='22023',message='life_blog_unknown_photo'; end if;
+ bound:=case when item ? 'view' then item->'view' else item end;
+ if p_digest=item->>'digest' or p_digest=item->'view'->>'digest' or (item ? 'view' and p_type<>'image/jpeg')
+ or p_width>(bound->>'width')::integer or p_height>(bound->>'height')::integer then raise exception using errcode='22023',message='life_blog_invalid_asset'; end if;
  object_path:=who::text||'/'||p_post_id::text||'/'||p_photo_id||'/'||p_digest;
  insert into haedo_blog_private.assets(owner_id,post_id,photo_id,digest,bytes,mime,width,height,path,public_copy)
  values(who,p_post_id,p_photo_id,p_digest,p_bytes,p_type,p_width,p_height,object_path,true) on conflict do nothing;
@@ -67,9 +72,9 @@ begin
 end $$;
 
 -- Same CAS, receipts and snapshot as the earlier publish, except that the
--- public bytes of every chosen photo are a copy: the HEIC/HEIF JPEG view, or
--- the registered public copy named in p_copies ({photo id: {type,size,digest,
--- width,height}}) for JPEG/PNG/WebP. p_copies names exactly those photos.
+-- public bytes of every chosen photo are its registered public copy, named in
+-- p_copies ({photo id: {type,size,digest,width,height}}). p_copies names
+-- exactly the chosen photos.
 create or replace function haedo_blog_private.publish_copies(p_post_id uuid,p_expected_revision bigint,p_operation_id uuid,p_photo_ids text[],p_author jsonb,p_expected_publication_revision bigint,p_copies jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare who uuid:=auth.uid(); h bytea; prior haedo_blog_private.receipts%rowtype; p haedo_blog_private.posts%rowtype; old haedo_blog_private.publications%rowtype;
@@ -114,21 +119,13 @@ begin
   if not(item->>'id'=any(chosen)) then continue; end if;
   public_id:=gen_random_uuid()::text;
   mapping:=mapping||jsonb_build_object(item->>'id',public_id);
-  if item ? 'view' then
-   -- HEIC/HEIF: the JPEG view the document already carries (ready() checked its upload).
-   if copies ? (item->>'id') then raise exception using errcode='22023',message='life_invalid_request'; end if;
-   src:=item->'view';
-   select * into a from haedo_blog_private.assets where owner_id=who and post_id=p_post_id and photo_id=item->>'id' and digest=src->>'digest' and deleted_at is null;
-   if not found or a.mime<>'image/jpeg' then raise exception using errcode='22023',message='life_blog_assets_incomplete'; end if;
-  else
-   src:=copies->(item->>'id');
-   if src is null then raise exception using errcode='22023',message='life_blog_public_copy_required'; end if;
-   select * into a from haedo_blog_private.assets where owner_id=who and post_id=p_post_id and photo_id=item->>'id' and digest=src->>'digest' and deleted_at is null and public_copy;
-   if not found or a.digest=item->>'digest' or a.mime not in ('image/jpeg','image/png') or a.mime<>src->>'type' or a.bytes<>(src->>'size')::bigint
-   or a.width<>(src->>'width')::integer or a.height<>(src->>'height')::integer
-   or not exists(select 1 from storage.objects o where o.bucket_id='haedo-blog-originals' and o.name=a.path and o.metadata->>'size'=a.bytes::text and o.metadata->>'mimetype'=a.mime)
-   then raise exception using errcode='22023',message='life_blog_assets_incomplete'; end if;
-  end if;
+  src:=copies->(item->>'id');
+  if src is null then raise exception using errcode='22023',message='life_blog_public_copy_required'; end if;
+  select * into a from haedo_blog_private.assets where owner_id=who and post_id=p_post_id and photo_id=item->>'id' and digest=src->>'digest' and deleted_at is null and public_copy;
+  if not found or a.digest=item->>'digest' or a.digest is not distinct from item->'view'->>'digest' or a.mime not in ('image/jpeg','image/png') or a.mime<>src->>'type'
+  or a.bytes<>(src->>'size')::bigint or a.width<>(src->>'width')::integer or a.height<>(src->>'height')::integer
+  or not exists(select 1 from storage.objects o where o.bucket_id='haedo-blog-originals' and o.name=a.path and o.metadata->>'size'=a.bytes::text and o.metadata->>'mimetype'=a.mime)
+  then raise exception using errcode='22023',message='life_blog_assets_incomplete'; end if;
   photos:=photos||jsonb_build_array(jsonb_build_object('id',public_id,'type',a.mime,'width',a.width,'height',a.height,'size',a.bytes,'digest',a.digest));
   media:=media||jsonb_build_object(public_id,jsonb_build_object('bucket','haedo-blog-originals','path',a.path,'type',a.mime,'size',a.bytes,'digest',a.digest,'copy',true));
  end loop;
@@ -163,8 +160,25 @@ returns jsonb language sql stable security definer set search_path=pg_catalog as
  where p.token=p_token and p.active and p.media ? p_photo_id and p.media->p_photo_id->'copy'='true'::jsonb
 $$;
 
+-- An active publication may only carry marked copies, one per public photo,
+-- whichever function writes it. Withdrawal (active=false) is never blocked.
+create or replace function haedo_blog_private.publication_copies_only()
+returns trigger language plpgsql set search_path=pg_catalog as $$
+begin
+ if new.active and (jsonb_typeof(new.media) is distinct from 'object' or jsonb_typeof(new.snapshot->'photos') is distinct from 'array'
+  or (select count(*) from jsonb_object_keys(new.media))<>jsonb_array_length(new.snapshot->'photos')
+  or exists(select 1 from jsonb_each(new.media) m(k,v) where v->'copy' is distinct from 'true'::jsonb)
+  or exists(select 1 from jsonb_array_elements(new.snapshot->'photos') x where not (new.media ? (x->>'id'))))
+ then raise exception using errcode='22023',message='life_blog_public_copy_required'; end if;
+ return new;
+end $$;
+revoke all on function haedo_blog_private.publication_copies_only() from public,anon,authenticated,service_role;
+drop trigger if exists blog_publications_copies_only on haedo_blog_private.publications;
+create trigger blog_publications_copies_only before insert or update on haedo_blog_private.publications
+ for each row execute function haedo_blog_private.publication_copies_only();
+
 -- The earlier RPC keeps its signature, privileges and receipts; it publishes
--- text and HEIC views, and refuses JPEG/PNG/WebP photos (no copy named).
+-- text, and refuses any photo (no copy named).
 create or replace function public.life_blog_publish(p_post_id uuid,p_expected_revision bigint,p_operation_id uuid,p_photo_ids text[] default '{}',p_author jsonb default '{"name":"","intro":""}'::jsonb,p_expected_publication_revision bigint default 0)
 returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_blog_private.publish_copies(p_post_id,p_expected_revision,p_operation_id,p_photo_ids,p_author,p_expected_publication_revision,'{}'::jsonb)$$;
 create or replace function public.life_blog_publish_copies(p_post_id uuid,p_expected_revision bigint,p_operation_id uuid,p_photo_ids text[],p_author jsonb,p_expected_publication_revision bigint,p_copies jsonb)

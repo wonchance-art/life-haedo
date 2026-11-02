@@ -2,12 +2,14 @@
  * private; this function never redirects or exposes a Storage URL or secret.
  * 2026-11-02: published photos are metadata-free copies. Before any byte is
  * sent, the whole object is read, its SHA-256 must equal the published digest
- * and its structure must carry no EXIF, GPS, XMP, IPTC, comment or text
- * metadata. Anything else (an original, trailing data, an unknown chunk) is
- * refused, so a client mistake cannot publish camera or location data. */
+ * and it must pass the public-copy allow list below (no EXIF, GPS, XMP,
+ * IPTC, comment, text, time or animation data, nothing after the end marker).
+ * Anything else is refused, so a client mistake cannot publish camera or
+ * location data. */
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const MAX_BYTES = 64 * 1024 * 1024;
-const TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+// Public copies are JPEG or PNG only (HEIC/HEIF and WebP publish a JPEG/PNG copy).
+const TYPES = new Set(["image/jpeg", "image/png"]);
 type Media = { bucket: string; path: string; type: string; size: number; digest: string };
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -30,11 +32,32 @@ function validMedia(input: unknown): input is Media {
     /^[A-Za-z0-9_-]{1,128}$/.test(path[2]) && path[3] === value.digest;
 }
 
-const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.subarray(from, to));
-const starts = (b: Uint8Array, at: number, text: string) => at + text.length <= b.length && ascii(b, at, at + text.length) === text;
-// JPEG: only JFIF/JFXX (APP0), ICC colour profile (APP2) and Adobe colour
-// transform (APP14) application segments; no APP1 (EXIF/XMP), APP13 (IPTC),
-// comments, MPF secondary images or bytes after the end marker.
+// The public-copy allow list. Same rules as PhotoPost.metadataFree in
+// assets/life/photo-post.js (tests/blog-public-copies.test.cjs compares both
+// on one corpus). JPEG: SOI, SOF, DHT, DQT, DRI, SOS, EOI, APP0 JFIF (16-byte,
+// no thumbnail), APP2 ICC (profile signature), APP14 Adobe (14-byte). PNG:
+// IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, iCCP (name/method/zlib
+// header), pHYs. Anything else, or bytes after the end marker, is refused.
+// ICC profile contents (including their description text) are checked
+// structurally only.
+const JPEG_SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "pHYs"]);
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+const bytesAre = (b: Uint8Array, from: number, value: string) =>
+  from + value.length <= b.length && [...value].every((c, i) => b[from + i] === c.charCodeAt(0));
+function jpegSegment(b: Uint8Array, marker: number, at: number, length: number): boolean {
+  const body = at + 2;
+  if (JPEG_SOF.has(marker) || [0xc4, 0xdb, 0xdd, 0xda].includes(marker)) return true;
+  if (marker === 0xe0) return length === 16 && bytesAre(b, body, "JFIF\0") && b[body + 12] === 0 && b[body + 13] === 0;
+  if (marker === 0xee) return length === 14 && bytesAre(b, body, "Adobe");
+  if (marker === 0xe2) {
+    if (length < 16 || !bytesAre(b, body, "ICC_PROFILE\0")) return false;
+    const seq = b[body + 12], count = b[body + 13];
+    if (seq < 1 || seq > count) return false;
+    return seq > 1 || (length >= 16 + 40 && bytesAre(b, body + 14 + 36, "acsp"));
+  }
+  return false;
+}
 function cleanJpeg(b: Uint8Array): boolean {
   if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return false;
   let at = 2;
@@ -44,17 +67,9 @@ function cleanJpeg(b: Uint8Array): boolean {
     if (at >= b.length) return false;
     const marker = b[at++];
     if (marker === 0xd9) return at === b.length;
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
     if (at + 2 > b.length) return false;
     const length = (b[at] << 8) | b[at + 1];
-    if (length < 2 || at + length > b.length) return false;
-    if (marker === 0xfe) return false;
-    if (marker >= 0xe0 && marker <= 0xef) {
-      const body = at + 2;
-      const allowed = (marker === 0xe0 && (starts(b, body, "JFIF\0") || starts(b, body, "JFXX\0"))) ||
-        (marker === 0xe2 && starts(b, body, "ICC_PROFILE\0")) || (marker === 0xee && starts(b, body, "Adobe"));
-      if (!allowed) return false;
-    }
+    if (length < 2 || at + length > b.length || !jpegSegment(b, marker, at, length)) return false;
     at += length;
     if (marker === 0xda) {
       // Entropy-coded data: stuffed 0xFF00, restart markers and fill bytes stay inside the scan.
@@ -69,39 +84,32 @@ function cleanJpeg(b: Uint8Array): boolean {
   }
   return false;
 }
-// PNG: still images with pixel and colour chunks only. No eXIf, tEXt, zTXt,
-// iTXt, tIME, animation or unknown chunks; nothing after IEND.
-const PNG_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "cHRM", "gAMA", "iCCP", "sBIT", "sRGB", "cICP", "bKGD", "pHYs"]);
+function iccpValid(b: Uint8Array, from: number, length: number): boolean {
+  let n = 0;
+  while (n < length && n < 80 && b[from + n] !== 0) {
+    const c = b[from + n];
+    if (!((c >= 32 && c <= 126) || c >= 161)) return false;
+    n++;
+  }
+  if (n < 1 || n > 79 || b[from] === 32 || b[from + n - 1] === 32 || n + 4 > length) return false;
+  const cmf = b[from + n + 2], flg = b[from + n + 3];
+  return b[from + n] === 0 && b[from + n + 1] === 0 && (cmf & 15) === 8 && ((cmf << 8) | flg) % 31 === 0;
+}
 function cleanPng(b: Uint8Array): boolean {
-  if (b.length < 8 || ascii(b, 0, 8) !== "\x89PNG\r\n\x1a\n") return false;
+  if (b.length < 8 || PNG_SIGNATURE.some((v, i) => b[i] !== v)) return false;
   let at = 8;
   while (at + 12 <= b.length) {
-    const length = ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0, name = ascii(b, at + 4, at + 8);
-    if (!PNG_CHUNKS.has(name) || at + 12 + length > b.length) return false;
-    at += 12 + length;
+    const length = ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0,
+      name = String.fromCharCode(...b.subarray(at + 4, at + 8)), end = at + 12 + length;
+    if (end > b.length || (at === 8) !== (name === "IHDR") || !PNG_KEEP.has(name) || (name === "iCCP" && !iccpValid(b, at + 8, length))) return false;
+    at = end;
     if (name === "IEND") return at === b.length;
   }
   return false;
 }
-// WebP: still image data, alpha and colour profile only. No EXIF or XMP.
-const WEBP_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ICCP"]);
-function cleanWebp(b: Uint8Array): boolean {
-  if (b.length < 20 || ascii(b, 0, 4) !== "RIFF" || ascii(b, 8, 12) !== "WEBP") return false;
-  const riff = (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
-  if (riff + 8 !== b.length) return false;
-  let at = 12;
-  while (at + 8 <= b.length) {
-    const name = ascii(b, at, at + 4), length = (b[at + 4] | (b[at + 5] << 8) | (b[at + 6] << 16) | (b[at + 7] << 24)) >>> 0;
-    if (!WEBP_CHUNKS.has(name) || at + 8 + length > b.length) return false;
-    if (name === "VP8X" && (length < 1 || (b[at + 8] & 0x0e))) return false; // EXIF, XMP or animation flags
-    at += 8 + length + (length & 1);
-  }
-  return at === b.length;
-}
 export function metadataFree(type: string, bytes: Uint8Array): boolean {
   if (type === "image/jpeg") return cleanJpeg(bytes);
   if (type === "image/png") return cleanPng(bytes);
-  if (type === "image/webp") return cleanWebp(bytes);
   return false;
 }
 async function readExact(body: ReadableStream<Uint8Array>, size: number): Promise<Uint8Array | null> {
@@ -173,7 +181,7 @@ export function createHandler({ fetcher = fetch, environment = (name: string) =>
       // old public photo. Nothing has been sent before this check.
       const current = await authorize();
       if (!current || (["bucket", "path", "type", "size", "digest"] as const).some((field) => current[field] !== media[field])) return failed(404);
-      const suffix = media.type === "image/jpeg" ? "jpg" : media.type === "image/png" ? "png" : "webp";
+      const suffix = media.type === "image/jpeg" ? "jpg" : "png";
       return new Response(bytes, { status: 200, headers: {
         ...HEADERS, "Content-Type": media.type, "Content-Length": String(media.size),
         "Content-Disposition": `inline; filename="photo.${suffix}"`,

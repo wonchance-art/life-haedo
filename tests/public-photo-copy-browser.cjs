@@ -3,8 +3,9 @@
  * go through the actual PhotoPost.readPhoto → publicCopy pipeline (real canvas
  * decoding and encoding). The original stays byte-identical; the copy carries no
  * metadata, applies EXIF rotation and passes the haedo-blog-media byte check.
- * HEIC decoding is stubbed (Linux Chromium has no HEIC decoder); its JPEG view is
- * still encoded by the real canvas. No account, server, or Apple-device claim.
+ * HEIC decoding is stubbed (Linux Chromium has no HEIC decoder); its JPEG view and
+ * the copy made from it are still encoded by the real canvas. An Apple-style
+ * encoder (minimal Exif APP1 in JPEG, iDOT in PNG) is simulated by wrapping toBlob. No account, server, or Apple-device claim.
  * BASE_URL=http://127.0.0.1:4197 node tests/public-photo-copy-browser.cjs
  */
 'use strict';
@@ -79,25 +80,67 @@ async function main() {
       }
       report.checks.push({ name: item.name, copy: result.copy.type, size: result.copy.size }); console.log('PASS ' + item.name + ' → ' + result.copy.type + ' ' + result.copy.width + '×' + result.copy.height);
     }
-    // HEIC: the public bytes are the JPEG view, made by the real canvas from a stubbed decode.
+    // HEIC: the public bytes are a copy made from the JPEG view (real canvas; the HEIC decode is stubbed).
     const heic = F.heicWithGps();
-    const result = await page.evaluate(async data => {
+    await page.evaluate(() => {
       const real = window.createImageBitmap.bind(window);
       window.createImageBitmap = async blob => {
         if (!['image/heic', 'image/heif'].includes(blob.type)) return real(blob);
         const c = document.createElement('canvas'); c.width = 40; c.height = 30; const x = c.getContext('2d'); x.fillStyle = '#336699'; x.fillRect(0, 0, 40, 30); return real(c);
       };
+    });
+    const heicCopy = async () => page.evaluate(async data => {
       const M = HaedoLife.PhotoPost, input = Uint8Array.from(atob(data), c => c.charCodeAt(0));
       const photo = await M.readPhoto(new File([input], 'IMG_0001.HEIC', { type: 'image/heic' }), HaedoLife.Core.id), copy = await M.publicCopy(photo);
-      const original = new Uint8Array(await photo.blob.arrayBuffer()), bytes = new Uint8Array(await copy.blob.arrayBuffer());
-      let s = ''; bytes.forEach(n => s += String.fromCharCode(n));
-      return { sameOriginal: original.length === input.length && original.every((v, i) => v === input[i]), view: copy.view, type: copy.type, digest: copy.digest, viewDigest: photo.view.digest, bytes: btoa(s) };
+      const original = new Uint8Array(await photo.blob.arrayBuffer()), bytes = new Uint8Array(await copy.blob.arrayBuffer()), view = new Uint8Array(await photo.view.blob.arrayBuffer());
+      const text = value => { let s = ''; value.forEach(n => s += String.fromCharCode(n)); return btoa(s); };
+      return { sameOriginal: original.length === input.length && original.every((v, i) => v === input[i]), view: copy.view, type: copy.type, digest: copy.digest, viewDigest: photo.view.digest,
+        width: copy.width, height: copy.height, bytes: text(bytes), viewBytes: text(view) };
     }, b64(heic));
-    assert.equal(result.sameOriginal, true, 'HEIC original keeps its exact bytes');
-    assert.equal(result.view, true); assert.equal(result.type, 'image/jpeg'); assert.equal(result.digest, result.viewDigest, 'HEIC publishes its JPEG view');
-    assert.deepEqual(F.leaks(bytesOf(result.bytes)), [], 'the HEIC view carries no EXIF/GPS/XMP'); assert(F.leaks(heic).length > 0);
-    assert.equal(edge.metadataFree('image/jpeg', bytesOf(result.bytes)), true);
-    report.checks.push({ name: 'HEIC view', copy: 'image/jpeg' }); console.log('PASS HEIC with Exif GPS → its JPEG view');
+    const checkHeic = (result, label) => {
+      assert.equal(result.sameOriginal, true, label + ': HEIC original keeps its exact bytes');
+      assert.equal(result.view, undefined); assert.equal(result.type, 'image/jpeg'); assert.deepEqual([result.width, result.height], [40, 30]);
+      assert.notEqual(result.digest, result.viewDigest, label + ': the public copy is a separate object from the view');
+      assert.deepEqual(F.leaks(bytesOf(result.bytes)), [], label + ': the copy carries no EXIF/GPS/XMP'); assert(F.leaks(heic).length > 0);
+      assert.equal(edge.metadataFree('image/jpeg', bytesOf(result.bytes)), true, label + ': the media handler accepts the copy');
+    };
+    checkHeic(await heicCopy(), 'HEIC'); report.checks.push({ name: 'HEIC copy from its view', copy: 'image/jpeg' }); console.log('PASS HEIC with Exif GPS → a JPEG copy of its view');
+
+    // Apple ImageIO (iOS/macOS Safari) can add a minimal Exif APP1 to canvas JPEG
+    // and an iDOT chunk to canvas PNG. Simulate that encoder: every toBlob output
+    // gains those pieces. The copy must still be reduced to the allow list.
+    const app0End = 4 + F.JPEG_8X8.readUInt16BE(4), appleSegment = F.appleJpeg(F.JPEG_8X8).subarray(app0End, app0End + F.appleJpeg(F.JPEG_8X8).length - F.JPEG_8X8.length);
+    const plainPng = F.png(4, 3), idatAt = 8 + 12 + 13, idotChunk = F.pngWithIdot(plainPng).subarray(idatAt, idatAt + F.pngWithIdot(plainPng).length - plainPng.length);
+    await page.evaluate(({ exif, idot }) => {
+      const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0)), segment = bytes(exif), chunk = bytes(idot), real = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+        return real.call(this, async blob => {
+          if (!blob) return callback(blob);
+          const b = new Uint8Array(await blob.arrayBuffer());
+          if (blob.type === 'image/jpeg') { const at = b[3] === 0xe0 ? 4 + ((b[4] << 8) | b[5]) : 2; return callback(new Blob([b.subarray(0, at), segment, b.subarray(at)], { type: blob.type })); }
+          if (blob.type === 'image/png') { let at = 8; while (String.fromCharCode(...b.subarray(at + 4, at + 8)) !== 'IDAT') at += 12 + (((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0); return callback(new Blob([b.subarray(0, at), chunk, b.subarray(at)], { type: blob.type })); }
+          callback(blob);
+        }, type, quality);
+      };
+    }, { exif: b64(appleSegment), idot: b64(idotChunk) });
+    const probe = await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 4; c.height = 3; c.getContext('2d').fillRect(0, 0, 4, 3);
+      const read = type => new Promise(r => c.toBlob(async b => r([...new Uint8Array(await b.arrayBuffer())]), type, 0.9)); return { jpeg: await read('image/jpeg'), png: await read('image/png') }; });
+    assert.equal(edge.metadataFree('image/jpeg', Buffer.from(probe.jpeg)), false, 'the simulated Apple JPEG output would be refused as is');
+    assert.equal(edge.metadataFree('image/png', Buffer.from(probe.png)), false, 'the simulated Apple PNG output would be refused as is');
+    for (const item of cases.filter(value => ['JPEG with EXIF orientation 6, GPS and XMP', 'PNG with eXIf GPS and iTXt XMP'].includes(value.name))) {
+      const result = await page.evaluate(async ({ file, type, data }) => {
+        const M = HaedoLife.PhotoPost, photo = await M.readPhoto(new File([Uint8Array.from(atob(data), c => c.charCodeAt(0))], file, { type }), HaedoLife.Core.id), copy = await M.publicCopy(photo);
+        let s = ''; new Uint8Array(await copy.blob.arrayBuffer()).forEach(n => s += String.fromCharCode(n)); return { type: copy.type, digest: copy.digest, actual: await M.digest(copy.blob), bytes: btoa(s) };
+      }, { file: item.file, type: item.type, data: b64(item.bytes) });
+      const bytes = bytesOf(result.bytes);
+      assert.deepEqual(F.leaks(bytes), [], 'Apple-style ' + item.name + ': no Exif/GPS/XMP');
+      assert.equal(edge.metadataFree(result.type, bytes), true, 'Apple-style ' + item.name + ': the media handler accepts the copy');
+      assert.equal(result.actual, result.digest, 'the digest names the filtered bytes');
+      report.checks.push({ name: 'Apple-style encoder: ' + item.name, copy: result.type }); console.log('PASS Apple-style encoder: ' + item.name + ' → clean ' + result.type);
+    }
+    const appleHeic = await heicCopy();
+    assert(F.leaks(bytesOf(appleHeic.viewBytes)).includes('Exif\\0\\0'), 'the simulated Apple view carries an Exif block');
+    checkHeic(appleHeic, 'Apple-style HEIC view'); report.checks.push({ name: 'Apple-style encoder: HEIC view with Exif', copy: 'image/jpeg' }); console.log('PASS Apple-style encoder: HEIC view with Exif → clean JPEG copy');
     assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []);
   } finally { await browser.close(); }
   console.log(JSON.stringify({ pass: true, checks: report.checks.length, browser: report.browser }));

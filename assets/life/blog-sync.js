@@ -572,17 +572,16 @@
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
-    // Public copies (2026-11-02): every selected JPEG/PNG/WebP photo is
-    // published only as a metadata-free re-encoding. `provided` are the copies
-    // the reviewer previewed; missing ones are made here. HEIC/HEIF photos use
-    // their JPEG view and need none. Copies are uploaded before the durable
-    // publication request names them.
+    // Public copies (2026-11-02): every selected photo, in every format, is
+    // published only as a metadata-free re-encoding (HEIC/HEIF from their JPEG
+    // view). `provided` are the copies the reviewer previewed; missing ones are
+    // made here. Copies are uploaded before the durable request names them.
     const copyMeta = ({ id, type, size, digest, width, height }) => ({ id, type, size, digest, width, height });
     async function publicCopies(c, post, photoIds, provided) {
       const given = new Map((Array.isArray(provided) ? provided : []).map(copy => [copy?.id, copy])), copies = [];
       for (const photoId of photoIds) {
         const photo = post.photos.find(item => item.id === photoId);
-        if (!photo || photoPost.viewRequired(photo.type)) continue;
+        if (!photo) continue;
         const copy = given.has(photoId) ? photoPost.checkPublicCopy(photo, given.get(photoId)) : await photoPost.publicCopy(photo); guard(c);
         if (await photoPost.digest(copy.blob) !== copy.digest) throw Object.assign(new Error('공개용 사진 사본 정보를 확인해 주세요.'), { code: 'invalid_photo_post' });
         guard(c); copies.push(copy);
@@ -596,7 +595,7 @@
       if (initial.status !== 'saved') throw fault('invalid_request');
       const before = await readState(c);
       const selection = { photoIds: choices.photoIds || [], author: choices.author || { name: '', intro: '' } };
-      const needsCopies = selection.photoIds.some(photoId => { const photo = initial.photos.find(item => item.id === photoId); return photo && !photoPost.viewRequired(photo.type); });
+      const needsCopies = selection.photoIds.length > 0;
       // A request recorded before public copies existed would publish an
       // original; it is replaced by a new request with copies.
       const usable = pending => !!pending && (!needsCopies || !!pending.copies);

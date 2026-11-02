@@ -218,7 +218,7 @@
           if (!copies.has(p.id)) copies.set(p.id, await life.PhotoPost.publicCopy(p));
           if (!valid() || preview?.doc.id !== doc.id) return;
         }
-        const shown = included.map(p => copies.get(p.id)), uploaded = shown.filter(copy => !copy.view);
+        const shown = included.map(p => copies.get(p.id)), uploaded = shown;
         const snapshot = await life.Blog.publicSnapshot(doc, { photoIds, author: { name: author.value, intro: intro.value }, copies: uploaded });
         if (!valid() || preview?.doc.id !== doc.id) return;
         urls.forEach(url => URL.revokeObjectURL(url)); urls = [];

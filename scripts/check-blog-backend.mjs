@@ -88,15 +88,14 @@ async function edge() {
  response = await handler(request()); assert.equal(response.status, 502); assert.equal((await response.arrayBuffer()).byteLength, 0);
  served = Buffer.from(original); served[served.length - 20] ^= 1; returnedSize = served.length; Object.assign(media, { size: original.length, digest }); media.path = media.path.replace(/[a-f0-9]{64}$/, digest);
  response = await handler(request()); assert.equal(response.status, 502);
- for (const [type, clean, gps] of [["image/jpeg", photoFixtures.JPEG_8X8, photoFixtures.jpegWithGps(photoFixtures.JPEG_8X8)], ["image/png", original, tainted],
-  ["image/webp", photoFixtures.WEBP_8X8, photoFixtures.webpWithGps(photoFixtures.WEBP_8X8, { width: 8, height: 8 })]]) {
-  assert.equal(metadataFree(type, clean), true, type + " canvas output is served"); assert.equal(metadataFree(type, gps), false, type + " with EXIF/GPS/XMP is refused");
- }
+ // The same allow list as PhotoPost.metadataFree: Apple ImageIO Exif/iDOT, GPS, text, trailing data and allow-list gaps are refused.
+ for (const item of photoFixtures.corpus()) assert.equal(metadataFree(item.type, item.bytes), item.clean, item.name);
+ assert.equal(metadataFree("image/webp", photoFixtures.WEBP_8X8), false, "public copies are JPEG or PNG only");
  served = original;
  response = await handler(new Request("https://anonymous-edge.example.invalid/?token=invalid&photo=invalid")); assert.equal(response.status, 404);
  response = await handler(new Request(request(), { method: "POST" })); assert.equal(response.status, 405);
  response = await handler(new Request(request(), { method: "OPTIONS" })); assert.equal(response.status, 204);
- return 13;
+ return 12 + photoFixtures.corpus().length;
 }
 try {
  try { docker(["image", "inspect", image]); } catch (_) { docker(["pull", image]); }
@@ -117,7 +116,9 @@ try {
  await fixture(syncMigration); await fixture(deleteGuardMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-installation.sql")), installed);
  // 2026-11-02 public photo copies; re-running the 2026-11-01 files must not undo them.
  await fixture(copyMigration); const copyChecks = parsed(await fixture("supabase/tests/blog-public-copies.sql")); assert.equal(copyChecks.failures, 0);
- await fixture(syncMigration); await fixture(deleteGuardMigration); await fixture(copyMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
+ // Right after the 2026-11-01 files run again (copy migration not re-applied) the copy rule still holds.
+ await fixture(syncMigration); await fixture(deleteGuardMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
+ await fixture(copyMigration); assert.deepEqual(parsed(await fixture("supabase/tests/blog-public-copies.sql")), copyChecks);
  const simultaneous = await concurrency(), streams = await edge();
  const report = { pass: true, postgres: docker(["exec", container, "postgres", "--version"]).trim(),
   sqlAssertions: sqlChecks.passed, publicCopyAssertions: copyChecks.passed, installationAssertions: Object.keys(installed).length, concurrencyAssertions: simultaneous, edgeAssertions: streams,

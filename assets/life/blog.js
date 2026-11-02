@@ -125,10 +125,11 @@
     return value;
   }
   // `copies` (array or Map of {id,type,size,digest,width,height}) are the
-  // metadata-free public copies of selected JPEG/PNG/WebP photos; a selected
-  // photo then shows that copy's metadata, exactly as the server publishes it.
-  // Without `copies` the projection keeps the original's metadata (private
-  // reading only); publication always supplies them.
+  // metadata-free public copies of the selected photos, one per photo in every
+  // format (HEIC/HEIF copies are made from their JPEG view); a selected photo
+  // then shows that copy's metadata, exactly as the server publishes it.
+  // Without `copies` the projection keeps the original's (or HEIC view's)
+  // metadata for private reading only; publication always supplies them.
   function publicSnapshot(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}) {
     model().validate(doc);
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
@@ -142,10 +143,9 @@
     if (copied) {
       check(!copied.has(undefined) && [...copied.keys()].every((id) => selected.has(id)), "invalid_blog_selection");
       for (const p of doc.photos.filter((value) => selected.has(value.id))) {
-        const c = copied.get(p.id);
-        if (needsView(p)) { check(!c, "invalid_blog_selection"); continue; }
-        check(!!c && ["image/jpeg", "image/png"].includes(c.type) && c.digest !== p.digest && Number.isSafeInteger(c.size) && c.size > 0 &&
-          Number.isSafeInteger(c.width) && c.width >= 1 && c.width <= p.width && Number.isSafeInteger(c.height) && c.height >= 1 && c.height <= p.height &&
+        const c = copied.get(p.id), bound = needsView(p) ? p.view : p;
+        check(!!c && ["image/jpeg", "image/png"].includes(c.type) && c.digest !== p.digest && c.digest !== p.view?.digest && Number.isSafeInteger(c.size) && c.size > 0 &&
+          Number.isSafeInteger(c.width) && c.width >= 1 && c.width <= bound.width && Number.isSafeInteger(c.height) && c.height >= 1 && c.height <= bound.height &&
           typeof c.digest === "string" && /^[a-f0-9]{64}$/.test(c.digest), "invalid_blog_selection");
       }
     }
@@ -153,11 +153,11 @@
     const snapshot = { format: "life-blog-public-v1", title: doc.title,
       ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? copy(op) :
         { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
-      // A HEIC original is never projected publicly; its derived JPEG (no
-      // embedded metadata) is the public photo for that position. Other
-      // originals are replaced by their public copy when one is given.
+      // An original is never projected publicly when copies are given; the
+      // public photo for that position is its copy. A HEIC original is never
+      // projected even privately: its JPEG view stands in for it.
       attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map((p) => {
-        const { type, width, height, size, digest } = needsView(p) ? p.view : copied ? copied.get(p.id) : p;
+        const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
     validateSnapshot(snapshot);

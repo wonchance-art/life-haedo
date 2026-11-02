@@ -6,8 +6,8 @@
  *  1. blog-bootstrap.sql + the blog migrations up to 20261101160000, then
  *     blog-originals.sql (failures 0) and blog-installation.sql (all true).
  *  2. 20261102120000_life_blog_public_photo_copies.sql (when present), then
- *     blog-public-copies.sql; re-running the 2026-11-01 blog migrations and the
- *     copy migration keeps every result.
+ *     blog-public-copies.sql; re-running the 2026-11-01 blog migrations alone
+ *     keeps every result, and so does re-applying the copy migration.
  *  3. Served bytes, end to end: real SQL + the real haedo-blog-media handler +
  *     an in-memory Storage. Synthetic GPS-bearing JPEG/PNG/WebP/HEIC originals
  *     (tests/fixtures/photo-metadata.cjs). Whatever an outdated client manages to
@@ -52,12 +52,15 @@ async function main() {
         const copies = result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql')));
         assert.equal(copies.failures, 0);
         pass(`blog-public-copies.sql ${copies.passed} assertions`);
-        // The 2026-11-01 install bundle re-runs these two files; it must not undo the copy rule.
+        // The 2026-11-01 install bundle re-runs these two files; right after that
+        // (copy migration not re-applied) the copy rule must still hold.
         for (const name of BEFORE.slice(2)) await pgStub.applyFile(db, file(name));
-        await pgStub.applyFile(db, file(COPIES));
         assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql'))), copies);
         assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-installation.sql'))), installed);
-        pass('re-running the 2026-11-01 blog migrations and the copy migration keeps every result');
+        pass('re-running the 2026-11-01 blog migrations does not undo the copy rule');
+        await pgStub.applyFile(db, file(COPIES));
+        assert.deepEqual(result(await pgStub.applyFile(db, file('supabase/tests/blog-public-copies.sql'))), copies);
+        pass('re-applying the copy migration keeps every result');
       } else console.log('NOTE ' + COPIES + ' is absent: checking the earlier contract only');
       await servedBytes(db, copiesPresent);
     } finally { await db.end(); }
@@ -139,7 +142,8 @@ async function servedBytes(db, copiesPresent) {
   assert(copiesPresent);
 
   // 2. The current client publishes copies (canvas output stand-ins without metadata).
-  const copyBytes = { jpeg: F.stripJpeg(sources.jpeg.bytes), png: F.png(4, 3), webp: F.JPEG_8X8 };
+  // The HEIC copy is made from its view (here: the view without its colour profile).
+  const copyBytes = { jpeg: F.stripJpeg(sources.jpeg.bytes), png: F.png(4, 3), webp: F.stripJpeg(sources.jpeg.bytes), heic: F.stripJpeg(F.JPEG_8X8) };
   const copies = {};
   for (const [id, bytes] of Object.entries(copyBytes)) {
     const type = bytes[0] === 0xff ? 'image/jpeg' : 'image/png', stored = await store(id, bytes, type, sources[id].width, sources[id].height, 'life_blog_publish_prepare_copy');
@@ -149,11 +153,12 @@ async function servedBytes(db, copiesPresent) {
   let served = await serve(published.token);
   assert.deepEqual(served.map(item => item.status), [200, 200, 200, 200]);
   noLeak(served, 'copies');
-  assert.deepEqual(served.map(item => sha(item.bytes)), [copies.jpeg.digest, copies.png.digest, copies.webp.digest, photos[3].view.digest], 'the served bytes are exactly the copies and the HEIC view');
+  assert.deepEqual(served.map(item => sha(item.bytes)), [copies.jpeg.digest, copies.png.digest, copies.webp.digest, copies.heic.digest], 'the served bytes are exactly the registered copies');
+  assert(!served.some(item => [photos[3].digest, photos[3].view.digest].includes(sha(item.bytes))), 'neither the HEIC original nor its view is served');
   for (const item of served) assert(edge.metadataFree(item.photo.type, item.bytes));
   for (const [id, value] of Object.entries(sources)) assert.equal(sha(objects.get(`${owner}/${post}/${id}/${sha(value.bytes)}`).bytes), sha(value.bytes), id + ' original stays byte-identical');
   assert.equal(Number(await as('anon', null, "select count(*)::int as value from storage.objects where bucket_id='haedo-blog-originals'")), 0, 'anonymous callers read no private object');
-  pass('JPEG, PNG and WebP copies and the HEIC view are served without metadata; originals stay private and byte-identical');
+  pass('copies of JPEG, PNG, WebP and HEIC are served without metadata; originals stay private and byte-identical');
 
   // 3. A copy that still carries metadata (a client defect) is never served.
   const tainted = F.pngWithGps(F.png(4, 3, [9, 9, 9, 255])), bad = await store('png', tainted, 'image/png', 4, 3, 'life_blog_publish_prepare_copy');

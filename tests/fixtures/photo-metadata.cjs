@@ -139,4 +139,61 @@ function stripJpeg(jpeg) {
 // server-side tests need no browser. Generated 2026-11-02.
 const JPEG_8X8 = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAIAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAhEAABAgQHAAAAAAAAAAAAAAAABxICERMVFBclMURhYv/EABUBAQEAAAAAAAAAAAAAAAAAAAQG/8QAHREAAgEFAQEAAAAAAAAAAAAAAQMEAAIRMUEh8f/aAAwDAQACEQMRAD8AnVcVzNO1aVbMBV5NZ72eIZSZ3uAAkeOqIoJSMWjQ9OzntTD3skMLWnNx+cr/2Q==', 'base64');
 const WEBP_8X8 = Buffer.from('UklGRjICAABXRUJQVlA4WAoAAAAgAAAABwAABwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggRAAAABACAJ0BKggACAAAwBIliALD4oABrVue+4AA/v4yX8W9/+XHMv+f/73Vzrn/wqfDHV3v+9QLqUf/K7cump/ez/ezoiAA', 'base64');
-module.exports = { MARKERS, leaks, exif, jpegWithGps, pngWithGps, webpWithGps, heicWithGps, stripJpeg, png, apng, animatedWebp, riff, JPEG_8X8, WEBP_8X8 };
+// What Apple ImageIO (iOS/macOS Safari canvas toBlob) may add to otherwise
+// clean canvas output: a minimal Exif APP1 (IFD0 → Exif IFD with ColorSpace,
+// PixelXDimension, PixelYDimension) in JPEG, and an iDOT chunk in PNG.
+// No location data, but still an Exif block that must not be published.
+function appleExif(width, height) {
+  const u16 = n => { const b = Buffer.alloc(2); b.writeUInt16LE(n); return b; }, u32 = n => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
+  const entry = (tag, type, value) => Buffer.concat([u16(tag), u16(type), u32(1), type === 3 ? Buffer.concat([u16(value), Buffer.alloc(2)]) : u32(value)]);
+  const ifd0 = Buffer.concat([u16(1), entry(0x8769, 4, 26), u32(0)]);
+  const exifIfd = Buffer.concat([u16(3), entry(0xa001, 3, 1), entry(0xa002, 4, width), entry(0xa003, 4, height), u32(0)]);
+  return Buffer.concat([Buffer.from('II*\0', 'latin1'), u32(8), ifd0, exifIfd]);
+}
+function jpegSegment(marker, payload) { const head = Buffer.from([0xff, marker, 0, 0]); head.writeUInt16BE(payload.length + 2, 2); return Buffer.concat([head, payload]); }
+// Inserts a segment right after APP0 (or SOI), where ImageIO writes Exif.
+function jpegInsert(jpeg, segment) {
+  const b = Buffer.from(jpeg); let at = 2;
+  if (b[2] === 0xff && b[3] === 0xe0) at = 4 + b.readUInt16BE(4);
+  return Buffer.concat([b.subarray(0, at), segment, b.subarray(at)]);
+}
+const appleJpeg = (jpeg, width = 8, height = 8) => jpegInsert(jpeg, jpegSegment(0xe1, Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), appleExif(width, height)])));
+// iDOT: Apple's parallel-decoding hint (28 bytes), placed before the first IDAT.
+function pngWithIdot(png) {
+  const b = Buffer.from(png); let at = 8;
+  while (b.toString('latin1', at + 4, at + 8) !== 'IDAT') at += 12 + b.readUInt32BE(at);
+  const idot = Buffer.alloc(28); idot.writeUInt32BE(2, 0); idot.writeUInt32BE(0, 4);
+  return Buffer.concat([b.subarray(0, at), pngChunk('iDOT', idot), b.subarray(at)]);
+}
+// Allow-list edge cases: each is refused by the media handler and reduced by
+// PhotoPost.publicBytes. `clean` marks the ones that pass unchanged.
+function corpus() {
+  const j = Buffer.from(JPEG_8X8), p = png(4, 3), soiEnd = 2, app0End = 4 + j.readUInt16BE(4);
+  const jfifTail = Buffer.concat([j.subarray(0, 4), Buffer.from([0, 20]), j.subarray(6, app0End), Buffer.from('MORE', 'latin1'), j.subarray(app0End)]);
+  const iccStart = app0End, iccEnd = iccStart + 2 + j.readUInt16BE(iccStart + 2), icc = Buffer.from(j.subarray(iccStart, iccEnd));
+  icc.write('xxxx', 4 + 14 + 36, 'latin1');
+  const ihdrEnd = 8 + 12 + 13, iend = p.length - 12;
+  const iccp = (name, data) => pngChunk('iCCP', Buffer.concat([Buffer.from(name + '\0\0', 'latin1'), data]));
+  return [
+    { name: 'canvas JPEG (JFIF + ICC)', type: 'image/jpeg', bytes: j, clean: true },
+    { name: 'canvas PNG', type: 'image/png', bytes: p, clean: true },
+    { name: 'PNG with sRGB and pHYs', type: 'image/png', bytes: Buffer.concat([p.subarray(0, ihdrEnd), pngChunk('sRGB', Buffer.from([0])), pngChunk('pHYs', Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 0])), p.subarray(ihdrEnd)]), clean: true },
+    { name: 'PNG with a well-formed iCCP', type: 'image/png', bytes: Buffer.concat([p.subarray(0, ihdrEnd), iccp('sRGB profile', zlib.deflateSync(Buffer.alloc(64))), p.subarray(ihdrEnd)]), clean: true },
+    { name: 'Apple minimal Exif APP1', type: 'image/jpeg', bytes: appleJpeg(j), clean: false },
+    { name: 'GPS EXIF and XMP', type: 'image/jpeg', bytes: jpegWithGps(j), clean: false },
+    { name: 'APP0 JFIF with appended data', type: 'image/jpeg', bytes: jfifTail, clean: false },
+    { name: 'JFXX thumbnail extension', type: 'image/jpeg', bytes: jpegInsert(j, jpegSegment(0xe0, Buffer.from('JFXX\0\x10thumb', 'latin1'))), clean: false },
+    { name: 'JPG0 (0xF0) segment', type: 'image/jpeg', bytes: jpegInsert(j, jpegSegment(0xf0, Buffer.from('extension', 'latin1'))), clean: false },
+    { name: 'APP2 ICC without profile signature', type: 'image/jpeg', bytes: Buffer.concat([j.subarray(0, iccStart), icc, j.subarray(iccEnd)]), clean: false },
+    { name: 'comment segment', type: 'image/jpeg', bytes: jpegInsert(j, jpegSegment(0xfe, Buffer.from('taken at home', 'latin1'))), clean: false },
+    { name: 'bytes after EOI', type: 'image/jpeg', bytes: Buffer.concat([j, Buffer.from('MPF secondary image', 'latin1')]), clean: false },
+    { name: 'Apple iDOT', type: 'image/png', bytes: pngWithIdot(p), clean: false },
+    { name: 'eXIf GPS and iTXt XMP', type: 'image/png', bytes: pngWithGps(p), clean: false },
+    { name: 'tEXt chunk', type: 'image/png', bytes: Buffer.concat([p.subarray(0, iend), pngChunk('tEXt', Buffer.from('Author\0me', 'latin1')), p.subarray(iend)]), clean: false },
+    { name: 'tIME chunk', type: 'image/png', bytes: Buffer.concat([p.subarray(0, ihdrEnd), pngChunk('tIME', Buffer.from([7, 234, 11, 2, 9, 12, 0])), p.subarray(ihdrEnd)]), clean: false },
+    { name: 'iCCP with a broken zlib header', type: 'image/png', bytes: Buffer.concat([p.subarray(0, ihdrEnd), iccp('profile', Buffer.from([1, 2, 3, 4])), p.subarray(ihdrEnd)]), clean: false },
+    { name: 'bytes after IEND', type: 'image/png', bytes: Buffer.concat([p, Buffer.from('trailer', 'latin1')]), clean: false },
+    { name: 'animated PNG', type: 'image/png', bytes: apng(4, 3), clean: false },
+  ];
+}
+module.exports = { MARKERS, leaks, exif, jpegWithGps, pngWithGps, webpWithGps, heicWithGps, stripJpeg, png, apng, animatedWebp, riff, appleJpeg, pngWithIdot, corpus, JPEG_8X8, WEBP_8X8 };

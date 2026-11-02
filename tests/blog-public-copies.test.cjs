@@ -1,10 +1,13 @@
 'use strict';
-// Public photo copies (2026-11-02 owner decision): a published JPEG/PNG/WebP
-// photo is a separate metadata-free re-encoding; HEIC/HEIF publish their JPEG
-// view; originals stay private. Canvas decoding/encoding is stubbed here; the
-// real canvas, rotation and byte checks run in tests/public-photo-copy-browser.cjs,
-// and SQL plus served bytes in tests/run-blog-sql-postgres.cjs.
+// Public photo copies (2026-11-02 owner decision): every published photo, in
+// every format, is a separate metadata-free re-encoding reduced to a byte-level
+// allow list (HEIC/HEIF from their JPEG view); originals stay private. Canvas
+// decoding/encoding is stubbed here; the real canvas, rotation and byte checks
+// run in tests/public-photo-copy-browser.cjs, SQL plus served bytes in
+// tests/run-blog-sql-postgres.cjs.
 const test = require('node:test'), assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path'), { stripTypeScriptTypes } = require('node:module');
+const edge = import('data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, '../supabase/functions/haedo-blog-media/index.ts'), 'utf8'))).toString('base64'));
 const F = require('./fixtures/photo-metadata.cjs');
 const { server, device, clock, png, post, Core, Photo, Blog } = require('./helpers/blog-sync-cloud.cjs');
 const Remote = require('../assets/life/blog-remote.js');
@@ -38,7 +41,7 @@ async function savedWith(photos) {
   return { cloud, a, saved };
 }
 
-test('a PNG/JPEG/WebP copy is a new canvas encoding: JPEG for JPEG and opaque WebP, PNG for PNG; HEIC returns its view', async () => {
+test('every copy is a new canvas encoding: JPEG for JPEG, opaque WebP and HEIC (from its view), PNG for PNG', async () => {
   encodes.length = 0;
   const jpeg = await photoOf(F.jpegWithGps(F.JPEG_8X8), 'image/jpeg'), pngPhoto = await photoOf(F.pngWithGps(F.png(1, 1)), 'image/png');
   const webp = await photoOf(F.webpWithGps(F.WEBP_8X8, { width: 1, height: 1 }), 'image/webp');
@@ -49,10 +52,16 @@ test('a PNG/JPEG/WebP copy is a new canvas encoding: JPEG for JPEG and opaque We
     assert.equal(await Photo.digest(copy.blob), copy.digest);
   }
   assert.deepEqual(encodes.map(o => [o.type, o.quality]), [['image/jpeg', 0.9], ['image/png', undefined], ['image/jpeg', 0.9]]);
-  const view = new Blob([F.JPEG_8X8], { type: 'image/jpeg' }), heicBytes = F.heicWithGps(), heic = await photoOf(heicBytes, 'image/heic', 8, 8);
-  heic.view = { type: 'image/jpeg', size: view.size, digest: await Photo.digest(view), width: 8, height: 8, blob: view };
+  // HEIC: decoded from the view; the stub encodes the view's own bytes, so the
+  // copy is re-encoded at 0.89 to stay a separate object from the view.
+  const view = new Blob([F.JPEG_8X8], { type: 'image/jpeg' }), heic = await photoOf(F.heicWithGps(), 'image/heic', 8, 8);
+  heic.view = { type: 'image/jpeg', size: view.size, digest: await Photo.digest(view), width: 1, height: 1, blob: view };
+  encodes.length = 0;
   const copy = await Photo.publicCopy(heic);
-  assert.equal(copy.view, true); assert.equal(copy.digest, heic.view.digest); assert.equal(copy.blob, view);
+  assert.equal(copy.view, undefined); assert.equal(copy.type, 'image/jpeg');
+  assert.notEqual(copy.digest, heic.view.digest); assert.notEqual(copy.digest, heic.digest);
+  assert.deepEqual(encodes.map(o => o.quality), [0.9, 0.89]);
+  assert.throws(() => Photo.checkPublicCopy(heic, { ...copy, type: 'image/png', blob: new Blob([F.png()], { type: 'image/png' }) }), { code: 'invalid_photo_post' });
 });
 
 test('a copy whose re-encoding equals the original still becomes a separate object without adding metadata', async () => {
@@ -65,6 +74,33 @@ test('a copy whose re-encoding equals the original still becomes a separate obje
   const jpeg = await photoOf(F.JPEG_8X8, 'image/jpeg'); encodeAs = new Blob([F.JPEG_8X8], { type: 'image/jpeg' });
   const again = await Photo.publicCopy(jpeg);
   assert.deepEqual(encodes.map(o => o.quality), [0.9, 0.89]); assert.notEqual(again.digest, jpeg.digest);
+});
+
+test('copies from encoders that add their own Exif or iDOT (Apple ImageIO) are reduced to the allow list before upload', async () => {
+  const E = await edge;
+  for (const [type, made, original] of [['image/jpeg', F.appleJpeg(F.JPEG_8X8), F.jpegWithGps(F.JPEG_8X8)], ['image/png', F.pngWithIdot(F.png(1, 1, [1, 2, 3, 255])), F.pngWithGps(F.png(1, 1))]]) {
+    assert.equal(E.metadataFree(type, made), false, 'the raw encoder output would be refused by the media handler');
+    const photo = await photoOf(original, type); encodeAs = new Blob([made], { type });
+    const copy = await Photo.publicCopy(photo), bytes = Buffer.from(await copy.blob.arrayBuffer());
+    assert.equal(E.metadataFree(type, bytes), true, type + ': the uploaded copy passes the media handler');
+    assert.equal(Photo.metadataFree(type, bytes), true);
+    assert.deepEqual(F.leaks(bytes), [], type + ': no Exif, GPS or XMP');
+    assert.equal(copy.digest, await Photo.digest(new Blob([bytes])), 'the digest is of the filtered bytes');
+  }
+});
+
+test('the client filter and the media handler apply one allow list', async () => {
+  const E = await edge;
+  for (const item of F.corpus()) {
+    assert.equal(Photo.metadataFree(item.type, item.bytes), item.clean, 'client: ' + item.name);
+    assert.equal(E.metadataFree(item.type, item.bytes), item.clean, 'Edge: ' + item.name);
+    const filtered = Photo.publicBytes(item.type, item.bytes);
+    assert(filtered, item.name + ' keeps a readable structure');
+    assert.equal(E.metadataFree(item.type, filtered), true, 'filtered ' + item.name + ' passes the media handler');
+    assert.deepEqual(F.leaks(filtered), [], 'filtered ' + item.name + ' carries no metadata');
+    if (item.clean) assert.deepEqual(Buffer.from(filtered), Buffer.from(item.bytes), item.name + ' is unchanged');
+  }
+  assert.equal(E.metadataFree('image/webp', F.WEBP_8X8), false, 'public copies are JPEG or PNG only');
 });
 
 test('a copy is refused when decoding shows another orientation or the copy does not match its photo', async () => {
@@ -82,7 +118,7 @@ test('animation and alpha are read from the original headers', async () => {
   assert.deepEqual(await Photo.imageTraits(new Blob([F.JPEG_8X8])), { type: 'image/jpeg', alpha: false, animated: false });
 });
 
-test('the public snapshot names copy metadata; a missing, extra or HEIC copy is refused', async () => {
+test('the public snapshot names copy metadata for every photo; a missing, extra, original or view digest is refused', async () => {
   const jpeg = await photoOf(F.jpegWithGps(F.JPEG_8X8), 'image/jpeg'), copy = await Photo.publicCopy(jpeg);
   const doc = await post({ title: '스냅샷' }); doc.photos = [jpeg]; doc.ops = [{ insert: '본문\n' }, { insert: { photo: { id: jpeg.id, caption: '', alt: '' } } }, { insert: '\n' }];
   const meta = { id: copy.id, type: copy.type, size: copy.size, digest: copy.digest, width: copy.width, height: copy.height };
@@ -93,6 +129,13 @@ test('the public snapshot names copy metadata; a missing, extra or HEIC copy is 
   assert.throws(() => Blog.publicSnapshot(doc, { photoIds: [jpeg.id], copies: [{ ...meta, digest: jpeg.digest }] }), { code: 'invalid_blog_selection' });
   // Private reading (no copies given) keeps the original projection.
   assert.equal(Blog.publicSnapshot(doc, { photoIds: [jpeg.id] }).photos[0].digest, jpeg.digest);
+  const view = new Blob([F.JPEG_8X8], { type: 'image/jpeg' }), heic = await photoOf(F.heicWithGps(), 'image/heic', 8, 8);
+  heic.view = { type: 'image/jpeg', size: view.size, digest: await Photo.digest(view), width: 1, height: 1, blob: view };
+  const both = await post({ title: 'HEIC 포함' }); both.photos = [heic]; both.ops = [{ insert: '본문\n' }, { insert: { photo: { id: heic.id, caption: '', alt: '' } } }, { insert: '\n' }];
+  assert.throws(() => Blog.publicSnapshot(both, { photoIds: [heic.id], copies: [] }), { code: 'invalid_blog_selection' }, 'a HEIC photo needs a copy too');
+  const heicCopy = await Photo.publicCopy(heic), heicMeta = { id: heic.id, type: heicCopy.type, size: heicCopy.size, digest: heicCopy.digest, width: heicCopy.width, height: heicCopy.height };
+  assert.equal(Blog.publicSnapshot(both, { photoIds: [heic.id], copies: [heicMeta] }).photos[0].digest, heicCopy.digest);
+  assert.throws(() => Blog.publicSnapshot(both, { photoIds: [heic.id], copies: [{ ...heicMeta, digest: heic.view.digest }] }), { code: 'invalid_blog_selection' });
 });
 
 test('publishing uploads the copy before the durable request and names only copies; the original stays private', async () => {
@@ -145,12 +188,12 @@ test('an interrupted publication retries with the same uploaded copies; a reques
   assert.notEqual(request.operation, earlier, 'a new operation replaces the copy-less one'); assert.equal(request.options.copies.length, 1);
 });
 
-test('a text-only or HEIC-only publication names no copy and uses the earlier RPC unchanged', async () => {
+test('a text-only publication names no copy and uses the earlier RPC unchanged', async () => {
   const calls = [], auth = { ready: true, epoch: 1, user: { id: Core.id() }, async verify() { return auth.user; }, client: {
     rpc(name, params) { calls.push({ name, params }); return Promise.resolve({ data: { status: 'stored', token: Core.id(), blogToken: Core.id(), revision: 1 }, error: null }); } } };
   auth.session = { user: auth.user };
   const remote = Remote.create({ auth, blog: Blog }), postId = Core.id(), op = Core.id();
-  await remote.publish(postId, 1, op, { photoIds: ['heic-photo'], author: { name: '', intro: '' } });
+  await remote.publish(postId, 1, op, { photoIds: [], author: { name: '', intro: '' } });
   assert.equal(calls[0].name, 'life_blog_publish'); assert.equal(Object.hasOwn(calls[0].params, 'p_copies'), false);
   const copy = { id: 'jpeg-photo', type: 'image/jpeg', size: 10, digest: 'a'.repeat(64), width: 4, height: 3 };
   await remote.publish(postId, 1, op, { photoIds: ['jpeg-photo'], copies: [copy] });

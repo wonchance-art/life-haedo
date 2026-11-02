@@ -148,7 +148,7 @@ async function main() {
       visitor.expectedOffline = true; await anonymous.setOffline(true); await state('error'); assert.equal(await visitor.locator('#seriesContent').innerText(), '');
       await anonymous.setOffline(false); await state('published'); visitor.expectedOffline = false;
       assert.equal(await visitor.evaluate(() => typeof HaedoAuth), 'undefined');
-      await visitor.getByRole('button', { name: '사진 원본 크기로 보기', exact: true }).click(); assert.equal(await image.evaluate(node => node.getBoundingClientRect().width > node.parentElement.getBoundingClientRect().width), true);
+      await visitor.getByRole('button', { name: '사진 크게 보기', exact: true }).click(); assert.equal(await image.evaluate(node => node.getBoundingClientRect().width > node.parentElement.getBoundingClientRect().width), true);
       await visitor.getByRole('button', { name: '사진 화면에 맞추기', exact: true }).click();
       await visitor.evaluate(() => scrollTo(0, 0)); await capture(visitor, 'visitor-current-original', '#seriesContent');
       const next = visitor.getByRole('link', { name: '다음 글 · ' + fixture.docs[0].title, exact: true }); await next.click(); await state('published'); assert.equal(await visitor.locator('#seriesContent h1').innerText(), fixture.docs[0].title);

@@ -177,7 +177,7 @@
       try { const result = await client.storage.from(asset.bucket).download(asset.path); guard(context); if (result.error) throw result.error; if (!(result.data instanceof Blob)) throw fault('invalid_remote_data'); return result.data; }
       catch (error) { guard(context); throw clean(error); }
     }
-    // A metadata-free public copy of one JPEG/PNG/WebP photo of a stored post
+    // A metadata-free public copy of one photo (any format) of a stored post
     // (2026-11-02). Registered by its own RPC, so the server can tell it from
     // the private original; same immutable private bucket and path pattern.
     function checkCopy(value) {
@@ -217,9 +217,8 @@
       try { const result = await client.storage.from(BUCKET).remove(clone(paths)); guard(context); if (result.error) throw result.error; return Array.isArray(result.data) ? result.data.length : 0; }
       catch (error) { guard(context); throw clean(error); }
     }
-    // `copies` names the uploaded public copy of every selected JPEG/PNG/WebP
-    // photo; HEIC/HEIF photos publish their JPEG view. Without copies the
-    // earlier RPC is used unchanged (text-only and HEIC-only selections).
+    // `copies` names the uploaded public copy of every selected photo. A
+    // text-only publication names none and uses the earlier RPC unchanged.
     async function publish(postId, expectedRevision, operationId, options = {}) {
       identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1 || !Array.isArray(options.photoIds || []) || (options.photoIds || []).some(value => !PHOTO.test(value))) throw fault('invalid_request');
       if (!rev(options.expectedPublicRevision ?? 0)) throw fault('invalid_request');

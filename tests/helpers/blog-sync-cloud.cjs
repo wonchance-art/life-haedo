@@ -99,10 +99,10 @@ function server() {
         if (!asset.exists) { assets.get(asset.path).blob = blob; stats.uploads.push({ device: name, postId, id: item.id, digest: item.digest, type: item.type }); }
         return asset;
       },
-      // A registered public copy: JPEG/PNG of a stored JPEG/PNG/WebP photo, never the original.
+      // A registered public copy (JPEG/PNG; JPEG for HEIC) of a stored photo, never the original or HEIC view.
       async uploadPublicCopy(postId, item, blob) {
         const row = rows.get(postId), photo = row?.data.photos.find(value => value.id === item.id);
-        if (!photo || photo.view || item.digest === photo.digest || !['image/jpeg', 'image/png'].includes(item.type)) throw fault('invalid_request');
+        if (!photo || item.digest === photo.digest || item.digest === photo.view?.digest || !['image/jpeg', 'image/png'].includes(item.type) || (photo.view && item.type !== 'image/jpeg')) throw fault('invalid_request');
         assert.equal(blob.size, item.size); assert.equal(blob.type, item.type); assert.equal(await Photo.digest(blob), item.digest);
         const at = path(postId, item.id, item.digest);
         if (!assets.has(at)) { assets.set(at, { meta: { size: item.size, type: item.type }, blob, deleted: false, copy: true }); stats.copyUploads.push({ device: name, postId, id: item.id, digest: item.digest, type: item.type }); }
@@ -140,10 +140,10 @@ function server() {
       async publish(id, revision, operation, options) {
         stats.publishes.push({ id, revision, operation, options: copy(options) }); const row = rows.get(id);
         if (row.revision !== revision || (row.publication?.revision || 0) !== options.expectedPublicRevision) throw fault('blog_conflict');
-        // Every selected JPEG/PNG/WebP photo needs its uploaded copy; HEIC uses its view.
+        // Every selected photo, in every format, needs its uploaded copy.
         for (const id of options.photoIds || []) {
-          const photo = row.data.photos.find(value => value.id === id), named = (options.copies || []).find(item => item.id === id);
-          if (photo.view ? named : !named || !assets.get(path(row.id, id, named.digest))?.copy) throw fault('invalid_request');
+          const named = (options.copies || []).find(item => item.id === id);
+          if (!named || !assets.get(path(row.id, id, named.digest))?.copy) throw fault('invalid_request');
         }
         row.publication = { token: row.publication?.token || Core.id(), blogToken: Core.id(), revision: options.expectedPublicRevision + 1, active: true };
         return { status: 'stored', ...row.publication };
