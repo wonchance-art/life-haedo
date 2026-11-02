@@ -218,9 +218,12 @@ async function main() {
       } finally { await gate.close(); }
     }, sizes[2]);
 
-    if (!baseline) await check('background receive preserves composing search value, caret and input identity', async ({ page, context, server }) => {
+    if (!baseline) await check('background receive preserves composing search value, caret and input identity', async ({ page, context, server, drainStatic }) => {
       const changed = await advanceSource(server, '조합 입력 중 도착하는 새 판'), gate = await holdCatalog(context), text = '외국어 학습';
       try {
+        // A static request still in flight at reload (e.g. the late favicon) never
+        // finishes and its body cannot be read; observe until none remain first.
+        await drainStatic();
         await page.reload({ waitUntil: 'domcontentloaded' }); await gate.reached(); await ready(page); await mode(page, 'sources'); await page.locator('#lifeSearch').focus();
         await page.locator('#lifeSearch').evaluate((el, text) => { window.__purposeSearchInput = el; el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = text; el.setSelectionRange(1, 4); el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, inputType: 'insertCompositionText', data: text })); }, text);
         gate.release.resolve(); await wait(() => exact(page), state => state.bundle.sourceVersions.some(v => v.id === changed.next.id), 'Version arrived during composition');
@@ -232,9 +235,10 @@ async function main() {
       } finally { await gate.close(); }
     });
 
-    if (!baseline) await check('exact reader and selected original text survive incoming version and reader return', async ({ page, context, server }) => {
+    if (!baseline) await check('exact reader and selected original text survive incoming version and reader return', async ({ page, context, server, drainStatic }) => {
       const changed = await advanceSource(server, '읽던 판을 대체해서는 안 되는 새 버전'), gate = await holdCatalog(context);
       try {
+        await drainStatic();
         await page.reload({ waitUntil: 'domcontentloaded' }); await gate.reached(); await ready(page); await mode(page, 'sources');
         await page.locator('#lifeSearch').fill('외국어'); await page.locator('.life-source-open[data-version-id="' + changed.previous.id + '"]').click(); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
         const raw = page.locator('#lifeExcerptToggle'); if (await raw.count()) await raw.click(); await page.waitForFunction(() => document.querySelector('#lifeSourceText')?.dataset.readingMode === 'raw');

@@ -8,6 +8,7 @@ const { playwright, makeContext, ready, settle } = require('./unified-home-brows
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
 const { databaseSnapshot } = require('./local-post-finder-browser.cjs');
 const PhotoPost = require('../assets/life/photo-post.js');
+const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
 const output = path.resolve('.local/blog-autosave');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const records = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(); return { workspaceId, docs: await Promise.all((await s.listPhotoPosts(workspaceId)).map(p => s.readPhotoPost(workspaceId, p.id))) }; });
@@ -38,7 +39,7 @@ async function resumeDraft(page, id) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const report = { scope: 'Actual SDK/IndexedDB and Chromium renderer Page.crash with no graceful lifecycle flush. Composition and visibility events are synthetic, not native IME/Apple or OS crash durability.', checks: [], timings: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [], lifecycle: [], sourceHashes: {} };
+  const report = { scope: 'Actual SDK/IndexedDB and Chromium renderer Page.crash with no graceful lifecycle flush. Composition and visibility events are synthetic, not native IME/Apple or OS crash durability.', checks: [], timings: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [], lifecycle: [], sourceHashes: {}, backgroundSyncWrites: [] };
   for (const file of ['assets/life/photo-post-ui.js', 'assets/life/workbench-ui.js', 'assets/life/ui.js', 'assets/life/home.js', 'sw.js']) {
     const response = await fetch(base + '/' + file); assert(response.ok); const bytes = Buffer.from(await response.arrayBuffer());
     assert.equal(sha(bytes), sha(await fs.readFile(path.resolve(__dirname, '..', file)))); report.sourceHashes[file] = sha(bytes);
@@ -60,7 +61,15 @@ async function main() {
       await route.fulfill({ response, body: await response.text() + hook });
     });
     await context.route('**/*', route => { const origin = new URL(route.request().url()).origin; if ([new URL(base).origin, cloud].includes(origin)) return route.fallback(); report.external.push(origin); return route.abort(); });
-    context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && (/\/storage\/v1\/object/.test(url.pathname) || /\/rest\/v1\/rpc\/life_(?:blog_(?:save|publish|unpublish|prepare_asset)|sync_put|writing_draft_put|material_put|composition_put)$/.test(url.pathname))) report.remoteWrites.push(url.pathname); });
+    context.on('request', request => {
+      const url = new URL(request.url()); if (url.origin !== cloud || ['GET', 'HEAD', 'OPTIONS'].includes(request.method())) return;
+      // Owner directive 2026-11-01: a saved draft goes to its owner's private account
+      // storage DRAFT_DELAY (5 s) after the last local save. A check that outlives that
+      // delay legitimately sends it, so those owner-scoped sync writes are listed
+      // separately (tests/helpers/account-sync-rpcs.cjs); every other write stays a failure.
+      if (isBackgroundSyncWrite(url.href)) { report.backgroundSyncWrites.push({ name, path: url.pathname, owner: server.libraryOwner(request), body: request.postData() || '' }); return; }
+      if (/\/storage\/v1\/object/.test(url.pathname) || /\/rest\/v1\/rpc\/life_(?:blog_(?:save|publish|unpublish|prepare_asset)|sync_put|writing_draft_put|material_put|composition_put)$/.test(url.pathname)) report.remoteWrites.push(url.pathname);
+    });
     context.on('page', page => { page.setDefaultTimeout(15000); page.on('console', e => { if (e.type() === 'error') report.consoleErrors.push(e.text()); }); page.on('pageerror', e => report.pageErrors.push(e.message)); });
     const page = await context.newPage(); await home(page); await writer(page); return { context, page, server };
   }
@@ -154,7 +163,11 @@ async function main() {
       await p.evaluate(ws => HaedoLife.Shell.storage.setActive(ws), baseline.workspaceId); await home(p); assert.deepEqual((await records(p)).docs, [baseline.doc]);
       await resumeDraft(p, baseline.doc.id); assert.equal(await p.locator('#photoTitle').inputValue(), baseline.doc.title);
     });
-    assert.deepEqual(report.remoteWrites, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
+    assert.deepEqual(report.remoteWrites, []);
+    // Background draft uploads stay with the signed-in owner and never carry the
+    // old account's rejected late input.
+    for (const write of report.backgroundSyncWrites) { assert.equal(write.owner, accounts.a.id, write.name + ' ' + write.path); assert(!write.body.includes('전환 뒤 쓰면 안 되는 입력'), write.path); delete write.body; }
+    assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } finally { await browser.close(); report.cleanup = { browserClosed: true }; await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); }
 }
 if (require.main === module) main().catch(e => { console.error(e.stack); process.exitCode = 1; });

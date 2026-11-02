@@ -1,5 +1,7 @@
 # 해도 워크플로와 구조도
 
+> 이 폴더의 도식은 작성 당시의 이력이다. 최신 상태는 [최신 로드맵](../life-tools-design/roadmap.md)과 [계정 자동 연동](../design-review/account-sync-everywhere.md)을 따른다. 예를 들어 2026-10-26 도식의 "연간 계획 로컬 보관"·"단일 백업 아님"은 2026-11-01 계정 자동 연동과 [백업·복원 한 화면](../design-review/full-backup.md)으로 바뀌었고, v8의 "운영 마무리는 Local 담당"은 2026-11-02 운영 체계(Claude 총괄, `AGENTS.md`)로 대체됐다.
+
 2026-10-26 **현재 기능의 입력 → 처리 → 결과**: [PNG](rendered/product-workflow-20261026.png) · [SVG](rendered/product-workflow-20261026.svg) · [PDF](rendered/product-workflow-20261026.pdf) · [Graphviz 원본](product-workflow-20261026.dot). 뉴스·자료·글·계획·보관의 다섯 흐름과 기능별 저장 범위를 구분한다.
 
 2026-10-26 **목적별 구현 구조**: [PNG](rendered/product-placement-20261026.png) · [SVG](rendered/product-placement-20261026.svg) · [PDF](rendered/product-placement-20261026.pdf) · [Graphviz 원본](product-placement-20261026.dot). 홈·뉴스·자료실·계획·설정과 구현한 하위 메뉴를 정리했다. 뉴스 설정의 다섯 목적, 자료 메뉴의 모아 보기, 설정의 자료·글 / 계획·연표 파일 그룹을 표시한다. **출시 상태는 [구현·검수 기록](../design-review/purpose-workflow-implementation.md)을 따른다.** 입력 → 처리 → 결과 도식은 기능별 처리·보관 경계가 같아 유지했다. [설계의 기능 목적·동선·보존 조건](../design-review/purpose-workflow.md)과 설계 당시 도식은 Git 이력에 남아 있다. 아래 도식은 작성 당시의 이력으로 보존한다.
@@ -10,9 +12,9 @@
 
 [PDF](rendered/product-structure-20261020.pdf) · [도식 검사](rendered/product-structure-20261020.report.json): 11개 상자·10개 연결, 한글 표시, 상자 밖 본문 0개·외부 리소스 0개를 확인했고 독립 검토에서 현재/후속 구분과 글자·간선의 잘림을 확인했다. 문서 그림 검수이며 앱이나 실제 기기 검수 결과는 아니다.
 
-2026-10-12 현재 작업 우선순위는 [프로필·취향·기록 흐름](product-roadmap-20261012.mmd)과 [갱신한 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-12)을 따른다. 아래 v8은 전체 통합/공개 경계의 참고 도식이며 책 확장 우선순위는 최신 요청에 따라 보류다.
+2026-10-12 현재 작업 우선순위는 [프로필·취향·기록 흐름](product-roadmap-20261012.mmd)과 [갱신한 로드맵](../life-tools-design/roadmap-archive.md#현재-실행-로드맵--2026-10-12)을 따른다. 아래 v8은 전체 통합/공개 경계의 참고 도식이며 책 확장 우선순위는 최신 요청에 따라 보류다.
 
-2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-07)을 따른다.
+2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap-archive.md#현재-실행-로드맵--2026-10-08-kst)을 따른다.
 
 ![해도 전체 제품 흐름과 다음 단계](rendered/activity_hub_v8.svg)
 

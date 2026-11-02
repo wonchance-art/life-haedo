@@ -32,7 +32,7 @@
 
 1. **서버 사본을 지울 수 없다.** 작업공간·블로그 원본/사진·네이버 수집본에 사용자 삭제 RPC가 없고, `auth.users ... on delete cascade`는 `haedo_documents/items`, `life_public_pages` 세 곳뿐이다(`20261002061709:4,11`, `20261005120000:131`). 라이브러리 원본만 tombstone 방식이 있다. EXIF/GPS가 남을 수 있는 원본 사진을 지울 경로가 없고 `privacy.html`도 이를 설명하지 않는다.
 2. **비용·남용 상한이 없다.** 사용자 네이버 수집 claim은 `next_check_at`을 건너뛰고 2분 임대만 본다(`20261021093111:117`). 구독 20개 상한은 작업공간 단위다. `haedo-blog-media`는 무인증·CORS `*`·`no-store`·요청당 최대 64MB 전송이라 공개 링크가 퍼지면 전송량이 그대로 늘어난다. 블로그 자산 용량 한도와 서버 digest 검증도 없다(`20261017144744:153-184`).
-3. **환경을 저장소만으로 재현할 수 없다.** `supabase/config.toml`이 없고 pg_cron·pg_net·Vault 설정은 `operations/` 수동 SQL에 있다. 첫 마이그레이션은 재실행할 수 없다. `life_composition_valid`는 5번 재정의되어 최종 정의를 찾기 어렵다. 운영 행을 지우는 일회성 `supabase/tests/cleanup-cloud-http-20261003.sql`이 tests에 있다. 영수증 테이블 약 11개에는 보존 기한이 없다.
+3. **환경을 저장소만으로 재현할 수 없다.** `supabase/config.toml`이 없고 pg_cron·pg_net·Vault 설정은 `operations/` 수동 SQL에 있다. 첫 마이그레이션은 재실행할 수 없다. `life_composition_valid`는 5번 재정의되어 최종 정의를 찾기 어렵다. 운영 행을 지우는 일회성 `supabase/tests/cleanup-cloud-http-20261003.sql`이 tests에 있다(2026-11-02 `supabase/operations/archive/`로 이동). 영수증 테이블 약 11개에는 보존 기한이 없다.
 
 ### 코드 구조
 
