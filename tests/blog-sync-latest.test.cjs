@@ -240,9 +240,8 @@ test('three devices: one saved post, one editing draft (the latest) and every ot
   await cycles(a, time, 1);
   await b.storage.savePhotoPost(b.ws, { ...(await b.storage.readPhotoPost(b.ws, memo.id)), ops: [{ insert: '아이패드 본문\n' }], updatedAt: '2026-11-01T09:30:00.000Z' }, 1);
   await cycles(b, time, 2);
-  // The losing side was written at 09:30 (UTC) on B; its copy carries that local time.
-  const lost = new Date('2026-11-01T09:30:00.000Z'), two = value => String(value).padStart(2, '0');
-  const stamp = ' (' + two(lost.getMonth() + 1) + '-' + two(lost.getDate()) + ' ' + two(lost.getHours()) + ':' + two(lost.getMinutes()) + ')';
+  // The losing side was written at 09:30 UTC on B; its copy carries that time in UTC on every device.
+  const stamp = ' (11-01 09:30 UTC)';
   assert.deepEqual(await shown(b), [['draft', KEPT + '메모'], ['draft', KEPT + '메모' + stamp]].sort(), 'one prefix, and the copy is told apart by its write time');
   assert.equal((await byTitle(b, KEPT + '메모' + stamp)).ops[0].insert, '아이패드 본문\n');
   assert.equal((await byTitle(b, KEPT + '메모')).ops[0].insert, '맥 본문\n');
@@ -298,6 +297,72 @@ test('a device that already received another device\'s result for the same saved
   const saves = cloud.stats.saves.length;
   await cycles(a, time, 1); await cycles(b, time, 1); await cycles(c, time, 1);
   assert.equal(cloud.stats.saves.length, saves, 'settled: nothing is sent again');
+});
+
+test('a conflict decided by a hidden page\'s upload-only flush sends its recovery copy before the editing draft, so the saved content never leaves the account', async () => {
+  const { cloud, time, a, b } = await pair();
+  const id = await finishedOn({ time, a, others: [b], finisher: a });
+  await redraft(b, id, 'B 초안', '2026-11-01T10:05:00.000Z');
+  const hidden = { uploadOnly: true, flushDrafts: true };
+  let lists = 0; const syncList = b.remote.syncList; b.remote.syncList = async (...args) => { lists++; return syncList.apply(b.remote, args); };
+  for (let i = 0; i < 3; i++) { time.advance(60000); await b.sync.syncNow(hidden); }
+  assert.equal(lists, 0, 'the hidden page never pulled the server list');
+  // (The refused request that sent the draft over the saved post itself is not counted.)
+  const titles = cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId !== id).map(call => call.data.title);
+  assert(titles.includes(KEPT + '완성') && titles.includes('B 초안'), 'both went up while hidden');
+  assert(titles.indexOf(KEPT + '완성') < titles.indexOf('B 초안'), 'the recovery copy went up first');
+  // The owner finishes the editing draft on A while B stays hidden.
+  await a.sync.syncNow({ flushDrafts: true });
+  const later = await byTitle(a, 'B 초안'), done = await finish(a, later, at(time, 0));
+  await a.sync.saveDefault(a.ws, done.id, { expectedLocalRevision: done.revision });
+  assert.equal(cloud.rows.get(id).data.title, 'B 초안');
+  assert([...cloud.rows.values()].some(row => row.data.title === KEPT + '완성' && row.data.ops[0].insert === '출발한 날 🌿\n'), 'the saved content stays on the account');
+  b.remote.syncList = syncList;
+});
+
+test('a server list that keeps failing does not keep a decided recovery copy on one device', async () => {
+  const { cloud, time, a, b } = await pair();
+  const id = await finishedOn({ time, a, others: [b], finisher: a });
+  await redraft(b, id, 'B 초안', '2026-11-01T10:05:00.000Z');
+  b.remote.syncList = async () => { throw Object.assign(new Error('list timeout'), { code: 'network_error' }); };
+  await cycles(b, time, 4);
+  const titles = [...cloud.rows.values()].map(row => [row.data.status, row.data.title]).sort();
+  assert.deepEqual(titles, [['draft', 'B 초안'], ['draft', KEPT + '완성'], ['saved', '완성']]);
+});
+
+test('a saved post whose title already has the prefix: devices in different time zones keep one recovery copy, named in UTC', async () => {
+  // Local-time getters follow a per-device offset while that device runs.
+  const proto = Date.prototype, names = ['getMonth', 'getDate', 'getHours', 'getMinutes'], saved = Object.fromEntries(names.map(name => [name, proto[name]]));
+  let shift = 0;
+  for (const name of names) proto[name] = function () { return shift ? new Date(this.getTime() + shift)['getUTC' + name.slice(3)]() : saved[name].call(this); };
+  const zone = async (hours, fn) => { shift = hours * 3600000; try { return await fn(); } finally { shift = 0; } };
+  try {
+    for (const race of [false, true]) {
+      const cloud = server(), time = clock();
+      const a = await device(cloud, 'mac', { time }), b = await device(cloud, 'ipad', { time }), c = await device(cloud, 'iphone', { time });
+      const doc = await save(a, await post({ title: '쓰는 중', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
+      time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow(); await c.sync.syncNow();
+      const cur = await a.storage.readPhotoPost(a.ws, doc.id);
+      const done = await a.storage.savePhotoPost(a.ws, { ...cur, status: 'saved', title: KEPT + '메모', updatedAt: '2026-11-01T10:00:00.000Z' }, cur.revision);
+      await a.sync.saveDefault(a.ws, done.id, { expectedLocalRevision: done.revision });
+      await redraft(b, doc.id, 'B 초안', '2026-11-01T10:05:00.000Z');
+      await redraft(c, doc.id, 'C 초안', '2026-11-01T10:06:00.000Z');
+      if (race) { time.advance(60000); await b.sync.syncNow({ flushDrafts: true }); await zone(9, () => c.sync.syncNow({ flushDrafts: true })); }
+      else await cycles(b, time, 2);
+      await zone(9, () => cycles(c, time, 3)); await cycles(b, time, 2); await cycles(a, time, 2); await zone(9, () => cycles(c, time, 1));
+      const expected = [['draft', 'C 초안'], ['draft', KEPT + 'B 초안'], ['draft', KEPT + '메모 (11-01 10:00 UTC)'], ['saved', KEPT + '메모']].sort();
+      for (const dev of [a, b, c]) assert.deepEqual(await shown(dev), expected, (race ? 'race ' : 'sequential ') + dev.name);
+    }
+  } finally { Object.assign(proto, saved); }
+  // A title that already ends with such a time gets no second one.
+  const { time, a, b } = await pair();
+  const memo = await save(a, await post({ title: KEPT + '메모 (11-01 10:00 UTC)', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
+  time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow();
+  await a.storage.savePhotoPost(a.ws, { ...(await a.storage.readPhotoPost(a.ws, memo.id)), ops: [{ insert: '맥 본문\n' }], updatedAt: '2026-11-01T10:00:00.000Z' }, 1);
+  await cycles(a, time, 1);
+  await b.storage.savePhotoPost(b.ws, { ...(await b.storage.readPhotoPost(b.ws, memo.id)), ops: [{ insert: '아이패드 본문\n' }], updatedAt: '2026-11-01T09:30:00.000Z' }, 1);
+  await cycles(b, time, 2);
+  assert.deepEqual(await shown(b), [['draft', KEPT + '메모 (11-01 10:00 UTC)'], ['draft', KEPT + '메모 (11-01 10:00 UTC)']]);
 });
 
 test('a recovery copy that was changed after the conflict survives the deletion of the post it came from', async () => {

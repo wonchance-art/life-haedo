@@ -114,14 +114,17 @@
       photoPost.validate(doc); return doc;
     }
     // A copy of a copy keeps one prefix and gets the time its content was
-    // written instead, e.g. "복구 사본 · 메모 (11-02 15:04)" (the same form as
-    // a restored backup's "(11-02 복원)"), so it differs from the one it lost to.
+    // written instead, e.g. "복구 사본 · 메모 (11-01 10:00 UTC)" (the form of a
+    // restored backup's "(11-02 복원)"), so it differs from the one it lost to.
+    // UTC, so every device names the same copy the same way; a title that
+    // already ends with such a time gets no second one.
+    const STAMP = / \(\d\d-\d\d \d\d:\d\d UTC\)$/;
     function recoveryTitle(title, writtenAt) {
       let value = String(title || ''), suffix = '';
       if (!value.startsWith(CONFLICT_PREFIX)) value = CONFLICT_PREFIX + value;
-      else {
+      else if (!STAMP.test(value)) {
         const at = new Date(Date.parse(writtenAt)), two = number => String(number).padStart(2, '0');
-        if (Number.isFinite(at.getTime())) suffix = ' (' + two(at.getMonth() + 1) + '-' + two(at.getDate()) + ' ' + two(at.getHours()) + ':' + two(at.getMinutes()) + ')';
+        if (Number.isFinite(at.getTime())) suffix = ' (' + two(at.getUTCMonth() + 1) + '-' + two(at.getUTCDate()) + ' ' + two(at.getUTCHours()) + ':' + two(at.getUTCMinutes()) + ' UTC)';
       }
       // Titles are limited to 500 UTF-16 units; cut whole characters only.
       let head = '';
@@ -139,13 +142,17 @@
     const conflictCopy = (doc, id) => draftCopy(doc, recoveryTitle(doc.title, doc.updatedAt), id);
     // Title, body, attachments and the exact photo bytes (digests, HEIC views);
     // identity, status and times are not content. Equal sides need no copy.
-    function contentOf(doc) {
+    function contentOf(doc, { title = true } = {}) {
       const value = blog.pack(photoPost.compact(doc));
       for (const name of ['id', 'revision', 'status', 'replaces', 'createdAt', 'updatedAt', 'format', 'archived']) delete value[name];
+      if (!title) delete value.title;
       for (const photo of value.photos || []) if (photo.view) photo.view = viewMeta(photo.view);
       return canonical(value);
     }
     const sameContent = (a, b) => contentOf(a) === contentOf(b);
+    // The same recovery copy: a prefixed draft with the same body and photos
+    // (its title may differ only by how a device named it).
+    const sameCopy = (existing, doc) => existing?.status === 'draft' && !existing.replaces && String(existing.title || '').startsWith(CONFLICT_PREFIX) && contentOf(existing, { title: false }) === contentOf(doc, { title: false });
     // Identities for what a conflict over one exact server revision creates.
     // Every device deciding over that same revision makes the same ids, so two
     // devices' results meet as one post on the server and are decided there
@@ -174,8 +181,7 @@
     async function keptCopy(c, row, doc) {
       const derived = await conflictId(c, row, 'kept');
       if (!derived.used) return conflictCopy(doc, derived.id);
-      const copy = conflictCopy(doc);
-      return derived.existing?.status === 'draft' && derived.existing.title === copy.title && sameContent(derived.existing, copy) ? null : copy;
+      return sameCopy(derived.existing, doc) ? null : conflictCopy(doc);
     }
     // Latest wins (2026-11-01 rule; 2026-11-02: saved posts are no exception).
     // Both sides are compared by the time their content was written
@@ -278,7 +284,8 @@
       const remoteWins = remoteIsLater(row, post);
       // Both outcomes that change this local document wait for an open editor,
       // checked again after the downloads (it may have opened meanwhile).
-      const waits = () => (remoteWins || regression) && held(c.ws, c.id);
+      let otherId = null; // an editing draft already here that this decision rewrites
+      const waits = () => (remoteWins || regression) && held(c.ws, c.id) || !!otherId && held(c.ws, otherId);
       if (waits()) return getState(c.ws, c.id);
       const remoteDoc = await download(c, row);
       const map = byRemote || (await snapshot(c)).byRemote;
@@ -306,7 +313,7 @@
             // already here as this post's editing draft: the two drafts are
             // decided like any conflict. The later one stays the editing draft
             // (a tie keeps the one already here) and the other is kept.
-            if (held(c.ws, other.id)) return getState(c.ws, c.id);
+            otherId = other.id; if (waits()) return getState(c.ws, c.id);
             const ours = writtenAt(post.updatedAt, now()) > writtenAt(other.updatedAt, now());
             input.edit = ours ? { ...draftCopy(post, post.title, other.id, exact), revision: other.revision } : { ...structuredClone(other), replaces: exact };
             if (!sameContent(post, other)) copies.push(conflictCopy(ours ? other : post));
@@ -553,12 +560,22 @@
         }
         // Saved posts first, so an editing draft can name its target's server revision.
         uploads.sort((a, b) => Number(a.post.status === 'draft') - Number(b.post.status === 'draft'));
-        // A recovery copy a conflict made here goes up only after this cycle's
-        // server list shows that its post still exists: if the post was
+        // A recovery copy a conflict made here goes up only once its post is
+        // confirmed on the server (one read, so a hidden page's upload-only
+        // flush and a failing server list decide it too): if the post was
         // deleted on another device meanwhile, the copy that nobody has seen
-        // yet is dropped with it (forget) instead of being sent first.
-        const deferred = await unseenCopies(c, local, uploads);
-        await pool(uploads.filter(item => !deferred.has(item)).map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: local.byRemote })));
+        // yet is dropped with it (forget) instead of being sent. That post's
+        // editing draft from the same decision goes up only after its copy,
+        // so the server never holds the later draft without the losing content.
+        const groups = await unseenCopies(c, local, uploads), waiting = new Set(groups.flatMap(group => [...group.copies, ...group.edits]));
+        await pool(uploads.filter(item => !waiting.has(item)).map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: local.byRemote })));
+        await pool(groups.map(group => async () => {
+          await vanish(group.ws, group.localPostId, group.remoteId); // confirms the post (one read); removes it and forgets its copies when deleted
+          const value = await storage.listBlogSyncStates(group.ws); guard(c);
+          const present = item => value.posts.some(row => row.id === item.post.id);
+          for (const item of group.copies) if (present(item)) await push(item.ws, item.post.id, { verify: false, byRemote: local.byRemote });
+          for (const item of group.edits) if (present(item)) await push(item.ws, item.post.id, { verify: false, byRemote: local.byRemote });
+        }));
         if (!uploadOnly) {
           local = await snapshot(c, owned);
           rows = await remote.syncList(); guard(c);
@@ -585,11 +602,6 @@
             if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) tasks.push(() => vanish(entry.ws, entry.localPostId, remoteId));
           }
           await pool(tasks);
-          if (deferred.size) {
-            const after = await snapshot(c, owned);
-            await pool([...deferred].filter(({ ws, post }) => after.workspaces.get(ws)?.posts.some(item => item.id === post.id))
-              .map(({ ws, post }) => () => push(ws, post.id, { verify: false, byRemote: after.byRemote })));
-          }
         }
         summary.lastSyncAt = new Date(now()).toISOString(); summary.lastError = null;
       } catch (error) {
@@ -602,15 +614,21 @@
       return getStatus();
     }
     // Never-uploaded drafts that are the recovery copy of a bound post's
-    // current server revision (by their derived id).
+    // current server revision (by their derived id), grouped by that post with
+    // the editing draft made by the same decision.
     async function unseenCopies(c, local, uploads) {
       const fresh = uploads.filter(({ ws, post }) => post.status === 'draft' && !local.workspaces.get(ws).states.get(post.id));
-      const found = new Set(); if (!fresh.length) return found;
-      const ids = new Set();
-      for (const [remoteId, entry] of local.byRemote) if (entry.state.remoteRevision > 0) ids.add(entry.ws + '/' + await derivedId(remoteId, entry.state.remoteRevision, 'kept'));
-      guard(c);
-      for (const item of fresh) if (ids.has(item.ws + '/' + item.post.id)) found.add(item);
-      return found;
+      if (!fresh.length) return [];
+      const groups = [];
+      for (const [remoteId, entry] of local.byRemote) {
+        if (entry.state.remoteRevision === 0) continue;
+        const kept = await derivedId(remoteId, entry.state.remoteRevision, 'kept'); guard(c);
+        const copies = fresh.filter(item => item.ws === entry.ws && item.post.id === kept);
+        if (!copies.length) continue;
+        const edit = await derivedId(remoteId, entry.state.remoteRevision, 'edit'); guard(c);
+        groups.push({ ws: entry.ws, localPostId: entry.localPostId, remoteId, copies, edits: uploads.filter(item => item.ws === entry.ws && item.post.id === edit) });
+      }
+      return groups;
     }
     async function tally(c, rows) {
       const libraries = await storage.listAccountLibraries(); guard(c);
