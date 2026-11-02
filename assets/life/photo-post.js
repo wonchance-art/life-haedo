@@ -159,7 +159,12 @@
             if (!["center", "right", "justify"].includes(v))
               throw fault("정렬 서식을 확인해 주세요.");
           } else if (key === "link") link(v);
-          else throw fault("지원하지 않는 서식입니다.");
+          else if (key === "author") {
+            // Private authorship mark for text the owner brought from an AI
+            // tool. Only "ai" exists; unmarked text is the owner's own.
+            if (v !== "ai" || typeof op.insert !== "string")
+              throw fault("AI 글 표시를 확인해 주세요.");
+          } else throw fault("지원하지 않는 서식입니다.");
         }
       }
     }
