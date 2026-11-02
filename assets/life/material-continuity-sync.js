@@ -253,6 +253,8 @@
           if (!state.output || state.conflict) throw fault('material_conflict');
           const current = await checkedRow(c, state.remoteId);
           if (current.revision !== state.remoteRevision || await model.fingerprint(current.data) !== await model.fingerprint(state.head.data)) { await conflict(c, state, current); throw fault('material_conflict'); }
+          // Re-check after the fingerprint awaits: a disposed engine must not lazily create a dedicated BlogSync.
+          guard(c);
           const postState = await posts().save(ws, before.post.id, { expectedManifest: blog.pack(photoPost.compact(before.post)) }); guard(c);
           if (postState.status !== 'synced' || postState.remoteId !== state.output.postId) throw fault('material_output_changed');
           const storedPost = await blogRemote.read(state.output.postId); guard(c);

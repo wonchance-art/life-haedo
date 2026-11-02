@@ -118,7 +118,7 @@ test('the saved-output share stores its post through the page automatic BlogSync
   try {
     let f = null; const shared = [];
     life.BlogSync = {
-      forStorage: storage => f && storage === f.storage ? { save: (...args) => { shared.push(args[1]); return f.blogSync.save(...args); } } : null,
+      forStorage: storage => f && storage === f.storage ? { save: (...args) => { shared.push(args[1]); return f.blogSync.save(...args); }, dispose() { throw new Error('the page BlogSync is shared and must never be disposed by material continuity'); } } : null,
       create() { created++; return { async save() { throw fault('blog_state_conflict'); }, dispose() {} }; }
     };
     f = await fixture({ pageBlogSync: true });
@@ -127,9 +127,9 @@ test('the saved-output share stores its post through the page automatic BlogSync
     assert.equal(f.row().data.output.state, 'saved'); assert.equal(f.row().data.output.revision, 1); assert.equal(f.state().error, null);
     f.manager.dispose();
     // Without an automatic instance for this storage (e.g. a non-account page) a private one is used.
-    let g = null; life.BlogSync = { forStorage: () => null, create() { created++; return { save: (...args) => g.blogSync.save(...args) }; } }; g = await fixture({ pageBlogSync: true });
+    let g = null, ownDisposed = 0; life.BlogSync = { forStorage: () => null, create() { created++; return { save: (...args) => g.blogSync.save(...args), dispose() { ownDisposed++; } }; } }; g = await fixture({ pageBlogSync: true });
     await g.manager.autoSync(g.bundle.workspaceId, g.plan.id);
-    assert.equal(created, 1); assert.equal(g.row().data.output.state, 'saved'); g.manager.dispose();
+    assert.equal(created, 1); assert.equal(g.row().data.output.state, 'saved'); g.manager.dispose(); assert.equal(ownDisposed, 1, 'the private BlogSync is disposed with the manager');
   } finally { if (prior === undefined) delete life.BlogSync; else life.BlogSync = prior; }
 });
 test('a connect queued before pause cannot later re-enable the paused preparation', async () => {
