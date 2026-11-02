@@ -3,6 +3,7 @@
  * the real adapter. They do not evaluate model meaning or use model weights.
  * BASE_URL=http://127.0.0.1:4173 node tests/life-interest-browser.cjs */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const { openNewsSettings } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
@@ -162,7 +163,7 @@ async function main() {
       await nav(page, 'tools'); await page.getByRole('link', { name: '목표', exact: false }).click(); await page.waitForURL(url => url.pathname.endsWith('/goals.html'));
       await open(page); await page.locator('[data-interest-candidate]').first().uncheck(); await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert.equal((await stored(page)).bundle.workspaceId, data.workspaceId);
       await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); await page.locator('#interestRevertManual').click(); await idle(page); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
-      await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), otherId);
+      await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), otherId, { timeout: 12000, label: 'life-interest storage condition' });
       assert.deepEqual(await page.evaluate(async id => HaedoLife.Shell.storage.read(id), data.workspaceId), before.bundle);
     }, { mock: true });
     await check('synthetic late inference cancelled by navigation never saves analysis', async ({ page }) => {

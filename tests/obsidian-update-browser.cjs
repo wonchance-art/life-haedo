@@ -1,5 +1,6 @@
 /* Anonymous Auth simulator + actual Chrome and account-scoped IndexedDB. No production requests. */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
@@ -104,7 +105,7 @@ async function integrated() {
       const downloadEvent = page.waitForEvent('download'); await page.locator('#obsidianUpdateDownload').click(); const download = await downloadEvent;
       await download.saveAs(path.resolve('.local/obsidian-update/' + width + '-integrated-anonymous.json'));
       await page.locator('#obsidianUpdateRestore').click(); await page.getByText('새 작업공간 2개로 복원했습니다.', { exact: false }).waitFor();
-      await page.waitForFunction(async id => (await HaedoLife.Shell.storage.getActive()) === id, oldActive);
+      await awaitCondition(page, async id => (await HaedoLife.Shell.storage.getActive()) === id, oldActive, { timeout: 15000, label: 'obsidian-update storage condition' });
       const ids = await page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w => w.workspaceId));
       assert.equal(ids.length, oldIds.length + 2); assert.ok(oldIds.every(id => ids.includes(id)));
       assert.equal(await page.locator('#obsidianUpdateRestore').isDisabled(), true);

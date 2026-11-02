@@ -1,6 +1,7 @@
 /* Account materials: actual app, bundled SDK and IndexedDB with anonymous HTTP.
  * No personal corpus, operating database, live RLS or Apple-device claim. */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
@@ -124,7 +125,7 @@ async function main() {
       for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1000 }); const file = 'exact-material-' + width + '.png'; await page.screenshot({ path: path.join(out, file), fullPage: true }); report.visual.push(file); }
       await page.locator('#lifeSourceText').evaluate((el, text) => { const start = el.textContent.indexOf(text), r = document.createRange(); r.setStart(el.firstChild, start); r.setEnd(el.firstChild, start + text.length); el.focus(); getSelection().removeAllRanges(); getSelection().addRange(r); el.dispatchEvent(new Event('pointerup', { bubbles: true })); }, quote);
       await page.locator('#lifeExcerptToggle').click(); await page.locator('#lifeSourceTopic').fill('새 합성 주제'); await page.locator('#lifeSourceNote').fill('정확 원문 연결 메모'); await page.locator('#lifeSourceExcerptSave').click();
-      await page.waitForFunction(async q => { const s = HaedoLife.Shell.storage; return (await s.read(await s.getActive())).records.some(r => r.text === q); }, quote);
+      await awaitCondition(page, async q => { const s = HaedoLife.Shell.storage; return (await s.read(await s.getActive())).records.some(r => r.text === q); }, quote, { timeout: 20000, label: 'account-materials storage condition' });
       const saved = await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.read(await s.getActive()); });
       const record = saved.records.find(r => r.text === quote); assert.ok(record); assert.equal(record.sourceRefs[0].sourceVersionId, f.oldVersion); assert.equal(oldText.slice(record.sourceRefs[0].locator.start, record.sourceRefs[0].locator.end), quote);
       const snapshot = await databaseSnapshot(page), reads = server.requests.filter(r => r.kind === 'materials-read').length;

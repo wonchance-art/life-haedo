@@ -1,6 +1,7 @@
 /* Actual UI + bundled Auth/Storage SDK + IndexedDB; intercepted anonymous HTTP.
  * This checks default-save behavior, not hosted SQL/RLS or Apple hardware. */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 process.env.BASE_URL ||= 'http://127.0.0.1:4246';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { createHash } = require('node:crypto');
@@ -60,7 +61,7 @@ async function main() {
     f.original = Buffer.from(png, 'base64');
     await page.locator('#photoFiles').setInputFiles({ name: 'anonymous-original.png', mimeType: 'image/png', buffer: f.original });
     const started = Date.now();
-    await page.waitForFunction(async title => { const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws); const row = rows.find(row => row.title === title); return row && (await s.readPhotoPost(ws, row.id)).photos.length === 1; }, title);
+    await awaitCondition(page, async title => { const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws); const row = rows.find(row => row.title === title); return row && (await s.readPhotoPost(ws, row.id)).photos.length === 1; }, title, { timeout: 15000, label: 'blog-default-server storage condition' });
     // 2026-11-01: drafts reach the account too, but only after the autosave
     // quiet period, never on every keystroke.
     if (Date.now() - started < 4000) assert.equal(f.server.saves().length, previousSaves, 'Draft autosave is not sent on each keystroke');
@@ -191,7 +192,7 @@ async function main() {
       try {
         await f.page.getByRole('button', { name: '글 저장', exact: true }).click(); await hold.entered.promise;
         await nav(f.page, 'manage'); await f.page.locator('#lifeCurrentWorkspace').click(); await f.page.locator('#lifeWorkspace').selectOption(next);
-        await f.page.waitForFunction(async expected => await HaedoLife.Shell.storage.getActive() === expected && !document.querySelector('.life-app[aria-busy="true"]'), next);
+        await awaitCondition(f.page, async expected => await HaedoLife.Shell.storage.getActive() === expected && !document.querySelector('.life-app[aria-busy="true"]'), next, { timeout: 15000, label: 'blog-default-server storage condition' });
         hold.release.resolve();
         const current = await state(f.page); assert.equal(current.ws, next); assert.deepEqual(current.docs, []);
         assert(f.server.saves().every(call => call.body.p_workspace_id !== next)); assert.equal(await f.page.locator('#photoServerStatus').count(), 0);

@@ -4,6 +4,7 @@
  * Apple hardware or user usefulness claims.
  * BASE_URL=http://127.0.0.1:4173 node tests/life-external-discovery-browser.cjs */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -237,7 +238,7 @@ async function main() {
         journey.explicitOriginalPopup = true; journey.popupDoesNotReactOrSave = true;
         for (const kind of ['liked', 'bookmarked']) {
           await card(page, article.id).locator('[data-discovery-reaction="' + kind + '"]').click(); await idle(page);
-          await page.waitForFunction(async ({ canonicalUrl, kind }) => { const s = HaedoLife.Shell.storage, p = await s.readDiscoveryActions(await s.getActive()); return p.entries.some(entry => entry.canonicalUrl === canonicalUrl && entry[kind]); }, { canonicalUrl: journey.canonicalUrl, kind });
+          await awaitCondition(page, async ({ canonicalUrl, kind }) => { const s = HaedoLife.Shell.storage, p = await s.readDiscoveryActions(await s.getActive()); return p.entries.some(entry => entry.canonicalUrl === canonicalUrl && entry[kind]); }, { canonicalUrl: journey.canonicalUrl, kind }, { timeout: 12000, label: 'life-external-discovery storage condition' });
           assert.equal(await card(page, article.id).locator('[data-discovery-reaction="' + kind + '"]').getAttribute('aria-pressed'), 'true');
           assert.deepEqual(await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids);
         }
@@ -345,7 +346,7 @@ async function main() {
       const otherId = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, other = await s.createWorkspace('늦은 응답 검사 공간'); await s.setActive(id); return other.workspaceId; }, data.workspaceId);
       await open(page); const before = await state(page), arrived = feed.nextRequest(); feed.hold = true; await (await revealControl(page.locator('#discoveryRefresh'))).click(); await arrived;
       try {
-        await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId);
+        await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId, { timeout: 12000, label: 'life-external-discovery storage condition' });
       } finally { feed.release(); }
       await returnToDiscovery(page); assert.equal((await state(page)).bundle.workspaceId, otherId); assert.deepEqual((await state(page)).interest.manual, []); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
       assert.deepEqual(await page.evaluate(async id => HaedoLife.Shell.storage.read(id), data.workspaceId), before.bundle);
@@ -375,7 +376,7 @@ async function main() {
       await open(page); const before = await state(page); await abortFeedback(page, true); await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await page.locator('#discoveryError').waitFor({ state: 'visible' }); await idle(page); await page.locator('#discoveryFeedbackRetry').waitFor(); await abortFeedback(page, false);
       await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert.equal(await page.locator('#discoveryReview').isVisible(), true); assert.equal((await state(page)).bundle.workspaceId, data.workspaceId); assert.equal(await page.evaluate(() => HaedoAuth.user.id), accounts.a.id);
       await (await revealControl(page.locator('#discoveryFeedbackDiscard'))).click(); await idle(page); assert.deepEqual((await state(page)).feedback, before.feedback);
-      await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId);
+      await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId, { timeout: 12000, label: 'life-external-discovery storage condition' });
     });
     for (const width of [390, 820, 1440]) await check('synthetic discovery visual long Korean titles and controls ' + width, async ({ page, context }) => {
       await feedRoute(context); await seed(page); await open(page); const audit = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, controls: [...document.querySelectorAll('#discoveryReview button,#discoveryReview a')].filter(el => el.checkVisibility()).map(el => ({ label: (el.getAttribute('aria-label') || el.textContent).slice(0,80), width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height })) }));
