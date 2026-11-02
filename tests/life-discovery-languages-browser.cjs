@@ -22,7 +22,9 @@ const canonical = id => 'https://d2.naver.com/qa-language/' + id + '?ref=public'
 async function newsView(control) {
   const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
   if (!await panel.count()) return;
-  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
+  await control.waitFor({ state: 'attached' });
+  const settingsTarget = await panel.locator(control).count() > 0;
   if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
 }

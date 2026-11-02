@@ -14,7 +14,7 @@ class NaverMediaCloud extends CaptureCloud {
     this.compositionMissing = false; this.compositionOffline = new Set();
     this.loseComposition = new Set(); this.heldComposition = null;
     this.mediaReceipts = new Map(); this.receiptRequests = []; this.receiptErrors = [];
-    this.failedMedia = new Set(); this.corruptMedia = new Set(); this.failedReceiptWrites = new Set(); this.receiptHold = null;
+    this.failedMedia = new Set(); this.corruptMedia = new Set(); this.failedReceiptWrites = new Set(); this.failedReceiptResponses = new Map(); this.receiptHold = null;
     this.enableAccountLibrary();
   }
   receiptKey(owner, ws, source, version) { return [owner, ws, source, version].join(':'); }
@@ -37,7 +37,7 @@ class NaverMediaCloud extends CaptureCloud {
     }
     const body = request.postDataJSON(), ws = body.p_workspace_id, version = body.p_source_version_id, write = rpc.endsWith('_put');
     this.receiptRequests.push({ owner, device, rpc, body: copy(body) });
-    if (write && this.failedReceiptWrites.has(device)) { this.expectedHttpErrors++; return send({ code: 'XX000', message: 'Synthetic selected receipt write failure' }, 503); }
+    if (write && this.failedReceiptWrites.has(device)) { this.expectedHttpErrors++; this.failedReceiptResponses.set(device, (this.failedReceiptResponses.get(device) || 0) + 1); return send({ code: 'XX000', message: 'Synthetic selected receipt write failure' }, 503); }
     if (this.offline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }
     const hold = this.receiptHold?.device === device && this.receiptHold.write === write ? this.receiptHold : null;
     if (hold) { this.receiptHold = null; hold.gate.enter(); await hold.gate.released; }

@@ -248,3 +248,11 @@ Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL�
 목록 개수 변경/끝페이지 미완료로 재시작이 막히는 원형 문제를 실제 PostgreSQL에서 재현한 뒤 새scan/page1로 복구하도록 수정했다. migration SHA `186b8f4d06b5641859f419f864f640cff35b5b39adb524122d1047eb183d2cf4`를 운영에 설치했고 기존 inventory_claim body SHA `6e8def3fc70a1c103ea7570978c2400067915efb200dac32f722b6b60f9b87cd`에서 `a606c3837efe0f7ea805baabeb14292c5c7efe9e2b6fabf0e3de603f346bc5f8`의 검토한 조건문만 바뀌었다. 다른105함수·권한 fingerprint `9659c5af9a5133a6f71ec5bd6378528b`와 비활성 상태는 동일하다. 개인 자료는 조회/변경하지 않았고 기존 보안 advisor WARN의 종류/개수도 동일하다.
 
 서버 준비가 꺼진 동안에도 기존 연결을 중지할 수 있게 하고, RSS와 계정 연결의 중지 결과·초점·실패 입력을 보존했다. 단위1592개·중지UI 집중7개/실브라우저5개·worker/RSS29개·격리PG rescan13개와 전체설치11개를 통과했다. 공식spec481/current/enforced 관측을 사용한 실제 probe는 required_host_not_allowed/requests0으로 차단됐으며 실제 네이버 검증을 수행한 것으로 표시하지 않는다. 최종 PWA/CI·공개 반영은 연결 PR에서 확정한다.
+
+## 소유자 상태 확인 쿼리 (2026-11-02)
+
+이 세션은 운영 DB와 네이버에 접근할 수 없다. 그래서 소유자가 SQL Editor에서 실행할 읽기 전용 상태 표 [naver-status-check.sql](../../supabase/operations/naver-status-check.sql)을 추가했다.
+- **보여 주는 것(11행):** 실행 준비 여부, 예약 작업과 최근 실행 6건, 구독 수와 마지막 확인·성공·오류, 목록 상태·기준선, 관측 쌍 검증 수, 목록 글 수(기준선/이후 새 글/자동 대상), 보관 작업 상태별 수, 보관본 수.
+- **보여 주지 않는 것:** 블로그 ID·제목·URL·본문·키.
+- **검증:** 전체 마이그레이션을 적용한 일회용 PostgreSQL 16에서 빈 상태와 예약 행이 있는 상태로 실행했다. 운영 결과는 소유자 실행 뒤에 기록한다.
+
