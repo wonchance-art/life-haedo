@@ -183,7 +183,11 @@
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null, importResult: null
     };
     const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
-    const RecordsList = global.HaedoLife.RecordsList;
+    // A mixed update (an older offline cache that lacks records-list.js) keeps the earlier one-column
+    // list: no kind tabs, plain facts, no reading pane or highlights, and no exception.
+    const RecordsList = global.HaedoLife.RecordsList || Object.freeze({ missing: true, validKind: () => 'all', kindAllows: () => true,
+      when: () => document.createDocumentFragment(), badges: (_document, values) => node('p', values.filter(Boolean).join(' · ')),
+      tabs: () => document.createDocumentFragment(), matches: () => [], paint: () => () => {} });
     const root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
     status.id = 'lifeSaveStatus';
@@ -231,6 +235,7 @@
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
       onOpenInterests: () => navigate('interests'),
+      onReaderHistory: articleId => newsReaderHistory(articleId),
       onImport: (article, context = {}) => {
         if (disposed || state.mode !== 'external-discovery') return;
         return navigate('import', { externalImport: { article, workspaceId: state.bundle.workspaceId,
@@ -1412,6 +1417,7 @@
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
+      if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1640,6 +1646,8 @@
     function historyEntry(mode = state.mode) {
       const entry = { mode, workspaceId: state.bundle?.workspaceId || null };
       if (mode === 'source') Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+      // A news article read in place of the list (below 1101px) is its own entry, so the browser's back closes it.
+      if (mode === 'external-discovery' && state.newsArticle) entry.newsArticle = state.newsArticle;
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
       const origin = viewOrigins.get(mode);
@@ -1659,7 +1667,7 @@
     function historyPublic(value, depth = 0) {
       if (!value || typeof value !== 'object' || depth > 4) return null;
       const out = {}, id = key => typeof value[key] === 'string' && historyIdPattern.test(value[key]);
-      for (const key of ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'focusKey', 'focusId', 'focusTag', 'folderFilter', 'blogPostId']) if (id(key)) out[key] = value[key];
+      for (const key of ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'newsArticle', 'focusKey', 'focusId', 'focusTag', 'folderFilter', 'blogPostId']) if (id(key)) out[key] = value[key];
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
       for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
@@ -1682,10 +1690,10 @@
     }
     function historyBack(entry, key) {
       const value = historyPublic(entry) || {};
-      return { key, doc: historyDoc, mode: value.mode, workspaceId: value.workspaceId, sourceId: value.sourceId, sourceVersionId: value.sourceVersionId, task: value.task, blog: value.blog };
+      return { key, doc: historyDoc, mode: value.mode, workspaceId: value.workspaceId, sourceId: value.sourceId, sourceVersionId: value.sourceVersionId, task: value.task, blog: value.blog, newsArticle: value.newsArticle };
     }
     function sameHistoryScreen(a, b) {
-      return !!a && !!b && ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog'].every(key => (a[key] ?? null) === (b[key] ?? null));
+      return !!a && !!b && ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'newsArticle'].every(key => (a[key] ?? null) === (b[key] ?? null));
     }
     function syncHistoryPosition() {
       const recorded = global.history.state?.haedo;
@@ -1764,6 +1772,19 @@
         else if (destination !== here) global.history.replaceState(null, '', destination);
       }
       lastRouteBase = url.pathname + url.search;
+    }
+
+    // News: opening an article where it replaces the list pushes an entry; closing it in the app
+    // returns to the list entry with the browser (so the next back leaves news as before).
+    function newsReaderHistory(articleId) {
+      if (disposed || state.mode !== 'external-discovery' || historyWait) return;
+      if (articleId) { state.newsArticle = articleId; writeRoute('external-discovery', 'push'); return; }
+      const recorded = global.history.state?.haedo;
+      state.newsArticle = null;
+      if (recorded?.v === 1 && recorded.entry?.newsArticle && recorded.back?.mode === 'external-discovery' && !recorded.back.newsArticle && recorded.back.doc === historyDoc && Number.isSafeInteger(recorded.idx)) {
+        historyAim(recorded.idx - 1, recorded.back.key); return;
+      }
+      writeRoute('external-discovery', 'replace');
     }
 
     async function navigateSection(requested, push = true) {
@@ -1886,6 +1907,7 @@
         if (blog) Object.assign(options, blog, { blogContext: true });
         else options.historyTask = null;
       } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
+      if (entry.mode === 'external-discovery' && entry.newsArticle) options.newsArticle = entry.newsArticle;
       return options;
     }
 
@@ -1907,6 +1929,12 @@
         return;
       }
       if (record.key === fromKey) return;
+      // Within the news screen only the open article differs: open or close it in place.
+      if (state.mode === 'external-discovery' && entry.mode === 'external-discovery' && externalDiscoveryUI?.showArticle) {
+        state.newsArticle = entry.newsArticle || null;
+        if (externalDiscoveryUI.showArticle(state.newsArticle)) { syncHistoryPosition(); return; }
+        state.newsArticle = null;
+      }
       // Memory holds the full entry (focus label, search text); after a reload
       // only the identifiers in history.state are available.
       const full = historyDetails.get(record.key);
@@ -3424,7 +3452,7 @@
     // so moving through it never counts as reading. assets/life/records.css hides it below 1101px.
     function renderReaderPane() {
       const context = state.returnContext, workspaceId = state.bundle?.workspaceId;
-      if (!RecordsList || !context || context.mode !== 'sources' || context.workspaceId !== workspaceId || !main.querySelector(':scope > .life-reader')) return;
+      if (RecordsList.missing || !context || context.mode !== 'sources' || context.workspaceId !== workspaceId || !main.querySelector(':scope > .life-reader')) return;
       const readerColumn = node('div', null, 'records-reader-pane');
       readerColumn.append(...main.childNodes);
       const pane = node('section', null, 'records-pane'); pane.id = 'lifeRecordsPane'; pane.setAttribute('aria-label', '자료 목록');
@@ -3474,6 +3502,7 @@
         if (!rows.length) list.append(empty(query ? '조건에 맞는 자료가 없습니다.' : '목록에 표시할 자료가 없습니다.'));
         count.textContent = (kind === 'excerpt' ? '발췌 ' : '자료 ') + rows.length + '개' + (rows.length > limit ? ' · ' + limit + '개 표시' : '');
         more.hidden = rows.length <= limit;
+        list.setAttribute('role', 'tabpanel'); list.setAttribute('aria-labelledby', 'lifeRecordKind-' + kind);
         tabsHost.replaceChildren(RecordsList.tabs(document, { current: kind, counts: { [kind]: rows.length }, controls: 'lifeRecordsPaneList', onSelect: next => {
           state.recordKind = next; limit = SEARCH_PAGE_SIZE; draw(); tabsHost.querySelector('#lifeRecordKind-' + next)?.focus({ preventScroll: true });
         } }));
@@ -3542,6 +3571,7 @@
       more.id = 'lifeSearchMore';
       const kindTabs = node('div', null, 'records-kind-host');
       const drawKindTabs = counts => {
+        if (!RecordsList.missing) { list.setAttribute('role', 'tabpanel'); list.setAttribute('aria-labelledby', 'lifeRecordKind-' + state.recordKind); }
         kindTabs.replaceChildren(RecordsList.tabs(document, { current: state.recordKind, counts, controls: 'lifeSearchResults', onSelect: kind => {
           state.recordKind = kind; update();
           kindTabs.querySelector('#lifeRecordKind-' + kind)?.focus({ preventScroll: true });
@@ -5679,7 +5709,7 @@
       if (state.mode === 'naver-blog') { mainRenderPromise = renderNaverBlog().catch(failure); return; }
       if (state.mode === 'interests' && interestUI) return mainRenderPromise = interestUI.render().catch(failure);
       if (state.mode === 'annual-plan' && annualPlanUI) return mainRenderPromise = annualPlanUI.render().catch(failure);
-      if (state.mode === 'external-discovery' && externalDiscoveryUI) return mainRenderPromise = externalDiscoveryUI.render().catch(failure);
+      if (state.mode === 'external-discovery' && externalDiscoveryUI) return mainRenderPromise = externalDiscoveryUI.render({ articleId: state.newsArticle || null }).catch(failure);
       if (state.mode === 'public-cover') return mainRenderPromise = renderPublicCover().catch(failure);
       if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
       if (state.mode === 'preservation') return mainRenderPromise = renderPreservation().catch(failure);

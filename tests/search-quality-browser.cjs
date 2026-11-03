@@ -143,8 +143,8 @@ async function spacingCases(page, capture) {
   await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); await twoFrames(page);
   assert.equal(await cards(page).count(), 40);
   assert.equal(await page.locator(`.life-source-open[data-version-id="${savedVersion}"]`).evaluate(el => document.activeElement === el), true, 'Return focuses the exact saved-version card');
-  await capture('saved-outside-window');
-  return { spacingOptInTitleBodyNote: true, bodyRawRangePreserved: true, titleNoteNoInventedLocator: true, optionRestoredOnReturn: true, savedOutside40RemainsReachable: true };
+  await capture('fresh-save-first-row');
+  return { spacingOptInTitleBodyNote: true, bodyRawRangePreserved: true, titleNoteNoInventedLocator: true, optionRestoredOnReturn: true, freshSaveFirstRowReopensExactVersion: true };
 }
 async function shiftedReturn(page, first) {
   await measureInput(page, '정원');

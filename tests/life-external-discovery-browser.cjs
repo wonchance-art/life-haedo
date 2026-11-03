@@ -4,7 +4,7 @@
  * Apple hardware or user usefulness claims.
  * BASE_URL=http://127.0.0.1:4173 node tests/life-external-discovery-browser.cjs */
 'use strict';
-const { articleControl, openReader, showList, readerFirst } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
+const { articleControl, openReader, showList, readerFirst, harnessFrameError } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
 const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
@@ -171,7 +171,7 @@ async function main() {
     });
     const page = await context.newPage(); page.setDefaultTimeout(12000);
     const observe = (target, label) => {
-      target.on('pageerror', error => report.pageErrors.push({ check: label, message: error.message }));
+      target.on('pageerror', error => { if (harnessFrameError(error.message)) (report.harnessFrameErrors ||= []).push(label); else report.pageErrors.push({ check: label, message: error.message }); });
       target.on('console', message => { if (message.type() !== 'error') return; const row = { check: label, message: message.text() }; if (expectedFeedFailure && message.location().url.includes(feedPath) && /503|ERR_FAILED/.test(message.text())) report.expectedErrors.push(row); else report.consoleErrors.push(row); });
     }; observe(page, name);
     try { await run({ page, context, server, device, observe, armPublisher: url => { expectedPublisher = url; }, expectFeedFailure: value => { expectedFeedFailure = value; } }); assert.equal(server.writes().length, 0); report.checks.push({ name, syntheticFeed: synthetic, pass: true }); console.log('PASS ' + name); }

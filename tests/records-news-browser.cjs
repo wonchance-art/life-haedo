@@ -10,6 +10,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
+const { harnessFrameError } = require('./helpers/news-reader.cjs');
 const out = path.resolve(process.env.RECORDS_NEWS_OUTPUT || path.join(__dirname, '../.local/records-news'));
 const report = { createdAt: new Date().toISOString(), scope: 'Local Chromium, synthetic Auth and feed, synthetic publisher responses only.', checks: [], consoleErrors: [], pageErrors: [], external: [], publisherRequests: [], captures: [] };
 const frames = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -71,7 +72,7 @@ async function main() {
     await context.route(base + '/assets/life/discovery-feed.json', async route => { if (hold) await hold; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(currentFeed) }); });
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ check: name, text: message.text() }); });
-    page.on('pageerror', error => report.pageErrors.push({ check: name, text: error.message }));
+    page.on('pageerror', error => { if (harnessFrameError(error.message)) (report.harnessFrameErrors ||= []).push(name); else report.pageErrors.push({ check: name, text: error.message }); });
     try {
       await page.goto(base + '/index.html'); await ready(page);
       await run({ page, context, setFeed: value => { currentFeed = value; }, holdFeed: () => { let release; hold = new Promise(resolve => { release = resolve; }); return () => { hold = null; release(); }; } });
@@ -165,10 +166,13 @@ async function main() {
       assert.match(await page.locator('#discoveryList [data-discovery-id="english"] .discovery-meta').innerText(), /EN/);
       assert.equal(await page.locator('#discoveryFailedSources').isVisible(), true); assert.match(await page.locator('#discoveryFailedSources').innerText(), /출처 1곳 갱신 실패/);
       assert.match(await page.locator('#discoveryDiscover').innerText(), /전체 3/);
+      const historyLength = await page.evaluate(() => history.length);
       await row.locator('[data-discovery-select]').click(); await idle(page);
       const frame = page.locator('#discoveryReaderFrame');
       assert.deepEqual(await frame.evaluate(node => ({ src: node.src, referrer: node.getAttribute('referrerpolicy'), sandbox: node.getAttribute('sandbox') })),
-        { src: 'https://www.readersnews.com/news/articleView.html?idxno=900001', referrer: 'no-referrer', sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox' });
+        { src: 'https://www.readersnews.com/news/articleView.html?idxno=900001', referrer: 'no-referrer', sandbox: 'allow-scripts allow-popups' });
+      assert.equal(await page.evaluate(() => history.length), historyLength, 'the wide reading column stays on the same history entry');
+      assert.match(await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content'), /^frame-src 'self' blob: https:\/\/www\.youtube-nocookie\.com https:\/\/www\.readersnews\.com https:\/\/www\.frontiersin\.org$/);
       await until(page, () => true, null, 'frame'); await page.waitForTimeout(300);
       assert(report.publisherRequests.some(request => request.path.includes('900001') && request.referer === null), 'publisher request without referrer');
       const external = page.locator('#discoveryReader [data-discovery-open]');
@@ -197,12 +201,31 @@ async function main() {
       assert.deepEqual(tools.map(label => label.split(' ')[0]), ['담기', '좋아요', '새']);
       const bar = await page.locator('#discoveryReader .discovery-reader-tools').boundingBox(); assert(bar.y + bar.height >= 843, 'tools at the bottom edge');
       assert.equal(await page.evaluate(() => document.activeElement.id), 'discoveryReaderBack');
+      // Everything behind the full-screen reader is inert while it is open.
+      assert.equal(await page.evaluate(() => [document.querySelector('.life-toolbar'), document.querySelector('.discovery-list-pane'), document.querySelector('[data-haedo-navigation]')].every(element => element.closest('[inert]'))), true);
+      assert.equal(await page.evaluate(() => !!document.querySelector('#discoveryReader').closest('[inert]')), false);
       await capture(page, 'news-reader-390');
+      // The browser's back closes the reader and returns to the list; forward reopens the same article.
+      const opened = await page.evaluate(() => history.state?.haedo);
+      assert.equal(opened.entry.newsArticle, 'frame-ok'); assert.equal(opened.back.mode, 'external-discovery'); assert.equal(opened.back.newsArticle, undefined);
+      await page.goBack(); await idle(page); await frames(page);
+      assert.equal(await page.locator('#discoveryReader').count(), 0); assert.equal(await tabs.isVisible(), true);
+      assert.equal(await page.evaluate(() => document.querySelectorAll('[inert]').length), 0, 'closing releases inert');
+      assert.equal(await page.evaluate(() => history.state?.haedo?.entry?.newsArticle), undefined);
+      assert.equal(new URL(page.url()).searchParams.get('section'), 'news');
+      await page.goForward(); await idle(page); await frames(page);
+      assert.equal(await page.evaluate(() => document.body.dataset.haedoImmersive), 'news'); assert.match(await page.locator('#discoveryReaderTitle').innerText(), /합성 신간 소개 기사/);
+      await page.locator('#discoveryReaderBack').focus();
       await page.keyboard.press('Enter'); await idle(page); await frames(page);
+      // ‹ 뉴스 also goes back to the list entry, so one more back leaves news as before.
+      await page.waitForFunction(key => history.state?.haedo?.key === key, opened.back.key);
       assert.equal(await page.evaluate(() => document.body.dataset.haedoImmersive), undefined); assert.equal(await tabs.isVisible(), true);
       assert.equal(await page.evaluate(() => document.activeElement.closest('[data-discovery-id]')?.dataset.discoveryId), 'frame-ok');
       await page.setViewportSize({ width: 820, height: 1180 }); await page.locator('#discoveryList [data-discovery-id="frame-no"] [data-discovery-select]').click(); await idle(page);
       assert.equal(await page.locator('.discovery-list-pane').isVisible(), false); assert.equal(await page.locator('#discoveryReaderBack').isVisible(), true); assert.equal(await tabs.isVisible(), true);
+      assert.equal(await page.evaluate(() => document.querySelectorAll('[inert]').length), 0, 'iPad reading keeps the menu usable');
+      await page.goBack(); await idle(page); assert.equal(await page.locator('.discovery-list-pane').isVisible(), true, 'back returns to the list at 820 too');
+      await page.goForward(); await idle(page); assert.equal(await page.locator('#discoveryReaderBack').isVisible(), true);
       await capture(page, 'news-reader-820'); await page.locator('#discoveryReaderBack').click(); await idle(page);
       assert.equal(await page.locator('.discovery-list-pane').isVisible(), true); await capture(page, 'news-list-820');
     }, { width: 390, height: 844 });
@@ -214,7 +237,7 @@ async function main() {
       await page.locator('#discoveryShowAll').click(); await idle(page); assert.equal(await page.locator('#discoveryDiscover').getAttribute('aria-selected'), 'true');
       setFeed(feed([{ id: 'fresh', sourceId: 'seoul-culture', url: 'https://news.seoul.go.kr/culture/archives/900009', title: '새로 들어온 합성 기사', language: 'ko', tags: [], author: null, publishedAt: new Date(Date.now() - 60000).toISOString(), fetchedAt: new Date().toISOString(), summary: '', coverage: 'link_only', rights: { mode: 'metadata_only', label: '합성', url: 'https://news.seoul.go.kr/' } }]));
       const release = holdFeed(); await page.locator('#discoveryFilterToggle').click(); await page.locator('#discoveryRefreshNow').click();
-      await page.locator('#discoveryProgress').waitFor(); assert.match(await page.locator('#discoveryProgress').innerText(), /^새로 고치는 중 · 출처 3곳 중 0곳$/);
+      await page.locator('#discoveryProgress').waitFor(); assert.equal((await page.locator('#discoveryProgress').innerText()).trim(), '새로 고치는 중');
       assert.equal(await page.locator('#discoveryRefreshNow').isDisabled(), true); release(); await idle(page);
       await page.waitForFunction(() => document.querySelector('#discoveryProgress')?.hidden);
       assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 1건/);
@@ -236,6 +259,23 @@ async function main() {
       await page.locator('#discoveryUndoToast').click(); await idle(page);
       assert.equal(await page.locator('#discoveryList [data-discovery-id="frame-no"]').count(), 1, '되돌리기 restores the row');
       assert.deepEqual((await page.evaluate(async () => HaedoLife.Shell.storage.readDiscoveryProfile(await HaedoLife.Shell.storage.getActive()))).feedback, []);
+    });
+    await check('a cached older shell without records-list.js still opens the records list and an original', async ({ page, context }) => {
+      // Mixed update: the new pages reference records-list.js/records.css, an older offline cache cannot serve them.
+      await context.route(/\/assets\/life\/records(-list\.js|\.css)(\?.*)?$/, route => route.fulfill({ status: 404, body: '' }));
+      const mixed = report.consoleErrors.length;
+      await page.reload(); await ready(page);
+      assert.equal(await page.evaluate(() => !!HaedoLife.RecordsList), false);
+      const ids = await seedRecords(page); await nav(page, 'records'); await page.locator('#lifeSearch').fill('도서관'); await frames(page);
+      assert.equal(await page.locator('#lifeRecordKind-all').count(), 0, 'no kind tabs without the module');
+      assert(await page.locator('#lifeSearchResults .life-source-card').count() >= 3);
+      await page.locator(`#lifeSearchResults .life-source-card[data-version-id="${ids.oldVersion}"] .life-source-open`).click(); await settle(page);
+      assert.equal(await page.locator('#lifeVersion').inputValue(), ids.oldVersion); assert.equal(await page.locator('#lifeRecordsPane').count(), 0);
+      await page.locator('#lifeSearchReturn').click(); await settle(page);
+      assert.equal(await page.locator('#lifeSearch').inputValue(), '도서관');
+      // Only the two refused resources may log a load error; nothing throws.
+      const added = report.consoleErrors.splice(mixed);
+      assert(added.every(entry => /Failed to load resource/.test(entry.text)), JSON.stringify(added));
     });
   } finally {
     await browser.close();

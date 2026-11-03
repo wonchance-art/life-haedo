@@ -2,6 +2,8 @@
 <html lang="ko" data-theme="spring">
 <head>
   <meta charset="UTF-8">
+  <!-- Frames: app blobs/srcdoc, YouTube player (page-media.js), checked news publishers (discovery-ui.js FRAME_ALLOWED_SOURCES). Only frame-src is set. -->
+  <meta http-equiv="Content-Security-Policy" content="frame-src 'self' blob: https://www.youtube-nocookie.com https://www.readersnews.com https://www.frontiersin.org">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="여러 곳에 남긴 기록을 모아 읽고 정리하는 개인 생활 도구">
   <meta name="theme-color" content="#ffffff">

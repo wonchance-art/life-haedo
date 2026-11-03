@@ -32,4 +32,8 @@ async function readerFirst(page) {
   if (await reader.count() && await reader.isVisible()) return reader;
   return openReader(page, page.locator('#discoveryList [data-discovery-select]').first().locator('xpath=ancestor::*[@data-discovery-url][1]'));
 }
-module.exports = { idle, showList, openReader, articleControl, readerFirst };
+// Playwright's serviceWorkers:'block' patches navigator.serviceWorker in every frame; inside the reader's
+// opaque-origin publisher frame (sandbox without allow-same-origin) that patch itself throws. The app never
+// reads it there; a context with service workers allowed shows no such error (bundle C probe, 2026-11-03).
+const harnessFrameError = message => /^Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag\.$/.test(message);
+module.exports = { idle, showList, openReader, articleControl, readerFirst, harnessFrameError };
