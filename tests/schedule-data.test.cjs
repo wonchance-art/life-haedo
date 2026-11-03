@@ -36,6 +36,11 @@ test('titles name the period; another year is named in full', () => {
   assert.equal(D.title('month', '2025-10-28', '2026-11-03'), '2025년 10월');
   assert.equal(D.title('week', '2026-10-28', '2026-11-03'), '10.26 – 11.1');
   assert.equal(D.title('day', '2026-10-28', '2026-11-03'), '10월 28일 수요일');
+  // Weeks follow their Monday's year; a New Year week names both years (from either side).
+  assert.equal(D.title('week', '2027-01-01', '2026-11-03'), '2026년 12.28 – 2027년 1.3');
+  assert.equal(D.title('week', '2026-12-29', '2027-01-02'), '2026년 12.28 – 2027년 1.3');
+  assert.equal(D.title('week', '2027-01-06', '2027-01-02'), '1.4 – 1.10');
+  assert.equal(D.title('week', '2025-06-04', '2026-11-03'), '2025년 6.2 – 6.8');
 });
 
 test('records group by the local civil day of their time; plans by their own date', () => {

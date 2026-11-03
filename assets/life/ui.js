@@ -416,7 +416,7 @@
       links: {
         plan: () => planDestinations(),
         habits: () => scheduleLinks([['습관 체크', 'habits.html', 'check']]),
-        day: () => scheduleLinks([['습관 체크', 'habits.html', 'check'], ['행복도 기록', 'timeline.html', 'timeline']])
+        day: () => scheduleLinks([['습관 체크', 'habits.html', 'check'], ['연표에서 행복도 보기', 'timeline.html', 'timeline']])
       }
     });
 

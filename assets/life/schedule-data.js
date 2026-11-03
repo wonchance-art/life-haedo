@@ -86,7 +86,12 @@
     if (unit === 'year') return year + '년';
     if (unit === 'quarter') return year + '년 ' + quarterOf(value) + '분기';
     if (unit === 'month') return (thisYear ? '' : year + '년 ') + month + '월';
-    if (unit === 'week') { const days = weekOf(value); return (thisYear ? '' : year + '년 ') + shortDay(days[0]) + ' – ' + shortDay(days[6]); }
+    // A week is named by its Monday's year; a week across New Year names both years.
+    if (unit === 'week') {
+      const days = weekOf(value), first = parts(days[0]).year, last = parts(days[6]).year;
+      if (first !== last) return first + '년 ' + shortDay(days[0]) + ' – ' + last + '년 ' + shortDay(days[6]);
+      return (first === parts(now).year ? '' : first + '년 ') + shortDay(days[0]) + ' – ' + shortDay(days[6]);
+    }
     return dayTitle(value, now);
   }
   // One entry per civil day: saved posts, excerpts and dated plan entries.

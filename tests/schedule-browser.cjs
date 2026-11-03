@@ -35,6 +35,8 @@ async function seed(page) {
     for (const [at, title] of rows) {
       const doc = m.create(c.id, new Date(at).toISOString()); doc.title = title; doc.status = 'saved';
       doc.ops = [{ insert: '퇴근길에 한 정거장 먼저 내려 천변을 따라 걸었다. 가로등이 켜지는 순서를 세다가 집 앞까지 왔다.\n' }];
+      // Written on 10-21, edited on 11-02: the list sorts by the edit, the calendar keeps the day it was written.
+      if (title === '천변을 따라 걸은 날') doc.updatedAt = new Date('2026-11-02T20:00:00+09:00').toISOString();
       if (title === '비 오는 날 동네 도서관') {
         const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 600; const g = canvas.getContext('2d'); g.fillStyle = '#b9cbc4'; g.fillRect(0, 0, 800, 600); g.fillStyle = '#c7b79a'; g.fillRect(0, 380, 800, 220);
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', .9)); const image = await m.readPhoto(new File([blob], 'anonymous.jpg', { type: blob.type }), c.id);
@@ -85,15 +87,16 @@ async function alignmentCopy(page, name) {
 async function main() {
   await fs.mkdir(path.join(output, 'align'), { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-  async function check(name, run, viewport = { width: 1440, height: 960 }) {
+  async function check(name, run, viewport = { width: 1440, height: 960 }, contextOptions = {}) {
     if (process.env.SCHEDULE_TEST_MATCH && !new RegExp(process.env.SCHEDULE_TEST_MATCH).test(name)) return;
     const server = new FakeCloud(), device = 'schedule-' + report.checks.length;
-    const context = await makeContext(browser, server, device, accounts.a, { viewport, timezoneId: 'Asia/Seoul', locale: 'ko-KR' });
+    const context = await makeContext(browser, server, device, accounts.a, { viewport, timezoneId: 'Asia/Seoul', locale: 'ko-KR', ...contextOptions });
     await instrumentStorage(context);
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     await page.clock.setFixedTime(new Date(TODAY));
     page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
-    page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); });
+    // Only the offline check expects failed network loads; they are counted separately.
+    page.on('console', event => { if (event.type() !== 'error') return; if (page.__expectOffline) report.expectedOffline = (report.expectedOffline || 0) + 1; else report.consoleErrors.push({ check: name, message: event.text() }); });
     console.log('RUN ' + name);
     try { await run({ page, context, server, device }); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
@@ -180,6 +183,15 @@ async function main() {
       assert.equal(await page.locator('#lifeApp nav[aria-label="보기 단위"] [data-schedule-view="month"]').isVisible(), false, 'no unit buttons on a phone');
       await page.locator('[data-schedule-view="tools"]').click(); await shown(page, 'tools');
       assert.equal(await page.locator('[data-schedule-up="home"]').isVisible(), true);
+      // Another year on a phone, then back; ‹ › replace the screen.
+      await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '2025년');
+      await page.locator('[data-schedule-step="1"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '2026년');
+      // The whole row opens the month (here its title).
+      await page.locator('.schedule-year-row[data-month="10"] .schedule-lead').click(); await shown(page, 'month');
+      assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '10월');
+      await page.goBack(); await shown(page, 'tools');
       await page.locator('[data-focus-key="schedule:month:2026-10"]').click(); await shown(page, 'month');
       assert.equal(await page.locator('[data-schedule-up="tools"]').innerText(), '2026');
       await page.locator('[data-focus-key="schedule:day:2026-10-29"]').click(); await shown(page, 'day');
@@ -221,6 +233,65 @@ async function main() {
       assert(!text.includes(PRIVATE) && !text.includes('제주 여행') && !text.includes('비 오는 날'), 'account B sees none of account A');
     });
 
+    await check('the calendar places a post on the day it was written; the list keeps its edit order', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      await page.reload(); await ready(page); await shown(page, 'home');
+      const firstDay = page.locator('#homePostList .home-day-heading').first();
+      assert.equal(await firstDay.innerText(), '11월 2일 월요일');
+      // The list heading uses the field it sorts by (updatedAt): the edited post sits under 11월 2일.
+      assert.deepEqual(await page.locator('#homePostList > *').evaluateAll(nodes => {
+        const out = []; let day = null;
+        for (const node of nodes) { if (node.classList.contains('home-day-heading')) day = node.textContent; else if (node.classList.contains('home-post')) out.push([day, node.querySelector('.home-post-open').textContent]); }
+        return out.slice(0, 2);
+      }), [['11월 2일 월요일', PRIVATE], ['11월 2일 월요일', '천변을 따라 걸은 날']]);
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-21'); await ready(page); await shown(page, 'day');
+      assert.match(await page.locator('#lifeSchedule').innerText(), /천변을 따라 걸은 날/);
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day');
+      assert.doesNotMatch(await page.locator('#lifeSchedule').innerText(), /천변을 따라 걸은 날/);
+      assert.match(await page.locator('#lifeSchedule').innerText(), new RegExp(PRIVATE));
+    });
+
+    await check('single-key shortcuts never fire while typing or composing, and follow the physical key in the Korean layout', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      await page.reload(); await ready(page); await shown(page, 'home');
+      // Typing in the list search keeps the text and the screen.
+      await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').focus();
+      await page.keyboard.type('ymdwqlt/');
+      assert.equal(await page.locator('#homePostSearch').inputValue(), 'ymdwqlt/'); assert.equal(await mode(page), 'home');
+      // An IME composition in the field (CDP) commits text and moves nowhere.
+      const cdp = await page.context().newCDPSession(page);
+      await page.locator('#homePostSearch').fill(''); await cdp.send('Input.imeSetComposition', { text: 'ㅡ', selectionStart: 1, selectionEnd: 1 });
+      await page.keyboard.press('KeyM'); await cdp.send('Input.insertText', { text: '므' });
+      assert.equal(await mode(page), 'home');
+      await page.locator('#homePostSearch').fill(''); await page.locator('#lifeApp .life-page-title').focus();
+      // A key event during composition (isComposing, or keyCode 229) is ignored outside fields as well.
+      // KeyboardEventInit has no keyCode, so a composing keyCode 229 is set on the event itself.
+      const press = init => page.evaluate(({ keyCode, ...init }) => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        if (keyCode) Object.defineProperty(event, 'keyCode', { get: () => keyCode });
+        document.activeElement.dispatchEvent(event);
+      }, init);
+      await press({ key: 'ㅡ', code: 'KeyM', isComposing: true }); await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      await press({ key: 'm', code: 'KeyM', keyCode: 229 }); await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      // 2-set Korean layout without composition: ㅡ is the M key, ㅛ the Y key.
+      await press({ key: 'ㅡ', code: 'KeyM' }); await shown(page, 'month');
+      await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅛ', code: 'KeyY' }); await shown(page, 'tools');
+      await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅣ', code: 'KeyL' }); await shown(page, 'home');
+    });
+
+    await check('dated 일정 addresses reload offline from the installed shell', async ({ page, context }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 60000 });
+      page.__expectOffline = true; await context.setOffline(true);
+      try {
+        for (const query of ['?section=schedule&view=month&date=2026-10-28', '?section=schedule&view=day&date=2026-10-29', '?section=tools&date=2025-05-01']) {
+          const response = await page.goto(base + '/index.html' + query);
+          assert.equal(response?.status(), 200, query); assert.equal(response.fromServiceWorker(), true, query + ' from the shell');
+          await page.waitForFunction(() => globalThis.HaedoLife?.Shell && globalThis.HaedoLife.ScheduleUI && globalThis.HaedoLife.ScheduleData);
+        }
+      } finally { await context.setOffline(false); page.__expectOffline = false; }
+    }, { width: 1440, height: 960 }, { serviceWorkers: 'allow' });
+
     await check('every unit at 1440, 820 and 390 has no horizontal overflow and keeps accessible names', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const scenes = [['list', '/index.html', 'home'], ['year', '/index.html?section=tools', 'tools'], ['quarter', '/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter'],
@@ -235,7 +306,7 @@ async function main() {
           const audit = await page.evaluate(() => {
             const shown = [...document.querySelectorAll('#lifeApp button, #lifeApp a')].filter(el => el.checkVisibility());
             const unnamed = shown.filter(el => !(el.getAttribute('aria-label') || el.textContent).trim()).map(el => el.className);
-            const small = shown.filter(el => el.closest('.life-toolbar,.schedule-aside,.schedule-links,.schedule-week-strip')).filter(el => { const r = el.getBoundingClientRect(); return r.height < 44 && r.width < 44; }).map(el => el.getAttribute('aria-label') || el.textContent);
+            const small = shown.filter(el => el.closest('.life-toolbar,.schedule-aside,.schedule-links,.schedule-week-strip,.schedule-quote,.schedule-plan-list')).filter(el => { const r = el.getBoundingClientRect(); return r.height < 44 && r.width < 44; }).map(el => el.getAttribute('aria-label') || el.textContent);
             return { unnamed, small };
           });
           assert.deepEqual(audit.unnamed, [], scene + ' ' + width + ' controls have names');

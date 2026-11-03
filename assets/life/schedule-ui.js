@@ -49,19 +49,25 @@
       ]);
       const posts = [], excerpts = [];
       if (photo.status === 'fulfilled' && Array.isArray(photo.value?.posts)) {
-        for (const post of photo.value.posts) if (post.status === 'saved' && !post.archived)
-          posts.push({ kind: 'photo', id: post.id, workspaceId: post.workspaceId || workspaceId, title: post.title, body: post.body, at: post.updatedAt, photos: post.photos || 0 });
+        const saved = photo.value.posts.filter(post => post.status === 'saved' && !post.archived);
+        // A calendar places a post on the day it was written (createdAt), so editing an old post
+        // does not move it to today. The list index has no createdAt; each library is read once.
+        const written = await createdTimes(saved, workspaceId);
+        for (const post of saved)
+          posts.push({ kind: 'photo', id: post.id, workspaceId: post.workspaceId || workspaceId, title: post.title, body: post.body,
+            at: written.get((post.workspaceId || workspaceId) + '/' + post.id) || post.updatedAt, photos: post.photos || 0 });
         if (photo.value.failed) errors.push('일부 자료공간의 글');
       } else errors.push('사진 글');
       if (workbench.status === 'fulfilled' && workbench.value?.workspaceId === workspaceId) {
         for (const post of workbench.value.page?.posts || []) if (post.status === 'saved')
-          posts.push({ kind: 'plain', id: post.id, workspaceId, title: '', body: post.body, at: post.updatedAt, photos: 0, attachments: post.attachments || [] });
+          posts.push({ kind: 'plain', id: post.id, workspaceId, title: '', body: post.body, at: post.createdAt || post.updatedAt, photos: 0, attachments: post.attachments || [] });
       } else errors.push('첨부 글');
       const active = id => core.isSourceActive(bundle, id);
       for (const source of bundle.sources) {
         if (!active(source.id) || !life.Writing?.isOwnSource(source, bundle)) continue;
         const version = life.Writing.latestVersion(bundle, source.id);
-        if (version) posts.push({ kind: 'source', id: source.id, versionId: version.id, workspaceId, title: source.title, body: version.contentText, at: version.importedAt, photos: 0 });
+        // A direct writing's first version is when it was written; later versions are edits.
+        if (version) posts.push({ kind: 'source', id: source.id, versionId: version.id, workspaceId, title: source.title, body: version.contentText, at: source.createdAt || version.importedAt, photos: 0 });
       }
       const sources = new Map(bundle.sources.map(source => [source.id, source]));
       for (const record of bundle.records || []) {
@@ -76,6 +82,17 @@
         rows = plan.value.rows || [];
       } else if (plan.status !== 'fulfilled') errors.push('연간 계획');
       return { days: data().group({ posts, excerpts, plans }), posts, plans, rows, errors };
+    }
+    // createdAt of saved photo posts, one read per library; an unreadable post keeps its list time.
+    async function createdTimes(saved, workspaceId) {
+      const byLibrary = new Map(), out = new Map();
+      for (const post of saved) { const ws = post.workspaceId || workspaceId; if (!byLibrary.has(ws)) byLibrary.set(ws, []); byLibrary.get(ws).push(post.id); }
+      if (typeof storage.readPhotoPosts !== 'function') return out;
+      await Promise.all([...byLibrary].map(async ([ws, ids]) => {
+        try { (await storage.readPhotoPosts(ws, ids)).forEach((doc, i) => { if (doc?.id === ids[i] && typeof doc.createdAt === 'string') out.set(ws + '/' + doc.id, doc.createdAt); }); }
+        catch (_) { /* The list time still places the post. */ }
+      }));
+      return out;
     }
     // A photo post's first photo, read only when the thumbnail is about to show.
     function thumb(context, post, label) {
@@ -237,6 +254,8 @@
           const photos = el('span', null, 'schedule-year-photos');
           summary.photos.slice(-2).reverse().forEach(post => photos.append(thumb(context, post, month + '월 사진')));
           row.append(label, body, photos);
+          // The whole row (title, photos) opens the month; dots open their day; the label is the keyboard control.
+          row.addEventListener('click', event => { if (!event.target.closest('button,a,.schedule-dots') && showing(context)) label.click(); });
           rows.append(row);
         }
       };
@@ -290,7 +309,7 @@
     function monthView(context) {
       const { year, month } = data().parts(context.date), now = data().today();
       const wrap = el('div', null, 'schedule-month');
-      const grid = el('div', null, 'schedule-month-grid'); grid.setAttribute('aria-label', year + '년 ' + month + '월');
+      const grid = el('div', null, 'schedule-month-grid'); grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', year + '년 ' + month + '월');
       data().WEEKDAYS.forEach(name => { const head = el('span', name, 'schedule-weekday'); head.setAttribute('aria-hidden', 'true'); grid.append(head); });
       for (const week of data().monthWeeks(context.date)) for (const day of week) {
         const entry = context.result.days.get(day), inMonth = data().parts(day).month === month;
@@ -312,7 +331,7 @@
         }
         const mark = el('span', null, 'schedule-cell-dot'); mark.setAttribute('aria-hidden', 'true');
         mark.dataset.level = String(data().level(data().count(entry)));
-        if (!data().count(entry) && entry?.plans.length) mark.dataset.planned = 'true';
+        if (!data().count(entry) && entry?.plans.length && day >= now) mark.dataset.planned = 'true';
         cell.append(mark);
         grid.append(cell);
       }
@@ -377,11 +396,12 @@
       return wrap;
     }
     function weekStrip(context) {
-      const strip = el('div', null, 'schedule-week-strip'); strip.setAttribute('role', 'tablist');
+      // A group of day buttons (no tab pattern: each opens that day); the shown day is aria-current.
+      const strip = el('div', null, 'schedule-week-strip'); strip.setAttribute('role', 'group');
       const week = data().weekOf(context.date); strip.setAttribute('aria-label', data().shortDay(week[0]) + ' – ' + data().shortDay(week[6]));
       for (const day of week) {
         const tab = goButton(context, null, 'day', day, 'schedule-strip-day', 'schedule:strip:' + day);
-        tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', String(day === context.date));
+        if (day === context.date) tab.setAttribute('aria-current', 'date');
         tab.setAttribute('aria-label', dayLabel(day, context.result.days.get(day)));
         if (day === data().today()) tab.dataset.today = 'true';
         const mark = el('span', null, 'schedule-cell-dot'); mark.setAttribute('aria-hidden', 'true'); mark.dataset.level = String(data().level(data().count(context.result.days.get(day))));
@@ -539,14 +559,24 @@
     return dialog;
   }
   // Single-key shortcuts while a schedule screen is shown and no field has focus.
+  // Under the Korean 2-set layout `key` is a jamo (e.g. ㅡ for M); the physical key decides then.
+  const CODES = Object.freeze({ KeyL: 'l', KeyY: 'y', KeyQ: 'q', KeyM: 'm', KeyW: 'w', KeyD: 'd', KeyT: 't', KeyP: 'p', KeyN: 'n', Slash: '/' });
+  function shortcutKey(event) {
+    if (event.key.length !== 1) return event.key;
+    const key = event.key.toLowerCase();
+    if (/^[a-z/?]$/.test(key)) return key;
+    const latin = CODES[event.code];
+    return latin === '/' && event.shiftKey ? '?' : latin || null;
+  }
+  // Single-key shortcuts while a schedule screen is shown, no field has focus and no IME is composing.
   function bindShortcuts({ active, onKey }) {
     const handler = event => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || !active()) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229 || !active()) return;
       const target = event.target;
       if (target?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable=true],dialog,[role=tablist],details[open]')) return;
-      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      const key = shortcutKey(event);
       const map = { l: 'home', y: 'tools', q: 'quarter', m: 'month', w: 'week', d: 'day', t: 'today', p: 'prev', n: 'next', ArrowLeft: 'prev', ArrowRight: 'next', '/': 'find', '?': 'help' };
-      if (!Object.hasOwn(map, key) || event.shiftKey && key !== '?') return;
+      if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?') return;
       event.preventDefault(); onKey(map[key]);
     };
     document.addEventListener('keydown', handler);

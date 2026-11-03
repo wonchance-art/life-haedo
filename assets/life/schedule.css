@@ -45,8 +45,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-dots-large { gap: 4px; }
 .schedule-dot { display: block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #dfe5e2; box-sizing: border-box; }
 .schedule-dots-large .schedule-dot { width: 12px; height: 12px; }
-.schedule-dot[data-level="1"] { background: #86bc9e; }
-.schedule-dot[data-level="2"] { background: #468c6a; }
+/* Each step reaches 3:1 on white, #f4f7f5 and #eaf1ed, and the steps differ in lightness. */
+.schedule-dot[data-level="1"] { background: #579777; }
+.schedule-dot[data-level="2"] { background: #2e6b50; }
 .schedule-dot[data-level="3"] { background: #1b4f38; }
 .schedule-dot[data-planned] { border: 1.5px dashed var(--ink-soft); background: transparent; }
 .schedule-dot[data-today] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--color-primary); }
@@ -66,6 +67,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-year-rows { display: grid; margin-top: 8px; }
 .schedule-year-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 84px; column-gap: 12px; align-items: center; min-height: 56px; margin-inline: -12px; padding-inline: 12px; border-radius: 14px; }
 .schedule-year-row[data-selected] { background: var(--haedo-soft); }
+.schedule-year-row { cursor: pointer; }
+.schedule-year-row:hover .schedule-month-label { color: var(--color-primary); }
 .schedule-month-label, .schedule-week-label { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--haedo-text-control); font-weight: 550; text-align: left; font-variant-numeric: tabular-nums; }
 .schedule-month-label:hover, .schedule-week-label:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
 .schedule-year-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-block: 8px; }
@@ -136,7 +139,7 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-quote > blockquote { grid-column: 2; margin: 0; font-size: var(--haedo-text-body); line-height: 1.6; overflow-wrap: anywhere; }
 .schedule-quote > figcaption { grid-column: 2; margin-top: 4px; }
 .schedule-week-day .schedule-quote > blockquote, .schedule-month-chosen .schedule-quote > blockquote { font-size: var(--haedo-text-meta); }
-.schedule-link { min-height: 32px; border: 0; padding: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-meta); text-align: left; }
+.schedule-link { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-meta); text-align: left; }
 .schedule-link:hover { color: var(--color-primary); text-decoration: underline; }
 
 /* Links to the editors that own goals, habits and happiness. */
@@ -190,8 +193,8 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
   .life-toolbar[data-schedule=home] .life-schedule-view[data-schedule-view=tools] { padding: 0; border: 0; border-radius: 12px; color: var(--ink); }
   .life-toolbar[data-schedule=home] .schedule-view-letter { display: none; }
   .life-toolbar[data-schedule=home] .schedule-view-icon { display: block; }
-  .life-toolbar[data-schedule=home] .schedule-today, .life-toolbar[data-schedule=home] .schedule-step,
-  .life-toolbar:is([data-schedule=tools],[data-schedule=quarter],[data-schedule=week]) .schedule-step { display: none; }
+  /* ‹ › stay on every unit (another year, month or day); the list has no period to step. */
+  .life-toolbar[data-schedule=home] .schedule-today, .life-toolbar[data-schedule=home] .schedule-step { display: none; }
   /* Up link and actions share the top row; the period title takes the full next row (iOS 캘린더). */
   .life-toolbar[data-schedule]:not([data-schedule=home]) { flex-wrap: wrap; row-gap: 0; }
   .life-toolbar[data-schedule]:not([data-schedule=home]) .haedo-heading-title { display: contents; }
@@ -207,7 +210,7 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
   .schedule-year-body { padding-block: 4px; }
   .schedule-year-photos > .schedule-thumb { width: 32px; height: 32px; }
   .schedule-year-photos > .schedule-thumb + .schedule-thumb { display: none; }
-  .schedule-quarter-row { grid-template-columns: 104px minmax(0, 1fr); }
+  .schedule-quarter-row { grid-template-columns: 96px minmax(0, 1fr); }
   .schedule-quarter-month, .schedule-quarter-photo, .schedule-count, .schedule-quarter-row > .schedule-dots { display: none; }
   .schedule-dots-large .schedule-dot { width: 8px; height: 8px; }
 
@@ -221,7 +224,7 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
   .schedule-day-cell > .schedule-thumb { width: 16px; height: 16px; border-radius: 4px; }
   .schedule-day-cell > .schedule-thumb ~ .schedule-cell-dot { display: none; }
   .schedule-cell-dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: transparent; }
-  .schedule-cell-dot:not([data-level="0"]) { background: #86bc9e; }
+  .schedule-cell-dot:not([data-level="0"]) { background: #579777; }
   .schedule-cell-dot[data-planned] { border: 1.5px dashed var(--ink-soft); box-sizing: border-box; }
   .schedule-week-day .schedule-plan-body { font-size: var(--haedo-text-control); }
   .schedule-month-chosen { display: block; margin-top: 16px; }
@@ -232,9 +235,11 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
   .schedule-strip-day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 60px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; }
   .schedule-strip-name { color: var(--ink-soft); font-size: var(--haedo-text-badge); }
   .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
-  .schedule-strip-day[aria-selected=true] .schedule-strip-number { background: var(--ink); color: #fff; font-weight: 750; }
-  .schedule-strip-day[data-today]:not([aria-selected=true]) .schedule-strip-number { color: var(--color-primary); font-weight: 750; }
+  .schedule-strip-day[aria-current=date] .schedule-strip-number { background: var(--ink); color: #fff; font-weight: 750; }
+  .schedule-strip-day[data-today]:not([aria-current=date]) .schedule-strip-number { color: var(--color-primary); font-weight: 750; }
   .schedule-day .schedule-post-title { font-size: 20px; }
+  /* Same columns as the 일정 list rows (time 44 · icon 20, 8px gaps), so content shares the list's line. */
+  .schedule-row { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
   .schedule-post-media > .schedule-thumb { height: 180px; }
 }
 @media (prefers-reduced-motion: reduce) { .life-schedule[aria-busy=true] .schedule-body { transition: none; } }
