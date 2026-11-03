@@ -3,6 +3,7 @@ const CACHE='haedo-v179';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
+  './assets/life/records-list.js','./assets/life/records.css',
   './assets/life/annual-plan.js','./assets/life/annual-plan-ui.js','./assets/life/annual-plan.css',
   './assets/life/source-edit.js','./assets/life/source-edit-ui.js','./assets/life/source-markdown.js','./assets/life/source-markdown.css',
   './vendor/markdown-it/markdown-it.umd.min.js','./vendor/dompurify/purify.min.js',

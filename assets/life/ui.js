@@ -107,6 +107,7 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    let readerMatchRefresh = null;
     let readerWatch = null;
     let readingResumeCleanup = null;
     let readingResumePromise = Promise.resolve();
@@ -170,7 +171,7 @@
     let compositionPanel = null, metadataCleanup = null;
     const downloadUrls = new Set();
     const state = {
-      bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', folderFilter: 'all', returnContext: null, suppressReaderResume: false, sourceId: null,
+      bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', recordKind: 'all', originFilter: '', folderFilter: 'all', returnContext: null, suppressReaderResume: false, sourceId: null,
       sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicFilterSearch: '',
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], sourceEditStages: [], batches: new Map(), batchId: null,
@@ -182,6 +183,7 @@
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null, importResult: null
     };
     const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
+    const RecordsList = global.HaedoLife.RecordsList;
     const root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
     status.id = 'lifeSaveStatus';
@@ -2097,6 +2099,8 @@
           await navigate('import');
         }));
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
+        // 자료: a labelled 가져오기 on wide screens; the same control keeps only its icon on a phone.
+        if (section === 'records') { add.classList.add('life-records-import'); add.querySelector('.life-tooltip')?.remove(); add.append(node('span', '가져오기', 'life-records-import-label')); }
         // Home exposes these actions with labels in its shortcut row.
         if (section === 'records') { nav.append(add); actions.append(nav); }
       }
@@ -2833,6 +2837,7 @@
       state.sourcesWindowKey = '';
       state.sourcesRevealVersionId = null;
       state.ignoreKoreanSpacing = false;
+      state.recordKind = 'all';
     }
 
     async function arrangeRecords(mode, versionIds, returnFocusId) {
@@ -2876,9 +2881,9 @@
       return actions;
     }
 
-    function searchField(parent, placeholder, update, key) {
+    function searchField(parent, placeholder, update, key, label = '자료 검색', id = 'lifeSearch') {
       const bar = node('div', null, 'life-search-bar');
-      const search = field('자료 검색', 'search', 'lifeSearch', state[key]);
+      const search = field(label, 'search', id, state[key]);
       search.label.classList.add('life-search-field');
       search.label.firstChild.className = 'life-sr-only';
       search.input.placeholder = placeholder;
@@ -2899,8 +2904,11 @@
         update();
         search.input.focus({ preventScroll: true });
       });
-      clear.id = 'lifeSearchClear';
-      bar.append(global.HaedoLife.Icons.create('search'), search.label, clear);
+      clear.id = id + 'Clear';
+      // Clear and filter end the bar as one control group on its right edge.
+      const tools = node('div', null, 'life-search-tools'); tools.setAttribute('role', 'toolbar'); tools.setAttribute('aria-label', '검색 동작');
+      tools.append(clear); bar.tools = tools;
+      bar.append(global.HaedoLife.Icons.create('search'), search.label, tools);
       parent.append(bar);
       return bar;
     }
@@ -3280,7 +3288,7 @@
       const filter = iconButton('검색 필터', 'filter', () => {});
       filter.id = 'lifeFilterToggle';
       disclosure(filter, filters, { onChange: open => { state.topicsFiltersOpen = open; } });
-      bar.append(filter);
+      bar.tools.append(filter);
       main.append(filters, count, results);
       update();
     }
@@ -3342,6 +3350,151 @@
       return sourceFoldersUI;
     }
 
+    // One match computation for the records list and the reading pane beside an
+    // opened original: literal search, saved-note matches at their exact version,
+    // origin and folder filters, newest stored version first.
+    function sourceListMatches(folders) {
+      const query = state.sourcesSearch.trim();
+      const searchOptions = { ignoreKoreanSpacing: state.ignoreKoreanSpacing };
+      const hits = core.searchSources(state.bundle, query, searchOptions).filter(hit => activeSource(hit.sourceId));
+      const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
+      const matchingRecords = query ? state.bundle.records.filter(activeRecord).filter(record => {
+        const text = [record.text, record.topic, record.note].join('\n');
+        return state.ignoreKoreanSpacing ? core.matchesSearchText(text, query, searchOptions) : matchingText(text, query);
+      }) : state.bundle.records.filter(activeRecord);
+      // A note can match without the source text matching. Keep its exact version
+      // and do not invent a source-text location for a user's own words.
+      if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
+        if (!activeSource(ref.sourceId) || byVersion.has(ref.sourceVersionId)) return;
+        const versions = state.bundle.sourceVersions.filter(version => version.sourceId === ref.sourceId);
+        const index = versions.findIndex(version => version.id === ref.sourceVersionId);
+        if (index < 0 || !sourceFor(ref.sourceId)) return;
+        const hit = { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, matchedBy: 'note', versionIndex: index + 1, versionCount: versions.length };
+        byVersion.set(ref.sourceVersionId, hit);
+        hits.push(hit);
+      }));
+      const folderState = state.folderFilter === 'all' ? null : folders?.getFolderState();
+      const knownFolder = state.folderFilter === 'all' || state.folderFilter === 'unfiled' || folderState?.folders.some(value => value.id === state.folderFilter);
+      const matchesFolder = state.folderFilter === 'all' ? () => true : folderState && knownFolder
+        ? global.HaedoLife.SourceFolders.compileMatcher(folderState, state.folderFilter) : () => false;
+      const sourcePasses = sourceId => { const source = sourceFor(sourceId); return !!source && (!state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(source) : source.origin === state.originFilter)) && matchesFolder(sourceId); };
+      const versions = new Map(state.bundle.sourceVersions.map(version => [version.id, version]));
+      const time = hit => Date.parse(versions.get(hit.sourceVersionId)?.importedAt) || 0;
+      const order = new Map(hits.map((hit, index) => [hit, index]));
+      const matches = hits.filter(hit => sourcePasses(hit.sourceId)).sort((a, b) => time(b) - time(a) || order.get(a) - order.get(b));
+      return { query, matchingRecords, matches, folderState, knownFolder, sourcePasses };
+    }
+
+    // Saved passages as their own rows: each opens its first visible exact source version and range.
+    function excerptMatches(records, sourcePasses) {
+      return records.map(record => ({ record, ref: record.sourceRefs.find(ref => activeSource(ref.sourceId) && sourcePasses(ref.sourceId) &&
+        state.bundle.sourceVersions.some(version => version.id === ref.sourceVersionId)) }))
+        .filter(item => item.ref).sort((a, b) => (Date.parse(b.record.createdAt) || 0) - (Date.parse(a.record.createdAt) || 0));
+    }
+
+    function markedText(text, query, className) {
+      const line = node('span', null, className), found = query ? core.findSearchText(text, query, { ignoreKoreanSpacing: state.ignoreKoreanSpacing }) : null;
+      if (!found) { line.textContent = text; return line; }
+      line.append(document.createTextNode(text.slice(0, found.start)), node('mark', text.slice(found.start, found.end)), document.createTextNode(text.slice(found.end)));
+      return line;
+    }
+
+    function excerptRow(record, ref, query, { mode = 'sources', open = null, current = false } = {}) {
+      const source = sourceFor(ref.sourceId);
+      const versions = state.bundle.sourceVersions.filter(version => version.sourceId === ref.sourceId);
+      const index = versions.findIndex(version => version.id === ref.sourceVersionId) + 1;
+      const card = node('article', null, 'records-row records-excerpt-row');
+      if (current) card.dataset.current = 'true';
+      Object.assign(card.dataset, { recordId: record.id, sourceId: ref.sourceId, versionId: ref.sourceVersionId });
+      const key = resultFocusKey(mode, 'excerpt-' + record.id);
+      const control = button(null, guarded(() => open ? open(ref, key) : openResult(mode, key, ref)), 'records-excerpt-open');
+      control.dataset.focusKey = key;
+      if (current) control.setAttribute('aria-current', 'true');
+      control.setAttribute('aria-label', '발췌를 원문에서 보기: ' + record.text.slice(0, 80) + ' · ' + (source ? sourceLabel(source) : '출처 없음'));
+      control.append(markedText(record.text, query, 'records-quote'));
+      card.append(RecordsList.when(document, record.createdAt), control);
+      if (record.note) card.append(markedText(record.note, query, 'records-note'));
+      card.append(RecordsList.badges(document, ['발췌', source ? sourceLabel(source) : '출처 없음', record.topic || null,
+        index && index < versions.length ? '이전 버전' : null, record.sourceRefs.length > 1 ? '출처 ' + record.sourceRefs.length + '개' : null]));
+      return card;
+    }
+
+    // Wide screens keep the records list beside an original opened from it. The reader
+    // keeps the document scroll (reading position, exact ranges); this list scrolls on its own,
+    // so moving through it never counts as reading. assets/life/records.css hides it below 1101px.
+    function renderReaderPane() {
+      const context = state.returnContext, workspaceId = state.bundle?.workspaceId;
+      if (!RecordsList || !context || context.mode !== 'sources' || context.workspaceId !== workspaceId || !main.querySelector(':scope > .life-reader')) return;
+      const readerColumn = node('div', null, 'records-reader-pane');
+      readerColumn.append(...main.childNodes);
+      const pane = node('section', null, 'records-pane'); pane.id = 'lifeRecordsPane'; pane.setAttribute('aria-label', '자료 목록');
+      const list = node('div', null, 'records-pane-list'); list.id = 'lifeRecordsPaneList';
+      const count = node('p', '', 'life-meta records-pane-count'); count.id = 'lifeRecordsPaneCount'; count.setAttribute('role', 'status');
+      const tabsHost = node('div', null, 'records-kind-host');
+      let limit = Math.max(SEARCH_PAGE_SIZE, state.sourcesLimit);
+      const open = (ref, key) => {
+        state.recordsPaneScroll = { workspaceId, top: pane.scrollTop };
+        return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null,
+          suppressReaderResume: !!state.sourcesSearch.trim() && !ref.locator, returnContext: { ...context, focusKey: key, sourceVersionId: ref.sourceVersionId } });
+      };
+      const row = (hit, query) => {
+        const source = sourceFor(hit.sourceId), version = state.bundle.sourceVersions.find(value => value.id === hit.sourceVersionId);
+        const item = node('article', null, 'records-row records-pane-row');
+        Object.assign(item.dataset, { sourceId: source.id, versionId: version.id });
+        const key = resultFocusKey('sources', version.id);
+        const control = button(null, guarded(() => open(hit, key)), 'records-row-open');
+        control.dataset.paneKey = key;
+        if (version.id === state.sourceVersionId) { control.setAttribute('aria-current', 'true'); item.dataset.current = 'true'; }
+        control.append(node('span', sourceLabel(source), 'records-row-title'));
+        if (hit.locator) {
+          const before = hit.snippet?.before || '', after = hit.snippet?.after || '', context = node('span', null, 'records-row-context');
+          context.append(document.createTextNode((hit.locator.start > before.length ? '…' : '') + before), node('mark', hit.quote), document.createTextNode(after + (hit.locator.end + after.length < version.contentText.length ? '…' : '')));
+          control.append(context);
+        }
+        const facts = [sourceOrigin(source)];
+        if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
+        if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
+        if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
+        if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
+        item.append(RecordsList.when(document, version.importedAt), control, RecordsList.badges(document, facts));
+        return item;
+      };
+      const more = button('자료 더 보기', () => {
+        const start = list.children.length; limit += SEARCH_PAGE_SIZE; draw();
+        list.children[start]?.querySelector('button')?.focus({ preventScroll: true });
+      });
+      more.id = 'lifeRecordsPaneMore';
+      function draw() {
+        if (disposed || !pane.isConnected && list.childElementCount) return;
+        const kind = state.recordKind = RecordsList.validKind(state.recordKind), query = state.sourcesSearch.trim();
+        const { matchingRecords, matches, sourcePasses } = sourceListMatches(foldersController());
+        const rows = kind === 'excerpt' ? excerptMatches(matchingRecords, sourcePasses) : matches.filter(hit => RecordsList.kindAllows(kind, sourceFor(hit.sourceId)));
+        list.replaceChildren(...rows.slice(0, limit).map(value => kind === 'excerpt'
+          ? excerptRow(value.record, value.ref, query, { open, current: value.ref.sourceVersionId === state.sourceVersionId }) : row(value, query)));
+        if (!rows.length) list.append(empty(query ? '조건에 맞는 자료가 없습니다.' : '목록에 표시할 자료가 없습니다.'));
+        count.textContent = (kind === 'excerpt' ? '발췌 ' : '자료 ') + rows.length + '개' + (rows.length > limit ? ' · ' + limit + '개 표시' : '');
+        more.hidden = rows.length <= limit;
+        tabsHost.replaceChildren(RecordsList.tabs(document, { current: kind, counts: { [kind]: rows.length }, controls: 'lifeRecordsPaneList', onSelect: next => {
+          state.recordKind = next; limit = SEARCH_PAGE_SIZE; draw(); tabsHost.querySelector('#lifeRecordKind-' + next)?.focus({ preventScroll: true });
+        } }));
+      }
+      const bar = searchField(pane, '자료에서 찾기', () => { limit = SEARCH_PAGE_SIZE; draw(); readerMatchRefresh?.(); }, 'sourcesSearch', '자료에서 찾기', 'lifePaneSearch');
+      bar.classList.add('records-pane-search');
+      pane.append(tabsHost, count, list, more);
+      draw();
+      main.append(pane, readerColumn);
+      main.dataset.split = 'records';
+      const saved = state.recordsPaneScroll?.workspaceId === workspaceId ? state.recordsPaneScroll.top : 0;
+      requestAnimationFrame(() => {
+        if (!pane.isConnected) return;
+        pane.scrollTop = saved;
+        // Keep the opened row in view inside the list only; scrolling the window would move the reader.
+        const current = list.querySelector('[data-current="true"], .records-excerpt-open[aria-current="true"]');
+        const item = current?.closest('.records-row') || current;
+        if (item && (item.offsetTop < pane.scrollTop || item.offsetTop + item.offsetHeight > pane.scrollTop + pane.clientHeight)) pane.scrollTop = Math.max(0, item.offsetTop - 96);
+      });
+    }
+
     function renderSources() {
       const heading = title('기록');
       heading.classList.add('life-sr-only');
@@ -3384,9 +3537,16 @@
         const start = list.children.length;
         state.sourcesLimit += SEARCH_PAGE_SIZE;
         update(true);
-        list.children[start]?.querySelector('.life-source-open')?.focus({ preventScroll: true });
+        list.children[start]?.querySelector('.life-source-open,.records-excerpt-open')?.focus({ preventScroll: true });
       });
       more.id = 'lifeSearchMore';
+      const kindTabs = node('div', null, 'records-kind-host');
+      const drawKindTabs = counts => {
+        kindTabs.replaceChildren(RecordsList.tabs(document, { current: state.recordKind, counts, controls: 'lifeSearchResults', onSelect: kind => {
+          state.recordKind = kind; update();
+          kindTabs.querySelector('#lifeRecordKind-' + kind)?.focus({ preventScroll: true });
+        } }));
+      };
       const selectionBar = node('section', null, 'life-selection-bar');
       selectionBar.id = 'lifeSelectionBar';
       selectionBar.setAttribute('aria-label', '선택한 기록 정리');
@@ -3439,8 +3599,9 @@
         });
       }
       const update = (append = false) => {
+        const kind = state.recordKind = RecordsList.validKind(state.recordKind);
         const query = state.sourcesSearch.trim();
-        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing, state.folderFilter]);
+        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing, state.folderFilter, kind]);
         if (state.sourcesWindowKey !== windowKey) {
           state.sourcesWindowKey = windowKey;
           state.sourcesLimit = SEARCH_PAGE_SIZE;
@@ -3448,36 +3609,15 @@
         }
         const start = append ? list.children.length : 0;
         if (!append) list.replaceChildren();
-        const searchOptions = { ignoreKoreanSpacing: state.ignoreKoreanSpacing };
-        const hits = core.searchSources(state.bundle, query, searchOptions).filter(hit => activeSource(hit.sourceId));
-        const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
-        const matchingRecords = query ? state.bundle.records.filter(activeRecord).filter(record => {
-          const text = [record.text, record.topic, record.note].join('\n');
-          return state.ignoreKoreanSpacing ? core.matchesSearchText(text, query, searchOptions) : matchingText(text, query);
-        }) : state.bundle.records.filter(activeRecord);
-        // A note can match without the source text matching. Keep its exact version
-        // and do not invent a source-text location for a user's own words.
-        if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
-          if (!activeSource(ref.sourceId) || byVersion.has(ref.sourceVersionId)) return;
-          const versions = state.bundle.sourceVersions.filter(version => version.sourceId === ref.sourceId);
-          const index = versions.findIndex(version => version.id === ref.sourceVersionId);
-          if (index < 0 || !sourceFor(ref.sourceId)) return;
-          const hit = { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, matchedBy: 'note', versionIndex: index + 1, versionCount: versions.length };
-          byVersion.set(ref.sourceVersionId, hit);
-          hits.push(hit);
-        }));
-        const folderState = state.folderFilter === 'all' ? null : folders?.getFolderState();
-        const knownFolder = state.folderFilter === 'all' || state.folderFilter === 'unfiled' || folderState?.folders.some(value => value.id === state.folderFilter);
-        const matchesFolder = state.folderFilter === 'all' ? () => true : folderState && knownFolder
-          ? global.HaedoLife.SourceFolders.compileMatcher(folderState, state.folderFilter) : () => false;
-        const matches = hits.filter(hit => (!state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(sourceFor(hit.sourceId)) : sourceFor(hit.sourceId).origin === state.originFilter)) &&
-          matchesFolder(hit.sourceId));
+        const { matchingRecords, matches: listed, folderState, knownFolder, sourcePasses } = sourceListMatches(folders);
+        const matches = kind === 'excerpt' ? [] : listed.filter(hit => RecordsList.kindAllows(kind, sourceFor(hit.sourceId)));
+        const excerpts = kind === 'excerpt' ? excerptMatches(matchingRecords, sourcePasses) : [];
         const revealIndex = matches.findIndex(hit => hit.sourceVersionId === state.sourcesRevealVersionId);
         if (revealIndex >= state.sourcesLimit) state.sourcesLimit = Math.ceil((revealIndex + 1) / SEARCH_PAGE_SIZE) * SEARCH_PAGE_SIZE;
         state.sourcesRevealVersionId = null;
         const imported = state.importResult;
         importResult.replaceChildren();
-        const visibleMatches = matches.slice(0, state.sourcesLimit);
+        const visibleMatches = matches.slice(0, state.sourcesLimit), visibleExcerpts = excerpts.slice(0, state.sourcesLimit);
         importResult.hidden = !imported || imported.workspaceId !== state.bundle.workspaceId || visibleMatches.some(hit => hit.sourceVersionId === imported.sourceVersionId);
         if (!importResult.hidden) {
           const source = sourceFor(imported.sourceId);
@@ -3489,14 +3629,23 @@
           importResult.append(node('p', source ? sourceLabel(source) : '보관한 원문', 'life-meta'), open);
         }
         updateSelection(matches);
-        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '') + (state.ignoreKoreanSpacing ? ' · 한글 띄어쓰기 무시' : '') + (matches.length > visibleMatches.length ? ' · ' + visibleMatches.length + '개 표시' : '');
-        more.hidden = matches.length <= visibleMatches.length;
+        const total = kind === 'excerpt' ? excerpts.length : matches.length, visible = kind === 'excerpt' ? visibleExcerpts.length : visibleMatches.length;
+        count.textContent = (kind === 'excerpt' ? '발췌 ' : '자료 ') + total + '개' + (kind === 'original' ? ' · 원문' : kind === 'article' ? ' · 기사' : '') +
+          (kind === 'excerpt' ? '' : state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '') +
+          (state.ignoreKoreanSpacing ? ' · 한글 띄어쓰기 무시' : '') + (total > visible ? ' · ' + visible + '개 표시' : '');
+        drawKindTabs({ [kind]: total });
+        more.hidden = total <= visible;
+        if (kind === 'excerpt') {
+          visibleExcerpts.slice(start).forEach(({ record, ref }) => list.append(excerptRow(record, ref, query)));
+          if (!excerpts.length) list.append(empty(query || state.originFilter || state.folderFilter !== 'all' ? '조건에 맞는 발췌가 없습니다.' : '아직 모아 둔 발췌가 없습니다. 원문을 읽다가 구절을 선택해 발췌해 보세요.'));
+          return;
+        }
         visibleMatches.slice(start).forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
           const records = matchingRecords.filter(record => record.sourceRefs.some(ref =>
             query ? ref.sourceVersionId === version.id : ref.sourceId === source.id));
-          const card = node('article', null, 'life-card life-source-card');
+          const card = node('article', null, 'life-card life-source-card records-row');
           Object.assign(card.dataset, { sourceId: source.id, versionId: version.id, matchedBy: hit.matchedBy });
           const key = resultFocusKey('sources', version.id);
           const open = button(sourceLabel(source), guarded(() => openResult('sources', key, hit)), 'life-source-open');
@@ -3522,7 +3671,7 @@
             heading.append(choose);
           }
           heading.append(open);
-          card.append(heading);
+          card.append(RecordsList.when(document, version.importedAt), heading);
           if (hit.locator) {
             card.dataset.locatorStart = String(hit.locator.start); card.dataset.locatorEnd = String(hit.locator.end);
             const context = node('p', null, 'life-search-context');
@@ -3533,12 +3682,15 @@
             card.append(node('p', version.contentText.slice(0, 180) + (version.contentText.length > 180 ? '…' : ''), 'life-search-context'));
           }
           const footer = node('div', null, 'life-feed-footer');
+          // Badges show stored facts only: origin, coverage, exact version and why it matched.
           const facts = [sourceOrigin(source)];
           if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
+          if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
           if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') facts.push('제목 일치');
           if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
-          footer.append(node('p', facts.join(' · '), 'life-meta life-source-meta'));
+          const badges = RecordsList.badges(document, facts); badges.classList.add('life-meta', 'life-source-meta');
+          footer.append(badges);
           const details = node('section', null, 'life-result-details');
           details.id = 'lifeResultDetails-' + version.id;
           details.hidden = true;
@@ -3548,8 +3700,11 @@
           details.append(metadata(source, version, true));
           const info = iconButton('자료 출처 정보 · ' + sourceLabel(source), 'info', () => {}, 'life-result-info');
           disclosure(info, details);
-          footer.append(info);
-          if (folders) footer.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source) }));
+          // The row's own actions end it as one group on the right edge.
+          const rowTools = node('div', null, 'records-row-tools'); rowTools.setAttribute('role', 'toolbar'); rowTools.setAttribute('aria-label', '자료 동작 · ' + sourceLabel(source));
+          rowTools.append(info);
+          if (folders) rowTools.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source) }));
+          footer.append(rowTools);
           card.append(footer, details);
           if (records.length) {
             const notes = node('section', null, 'life-record-notes');
@@ -3565,9 +3720,10 @@
           }
           list.append(card);
         });
-        if (!matches.length) list.append(empty(state.folderFilter !== 'all' && !folderState ? '폴더를 확인하고 있습니다. 폴더 메뉴에서 다시 확인할 수 있습니다.' : !knownFolder ? '선택한 폴더가 없습니다. 다른 폴더를 선택해 주세요.' : state.bundle.sources.length ? '조건에 맞는 자료가 없습니다.' : '아직 기록이 없습니다. 글을 쓰거나 다른 곳의 기록을 가져와 보세요.'));
+        if (!matches.length) list.append(empty(state.folderFilter !== 'all' && !folderState ? '폴더를 확인하고 있습니다. 폴더 메뉴에서 다시 확인할 수 있습니다.' : !knownFolder ? '선택한 폴더가 없습니다. 다른 폴더를 선택해 주세요.' :
+          kind === 'article' && !query ? '보관한 기사가 없습니다. 뉴스에서 자료에 보관한 링크가 여기에 모입니다.' : state.bundle.sources.length ? '조건에 맞는 자료가 없습니다.' : '아직 기록이 없습니다. 글을 쓰거나 다른 곳의 기록을 가져와 보세요.'));
       };
-      const bar = searchField(main, '제목·본문·메모 찾기', update, 'sourcesSearch');
+      const bar = searchField(main, '자료에서 찾기', update, 'sourcesSearch', '자료에서 찾기');
       const filters = node('section', null, 'life-filter-panel');
       filters.id = 'lifeSearchFilters';
       filters.hidden = !state.sourcesFiltersOpen;
@@ -3578,7 +3734,7 @@
       const filter = iconButton('검색 필터', 'filter', () => {});
       filter.id = 'lifeFilterToggle';
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
-      bar.append(filter);
+      bar.tools.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
       spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
       main.append(filters);
@@ -3601,8 +3757,18 @@
       }
       main.append(importResult);
       renderReadingResume(main, 'sources');
-      main.append(selectionBar, count, list, more);
+      main.append(selectionBar, kindTabs, count, list, more);
       update();
+      // Wide screens read beside this list (assets/life/records.css); the empty reading
+      // column only says where an opened original appears.
+      const column = node('div', null, 'records-list-column');
+      column.append(...main.childNodes);
+      const placeholder = node('aside', null, 'records-reader-empty');
+      placeholder.id = 'lifeRecordsReaderEmpty';
+      placeholder.setAttribute('aria-label', '읽기 칸');
+      placeholder.append(node('p', '목록에서 자료를 고르면 여기에서 읽습니다.', 'life-meta'));
+      main.append(column, placeholder);
+      main.dataset.split = 'records';
     }
 
     function metadata(source, version, expanded = false) {
@@ -3776,6 +3942,7 @@
       }
       const article = node('article', null, 'life-reader');
       const tools = node('div', null, 'life-reader-tools');
+      tools.setAttribute('role', 'toolbar'); tools.setAttribute('aria-label', '원문 동작');
       const linkedOrigin = obsidianReaderOrigin(source, version);
       const back = state.returnContext ? searchReturnButton() : iconButton('자료로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
@@ -3816,6 +3983,9 @@
       article.append(tools, arrangePanel, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
+      // One row for the exact version (and when it was kept) and moving between list matches.
+      const versionRow = node('div', null, 'life-reader-version-row'); versionRow.id = 'lifeReaderVersionRow';
+      article.append(versionRow);
       if (linkedOrigin) {
         const previous = button('이전 원문으로 돌아가기', guarded(() => returnFromObsidianReference(linkedOrigin)));
         previous.id = 'lifeObsidianPreviousSource'; article.append(previous);
@@ -3838,7 +4008,7 @@
         const choices = selectField('원문 버전', 'lifeVersion', versions.map((v, index) => [v.id, '버전 ' + (index + 1) + ' · ' + dateLabel(v.importedAt) + ' 보관']), version.id);
         choices.label.classList.add('life-version-field');
         choices.input.addEventListener('change', guarded(() => navigate('source', { sourceVersionId: choices.input.value, locator: null })));
-        article.append(choices.label);
+        versionRow.append(choices.label);
       }
       const details = metadata(source, version, true);
       details.id = 'lifeSourceDetails';
@@ -4141,6 +4311,16 @@
         selectionOrigin = 'dom';
         remember(start, end);
       };
+      // A collapsed range at a line break can report an empty box; measure the next (or previous) character instead.
+      const rangeRect = range => {
+        const rect = range.getBoundingClientRect();
+        if (rect.height || !range.collapsed || range.startContainer !== originalText) return rect;
+        const at = range.startOffset, probe = document.createRange();
+        const end = Math.min(version.contentText.length, at + (version.contentText.codePointAt(at) > 0xFFFF ? 2 : 1));
+        probe.setStart(originalText, end > at ? at : Math.max(0, at - 1)); probe.setEnd(originalText, end > at ? end : at);
+        const next = probe.getBoundingClientRect();
+        return next.height ? next : rect;
+      };
       const restoreSelection = locator => {
         readerWatch?.suppress();
         const start = Math.max(0, Math.min(version.contentText.length, locator.start));
@@ -4263,10 +4443,46 @@
         state.sourceSelection = null; picked.textContent = instruction; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
         quote.dataset.hasSelection = 'false';
         if (formattedView) { global.getSelection()?.removeAllRanges(); markdown.adapter.scrollToOffset(offset); }
-        else { const range = restoreSelection({ start: offset, end: offset }); const rect = range.getBoundingClientRect(); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
+        else { const range = restoreSelection({ start: offset, end: offset }); const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         watchReading(); readerWatch?.suppress(); if (focus) reader.focus({ preventScroll: true });
       };
       watchReading();
+      // 일치 이동 and saved passages of this exact version. CSS custom highlights paint
+      // ranges over the unchanged text node, so UTF-16 selection offsets stay exact.
+      const textRange = value => {
+        if (!value || !Number.isInteger(value.start) || !Number.isInteger(value.end) || value.start >= value.end || value.end > version.contentText.length) return null;
+        // StaticRange: the reader may move into the reading column after this, which would collapse a live Range.
+        if (typeof global.StaticRange === 'function') return new global.StaticRange({ startContainer: originalText, startOffset: value.start, endContainer: originalText, endOffset: value.end });
+        const range = document.createRange(); range.setStart(originalText, value.start); range.setEnd(originalText, value.end); return range;
+      };
+      const clearExcerptPaint = RecordsList.paint('haedo-excerpt', state.bundle.records.filter(activeRecord)
+        .flatMap(record => record.sourceRefs.filter(ref => ref.sourceVersionId === version.id && ref.locator)).map(ref => textRange(ref.locator)).filter(Boolean));
+      const matchNav = node('div', null, 'life-reader-matches'); matchNav.id = 'lifeReaderMatches'; matchNav.hidden = true;
+      const matchCount = node('span', '', 'life-reader-match-count'); matchCount.id = 'lifeReaderMatchCount';
+      const previousMatch = iconButton('이전 일치', 'up', () => moveMatch(-1)); previousMatch.id = 'lifeReaderMatchPrevious';
+      const nextMatch = iconButton('다음 일치', 'chevron', () => moveMatch(1)); nextMatch.id = 'lifeReaderMatchNext';
+      matchNav.append(matchCount, previousMatch, nextMatch); versionRow.append(matchNav);
+      let found = [], matchIndex = -1, clearMatchPaint = () => {};
+      const showMatchCount = () => { matchCount.textContent = matchIndex >= 0 ? '일치 ' + (matchIndex + 1) + ' / ' + found.length : '일치 ' + found.length + '개'; };
+      const refreshMatches = () => {
+        const fromList = state.returnContext?.mode === 'sources' && state.returnContext.workspaceId === state.bundle?.workspaceId;
+        found = fromList ? RecordsList.matches(core, version.contentText, state.sourcesSearch, { ignoreKoreanSpacing: state.ignoreKoreanSpacing }) : [];
+        const selected = state.sourceSelection;
+        matchIndex = selected ? found.findIndex(item => item.start === selected.start && item.end === selected.end) : -1;
+        clearMatchPaint(); clearMatchPaint = RecordsList.paint('haedo-search', found.map(textRange).filter(Boolean));
+        matchNav.hidden = !found.length; showMatchCount();
+      };
+      function moveMatch(step) {
+        if (!found.length || !reader.isConnected) return;
+        if (formattedView) changeReaderMode('raw', false);
+        matchIndex = matchIndex < 0 ? (step > 0 ? 0 : found.length - 1) : (matchIndex + step + found.length) % found.length;
+        const range = restoreSelection(found[matchIndex]), rect = range.getBoundingClientRect();
+        global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' });
+        readingScrollY = global.scrollY; showMatchCount();
+      }
+      readerMatchRefresh = refreshMatches;
+      const readerBaseCleanup = readerCleanup;
+      readerCleanup = () => { readerBaseCleanup(); clearExcerptPaint(); clearMatchPaint(); if (readerMatchRefresh === refreshMatches) readerMatchRefresh = null; };
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
         // A fresh user choice takes priority over a navigation restore queued before it.
@@ -4276,11 +4492,13 @@
           if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
         } else {
           const range = restoreSelection(locator);
+          matchIndex = found.findIndex(item => item.start === locator.start && item.end === locator.end); showMatchCount();
           if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
-          else { const rect = range.getBoundingClientRect(); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
+          else { const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         }
         readingScrollY = global.scrollY;
       });
+      refreshMatches();
       state.locator = null;
     }
 
@@ -5448,6 +5666,7 @@
       writeRoute(state.mode, false);
       renderHeader();
       main.dataset.mode = state.mode;
+      delete main.dataset.split;
       main.replaceChildren();
       if (state.mode === 'home' && home) {
         // Home's configuration read must not lock independent navigation.
@@ -5495,7 +5714,7 @@
       else if (state.mode === 'manage') renderManagement();
       else if (state.mode === 'batch') renderBatch();
       else if (state.mode === 'import') renderImport();
-      else if (state.mode === 'source') renderSource();
+      else if (state.mode === 'source') { renderSource(); renderReaderPane(); }
       else if (state.mode === 'source-trash') renderSourceTrash();
       else if (state.mode === 'sources') renderSources();
       else if (state.mode === 'transfer') renderTransfer();
