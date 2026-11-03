@@ -6,6 +6,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof globalThis === 'object' ? globalThis : this, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
 
   const MESSAGES = {
     auth_required: '로그인 후 다시 동기화해 주세요. 이 브라우저의 자료는 보존됩니다.',
@@ -59,7 +62,7 @@
     const loadConfig = remoteFactory?.loadConfig || support?.loadConfig;
     const saveConfig = remoteFactory?.saveConfig || support?.saveConfig;
     const listeners = new Set(), watches = new Map(), timers = new Map(), locks = new Map(), spaceEpochs = new Map(), closingAdapters = new Set();
-    let adapter = null, config = null, account = null, epoch = 0, disposed = false, authUnsubscribe = null, interval = null, lifecycle = false;
+    let adapter = null, config = null, account = null, epoch = 0, disposed = false, authUnsubscribe = null, wiring = null, lifecycle = false;
     let pendingReconnect = null, reconnecting = null;
     const connectionCandidates = new Set();
 
@@ -187,9 +190,7 @@
     function startLifecycle() {
       if (lifecycle || !automaticEnabled) return;
       lifecycle = true;
-      root.addEventListener?.('online', automatic);
-      root.document?.addEventListener?.('visibilitychange', visible);
-      interval = root.setInterval(visible, 60000); interval?.unref?.();
+      wiring = syncLifecycle()?.attach(root, { listen: [['window', 'online', automatic], ['document', 'visibilitychange', visible]], poll: [60000, visible] }) || null;
     }
     function setAutomatic(enabled) {
       live(); if (typeof enabled !== 'boolean') throw fault('dependency_unavailable');
@@ -197,9 +198,7 @@
       if (enabled) { startLifecycle(); automatic(); }
       else {
         clearScheduled();
-        if (interval !== null) root.clearInterval(interval); interval = null;
-        root.removeEventListener?.('online', automatic);
-        root.document?.removeEventListener?.('visibilitychange', visible); lifecycle = false;
+        wiring?.detach(); wiring = null; lifecycle = false;
       }
     }
     function clearWatches() {
@@ -539,9 +538,7 @@
       closingAdapters.clear(); pendingReconnect = null; reconnecting = null;
       for (const candidate of connectionCandidates) candidate.dispose?.();
       connectionCandidates.clear();
-      if (interval !== null) root.clearInterval(interval);
-      root.removeEventListener?.('online', automatic);
-      root.document?.removeEventListener?.('visibilitychange', visible);
+      wiring?.detach(); wiring = null;
       listeners.clear(); locks.clear();
     }
     return Object.freeze({ start, connect, signOut, getAccount, getConfig, getState, subscribe, enable, pause, listRemote, download, adoptExisting, setAutomatic, syncNow, resolve, dispose });

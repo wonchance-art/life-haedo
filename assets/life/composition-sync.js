@@ -6,6 +6,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const messages = {
     composition_source_pending: '원문 동기화를 먼저 완료해 주세요. 구성은 이 기기에 보존됩니다.',
     composition_conflict: '두 기기의 구성이 다릅니다. 양쪽 내용을 비교해 주세요.',
@@ -45,7 +48,7 @@
     // as soon as its originals sync for this account (no per-workspace opt-in).
     const autoEnable = compositionDomain;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
-    let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null, parked = false;
+    let disposed = false, started = false, wiring = null, refreshing = false, unlistenSources = null, parked = false;
     // Between a persisted pagehide and its pageshow the page sits in the back/forward cache:
     // starting work there evicts it, and nothing begun then may stand in for the resumed page's
     // own account check. A cached page resumes on the regular poll.
@@ -264,10 +267,11 @@
     }
     function start() {
       guard(); if (started) return; started = true;
-      root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
-      root.document?.addEventListener('visibilitychange', automatic);
-      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
-      if (polling) { interval = root.setInterval(automatic, 30000); interval?.unref?.(); }
+      wiring = syncLifecycle()?.attach(root, {
+        listen: [['window', 'online', automatic], ['window', 'focus', automatic], ['document', 'visibilitychange', automatic],
+          ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
+        poll: polling ? [30000, automatic] : null,
+      }) || null;
       unlistenSources = sourceSync.subscribe(event => {
         if (!event.workspaceId) return;
         if (watches.has(event.workspaceId)) { if (![...locks.keys()].some(key => key.startsWith(event.workspaceId + '|'))) schedule(event.workspaceId); }
@@ -280,10 +284,8 @@
       for (const timer of timers.values()) root.clearTimeout(timer);
       for (const stop of watches.values()) stop();
       timers.clear(); watches.clear(); listeners.clear();
-      root.clearInterval(interval); unlistenSources?.();
-      root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
-      root.document?.removeEventListener('visibilitychange', automatic); remote.dispose?.();
-      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
+      wiring?.detach(); wiring = null; unlistenSources?.();
+      remote.dispose?.();
     }
     function subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     // The automatic-resolution notice persists in the state record until acknowledged.
