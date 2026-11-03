@@ -3,6 +3,8 @@
   'use strict';
   const SESSION_KEY = 'caeyeon_life_platform_session';
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
+  // Longest life of a page opening's shared account check (see beginStartup): about the first-screen budget.
+  const STARTUP_LIMIT_MS = 10000;
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
   const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
@@ -66,6 +68,7 @@
     let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null, parked = false;
     // The page's opening (see beginStartup); null outside it.
     let startupScope = null;
+    const now = typeof options.now === 'function' ? options.now : () => Date.now();
     // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
     // A verification scope never reuses a result from an earlier generation.
     let authGeneration = 0;
@@ -179,25 +182,35 @@
     // so its errors, retries and late-response guards are unchanged.
     // The page's opening (2026-11-03, first screen delay): shell verification,
     // the foreground account bootstrap and the first mount are one unit of work.
-    // Opt-in reads (verify({ startup: true }) and a scope's first check) reuse
-    // its finished server check under the W4 conditions above; writes and
-    // fresh: true checks keep contacting Auth. The shell ends it once the
-    // screen is shown or the opening fails; a new opening starts empty.
+    // Opt-in callers (verify({ startup: true }): the shell and AccountLibrary;
+    // getStartupUser() reads; a W4 scope's first check) reuse its finished server
+    // check under the W4 conditions above; writes, BlogSync and fresh: true checks
+    // keep contacting Auth. The shell ends it once the screen is shown or the
+    // opening fails, it lapses after STARTUP_LIMIT_MS, and a new opening starts empty.
     function beginStartup() {
       startupScope?.end();
-      const scope = makeScope(() => serverVerify());
+      // A stalled bootstrap or mount cannot keep the opening's result alive: past the
+      // first-screen budget every opt-in call checks with Auth again.
+      const scope = makeScope(() => serverVerify(), now() + STARTUP_LIMIT_MS);
       startupScope = scope;
       return Object.freeze({ end() { scope.end(); if (startupScope === scope) startupScope = null; } });
     }
     // A scope's first (non-fresh) check may use the page opening's finished check.
     function verificationScope() { return makeScope(options => verify(options?.fresh ? undefined : { startup: true })); }
-    function makeScope(server) {
+    function makeScope(server, deadline = Infinity) {
       const opened = epoch; let ended = false, record = null, running = null, carried = null;
       const reusable = () => !!record && !ended && !closed && !parked && !blocked() && opened === epoch &&
-        record.generation === authGeneration && user?.id === record.uid;
+        record.generation === authGeneration && user?.id === record.uid && now() <= deadline;
       async function check(options = {}) {
-        // A check begun earlier in this scope is awaited first (single flight), then judged like any finished one.
-        if (!options.fresh && running) await running.catch(() => {});
+        // Single flight: a non-fresh call joins this scope's check that is still running, but only one
+        // begun in the same epoch and generation (never a check for an account or session since replaced).
+        // Its answer is shared as an in-flight getUser() is (2026-10-24): it is used when nothing about the
+        // account changed meanwhile, even if the scope ended while it ran.
+        const flight = running;
+        if (!options.fresh && flight && flight.epoch === epoch && flight.generation === authGeneration) {
+          let shared = null; try { shared = await flight.promise; } catch (_) { shared = null; }
+          if (shared && !closed && !parked && !blocked() && flight.epoch === epoch && flight.generation === authGeneration && user === shared) return shared;
+        }
         if (!options.fresh && reusable()) {
           const current = await client.auth.getSession(), stored = current?.data?.session;
           if (!current.error && reusable() && typeof stored?.access_token === 'string' && stored.access_token === record.token && stored.user?.id === record.uid) return user;
@@ -211,8 +224,9 @@
               typeof token === 'string' && token && session.user?.id === verified.id) record = { uid: verified.id, token, generation: kept };
           return verified;
         })();
-        if (!options.fresh) running = run;
-        try { return await run; } finally { if (running === run) running = null; }
+        const entry = { promise: run, epoch, generation };
+        if (!options.fresh) running = entry;
+        try { return await run; } finally { if (running === entry) running = null; }
       }
       // Only the page opening uses carry: the document's own first pageshow (see pageshow).
       function carry(from, to) { carried = { from, to }; if (record?.generation === from) record.generation = to; }
@@ -345,6 +359,6 @@
       dispose() { if (closed) return; closed = true; invalidate(); subscription?.unsubscribe(); listeners.clear(); env.removeEventListener?.('pagehide', pagehide); env.removeEventListener?.('pageshow', pageshow); env.removeEventListener?.('storage', storageChange); Promise.resolve(client?.auth.dispose?.()).catch(() => {}); }
     });
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY }; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS }; return; }
   root.HaedoAuth = createAuth(root);
 })(globalThis);
