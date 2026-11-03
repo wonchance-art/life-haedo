@@ -175,23 +175,24 @@ test('SyncLifecycle.attach binds in the given order, starts the poll after them,
 });
 
 // Browser-like: no require, no HaedoLife.SyncLifecycle. Each engine binds nothing, throws nothing,
-// and its start-up pass still reaches the dependency it reads first.
+// and its start-up pass still reaches the dependency it reads first, exactly as often as observed
+// (once for every engine).
 const OLDER_PAGE = [
-  { file: 'sync.js', name: 'Sync', first: 'loadConfig',
+  { file: 'sync.js', name: 'Sync', first: 'loadConfig', starts: 1,
     run: (api, hit) => { const sync = api.create({ storage: {}, core: {}, remoteFactory: Object.assign(() => ({}), { loadConfig: async () => { hit(); return null; } }) }); sync.start().catch(() => {}); return sync; } },
-  { file: 'composition-sync.js', name: 'CompositionSync', first: 'storage read',
+  { file: 'composition-sync.js', name: 'CompositionSync', first: 'storage read', starts: 1,
     run: (api, hit) => { const storage = new Proxy({ account: owner }, { get: (target, key) => key in target ? target[key] : () => { hit(); return never(); } });
       const sync = api.create({ storage, sourceSync: { subscribe: () => () => {}, getState: never }, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} } }); sync.start(); return sync; } },
-  { file: 'writing-sync.js', name: 'WritingSync', first: 'storage read',
+  { file: 'writing-sync.js', name: 'WritingSync', first: 'storage read', starts: 1,
     run: (api, hit) => { const storage = new Proxy({ account: owner }, { get: (target, key) => key in target ? target[key] : key === 'subscribeAll' ? undefined : () => { hit(); return never(); } });
       const sync = api.create({ storage, sourceSync: { subscribe: () => () => {} }, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} }, engine: {}, materials: null }); sync.start(); return sync; } },
-  { file: 'material-continuity-sync.js', name: 'MaterialContinuitySync', first: 'manager.list',
+  { file: 'material-continuity-sync.js', name: 'MaterialContinuitySync', first: 'manager.list', starts: 1,
     run: (api, hit) => { const storage = { account: owner, readMaterialWriting: never, adoptMaterialContinuity: never, listWorkspaces: never };
       const background = api.automatic({ storage, auth: { getAccount: () => owner, epoch: 1 }, manager: { list: () => { hit(); return never(); }, dispose() {} } }); background.start(); return background; } },
-  { file: 'account-docs-sync.js', name: 'AccountDocsSync', first: 'listAccountDocs',
+  { file: 'account-docs-sync.js', name: 'AccountDocsSync', first: 'listAccountDocs', starts: 1,
     run: (api, hit) => { const storage = { account: owner, listAccountDocs: () => { hit(); return never(); }, subscribeAll: () => () => {} };
       const sync = api.create({ storage, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} }, locks: null }); sync.start(); return sync; } },
-  { file: 'account-library.js', name: 'AccountLibrary', first: 'auth.verify',
+  { file: 'account-library.js', name: 'AccountLibrary', first: 'auth.verify', starts: 1,
     run: (api, hit) => { const manager = { subscribe: () => () => {}, setAutomatic() {}, start: never, getAccount: () => owner };
       // Reads fail (not hang) so bootstrap reaches the point where its lifecycle would start.
       const storage = new Proxy({ isAccountScoped: true, account: owner, subscribeAll: () => () => {} }, { get: (target, key) => key in target ? target[key] : failing });
@@ -200,7 +201,7 @@ const OLDER_PAGE = [
       library.bootstrap().catch(() => {}); return library; } },
 ];
 
-for (const { file, name, first, run } of OLDER_PAGE) {
+for (const { file, name, first, starts, run } of OLDER_PAGE) {
   test(`an older cached page without sync-lifecycle.js: ${name} starts with no automatic wake-ups`, async () => {
     const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
     const bound = [], context = vm.createContext({
@@ -214,7 +215,7 @@ for (const { file, name, first, run } of OLDER_PAGE) {
     let runs = 0;
     const engine = run(context.HaedoLife[name], () => { runs++; }); await settle(); await settle();
     assert.deepEqual(bound, [], 'no listener and no poll');
-    assert.ok(runs >= 1, 'the start-up pass reached ' + first);
+    assert.equal(runs, starts, 'the start-up pass reached ' + first + ' exactly ' + starts + ' time(s)');
     assert.doesNotThrow(() => engine.dispose());
   });
 }
