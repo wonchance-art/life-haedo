@@ -2,6 +2,17 @@
 (function (root) {
   'use strict';
   const life = root.HaedoLife = root.HaedoLife || {};
+  // Frames of index.html/life.html: app blobs/srcdoc, YouTube player (page-media.js), checked news
+  // publishers (discovery-ui.js FRAME_ALLOWED_SOURCES). Only frame-src is set. It is added here, before
+  // any view can create a frame, not written as <meta http-equiv> in the HTML: Chromium's preload
+  // scanner stops looking ahead at a CSP meta tag, so the pages' ~180 scripts were fetched one after
+  // another (2026-11-03, slow first screen). A meta inserted into head is enforced the same way.
+  const FRAME_POLICY = "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.readersnews.com https://www.frontiersin.org";
+  if (![...root.document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]')].some(meta => meta.content === FRAME_POLICY)) {
+    const policy = root.document.createElement('meta');
+    policy.httpEquiv = 'Content-Security-Policy'; policy.content = FRAME_POLICY;
+    root.document.head.append(policy);
+  }
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, accountDocsSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
