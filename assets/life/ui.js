@@ -147,7 +147,7 @@
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
     let naverCaptureUI = null, naverCaptureService = null, naverReaderService = null, naverPhotoView = null, naverCaptureTarget = null;
-    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null, backupInterruption = '', backupOriginals = null;
+    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null, backupInterruption = '', backupOriginals = null, settingsUI = null;
     let sourceFoldersUI = null, sourceFoldersWorkspace = null, sourceFoldersMount = null, sourceFoldersUpdate = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
@@ -2617,11 +2617,15 @@
       publicCoverUI = instance; await instance.ready;
     }
 
+    // 2026-11-03 설정(묶음 E): 넓은 화면은 왼쪽 항목 목록·오른쪽 상세, 좁은 화면은 묶음별 행과 현재 값.
+    // 배치·하위 항목 해시는 SettingsUI(assets/life/settings-ui.js), 행의 동작과 ID는 여기서 그대로 만든다.
     function renderManagement() {
-      const manage = actionRow('현재 자료공간', (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
-      manage.id = 'lifeCurrentWorkspace';
-      manage.setAttribute('aria-label', '현재 자료공간');
-      manage.setAttribute('aria-description', '현재 작업공간. 눌러 다른 작업공간을 선택합니다.');
+      settingsUI?.dispose(); settingsUI = null;
+      const Settings = global.HaedoLife.SettingsUI;
+      const workspaceId = state.bundle.workspaceId, renderToken = renderGeneration;
+      const manage = Settings.row({ label: '현재 자료공간', ariaLabel: '현재 자료공간', description: '현재 작업공간. 눌러 다른 작업공간을 선택합니다.',
+        sub: (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개',
+        value: state.bundle.title || '내 자료', id: 'lifeCurrentWorkspace', focusKey: 'manage:workspace', onClick: guarded(() => {}) });
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
       management.hidden = !state.managementOpen;
@@ -2657,39 +2661,46 @@
       }));
       management.append(workspace.label);
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
-      main.append(manage, management);
+      const accountRows = [];
       if (sync) {
-        const connection = actionRow(managedLibrary ? '계정 보관' : '동기화', '', 'cloud', async () => {
-          await navigate('sync'); await refreshSync();
-        });
-        const status = connection.querySelector('.life-meta');
-        status.id = 'lifeManagementSyncStatus';
-        status.setAttribute('role', 'status');
+        const label = managedLibrary ? '계정 보관' : '동기화';
         const presentation = syncPresentation();
-        status.textContent = (managedLibrary ? '' : '원문·발췌 · ') + presentation.label;
+        const connection = Settings.row({ label, ariaLabel: label, value: (managedLibrary ? '' : '원문·발췌 · ') + presentation.label,
+          sub: managedLibrary ? null : '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.',
+          valueId: 'lifeManagementSyncStatus', focusKey: 'manage:sync', onClick: guarded(async () => { await navigate('sync'); await refreshSync(); }) });
+        const status = connection.querySelector('#lifeManagementSyncStatus');
+        status.setAttribute('role', 'status');
         status.dataset.syncState = presentation.key;
-        main.append(connection);
-        if (!managedLibrary) main.append(node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
-        refreshSync().catch(failure);
+        accountRows.push(connection);
       }
       // One entry for every file: 모두 받기, each existing format and restore.
-      const backups = node('section', null, 'life-management-backups');
-      backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
-      const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
-      const open = actionRow('백업·복원', '모두 받기 · 형식별 파일 · 새 사본으로 복원', 'download', () => navigate('backup'));
-      open.id = 'lifeBackupOpen';
-      backups.append(heading, open);
-      main.append(backups);
+      const open = Settings.row({ label: '백업·복원', ariaLabel: '백업·복원', sub: '모두 받기 · 형식별 파일 · 새 사본으로 복원', id: 'lifeBackupOpen',
+        focusKey: 'manage:backup', onClick: guarded(() => navigate('backup')) });
       // 2026-11-02: the public cover and published pages moved here from the blog menu.
-      const publicPages = node('section', null, 'life-management-backups life-management-public');
-      publicPages.setAttribute('aria-labelledby', 'lifePublicPagesHeading');
-      const publicHeading = node('h2', '공개 페이지'); publicHeading.id = 'lifePublicPagesHeading';
-      const cover = actionRow('공개 표지', '공개 링크의 첫 화면', 'link', () => navigate('public-cover'));
-      cover.dataset.focusKey = 'manage:public-cover';
-      const pages = actionRow('공개한 페이지', '공개 중인 페이지의 링크·철회', 'link', () => navigate('public-pages'));
-      pages.dataset.focusKey = 'manage:public-pages';
-      publicPages.append(publicHeading, cover, pages);
-      main.append(publicPages);
+      const cover = Settings.row({ label: '공개 표지', ariaLabel: '공개 표지', sub: '공개 링크의 첫 화면', focusKey: 'manage:public-cover', onClick: guarded(() => navigate('public-cover')) });
+      const pages = Settings.row({ label: '공개한 페이지', ariaLabel: '공개한 페이지', sub: '공개 중인 페이지의 링크·철회', focusKey: 'manage:public-pages', onClick: guarded(() => navigate('public-pages')) });
+      // 뉴스: 기존 화면을 여는 경로만 쓴다(관심 주제 편집, 뉴스의 설정 단추). 값은 저장된 언어 선택만 읽는다.
+      const news = externalDiscoveryUI ? {
+        onOpenInterests: interestUI ? guarded(() => navigate('interests')) : null,
+        onOpenSettings: guarded(async () => {
+          if (await navigate('external-discovery') === false) return;
+          const token = navigationGeneration;
+          // 뉴스 목록을 기다리며 전역 이동을 막지 않는다. 다른 화면으로 옮겼으면 열지 않는다.
+          Promise.resolve(mainRenderPromise).then(() => {
+            if (disposed || token !== navigationGeneration || state.mode !== 'external-discovery') return;
+            const toggle = main.querySelector('#discoveryNewsSettings');
+            if (toggle && !main.querySelector('#discoveryNewsSettingsPanel')?.checkVisibility?.()) toggle.click();
+          }).catch(failure);
+        }),
+        readLanguages: storage.readDiscoveryLanguageSettings ? () => storage.readDiscoveryLanguageSettings(workspaceId) : null
+      } : null;
+      settingsUI = Settings.create({
+        rows: { account: accountRows, workspace: [manage, management], backup: [open], public: [cover, pages] },
+        account: { email: auth?.getAccount?.()?.email || '' }, news,
+        isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId
+      });
+      settingsUI.mount(main);
+      if (sync) refreshSync().catch(failure);
     }
 
     function backupFormatRows() {
@@ -2728,9 +2739,13 @@
       const restoreHost = node('section', null, 'life-settings-section fb-section'); restoreHost.id = 'fbRestore';
       const formats = backupFormatRows();
       main.append(downloadHost, restoreHost, formats);
-      if (/^#lifeBackup(?:Choices|Materials|Planning)$/.test(global.location.hash)) global.requestAnimationFrame(() => {
-        if (isCurrent()) { formats.querySelector('h2')?.focus({ preventScroll: true }); formats.scrollIntoView({ block: 'start' }); }
-      });
+      if (/^#lifeBackup(?:Choices|Materials|Planning)$/.test(global.location.hash)) {
+        const reveal = () => global.requestAnimationFrame(() => {
+          if (isCurrent()) { formats.querySelector('h2')?.focus({ preventScroll: true }); formats.scrollIntoView({ block: 'start' }); }
+        });
+        // A first load renders before the verified account is shown (shell: haedo:page-ready); focus needs the shown screen.
+        if (main.getClientRects().length) reveal(); else document.addEventListener('haedo:page-ready', reveal, { once: true });
+      }
       const platformData = global.HaedoPlatformData, userId = storage.account?.userId;
       const timeline = platformData && userId ? () => global.HaedoLife.FullBackup.timelineSnapshot({ platformData, localStorage: global.localStorage, uid: userId }) : null;
       const instance = global.HaedoLife.FullBackupUI.create({ storage, timeline, isCurrent, onError: failure,

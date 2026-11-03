@@ -13,7 +13,7 @@ const SHELL=[
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
   './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
   './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
-  './assets/life/preservation-ui.js','./assets/life/full-backup.js','./assets/life/full-backup-ui.js','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
+  './assets/life/preservation-ui.js','./assets/life/full-backup.js','./assets/life/full-backup-ui.js','./assets/life/settings-ui.js','./assets/life/settings.css','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
   './assets/life/blog-remote.js','./assets/life/sync-common.js','./assets/life/blog-sync.js','./assets/life/account-blog-ui.js','./assets/life/blog-public-ui.js','./assets/life/blog-manager.js','./assets/life/blog-public.js',
   './assets/life/blog-public.css','./assets/life/blog-manager.css','./','./index.html','./login.html',
   './workspace.html','./timeline.html','./assets/life/obsidian-decisions.js','./assets/life/obsidian-link-candidates.js','./assets/life/obsidian-link-commit.js','./assets/life/obsidian-link-candidates-ui.js','./assets/life/obsidian-package.js','./goals.html',
