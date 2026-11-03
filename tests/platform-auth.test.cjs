@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
-const { createAuth, safeNext, validConfig, SESSION_KEY, LOGOUT_KEY } = require('../assets/platform-auth.js');
+const { createAuth, safeNext, validConfig, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS } = require('../assets/platform-auth.js');
 const config = { url: 'https://fixture.supabase.co', key: 'sb_publishable_fixture' };
 const A = { id: '11111111-1111-4111-8111-111111111111', email: 'fixture@example.invalid' };
 const B = { id: '22222222-2222-4222-8222-222222222222', email: 'other@example.invalid' };
@@ -53,7 +53,7 @@ function setup(overrides = {}) {
     if (user) records.set(SESSION_KEY, JSON.stringify({ user, access_token: 'synthetic-' + user.id })); else records.delete(SESSION_KEY);
     for (const listener of [...sdkListeners]) listener(user ? 'SIGNED_IN' : 'SIGNED_OUT', user ? { user } : null);
   };
-  const auth = createAuth(env, { config, clientFactory });
+  const auth = createAuth(env, { config, clientFactory, ...(overrides.now ? { now: overrides.now } : {}) });
   return { auth, state, env, pageHandlers, sdkListeners };
 }
 
@@ -693,4 +693,96 @@ test('opening: overlapping opt-in calls make one request, and a late result for 
   const before = serverChecks(state);
   assert.equal((await auth.verify({ startup: true })).id, B.id); assert.equal(serverChecks(state), before + 1, 'the new account gets its own check');
   second.end(); auth.dispose();
+});
+
+// 2026-11-03 independent review of the page opening (P1–P8 probes): each case
+// below fails when the matching guard is removed from platform-auth.js.
+test('opening: a session token or user replaced without any event is never reused', async () => {
+  const { auth, state } = setup();
+  const opening = auth.beginStartup();
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  state.records.set(SESSION_KEY, JSON.stringify({ user: A, access_token: 'synthetic-rotated-silently' }));
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2, 'a different stored token is checked');
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2);
+  state.records.set(SESSION_KEY, JSON.stringify({ user: B, access_token: 'synthetic-rotated-silently' }));
+  const replaced = await auth.verify({ startup: true }).catch(error => error);
+  assert.notEqual(replaced?.id, A.id, 'a stored session of another user never receives the earlier answer'); assert.equal(serverChecks(state), 3);
+  opening.end(); auth.dispose();
+});
+
+test('opening: a caller that arrives after an account switch gets its own check while the old one is still running', async () => {
+  const { auth, state } = setup();
+  const opening = auth.beginStartup(), late = deferred(); state.userPromise = late.promise;
+  const a = auth.verify({ startup: true }); await tick();
+  state.change(B); state.userPromise = null;
+  const b = auth.verify({ startup: true });
+  const first = await Promise.race([b.then(user => user?.id), new Promise(resolve => setTimeout(() => resolve('waiting'), 300))]);
+  assert.equal(first, B.id, 'B is answered without waiting for the stalled check of A');
+  late.resolve({ data: { user: A }, error: null });
+  await assert.rejects(a, errorCode('request_cancelled'));
+  assert.equal(auth.getAccount()?.userId, B.id);
+  opening.end(); auth.dispose();
+});
+
+test('opening: a check that crosses an Auth event and then the first pageshow is not kept', async () => {
+  const { auth, state, pageHandlers, sdkListeners } = setup();
+  const opening = auth.beginStartup(), late = deferred(); state.userPromise = late.promise;
+  const running = auth.verify({ startup: true }); await tick();
+  for (const listener of [...sdkListeners]) listener('TOKEN_REFRESHED', { user: A, access_token: 'synthetic-a' });
+  await pageHandlers.get('pageshow')({ persisted: false });
+  late.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  await running.catch(() => {});
+  const before = serverChecks(state);
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), before + 1, 'the Auth event in between still discards it');
+  opening.end(); auth.dispose();
+});
+
+test('opening: callers waiting on the running check share its answer even when the opening ends meanwhile', async () => {
+  // CI life-discovery-automation (PR #183): a resumed page's BlogSync joined the shell's
+  // running check, the shell then ended the opening, and the waiter sent a second request.
+  const { auth, state } = setup();
+  const opening = auth.beginStartup(), gate = deferred(); state.userPromise = gate.promise;
+  const shell = auth.verify({ startup: true }); await tick();
+  const engine = auth.verify({ startup: true }); await tick();
+  gate.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  assert.equal((await shell).id, A.id); opening.end();
+  assert.equal((await engine).id, A.id); assert.equal(serverChecks(state), 1);
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2, 'after the opening a new call checks');
+  auth.dispose();
+});
+
+test('opening: past the first-screen limit an opt-in call checks with Auth again', async () => {
+  const clock = { now: 1_000_000 };
+  const { auth, state } = setup({ now: () => clock.now });
+  const opening = auth.beginStartup();
+  await auth.verify({ startup: true }); clock.now += STARTUP_LIMIT_MS - 1;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  clock.now += 2;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2, 'a stalled opening no longer shares');
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 3);
+  opening.end(); auth.dispose();
+});
+
+test('opening: a waiter whose shared check crossed an Auth event checks again instead of taking that answer', async () => {
+  const { auth, state, sdkListeners } = setup();
+  const opening = auth.beginStartup(), gate = deferred(); state.userPromise = gate.promise;
+  const shell = auth.verify({ startup: true }); await tick();
+  const engine = auth.verify({ startup: true }); await tick();
+  for (const listener of [...sdkListeners]) listener('TOKEN_REFRESHED', { user: A, access_token: 'synthetic-a' });
+  gate.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  await shell.catch(() => {});
+  assert.equal((await engine).id, A.id); assert.equal(serverChecks(state), 2, 'the event after joining discards the shared answer');
+  opening.end(); auth.dispose();
+});
+
+test('opening: the bootstrap joins the shell check that the document\'s first pageshow crossed (warm open: one request)', async () => {
+  const { auth, state, pageHandlers } = setup();
+  const opening = auth.beginStartup(), gate = deferred(); state.userPromise = gate.promise;
+  const shell = auth.verify({ startup: true }); await tick();
+  await pageHandlers.get('pageshow')({ persisted: false });
+  const bootstrap = auth.verify({ startup: true }); await tick();
+  gate.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  assert.equal((await shell).id, A.id); assert.equal((await bootstrap).id, A.id);
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  opening.end(); auth.dispose();
 });
