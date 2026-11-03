@@ -2,7 +2,7 @@
 
 > 2026-10-29 이전 절은 [roadmap-archive.md](roadmap-archive.md)에 원문 그대로 옮겼다.
 
-## 부드러운 판 묶음 B·C·E — 일정·자료·뉴스·설정, PR179 통합, 캐시 `haedo-v180` (2026-11-03 KST)
+## 부드러운 판 묶음 B·C·E — 일정·자료·뉴스·설정, PR179 병합·배포, 캐시 `haedo-v180`, 실기기 확인 전 (2026-11-03 KST)
 
 소유자 결정(11-03)
 - 저장 형식은 바꾸지 않는다.
@@ -37,6 +37,12 @@
   - 구조 기준선에 SettingsUI·RecordsList를 넣었다.
   - 캐시를 `haedo-v180`으로 올렸다. PWA v179→v180 업그레이드 검사는 9/9다.
   - CI 그룹 1에 schedule·settings·records-news를 등록했다.
+- **배포(11-03 15:46 KST 병합 `0c4da05`)**
+  - CI 현재 head `3c91a10` 전부 녹색, 병합 직전 main 변동 없음.
+  - 라이브 확인: 서비스워커 캐시 `haedo-v180`. 셸 파일 17개(sw.js, HTML 3개, ui·schedule·settings·records·discovery·navigation·shell·home)가 main과 바이트까지 같다.
+  - 1440·390 격리 브라우저에서 `index.html`·`timeline.html`·`workspace.html`가 모두 200이고, 가로 넘침·콘솔·페이지 오류는 0이다.
+  - `index.html`에 CSP `frame-src` meta가 실렸다.
+  - 로그인 뒤 화면은 실제 계정이 필요해 확인하지 않았다.
 - **미해결로 기록**
   - life PWA 오프라인 검사의 시간 초과 1회: 재현되지 않았고 원래 로그도 없다.
   - startup-performance의 부하 민감성: 기준 커밋에서도 실패한다. 20초 대기 제한 때문으로 추정한다.
