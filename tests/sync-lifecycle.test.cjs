@@ -174,20 +174,47 @@ test('SyncLifecycle.attach binds in the given order, starts the poll after them,
   assert.throws(() => SyncLifecycle.attach(host, { listen: [['window', 'online', null]] }), TypeError);
 });
 
-test('an older cached page without sync-lifecycle.js still starts the engine, with no automatic wake-ups', async () => {
-  // Browser-like: no require, no HaedoLife.SyncLifecycle. The engine binds nothing, throws nothing,
-  // and its start-up pass still runs.
-  const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
-  const bound = [], context = vm.createContext({
-    addEventListener: (type) => bound.push(type), removeEventListener() {}, document: { visibilityState: 'visible', addEventListener: type => bound.push(type), removeEventListener() {} },
-    setInterval: () => { bound.push('interval'); return 1; }, clearInterval() {}, setTimeout, clearTimeout, Promise, Date, Map, Set, Error, Object, Array, JSON, console,
+// Browser-like: no require, no HaedoLife.SyncLifecycle. Each engine binds nothing, throws nothing,
+// and its start-up pass still reaches the dependency it reads first.
+const OLDER_PAGE = [
+  { file: 'sync.js', name: 'Sync', first: 'loadConfig',
+    run: (api, hit) => { const sync = api.create({ storage: {}, core: {}, remoteFactory: Object.assign(() => ({}), { loadConfig: async () => { hit(); return null; } }) }); sync.start().catch(() => {}); return sync; } },
+  { file: 'composition-sync.js', name: 'CompositionSync', first: 'storage read',
+    run: (api, hit) => { const storage = new Proxy({ account: owner }, { get: (target, key) => key in target ? target[key] : () => { hit(); return never(); } });
+      const sync = api.create({ storage, sourceSync: { subscribe: () => () => {}, getState: never }, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} } }); sync.start(); return sync; } },
+  { file: 'writing-sync.js', name: 'WritingSync', first: 'storage read',
+    run: (api, hit) => { const storage = new Proxy({ account: owner }, { get: (target, key) => key in target ? target[key] : key === 'subscribeAll' ? undefined : () => { hit(); return never(); } });
+      const sync = api.create({ storage, sourceSync: { subscribe: () => () => {} }, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} }, engine: {}, materials: null }); sync.start(); return sync; } },
+  { file: 'material-continuity-sync.js', name: 'MaterialContinuitySync', first: 'manager.list',
+    run: (api, hit) => { const storage = { account: owner, readMaterialWriting: never, adoptMaterialContinuity: never, listWorkspaces: never };
+      const background = api.automatic({ storage, auth: { getAccount: () => owner, epoch: 1 }, manager: { list: () => { hit(); return never(); }, dispose() {} } }); background.start(); return background; } },
+  { file: 'account-docs-sync.js', name: 'AccountDocsSync', first: 'listAccountDocs',
+    run: (api, hit) => { const storage = { account: owner, listAccountDocs: () => { hit(); return never(); }, subscribeAll: () => () => {} };
+      const sync = api.create({ storage, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} }, locks: null }); sync.start(); return sync; } },
+  { file: 'account-library.js', name: 'AccountLibrary', first: 'auth.verify',
+    run: (api, hit) => { const manager = { subscribe: () => () => {}, setAutomatic() {}, start: never, getAccount: () => owner };
+      // Reads fail (not hang) so bootstrap reaches the point where its lifecycle would start.
+      const storage = new Proxy({ isAccountScoped: true, account: owner, subscribeAll: () => () => {} }, { get: (target, key) => key in target ? target[key] : failing });
+      const library = api.create({ storage, core: {}, sync: manager, compositionSync: manager, libraryMetaSync: manager,
+        auth: { epoch: 1, user: { id: owner.userId }, getAccount: () => owner, verify: () => { hit(); return failing(); } }, remote: { dispose() {}, capabilities: failing } });
+      library.bootstrap().catch(() => {}); return library; } },
+];
+
+for (const { file, name, first, run } of OLDER_PAGE) {
+  test(`an older cached page without sync-lifecycle.js: ${name} starts with no automatic wake-ups`, async () => {
+    const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
+    const bound = [], context = vm.createContext({
+      addEventListener: type => bound.push(type), removeEventListener() {},
+      document: { visibilityState: 'visible', addEventListener: type => bound.push(type), removeEventListener() {} },
+      setInterval: () => { bound.push('interval'); return 1; }, clearInterval() {}, setTimeout, clearTimeout, queueMicrotask, structuredClone,
+      Promise, Date, Map, Set, WeakMap, Error, TypeError, Object, Array, JSON, Math, Number, String, Boolean, Symbol, RegExp, Reflect, Proxy, URL, TextEncoder, crypto, console,
+    });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../assets/life', file), 'utf8'), context);
+    assert.equal(context.HaedoLife.SyncLifecycle, undefined, 'the module is really absent');
+    let runs = 0;
+    const engine = run(context.HaedoLife[name], () => { runs++; }); await settle(); await settle();
+    assert.deepEqual(bound, [], 'no listener and no poll');
+    assert.ok(runs >= 1, 'the start-up pass reached ' + first);
+    assert.doesNotThrow(() => engine.dispose());
   });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../assets/life/account-docs-sync.js'), 'utf8'), context);
-  let runs = 0;
-  const storage = { account: owner, listAccountDocs: () => { runs++; return never(); }, subscribeAll: () => () => {} };
-  const sync = context.HaedoLife.AccountDocsSync.create({ storage, auth: { getAccount: () => owner, epoch: 1 }, remote: { dispose() {} }, locks: null });
-  sync.start(); await settle();
-  assert.deepEqual(bound, []);
-  assert.equal(runs, 1, 'the start-up pass ran');
-  assert.doesNotThrow(() => sync.dispose());
-});
+}
