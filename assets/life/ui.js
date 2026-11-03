@@ -1765,6 +1765,10 @@
       const date = scheduleDate(), sd = global.HaedoLife.ScheduleData;
       if (sd && calendarModes.has(mode) && (mode !== 'tools' || sd.parts(date).year !== sd.parts(sd.today()).year)) url.searchParams.set('date', date);
       else url.searchParams.delete('date');
+      // The app's own screen hashes stay where they belong: 설정's items within 설정 (its
+      // sub-screens keep them so back restores the row used), the old backup anchors on 백업·복원.
+      if (/^#settings-/.test(url.hash) && section !== 'manage') url.hash = '';
+      if (/^#lifeBackup(?:Choices|Materials|Planning)$/.test(url.hash) && mode !== 'backup') url.hash = '';
       const destination = url.pathname + url.search + url.hash;
       const here = global.location.pathname + global.location.search + global.location.hash;
       const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo : null;

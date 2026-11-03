@@ -127,6 +127,21 @@ async function main() {
         await page.waitForFunction(() => document.activeElement?.id === 'lifeBackupFormatsHeading');
         assert.equal(await page.locator('a[href="workspace.html?section=manage#backupAll"]').count(), 1);
       }
+      // A screen's own hash does not follow the person: an item of 설정 to another section, or an
+      // old backup anchor back to 설정 (review m3 of bundle E).
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#settings-public'); await ready(page); await mode(page, 'manage');
+      await nav(page, 'news'); await mode(page, 'external-discovery');
+      assert.equal(new URL(page.url()).hash, '', 'another section does not carry #settings-public');
+      await nav(page, 'manage'); await mode(page, 'manage');
+      // The address may then name the item that the restored scroll position shows (scroll following).
+      assert.match(new URL(page.url()).hash, /^(#settings-[a-z]+)?$/);
+      assert.notEqual(await activeId(page), 'settings-heading-public', 'returning to 설정 does not reselect the item of an earlier visit');
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#lifeBackupMaterials'); await ready(page); await mode(page, 'backup');
+      assert.equal(new URL(page.url()).hash, '#lifeBackupMaterials');
+      await nav(page, 'manage'); await mode(page, 'manage');
+      // 설정 may name the item its restored scroll position shows, never the backup anchor.
+      assert.match(new URL(page.url()).hash, /^(#settings-[a-z]+)?$/, '설정 does not keep the backup anchor');
+      await page.reload(); await ready(page); await mode(page, 'manage');
       await page.goto(base + '/workspace.html?section=manage#backupAll');
       await page.locator('#backupAll').waitFor({ state: 'visible' });
     });
