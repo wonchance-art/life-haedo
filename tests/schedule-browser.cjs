@@ -23,7 +23,8 @@ async function instrumentStorage(context) {
     const response = await route.fetch(), source = await response.text();
     const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);
       const hold=async(name,result)=>{if(window.__scheduleHold===name){window.__scheduleHeld=true;await new Promise(resolve=>{window.__scheduleRelease=()=>{window.__scheduleHold=null;resolve();};});}window.__scheduleReads=(window.__scheduleReads||0)+1;return result;};
-      return Object.freeze({...actual,async readAnnualPlan(...v){return hold('plan',await actual.readAnnualPlan(...v));}});}});})();`;
+      return Object.freeze({...actual,async readAnnualPlan(...v){return hold('plan',await actual.readAnnualPlan(...v));},
+        async readPhotoPosts(ws,ids){(window.__schedulePhotoReads||=[]).push(ids.length);return actual.readPhotoPosts(ws,ids);}});}});})();`;
     await route.fulfill({ response, body: source + hook });
   });
 }
@@ -277,6 +278,43 @@ async function main() {
       await press({ key: 'ㅡ', code: 'KeyM' }); await shown(page, 'month');
       await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅛ', code: 'KeyY' }); await shown(page, 'tools');
       await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅣ', code: 'KeyL' }); await shown(page, 'home');
+      // An ASCII key of another layout is that character: AZERTY `,` sits on KeyM, Dvorak `,` on KeyW.
+      await page.locator('#lifeApp .life-page-title').focus();
+      await press({ key: ',', code: 'KeyM' }); await press({ key: ',', code: 'KeyW' }); await press({ key: ';', code: 'KeyD' });
+      await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      // Every editable host counts as a field: plaintext-only and an inherited editable child.
+      await page.evaluate(() => {
+        const plain = document.createElement('div'); plain.id = 'scheduleEditablePlain'; plain.setAttribute('contenteditable', 'plaintext-only'); plain.tabIndex = 0; plain.textContent = '메모';
+        const parent = document.createElement('div'); parent.setAttribute('contenteditable', 'true');
+        const child = document.createElement('span'); child.id = 'scheduleEditableChild'; child.tabIndex = 0; child.textContent = '안쪽'; parent.append(child);
+        document.querySelector('#lifeMain').prepend(plain, parent);
+      });
+      for (const id of ['scheduleEditablePlain', 'scheduleEditableChild']) {
+        await page.locator('#' + id).focus(); await press({ key: 'm', code: 'KeyM' }); await press({ key: 'ㅡ', code: 'KeyM' });
+        await page.waitForTimeout(300); assert.equal(await mode(page), 'home', id);
+      }
+      await page.locator('#scheduleEditablePlain').focus(); await page.keyboard.type('mdy');
+      await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+    });
+
+    await check('a calendar reads each post’s writing day once and again only after the post changes', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); const fixture = await seed(page);
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
+      const reads = () => page.evaluate(() => (window.__schedulePhotoReads || []).reduce((sum, n) => sum + n, 0));
+      const first = await reads(); assert.equal(first, 27, 'the first calendar reads every saved photo post once');
+      for (const unit of ['month', 'day', 'quarter', 'week', 'tools']) { await page.locator('[data-schedule-view="' + unit + '"]').click(); await shown(page, unit); }
+      assert.equal(await reads(), first, 'later units reuse the cached writing days');
+      // A changed post (new revision) is read again; the others stay cached.
+      await page.evaluate(async id => {
+        const s = HaedoLife.Shell.storage, ws = await s.getActive(), doc = await s.readPhotoPost(ws, id);
+        doc.title = doc.title + ' 고침'; doc.updatedAt = new Date().toISOString(); await s.savePhotoPost(ws, doc, doc.revision);
+      }, fixture.ids['추석 장보기']);
+      await page.locator('[data-schedule-view="month"]').click(); await shown(page, 'month');
+      await page.waitForFunction(n => (window.__schedulePhotoReads || []).reduce((sum, v) => sum + v, 0) >= n, first + 1);
+      await page.locator('[data-schedule-view="day"]').click(); await shown(page, 'day');
+      assert.equal(await reads(), first + 1, 'only the changed post was read again');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-09-14'); await ready(page); await shown(page, 'day');
+      assert.match(await page.locator('#lifeSchedule').innerText(), /추석 장보기 고침/, 'the edited post keeps its writing day');
     });
 
     await check('dated 일정 addresses reload offline from the installed shell', async ({ page, context }) => {

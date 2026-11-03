@@ -30,7 +30,8 @@
 
   function create({ storage, core, host, getBundle, isDisposed = () => false, announce = () => {}, open, go, links = {} }) {
     let disposed = false, generation = 0, visible = false, filter = 'all';
-    let stopWatch = null, watchTimer = null, observer = null;
+    let stopWatch = null, watchTimer = null, observer = null, createdScope = null;
+    const createdCache = new Map();
     const urls = new Set();
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.isConnected;
@@ -84,14 +85,31 @@
       return { days: data().group({ posts, excerpts, plans }), posts, plans, rows, errors };
     }
     // createdAt of saved photo posts, one read per library; an unreadable post keeps its list time.
+    // Kept across renders by (library, post, revision, updatedAt): only new or changed posts are read.
+    // The cache belongs to one account and open library; either change empties it.
+    function createdKey(ws, post) { return JSON.stringify([ws, post.id, post.revision ?? null, post.updatedAt ?? null]); }
     async function createdTimes(saved, workspaceId) {
-      const byLibrary = new Map(), out = new Map();
-      for (const post of saved) { const ws = post.workspaceId || workspaceId; if (!byLibrary.has(ws)) byLibrary.set(ws, []); byLibrary.get(ws).push(post.id); }
-      if (typeof storage.readPhotoPosts !== 'function') return out;
-      await Promise.all([...byLibrary].map(async ([ws, ids]) => {
-        try { (await storage.readPhotoPosts(ws, ids)).forEach((doc, i) => { if (doc?.id === ids[i] && typeof doc.createdAt === 'string') out.set(ws + '/' + doc.id, doc.createdAt); }); }
-        catch (_) { /* The list time still places the post. */ }
+      const scope = JSON.stringify([storage.account?.userId ?? null, workspaceId]);
+      if (createdScope !== scope) { createdCache.clear(); createdScope = scope; }
+      const byLibrary = new Map(), out = new Map(), used = new Set();
+      for (const post of saved) {
+        const ws = post.workspaceId || workspaceId, key = createdKey(ws, post); used.add(key);
+        if (createdCache.has(key)) { out.set(ws + '/' + post.id, createdCache.get(key)); continue; }
+        if (!byLibrary.has(ws)) byLibrary.set(ws, []); byLibrary.get(ws).push(post);
+      }
+      if (byLibrary.size && typeof storage.readPhotoPosts === 'function') await Promise.all([...byLibrary].map(async ([ws, posts]) => {
+        try {
+          const docs = await storage.readPhotoPosts(ws, posts.map(post => post.id));
+          // A pass that started under another account or library does not fill this cache.
+          if (createdScope !== scope) return;
+          docs.forEach((doc, i) => {
+            const post = posts[i];
+            if (doc?.id !== post.id || typeof doc.createdAt !== 'string') return;
+            createdCache.set(createdKey(ws, post), doc.createdAt); out.set(ws + '/' + post.id, doc.createdAt);
+          });
+        } catch (_) { /* Not cached: the list time places the post and the next render reads it again. */ }
       }));
+      if (createdScope === scope) for (const key of [...createdCache.keys()]) if (!used.has(key)) createdCache.delete(key);
       return out;
     }
     // A photo post's first photo, read only when the thumbnail is about to show.
@@ -489,7 +507,7 @@
       unwatch();
       generation += 1; visible = false; clearMedia();
     }
-    function dispose() { leave(); disposed = true; }
+    function dispose() { leave(); disposed = true; createdCache.clear(); createdScope = null; }
     return Object.freeze({ render, leave, dispose });
   }
 
@@ -561,10 +579,11 @@
   // Single-key shortcuts while a schedule screen is shown and no field has focus.
   // Under the Korean 2-set layout `key` is a jamo (e.g. ㅡ for M); the physical key decides then.
   const CODES = Object.freeze({ KeyL: 'l', KeyY: 'y', KeyQ: 'q', KeyM: 'm', KeyW: 'w', KeyD: 'd', KeyT: 't', KeyP: 'p', KeyN: 'n', Slash: '/' });
+  // Only a non-ASCII character (a Hangul jamo, …) falls back to the physical key: an ASCII key of
+  // another layout (AZERTY `,` on KeyM, Dvorak `,` on KeyW) is that character, not a shortcut.
   function shortcutKey(event) {
     if (event.key.length !== 1) return event.key;
-    const key = event.key.toLowerCase();
-    if (/^[a-z/?]$/.test(key)) return key;
+    if (event.key.charCodeAt(0) < 128) return event.key.toLowerCase();
     const latin = CODES[event.code];
     return latin === '/' && event.shiftKey ? '?' : latin || null;
   }
@@ -573,7 +592,8 @@
     const handler = event => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229 || !active()) return;
       const target = event.target;
-      if (target?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable=true],dialog,[role=tablist],details[open]')) return;
+      // isContentEditable covers every editable host (true, plaintext-only, inherited).
+      if (target?.isContentEditable || target?.closest?.('input,textarea,select,dialog,[role=tablist],details[open]')) return;
       const key = shortcutKey(event);
       const map = { l: 'home', y: 'tools', q: 'quarter', m: 'month', w: 'week', d: 'day', t: 'today', p: 'prev', n: 'next', ArrowLeft: 'prev', ArrowRight: 'next', '/': 'find', '?': 'help' };
       if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?') return;
