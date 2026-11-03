@@ -442,18 +442,28 @@ async function main() {
       assert.equal(await write.getAttribute('aria-current'), null);
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       await nav(page, 'home'); await page.locator('#lifeHome').waitFor();
-      // The 보기 단위 switch keeps one place in both views (review M1).
+      // The 보기 단위 switch keeps one place in the list and in every calendar unit (review M1).
       const switchX = () => page.locator('#lifeApp nav[aria-label="보기 단위"]').evaluate(node => Math.round(node.getBoundingClientRect().left));
-      for (const width of [1440, 820, 390]) {
+      for (const width of [1440, 820]) {
         await page.setViewportSize({ width, height: 900 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
         const list = await switchX();
-        await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
-        assert.equal(await switchX(), list, 'switch x at ' + width);
-        assert.equal(await page.locator('#lifeApp .life-toolbar [role="toolbar"][aria-label="화면 동작"]').count(), 1);
+        for (const unit of ['tools', 'quarter', 'month', 'week', 'day']) {
+          await page.locator('[data-schedule-view="' + unit + '"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="' + unit + '"]').waitFor();
+          assert.equal(await switchX(), list, 'switch x of ' + unit + ' at ' + width);
+          assert.equal(await page.locator('#lifeApp .life-toolbar [role="toolbar"][aria-label="화면 동작"]').count(), 1);
+        }
       }
+      // iPhone (2026-11-02/03 decisions): no unit buttons; the list opens 연 and each unit goes one level up.
+      await page.setViewportSize({ width: 390, height: 844 }); await page.locator('[data-schedule-up="month"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="month"]').waitFor();
+      await page.locator('[data-schedule-up="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('#lifeApp nav[aria-label="보기 단위"]').isVisible(), false);
+      await page.locator('[data-schedule-up="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
+      assert.deepEqual(await page.locator('#lifeApp nav[aria-label="보기 단위"] a').evaluateAll(links => links.filter(link => link.checkVisibility()).map(link => link.dataset.scheduleView)), ['tools']);
+      await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
       await page.setViewportSize({ width: 820, height: 1000 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
       const views = page.locator('#lifeApp nav[aria-label="보기 단위"] a');
-      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-current')])), [['목록', 'true'], ['계획', null]]);
+      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-label'), link.getAttribute('aria-current')])),
+        [['목록', '목록', 'true'], ['Y', '연', null], ['Q', '분기', null], ['M', '월', null], ['W', '주', null], ['D', '일', null]]);
       await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
       assert.equal(await page.evaluate(() => document.activeElement?.dataset.scheduleView), 'tools');
       assert.equal(await page.evaluate(() => location.search), '?section=schedule&view=tools');

@@ -18,6 +18,8 @@
   }
   const viewSections = Object.freeze({
     home: 'schedule', blog: 'schedule', 'account-blog': 'schedule', tools: 'schedule', 'annual-plan': 'schedule', time: 'schedule',
+    // 일정's calendar units (tools is Y): 분기·월·주·일.
+    quarter: 'schedule', month: 'schedule', week: 'schedule', day: 'schedule',
     'public-cover': 'manage', 'public-pages': 'manage',
     'external-discovery': 'news', interests: 'news',
     sources: 'records', topics: 'records', source: 'records', 'source-edit': 'records',

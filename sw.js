@@ -3,7 +3,7 @@ const CACHE='haedo-v179';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
-  './assets/life/annual-plan.js','./assets/life/annual-plan-ui.js','./assets/life/annual-plan.css',
+  './assets/life/annual-plan.js','./assets/life/annual-plan-ui.js','./assets/life/annual-plan.css','./assets/life/schedule-data.js','./assets/life/schedule-ui.js','./assets/life/schedule.css',
   './assets/life/source-edit.js','./assets/life/source-edit-ui.js','./assets/life/source-markdown.js','./assets/life/source-markdown.css',
   './vendor/markdown-it/markdown-it.umd.min.js','./vendor/dompurify/purify.min.js',
   './vendor/js-yaml/js-yaml.umd.min.js',
@@ -47,8 +47,9 @@ const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).hr
 const DISCOVERY_CACHE='haedo-discovery-feed-v1';
 const discoveryURL=new URL('./assets/life/discovery-feed.json',self.registration.scope).href;
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
-// `blog` reopens the blog editor/reader after a reload; `compose` starts a new post.
-const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose']);
+// `blog` reopens the blog editor/reader after a reload; `compose` starts a new post;
+// `date` names 일정's period (Y·Q·M·W·D). The app validates every value; the shell is the same page.
+const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose','date']);
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))
