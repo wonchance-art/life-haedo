@@ -9,7 +9,7 @@
   - `allow-popups`만 두고 `allow-popups-to-escape-sandbox`는 뺐다. 출판사 링크로 연 새 창도 같은 샌드박스를 이어받는다.
   - 최상위 이동·양식 제출·대화상자는 허용하지 않는다.
   - **제3자 스크립트:** 출판사 페이지가 불러오는 광고·분석·소셜 위젯 스크립트도 그 틀 안에서 돈다. 해도는 그 스크립트를 고르거나 막지 않는다.
-  - **CSP `frame-src`의 역할:** `index.html`·`life.html`의 `<meta http-equiv="Content-Security-Policy" content="frame-src …">`는 해도 문서가 직접 만드는 틀의 목적지만 제한한다. 허용 목록 밖 출처를 띄우는 실수를 브라우저가 막는다. 출판사 페이지 안의 하위 틀(예: Facebook 위젯)은 그 출판사 문서의 정책을 따르고, 해도의 `frame-src`와 무관하다.
+  - **CSP `frame-src`의 역할:** `index.html`·`life.html`의 `<meta http-equiv="Content-Security-Policy" content="frame-src …">`는 해도 문서에 있는 틀의 목적지를 제한한다. 허용 목록 밖 출처를 띄우는 실수를 막고, 허용된 출판사 틀이 스스로 허용 밖 호스트로 이동하려 할 때도 막는다(재검수 실측: 요청 0, 틀은 오류 화면). 그래서 YouTube나 출판사 틀이 다른 호스트로 리다이렉트하면 빈 틀이 된다(2026-11-03 실제 두 출판사는 iPhone UA에서도 리다이렉트 없음). `data:` 틀도 막히며, 저장소에는 `data:` 틀 사용처가 없다. 출판사 페이지 안의 하위 틀(예: Facebook 위젯)은 그 출판사 문서의 정책을 따르고, 해도의 `frame-src`와 무관하다.
   - **출판사에 보이는 것:** `referrerpolicy="no-referrer"`로 Referer는 보내지 않는다. 그래도 Chromium·Safari에서는 틀 안의 `location.ancestorOrigins`로 해도 앱의 출처(예: `https://<배포 주소>`)가 출판사 스크립트에 보인다. 읽는 글의 주소는 새 탭으로 열 때와 같이 출판사에 전달된다. 개인 자료·검색어·관심 주제는 틀에 넘기지 않는다.
 - **`allow-same-origin` 실험 (2026-11-03, 이 세션의 프록시를 거친 실제 주소, Chromium 1243):** 같은 페이지를 두 sandbox로 띄워 비교했다.
 
