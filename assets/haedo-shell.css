@@ -214,3 +214,5 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 body.haedo-shell:has(> #lifeWelcome:not([hidden])) { padding-left:0; }
 body:has(> #lifeWelcome:not([hidden])) > .haedo-nav { display:none; }
 @media(max-width:760px){body.haedo-shell:has(> #lifeWelcome:not([hidden])) {padding-bottom:0;}}
+/* Full-screen reading (e.g. a news original on iPhone) hides the bottom tabs and the pencil; closing the reader restores them. */
+@media(max-width:760px){body.haedo-shell[data-haedo-immersive]>.haedo-nav{display:none}}

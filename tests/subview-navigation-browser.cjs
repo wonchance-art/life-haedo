@@ -23,9 +23,23 @@ async function openLibrary(page) {
   const library = page.locator('.home-library');
   if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
 }
+// 일정's list decides which write button it shows only after its posts load:
+// with no posts the top 새 글 쓰기 is hidden for the list's own 첫 글 쓰기.
+// A click resolved while the list is busy can keep waiting on the hidden one.
+const homeLoaded = page => page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
 async function home(page) {
-  await nav(page, 'home'); await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
+  await nav(page, 'home'); await homeLoaded(page);
   await openLibrary(page);
+}
+// 백업·복원 lists the ZIP's contents after it opens; the file-format rows below
+// move down once that list fills in. #fbEstimate is written with the list.
+const backupListed = page => page.waitForFunction(() => !!document.querySelector('#fbEstimate')?.textContent);
+// html{scroll-behavior:smooth} makes Playwright's own scroll-into-view start an
+// animation that it does not wait for; under CPU load the press and release
+// then land on different rows. Bring an off-screen row to rest first.
+async function clickAtRest(locator) {
+  await locator.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await locator.click();
 }
 async function photoPosts(page) {
   return page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.listPhotoPosts(await s.getActive())).map(({ id, status, title }) => ({ id, status, title })); });
@@ -230,12 +244,13 @@ async function main() {
       for (const [label, destination, title] of [['내보내기·사본 복원', 'transfer', '자료 백업·복원'], ['동기화', 'sync', '동기화'], ['자료·구성 백업', 'workbench-backup', '자료·구성 백업']]) {
         // File formats open from 설정 → 백업·복원 and return there (2026-11-01).
         const parent = destination === 'sync' ? 'manage' : 'backup';
-        if (parent === 'backup') { await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await mode(page, 'backup'); }
-        await page.getByRole('button', { name: label, exact: true }).click(); await mode(page, destination);
+        if (parent === 'backup') { await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await mode(page, 'backup'); await backupListed(page); }
+        await clickAtRest(page.getByRole('button', { name: label, exact: true })); await mode(page, destination);
         assert.equal(await heading(page).textContent(), title);
         if (destination === 'transfer') await capture(page, 'transfer', width);
         await back(page, parent); await page.waitForFunction(label => document.activeElement?.getAttribute('aria-label') === label, label);
-        await page.getByRole('button', { name: label, exact: true }).click(); await mode(page, destination); await nav(page, 'manage'); await mode(page, 'manage');
+        if (parent === 'backup') await backupListed(page);
+        await clickAtRest(page.getByRole('button', { name: label, exact: true })); await mode(page, destination); await nav(page, 'manage'); await mode(page, 'manage');
       }
       assert.deepEqual(await current(page), before);
     }, width);
@@ -336,7 +351,7 @@ async function main() {
     }, width);
     for (const width of [1440, 390]) await check('history: browser back returns to the previous app screen ' + width, async ({ page }) => {
       await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
-      await nav(page, 'home'); await mode(page, 'home'); await openLibrary(page);
+      await nav(page, 'home'); await mode(page, 'home'); await homeLoaded(page); await openLibrary(page);
       await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('뒤로 가기로 닫을 글'); await page.locator('.ql-editor').fill('뒤로 가도 초안은 남습니다.');
       await page.goBack(); await mode(page, 'home');
@@ -398,7 +413,7 @@ async function main() {
       // A failed review save is retried explicitly, as for the in-app return.
       await page.evaluate(() => { window.__homeFailStage = false; });
       await page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(page);
-      await page.goBack(); await mode(page, 'home'); await openLibrary(page);
+      await page.goBack(); await mode(page, 'home'); await homeLoaded(page); await openLibrary(page);
       await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       const writeUrl = page.url();
       const title = page.locator('#photoTitle');
@@ -516,7 +531,7 @@ async function main() {
     await check('history: a blog task never follows the records tab', async ({ page }) => {
       await fixture(page); await nav(page, 'records'); await mode(page, 'sources');
       await openRecordsMenu(page); await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
-      await nav(page, 'home'); await mode(page, 'home'); await openLibrary(page);
+      await nav(page, 'home'); await mode(page, 'home'); await homeLoaded(page); await openLibrary(page);
       await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('자료실 탭 확인용 글');
       await nav(page, 'records'); await mode(page, 'page');

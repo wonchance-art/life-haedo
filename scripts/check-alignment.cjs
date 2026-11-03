@@ -3,7 +3,8 @@
  * 사용: node scripts/check-alignment.cjs <HTML 파일 또는 http://127.0.0.1 주소>:<폭>:<높이> ...
  *   예) node scripts/check-alignment.cjs docs/x.html:1440:960 http://127.0.0.1:4173/index.html:390:844
  * 기준과 해석은 docs/design-review/expert-design-brief.md 「정렬 기준」. 파일을 쓰거나 외부로 보내지 않는다.
- * 측정 영역: <main> → [data-align-root] → 첫 화면 틀(x-dc > div) → body 순서로 찾는다.
+ * 측정 영역: 보이는 [data-align-root] → 보이는 <main> → 첫 화면 틀(x-dc > div) → body 순서로 찾는다.
+ *   숨은 <main>(예: 로그인 뒤의 index.html #lifeWelcome)은 건너뛴다.
  * Playwright는 기존 설치를 쓴다(PW_MODULE_PATH 또는 전역 설치).
  */
 'use strict';
@@ -27,7 +28,8 @@ const toUrl = (target) => (/^https?:\/\//.test(target) ? target : 'file://' + pa
     await page.goto(toUrl(target));
     await page.waitForTimeout(500);
     const r = await page.evaluate(() => {
-      const root = document.querySelector('main') || document.querySelector('[data-align-root]') || document.querySelector('x-dc > div') || document.body;
+      const shown = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+      const root = [...document.querySelectorAll('[data-align-root]')].find(shown) || [...document.querySelectorAll('main')].find(shown) || document.querySelector('x-dc > div') || document.body;
       const rr = root.getBoundingClientRect();
       const skipZone = (el) => el.closest('[role="menu"],[role="dialog"],[role="status"],[aria-hidden="true"],nav[aria-label="주 메뉴"]');
       const shaped = (el) => { const cs = getComputedStyle(el); const bg = cs.backgroundColor; return (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') || (cs.boxShadow !== 'none' && !/inset 0px -/.test(cs.boxShadow)) || parseFloat(cs.borderLeftWidth) > 0; };

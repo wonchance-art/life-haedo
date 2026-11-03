@@ -2,6 +2,7 @@
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
+const { articleControl, openReader, showList } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path'), http = require('node:http');
 const { createHash } = require('node:crypto');
 const project = path.resolve(__dirname, '..'), output = path.resolve(process.env.EXTERNAL_DISCOVERY_PWA_OUTPUT || path.join(project, '.local/external-discovery-pwa'));
@@ -23,12 +24,21 @@ async function newsView(control) {
   // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
   await control.waitFor({ state: 'attached' });
   const settingsTarget = await panel.locator(control).count() > 0;
-  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  if (settingsTarget && !await panel.isVisible()) {
+    // 2026-11-03: the settings icon sits with the list; an open reader below 1101px is closed first with ‹ 뉴스.
+    if (await page.locator('#discoveryReaderBack').isVisible()) { await page.locator('#discoveryReaderBack').click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
+    await page.locator('#discoveryNewsSettings').click();
+  }
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+  // 2026-11-03: below 1101px an open reader takes the list's place; ‹ 뉴스 returns to the list before a list control is used.
+  const back = page.locator('#discoveryReaderBack');
+  if (!settingsTarget && await back.count() && await back.isVisible() && !await control.evaluate(element => !!element.closest('#discoveryReader'))) { await back.click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
 }
 async function selectNewsMode(page, value) {
   await newsView(page.locator('#discoveryDiscover'));
   if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  // 2026-11-03: 정렬 lives in the 정렬·주제·언어 filter disclosure next to the list tabs.
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryFilterToggle').click();
   await page.locator('#discoverySort').selectOption(value);
 }
 // Open actual native disclosures, outermost first, before using a moved control.
@@ -58,7 +68,7 @@ async function main() {
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v179');
+  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v180');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
   assert.equal(report.oldSwSHA256, previousWorker.sha256, 'Prior worker must be the exact ' + previousWorker.commit + ' v' + previousVersion + ' source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
@@ -225,7 +235,7 @@ async function main() {
     await check('verified offline session saves private feedback and cached-shell reload preserves it', async () => {
       await context.setOffline(true); await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle();
       const article = page.locator('article[data-discovery-id]').first();
-      await (await revealControl(article.locator('button[data-discovery-feedback="already_read"]'))).click();
+      await (await revealControl((await articleControl(page, article, 'button[data-discovery-feedback="already_read"]')))).click();
       await wait(page, async length => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryProfile(await s.getActive())).feedback.length === length; }, before.discovery.feedback.length + 1);
       changed = await state(); assert.deepEqual(changed.bundle, before.bundle); assert.deepEqual(changed.manual, before.manual); assert.deepEqual(changed.workbench, before.workbench); assert.deepEqual(changed.actions, before.actions); assert.deepEqual(changed.reading, before.reading);
       const response = await page.reload(); assert.equal(response.fromServiceWorker(), true); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle();

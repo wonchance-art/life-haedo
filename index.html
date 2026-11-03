@@ -2,6 +2,8 @@
 <html lang="ko" data-theme="spring">
 <head>
   <meta charset="UTF-8">
+  <!-- Frames: app blobs/srcdoc, YouTube player (page-media.js), checked news publishers (discovery-ui.js FRAME_ALLOWED_SOURCES). Only frame-src is set. -->
+  <meta http-equiv="Content-Security-Policy" content="frame-src 'self' blob: https://www.youtube-nocookie.com https://www.readersnews.com https://www.frontiersin.org">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그. 먼저 비공개로 보관하고 공개할 내용은 직접 고릅니다.">
   <meta name="theme-color" content="#ffffff">
@@ -12,6 +14,7 @@
   <link rel="stylesheet" href="assets/life/ui.css">
   <link rel="stylesheet" href="assets/life/source-markdown.css">
   <link rel="stylesheet" href="assets/life/source-folders.css">
+  <link rel="stylesheet" href="assets/life/records.css">
   <link rel="stylesheet" href="assets/life/page-posts.css">
   <link rel="stylesheet" href="vendor/quill/quill.snow.css">
   <link rel="stylesheet" href="assets/life/photo-post.css">
@@ -25,6 +28,7 @@
   <link rel="stylesheet" href="assets/life/interest.css">
   <link rel="stylesheet" href="assets/life/discovery.css">
   <link rel="stylesheet" href="assets/life/annual-plan.css">
+  <link rel="stylesheet" href="assets/life/schedule.css">
   <link rel="stylesheet" href="assets/life/naver-blog.css">
   <link rel="stylesheet" href="assets/life/collection.css">
   <link rel="stylesheet" href="assets/haedo-shell.css">
@@ -32,6 +36,7 @@
   <link rel="stylesheet" href="assets/life/blog-manager.css">
   <link rel="stylesheet" href="assets/life/blog-series.css">
   <link rel="stylesheet" href="assets/life/preservation.css">
+  <link rel="stylesheet" href="assets/life/settings.css">
   <link rel="stylesheet" href="assets/life/original-attachments.css">
   <link rel="stylesheet" href="assets/haedo-motion.css">
 </head>
@@ -132,6 +137,8 @@
   <script src="assets/life/discovery-ui.js"></script>
   <script src="assets/life/annual-plan-ui.js"></script>
   <script src="assets/life/annual-plan.js"></script>
+  <script src="assets/life/schedule-data.js"></script>
+  <script src="assets/life/schedule-ui.js"></script>
   <script src="assets/life/library-meta.js"></script>
   <script src="assets/life/storage.js"></script>
   <script src="assets/life/account-materials.js"></script>
@@ -153,6 +160,7 @@
   <script src="assets/life/source-markdown.js"></script>
   <script src="assets/life/source-folders.js"></script>
   <script src="assets/life/source-folders-ui.js"></script>
+  <script src="assets/life/records-list.js"></script>
   <script src="assets/life/reading-position.js"></script>
   <script src="assets/life/legacy.js"></script>
   <script src="assets/life/icons.js"></script>
@@ -196,6 +204,7 @@
   <script src="assets/life/preservation-ui.js"></script>
   <script src="assets/life/full-backup.js"></script>
   <script src="assets/life/full-backup-ui.js"></script>
+  <script src="assets/life/settings-ui.js"></script>
   <script src="assets/life/blog-public.js"></script>
   <script src="assets/life/blog-series-public.js"></script>
   <script src="assets/life/blog-series.js"></script>

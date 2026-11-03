@@ -36,14 +36,19 @@ async function instrument(context) {
     const hook = `\n;(()=>{const original=HaedoMotion;globalThis.HaedoMotion=Object.freeze({...original,...Object.fromEntries(['enter','feedback'].map(method=>[method,function(element,options){const call={method,options,mode:document.querySelector('#lifeMain')?.dataset.mode,target:element?.id||element?.className,connected:!!element?.isConnected};__nativeMotion.calls.push(call);__nativeMotion.activeCall=call;try{return original[method](element,options);}finally{__nativeMotion.activeCall=null;}}]))});})();`;
     await route.fulfill({ response, body: await response.text() + hook });
   });
+  // __nativeHold holds 일정 list (home) post-list reads that started on that list.
+  // Since 일정 Y also lists posts, its own reads are not held. __nativeRelease
+  // releases every held read (a list reads each library of the account).
   await context.route('**/assets/life/storage.js', async route => {
     const response = await route.fetch();
-    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async listPhotoPosts(...values){const result=await actual.listPhotoPosts(...values);if(window.__nativeHold){window.__nativeHeld=true;await new Promise(resolve=>window.__nativeRelease=()=>{window.__nativeHold=false;resolve();});}return result;}});}});})();`;
+    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async listPhotoPosts(...values){const from=document.querySelector('#lifeMain')?.dataset.mode;const result=await actual.listPhotoPosts(...values);if(window.__nativeHold&&from==='home'){window.__nativeHeld=true;const held=window.__nativeHeldReads||=[];await new Promise(resolve=>{held.push(resolve);window.__nativeRelease=()=>{window.__nativeHold=false;held.splice(0).forEach(release=>release());};});}return result;}});}});})();`;
     await route.fulfill({ response, body: await response.text() + hook });
   });
 }
 async function open(page) { await page.goto(base + '/index.html'); await ready(page); await loaded(page); }
 async function loaded(page) { await page.locator('#homePosts[aria-busy="false"]').waitFor(); }
+// 일정 Y draws its frame, then its records; the entrance motion follows the records.
+async function scheduleLoaded(page) { await page.locator('#lifeSchedule[aria-busy="false"]').waitFor(); }
 async function cleanTrace(page) { await page.evaluate(() => { __nativeMotion.calls.length = 0; __nativeMotion.animations.length = 0; }); }
 async function idle(page) { await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== 'running')); }
 async function enterFrames(page, kind) {
@@ -198,8 +203,8 @@ async function main() {
     await check('late private list work cannot animate or repaint after navigation, workspace switch or signout', async ({ page, server, device }) => {
       await open(page); const refs = await seed(page); const other = await page.evaluate(async first => { const s = HaedoLife.Shell.storage, created = await s.createWorkspace('분리된 익명 공간'); await s.setActive(first); return created.workspaceId; }, refs.workspaceId);
       await page.reload(); await ready(page); await loaded(page);
-      await nav(page, 'tools'); await page.evaluate(() => { __nativeHold = true; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
-      await nav(page, 'tools'); await idle(page); await cleanTrace(page); await page.evaluate(() => __nativeRelease()); await settle(page);
+      await nav(page, 'tools'); await scheduleLoaded(page); await page.evaluate(() => { __nativeHold = true; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
+      await nav(page, 'tools'); await scheduleLoaded(page); await idle(page); await cleanTrace(page); await page.evaluate(() => __nativeRelease()); await settle(page);
       assert.equal(await page.locator('#homePosts').count(), 0); assert.deepEqual(await page.evaluate(() => __nativeMotion.calls), []);
       await page.evaluate(() => { __nativeHold = true; __nativeHeld = false; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page);
@@ -211,7 +216,7 @@ async function main() {
       assert(accountRows > 0, 'the account-wide home shows the posts from the first workspace');
       await page.evaluate(() => __nativeReleaseOld()); await settle(page);
       assert.equal(await page.locator('#homePosts .home-post').count(), accountRows); assert.deepEqual(await page.evaluate(() => __nativeMotion.calls), []);
-      await nav(page, 'tools'); await page.evaluate(() => { __nativeHold = true; __nativeHeld = false; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
+      await nav(page, 'tools'); await scheduleLoaded(page); await page.evaluate(() => { __nativeHold = true; __nativeHeld = false; }); await nav(page, 'home'); await page.waitForFunction(() => __nativeHeld);
       await page.evaluate(() => { window.__nativeSignout = HaedoAuth.client.auth.signOut({ scope: 'local' }); });
       await page.waitForFunction(() => document.querySelector('#lifeApp').hidden && !HaedoLife.Shell.storage); await cleanTrace(page); await page.evaluate(() => __nativeRelease());
       await page.waitForFunction(() => HaedoAuth.user === null); assert.doesNotMatch(await page.locator('body').innerText(), /산책에서 발견한 문장/);

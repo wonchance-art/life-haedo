@@ -33,7 +33,7 @@ async function news(page) {
   await panel.waitFor({ state: 'hidden' });
 }
 async function topics(page) { await settings(page); const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
-async function sort(page, mode) { await news(page); await page.locator('#discoverySort').selectOption(mode); await idle(page); }
+async function sort(page, mode) { await news(page); if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryFilterToggle').click(); /* 2026-11-03: 정렬 is inside the filter disclosure */ await page.locator('#discoverySort').selectOption(mode); await idle(page); }
 async function refresh(page) { await options(page); await page.locator('#discoveryRefresh').click(); }
 async function open(page) { await page.goto(entry); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); }
 async function snapshot(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), workbench: await s.readWorkbench(w), profile: await s.readInterestProfile(w), feedback: await s.readDiscoveryProfile(w), settings: await s.readDiscoverySettings(w) }; }); }

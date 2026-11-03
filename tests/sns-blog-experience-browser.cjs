@@ -91,7 +91,17 @@ async function snap(page, scene) {
           const focusedWriting = await page.evaluate(() => document.body.dataset.writingFocus === 'true');
           if (metrics.navigation.length || !focusedWriting) report.qualityFailures.push({ scene, width: size.width, check: 'focusedMobileWriting', details: metrics.navigation });
         } else if (!aligned) report.qualityFailures.push({ scene, width: size.width, check: 'navigationAlignment', details: metrics.navigation });
-        if (metrics.contentWidth > 721) report.qualityFailures.push({ scene, width: size.width, check: 'contentMaximum720', details: metrics.contentWidth });
+        // 2026-11-02 soft redesign: 일정's calendar units (the tools scene is Y) use the wide frame of the
+        // soft-y board, 1fr beside a 280px plan column, up to 1200px; every other scene keeps the 720px column.
+        // 2026-11-03 soft redesign C: 자료 opened from its list at 1101px+ reads beside the list (soft-library)
+        // in the same wide frame; the reading column itself stays within 720px.
+        const split = await page.evaluate(() => document.querySelector('#lifeMain')?.dataset.split === 'records');
+        const wide = scene === 'tools' || split;
+        if (wide ? metrics.contentWidth > 1152 : metrics.contentWidth > 721) report.qualityFailures.push({ scene, width: size.width, check: scene === 'tools' ? 'calendarMaximum1152' : wide ? 'recordsSplitMaximum1152' : 'contentMaximum720', details: metrics.contentWidth });
+        if (split) {
+          const reader = await page.evaluate(() => { const node = document.querySelector('#lifeMain .records-reader-pane > .life-reader'); return node ? Math.round(node.getBoundingClientRect().width) : null; });
+          if (reader !== null && reader > 721) report.qualityFailures.push({ scene, width: size.width, check: 'recordsReaderMaximum720', details: reader });
+        }
       }
     }
   }
