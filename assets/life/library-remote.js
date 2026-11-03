@@ -56,12 +56,15 @@
         (auth.getAccount?.()?.userId || auth.user?.id) === owner && (!auth.getAccount || auth.getAccount()?.projectUrl === project), 'request_cancelled');
     }
     function context() { alive(); const value = { authEpoch: auth.epoch }; alive(value); return value; }
-    async function authorize(ctx) {
-      alive(ctx); const result = await client.auth.getUser(); alive(ctx);
+    async function authorize(ctx, read = false) {
+      alive(ctx); const result = await (read && client.auth.getStartupUser ? client.auth.getStartupUser() : client.auth.getUser()); alive(ctx);
       check(!result.error && result.data?.user?.id === owner, 'auth_required');
     }
+    // Reads may reuse the page opening's finished check. Writes, and life_library_open (it can create the
+    // account's first library), always check with Auth.
+    const READS = new Set(['life_library_capabilities', 'life_library_catalog', 'life_library_meta_get']);
     async function rpc(ctx, name, params) {
-      await authorize(ctx); const result = await client.rpc(name, params); alive(ctx);
+      await authorize(ctx, READS.has(name)); const result = await client.rpc(name, params); alive(ctx);
       if (result.error) throw result.error;
       return result.data;
     }

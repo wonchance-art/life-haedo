@@ -50,7 +50,8 @@
       if (disposed || auth.epoch !== authEpoch || !same(auth.getAccount?.()) || auth.user?.id !== owner.userId) throw fault('request_cancelled');
     }
     async function step(action) { guard(); const result = await action(); guard(); return result; }
-    async function verify() { const user = await step(() => auth.verify()); if (user?.id !== owner.userId) throw fault('auth_required'); }
+    // May reuse the page opening's finished server check (platform-auth beginStartup).
+    async function verify() { const user = await step(() => auth.verify({ startup: true })); if (user?.id !== owner.userId) throw fault('auth_required'); }
     function emit(type = 'state', workspaceId) {
       if (disposed) return;
       const event = { type, ...(workspaceId ? { workspaceId } : {}) };

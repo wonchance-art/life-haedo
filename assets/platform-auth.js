@@ -64,6 +64,8 @@
     const ready = validConfig(input, location.hostname) && typeof sdkFactory === 'function';
     const config = ready ? Object.freeze({ url: new URL(input.url).origin, key: input.key }) : null;
     let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null, parked = false;
+    // The page's opening (see beginStartup); null outside it.
+    let startupScope = null;
     // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
     // A verification scope never reuses a result from an earlier generation.
     let authGeneration = 0;
@@ -132,7 +134,14 @@
       pendingUser = pending;
       return pending.promise;
     }
-    async function verify() {
+    // verify({ startup: true }) may reuse a server check finished during the
+    // page's opening (beginStartup), under the same conditions as a W4 scope.
+    // Without that option, or outside the opening, it always contacts Auth.
+    async function verify(options) {
+      if (options?.startup === true && startupScope && !startupScope.ended) return startupScope.verify();
+      return serverVerify();
+    }
+    async function serverVerify() {
       if (!client || blocked()) return null;
       // A page in the back/forward cache starts no account check. The document
       // becomes visible before pageshow; a check begun then would be shared by
@@ -168,27 +177,49 @@
     // back/forward cache. There is no time window. Anything else, an ended
     // scope, a null or failed check, and fresh: true all run verify() as before,
     // so its errors, retries and late-response guards are unchanged.
-    function verificationScope() {
-      const opened = epoch; let ended = false, record = null;
+    // The page's opening (2026-11-03, first screen delay): shell verification,
+    // the foreground account bootstrap and the first mount are one unit of work.
+    // Opt-in reads (verify({ startup: true }) and a scope's first check) reuse
+    // its finished server check under the W4 conditions above; writes and
+    // fresh: true checks keep contacting Auth. The shell ends it once the
+    // screen is shown or the opening fails; a new opening starts empty.
+    function beginStartup() {
+      startupScope?.end();
+      const scope = makeScope(() => serverVerify());
+      startupScope = scope;
+      return Object.freeze({ end() { scope.end(); if (startupScope === scope) startupScope = null; } });
+    }
+    // A scope's first (non-fresh) check may use the page opening's finished check.
+    function verificationScope() { return makeScope(options => verify(options?.fresh ? undefined : { startup: true })); }
+    function makeScope(server) {
+      const opened = epoch; let ended = false, record = null, running = null, carried = null;
       const reusable = () => !!record && !ended && !closed && !parked && !blocked() && opened === epoch &&
         record.generation === authGeneration && user?.id === record.uid;
       async function check(options = {}) {
+        // A check begun earlier in this scope is awaited first (single flight), then judged like any finished one.
+        if (!options.fresh && running) await running.catch(() => {});
         if (!options.fresh && reusable()) {
           const current = await client.auth.getSession(), stored = current?.data?.session;
           if (!current.error && reusable() && typeof stored?.access_token === 'string' && stored.access_token === record.token && stored.user?.id === record.uid) return user;
         }
         record = null;
         const generation = authGeneration;
-        const verified = await verify();
-        const token = session?.access_token;
-        if (verified && !ended && !parked && opened === epoch && generation === authGeneration && user === verified &&
-            typeof token === 'string' && token && session.user?.id === verified.id) record = { uid: verified.id, token, generation };
-        return verified;
+        const run = (async () => {
+          const verified = await server(options);
+          const token = session?.access_token, kept = carried?.from === generation ? carried.to : generation;
+          if (verified && !ended && !parked && opened === epoch && kept === authGeneration && user === verified &&
+              typeof token === 'string' && token && session.user?.id === verified.id) record = { uid: verified.id, token, generation: kept };
+          return verified;
+        })();
+        if (!options.fresh) running = run;
+        try { return await run; } finally { if (running === run) running = null; }
       }
-      return Object.freeze({ verify: check, end() { ended = true; record = null; }, get ended() { return ended; } });
+      // Only the page opening uses carry: the document's own first pageshow (see pageshow).
+      function carry(from, to) { carried = { from, to }; if (record?.generation === from) record.generation = to; }
+      return Object.freeze({ verify: check, carry, end() { ended = true; record = null; running = null; }, get ended() { return ended; } });
     }
-    async function requireUser() {
-      const verified = await verify();
+    async function requireUser(options) {
+      const verified = await verify(options);
       if (!verified) location.replace?.('login.html?next=' + encodeURIComponent(safeNext(location.pathname?.split('/').pop() + (location.search || ''))));
       return verified;
     }
@@ -275,8 +306,15 @@
       if (value.key === null || value.key === LOGOUT_KEY || value.key?.startsWith(SESSION_KEY)) authGeneration++;
       if (value.key === LOGOUT_KEY && value.newValue === '1') invalidate();
     };
+    let shown = false;
     const pageshow = async value => {
+      const before = authGeneration;
       parked = false; authGeneration++;
+      // The document's first pageshow (not from the back/forward cache) follows no
+      // hidden period. W4 scopes still drop their results; the page opening keeps a
+      // check that no other boundary followed (an Auth event in between still discards it).
+      if (!value?.persisted && !shown) startupScope?.carry(before, authGeneration);
+      shown = true;
       if (!value.persisted || !hasPrivateSurface()) return;
       // A workspace owns its unsaved editor and verifies the resumed account
       // before revealing it. Let that owner handle one verification, rather than
@@ -300,7 +338,7 @@
     env.addEventListener?.('pagehide', pagehide); env.addEventListener?.('pageshow', pageshow); env.addEventListener?.('storage', storageChange);
     // Let SDK PKCE initialization read the callback first, then scrub success and failure URLs.
     if (client) client.auth.getSession().then(scrubCallback, scrubCallback); else scrubCallback();
-    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, requireUser, login, signOut, request,
+    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, beginStartup, requireUser, login, signOut, request,
       get user() { return blocked() ? null : user; }, get session() { return blocked() ? null : session; }, get epoch() { return epoch; },
       getAccount: account, getClient: () => client,
       onAccountChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },

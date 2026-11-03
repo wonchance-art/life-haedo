@@ -618,3 +618,79 @@ test('W4 actual bundled SDK: one user HTTP request per scope, read against the r
     scope.end(); await scope.verify(); assert.equal(paths.length, 4);
   } finally { auth.dispose(); }
 });
+
+// 2026-11-03 page opening (beginStartup): the shell check, the foreground
+// account bootstrap and the first mount share one finished server check.
+// Only opt-in reads use it; it follows the W4 conditions and a new opening starts empty.
+test('opening: opt-in reads share one server check; plain, fresh and ended calls still contact Auth', async () => {
+  const { auth, state } = setup();
+  const opening = auth.beginStartup();
+  assert.equal((await auth.verify({ startup: true })).id, A.id); assert.equal(serverChecks(state), 1);
+  assert.equal((await auth.requireUser({ startup: true })).id, A.id); assert.equal((await auth.verify({ startup: true })).id, A.id);
+  assert.equal(serverChecks(state), 1, 'bootstrap and remote reads reuse the opening check');
+  const scope = auth.verificationScope(); await scope.verify(); assert.equal(serverChecks(state), 1, 'a sync operation starts from the opening check');
+  await scope.verify({ fresh: true }); assert.equal(serverChecks(state), 2, 'a snapshot write still checks with Auth');
+  await auth.verify(); assert.equal(serverChecks(state), 3, 'a call without the option is never shared');
+  opening.end();
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 4, 'after the opening every call checks');
+  const next = auth.beginStartup();
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 5, 'a new opening starts without a result');
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 5);
+  next.end(); auth.dispose();
+});
+
+test('opening: an account switch, sign-out, token change, Auth event or page hide never reuses the earlier check', async () => {
+  const { auth, state, sdkListeners, pageHandlers } = setup();
+  const opening = auth.beginStartup();
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  state.change(B);
+  assert.equal((await auth.verify({ startup: true })).id, B.id, 'the switched account is checked, not the earlier result'); assert.equal(serverChecks(state), 2);
+  state.records.set(SESSION_KEY, JSON.stringify({ user: B, access_token: 'synthetic-rotated' }));
+  assert.equal((await auth.verify({ startup: true })).id, B.id); assert.equal(serverChecks(state), 3, 'a new access token is checked');
+  for (const listener of [...sdkListeners]) listener('TOKEN_REFRESHED', { user: B, access_token: 'synthetic-rotated' });
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 4, 'a token refresh event is checked');
+  pageHandlers.get('pagehide')({ persisted: false });
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 5, 'a page boundary is checked');
+  state.change(null);
+  assert.equal(await auth.verify({ startup: true }), null); assert.equal(auth.getAccount(), null);
+  state.change(A); state.records.set(LOGOUT_KEY, '1');
+  assert.equal(await auth.verify({ startup: true }), null, 'a logout marker blocks reuse');
+  opening.end(); auth.dispose();
+});
+
+test('opening: only the document\'s first pageshow keeps the opening check; an Auth event before it, or a resumed page, does not', async () => {
+  const { auth, state, pageHandlers } = setup();
+  const opening = auth.beginStartup();
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  await pageHandlers.get('pageshow')({ persisted: false });
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1, 'the first show of this document is not a hidden period');
+  const scope = auth.verificationScope(); await scope.verify(); assert.equal(serverChecks(state), 1);
+  pageHandlers.get('pagehide')({ persisted: true }); await pageHandlers.get('pageshow')({ persisted: true });
+  const resumed = serverChecks(state); // the resumed private page verifies itself
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), resumed + 1, 'a page resumed from the back/forward cache checks again');
+  opening.end();
+  const { auth: other, state: otherState, sdkListeners: otherListeners, pageHandlers: otherHandlers } = setup();
+  const second = other.beginStartup();
+  await other.verify({ startup: true });
+  for (const listener of [...otherListeners]) listener('TOKEN_REFRESHED', { user: A, access_token: 'synthetic-a' });
+  await otherHandlers.get('pageshow')({ persisted: false });
+  await other.verify({ startup: true }); assert.equal(serverChecks(otherState), 2, 'an Auth event before the first pageshow is not carried over');
+  second.end(); other.dispose(); auth.dispose();
+});
+
+test('opening: overlapping opt-in calls make one request, and a late result for the previous account is not used', async () => {
+  const { auth, state } = setup();
+  const opening = auth.beginStartup(), waiting = deferred(); state.userPromise = waiting.promise;
+  const calls = Array.from({ length: 4 }, () => auth.verify({ startup: true })); await tick();
+  waiting.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  assert.deepEqual((await Promise.all(calls)).map(user => user.id), [A.id, A.id, A.id, A.id]); assert.equal(serverChecks(state), 1);
+  opening.end();
+  const second = auth.beginStartup(), late = deferred(); state.userPromise = late.promise;
+  const pending = auth.verify({ startup: true }); await tick();
+  state.change(B); state.userPromise = null;
+  late.resolve({ data: { user: A }, error: null });
+  await assert.rejects(pending, errorCode('request_cancelled'));
+  const before = serverChecks(state);
+  assert.equal((await auth.verify({ startup: true })).id, B.id); assert.equal(serverChecks(state), before + 1, 'the new account gets its own check');
+  second.end(); auth.dispose();
+});
