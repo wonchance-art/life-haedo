@@ -155,6 +155,9 @@ jobs:
       - name: Verify the structure baseline of loaded globals across signed-out and signed-in pages
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/structure-baseline-browser.cjs
+      - name: Verify a page without the shared sync module keeps its body and holds unsent posts with a refresh notice
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/sync-common-mixed-browser.cjs
       - name: Verify private collection storage and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-library-browser.cjs
