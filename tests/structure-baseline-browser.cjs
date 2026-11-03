@@ -180,6 +180,7 @@ const PINNED = {
     "Remote",
     "ScheduleData",
     "ScheduleUI",
+    "SettingsUI",
     "Share",
     "ShareRemote",
     "ShareView",
