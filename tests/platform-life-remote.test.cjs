@@ -169,6 +169,17 @@ test("W4 a borrowed scope verifies through one platform scope, keeps the account
   assert.throws(() => s.client.auth.scope(), { code: "request_cancelled" });
 });
 
+test("page opening: only getStartupUser asks for the opening's shared check; getUser and late answers keep their guards", async () => {
+  const s = setup(), seen = [];
+  s.auth.verify = async options => { seen.push(options ?? null); return s.auth.user; };
+  await s.client.auth.getUser(); await s.client.auth.getStartupUser();
+  assert.deepEqual(seen, [null, { startup: true }]);
+  let finish; s.auth.verify = () => new Promise(resolve => { finish = resolve; });
+  const late = s.client.auth.getStartupUser(); s.change({ id: "B" }); finish({ id: "A" });
+  await assert.rejects(late, { code: "request_cancelled" });
+  s.client.auth.dispose();
+});
+
 test("platform account notifications are verified and all borrowed subscriptions are removed", () => {
   const s = setup(), accountListeners = new Set(), events = [];
   s.auth.onAccountChange = listener => { accountListeners.add(listener); return () => accountListeners.delete(listener); };

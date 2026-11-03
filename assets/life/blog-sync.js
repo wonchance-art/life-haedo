@@ -37,7 +37,7 @@
   }
   function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
     photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
-    makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2,
+    makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2, receiveConcurrency = 4, downloadConcurrency = 6,
     now = () => Date.now(), timers = root, locks = root.navigator?.locks, events = root } = {}) {
     const cleaner = root.HaedoLife?.BlogRemote?.clean || (error => error);
     const fault = code => cleaner({ code });
@@ -60,7 +60,8 @@
     // The one network account check at the start of a transfer or cycle. Each
     // request afterwards re-checks identity synchronously (BlogRemote guard),
     // and BlogRemote verifies once more right before a durable commit.
-    async function verified(c) { guard(c); const user = await auth.verify(); guard(c); if (user?.id !== owner.userId) throw fault('auth_required'); }
+    // startup: the receive cycle may reuse the page opening's finished check; its writes check again in BlogRemote.
+    async function verified(c, startup = false) { guard(c); const user = await auth.verify(startup ? { startup: true } : undefined); guard(c); if (user?.id !== owner.userId) throw fault('auth_required'); }
     function publish$(event) { if (!disposed) for (const listener of listeners) { try { listener(event); } catch (_) {} } }
     const emit = (ws, id) => publish$({ workspaceId: ws, localPostId: id });
     function serial(ws, id, action) {
@@ -114,14 +115,24 @@
     }
     // Downloads every original (and HEIC view) of an exact server row, then
     // verifies type signatures, digests and the view pairing through Blog.hydrate.
+    // Files of all receiving posts share one bounded set of transfers (2026-11-03:
+    // one file after another made a new device wait about 16 s for 20 rows).
+    let transfers = 0; const waitingTransfers = [];
+    async function transfer(asset) {
+      while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
+      transfers++;
+      try { return await remote.downloadAsset(asset); }
+      finally { transfers--; waitingTransfers.shift()?.(); }
+    }
     async function download(c, row) {
       const files = new Map();
-      for (const photo of row.data.photos) {
+      // Every original and view is still downloaded and checked; only their order is concurrent.
+      await Promise.all(row.data.photos.map(async photo => {
         const asset = row.assets[photo.id];
-        const blob = typed(await remote.downloadAsset({ bucket: asset.bucket, path: asset.path }), photo); guard(c);
-        const view = photo.view ? typed(await remote.downloadAsset(asset.view), photo.view) : undefined; guard(c);
+        const [original, viewBlob] = await Promise.all([transfer({ bucket: asset.bucket, path: asset.path }), photo.view ? transfer(asset.view) : undefined]); guard(c);
+        const blob = typed(original, photo), view = photo.view ? typed(viewBlob, photo.view) : undefined;
         files.set(photo.id, view ? { blob, view } : { blob });
-      }
+      }));
       try { const doc = await blog.hydrate(row.data, files); guard(c); return doc; }
       catch (error) { guard(c); if (error?.code === 'request_cancelled') throw error; throw fault('invalid_remote_data'); }
     }
@@ -539,9 +550,9 @@
     }
     const backingOff = (ws, id) => (retries.get(key(ws, id))?.until || 0) > now();
     function draftWaiting(post) { const due = draftDue.get(post.id); return due && due > now() || Date.parse(post.updatedAt) > now() - DRAFT_DELAY; }
-    async function pool(tasks) {
+    async function pool(tasks, limit = concurrency) {
       let next = 0;
-      await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+      await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, async () => {
         while (next < tasks.length) { const task = tasks[next++]; try { await task(); } catch (_) { /* Recorded per post; retried later. */ } }
       }));
     }
@@ -550,7 +561,7 @@
       summary.running = true; publish$({ type: 'status', status: getStatus() });
       let rows = null;
       try {
-        await verified(c);
+        await verified(c, true);
         const libraries = await storage.listAccountLibraries(); guard(c);
         const owned = libraries.map(item => item.workspaceId), eligible = libraries.filter(item => item.eligible !== false).map(item => item.workspaceId);
         let local = await snapshot(c, owned);
@@ -603,7 +614,8 @@
             return fallback || null;
           };
           const tasks = [];
-          rows.sort((a, b) => Number(a.status === 'draft') - Number(b.status === 'draft'));
+          // Saved posts first, then the most recently written: the rows the list shows first arrive first.
+          rows.sort((a, b) => Number(a.status === 'draft') - Number(b.status === 'draft') || Date.parse(b.document_updated_at) - Date.parse(a.document_updated_at));
           for (const row of rows) {
             if (deleted.has(row.id)) continue;
             const entry = local.byRemote.get(row.id);
@@ -617,7 +629,7 @@
           for (const [remoteId, entry] of local.byRemote) {
             if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) tasks.push(() => vanish(entry.ws, entry.localPostId, remoteId));
           }
-          await pool(tasks);
+          await pool(tasks, receiveConcurrency);
         }
         summary.lastSyncAt = new Date(now()).toISOString(); summary.lastError = null;
       } catch (error) {
