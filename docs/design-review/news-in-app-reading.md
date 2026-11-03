@@ -9,7 +9,7 @@
   - `allow-popups`만 두고 `allow-popups-to-escape-sandbox`는 뺐다. 출판사 링크로 연 새 창도 같은 샌드박스를 이어받는다.
   - 최상위 이동·양식 제출·대화상자는 허용하지 않는다.
   - **제3자 스크립트:** 출판사 페이지가 불러오는 광고·분석·소셜 위젯 스크립트도 그 틀 안에서 돈다. 해도는 그 스크립트를 고르거나 막지 않는다.
-  - **CSP `frame-src`의 역할:** `index.html`·`life.html`의 `<meta http-equiv="Content-Security-Policy" content="frame-src …">`는 해도 문서에 있는 틀의 목적지를 제한한다. 허용 목록 밖 출처를 띄우는 실수를 막고, 허용된 출판사 틀이 스스로 허용 밖 호스트로 이동하려 할 때도 막는다(재검수 실측: 요청 0, 틀은 오류 화면). 그래서 YouTube나 출판사 틀이 다른 호스트로 리다이렉트하면 빈 틀이 된다(2026-11-03 실제 두 출판사는 iPhone UA에서도 리다이렉트 없음). `data:` 틀도 막히며, 저장소에는 `data:` 틀 사용처가 없다. 출판사 페이지 안의 하위 틀(예: Facebook 위젯)은 그 출판사 문서의 정책을 따르고, 해도의 `frame-src`와 무관하다.
+  - **CSP `frame-src`의 역할:** `index.html`·`life.html`의 `<meta http-equiv="Content-Security-Policy" content="frame-src …">`는 해도 문서에 있는 틀의 목적지를 제한한다. 이 meta는 HTML에 쓰지 않고 `assets/life/shell.js`가 화면을 열기 전에 `head`에 넣는다(아래 「HTML에 쓰지 않는 이유」). 허용 목록 밖 출처를 띄우는 실수를 막고, 허용된 출판사 틀이 스스로 허용 밖 호스트로 이동하려 할 때도 막는다(재검수 실측: 요청 0, 틀은 오류 화면). 그래서 YouTube나 출판사 틀이 다른 호스트로 리다이렉트하면 빈 틀이 된다(2026-11-03 실제 두 출판사는 iPhone UA에서도 리다이렉트 없음). `data:` 틀도 막히며, 저장소에는 `data:` 틀 사용처가 없다. 출판사 페이지 안의 하위 틀(예: Facebook 위젯)은 그 출판사 문서의 정책을 따르고, 해도의 `frame-src`와 무관하다.
   - **출판사에 보이는 것:** `referrerpolicy="no-referrer"`로 Referer는 보내지 않는다. 그래도 Chromium·Safari에서는 틀 안의 `location.ancestorOrigins`로 해도 앱의 출처(예: `https://<배포 주소>`)가 출판사 스크립트에 보인다. 읽는 글의 주소는 새 탭으로 열 때와 같이 출판사에 전달된다. 개인 자료·검색어·관심 주제는 틀에 넘기지 않는다.
 - **`allow-same-origin` 실험 (2026-11-03, 이 세션의 프록시를 거친 실제 주소, Chromium 1243):** 같은 페이지를 두 sandbox로 띄워 비교했다.
 
@@ -37,6 +37,17 @@
 | `blog.html`·`share.html`·`series.html`·`cover.html`·`taste.html` | 각자 기존 CSP를 쓰고 이번에 바꾸지 않았다 | – |
 
 로컬 Chromium 실측(합성 응답): srcdoc·blob·YouTube·두 출판사 틀은 열렸고, 허용 밖 `news.seoul.go.kr`은 `frame-src` 위반으로 막혔다.
+
+### HTML에 쓰지 않는 이유 (2026-11-03 첫 화면 지연)
+
+- **원인:** `haedo-v180`에서 `index.html`·`life.html`의 `head`에 CSP meta를 쓰자 Chromium 1243의 미리 읽기(preload scanner)가 그 뒤의 스크립트를 미리 받지 않았다. 스크립트 약 180개를 파서가 하나씩 만나서 받았다.
+- **실측(로그인 전 `index.html`, Playwright 경로 지연):**
+  - 정적 응답 지연 0ms: DOMContentLoaded 0.5초 → 1.0~1.2초. 마지막 스크립트 요청 시작이 39ms → 1040ms.
+  - 요청당 40ms: 0.59초 → 7.6초.
+  - meta만 빼거나 같은 정책을 HTTP 헤더로 보내면 v179와 같아진다.
+- **지금 방식:** `shell.js`가 처음 실행될 때 같은 정책의 meta를 `head`에 넣는다. 틀은 모두 그 뒤 화면 코드가 만든다. HTML 명세상 `head`에 넣은 meta도 적용된다. 로컬 Chromium에서 넣은 meta도 허용 밖 틀을 `frame-src` 위반으로 막았다.
+- **미검증:** Safari(WebKit)의 미리 읽기 동작과, 넣은 meta가 막는지는 실제 기기에서 확인하지 않았다.
+- **바꿀 조건:** 배포처가 응답 헤더를 지원하면 정책을 헤더로 옮긴다.
 
 ## 확인 결과 (2026-11-03)
 
