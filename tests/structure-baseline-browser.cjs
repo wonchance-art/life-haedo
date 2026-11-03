@@ -173,6 +173,7 @@ const PINNED = {
     "PublicCoverUI",
     "PublicCoverView",
     "ReadingPosition",
+    "RecordsList",
     "Rediscovery",
     "Reflection",
     "ReflectionLenses",
