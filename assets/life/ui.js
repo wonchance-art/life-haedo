@@ -5445,6 +5445,7 @@
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       fullBackupUI?.dispose(); fullBackupUI = null;
+      settingsUI?.dispose(); settingsUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       homeRenderPromise = Promise.resolve();
@@ -5707,6 +5708,7 @@
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       fullBackupUI?.dispose(); fullBackupUI = null; backupOriginals?.dispose(); backupOriginals = null;
+      settingsUI?.dispose(); settingsUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       compositionSync?.dispose();

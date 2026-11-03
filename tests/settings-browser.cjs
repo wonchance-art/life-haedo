@@ -10,7 +10,7 @@ const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
 const out = path.resolve('.local/settings-browser');
-const report = { createdAt: new Date().toISOString(), scope: 'Actual SDK/IndexedDB with intercepted anonymous Auth; Chromium widths, not Apple devices', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Actual SDK/IndexedDB with intercepted anonymous Auth; Chromium widths, not Apple devices', checks: [], visual: [], consoleErrors: [], pageErrors: [] };
 const ITEMS = ['계정', '자료공간', '뉴스', '일정', '백업', '공개 페이지', '단축키'];
 
 async function mode(page, value) { await page.locator('#lifeMain[data-mode="' + value + '"]').waitFor(); await settle(page); }
@@ -88,12 +88,30 @@ async function main() {
       assert.equal(new URL(page.url()).hash, '#settings-backup');
       assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '백업');
       assert.equal(await activeId(page), 'settings-heading-backup');
-      const top = await page.locator('#settings-backup').evaluate(el => el.getBoundingClientRect().top);
-      assert(top >= 0 && top < 200, 'selected item is brought to the top: ' + top);
+      // The item starts just below the fixed header: html scroll-padding-top plus the section's scroll-margin-top.
+      const place = await page.locator('#settings-backup').evaluate(el => ({ top: el.getBoundingClientRect().top, header: document.querySelector('.life-header').getBoundingClientRect().bottom,
+        expected: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + parseFloat(getComputedStyle(el).scrollMarginTop) }));
+      assert(Math.abs(place.top - place.expected) <= 1 && place.top >= place.header, 'selected item is brought to the top: ' + JSON.stringify(place));
       // Keyboard: Tab to the item, Enter.
       await page.locator('.settings-index-link', { hasText: '단축키' }).focus(); await page.keyboard.press('Enter');
       assert.equal(new URL(page.url()).hash, '#settings-keys'); assert.equal(await activeId(page), 'settings-heading-keys');
       assert.deepEqual(await page.evaluate(() => ({ length: history.length, key: history.state?.haedo?.key })), before, 'item moves replace the address; the app entry is kept');
+      // Scrolling by hand moves the current item and the address with it; focus stays where it was.
+      await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await page.mouse.move(900, 500);
+      await page.mouse.wheel(0, 1); await page.waitForFunction(() => location.hash === '#settings-account');
+      const schedule = await page.locator('#settings-schedule').evaluate(el => el.getBoundingClientRect().top + scrollY - parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) - 8);
+      await page.mouse.wheel(0, schedule - 1);
+      await page.waitForFunction(() => location.hash === '#settings-schedule' && document.querySelector('.settings-index-link[aria-current]')?.textContent === '일정');
+      assert.equal(await activeId(page), 'settings-heading-keys', 'scrolling never moves focus');
+      await page.mouse.wheel(0, 4000);
+      await page.waitForFunction(() => location.hash === '#settings-keys' && document.querySelector('.settings-index-link[aria-current]')?.textContent === '단축키');
+      assert.deepEqual(await page.evaluate(() => ({ length: history.length, key: history.state?.haedo?.key })), before, 'scroll following replaces the address only');
+      // Names are the item; the current value is the description.
+      const described = selector => page.locator(selector).evaluate(el => (el.getAttribute('aria-describedby') || '').split(' ').map(id => document.getElementById(id)?.textContent || '').join(' '));
+      assert.equal(await page.getByRole('button', { name: '계정', exact: true }).getAttribute('id'), 'lifeSettingsAccount');
+      assert.match(await described('#lifeSettingsAccount'), /device-a@example\.invalid/);
+      assert.match(await described('[data-focus-key="manage:news-settings"]'), /전체 언어/);
+      assert.match(await described('#lifeCurrentWorkspace'), /내 자료.*이 브라우저 · 자료 0개.*다른 작업공간을 선택/);
       // Reload and direct addresses open the named item.
       await page.reload(); await ready(page); await mode(page, 'manage');
       assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '단축키'); assert.equal(await activeId(page), 'settings-heading-keys');
@@ -117,6 +135,15 @@ async function main() {
       // 공개한 페이지 reads the owner's list; this anonymous simulator answers with an empty one.
       await context.route('**/rest/v1/rpc/life_public_page_list', route => route.request().method() === 'OPTIONS' ? route.fallback()
         : route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ pages: [], nextCursor: null }) }));
+      // Direct entries on the narrow layout focus a visible place: the joined items' first row; 단축키 (wide only) opens the plain list.
+      for (const [hash, focusKey] of [['#settings-public', 'manage:public-cover'], ['#settings-workspace', 'manage:workspace'], ['#settings-news', null]]) {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage' + hash); await ready(page); await mode(page, 'manage');
+        await page.waitForFunction(key => { const el = document.activeElement, box = el?.getBoundingClientRect(); return el && box.width > 40 && box.height >= (key ? 44 : 16) && box.top >= 0 && box.bottom <= innerHeight &&
+          (key ? el.dataset.focusKey === key : el.id === 'settings-heading-news'); }, focusKey);
+      }
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#settings-keys'); await ready(page); await mode(page, 'manage');
+      await page.waitForTimeout(100);
+      assert.equal(await page.evaluate(() => scrollY), 0); assert.doesNotMatch(await activeId(page), /^settings-heading-keys$/);
       await openSettings(page);
       // 백업·복원: in-app back, browser back and forward.
       await page.locator('#lifeBackupOpen').tap(); await mode(page, 'backup');
@@ -171,7 +198,7 @@ async function main() {
       await page.locator('[data-haedo-navigation] [data-haedo-compose]:visible').first().click(); await page.locator('.ql-editor').waitFor();
       await failPostWrites(page); await page.locator('.ql-editor').fill('설정으로 옮기기 전에 남아야 하는 문장');
       await page.locator('.photo-status[role="alert"]').waitFor();
-      await page.evaluate(() => document.querySelector('[data-haedo-navigation] [data-haedo-section="manage"]').click());
+      await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click();
       await page.locator('#lifeError:not([hidden])').waitFor();
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '설정으로 옮기기 전에 남아야 하는 문장');
       assert.equal(await page.locator('#lifeSettings').count(), 0);

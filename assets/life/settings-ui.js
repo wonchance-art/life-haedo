@@ -47,15 +47,19 @@
   function readAge(storage) { try { return storage?.getItem(AGE_KEY) === 'kr' ? 'kr' : 'intl'; } catch (_) { return 'intl'; } }
 
   // 행 하나: 이름(+보조 줄) · 현재 값 · 화살표. onClick은 호출하는 쪽의 보호(guarded)를 거친 처리다.
+  // 접근 가능한 이름은 항목 이름(ariaLabel)이고, 현재 값·보조 줄·설명은 aria-describedby로 읽힌다.
+  let rowSequence = 0;
   function row({ label, ariaLabel, sub, value, valueId, onClick, id, focusKey, description }) {
     const control = node('button', null, 'life-destination life-action-row settings-row'); control.type = 'button';
+    const key = 'lifeSettingsRow' + (++rowSequence), described = [];
     if (ariaLabel) control.setAttribute('aria-label', ariaLabel);
-    if (description) control.setAttribute('aria-description', description);
     if (id) control.id = id;
     if (focusKey) control.dataset.focusKey = focusKey;
-    const shown = node('span', value ?? '', 'life-meta settings-row-value'); if (valueId) shown.id = valueId;
+    const shown = node('span', value ?? '', 'life-meta settings-row-value'); shown.id = valueId || key + 'Value'; described.push(shown.id);
     control.append(node('strong', label, 'settings-row-label'), shown);
-    if (sub !== undefined && sub !== null) control.append(node('span', sub, 'life-meta settings-row-sub'));
+    if (sub !== undefined && sub !== null) { const line = node('span', sub, 'life-meta settings-row-sub'); line.id = key + 'Sub'; described.push(line.id); control.append(line); }
+    if (description) { const extra = node('span', description); extra.id = key + 'Description'; extra.hidden = true; described.push(extra.id); control.append(extra); }
+    control.setAttribute('aria-describedby', described.join(' '));
     control.append(glyph('chevron'));
     if (onClick) control.addEventListener('click', onClick);
     return control;
@@ -123,7 +127,7 @@
       const email = account?.email || '';
       if (panel) {
         // 로그아웃은 기존 계정 메뉴(#lifeAccount) 한 곳에서 한다. 이 행은 그 메뉴를 연다.
-        const control = row({ label: '로그인', value: email || '내 계정', ariaLabel: '로그인 · 계정 메뉴 열기', id: 'lifeSettingsAccount', focusKey: 'manage:account',
+        const control = row({ label: '계정', value: email || '내 계정', sub: 'Google 로그인', ariaLabel: '계정', id: 'lifeSettingsAccount', focusKey: 'manage:account',
           onClick: () => {
             if (disposed) return;
             panel.open = true;
@@ -250,8 +254,11 @@
     syncSchedule();
 
     // ---------- 하위 항목: 해시와 현재 항목 ----------
+    let current = null;
+    const shown = box => box.getClientRects().length > 0;
     function mark(id) {
       if (!sections.has(id)) id = sections.keys().next().value;
+      current = id;
       for (const [key, link] of links) { if (key === id) link.setAttribute('aria-current', 'true'); else link.removeAttribute('aria-current'); }
     }
     function writeHash(id) {
@@ -261,27 +268,69 @@
         if (url.href !== root.location.href) root.history.replaceState(root.history.state, '', url.pathname + url.search + url.hash);
       } catch (_) { /* 주소를 못 바꿔도 항목 이동은 유지한다. */ }
     }
+    // 초점 자리: 보이는 제목. 좁은 칸에서 묶음에 이어 붙인 항목(자료공간·공개 페이지)은 제목을 숨기므로 첫 행에 둔다.
+    function focusTarget(box) {
+      const heading = box.querySelector('.settings-heading');
+      if (heading && heading.getBoundingClientRect().width > 1) return heading;
+      return [...box.querySelectorAll('.settings-card button, .settings-card select, .settings-card input, .settings-card a[href]')].find(shown) || heading;
+    }
     function select(id, { focus = false, scroll = false, write: shouldWrite = false } = {}) {
-      if (disposed || !sections.has(id)) return false;
-      mark(id);
-      const box = sections.get(id), heading = box.querySelector('.settings-heading');
+      // 지금 칸에 없는 항목(좁은 칸의 단축키)은 고르지 않는다. 설정 첫 화면 그대로 연다.
+      if (disposed || !sections.has(id) || !shown(sections.get(id))) return false;
+      mark(id); pinned = id;
+      const box = sections.get(id);
       if (scroll) box.scrollIntoView({ block: 'start', behavior: 'instant' });
-      if (focus) heading.focus({ preventScroll: true });
+      if (focus) focusTarget(box)?.focus({ preventScroll: true });
       if (shouldWrite) writeHash(id);
       return true;
     }
+
+    // 넓은 칸에서 직접 스크롤하면 현재 표시와 해시가 따라간다(초점은 옮기지 않는다).
+    // 항목을 고른 직후의 스크롤(바닥에 닿아 위로 못 올린 항목 포함)은 고른 항목을 유지하고, 사용자가 다시 스크롤하면 따라간다.
+    let pinned = null, spyFrame = 0, atBottom = false, observer = null;
+    const sentinel = node('div', null, 'settings-end'); sentinel.setAttribute('aria-hidden', 'true'); element.append(sentinel);
+    function line() {
+      const padding = parseFloat(getComputedStyle(root.document.documentElement).scrollPaddingTop);
+      return (Number.isFinite(padding) ? padding : 80) + 16;
+    }
+    function spy() {
+      spyFrame = 0;
+      if (disposed || pinned || !element.isConnected || !shown(index)) return;
+      const visible = [...sections].filter(([, box]) => shown(box));
+      if (!visible.length) return;
+      const top = line();
+      let best = visible[0][0];
+      for (const [id, box] of visible) if (box.getBoundingClientRect().top <= top) best = id;
+      if (atBottom) best = visible[visible.length - 1][0];
+      if (best !== current) { mark(best); writeHash(best); }
+    }
+    const schedule = () => { if (!spyFrame && !disposed) spyFrame = root.requestAnimationFrame(spy); };
+    const unpin = () => { pinned = null; };
+    if (root.IntersectionObserver) {
+      // 위쪽 띠(머리글 아래 ~ 화면 가운데)를 지나는 항목이 바뀔 때만 다시 잰다.
+      observer = new root.IntersectionObserver(schedule, { rootMargin: '-96px 0px -50% 0px', threshold: [0, 1] });
+      // 맨 끝 표지는 화면 전체 기준으로 본다(마지막 항목은 위쪽 띠까지 올라오지 못할 수 있다).
+      const bottom = new root.IntersectionObserver(entries => { for (const entry of entries) atBottom = entry.isIntersecting; schedule(); });
+      cleanups.push(() => { observer.disconnect(); bottom.disconnect(); });
+      for (const box of sections.values()) observer.observe(box);
+      bottom.observe(sentinel);
+    }
+    // 사용자의 스크롤 입력만 고정을 푼다(프로그램 스크롤은 풀지 않는다).
+    listen(root, 'wheel', () => { unpin(); schedule(); }, { passive: true });
+    listen(root, 'touchmove', () => { unpin(); schedule(); }, { passive: true });
+    listen(root, 'keydown', event => { if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) { unpin(); schedule(); } });
+
     function mount(host) {
       host.append(element);
       const match = HASH.exec(root.location.hash || '');
       const id = match && sections.has(match[1]) ? match[1] : null;
       // 해시로 들어오면 그 항목으로 옮긴다. 브라우저 뒤로 가기로 돌아올 때는 앱이 위치·초점을 다시 맞춘다.
-      mark(id);
+      mark(null);
       if (!id) return element;
       if (element.getClientRects().length) {
         // 이동을 마친 앱은 화면의 첫 제목에 초점을 둔다. 해시 항목의 초점은 그 뒤에 둔다
         // (뒤로 가기의 초점·위치 복원은 이보다 나중에 등록되므로 그쪽이 이긴다).
-        select(id, { scroll: true });
-        root.requestAnimationFrame(() => { if (!disposed && element.isConnected) sections.get(id)?.querySelector('.settings-heading')?.focus({ preventScroll: true }); });
+        if (select(id, { scroll: true })) root.requestAnimationFrame(() => { if (!disposed && element.isConnected) focusTarget(sections.get(id))?.focus({ preventScroll: true }); });
       } else {
         // 첫 화면은 계정 확인 뒤에 보인다(shell의 haedo:page-ready). 보이기 전에는 옮길 수 없다.
         const ready = () => root.requestAnimationFrame(() => {
@@ -293,6 +342,7 @@
     }
     function dispose() {
       if (disposed) return; disposed = true;
+      if (spyFrame) root.cancelAnimationFrame(spyFrame);
       cleanups.splice(0).forEach(run => { try { run(); } catch (_) {} });
     }
     return Object.freeze({ element, mount, select, dispose, sections: () => [...sections.keys()] });
