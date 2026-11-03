@@ -774,3 +774,15 @@ test('opening: a waiter whose shared check crossed an Auth event checks again in
   assert.equal((await engine).id, A.id); assert.equal(serverChecks(state), 2, 'the event after joining discards the shared answer');
   opening.end(); auth.dispose();
 });
+
+test('opening: the bootstrap joins the shell check that the document\'s first pageshow crossed (warm open: one request)', async () => {
+  const { auth, state, pageHandlers } = setup();
+  const opening = auth.beginStartup(), gate = deferred(); state.userPromise = gate.promise;
+  const shell = auth.verify({ startup: true }); await tick();
+  await pageHandlers.get('pageshow')({ persisted: false });
+  const bootstrap = auth.verify({ startup: true }); await tick();
+  gate.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  assert.equal((await shell).id, A.id); assert.equal((await bootstrap).id, A.id);
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
+  opening.end(); auth.dispose();
+});

@@ -199,6 +199,9 @@
     function verificationScope() { return makeScope(options => verify(options?.fresh ? undefined : { startup: true })); }
     function makeScope(server, deadline = Infinity) {
       const opened = epoch; let ended = false, record = null, running = null, carried = null;
+      // A generation as it stands after the opening's first-pageshow carry (only the opening carries).
+      const carriedTo = generation => carried?.from === generation ? carried.to : generation;
+      const current = generation => carriedTo(generation) === authGeneration;
       const reusable = () => !!record && !ended && !closed && !parked && !blocked() && opened === epoch &&
         record.generation === authGeneration && user?.id === record.uid && now() <= deadline;
       async function check(options = {}) {
@@ -207,9 +210,9 @@
         // Its answer is shared as an in-flight getUser() is (2026-10-24): it is used when nothing about the
         // account changed meanwhile, even if the scope ended while it ran.
         const flight = running;
-        if (!options.fresh && flight && flight.epoch === epoch && flight.generation === authGeneration) {
+        if (!options.fresh && flight && flight.epoch === epoch && current(flight.generation)) {
           let shared = null; try { shared = await flight.promise; } catch (_) { shared = null; }
-          if (shared && !closed && !parked && !blocked() && flight.epoch === epoch && flight.generation === authGeneration && user === shared) return shared;
+          if (shared && !closed && !parked && !blocked() && flight.epoch === epoch && current(flight.generation) && user === shared) return shared;
         }
         if (!options.fresh && reusable()) {
           const current = await client.auth.getSession(), stored = current?.data?.session;
@@ -219,7 +222,7 @@
         const generation = authGeneration;
         const run = (async () => {
           const verified = await server(options);
-          const token = session?.access_token, kept = carried?.from === generation ? carried.to : generation;
+          const token = session?.access_token, kept = carriedTo(generation);
           if (verified && !ended && !parked && opened === epoch && kept === authGeneration && user === verified &&
               typeof token === 'string' && token && session.user?.id === verified.id) record = { uid: verified.id, token, generation: kept };
           return verified;
