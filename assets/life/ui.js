@@ -298,6 +298,12 @@
         })();
         return true;
       },
+      // Material writing could not open (an older page mixed with newer modules): the page shows the
+      // selected-materials page again, so the heading and the next history entry stop naming the task.
+      onMaterialUnavailable: () => {
+        if (disposed || state.mode !== 'page' || !materialWritingTask) return;
+        materialWritingTask = false; materialHistorySeed = null; materialReaderOrigin = null; blogMode = null; renderHeader();
+      },
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
         restorePostReturn(context);
