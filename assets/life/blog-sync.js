@@ -37,7 +37,7 @@
   }
   function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
     photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
-    makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2,
+    makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2, receiveConcurrency = 4, downloadConcurrency = 6, receiveBytes = 160 * 1024 * 1024,
     now = () => Date.now(), timers = root, locks = root.navigator?.locks, events = root } = {}) {
     const cleaner = root.HaedoLife?.BlogRemote?.clean || (error => error);
     const fault = code => cleaner({ code });
@@ -47,6 +47,8 @@
     const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map();
     const holds = new Map(), retries = new Map(), draftDue = new Map();
     let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null, soon = null;
+    // Delay of the next cycle while server posts wait for this device's first library (0: none waiting).
+    let unplacedDelay = 0;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
     let parked = false;
     const removers = [];
@@ -114,14 +116,39 @@
     }
     // Downloads every original (and HEIC view) of an exact server row, then
     // verifies type signatures, digests and the view pairing through Blog.hydrate.
+    // Files of all receiving posts share one bounded set of transfers (2026-11-03:
+    // one file after another made a new device wait about 16 s for 20 rows).
+    let transfers = 0; const waitingTransfers = [];
+    // Bytes of the posts being received, from download until their local commit. A post
+    // waits while others hold more than receiveBytes together (iPhone memory: one post can
+    // hold 20 photos and 256 MB); a single larger post still goes alone.
+    let heldBytes = 0; const waitingBytes = [];
+    async function withBytes(row, task) {
+      const size = row.data.photos.reduce((sum, photo) => sum + photo.size + (photo.view?.size || 0), 0);
+      while (heldBytes > 0 && heldBytes + size > receiveBytes) await new Promise(resolve => waitingBytes.push(resolve));
+      heldBytes += size;
+      try { return await task(); }
+      finally { heldBytes -= size; waitingBytes.splice(0).forEach(resolve => resolve()); }
+    }
+    async function transfer(asset) {
+      while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
+      transfers++;
+      try { return await remote.downloadAsset(asset); }
+      finally { transfers--; waitingTransfers.shift()?.(); }
+    }
     async function download(c, row) {
       const files = new Map();
-      for (const photo of row.data.photos) {
+      // Every original and view is still downloaded and checked; only their order is concurrent.
+      // All of a post's transfers end before it fails, so its byte budget is not given back early.
+      const results = await Promise.allSettled(row.data.photos.map(async photo => {
         const asset = row.assets[photo.id];
-        const blob = typed(await remote.downloadAsset({ bucket: asset.bucket, path: asset.path }), photo); guard(c);
-        const view = photo.view ? typed(await remote.downloadAsset(asset.view), photo.view) : undefined; guard(c);
+        const pair = await Promise.allSettled([transfer({ bucket: asset.bucket, path: asset.path }), photo.view ? transfer(asset.view) : undefined]);
+        const rejected = pair.find(result => result.status === 'rejected'); if (rejected) throw rejected.reason; guard(c);
+        const blob = typed(pair[0].value, photo), view = photo.view ? typed(pair[1].value, photo.view) : undefined;
         files.set(photo.id, view ? { blob, view } : { blob });
-      }
+      }));
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
       try { const doc = await blog.hydrate(row.data, files); guard(c); return doc; }
       catch (error) { guard(c); if (error?.code === 'request_cancelled') throw error; throw fault('invalid_remote_data'); }
     }
@@ -373,20 +400,22 @@
         const c = context(ws, head.id);
         try {
           const row = await remote.read(head.id); guard(c); if (!row) return null;
-          const doc = localDoc(await download(c, row), row.id, 0, ws, byRemote);
-          const binding = synced({ remoteId: row.id, localRevision: 0, publishPending: null, unpublishPending: null }, row);
-          try { await storage.commitBlogSync(ws, { postId: row.id, post: doc, baseRevision: 0, binding, bindingRevision: 0 }, { isCurrent: () => current(c) }); }
-          catch (error) {
-            if (error?.code === 'blog_post_deleted') return null;
-            if (error?.code === 'photo_post_conflict' || error?.code === 'blog_state_conflict') {
-              const existing = await readState(c);
-              if (existing?.remoteId === row.id) return null; // another tab installed it
-              // An unbound local document already uses this identity: decide it as a conflict.
-              if (!existing && error.code === 'photo_post_conflict') { await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null; }
+          return await withBytes(row, async () => {
+            const doc = localDoc(await download(c, row), row.id, 0, ws, byRemote);
+            const binding = synced({ remoteId: row.id, localRevision: 0, publishPending: null, unpublishPending: null }, row);
+            try { await storage.commitBlogSync(ws, { postId: row.id, post: doc, baseRevision: 0, binding, bindingRevision: 0 }, { isCurrent: () => current(c) }); }
+            catch (error) {
+              if (error?.code === 'blog_post_deleted') return null;
+              if (error?.code === 'photo_post_conflict' || error?.code === 'blog_state_conflict') {
+                const existing = await readState(c);
+                if (existing?.remoteId === row.id) return null; // another tab installed it
+                // An unbound local document already uses this identity: decide it as a conflict.
+                if (!existing && error.code === 'photo_post_conflict') { await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null; }
+              }
+              throw error;
             }
-            throw error;
-          }
-          guard(c); emit(ws, row.id); retries.delete(key(ws, row.id)); return row.id;
+            guard(c); emit(ws, row.id); retries.delete(key(ws, row.id)); return row.id;
+          });
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
@@ -403,10 +432,12 @@
           if (held(ws, id)) return null;
           const row = await remote.read(head.id); guard(c);
           if (!row || row.revision === state.remoteRevision) return null;
-          const doc = localDoc(await download(c, row), id, post.revision, ws, byRemote);
-          if (held(ws, id)) return null; // an editor opened during the download
-          await storage.commitBlogSync(ws, { postId: id, post: doc, baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision }, { isCurrent: () => current(c) });
-          guard(c); emit(ws, id); retries.delete(key(ws, id)); return id;
+          return await withBytes(row, async () => {
+            const doc = localDoc(await download(c, row), id, post.revision, ws, byRemote);
+            if (held(ws, id)) return null; // an editor opened during the download
+            await storage.commitBlogSync(ws, { postId: id, post: doc, baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision }, { isCurrent: () => current(c) });
+            guard(c); emit(ws, id); retries.delete(key(ws, id)); return id;
+          });
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
@@ -539,9 +570,9 @@
     }
     const backingOff = (ws, id) => (retries.get(key(ws, id))?.until || 0) > now();
     function draftWaiting(post) { const due = draftDue.get(post.id); return due && due > now() || Date.parse(post.updatedAt) > now() - DRAFT_DELAY; }
-    async function pool(tasks) {
+    async function pool(tasks, limit = concurrency) {
       let next = 0;
-      await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+      await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, async () => {
         while (next < tasks.length) { const task = tasks[next++]; try { await task(); } catch (_) { /* Recorded per post; retried later. */ } }
       }));
     }
@@ -602,14 +633,16 @@
             if (fallback === null) { const active = await storage.getActive().catch(() => null); fallback = eligible.includes(active) ? active : eligible[0] || ''; }
             return fallback || null;
           };
-          const tasks = [];
-          rows.sort((a, b) => Number(a.status === 'draft') - Number(b.status === 'draft'));
+          const tasks = []; let unplaced = 0;
+          // Saved posts first, then the most recently written: the rows the list shows first arrive first.
+          rows.sort((a, b) => Number(a.status === 'draft') - Number(b.status === 'draft') || Date.parse(b.document_updated_at) - Date.parse(a.document_updated_at));
           for (const row of rows) {
             if (deleted.has(row.id)) continue;
             const entry = local.byRemote.get(row.id);
             if (!entry) {
               const ws = await target(row);
-              if (ws && !backingOff(ws, row.id)) tasks.push(() => install(ws, row, local.byRemote));
+              if (!ws) unplaced++;
+              else if (!backingOff(ws, row.id)) tasks.push(() => install(ws, row, local.byRemote));
             } else if (entry.state.remoteRevision !== row.revision) {
               if (!backingOff(entry.ws, entry.localPostId)) tasks.push(() => apply(entry.ws, entry.localPostId, row, local.byRemote));
             } else if (canonical(entry.state.publication ?? null) !== canonical(row.publication ?? null)) tasks.push(() => refreshPublication(entry.ws, entry.localPostId, row));
@@ -617,7 +650,12 @@
           for (const [remoteId, entry] of local.byRemote) {
             if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) tasks.push(() => vanish(entry.ws, entry.localPostId, remoteId));
           }
-          await pool(tasks);
+          await pool(tasks, receiveConcurrency);
+          // A new device can list the account's posts before its first library is stored
+          // (2026-11-03 CI: the second browser then waited the whole 30 s interval).
+          // Look again soon, backing off up to the interval while none is there.
+          unplacedDelay = unplaced ? Math.min(unplacedDelay ? unplacedDelay * 2 : 500, interval) : 0;
+          if (unplacedDelay) soon = Math.min(soon ?? unplacedDelay, unplacedDelay);
         }
         summary.lastSyncAt = new Date(now()).toISOString(); summary.lastError = null;
       } catch (error) {

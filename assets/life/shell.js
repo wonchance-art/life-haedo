@@ -218,8 +218,11 @@
       if (!auth) { hide(); retryNotice('로그인 연결을 준비하지 못했습니다.'); return null; }
       notice('로그인을 확인하고 있습니다.');
       const authEpoch = auth.epoch, cached = retained ? mounted : null, transition = suspension;
+      // One server check for the opening: the foreground account bootstrap and the
+      // first mount reuse it while the session, token and account stay the same.
+      const opening = auth.beginStartup?.();
       try {
-        const user = await (publicHome ? auth.verify() : auth.requireUser());
+        const user = await (publicHome ? auth.verify({ startup: true }) : auth.requireUser({ startup: true }));
         if (suspended || auth.epoch !== authEpoch) return null;
         if (cached && (cached !== mounted || transition !== suspension)) return null;
         const account = auth.getAccount();
@@ -231,7 +234,7 @@
         else hide();
         retryNotice('개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
         return null;
-      }
+      } finally { opening?.end(); }
     })();
     starting = pending;
     pending.finally(() => { if (starting === pending) starting = null; });

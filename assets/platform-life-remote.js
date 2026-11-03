@@ -96,6 +96,8 @@
       }
       const borrowedAuth = {
         getUser() { return checkedUser(() => auth.verify()); },
+        // For reads only: may reuse the page opening's finished server check (platform-auth beginStartup).
+        getStartupUser() { return checkedUser(() => auth.verify({ startup: true })); },
         // One platform verification scope for one unit of transport work (W4).
         // Without platform support, or once ended, every call verifies as before.
         scope() {

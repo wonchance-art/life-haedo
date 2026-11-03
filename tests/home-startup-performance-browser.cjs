@@ -4,7 +4,8 @@
  * with a synthetic per-request latency. Not a production, real-device or
  * field measurement.
  * BASE_URL=http://127.0.0.1:4373 HOME_PERF_SOURCE_ROOT=<site> node this-file
- * HOME_PERF_SAMPLES (3), HOME_PERF_THROTTLE (1 or 4), HOME_PERF_OUTPUT (fresh dir). */
+ * HOME_PERF_SAMPLES (3), HOME_PERF_THROTTLE (1 or 4), HOME_PERF_OUTPUT (fresh dir),
+ * HOME_PERF_STATIC_LATENCY (40 ms per static file), HOME_PERF_TRACE=1 (request initiators before the shell). */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4373';
 const assert = require('node:assert/strict');
@@ -22,6 +23,8 @@ const samples = Number(process.env.HOME_PERF_SAMPLES || 3);
 const throttle = Number(process.env.HOME_PERF_THROTTLE || 1);
 // Synthetic Supabase round trip: deterministic 150–300 ms per private request.
 const latencyMin = Number(process.env.HOME_PERF_LATENCY_MIN || 150), latencyMax = Number(process.env.HOME_PERF_LATENCY_MAX || 300);
+const staticLatency = Number(process.env.HOME_PERF_STATIC_LATENCY ?? 40);
+const trace = process.env.HOME_PERF_TRACE === '1';
 const ids = ['20000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000003'];
 const sourceCounts = [300, 60, 40];
 // Saved photo posts and drafts per library; 1–3 photos each.
@@ -55,8 +58,8 @@ function seedCloud(bundles) {
   server.libraryDefaults.set(accounts.a.id, { workspaceId: ids[0], defaultRevision: 1, initialHash: null, initialRevision: null });
   return server;
 }
-const report = { createdAt: new Date().toISOString(), sourceRoot, base, samples, throttle, latency: [latencyMin, latencyMax], sourceCounts, postPlan,
-  scope: 'Synthetic anonymous Auth/FakeCloud; deterministic per-request latency on private HTTP only; Playwright routing disables HTTP cache. Not production or Apple hardware.',
+const report = { createdAt: new Date().toISOString(), sourceRoot, base, samples, throttle, latency: [latencyMin, latencyMax], staticLatency, sourceCounts, postPlan,
+  scope: 'Synthetic anonymous Auth/FakeCloud; deterministic per-request latency on private HTTP and a fixed latency per static file; Playwright routing disables HTTP cache and the service worker. Not production or Apple hardware.',
   measurements: [], consoleErrors: [], pageErrors: [] };
 async function main() {
   await assert.rejects(fs.access(output), 'Fresh evidence directory required'); await fs.mkdir(output, { recursive: true });
@@ -69,7 +72,7 @@ async function main() {
   async function device(server, name, { latency = true } = {}) {
     const context = await makeContext(browser, server, name, accounts.a, { viewport: { width: 1440, height: 1000 } });
     await context.addInitScript(() => {
-      const m = window.__homePerf = { auth: null, shell: null, firstRow: null, listReady: null, rows20: null, motionEnd: null, animationsSeen: 0, longTasks: [] };
+      const m = window.__homePerf = { auth: null, shell: null, firstRow: null, listReady: null, rows20: null, viewportPhotos: null, motionEnd: null, animationsSeen: 0, longTasks: [] };
       try { new PerformanceObserver(list => { for (const e of list.getEntries()) m.longTasks.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ type: 'longtask', buffered: true }); } catch (_) {}
       const tick = () => {
         const now = performance.now(), app = document.getElementById('lifeApp');
@@ -78,27 +81,58 @@ async function main() {
         const list = document.getElementById('homePostList');
         const rows = list ? list.querySelectorAll('.home-post,.home-draft').length : 0;
         if (m.shell !== null && m.firstRow === null && rows) m.firstRow = now;
-        if (m.shell !== null && m.listReady === null && document.querySelector('#homePosts[aria-busy="false"]') && document.querySelector('#homeComposition[aria-busy="false"]')) m.listReady = now;
+        // A settled list that shows rows: an empty list waiting for the first receive is not usable.
+        if (m.shell !== null && m.listReady === null && rows && document.querySelector('#homePosts[aria-busy="false"]') && document.querySelector('#homeComposition[aria-busy="false"]')) m.listReady = now;
         if (m.shell !== null && m.rows20 === null && rows >= 20) m.rows20 = now;
+        // Every photo frame of the first screen shows its picture.
+        if (m.rows20 !== null && m.viewportPhotos === null) {
+          const frames = [...list.querySelectorAll('.home-post-media')].filter(frame => { const r = frame.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+          if (frames.length && frames.every(frame => frame.getAttribute('aria-busy') === 'false' && frame.querySelector('img')?.complete)) m.viewportPhotos = now;
+        }
         const running = app && !app.hidden ? document.getAnimations().filter(a => a.playState === 'running').length : 0;
         m.animationsSeen = Math.max(m.animationsSeen, running);
         if (m.listReady !== null && m.motionEnd === null && running === 0) m.motionEnd = now;
-        if (m.motionEnd === null || m.rows20 === null) requestAnimationFrame(tick);
+        if (m.motionEnd === null || m.rows20 === null || m.viewportPhotos === null) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     });
     const requests = [];
-    if (latency) await context.route(cloud + '/**', async route => {
-      const request = route.request(); if (request.method() === 'OPTIONS') return route.fallback();
-      const n = ++requestNo, delay = latencyMin + (n * 7919) % (latencyMax - latencyMin + 1), u = new URL(request.url());
-      requests.push({ path: u.pathname, at: Date.now() }); await sleep(delay); return route.fallback();
-    });
+    if (latency) {
+      // Static files: a fixed round trip, like a deployed site without a warm cache.
+      if (staticLatency) await context.route(base + '/**', async route => { await sleep(staticLatency); return route.fallback(); });
+      await context.route(cloud + '/**', async route => {
+        const request = route.request(); if (request.method() === 'OPTIONS') return route.fallback();
+        const n = ++requestNo, delay = latencyMin + (n * 7919) % (latencyMax - latencyMin + 1);
+        await sleep(delay); return route.fallback();
+      });
+    }
+    context.on('request', request => { const u = new URL(request.url()); if (u.origin !== cloud || request.method() === 'OPTIONS') return; const row = { path: u.pathname, start: Date.now(), end: null }; requests.push(row); request.__homeRow = row; });
+    const finish = request => { if (request.__homeRow) request.__homeRow.end = Date.now(); };
+    context.on('requestfinished', finish); context.on('requestfailed', finish);
     const page = await context.newPage(); page.setDefaultTimeout(120000);
     page.on('pageerror', error => report.pageErrors.push({ name, message: error.message }));
     page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ name, message: event.text() }); });
     const cdp = await context.newCDPSession(page);
     if (throttle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
-    return { name, context, page, cdp, requests };
+    const initiators = [];
+    if (trace) {
+      await cdp.send('Network.enable');
+      cdp.on('Network.requestWillBeSent', event => {
+        if (!event.request.url.startsWith(cloud) || event.request.method === 'OPTIONS') return;
+        const frames = [];
+        for (let stack = event.initiator?.stack; stack && frames.length < 8; stack = stack.parent)
+          for (const f of stack.callFrames) if (/\/assets\//.test(f.url) && frames.length < 8) frames.push(f.functionName + '@' + f.url.replace(/^.*\/assets\//, '') + ':' + (f.lineNumber + 1));
+        initiators.push({ path: new URL(event.request.url).pathname, at: Date.now(), frames });
+      });
+    }
+    return { name, context, page, cdp, requests, initiators };
+  }
+  // Requests that finished before `until`, and how many non-overlapping waves they form (one after another).
+  function waves(rows, until) {
+    const done = rows.filter(r => r.end !== null && r.end <= until).sort((a, b) => a.start - b.start);
+    let count = 0, edge = -Infinity;
+    for (const r of done) { if (r.start >= edge) { count++; edge = r.end; } else edge = Math.max(edge, r.end); }
+    return { requests: done.length, waves: count, auth: done.filter(r => r.path === '/auth/v1/user').length };
   }
   const localPosts = page => page.evaluate(async () => {
     const s = HaedoLife.Shell?.storage; if (!s) return -1; let n = 0;
@@ -111,17 +145,18 @@ async function main() {
     await wait(() => librariesSynced(page), Boolean, 'All libraries synced');
   }
   async function measure(d, label, warm) {
-    const start = Date.now(), before = d.requests.length;
+    const before = d.requests.length, traced = d.initiators.length;
     if (warm) await d.page.reload({ waitUntil: 'domcontentloaded' }); else await d.page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' });
-    await d.page.waitForFunction(() => window.__homePerf?.motionEnd !== null && window.__homePerf?.listReady !== null, null, { timeout: 120000 });
-    const firstScreen = await d.page.evaluate(() => ({ ...__homePerf, rows: document.querySelectorAll('#homePostList .home-post,#homePostList .home-draft').length }));
-    const firstReady = Date.now();
-    await d.page.waitForFunction(() => window.__homePerf?.rows20 !== null, null, { timeout: 120000 }).catch(() => {});
-    const m = await d.page.evaluate(() => ({ ...__homePerf }));
-    const row = { label, warm, throttle, shellMs: m.shell, firstRowMs: m.firstRow, listReadyMs: m.listReady, motionEndMs: m.motionEnd, rows20Ms: m.rows20, rowsAtListReady: firstScreen.rows, authMs: m.auth,
-      animationsSeen: m.animationsSeen, longTasks: m.longTasks.filter(([s]) => s <= (m.motionEnd || 0)), privateRequestsBeforeReady: d.requests.slice(before).filter(r => r.at <= firstReady).map(r => ({ path: r.path, at: r.at - start })) };
+    await d.page.waitForFunction(() => ['motionEnd', 'listReady', 'rows20', 'viewportPhotos'].every(key => window.__homePerf?.[key] !== null && window.__homePerf?.[key] !== undefined), null, { timeout: 180000 });
+    const m = await d.page.evaluate(() => ({ ...__homePerf, origin: performance.timeOrigin }));
+    const rows = d.requests.slice(before), at = value => m.origin + value;
+    const row = { label, warm, throttle, shellMs: m.shell, firstRowMs: m.firstRow, listReadyMs: m.listReady, rows20Ms: m.rows20, viewportPhotosMs: m.viewportPhotos, motionEndMs: m.motionEnd, authMs: m.auth,
+      beforeShell: waves(rows, at(m.shell)), beforeRows20: waves(rows, at(m.rows20)), animationsSeen: m.animationsSeen, longTasks: m.longTasks.filter(([s]) => s <= (m.rows20 || 0)),
+      requests: rows.map(r => ({ path: r.path, start: Math.round(r.start - m.origin), end: r.end === null ? null : Math.round(r.end - m.origin) })),
+      initiators: trace ? d.initiators.slice(traced).filter(r => r.at <= at(m.rows20)).map(r => ({ ...r, at: Math.round(r.at - m.origin) })) : undefined };
     report.measurements.push(row);
-    console.log(JSON.stringify({ label, shell: Math.round(row.shellMs), firstRow: row.firstRowMs && Math.round(row.firstRowMs), listReady: Math.round(row.listReadyMs), motionEnd: Math.round(row.motionEndMs), rows20: row.rows20Ms && Math.round(row.rows20Ms), rowsAtListReady: row.rowsAtListReady, reqBeforeReady: row.privateRequestsBeforeReady.length }));
+    const r = value => value === null || value === undefined ? null : Math.round(value);
+    console.log(JSON.stringify({ label, shell: r(row.shellMs), firstRow: r(row.firstRowMs), listReady: r(row.listReadyMs), rows20: r(row.rows20Ms), viewportPhotos: r(row.viewportPhotosMs), beforeShell: row.beforeShell, beforeRows20: row.beforeRows20 }));
     return row;
   }
   try {
@@ -171,7 +206,9 @@ async function main() {
     await browser.close();
     const median = values => { const sorted = values.filter(v => typeof v === 'number').sort((a, b) => a - b); return sorted.length ? Math.round(sorted[Math.floor(sorted.length / 2)]) : null; };
     report.summary = {};
-    for (const warm of [false, true]) { const rows = report.measurements.filter(row => row.warm === warm); if (rows.length) report.summary[warm ? 'warm' : 'cold'] = Object.fromEntries(['shellMs', 'firstRowMs', 'listReadyMs', 'motionEndMs', 'rows20Ms'].map(key => [key, median(rows.map(row => row[key]))])); }
+    for (const warm of [false, true]) { const rows = report.measurements.filter(row => row.warm === warm); if (rows.length) report.summary[warm ? 'warm' : 'cold'] = { ...Object.fromEntries(['shellMs', 'firstRowMs', 'listReadyMs', 'rows20Ms', 'viewportPhotosMs', 'motionEndMs'].map(key => [key, median(rows.map(row => row[key]))])),
+      requestsBeforeShell: median(rows.map(row => row.beforeShell.requests)), wavesBeforeShell: median(rows.map(row => row.beforeShell.waves)), authBeforeShell: median(rows.map(row => row.beforeShell.auth)),
+      requestsBeforeRows20: median(rows.map(row => row.beforeRows20.requests)), wavesBeforeRows20: median(rows.map(row => row.beforeRows20.waves)) }; }
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   }
   console.log(JSON.stringify({ throttle, summary: report.summary, pageErrors: report.pageErrors.length, consoleErrors: report.consoleErrors.length }));
