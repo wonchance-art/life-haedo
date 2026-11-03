@@ -191,3 +191,32 @@
 .home-saved-filter-notice { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .home-saved-filter-notice > .life-meta { font-size: 13px; line-height: 1.8; }
 .home-saved-filter-notice > .life-button { min-height: 44px; margin-top: 10px; }
+
+/* 2026-11-02 일정 목록: date heading, then rows of time · icon · content (soft-home board).
+ * Rows keep their own classes and actions; only the arrangement changes. */
+.home-day-heading { margin: 32px 0 0; color: var(--ink); font-size: var(--haedo-text-meta, 13px); font-weight: 650; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.home-post-list > .home-day-heading:first-child, .home-post-list > .home-archive-note + .home-day-heading { margin-top: 16px; }
+.home-post, .home-draft { display: grid; grid-template-columns: 52px 20px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+.home-post { margin-inline: 0; padding: 16px 0 20px; border-bottom: 0; }
+.home-draft { border-bottom: 0; }
+.home-row-time { padding-top: 6px; color: var(--ink-soft); font-size: var(--haedo-text-meta, 13px); line-height: 1.6; font-variant-numeric: tabular-nums; }
+.home-row-mark { display: flex; padding-top: 6px; color: var(--ink-soft); }
+.home-row-mark > .life-glyph { width: 20px; height: 20px; }
+.home-post-body { min-width: 0; }
+.home-post-open { font-size: var(--haedo-text-title, 24px); line-height: 1.4; }
+.home-post-prose { font-size: var(--haedo-text-body, 17px); }
+.home-post-media { margin-top: 12px; aspect-ratio: 16 / 9; }
+.home-post-footer { min-height: 44px; margin-top: 8px; }
+.home-draft-open { min-height: 72px; padding: 12px 0; }
+.home-draft > .home-row-time, .home-draft > .home-row-mark { padding-top: 16px; }
+/* The blog name starts on the rows' content line (time 52 + 12 + icon 20 + 12). */
+.home-profile-copy { grid-template-columns: 84px minmax(0, 1fr); }
+@media (max-width: 760px) {
+  .home-post, .home-draft { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
+  .home-post { margin-inline: 0; padding: 12px 0 16px; }
+  .home-post-open { font-size: 20px; }
+  .home-post-prose { font-size: 16px; }
+  .home-post-media { aspect-ratio: 4 / 3; }
+  .home-draft-open { padding-block: 12px; }
+  .home-profile-copy { grid-template-columns: 72px minmax(0, 1fr); column-gap: 8px; }
+}

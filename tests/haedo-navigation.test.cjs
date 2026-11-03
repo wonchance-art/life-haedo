@@ -46,7 +46,9 @@ test('old section addresses open the new sections and only the four menu IDs or 
   for (const [id, expected] of [['home', 'schedule'], ['tools', 'schedule'], ['schedule', 'schedule'], ['news', 'news'], ['records', 'records'],
     ['manage', 'manage'], ['compose', null], ['hasOwnProperty', null], ['__proto__', null], [undefined, null]]) assert.equal(api.normalizeSection(id), expected, String(id));
   for (const [view, expected] of [['home', 'schedule'], ['blog', 'schedule'], ['account-blog', 'schedule'], ['tools', 'schedule'], ['annual-plan', 'schedule'],
-    ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'schedule'], ['backup', 'manage'], ['external-discovery', 'news']]) assert.equal(api.getSectionForView(view), expected, view);
+    ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'schedule'], ['backup', 'manage'], ['external-discovery', 'news'],
+    // 일정's calendar units (2026-11-02): tools is Y; Q·M·W·D are their own views.
+    ['quarter', 'schedule'], ['month', 'schedule'], ['week', 'schedule'], ['day', 'schedule']]) assert.equal(api.getSectionForView(view), expected, view);
 });
 
 test('planning links wait for saved input, suppress duplicate clicks and navigate once', async () => {

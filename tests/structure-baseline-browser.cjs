@@ -178,6 +178,8 @@ const PINNED = {
     "ReflectionLenses",
     "ReflectionLensesUI",
     "Remote",
+    "ScheduleData",
+    "ScheduleUI",
     "Share",
     "ShareRemote",
     "ShareView",
