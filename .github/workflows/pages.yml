@@ -161,6 +161,15 @@ jobs:
       - name: Verify the shared sync lifecycle wakes every engine on the same page events
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/sync-lifecycle-browser.cjs
+      - name: Verify schedule list, year to day views, old addresses, offline dated reloads and keyboard guards
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-browser.cjs
+      - name: Verify settings items, hash entries, narrow groups, device values and leave protection
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/settings-browser.cjs
+      - name: Verify records rows, kind tabs, two-pane reading, news reader, framed sources and phone full-screen reading
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/records-news-browser.cjs
       - name: Verify private collection storage and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-library-browser.cjs
