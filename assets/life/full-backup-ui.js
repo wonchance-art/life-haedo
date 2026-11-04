@@ -115,6 +115,11 @@
         copy.append(node('strong', F.KINDS[kind].label), node('span', '확인하는 중…', 'life-meta'));
         item.append(copy); return item;
       }));
+      // What the ZIP leaves out is already known from the plan; drawing it now
+      // keeps the rows below in place when the counts arrive.
+      excludedHost.replaceChildren(notIncludedList(plan.notIncluded, 'fbNotIncluded'));
+      if (plan.skipped.length) excludedHost.append(node('p', '파일 형식에 맞지 않아 담지 않는 항목 ' + plan.skipped.length + '개', 'fb-warning'), skippedList(plan.skipped));
+      estimateLine.textContent = '예상 크기를 확인하는 중…';
       const value = await F.inventory(plan, context(), { isCurrent: () => alive(token) });
       if (!alive(token)) return;
       inventoryList.replaceChildren();
@@ -123,8 +128,12 @@
         if (row.failed) item.append(node('span', '읽지 못한 항목 ' + row.failed + '개 · 받을 때 다시 확인합니다', 'fb-warning'));
         inventoryList.append(item);
       }
-      excludedHost.replaceChildren(notIncludedList(value.notIncluded, 'fbNotIncluded'));
-      if (value.skipped.length) excludedHost.append(node('p', '파일 형식에 맞지 않아 담지 않는 항목 ' + value.skipped.length + '개', 'fb-warning'), skippedList(value.skipped));
+      // The inventory reports the plan's own lists; redraw only if they differ,
+      // so an opened "넣지 않는 것" stays open.
+      if (value.notIncluded !== plan.notIncluded || value.skipped !== plan.skipped) {
+        excludedHost.replaceChildren(notIncludedList(value.notIncluded, 'fbNotIncluded'));
+        if (value.skipped.length) excludedHost.append(node('p', '파일 형식에 맞지 않아 담지 않는 항목 ' + value.skipped.length + '개', 'fb-warning'), skippedList(value.skipped));
+      }
       const files = value.kinds.reduce((sum, row) => sum + row.files + row.failed, 0) + 2;
       estimateLine.textContent = '자료공간 ' + value.workspaces + '개 · 파일 ' + files + '개(README.txt·manifest.json 포함) · 예상 크기 약 ' + size(value.estimate);
       warning.hidden = value.estimate < F.LIMITS.warn;

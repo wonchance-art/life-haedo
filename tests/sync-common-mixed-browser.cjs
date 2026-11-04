@@ -43,7 +43,9 @@ async function main() {
       await page.locator('#photoTitle').fill('섞인 판에서 쓴 글'); await page.locator('.ql-editor').fill('새로고침 전까지 이 기기에만 있다.');
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
       const status = page.locator('#photoServerStatus');
-      await status.filter({ hasText: '저장됨 · 앱을 새로고침하면 계정에 올립니다.' }).waitFor();
+      await status.filter({ hasText: '저장됨 · 앱을 새로고침하면 계정에 올림' }).waitFor();
+      // The privacy pill names the problem; the normal states stay quiet (D1).
+      assert.match(await page.locator('.photo-privacy').getAttribute('aria-label'), /새로고침 필요/);
       assert.equal(await status.getAttribute('data-state'), 'refresh');
       assert.equal(await page.locator('#photoServerRetry').count(), 0);
     });
