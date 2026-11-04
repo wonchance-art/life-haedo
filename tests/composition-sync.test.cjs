@@ -91,7 +91,7 @@ function fixture(t, options = {}) {
   // (syncNow) brings the local copy up to the server's.
   state.source = { local: 1, server: 1 };
   const sourceSync = {
-    async getState() { return { enabled: true, status: state.source.pending ? 'pending' : 'synced', binding, remoteRevision: state.source.local }; },
+    async getState() { state.sourceReads = (state.sourceReads || 0) + 1; return { enabled: true, status: state.source.pending ? 'pending' : 'synced', binding, remoteRevision: state.source.local }; },
     async syncNow() { state.calls.push('sources'); state.source.local = Math.max(state.source.local, state.source.server); state.source.pending = false; },
     subscribe() { return () => {}; }
   };
@@ -317,6 +317,22 @@ test('one engine task asks the originals server once when this device already ho
   // A new task checks again.
   assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
   assert.equal(f.state.calls.filter(x => x === 'sources').length, 2);
+});
+
+// 2026-11-04 (status reads): a skipped originals check reuses the state it has just read; a check that
+// asked the server reads the state again.
+test('a skipped originals check reads the originals state once; a check that asked the server reads it again', async t => {
+  const f = fixture(t);
+  f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  // One task: the first sources() asks the server (two reads), the row's sources() skips (one read).
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 1);
+  assert.equal(f.state.sourceReads, 3);
+  const asked = fixture(t);
+  asked.state.readOverride = () => { asked.state.source.server = 2; return { ...copy(asked.state.row), revision: 2, source_revision: 2, data: { ...copy(asked.state.local), revision: 2 } }; };
+  assert.equal((await asked.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(asked.state.calls.filter(x => x === 'sources').length, 2);
+  assert.equal(asked.state.sourceReads, 4, 'both checks asked the server, so each read the state twice');
 });
 
 test('a row that needs newer originals than this device holds asks the server again before it is applied', async t => {
