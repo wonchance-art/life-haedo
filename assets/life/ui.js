@@ -2095,7 +2095,8 @@
           if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
           return;
         }
-        const controls = [...root.querySelectorAll('button,a,summary,input')];
+        // Only rendered controls: a match hidden at this width (e.g. the wide-only menu link at 390) cannot take focus.
+        const controls = [...root.querySelectorAll('button,a,summary,input')].filter(el => el.getClientRects().length > 0);
         const remoteId = origin.mode === 'account-blog' && /^account-blog:(?:open|receive|received|manage):([^:]+)(?::[^:]+)?$/.exec(origin.focusKey || '')?.[1];
         const receivedActions = remoteId ? controls.filter(el => el.dataset.remoteId === remoteId && el.dataset.action === 'open') : [];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
@@ -2104,6 +2105,8 @@
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
+        // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
+        if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
         if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);

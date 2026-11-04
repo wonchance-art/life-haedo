@@ -373,6 +373,10 @@ async function main() {
       await page.goBack(); await mode(page, 'tools');
       await page.goBack(); await mode(page, 'home');
       await page.goBack(); await mode(page, 'manage');
+      // The origin (the 일정 menu link) can be hidden at this width; focus must still land on the screen, never <body>.
+      await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body && document.querySelector('#lifeMain')?.contains(document.activeElement) || document.activeElement?.closest?.('.life-toolbar,nav'));
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.notEqual(await page.evaluate(() => document.activeElement?.tagName), 'BODY', 'browser back to 설정 never leaves focus on body');
     }, width);
     await check('history: back keeps the exact reader version, search and position', async ({ page }) => {
       const f = await fixture(page); await nav(page, 'records'); await mode(page, 'sources');
