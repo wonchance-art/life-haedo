@@ -10,7 +10,8 @@
  *   excerpts. Never IDs, e-mail, photos or the whole document.
  * - A result that arrives after the account, post or screen changed is
  *   discarded (isCurrent(token) is false).
- * - apply() replaces only the accepted ranges, marks only their new text with
+ * - apply() (on the instance) first checks isCurrent(token), so a suggestion
+ *   is never applied to another account, post or screen; it then replaces only the accepted ranges, marks only their new text with
  *   the private authorship attribute author:"ai" (묶음 A), keeps photos and other
  *   formats, and refuses while a Korean IME composition is open or when the
  *   selected text changed since the request.
@@ -55,6 +56,9 @@
     ai_network: "연결을 확인한 뒤 다시 시도해 주세요.",
     invalid_request: "AI에 보낼 내용을 확인해 주세요.",
     unauthorized: "다시 로그인한 뒤 시도해 주세요.",
+    ai_not_allowed: "이 계정에서는 AI 제안을 쓸 수 없어요.",
+    origin_not_allowed: "이 주소에서는 AI 제안을 쓸 수 없어요.",
+    ai_not_current_apply: "다른 글이나 계정으로 바뀌어 제안을 적용하지 않았어요.",
     setup_required: "AI 제안이 아직 설정되지 않았어요.",
     ai_not_configured: "AI 제안이 아직 설정되지 않았어요.",
     ai_monthly_limit: "이번 달 AI 사용 한도에 도달했어요. 다음 달 1일(UTC)부터 다시 쓸 수 있어요.",
@@ -191,7 +195,7 @@
    * Quill Delta document (array of {insert, attributes?}). `original` is the
    * selection text the suggestion was made from; the current text there must
    * still be exactly that. Returns { ops, applied, selection } with new ops. */
-  function apply(ops, { index, length, original, ranges, accepted, composing = false } = {}) {
+  function applyRanges(ops, { index, length, original, ranges, accepted, composing = false } = {}) {
     check(composing === false, "ai_composing");
     check(Array.isArray(ops) && ops.length > 0 && ops.every((op) => plain(op) && Object.hasOwn(op, "insert") &&
       (typeof op.insert === "string" || plain(op.insert)) && (op.attributes === undefined || plain(op.attributes))), "ai_invalid_document");
@@ -325,8 +329,15 @@
       sent.set(prepared, run);
       return run;
     }
-    return Object.freeze({ prepare, send });
+    /* Apply accepted ranges of a result to the editor's current ops. `token`
+     * names the editor target now on screen; if it is no longer current
+     * (account, post or screen changed) nothing is applied. */
+    function apply(ops, { token, ...options } = {}) {
+      check(isCurrent(token), "ai_not_current_apply");
+      return applyRanges(ops, options);
+    }
+    return Object.freeze({ prepare, send, apply });
   }
 
-  return Object.freeze({ LIMITS, TASKS, PROVIDER, MESSAGES, UNVERIFIED, create, requestBody, diff, apply, verifyCitations, remoteRequest });
+  return Object.freeze({ LIMITS, TASKS, PROVIDER, MESSAGES, UNVERIFIED, create, requestBody, diff, verifyCitations, remoteRequest });
 });
