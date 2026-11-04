@@ -27,7 +27,7 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 
 ## 실행과 검증
 
-짧은 요청도 AGENTS.md에 따라 목표·범위·보존 조건·완료 기준으로 정리해 실행한다. 핵심 흐름은 실제 UI 진입부터 결과 재열기까지 검증한다. `node tests/core-experience-browser.cjs`는 가져오기 → 읽기 → 관련 기록 → 묶음/내 페이지 → 저장·복귀를 확인하며 CI 배포 조건에도 포함된다. 브라우저 검사 통과와 시각·추천 내용의 유용성, 실제 Apple 기기 체험을 서로 대신하지 않는다.
+핵심 흐름은 실제 UI 진입부터 결과 재열기까지 검증한다. `node tests/core-experience-browser.cjs`는 가져오기 → 읽기 → 관련 기록 → 묶음/내 페이지 → 저장·복귀를 확인하며 CI 배포 조건에도 포함된다. 브라우저 검사 통과와 시각·추천 내용의 유용성, 실제 Apple 기기 체험을 서로 대신하지 않는다.
 
 `npm run check`로 구문과 로컬 리소스를, `npm test`로 데이터·동기화·서비스워커 회귀 사례를 확인하고 `npm run dev`로 127.0.0.1:4173에서 실행한다. `scripts/dev-server.py`는 OAuth 코드·문서 URL을 요청 로그에 남기지 않는다.
 앱 실행용 패키지 설치는 없다. 브라우저 CLI가 설치돼 있지 않으면 현재 사용 가능한 Codex 브라우저 도구를 써도 된다.
@@ -38,7 +38,7 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 자동 검증은 합성 계정의 모의 Auth HTTP와 실제 동봉 SDK를 사용하고 운영 세션을 복사하지 않는다.
 모의 OAuth·계정 전환 검증을 실제 Google 제공자 로그인으로 보고하지 않는다. 과거 게이트 우회값을 현재 보호 페이지의 인증 대신 쓰지 않는다.
 
-초기 구동 확인은 공개 홈 → 서버 계정 검증 → 기록 피드 진입으로 한다. 기록·도구·관리 이동과 로그인 복귀는 `node tests/unified-home-browser.cjs`, 3폭 시각 검토는 `node scripts/check-unified-home-design.cjs`로 확인한다. `life.html`의 기존 주소와 `workspace.html?section=manage`의 플랫폼 백업 진입도 보존한다. 연표 변경은 새 익명 연표 → 사건 편집·저장 → 새로고침 후 유지, 자료 변경은 텍스트 가져오기 → 발췌·출처 → 재열기 → JSON 사본 복원을 확인한다.
+초기 구동 확인은 공개 홈 → 서버 계정 검증 → 일정 목록 진입으로 한다. 뉴스·일정·자료·설정 이동과 로그인 복귀는 `node tests/unified-home-browser.cjs`, 3폭 시각 검토는 `node scripts/check-unified-home-design.cjs`로 확인한다. `life.html`의 기존 주소와 `workspace.html?section=manage`의 플랫폼 백업 진입도 보존한다. 연표 변경은 새 익명 연표 → 사건 편집·저장 → 새로고침 후 유지, 자료 변경은 텍스트 가져오기 → 발췌·출처 → 재열기 → JSON 사본 복원을 확인한다.
 수정 작업에서는 영향받은 흐름만 추가한다. 실제 `console`과 `errors`를 읽고 스크린샷을 눈으로 확인한다.
 설치되지 않은 `window.__consoleErrors` 배열의 빈 결과를 “콘솔 0”의 근거로 쓰지 않는다.
 
@@ -57,4 +57,6 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 로컬에서 먼저 점검한다. 허용된 브랜치·푸시 범위에서 배포하고, 공개 URL에서 새 변경과 콘솔을 확인한다.
 첫 로드가 이전 서비스워커 문서면 한 번 더 새로고침한다. 변경을 확인하기 전까지 배포 완료로 보고하지 않는다.
 
-직접 글쓰기는 `assets/life/writing.js`·`writing-ui.js`와 `ui.js`의 `write` 화면이다. 저장한 글은 기존 원천/불변 버전을 재사용하고 `kind=writing` 초안은 기본 로컬 보관이며 writing-sync가 고른 한 편만 별도로 연결한다. 가져오기 검토는 포함하지 않는다. 종료 상태와 정확한 원문 쌍·새 미연결 초안 복구 계약은 `docs/design-review/writing-continuity.md`를 따른다. `node tests/life-writing-browser.cjs`로 입력·충돌·발췌·백업·계정/공간 경계와 세 폭을 확인한다. 원문 제목은 현재 값이며 버전별 제목 이력을 약속하지 않는다. 새 라이브러리 없이 기존 원자 저장·동기화 계약을 유지한다. 구성·초안 SQL의 운영 설치 여부는 `docs/life-tools-design/continuity-batch-installation.md`로 확인한다.
+## 직접 글쓰기
+
+`assets/life/writing.js`·`writing-ui.js`와 `ui.js`의 `write` 화면이다. 저장한 글은 기존 원천/불변 버전을 재사용하고, `kind=writing` 초안은 2026-11-01부터 `writing-sync.js`가 계정의 모든 초안을 자동 동기화한다. 가져오기 검토는 포함하지 않는다. 종료 상태와 정확한 원문 쌍·새 미연결 초안 복구 계약은 `docs/design-review/writing-continuity.md`를 따른다. `node tests/life-writing-browser.cjs`로 입력·충돌·발췌·백업·계정/공간 경계와 세 폭을, `tests/writing-sync*-browser.cjs`로 기기 간 동기화를 확인한다. 원문 제목은 현재 값이며 버전별 제목 이력을 약속하지 않는다. 새 라이브러리 없이 기존 원자 저장·동기화 계약을 유지한다. 구성·초안 SQL의 운영 설치 여부는 `docs/life-tools-design/continuity-batch-installation.md`로 확인한다.

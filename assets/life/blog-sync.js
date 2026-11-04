@@ -135,7 +135,8 @@
       finally { heldBytes -= size; waitingBytes.splice(0).forEach(resolve => resolve()); }
     }
     // A transfer that waited for a slot starts only while its cycle is still current: after an
-    // account change or dispose the queued files are not fetched (the started ones still finish).
+    // account change or dispose the queued files are not fetched, and BlogRemote aborts the ones
+    // already in progress (2026-11-04).
     async function transfer(c, asset) {
       while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
       transfers++;

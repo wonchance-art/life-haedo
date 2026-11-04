@@ -498,3 +498,55 @@ test('source and note search share strict query/options validation and native li
     assert.throws(() => search({ normalized: true }), errorCode('unsupported_field'));
   }
 });
+
+// 2026-11-04 startup latency: validateText counts UTF-8 bytes in its own pass instead of encoding the
+// text again. The size decision must equal TextEncoder's at the 1 MiB edge for 1-, 2-, 3- and 4-byte
+// characters, mixed text and a lone surrogate.
+test('the UTF-8 size limit decides exactly as TextEncoder at the 1 MiB edge', { timeout: 60000 }, async () => {
+  const limit = core.MAX_IMPORT_BYTES, bytes = text => new TextEncoder().encode(text).length;
+  const workspace = core.createWorkspace({ title: '크기 경계' });
+  const fits = async text => { try { await core.prepareImport(input({ text }), workspace); return true; } catch (error) { if (error.code === 'text_too_large') return false; throw error; } };
+  const cases = [];
+  for (const [char, size] of [['a', 1], ['é', 2], ['한', 3], ['🌱', 4]]) {
+    const at = Math.floor(limit / size);
+    cases.push(char.repeat(at), char.repeat(at + 1));
+  }
+  const mixed = 'a한é🌱\n';
+  const unit = bytes(mixed), n = Math.floor(limit / unit);
+  cases.push(mixed.repeat(n) + 'a'.repeat(limit - n * unit), mixed.repeat(n) + 'a'.repeat(limit - n * unit + 1));
+  for (const text of cases) assert.equal(await fits(text), bytes(text) <= limit && text.length <= limit, 'length ' + text.length + ', ' + bytes(text) + ' bytes');
+  await assert.rejects(core.prepareImport(input({ text: 'a'.repeat(400000) + '\ud800' + 'a' }), workspace), errorCode('invalid_encoding'));
+});
+
+// 2026-11-04 (#opt-cpu review condition a): utf8Length equals TextEncoder for well-formed text and
+// rejects what TextEncoder would silently replace. 20,000 seeded random strings plus fixed edges.
+test('utf8Length equals TextEncoder on 20,000 random strings and every code unit edge, and rejects lone surrogates', () => {
+  const encode = text => new TextEncoder().encode(text).length;
+  let seed = 0x2026_1104;
+  const random = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32;
+  const pick = list => list[Math.floor(random() * list.length)];
+  // Units around each UTF-8 length edge, Korean, private use, the BMP top, and pairs (4 bytes).
+  const units = [0x01, 0x41, 0x7e, 0x7f, 0x80, 0x81, 0x7fe, 0x7ff, 0x800, 0x801, 0xac00, 0xd7a3, 0xd7ff, 0xe000, 0xfeff, 0xfffd, 0xfffe, 0xffff];
+  const pairs = ['𐀀', '🌱', '􏿿', '𝐀'];
+  const piece = () => random() < 0.2 ? pick(pairs) : String.fromCharCode(random() < 0.5 ? pick(units) : 1 + Math.floor(random() * 0xd7fe));
+  let checked = 0;
+  for (let n = 0; n < 20000; n++) {
+    let text = ''; const length = Math.floor(random() * 40);
+    for (let i = 0; i < length; i++) text += piece();
+    assert.equal(core.utf8Length(text), encode(text), JSON.stringify(text)); checked++;
+  }
+  assert.equal(checked, 20000);
+  assert.equal(core.utf8Length(''), 0);
+  for (const unit of units) assert.equal(core.utf8Length(String.fromCharCode(unit)), encode(String.fromCharCode(unit)), unit.toString(16));
+  for (const pair of pairs) assert.equal(core.utf8Length(pair), 4);
+  // Lone or reversed surrogates anywhere: rejected (TextEncoder would write U+FFFD instead).
+  for (const bad of ['\ud800', '\udc00', 'a\ud800', '\udfffa', '\udc00\ud800', '가\ud83c', '\ud83c가', 'ab\udbff'])
+    assert.throws(() => core.utf8Length(bad), errorCode('invalid_encoding'), JSON.stringify(bad));
+  // The size decision at the limit taken from the module's own constant, ±1 byte.
+  const limit = core.MAX_IMPORT_BYTES;
+  for (const [char, size] of [['a', 1], ['é', 2], ['한', 3], ['🌱', 4]]) {
+    const under = char.repeat(Math.floor(limit / size)), over = under + char;
+    assert.equal(core.utf8Length(under) <= limit, encode(under) <= limit);
+    assert.equal(core.utf8Length(over) <= limit, encode(over) <= limit);
+  }
+});

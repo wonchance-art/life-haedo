@@ -171,11 +171,16 @@
       }
       return asset;
     }
+    // A transfer in progress is aborted by an account change or dispose (cancel), like the RPCs
+    // (2026-11-04: before, up to six started photo downloads ran to the end and were then thrown away).
+    // The bundled storage-js (2.117.2) passes download()'s third argument into the GET fetch options.
     async function downloadAsset(asset) {
       const context = capture(); guard(context);
       if (asset?.bucket !== BUCKET || typeof asset.path !== 'string' || !asset.path.startsWith(context.userId + '/')) throw fault('invalid_remote_data');
-      try { const result = await client.storage.from(asset.bucket).download(asset.path); guard(context); if (result.error) throw result.error; if (!(result.data instanceof Blob)) throw fault('invalid_remote_data'); return result.data; }
+      const controller = new AbortController(); controllers.add(controller);
+      try { const result = await client.storage.from(asset.bucket).download(asset.path, undefined, { signal: controller.signal }); guard(context); if (result.error) throw result.error; if (!(result.data instanceof Blob)) throw fault('invalid_remote_data'); return result.data; }
       catch (error) { guard(context); throw clean(error); }
+      finally { controllers.delete(controller); }
     }
     // A metadata-free public copy of one photo (any format) of a stored post
     // (2026-11-02). Registered by its own RPC, so the server can tell it from
