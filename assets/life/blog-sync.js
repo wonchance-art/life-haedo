@@ -130,10 +130,12 @@
       try { return await task(); }
       finally { heldBytes -= size; waitingBytes.splice(0).forEach(resolve => resolve()); }
     }
-    async function transfer(asset) {
+    // A transfer that waited for a slot starts only while its cycle is still current: after an
+    // account change or dispose the queued files are not fetched (the started ones still finish).
+    async function transfer(c, asset) {
       while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
       transfers++;
-      try { return await remote.downloadAsset(asset); }
+      try { guard(c); return await remote.downloadAsset(asset); }
       finally { transfers--; waitingTransfers.shift()?.(); }
     }
     async function download(c, row) {
@@ -142,7 +144,7 @@
       // All of a post's transfers end before it fails, so its byte budget is not given back early.
       const results = await Promise.allSettled(row.data.photos.map(async photo => {
         const asset = row.assets[photo.id];
-        const pair = await Promise.allSettled([transfer({ bucket: asset.bucket, path: asset.path }), photo.view ? transfer(asset.view) : undefined]);
+        const pair = await Promise.allSettled([transfer(c, { bucket: asset.bucket, path: asset.path }), photo.view ? transfer(c, asset.view) : undefined]);
         const rejected = pair.find(result => result.status === 'rejected'); if (rejected) throw rejected.reason; guard(c);
         const blob = typed(pair[0].value, photo), view = photo.view ? typed(pair[1].value, photo.view) : undefined;
         files.set(photo.id, view ? { blob, view } : { blob });
@@ -441,10 +443,15 @@
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
+    // Publishing and withdrawing keep the post's remoteRevision; only the publication's own revision
+    // grows. A list read before this device's later publish or withdrawal (2026-11-04: the list is
+    // requested together with the account check) carries an older publication: it is not taken.
+    const publicRevision = value => value?.revision || 0;
     async function refreshPublication(ws, id, head) {
       return serial(ws, id, async () => {
         const c = context(ws, id), state = await readState(c);
-        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending)
+        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending &&
+            publicRevision(head.publication) >= publicRevision(state.publication))
           await writeState(c, state, { publication: head.publication ?? null });
       });
     }
@@ -580,11 +587,20 @@
       const c = context('*', 'cycle');
       summary.running = true; publish$({ type: 'status', status: getStatus() });
       let rows = null;
+      // The server post list is requested together with the cycle's account check (2026-11-04:
+      // one round trip less before a new device's first row). It is read only after that check
+      // passes and only when this cycle sent nothing to the server first; otherwise the list is
+      // requested again at the same point as before. Each listed row stays a hint: apply,
+      // install and vanish read the exact server row themselves.
+      const early = uploadOnly ? null : remote.syncList();
+      early?.catch(() => {});
       try {
         await verified(c);
         const libraries = await storage.listAccountLibraries(); guard(c);
         const owned = libraries.map(item => item.workspaceId), eligible = libraries.filter(item => item.eligible !== false).map(item => item.workspaceId);
         let local = await snapshot(c, owned);
+        // Whether this cycle may send anything to the server before it lists (then the early list is not used).
+        let sent = local.tombstones.length > 0 || local.duplicates.length > 0;
         for (const item of local.tombstones) {
           try {
             if (local.byRemote.has(item.remoteId)) await storage.clearBlogTombstone(item.ws, item.remoteId);
@@ -624,8 +640,9 @@
           for (const item of group.edits) if (present(item)) await push(item.ws, item.post.id, { verify: false, byRemote: local.byRemote });
         }));
         if (!uploadOnly) {
+          if (uploads.length || groups.length) sent = true;
           local = await snapshot(c, owned);
-          rows = await remote.syncList(); guard(c);
+          rows = await (early && !sent ? early.catch(() => remote.syncList()) : remote.syncList()); guard(c);
           const deleted = new Set(local.tombstones.map(item => item.remoteId)), seen = new Set(rows.map(row => row.id));
           let fallback = null;
           const target = async row => {

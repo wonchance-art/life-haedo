@@ -786,3 +786,19 @@ test('opening: the bootstrap joins the shell check that the document\'s first pa
   await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1);
   opening.end(); auth.dispose();
 });
+
+// 2026-11-04 (PR183 re-review M2): the stored session turns into another user with no Auth
+// event, storage event or epoch change while callers wait on the running opening check.
+// Neither the caller that started it nor a waiter receives the earlier user's answer.
+test('opening: a user replaced without any event while callers wait on the running check is never answered with the earlier user', async () => {
+  const { auth, state } = setup();
+  const opening = auth.beginStartup(), late = deferred(); state.userPromise = late.promise;
+  const started = auth.verify({ startup: true }); await tick();
+  const waiter = auth.verify({ startup: true }); await tick();
+  state.records.set(SESSION_KEY, JSON.stringify({ user: B, access_token: 'synthetic-silent-b' }));
+  late.resolve({ data: { user: A }, error: null }); state.userPromise = null;
+  const results = await Promise.allSettled([started, waiter]);
+  for (const result of results) assert.notEqual(result.status === 'fulfilled' ? result.value?.id : null, A.id, 'no caller gets A after the silent switch');
+  assert.notEqual(auth.getAccount()?.userId, A.id);
+  opening.end(); auth.dispose();
+});
