@@ -361,3 +361,48 @@ test('preparing the actual originals service performs no storage or remote work 
   } finally { manager.dispose(); }
   assert.equal(storageOpens, 0); assert.equal(remoteCalls, 0);
 });
+// 2026-11-04 startup latency: background receive takes two account spaces at a time.
+const third = '44444444-4444-4444-8444-444444444444';
+async function until(condition, label) { for (let i = 0; i < 500; i++) { if (condition()) return; await new Promise(done => setImmediate(done)); } throw Error(label); }
+function gatedDownloads(h) {
+  const original = h.args.sync.download, gates = new Map(); let inFlight = 0, peak = 0;
+  h.args.sync.download = async (id, options) => {
+    inFlight++; peak = Math.max(peak, inFlight); const gate = deferred(); gates.set(id, gate);
+    try { if (await gate.promise === 'fail') throw Object.assign(Error('offline'), { code: 'network_error' }); return await original(id, options); } finally { inFlight--; }
+  };
+  return { gates, get peak() { return peak; }, get inFlight() { return inFlight; } };
+}
+test('background receive takes at most two account spaces at a time and then every space', async () => {
+  const h = harness({ rows: [first, second, third] }), downloads = gatedDownloads(h), manager = create(h.args);
+  try {
+    const pending = manager.bootstrap();
+    await until(() => downloads.gates.size === 2, 'two receives did not start');
+    assert.equal(downloads.inFlight, 2); assert.ok(!downloads.gates.has(third), 'a third space waits for a free slot');
+    downloads.gates.get(first).resolve();
+    await until(() => downloads.gates.has(third), 'the third receive did not start after one finished');
+    assert.equal(downloads.peak, 2);
+    downloads.gates.get(second).resolve(); downloads.gates.get(third).resolve();
+    const result = await pending; assert.equal(result.workspaceId, first);
+    assert.deepEqual(h.log.filter(s => s.startsWith('receive:')).sort(), ['receive:' + first, 'receive:' + second, 'receive:' + third].sort());
+    for (const id of [first, second, third]) assert.ok(h.log.indexOf('source:' + id) < h.log.indexOf('metadata:' + id), 'each space keeps originals before its domains');
+    assert.deepEqual(h.log.filter(s => s.startsWith('active:')), ['active:' + first]);
+  } finally { manager.dispose(); }
+});
+test('a failed space receive starts no further spaces and settles only after the started one finishes', async () => {
+  const h = harness({ rows: [first, second, third] }), downloads = gatedDownloads(h), manager = create(h.args);
+  try {
+    let settled = false; const pending = manager.bootstrap().finally(() => { settled = true; });
+    await until(() => downloads.gates.size === 2, 'two receives did not start');
+    downloads.gates.get(second).resolve('fail');
+    for (let i = 0; i < 50; i++) await new Promise(done => setImmediate(done));
+    assert.equal(settled, false, 'the started receive is still running');
+    assert.ok(!downloads.gates.has(third), 'no space starts after a failure');
+    downloads.gates.get(first).resolve();
+    // #185 review minor 1: the failed receive is reported, never shown as a finished pass.
+    const result = await pending;
+    assert.equal(result.error?.code, 'network_error', 'the bootstrap reports the failed receive');
+    assert.equal((await manager.getState()).status === 'synced', false, 'the account is not shown as synchronized');
+    assert.ok(!downloads.gates.has(third)); assert.equal(downloads.inFlight, 0);
+    assert.ok(h.log.includes('receive:' + first) && !h.log.includes('receive:' + second));
+  } finally { manager.dispose(); }
+});
