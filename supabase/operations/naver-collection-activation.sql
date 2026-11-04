@@ -9,6 +9,10 @@
 --   haedo_naver_project_url       = this project's HTTPS root URL
 --   haedo_naver_service_role_key  = this same project's server-only service key
 -- This tool only tests/uses them, never returns or logs their values.
+-- 2026-11-04: schedules send the key in the apikey header (an sb_secret_ key is
+-- not a JWT and cannot be a Bearer token; a legacy service JWT also works there).
+-- Deploy the haedo-naver-blog function that reads the apikey header BEFORE
+-- activating. Existing schedules are switched by 20261104-naver-cron-apikey.sql.
 --
 -- ACTIVATE (run these SET statements in the SAME transaction as the DO below):
 --   set local haedo.naver_action = 'activate';
@@ -79,7 +83,7 @@ begin
   perform cron.schedule(job_name,'*/15 * * * *',$job$
   select net.http_post(
    url:=(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_project_url')||'/functions/v1/haedo-naver-blog',
-   headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||
+   headers:=jsonb_build_object('Content-Type','application/json','apikey',
     (select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_service_role_key')),
    body:='{"action":"cron"}'::jsonb,timeout_milliseconds:=120000);
   $job$);
@@ -90,7 +94,7 @@ begin
  perform cron.schedule(capture_job,'*/15 * * * *',$job$
   select net.http_post(
    url:=(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_project_url')||'/functions/v1/haedo-naver-blog',
-   headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||
+   headers:=jsonb_build_object('Content-Type','application/json','apikey',
     (select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_service_role_key')),
    body:='{"action":"run"}'::jsonb,timeout_milliseconds:=120000);
  $job$);

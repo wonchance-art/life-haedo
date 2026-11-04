@@ -71,6 +71,8 @@ async function main() {
       assert.deepEqual(current.jobs.map(j => j.jobname), ['haedo-naver-capture-poll', 'unrelated-job']);
       const job = current.jobs[0]; assert.equal(job.schedule, '*/15 * * * *'); assert.match(job.command, /body:='\{"action":"run"\}'::jsonb/);
       assert.match(job.command, /\/functions\/v1\/haedo-naver-blog/); assert.match(job.command, /vault\.decrypted_secrets/);
+      assert.match(job.command, /'apikey',\s*\(select decrypted_secret from vault\.decrypted_secrets where name='haedo_naver_service_role_key'\)/);
+      assert.equal(job.command.includes('Authorization'), false, 'an sb_secret_ key is never sent as a Bearer token');
       assert.equal(job.command.includes('synthetic-'), false); assert.equal(current.preserved, 'immutable fixture body/photo receipt');
     });
     check('default all mode schedules RSS cron and PC run without duplicating named jobs', () => {

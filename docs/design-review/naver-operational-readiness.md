@@ -203,6 +203,21 @@ Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL�
 
 배포 함수의 ACTIVE 표시와 환경변수 설정 완료도 실제 외부 수집 성공과 구분한다. 기존 [Edge handler](../../supabase/functions/haedo-naver-blog/handler.mjs)의 기능 관문과 DB `ready` 관문이 모두 충족돼야 수집을 수행한다. 현재 관측에서 어느 관문도 임의로 켜지 않았다.
 
+### 새 API 키로 전환 (2026-11-04, 레거시 키 폐지 대비)
+
+Supabase가 레거시 `anon`·`service_role` 키를 2026년 말까지 폐지한다([API keys](https://supabase.com/docs/guides/api/api-keys), 확인일 2026-11-04). 새 서버 키 `sb_secret_`는 JWT가 아니라서 `Authorization: Bearer`로 보낼 수 없고, `apikey` 헤더로만 보낸다.
+
+- **함수:** `SUPABASE_SECRET_KEYS`·`SUPABASE_PUBLISHABLE_KEYS`의 `default`를 먼저 읽고, 레거시 키는 대체값으로만 쓴다. cron 인증은 `apikey` 헤더 기준이고, 기존 Bearer cron도 받는다. 규칙과 검사는 [writing-ai-suggestions.md의 Supabase 키 절](writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비)에 있다.
+- **cron:** [20261104-naver-cron-apikey.sql](../../supabase/operations/20261104-naver-cron-apikey.sql)이 이미 있는 두 일정의 명령만 `apikey` 헤더 방식으로 바꾼다. 기본 실행은 점검만 한다. 일정 주기·활성 상태·`ready`는 그대로 두고, 행 수가 바뀌면 전체를 되돌린다. [활성화 SQL](../../supabase/operations/naver-collection-activation.sql)도 새로 만드는 일정부터 같은 헤더를 쓴다.
+- **순서(총괄·소유자):**
+  1. 새 함수를 배포한다(`_shared/supabase-keys.mjs` 포함, `verify_jwt=false` 유지).
+  2. 전환 SQL을 `set local haedo.naver_cron_action='apikey'`와 함께 실행한다.
+  3. 필요하면 소유자가 Vault `haedo_naver_service_role_key` 값을 `sb_secret_` 키로 바꾼다.
+  4. 레거시 키를 끄는 것은 그 뒤에 한다.
+
+  순서를 거꾸로 하면 이전 판 함수가 `apikey` 헤더를 읽지 못해 cron이 401로 거절된다. 함수를 이전 판으로 되돌릴 때는 같은 SQL을 `'bearer'`로 실행한다. Vault 값이 `sb_secret_`이면 이 되돌리기를 거부한다.
+- **미검증:** 실제 pg_cron의 같은 이름 일정 갱신과 실제 게이트웨이가 `apikey`만 있는 요청을 함수에 넘기는 동작. 격리 PostgreSQL의 일정 shim과 단위 검사로만 확인했다.
+
 공식 운영 참고는 Supabase의 [Schedule Edge Functions](https://supabase.com/docs/guides/functions/schedule-functions), [Vault](https://supabase.com/docs/guides/database/vault), [Storage 접근 제어](https://supabase.com/docs/guides/storage/security/access-control)다. 실제 사용 설정·배포본과 문서를 대조하며 기존 SDK·비공개 버킷을 재사용한다.
 
 ## 활성화와 일정의 경계

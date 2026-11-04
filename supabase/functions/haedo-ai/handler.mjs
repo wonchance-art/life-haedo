@@ -36,6 +36,8 @@
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
+import { supabaseKeys, serverHeaders } from '../_shared/supabase-keys.mjs';
+
 export const PROVIDER = Object.freeze({ url: 'https://api.anthropic.com/v1/messages', version: '2026-10-21' });
 export const MODELS = Object.freeze({ haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' });
 // Character limits count UTF-16 code units (String.length), the same unit as
@@ -245,13 +247,12 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       let project;
       try { project = new URL(environment('SUPABASE_URL') || ''); } catch (_) { fail('setup_required'); }
       check(project.protocol === 'https:' && !project.username && !project.password && project.pathname === '/' && !project.search && !project.hash, 'setup_required');
-      const origin = project.origin, serviceKey = environment('SUPABASE_SERVICE_ROLE_KEY');
-      const publicKey = environment('SUPABASE_ANON_KEY') || environment('SUPABASE_PUBLISHABLE_KEY');
-      check(typeof serviceKey === 'string' && serviceKey.length > 0 && !serviceKey.startsWith('sb_publishable_') &&
-        serviceKey !== environment('SUPABASE_ANON_KEY') && serviceKey !== environment('SUPABASE_PUBLISHABLE_KEY'), 'setup_required');
-      check(typeof publicKey === 'string' && publicKey.length > 0, 'setup_required');
+      // New sb_secret_/sb_publishable_ keys first, legacy keys as fallback.
+      const origin = project.origin, { server: serviceKey, publicKey } = supabaseKeys(environment);
+      check(serviceKey && publicKey, 'setup_required');
       const token = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
-      check(token && token.length <= 8192, 'unauthorized');
+      // Only a user session goes in Authorization; an API key is never a user.
+      check(token && token.length <= 8192 && !token.startsWith('sb_'), 'unauthorized');
       let parsed;
       try { parsed = JSON.parse(await readBounded(request, LIMITS.body)); } catch (_) { fail('invalid_request'); }
       input = validateInput(parsed);
@@ -277,7 +278,7 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       const rpc = async (name, args) => {
         const response = await fetcher(origin + '/rest/v1/rpc/' + name, { method: 'POST', redirect: 'error',
           signal: AbortSignal.timeout(10000),
-          headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+          headers: { ...serverHeaders(serviceKey), 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
         if (!response.ok) { await response.body?.cancel(); fail('server_error'); }
         const value = JSON.parse(await readBounded(response, 16384));
         check(object(value) && typeof value.status === 'string', 'server_error');

@@ -125,6 +125,30 @@ async function readExact(body: ReadableStream<Uint8Array>, size: number): Promis
   } finally { reader.releaseLock(); }
   return received === size ? bytes : null;
 }
+// Supabase API keys, new format first (2026-11-04; legacy keys retire by the
+// end of 2026). Same rules as ../_shared/supabase-keys.mjs, kept inline so this
+// single-file function deploys alone; tests/supabase-keys.test.cjs checks both.
+// SUPABASE_SECRET_KEYS / SUPABASE_PUBLISHABLE_KEYS are JSON objects keyed by
+// name ("default" is used). sb_secret_ keys are not JWTs: apikey header only.
+type Environment = (name: string) => string | undefined;
+const keyText = (value: unknown) => typeof value === "string" && value.length > 0 ? value : null;
+function namedKeys(raw: string | undefined): Record<string, unknown> | null {
+  if (typeof raw !== "string" || !raw.length) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+  } catch (_) { return null; }
+}
+export function serverKey(environment: Environment): string | null {
+  const secrets = namedKeys(environment("SUPABASE_SECRET_KEYS"));
+  const publishables = namedKeys(environment("SUPABASE_PUBLISHABLE_KEYS"));
+  const publicKeys = [...Object.values(publishables || {}).map(keyText),
+    keyText(environment("SUPABASE_ANON_KEY")), keyText(environment("SUPABASE_PUBLISHABLE_KEY"))].filter(Boolean);
+  return [keyText(secrets?.default), keyText(environment("SUPABASE_SERVICE_ROLE_KEY"))]
+    .find((key) => !!key && !key.startsWith("sb_publishable_") && !publicKeys.includes(key)) || null;
+}
+const serverHeaders = (key: string): Record<string, string> =>
+  key.startsWith("sb_secret_") ? { apikey: key } : { apikey: key, Authorization: "Bearer " + key };
 const hex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer), (n) => n.toString(16).padStart(2, "0")).join("");
 
 export function createHandler({ fetcher = fetch, environment = (name: string) => Deno.env.get(name) }: {
@@ -138,7 +162,7 @@ export function createHandler({ fetcher = fetch, environment = (name: string) =>
         url.searchParams.getAll("token").length !== 1 || url.searchParams.getAll("photo").length !== 1) return failed(404);
     const token = url.searchParams.get("token"), photo = url.searchParams.get("photo");
     if (!UUID.test(token || "") || !UUID.test(photo || "")) return failed(404);
-    const project = environment("SUPABASE_URL"), key = environment("SUPABASE_SERVICE_ROLE_KEY");
+    const project = environment("SUPABASE_URL"), key = serverKey(environment);
     if (!project || !key) return failed(503);
     let origin: string;
     try {
@@ -150,7 +174,7 @@ export function createHandler({ fetcher = fetch, environment = (name: string) =>
     const authorize = async (): Promise<Media | null> => {
       const response = await fetcher(origin + "/rest/v1/rpc/life_blog_public_media", {
         method: "POST", signal: request.signal, redirect: "error",
-        headers: { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json" },
+        headers: { ...serverHeaders(key), "Content-Type": "application/json" },
         body: JSON.stringify({ p_token: token, p_photo_id: photo }),
       });
       if (!response.ok) throw new Error("media lookup failed");
@@ -167,7 +191,7 @@ export function createHandler({ fetcher = fetch, environment = (name: string) =>
       if (!media) return failed(404);
       stored = await fetcher(origin + "/storage/v1/object/authenticated/haedo-blog-originals/" + media.path.split("/").map(encodeURIComponent).join("/"), {
         method: "GET", signal: request.signal, cache: "no-store", redirect: "error",
-        headers: { apikey: key, Authorization: "Bearer " + key },
+        headers: serverHeaders(key),
       });
       if (!stored.ok || !stored.body) { await stored.body?.cancel(); return failed(404); }
       const type = stored.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
