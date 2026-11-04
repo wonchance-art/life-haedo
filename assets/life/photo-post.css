@@ -438,9 +438,9 @@
 .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
 .photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
 .photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
-/* Private AI authorship mark (editor only). A dotted underline carries the
-   meaning without color; the soft fill only groups the run. Not rendered in
-   reading, HTML files or public copies. */
+/* Private AI authorship mark in the editor. A dotted underline carries the
+   meaning without color; the soft fill only groups the run. The owner's reading
+   views use .blog-ai-text (blog-public.css); HTML files and public copies carry no mark. */
 .photo-posts .ql-editor .photo-ai-text {
   background: var(--paper-2, #f4f7f5);
   border-radius: 3px;
