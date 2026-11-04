@@ -283,3 +283,100 @@ test('receive: a byte budget makes further posts wait while the ones being recei
   assert.equal(peakFiles, 2, 'the photos of that one post still download together');
   assert.equal((await list(b)).length, docs.length); assert.equal(cloud.rows.size, docs.length);
 });
+
+// 2026-11-04 (PR183 re-review minor): after dispose, files still waiting for a transfer slot
+// are not fetched; only those already started finish. Fails when the slot check is removed.
+test('receive: dispose stops queued photo downloads; only the ones already started finish', async () => {
+  const { b } = await seeded(6, 2), original = b.remote.downloadAsset, gates = [];
+  let started = 0;
+  b.remote.downloadAsset = async asset => { started++; await new Promise(done => gates.push(done)); return original.call(b.remote, asset); };
+  const cycle = b.sync.syncNow();
+  for (let i = 0; i < 200 && started < 6; i++) await new Promise(done => setTimeout(done, 1));
+  assert.equal(started, 6, 'six transfers start, the rest wait for a slot');
+  b.sync.dispose();
+  gates.splice(0).forEach(done => done());
+  await within(cycle, 5000, 'disposed cycle');
+  for (let i = 0; i < 20; i++) await new Promise(done => setTimeout(done, 1));
+  assert.equal(started, 6, 'no queued file is fetched after dispose');
+  assert.equal(gates.length, 0);
+});
+
+const deferredValue = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+// 2026-11-04 startup latency: the server list is requested together with the cycle's account
+// check, read only after the check passes, and requested again when the cycle sent anything first.
+test('receive: the post list overlaps the account check and is used only after it passes', async () => {
+  const { b, docs } = await seeded(2, 0), order = [], gate = deferredValue();
+  const listed = b.remote.syncList, verify = b.auth.verify;
+  b.remote.syncList = async () => { order.push('list'); return listed.call(b.remote); };
+  b.auth.verify = async () => { order.push('verify:start'); await gate.promise; order.push('verify:end'); return verify.call(b.auth); };
+  const cycle = b.sync.syncNow();
+  for (let i = 0; i < 20 && !order.includes('list'); i++) await new Promise(done => setTimeout(done, 1));
+  assert.deepEqual(order, ['list', 'verify:start'], 'the list is on its way while the account is checked');
+  assert.equal((await list(b)).length, 0, 'nothing is installed before the check passes');
+  gate.resolve(); await cycle;
+  assert.equal(order.filter(x => x === 'list').length, 1, 'one list request per cycle');
+  assert.deepEqual((await list(b)).map(row => row.id).sort(), docs.map(doc => doc.id).sort());
+});
+test('receive: a cycle that sends a post first lists again after sending', async () => {
+  const { b, docs } = await seeded(1, 0), order = [];
+  await b.sync.syncNow();
+  await save(b, await post({ title: '이 기기의 새 글', photos: 0 }));
+  const listed = b.remote.syncList, saveRemote = b.remote.save;
+  b.remote.syncList = async () => { order.push('list'); return listed.call(b.remote); };
+  b.remote.save = async (...args) => { order.push('save'); return saveRemote.apply(b.remote, args); };
+  assert.equal((await b.sync.syncNow()).state, 'synced');
+  assert.deepEqual(order, ['list', 'save', 'list'], 'the early list is set aside once this cycle sent a post');
+  assert.equal((await list(b)).length, docs.length + 1);
+});
+test('receive: when the account check fails nothing from the early list is installed', async () => {
+  const { b } = await seeded(2, 0);
+  b.auth.verify = async () => ({ id: '99999999-9999-4999-8999-999999999999' });
+  await b.sync.syncNow();
+  assert.equal((await list(b)).length, 0);
+  assert.notEqual(b.sync.getStatus().lastError, null);
+});
+
+// #185 review minor 3: publishing and withdrawing keep the post's remoteRevision, so a list read
+// before this device withdrew (the early list, or any list racing the change) must not put the
+// older publication back.
+test('receive: a list row with an older publication never replaces the one this device recorded later', async () => {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time });
+  const doc = await save(a, await post({ title: '공개했다가 철회한 글' })); await a.sync.syncNow();
+  await a.sync.publish(a.ws, doc.id, { expectedLocalRevision: doc.revision });
+  const listed = a.remote.syncList, stale = await listed.call(a.remote);
+  assert.equal(stale[0].publication.active, true);
+  await a.sync.unpublish(a.ws, doc.id);
+  const withdrawn = (await a.storage.readBlogSyncState(a.ws, doc.id)).publication;
+  assert.equal(withdrawn.active, false);
+  a.remote.syncList = async () => structuredClone(stale);
+  await a.sync.syncNow();
+  const after = (await a.storage.readBlogSyncState(a.ws, doc.id)).publication;
+  assert.equal(after.active, false, 'the withdrawn post is not shown as public again');
+  assert.equal(after.revision, withdrawn.revision);
+  // A newer publication from another device is still taken from the list.
+  a.remote.syncList = listed;
+  const row = cloud.rows.get(stale[0].id); row.publication = { ...row.publication, active: true, revision: withdrawn.revision + 1 };
+  await a.sync.syncNow();
+  assert.equal((await a.storage.readBlogSyncState(a.ws, doc.id)).publication.revision, withdrawn.revision + 1);
+});
+// #185 review minor 2: a cycle that sends a deletion lists again after it (the early list still
+// names the deleted post, which would be received again), and a failed early list is requested again.
+test('receive: a cycle that sends a deletion lists again, so the deleted post is not received back', async () => {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time }), order = [];
+  const doc = await save(a, await post({ title: '지울 글' })); await a.sync.syncNow();
+  await a.sync.deletePost(a.ws, doc.id);
+  const listed = a.remote.syncList, removed = a.remote.deletePost;
+  a.remote.syncList = async () => { order.push('list'); return listed.call(a.remote); };
+  a.remote.deletePost = async (...args) => { order.push('delete'); return removed.apply(a.remote, args); };
+  await a.sync.syncNow();
+  assert.deepEqual(order, ['list', 'delete', 'list']);
+  assert.equal(cloud.rows.has(doc.id), false);
+  assert.equal((await list(a)).length, 0, 'the deleted post is not received again from the early list');
+});
+test('receive: a failed early list is requested again after the account check', async () => {
+  const { b, docs } = await seeded(2, 0), listed = b.remote.syncList; let calls = 0;
+  b.remote.syncList = async () => { if (!calls++) throw Object.assign(Error('offline'), { code: 'network_error' }); return listed.call(b.remote); };
+  assert.equal((await b.sync.syncNow()).state, 'synced');
+  assert.equal(calls, 2);
+  assert.equal((await list(b)).length, docs.length);
+});

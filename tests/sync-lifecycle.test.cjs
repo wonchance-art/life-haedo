@@ -17,6 +17,7 @@ const WritingSync = require('../assets/life/writing-sync.js');
 const MaterialContinuitySync = require('../assets/life/material-continuity-sync.js');
 const AccountDocsSync = require('../assets/life/account-docs-sync.js');
 const AccountLibrary = require('../assets/life/account-library.js');
+const BlogSync = require('../assets/life/blog-sync.js');
 
 const owner = { projectUrl: 'https://example.invalid', userId: '00000000-0000-4000-8000-00000000000a' };
 const never = () => new Promise(() => {});
@@ -48,6 +49,7 @@ function record(t) {
   return {
     // Bindings in registration order: [target, event, handler name]; the poll as [every, handler name].
     table: () => ({ events: bound.map(([n, type, fn]) => [n, type, fn.name]), polls: [...timers.values()] }),
+    bound: () => [...bound],
     log,
   };
 }
@@ -154,6 +156,85 @@ test('AccountLibrary: online, focus, visibility and a 30 s poll once its lifecyc
   assert.deepEqual(r.table(), EMPTY);
 });
 
+// S2b (2026-11-04): BlogSync. Its handlers are pinned by target, event and order, and by what each
+// does (the same before and after the move): a server list (a full pass), an account check without
+// a list (an upload-only flush), or the delay of the next scheduled pass.
+function blogEngine(t) {
+  const r = record(t), calls = { verify: 0, list: 0, delays: [] };
+  const storage = { account: owner, readBlogSyncState: async () => null, writeBlogSyncState: async () => ({}),
+    listAccountLibraries: async () => [], listBlogSyncStates: async () => ({ posts: [], states: [], tombstones: [] }) };
+  const auth = { epoch: 1, getAccount: () => owner, verify: async () => { calls.verify++; return { id: owner.userId }; } };
+  const remote = { syncList: async () => { calls.list++; return []; }, dispose() {} };
+  const timers = { setTimeout: (fn, delay) => { calls.delays.push(delay); return calls.delays.length; }, clearTimeout() {} };
+  const sync = BlogSync.create({ storage, auth, remote, blog: { pack() {}, hydrate() {} }, photoPost: { validate() {}, compact: v => v },
+    autoSync: true, locks: null, timers, interval: 30000 });
+  return { r, sync, calls };
+}
+const fire = (r, where, type, event = {}) => { for (const [n, t2, fn] of r.bound()) if (n === where && t2 === type) fn(event); };
+test('BlogSync: online, focus, pagehide, pageshow and visibility, no poll; each handler keeps its pass; dispose removes them', async t => {
+  const { r, sync, calls } = blogEngine(t);
+  assert.deepEqual(r.table().events.map(([n, type]) => [n, type]),
+    [['window', 'online'], ['window', 'focus'], ['window', 'pagehide'], ['window', 'pageshow'], ['document', 'visibilitychange']]);
+  assert.deepEqual(r.table().events.map(([, , name]) => name), ['online', 'focus', 'pagehide', 'pageshow', 'visibility'], 'named handlers since S2b');
+  assert.deepEqual(r.table().polls, [], 'BlogSync schedules its own next pass instead of a poll');
+  assert.deepEqual(calls.delays, [0], 'start schedules the first pass at once');
+  const step = async () => { for (let i = 0; i < 5; i++) await settle(); };
+  // online: a forced full pass (account check and the server list).
+  fire(r, 'window', 'online'); await step();
+  assert.deepEqual([calls.verify, calls.list], [1, 1]);
+  // focus: the next pass at once (no request by itself).
+  calls.delays.length = 0; fire(r, 'window', 'focus'); await step();
+  assert.deepEqual(calls.delays, [0]); assert.deepEqual([calls.verify, calls.list], [1, 1]);
+  // hidden: an upload-only flush (an account check, no list).
+  globalThis.document.visibilityState = 'hidden'; fire(r, 'document', 'visibilitychange'); await step();
+  assert.deepEqual([calls.verify, calls.list], [2, 1]);
+  // visible again: the next pass at once.
+  globalThis.document.visibilityState = 'visible'; calls.delays.length = 0; fire(r, 'document', 'visibilitychange'); await step();
+  assert.deepEqual(calls.delays, [0]);
+  // a page that is not kept: an upload-only flush.
+  fire(r, 'window', 'pagehide', { persisted: false }); await step();
+  assert.deepEqual([calls.verify, calls.list], [3, 1]);
+  // back/forward cache: parked starts nothing; the resumed page waits the regular interval.
+  fire(r, 'window', 'pagehide', { persisted: true }); fire(r, 'window', 'online'); await step();
+  assert.deepEqual([calls.verify, calls.list], [3, 1], 'a parked page makes no request');
+  calls.delays.length = 0; fire(r, 'window', 'pageshow', { persisted: true }); await step();
+  assert.deepEqual(calls.delays, [30000]);
+  sync.dispose();
+  assert.deepEqual(r.table(), EMPTY);
+});
+
+// #188 review M6/M8b: what the handlers pass to a pass, on real storage and the fake cloud.
+// online lifts the retry wait (force) and focus does not; hidden flushes a fresh draft
+// (flushDrafts) and a visible pass leaves it waiting.
+test('BlogSync: online sends a post waiting to retry and focus does not; hidden sends a fresh draft and a visible pass does not', async t => {
+  const Cloud = require('./helpers/blog-sync-cloud.cjs');
+  const r = record(t), cloud = Cloud.server(), time = Cloud.clock(), dev = await Cloud.device(cloud, 'mac', { time });
+  const scheduled = [];
+  const sync = BlogSync.create({ storage: dev.storage, auth: dev.auth, blog: Cloud.Blog, photoPost: Cloud.Photo, remote: dev.remote, makeId: Cloud.Core.id,
+    locks: null, now: () => time.now, autoSync: true, interval: 30000, timers: { setTimeout: fn => { scheduled.push(fn); return scheduled.length; }, clearTimeout() {} } });
+  const step = async () => { for (let i = 0; i < 20; i++) await settle(); };
+  const runScheduled = async () => { const due = scheduled.splice(0); for (const fn of due) fn(); await step(); await sync.syncNow().catch(() => {}); };
+  // A saved post whose first upload failed waits to retry.
+  await dev.storage.savePhotoPost(dev.ws, await Cloud.post({ title: '재시도 기다리는 글' }), 0);
+  cloud.control.failSave = () => true;
+  await sync.syncNow(); cloud.control.failSave = null;
+  assert.equal(cloud.rows.size, 0, 'the first upload failed');
+  // focus: a pass at once, which respects the retry wait.
+  fire(r, 'window', 'focus'); await runScheduled();
+  assert.equal(cloud.rows.size, 0, 'focus does not lift the retry wait');
+  // online: a forced pass lifts it.
+  fire(r, 'window', 'online'); await step(); await sync.syncNow().catch(() => {});
+  assert.equal(cloud.rows.size, 1, 'online sends the waiting post');
+  // A draft written just now waits for its typing pause.
+  await dev.storage.savePhotoPost(dev.ws, await Cloud.post({ title: '방금 쓴 초안', status: 'draft', time: new Date(time.now).toISOString() }), 0);
+  globalThis.document.visibilityState = 'visible'; fire(r, 'document', 'visibilitychange'); await runScheduled();
+  assert.equal(cloud.rows.size, 1, 'a visible pass leaves the fresh draft waiting');
+  globalThis.document.visibilityState = 'hidden'; fire(r, 'document', 'visibilitychange'); await step(); await sync.syncNow({ uploadOnly: true }).catch(() => {});
+  assert.equal(cloud.rows.size, 2, 'hidden flushes the draft');
+  sync.dispose();
+  assert.deepEqual(r.table(), EMPTY);
+});
+
 test('SyncLifecycle.attach binds in the given order, starts the poll after them, and detach removes exactly that once', () => {
   const SyncLifecycle = require('../assets/life/sync-lifecycle.js');
   const log = [];
@@ -199,9 +280,13 @@ const OLDER_PAGE = [
       const library = api.create({ storage, core: {}, sync: manager, compositionSync: manager, libraryMetaSync: manager,
         auth: { epoch: 1, user: { id: owner.userId }, getAccount: () => owner, verify: () => { hit(); return failing(); } }, remote: { dispose() {}, capabilities: failing } });
       library.bootstrap().catch(() => {}); return library; } },
+  { file: 'blog-sync.js', name: 'BlogSync', first: 'auth.verify', starts: 1, deps: ['sync-common.js'],
+    run: (api, hit) => { const storage = { account: owner, readBlogSyncState: never, writeBlogSyncState: never };
+      const sync = api.create({ storage, auth: { epoch: 1, getAccount: () => owner, verify: () => { hit(); return never(); } },
+        remote: { syncList: never, dispose() {} }, blog: { pack() {}, hydrate() {} }, photoPost: { validate() {} }, autoSync: true, locks: null }); return sync; } },
 ];
 
-for (const { file, name, first, starts, run } of OLDER_PAGE) {
+for (const { file, name, first, starts, run, deps = [] } of OLDER_PAGE) {
   test(`an older cached page without sync-lifecycle.js: ${name} starts with no automatic wake-ups`, async () => {
     const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
     const bound = [], context = vm.createContext({
@@ -210,10 +295,12 @@ for (const { file, name, first, starts, run } of OLDER_PAGE) {
       setInterval: () => { bound.push('interval'); return 1; }, clearInterval() {}, setTimeout, clearTimeout, queueMicrotask, structuredClone,
       Promise, Date, Map, Set, WeakMap, Error, TypeError, Object, Array, JSON, Math, Number, String, Boolean, Symbol, RegExp, Reflect, Proxy, URL, TextEncoder, crypto, console,
     });
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../assets/life', file), 'utf8'), context);
+    for (const dep of [...deps, file]) vm.runInContext(fs.readFileSync(path.join(__dirname, '../assets/life', dep), 'utf8'), context);
     assert.equal(context.HaedoLife.SyncLifecycle, undefined, 'the module is really absent');
     let runs = 0;
     const engine = run(context.HaedoLife[name], () => { runs++; }); await settle(); await settle();
+    // BlogSync's first pass is a 0 ms timer.
+    await new Promise(done => setTimeout(done, 5)); await settle();
     assert.deepEqual(bound, [], 'no listener and no poll');
     assert.equal(runs, starts, 'the start-up pass reached ' + first + ' exactly ' + starts + ' time(s)');
     assert.doesNotThrow(() => engine.dispose());

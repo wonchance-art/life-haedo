@@ -19,6 +19,10 @@
     if (!api?.canonical) throw Object.assign(new Error('동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.'), { code: 'sync_common_missing' });
     return api;
   }
+  // S2b: page-lifecycle wiring (sync-lifecycle.js), as the other sync engines (S2a). An older cached
+  // page may lack it: the engine then binds no page events and keeps its own scheduled passes and
+  // explicit syncs, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const CONFLICT_PREFIX = '복구 사본 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
   // A concurrent local change (another tab) is simply decided again next cycle.
@@ -51,7 +55,7 @@
     let unplacedDelay = 0;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
     let parked = false;
-    const removers = [];
+    let wiring = null;
     const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, posts: null, drafts: null, lastSyncAt: null, lastError: null, running: false };
     const canonical = syncCommon().canonical; // S0 group G3, shared with material-continuity-sync
     const key = (ws, id) => ws + '/' + id;
@@ -130,10 +134,12 @@
       try { return await task(); }
       finally { heldBytes -= size; waitingBytes.splice(0).forEach(resolve => resolve()); }
     }
-    async function transfer(asset) {
+    // A transfer that waited for a slot starts only while its cycle is still current: after an
+    // account change or dispose the queued files are not fetched (the started ones still finish).
+    async function transfer(c, asset) {
       while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
       transfers++;
-      try { return await remote.downloadAsset(asset); }
+      try { guard(c); return await remote.downloadAsset(asset); }
       finally { transfers--; waitingTransfers.shift()?.(); }
     }
     async function download(c, row) {
@@ -142,7 +148,7 @@
       // All of a post's transfers end before it fails, so its byte budget is not given back early.
       const results = await Promise.allSettled(row.data.photos.map(async photo => {
         const asset = row.assets[photo.id];
-        const pair = await Promise.allSettled([transfer({ bucket: asset.bucket, path: asset.path }), photo.view ? transfer(asset.view) : undefined]);
+        const pair = await Promise.allSettled([transfer(c, { bucket: asset.bucket, path: asset.path }), photo.view ? transfer(c, asset.view) : undefined]);
         const rejected = pair.find(result => result.status === 'rejected'); if (rejected) throw rejected.reason; guard(c);
         const blob = typed(pair[0].value, photo), view = photo.view ? typed(pair[1].value, photo.view) : undefined;
         files.set(photo.id, view ? { blob, view } : { blob });
@@ -441,10 +447,15 @@
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
+    // Publishing and withdrawing keep the post's remoteRevision; only the publication's own revision
+    // grows. A list read before this device's later publish or withdrawal (2026-11-04: the list is
+    // requested together with the account check) carries an older publication: it is not taken.
+    const publicRevision = value => value?.revision || 0;
     async function refreshPublication(ws, id, head) {
       return serial(ws, id, async () => {
         const c = context(ws, id), state = await readState(c);
-        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending)
+        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending &&
+            publicRevision(head.publication) >= publicRevision(state.publication))
           await writeState(c, state, { publication: head.publication ?? null });
       });
     }
@@ -580,11 +591,20 @@
       const c = context('*', 'cycle');
       summary.running = true; publish$({ type: 'status', status: getStatus() });
       let rows = null;
+      // The server post list is requested together with the cycle's account check (2026-11-04:
+      // one round trip less before a new device's first row). It is read only after that check
+      // passes and only when this cycle sent nothing to the server first; otherwise the list is
+      // requested again at the same point as before. Each listed row stays a hint: apply,
+      // install and vanish read the exact server row themselves.
+      const early = uploadOnly ? null : remote.syncList();
+      early?.catch(() => {});
       try {
         await verified(c);
         const libraries = await storage.listAccountLibraries(); guard(c);
         const owned = libraries.map(item => item.workspaceId), eligible = libraries.filter(item => item.eligible !== false).map(item => item.workspaceId);
         let local = await snapshot(c, owned);
+        // Whether this cycle may send anything to the server before it lists (then the early list is not used).
+        let sent = local.tombstones.length > 0 || local.duplicates.length > 0;
         for (const item of local.tombstones) {
           try {
             if (local.byRemote.has(item.remoteId)) await storage.clearBlogTombstone(item.ws, item.remoteId);
@@ -624,8 +644,9 @@
           for (const item of group.edits) if (present(item)) await push(item.ws, item.post.id, { verify: false, byRemote: local.byRemote });
         }));
         if (!uploadOnly) {
+          if (uploads.length || groups.length) sent = true;
           local = await snapshot(c, owned);
-          rows = await remote.syncList(); guard(c);
+          rows = await (early && !sent ? early.catch(() => remote.syncList()) : remote.syncList()); guard(c);
           const deleted = new Set(local.tombstones.map(item => item.remoteId)), seen = new Set(rows.map(row => row.id));
           let fallback = null;
           const target = async row => {
@@ -767,22 +788,27 @@
       if (draftTimer) timers.clearTimeout(draftTimer);
       draftTimer = timers.setTimeout(() => { draftTimer = null; void syncNow({ uploadOnly: true }); }, DRAFT_DELAY + 50);
     }
+    // Page events. A restored connection does not wait for backoff; a page that is not kept
+    // flushes its uploads and drafts; a parked page (back/forward cache) starts nothing.
+    function online() { void syncNow({ force: true }); }
+    function focus() { kick(0); }
+    function pagehide(event) { if (event?.persisted) parked = true; else void syncNow({ uploadOnly: true, flushDrafts: true }); }
+    // The resumed page verifies its account first; each later cycle verifies again.
+    function pageshow(event) { if (event?.persisted && parked) { parked = false; schedule(interval); } }
+    function visibility() {
+      if (events?.document?.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
+    }
     function start() {
       if (disposed || started) return; started = true;
-      const on = (target, name, handler) => { if (typeof target?.addEventListener === 'function') { target.addEventListener(name, handler); removers.push(() => target.removeEventListener(name, handler)); } };
-      const doc = events?.document;
-      on(events, 'online', () => { void syncNow({ force: true }); });
-      on(events, 'focus', () => kick(0));
-      on(events, 'pagehide', event => { if (event?.persisted) parked = true; else void syncNow({ uploadOnly: true, flushDrafts: true }); });
-      // The resumed page verifies its account first; each later cycle verifies again.
-      on(events, 'pageshow', event => { if (event?.persisted && parked) { parked = false; schedule(interval); } });
-      on(doc, 'visibilitychange', () => {
-        if (doc.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
-      });
+      // No poll: each pass schedules the next one itself (interval, backoff, drafts).
+      wiring = events ? syncLifecycle()?.attach(events, {
+        listen: [['window', 'online', online], ['window', 'focus', focus], ['window', 'pagehide', pagehide],
+          ['window', 'pageshow', pageshow], ['document', 'visibilitychange', visibility]],
+      }) || null : null;
       schedule(0);
     }
     function stop() {
-      started = false; removers.splice(0).forEach(remove => remove());
+      started = false; wiring?.detach(); wiring = null;
       if (timer) timers.clearTimeout(timer); if (draftTimer) timers.clearTimeout(draftTimer); timer = draftTimer = null;
     }
     // Per-post status for lists, computed locally without network.
