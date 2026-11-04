@@ -28,6 +28,7 @@ export async function build(root = new URL('../', import.meta.url)) {
 --   * 새 스키마 haedo_ai_private와 새 함수만 만든다. 기존 테이블·함수·행은 읽거나 바꾸지 않는다.
 --   * 다시 실행해도 된다(if not exists / create or replace / drop policy if exists).
 --   * 사용자 데이터 삭제·권한 완화가 없다. anon에는 어떤 실행 권한도 주지 않는다.
+--   * 월 $10 상한은 프로젝트 전체(모든 계정 합계)에 걸린다. Edge 함수는 HAEDO_AI_OWNER_ID 계정만 받는다.
 -- 실행 후 맨 아래 결과 표에서 모든 ok 값이 true인지 확인한다.
 
 do $haedo_install$
@@ -73,6 +74,10 @@ ${tag};
     raise exception 'a signed-in user can write AI usage directly';
   end if;
   if haedo_ai_private.monthly_limit_micro_usd() <> 10000000 then raise exception 'unexpected monthly AI cap'; end if;
+  if to_regprocedure('haedo_ai_private.project_used(date)') is null or to_regprocedure('haedo_ai_private.lock_project()') is null
+     or to_regprocedure('haedo_ai_private.expire_stale(uuid)') is not null then
+    raise exception 'the AI cap is not project-wide';
+  end if;
   raise notice 'haedo AI usage cap installed; % existing tables unchanged', (select count(*) from jsonb_object_keys(before));
 end
 $haedo_install$;
@@ -91,7 +96,8 @@ union all
 select 'only service_role writes AI usage', not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${WRITERS})
   and (has_function_privilege('authenticated', p.oid, 'execute') or not has_function_privilege('service_role', p.oid, 'execute')))
 union all
-select 'monthly cap is $10', haedo_ai_private.monthly_limit_micro_usd() = 10000000;
+select 'monthly cap is $10 for the whole project', haedo_ai_private.monthly_limit_micro_usd() = 10000000
+  and to_regprocedure('haedo_ai_private.project_used(date)') is not null and to_regprocedure('haedo_ai_private.expire_stale(uuid)') is null;
 `;
 }
 

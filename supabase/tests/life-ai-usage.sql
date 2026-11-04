@@ -1,6 +1,6 @@
 -- Isolated local PostgreSQL only. Synthetic anonymous owners; everything is rolled back.
--- Monthly AI cap (20261104090000_life_ai_usage.sql): reserve -> settle/release, the $10 cap
--- counting open reservations, duplicate and busy guards, stale expiry charged at the maximum,
+-- Monthly AI cap (20261104090000_life_ai_usage.sql): reserve -> settle/release, the project-wide
+-- $10 cap (all accounts together) counting open reservations, duplicate and busy guards, stale expiry charged at the maximum,
 -- service_role-only writes, owner-only reads (RLS) and no anon access. Concurrency (two
 -- sessions racing for the last budget) runs in tests/run-sql-replay-postgres.cjs.
 -- Sets both JWT settings so it runs on the replay stub (tests/helpers/supabase-pg-stub.cjs).
@@ -25,11 +25,11 @@ begin
  perform set_config('request.jwt.claim.role', role_name, true);
 end $$;
 do $tests$
-declare a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); c uuid:=gen_random_uuid(); stranger uuid:=gen_random_uuid();
+declare a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); c uuid:=gen_random_uuid(); stranger uuid:=gen_random_uuid(); stranger_ok uuid:=gen_random_uuid();
  r1 uuid:=gen_random_uuid(); r2 uuid:=gen_random_uuid(); r3 uuid:=gen_random_uuid(); r4 uuid:=gen_random_uuid(); r5 uuid:=gen_random_uuid();
- x jsonb; u haedo_ai_private.usage; stale uuid; m date:=date_trunc('month', clock_timestamp() at time zone 'UTC')::date; n integer;
+ x jsonb; u haedo_ai_private.usage; stale uuid; total bigint; m date:=date_trunc('month', clock_timestamp() at time zone 'UTC')::date; n integer;
 begin
- insert into auth.users(id) values(a),(b),(c);
+ insert into auth.users(id) values(a),(b),(c),(stranger_ok);
 
  -- Prices (micro-USD): Haiku 5.5 $0.10/$0.50, Sonnet 5.5 $2/$10 per MTok, rounded up.
  perform pg_temp.ai_ok(haedo_ai_private.cost_micro_usd('claude-haiku-5-5',1000000,0)=100000 and haedo_ai_private.cost_micro_usd('claude-haiku-5-5',0,1000000)=500000,'Haiku 5.5 prices');
@@ -47,7 +47,8 @@ begin
   and not has_function_privilege('authenticated','public.life_ai_settle(uuid,uuid,bigint,bigint)','execute')
   and not has_function_privilege('authenticated','public.life_ai_release(uuid,uuid)','execute')
   and not has_function_privilege('authenticated','haedo_ai_private.reserve(uuid,uuid,text,integer,integer)','execute')
-  and not has_function_privilege('authenticated','haedo_ai_private.expire_stale(uuid)','execute'),'a signed-in user cannot reserve, settle or release');
+  and not has_function_privilege('authenticated','haedo_ai_private.expire_stale()','execute')
+  and not has_function_privilege('authenticated','haedo_ai_private.project_used(date)','execute'),'a signed-in user cannot reserve, settle or release');
  perform pg_temp.ai_ok(has_function_privilege('service_role','public.life_ai_reserve(uuid,uuid,text,integer,integer)','execute')
   and has_function_privilege('service_role','public.life_ai_settle(uuid,uuid,bigint,bigint)','execute')
   and has_function_privilege('service_role','public.life_ai_release(uuid,uuid)','execute')
@@ -115,6 +116,21 @@ begin
  perform pg_temp.ai_ok(public.life_ai_settle(b,stale,1,1)->>'state'='expired','a late settle of an expired request changes nothing');
  u:=pg_temp.ai_row(b,m);
  perform pg_temp.ai_ok(u.cost_micro_usd=24,'the expired charge is not changed by the late settle');
+
+ -- The cap is project-wide: another account's usage counts, whatever this account has used.
+ execute 'reset role';
+ total:=pg_temp.ai_n(format('select coalesce(sum(cost_micro_usd+reserved_micro_usd),0) from haedo_ai_private.usage where month=%L',m));
+ update haedo_ai_private.usage set cost_micro_usd=cost_micro_usd+(10000000-total-5) where owner_id=c and month=m;
+ perform pg_temp.ai_as('service_role',null);
+ u:=pg_temp.ai_row(b,m);
+ perform pg_temp.ai_ok(u.cost_micro_usd+u.reserved_micro_usd < 100,'this account has used almost nothing');
+ x:=public.life_ai_reserve(b,gen_random_uuid(),'claude-haiku-5-5',10,10);
+ perform pg_temp.ai_ok(x->>'status'='limit' and (x->>'used_micro_usd')::bigint=10000000-5,'another account''s usage puts this account at the project cap');
+ x:=public.life_ai_reserve(stranger_ok,gen_random_uuid(),'claude-haiku-5-5',10,10);
+ perform pg_temp.ai_ok(x->>'status'='limit','a new account is refused at the project cap too');
+ x:=public.life_ai_reserve(b,gen_random_uuid(),'claude-haiku-5-5',10,8);
+ perform pg_temp.ai_ok(x->>'status'='reserved' and (x->>'remaining_micro_usd')::bigint=0,'the last 5 micro-USD of the project can still be reserved');
+ perform pg_temp.ai_ok(pg_temp.ai_n(format('select sum(cost_micro_usd+reserved_micro_usd) from haedo_ai_private.usage where month=%L',m))=10000000,'project total equals the cap, never more');
 
  -- Invalid input raises.
  perform pg_temp.ai_ok(pg_temp.ai_state(format('select public.life_ai_reserve(%L,%L,%L,10,10)',a,gen_random_uuid(),'claude-opus-5-5'))='22023','an unpriced model is rejected');

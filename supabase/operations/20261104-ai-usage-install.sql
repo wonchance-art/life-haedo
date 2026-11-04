@@ -1,7 +1,7 @@
 -- 해도 2026-11-04 AI 제안 월 상한 설치 (Supabase SQL Editor에서 한 번에 실행)
 -- 생성: node scripts/build-ai-usage-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
 -- 포함 마이그레이션(원본 sha256):
---   20261104090000_life_ai_usage.sql  0af63ce4d0b9133ed4e17d75c1961c07ba64410bddd224cddffb5a3384bfc6c9
+--   20261104090000_life_ai_usage.sql  48435434bb591f69a63ca1c077a070953e3b12862b1d861c3f7d19c9e58d295c
 --
 -- 안전 장치:
 --   * 설치 전체가 DO 블록 "한 문장"이다. 어느 단계에서 실패하면 전체가 되돌려져 아무것도 바뀌지 않는다.
@@ -10,6 +10,7 @@
 --   * 새 스키마 haedo_ai_private와 새 함수만 만든다. 기존 테이블·함수·행은 읽거나 바꾸지 않는다.
 --   * 다시 실행해도 된다(if not exists / create or replace / drop policy if exists).
 --   * 사용자 데이터 삭제·권한 완화가 없다. anon에는 어떤 실행 권한도 주지 않는다.
+--   * 월 $10 상한은 프로젝트 전체(모든 계정 합계)에 걸린다. Edge 함수는 HAEDO_AI_OWNER_ID 계정만 받는다.
 -- 실행 후 맨 아래 결과 표에서 모든 ok 값이 true인지 확인한다.
 
 do $haedo_install$
@@ -30,6 +31,9 @@ begin
   -- ===== 20261104090000_life_ai_usage.sql =====
   execute $haedo_ai_m1$
 -- Server-enforced monthly cap for the haedo-ai Edge function (writing-ai-review §8, approved 2026-11-04).
+-- The $10 cap is PROJECT-WIDE: it is the owner's provider key, so the sum over every account
+-- (settled cost plus open reservations) is compared with the cap, under one project lock.
+-- Rows stay per account for reading; the Edge function also admits only HAEDO_AI_OWNER_ID.
 -- Before a provider call the function reserves the request's worst-case cost; afterwards it
 -- settles the real usage (or returns the reservation when the provider refused the request).
 -- Only service_role (the Edge function) reserves, settles or releases. The owner may read their
@@ -93,23 +97,32 @@ returns bigint language sql immutable set search_path=pg_catalog as $$
 
 -- Open reservations older than 10 minutes belong to a call that never settled (the Edge
 -- function stops long before). They are charged at their reserved maximum, because the
--- provider may have billed the call. Caller holds the owner lock.
-create or replace function haedo_ai_private.expire_stale(p_owner_id uuid)
+-- provider may have billed the call. Applies to every account. Caller holds the project lock.
+create or replace function haedo_ai_private.expire_stale()
 returns void language plpgsql security definer set search_path=pg_catalog as $$
 declare r record;
 begin
- for r in select request_id, month, reserved_micro_usd from haedo_ai_private.reservations
-  where owner_id=p_owner_id and status='reserved' and created_at < clock_timestamp() - interval '10 minutes' order by created_at for update loop
+ for r in select owner_id, request_id, month, reserved_micro_usd from haedo_ai_private.reservations
+  where status='reserved' and created_at < clock_timestamp() - interval '10 minutes' order by created_at for update loop
   update haedo_ai_private.reservations set status='expired', cost_micro_usd=r.reserved_micro_usd, finished_at=clock_timestamp()
-   where owner_id=p_owner_id and request_id=r.request_id;
+   where owner_id=r.owner_id and request_id=r.request_id;
   update haedo_ai_private.usage set reserved_micro_usd=reserved_micro_usd-r.reserved_micro_usd,
    cost_micro_usd=cost_micro_usd+r.reserved_micro_usd, requests=requests+1, updated_at=clock_timestamp()
-   where owner_id=p_owner_id and month=r.month;
+   where owner_id=r.owner_id and month=r.month;
  end loop;
 end $$;
 
--- Reserve before calling the provider. One owner's reserve/settle/release run one at a time
--- (transaction advisory lock), so concurrent requests can never pass the cap together.
+-- One transaction advisory lock for the whole project: every reserve/settle/release of every
+-- account runs one at a time, so concurrent requests can never pass the cap together.
+create or replace function haedo_ai_private.lock_project()
+returns void language sql volatile set search_path=pg_catalog as $$ select pg_advisory_xact_lock(hashtextextended('haedo_ai_usage:project', 0)) $$;
+
+-- Settled cost plus open reservations of ALL accounts in one month. Caller holds the project lock.
+create or replace function haedo_ai_private.project_used(p_month date)
+returns bigint language sql stable security definer set search_path=pg_catalog as $$
+ select coalesce(sum(cost_micro_usd + reserved_micro_usd), 0)::bigint from haedo_ai_private.usage where month = p_month $$;
+
+-- Reserve before calling the provider.
 create or replace function haedo_ai_private.reserve(p_owner_id uuid, p_request_id uuid, p_model text, p_max_input_tokens integer, p_max_output_tokens integer)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare v_month date := date_trunc('month', clock_timestamp() at time zone 'UTC')::date;
@@ -120,15 +133,15 @@ begin
   or p_max_output_tokens is null or p_max_output_tokens not between 1 and 16000 then
   raise exception using errcode='22023', message='life_ai_invalid_request'; end if;
  if not exists (select 1 from auth.users where id=p_owner_id) then raise exception using errcode='22023', message='life_ai_unknown_owner'; end if;
- perform pg_advisory_xact_lock(hashtextextended('haedo_ai_usage:' || p_owner_id::text, 0));
- perform haedo_ai_private.expire_stale(p_owner_id);
+ perform haedo_ai_private.lock_project();
+ perform haedo_ai_private.expire_stale();
  if exists (select 1 from haedo_ai_private.reservations where owner_id=p_owner_id and request_id=p_request_id) then
   return jsonb_build_object('status','duplicate'); end if;
  select count(*) into v_open from haedo_ai_private.reservations where owner_id=p_owner_id and status='reserved';
  if v_open >= 4 then return jsonb_build_object('status','busy'); end if;
  v_cost := haedo_ai_private.cost_micro_usd(p_model, p_max_input_tokens, p_max_output_tokens);
  insert into haedo_ai_private.usage(owner_id, month) values (p_owner_id, v_month) on conflict (owner_id, month) do nothing;
- select cost_micro_usd + reserved_micro_usd into v_used from haedo_ai_private.usage where owner_id=p_owner_id and month=v_month for update;
+ v_used := haedo_ai_private.project_used(v_month);
  if v_used + v_cost > v_limit then
   return jsonb_build_object('status','limit','month',v_month,'used_micro_usd',v_used,'limit_micro_usd',v_limit); end if;
  insert into haedo_ai_private.reservations(owner_id, request_id, month, model, reserved_micro_usd)
@@ -147,7 +160,7 @@ begin
  if p_owner_id is null or p_request_id is null or p_input_tokens is null or p_input_tokens not between 0 and 10000000
   or p_output_tokens is null or p_output_tokens not between 0 and 10000000 then
   raise exception using errcode='22023', message='life_ai_invalid_request'; end if;
- perform pg_advisory_xact_lock(hashtextextended('haedo_ai_usage:' || p_owner_id::text, 0));
+ perform haedo_ai_private.lock_project();
  select * into r from haedo_ai_private.reservations where owner_id=p_owner_id and request_id=p_request_id for update;
  if not found then raise exception using errcode='22023', message='life_ai_unknown_request'; end if;
  if r.status <> 'reserved' then return jsonb_build_object('status','already_finished','state',r.status); end if;
@@ -158,7 +171,7 @@ begin
  update haedo_ai_private.reservations set status='settled', cost_micro_usd=v_cost, finished_at=clock_timestamp()
   where owner_id=p_owner_id and request_id=p_request_id;
  return jsonb_build_object('status','settled','month',r.month,'cost_micro_usd',v_cost,'month_cost_micro_usd',u.cost_micro_usd,
-  'remaining_micro_usd',greatest(0, v_limit-u.cost_micro_usd-u.reserved_micro_usd));
+  'remaining_micro_usd',greatest(0, v_limit-haedo_ai_private.project_used(r.month)));
 end $$;
 
 -- Return a reservation whose provider call was refused before any work (not billed).
@@ -167,7 +180,7 @@ returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare r haedo_ai_private.reservations%rowtype;
 begin
  if p_owner_id is null or p_request_id is null then raise exception using errcode='22023', message='life_ai_invalid_request'; end if;
- perform pg_advisory_xact_lock(hashtextextended('haedo_ai_usage:' || p_owner_id::text, 0));
+ perform haedo_ai_private.lock_project();
  select * into r from haedo_ai_private.reservations where owner_id=p_owner_id and request_id=p_request_id for update;
  if not found then raise exception using errcode='22023', message='life_ai_unknown_request'; end if;
  if r.status <> 'reserved' then return jsonb_build_object('status','already_finished','state',r.status); end if;
@@ -229,6 +242,10 @@ $haedo_ai_m1$;
     raise exception 'a signed-in user can write AI usage directly';
   end if;
   if haedo_ai_private.monthly_limit_micro_usd() <> 10000000 then raise exception 'unexpected monthly AI cap'; end if;
+  if to_regprocedure('haedo_ai_private.project_used(date)') is null or to_regprocedure('haedo_ai_private.lock_project()') is null
+     or to_regprocedure('haedo_ai_private.expire_stale(uuid)') is not null then
+    raise exception 'the AI cap is not project-wide';
+  end if;
   raise notice 'haedo AI usage cap installed; % existing tables unchanged', (select count(*) from jsonb_object_keys(before));
 end
 $haedo_install$;
@@ -247,4 +264,5 @@ union all
 select 'only service_role writes AI usage', not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('life_ai_reserve','life_ai_settle','life_ai_release')
   and (has_function_privilege('authenticated', p.oid, 'execute') or not has_function_privilege('service_role', p.oid, 'execute')))
 union all
-select 'monthly cap is $10', haedo_ai_private.monthly_limit_micro_usd() = 10000000;
+select 'monthly cap is $10 for the whole project', haedo_ai_private.monthly_limit_micro_usd() = 10000000
+  and to_regprocedure('haedo_ai_private.project_used(date)') is not null and to_regprocedure('haedo_ai_private.expire_stale(uuid)') is null;

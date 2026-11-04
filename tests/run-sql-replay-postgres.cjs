@@ -13,7 +13,8 @@
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
  * 4.5 Runs supabase/tests/blog-ai-authorship.sql (rolled back) on a fresh replayed copy.
  * 4.6 Runs supabase/tests/life-ai-usage.sql (rolled back) on a fresh replayed copy, then two
- *     sessions race for the last of the monthly AI budget: exactly one reservation wins.
+ *     sessions of two DIFFERENT accounts race for the last of the project-wide monthly AI
+ *     budget: exactly one reservation wins.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -159,30 +160,31 @@ async function main() {
       const result = rows[0].result;
       assert.equal(result.failures, 0); assert(result.passed >= 50, 'AI usage assertions ran: ' + result.passed);
       pass(`supabase/tests/life-ai-usage.sql: ${result.passed} assertions on a fresh replayed copy (rolled back)`);
-      // Two Edge requests of one owner race for the last 1,000 micro-USD. Session 1 reserves
-      // and holds its transaction open; session 2 must wait for it, then see the cap.
-      const owner = (await usage.query('select gen_random_uuid() id')).rows[0].id;
-      await usage.query('insert into auth.users(id) values($1)', [owner]);
+      // Two Edge requests of two different accounts race for the last 1,000 micro-USD of the
+      // project. Session 1 reserves for account 1 and holds its transaction open; session 2
+      // (account 2, no usage of its own) must wait for the project lock, then see the cap.
+      const [owner, other] = (await usage.query('select gen_random_uuid() a, gen_random_uuid() b')).rows.map(r => [r.a, r.b])[0];
+      await usage.query('insert into auth.users(id) values($1),($2)', [owner, other]);
       await usage.query(`insert into haedo_ai_private.usage(owner_id,month,cost_micro_usd) values($1,date_trunc('month',clock_timestamp() at time zone 'UTC')::date,9999000)`, [owner]);
-      const reserve = (client, id) => client.query(`select public.life_ai_reserve($1,$2,'claude-haiku-5-5',1000,1000)->>'status' s`, [owner, id]).then(r => r.rows[0].s);
+      const reserve = (client, id, who = owner) => client.query(`select public.life_ai_reserve($1,$2,'claude-haiku-5-5',1000,1000)->>'status' s`, [who, id]).then(r => r.rows[0].s);
       const ids = (await usage.query('select gen_random_uuid() a, gen_random_uuid() b')).rows[0];
       await usage.query('begin'); await usage.query('set local role service_role');
       await rival.query('begin'); await rival.query('set local role service_role');
       assert.equal(await reserve(usage, ids.a), 'reserved');
       const pid = (await rival.query('select pg_backend_pid() p')).rows[0].p;
-      const waiting = reserve(rival, ids.b);
+      const waiting = reserve(rival, ids.b, other);
       let blocked = false;
       for (let i = 0; i < 100 && !blocked; i++) {
         blocked = (await pg.connect(usageDb).then(async c => { try { return (await c.query(`select wait_event_type='Lock' w from pg_stat_activity where pid=$1`, [pid])).rows[0]?.w; } finally { await c.end(); } })) === true;
         if (!blocked) await new Promise(resolve => setTimeout(resolve, 20));
       }
-      assert(blocked, 'the second reservation waits for the first one\'s owner lock');
+      assert(blocked, 'the second account\'s reservation waits for the project lock');
       await usage.query('commit');
       assert.equal(await waiting, 'limit', 'the waiting reservation sees the first one and is refused at the cap');
       await rival.query('commit');
-      const totals = (await usage.query(`select cost_micro_usd+reserved_micro_usd t, (select count(*)::int from haedo_ai_private.reservations where owner_id=$1) n from haedo_ai_private.usage where owner_id=$1`, [owner])).rows[0];
+      const totals = (await usage.query(`select sum(cost_micro_usd+reserved_micro_usd) t, (select count(*)::int from haedo_ai_private.reservations where owner_id = any($1)) n from haedo_ai_private.usage where owner_id = any($1)`, [[owner, other]])).rows[0];
       assert.equal(Number(totals.t), 9999600); assert.equal(totals.n, 1);
-      pass('two concurrent reservations for the last budget: one reserved, the other waited on the owner lock and got limit; total 9,999,600 <= 10,000,000 micro-USD');
+      pass('two accounts reserving the last project budget at once: one reserved, the other waited on the project lock and got limit; project total 9,999,600 <= 10,000,000 micro-USD');
     } finally { await usage.end(); await rival.end(); }
 
     // Production path for the AI cap: a database that has every earlier migration but not
