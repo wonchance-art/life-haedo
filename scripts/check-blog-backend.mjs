@@ -65,7 +65,9 @@ async function edge() {
  const media = { bucket: "haedo-blog-originals", path: `${owner}/${post}/private-photo-id/${digest}`, type: "image/png", size: original.length, digest };
  let active = true, reads = 0, storageReads = 0, revokeOnStorage = false, returnedSize = original.length, served = original;
  const secret = "synthetic-server-only-secret";
- const handler = createHandler({ environment: (key) => key === "SUPABASE_URL" ? "https://anonymous-blog.example.invalid" : secret,
+ // Legacy server key only (the new-key matrix is tests/supabase-keys.test.cjs). Every
+ // other name is unset: a server key equal to a public key is refused (2026-11-04).
+ const handler = createHandler({ environment: (key) => ({ SUPABASE_URL: "https://anonymous-blog.example.invalid", SUPABASE_SERVICE_ROLE_KEY: secret })[key],
   fetcher: async (url, options) => {
    assert.equal(options.headers.Authorization, "Bearer " + secret); assert.equal(options.redirect, "error");
    if (url.includes("/rpc/")) { reads++; assert.deepEqual(JSON.parse(options.body), { p_token: token, p_photo_id: photo }); return Response.json(active ? media : null); }

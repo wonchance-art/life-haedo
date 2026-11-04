@@ -2,6 +2,26 @@
 
 > 2026-10-29 이전 절은 [roadmap-archive.md](roadmap-archive.md)에 원문 그대로 옮겼다.
 
+## Supabase 새 API 키 대비 — AI 세션, 병합 전 (2026-11-04 KST)
+
+주간 기술 동향 점검 1회차에서 나온 AI 세션 몫이다(총괄 지시). 레거시 `anon`·`service_role` 키가 2026년 말까지 폐지된다.
+
+- **완료(코드·검사):**
+  - `haedo-ai`·`haedo-blog-media`·`haedo-naver-blog`가 `SUPABASE_SECRET_KEYS`·`SUPABASE_PUBLISHABLE_KEYS`의 `default`를 먼저 읽고, 레거시 키는 대체값으로만 쓴다. `sb_secret_`는 `apikey` 헤더로만 보낸다.
+  - 네이버 cron 인증은 `apikey` 헤더 기준이고 기존 Bearer도 받는다. 이미 있는 일정을 바꾸는 운영 SQL `20261104-naver-cron-apikey.sql`을 만들었다(실행하지 않음).
+  - `haedo-ai`는 `verify_jwt=false`로 배포하도록 했다. AI 첫 사용 안내 문구에 30일 보존 문장을 정했다.
+  - 검사:
+    - 새 키만 / 레거시만 / 둘 다인 환경에서 세 함수의 단위 검사가 통과한다.
+    - sql-replay에 전환 SQL의 점검·갱신·되돌리기·거절을 넣었다.
+  - 상세: [writing-ai-suggestions.md](../design-review/writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비), [naver-operational-readiness.md](../design-review/naver-operational-readiness.md#새-api-키로-전환-2026-11-04-레거시-키-폐지-대비)
+- **남은 조건(총괄·소유자):**
+  1. 세 함수 배포(네이버는 런타임 소스 9개)
+  2. 전환 SQL 실행과 `net._http_response` 상태 코드 확인
+  3. Vault 값 교체
+  4. 레거시 키 끄기
+
+  순서를 지킨다. 실제 게이트웨이·pg_cron 동작은 배포 뒤 확인한다.
+
 ## 첫 화면 우선 순서(P1) 시도 — 최적화 세션, 채택하지 않음 (2026-11-04 KST)
 
 - **측정:** 글 관련 저장소 작업과 목록 작업이 매번 작업공간 전체를 검증한다(CPU 4배에서 검증만 약 14%). 제거 실험 결과는 배경 수신 15초 지연이 20행 −12%, 검증 전부 끄기(상한)가 −15%였다.
