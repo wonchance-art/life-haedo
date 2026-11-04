@@ -18,8 +18,10 @@
   // Inline marks in nesting order, outermost first: an inner mark is split at an outer boundary.
   const ORDER = ['ai', 'link', 'bold', 'italic'];
 
-  // CommonMark character classes for the flanking rules (Unicode whitespace and punctuation).
-  const isSpace = ch => ch === undefined || /\s/u.test(ch);
+  // The flanking rules' character classes, as markdown-it 15 has them (isWhiteSpace): not JS \s,
+  // which also counts U+2028, U+2029 and U+FEFF.
+  const SPACE = /^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]$/u;
+  const isSpace = ch => ch === undefined || SPACE.test(ch);
   const isPunct = ch => ch !== undefined && /[\p{P}\p{S}]/u.test(ch);
 
   // Text escaping: inline specials anywhere, block starters at the start of a line.
@@ -29,8 +31,12 @@
       .replace(/!(?=\\\[)/g, '\\!')
       .replace(/&(?=#?[0-9A-Za-z]+;)/g, '&amp;')
       // A literal ~~ or | stays literal under the common extensions too.
-      .replace(/~/g, '\\~');
+      .replace(/~/g, '\\~')
+      // A carriage return is a line ending in Markdown: kept as the character itself.
+      .replace(/\r/g, '&#13;');
   }
+  // Line breaks inside one value (a photo's alt or caption) stay characters, not line endings.
+  const breaks = text => text.replace(/\n/g, '&#10;').replace(/\r/g, '&#13;');
   function escapeLineStart(text) {
     return text
       .replace(/^(#{1,6})(?=\s|$)/, '\\$1')
@@ -41,23 +47,37 @@
   // Leading spaces/tabs would become indentation (or a code block), trailing ones a hard break:
   // the outermost one is written as a character reference.
   const ref = ch => ch === '\t' ? '&#9;' : '&#32;';
+  // Backslash escapes keep the URL as written: no entity (`&amp;`, `&copy;`) or escape is decoded
+  // from it. Inside <…>, < and > are escaped the same way. A line ending cannot be inside a
+  // destination; it is percent-encoded, as the parser's link normalisation would do anyway.
   function linkTarget(url) {
-    return /[\s()<>]/.test(url) ? '<' + url.replace(/[<>]/g, ch => encodeURIComponent(ch)) + '>' : url;
+    const escaped = url.replace(/[\\&]/g, ch => '\\' + ch).replace(/[\n\r]/g, ch => encodeURIComponent(ch));
+    return /[\s()<>]/.test(url) ? '<' + escaped.replace(/[<>]/g, ch => '\\' + ch) + '>' : escaped;
   }
-  const quote = text => '"' + String(text).replace(/[\\"]/g, ch => '\\' + ch).replace(/\n/g, ' ') + '"';
+  // A link title (the photo caption, a plain-text textarea shown with pre-wrap): every character
+  // kept, line breaks included.
+  const quote = text => '"' + breaks(String(text).replace(/[\\"&]/g, ch => '\\' + ch)) + '"';
 
-  // Delta → lines: [{ runs: [{ text, attrs }], block: {header|list|blockquote|align}, photo }]
+  // Delta → lines: [{ runs: [{ text, attrs }], block: {header|list|blockquote|align}, photo }].
+  // As the app reads a v2 body (blog-public-ui.js render, the editor's Quill): a photo is a block
+  // embed of its own and takes no "\n"; text waiting before it ends as a plain paragraph; every
+  // "\n" ends one line with its block attributes, an empty one included ([photo, "\n"] is a photo
+  // and an empty paragraph).
   function linesOf(ops) {
-    const lines = []; let runs = [], photo = null;
+    const lines = []; let runs = [];
     for (const op of ops) {
-      if (typeof op.insert !== 'string') { photo = op.insert.photo; continue; }
+      if (typeof op.insert !== 'string') {
+        if (runs.length) { lines.push({ runs, block: {}, photo: null }); runs = []; }
+        lines.push({ runs: [], block: {}, photo: op.insert.photo });
+        continue;
+      }
       const parts = op.insert.split('\n');
       parts.forEach((part, i) => {
         if (part) runs.push({ text: part, attrs: op.attributes || {} });
-        if (i < parts.length - 1) { lines.push({ runs, block: op.attributes || {}, photo }); runs = []; photo = null; }
+        if (i < parts.length - 1) { lines.push({ runs, block: op.attributes || {}, photo: null }); runs = []; }
       });
     }
-    if (runs.length || photo) lines.push({ runs, block: {}, photo });
+    if (runs.length) lines.push({ runs, block: {}, photo: null });
     return lines;
   }
   const markOf = (attrs, key) => key === 'ai' ? attrs.author === 'ai' : key === 'link' ? attrs.link || null : attrs[key] === true;
@@ -159,7 +179,7 @@
       if (line.photo) {
         photos.push(line.photo.id);
         const caption = line.photo.caption ? ' ' + quote(line.photo.caption) : '';
-        text = '![' + escapeInline(line.photo.alt || '').replace(/\n/g, ' ') + '](' + PHOTO_SCHEME + line.photo.id + caption + ')';
+        text = '![' + breaks(escapeInline(line.photo.alt || '')) + '](' + PHOTO_SCHEME + line.photo.id + caption + ')';
       } else {
         const body = inline(line.runs, true, stats);
         text = body === '' ? '&nbsp;' : body;

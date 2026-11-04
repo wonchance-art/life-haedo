@@ -49,26 +49,36 @@ function readBack(markdown) {
   }
   return lines;
 }
-// Delta → the same shape, without underline and alignment.
+// Delta → the same shape, without underline and alignment. Written from the app's own reading of
+// a v2 body (blog-public-ui.js render), not from the converter: a photo is its own block and takes
+// no "\n"; text waiting before a photo ends as a plain paragraph; every "\n" ends a line, empty
+// ones included. Links compare as the parser normalises them.
 function expected(ops) {
-  const lines = []; let runs = [], photo = null;
+  const lines = []; let runs = [];
   const push = (text, a) => {
-    const attrs = { bold: a.bold === true, italic: a.italic === true, link: a.link || null, ai: a.author === 'ai' }, last = runs.at(-1);
+    const attrs = { bold: a.bold === true, italic: a.italic === true, link: a.link ? parser.normalizeLink(a.link) : null, ai: a.author === 'ai' }, last = runs.at(-1);
     if (last && ['bold', 'italic', 'link', 'ai'].every(key => last[key] === attrs[key])) last.text += text; else runs.push({ text, ...attrs });
   };
+  // The one documented equivalence (post-markdown-d2.md): a line whose whole text is one NBSP is
+  // written like an empty line (&nbsp;); both show as the same blank line.
+  const end = (b = {}) => {
+    const blank = runs.map(run => run.text).join('') === '\u00a0';
+    lines.push({ kind: b.header ? 'h' + b.header : b.list ? 'list:' + b.list : b.blockquote ? 'quote' : 'p', runs: blank ? [] : runs }); runs = [];
+  };
   for (const op of ops) {
-    if (typeof op.insert !== 'string') { photo = op.insert.photo; continue; }
+    if (typeof op.insert !== 'string') {
+      if (runs.length) end();
+      const photo = op.insert.photo;
+      lines.push({ kind: 'photo', photo: { src: M.PHOTO_SCHEME + photo.id, alt: photo.alt || '', title: photo.caption || '' } });
+      continue;
+    }
     const parts = op.insert.split('\n');
     parts.forEach((part, i) => {
       if (part) push(part, op.attributes || {});
-      if (i < parts.length - 1) {
-        const b = op.attributes || {};
-        lines.push(photo ? { kind: 'photo', photo: { src: M.PHOTO_SCHEME + photo.id, alt: photo.alt || '', title: (photo.caption || '').replace(/\n/g, ' ') } }
-          : { kind: b.header ? 'h' + b.header : b.list ? 'list:' + b.list : b.blockquote ? 'quote' : 'p', runs });
-        runs = []; photo = null;
-      }
+      if (i < parts.length - 1) end(op.attributes || {});
     });
   }
+  if (runs.length) end();
   return lines;
 }
 const check = (ops, label) => {
@@ -123,7 +133,8 @@ test('underline and alignment are dropped (text kept) and counted; AI marks and 
   const r = M.fromDelta([{ insert: '밑줄', attributes: { underline: true } }, { insert: ' 그리고 ' }, { insert: '둘', attributes: { underline: true, bold: true } },
     { insert: '\n', attributes: { align: 'center' } }, { insert: { photo: { id: 'p', alt: 'a', caption: '' } } }, { insert: '\n', attributes: { align: 'right' } }]);
   assert.deepEqual(r.dropped, { underline: 2, align: 2 });
-  assert.equal(r.markdown, '밑줄 그리고 **둘**\n\n![a](haedo-photo:p)\n');
+  // The aligned "\n" after the photo is its own (empty) paragraph, as the app shows it.
+  assert.equal(r.markdown, '밑줄 그리고 **둘**\n\n![a](haedo-photo:p)\n\n&nbsp;\n');
 });
 
 test('fromV2 keeps every field but the body, and only the photos the body shows (in body order)', () => {
@@ -139,19 +150,59 @@ test('fromV2 keeps every field but the body, and only the photos the body shows 
   assert.throws(() => M.fromV2({ ...doc, format: 'life-photo-post-v1' }), TypeError);
 });
 
+// Shapes the editor really produces (vendor/quill getContents): a photo is a block embed with no
+// "\n" of its own, photos can follow each other, and the document still ends with "\n".
+test('photos are blocks of their own: text after a photo, photos in a row, the empty paragraph after a photo', () => {
+  const photo = (id, extra = {}) => ({ insert: { photo: { id, alt: '', caption: '', ...extra } } });
+  const ai = check([{ insert: '본문\n' }, photo('p1'), { insert: '사진 뒤 문장', attributes: { author: 'ai' } }, { insert: '\n' }], 'AI sentence after a photo');
+  assert.match(ai.markdown, /<span data-author="ai">사진 뒤 문장<\/span>/); assert.deepEqual(ai.photos, ['p1']);
+  const two = check([{ insert: '앞\n' }, photo('p1'), photo('p2'), { insert: '뒤 문단\n' }], 'two photos in a row');
+  assert.deepEqual(two.photos, ['p1', 'p2']); assert.match(two.markdown, /뒤 문단/);
+  const quill = check([{ insert: '첫 문단\n' }, photo('p2'), photo('p1'), { insert: '\n사진 뒤 문단\n' }], 'vendor/quill getContents');
+  assert.deepEqual(quill.photos, ['p2', 'p1']);
+  assert.equal(quill.markdown, '첫 문단\n\n![](haedo-photo:p2)\n\n![](haedo-photo:p1)\n\n&nbsp;\n\n사진 뒤 문단\n');
+  assert.equal(check([photo('p1'), { insert: '\n' }], 'photo then the final newline').markdown, '![](haedo-photo:p1)\n\n&nbsp;\n');
+  check([photo('a'), photo('b'), photo('c')], 'photos only, no newline');
+  check([{ insert: '목록', attributes: {} }, { insert: '\n', attributes: { list: 'bullet' } }, photo('p'), { insert: '목록 둘' }, { insert: '\n', attributes: { list: 'bullet' } }], 'a photo between two list items');
+  // fromV2 keeps both photos of a row (none is lost from the photo list).
+  const doc = { format: 'life-photo-post-v2', id: 'x', ops: [{ insert: '앞\n' }, photo('p1'), photo('p2'), { insert: '뒤\n' }], photos: [{ id: 'p1' }, { id: 'p2' }] };
+  assert.deepEqual(M.fromV2(doc).document.photos.map(p => p.id), ['p1', 'p2']);
+});
+
+test('captions, alt text and link addresses keep every character: line breaks, & and character references', () => {
+  const caption = '첫 줄\n둘째 줄 a & b &amp; &#65; "인용" \\끝\r\r다음';
+  const r = check([{ insert: { photo: { id: 'p', alt: '대체\n글 &amp; [x]', caption } } }, { insert: '\n' }], 'caption');
+  assert.doesNotMatch(r.markdown.split('\n')[0], /\n/);
+  for (const link of ['https://example.org/?a=1&amp;b=2&copy;', 'https://example.org/a\\(b)', 'https://example.org/<태그> 와 공백', 'https://example.org/한글/경로?q=가나&x=&#65;'])
+    check([{ insert: '링크', attributes: { link } }, { insert: '\n' }], link);
+  // A carriage return inside text is a character, not a line ending (no split heading, no break).
+  check([{ insert: '제목\r둘' }, { insert: '\n', attributes: { header: 1 } }, { insert: 'a\r\rb\n' }], 'carriage returns');
+});
+
+test('whitespace for emphasis is markdown-it\'s: U+2028, U+2029 and U+FEFF are not spaces', () => {
+  for (const ch of ['\u2028', '\u2029', '\ufeff', '\u00a0', '\u3000', '\u2009'])
+    check([{ insert: '가' + ch }, { insert: '（괄호）', attributes: { bold: true } }, { insert: ch + '나\n' }], 'U+' + ch.codePointAt(0).toString(16));
+});
+
 // POST_MARKDOWN_FUZZ=20000 runs a longer local pass (same seed sequence).
 const FUZZ = Number(process.env.POST_MARKDOWN_FUZZ || 1500);
 test(FUZZ.toLocaleString('en-US') + ' random v2 documents read back as the same blocks and inline marks', () => {
   let seed = Number(process.env.POST_MARKDOWN_SEED || 20261104);
   const rand = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const pick = list => list[Math.floor(rand() * list.length)];
-  const chars = [...'가나다라 마바사 한글 강조 하늘 abcXYZ 012 9 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ “”‘’…·—🌱 \t'];
+  const chars = [...'가나다라 마바사 한글 강조 하늘 abcXYZ 012 9 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ “”‘’…·—🌱 \t\u00a0\u2028\u3000\r', '&amp;', '&#65;', '&copy;'];
   const word = () => Array.from({ length: 1 + Math.floor(rand() * 7) }, () => pick(chars)).join('');
-  const links = ['https://example.org/', 'https://example.org/a_(b)', 'https://example.org/?q=1&x=*', 'http://ex.invalid/path#frag'];
+  const links = ['https://example.org/', 'https://example.org/a_(b)', 'https://example.org/?q=1&x=*', 'http://ex.invalid/path#frag',
+    'https://example.org/?a=1&amp;b=2&copy;', 'https://example.org/한글 경로', 'https://example.org/a\\b<c>'];
+  const caption = () => rand() < 0.5 ? '' : Array.from({ length: 1 + Math.floor(rand() * 3) }, word).join(pick(['\n', ' ', '\n\n']));
   for (let n = 0; n < FUZZ; n++) {
     const ops = [];
     for (let line = 0; line < 1 + Math.floor(rand() * 5); line++) {
-      if (rand() < 0.1) { ops.push({ insert: { photo: { id: 'p' + n + '_' + line, alt: rand() < 0.5 ? word() : '', caption: rand() < 0.5 ? word() : '' } } }, { insert: '\n' }); continue; }
+      // Photos as Quill gives them: block embeds without a "\n", sometimes two in a row.
+      if (rand() < 0.15) {
+        for (let k = 0; k < (rand() < 0.3 ? 2 : 1); k++) ops.push({ insert: { photo: { id: 'p' + n + '_' + line + '_' + k, alt: rand() < 0.5 ? word() : '', caption: caption() } } });
+        if (rand() < 0.5) continue;
+      }
       for (let run = 0; run < Math.floor(rand() * 4); run++) {
         const attributes = {};
         if (rand() < 0.3) attributes.bold = true; if (rand() < 0.3) attributes.italic = true; if (rand() < 0.15) attributes.underline = true;

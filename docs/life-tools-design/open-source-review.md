@@ -1150,6 +1150,7 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 - **번들(esbuild IIFE, minify, 같은 날 측정):**
   - `Editor`+`StarterKit`+`Markdown`: min 455,791B, gzip 143,733B, brotli 122,888B
   - 지금 vendor `quill.js`: 209,274B, gzip 58,787B. Tiptap 쪽이 gzip 약 2.4배다.
+  - 측정 방법: Node `zlib.gzipSync(level 9)`·`brotliCompressSync`(기본값). 도구마다 값이 다르다. 같은 `quill.js`가 `gzip -9`로는 59,009B, `gzip -6`으로는 59,229B다(11-04 재확인).
   - 공식 UMD가 없으므로 도입한다면 빌드 명령·lock·SHA-256을 vendor 기록에 둔다.
   - 11-02 실험의 값(min 492,588B)은 Link와 직접 만든 확장을 포함한 크기라 이번 값과 묶음이 다르다.
 - **채택 조건 5가지(11-02 실험) — 지금 상태:**
