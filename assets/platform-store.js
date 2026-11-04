@@ -3,6 +3,15 @@
   let uid = null, items = [], epoch = 0, accountProject = null, queue = null, docQueue = null, pulling = null;
   // Document uploads that failed in this page (id -> message), shown as "계정에 올리지 못함".
   const docErrors = new Map();
+  // One uploader per document (B2 review B1). This store sends only documents this page wrote
+  // through it (행복도, its own recovery copies); the timeline editor (app.js) and the goals/habits
+  // screens' explicit sync send the rest. `following` is set by the 일정 screen, which owns the
+  // documents it shows.
+  const ownedDocs = new Set();
+  let following = false;
+  // 행복도 changes not yet on the server, per document (date -> 0–10 or null), and the body this
+  // page last knew to be on the server. Together they let a conflict be rebased day by day (M1).
+  const pendingHappiness = new Map(), lastSynced = new Map();
   const project = () => auth.config?.url.replace(/\/+$/, "");
   const headers = () => ({ "Content-Type": "application/json", Prefer: "return=representation" });
   function accountError() {
@@ -40,20 +49,38 @@
   function clearAccount() {
     epoch++;
     queue?.clear(); queue = null; docQueue?.clear(); docQueue = null; pulling = null; docErrors.clear();
+    ownedDocs.clear(); pendingHappiness.clear(); lastSynced.clear(); following = false;
     uid = null; accountProject = null; items = [];
   }
   // 2026-11-01 owner rule: when both sides changed, the newest edit wins and the other side is
   // kept. The losing item goes to the account's recovery list before the winner replaces it; if
   // that write fails nothing is replaced (the caller leaves the item in its conflict state).
+  // The comparison mixes a device's edit time and a server upload time (no shared clock); the
+  // losing side is always kept, so a wrong order loses nothing.
+  const sameData = (a, b) => JSON.stringify(HaedoData.canonical(a)) === JSON.stringify(HaedoData.canonical(b));
+  // A list that cannot be read is set aside (raw value) and a new list starts: a damaged value
+  // never blocks a conflict, a backup or a restore.
   function readRecovery(captured) {
-    const list = model.read(localStorage, model.keys(captured.uid).recovery, []);
-    if (!Array.isArray(list)) throw new Error("기기의 복구 사본 목록을 읽지 못했습니다. 원본은 보존했습니다.");
-    return list;
+    const k = model.keys(captured.uid), raw = localStorage.getItem(k.recovery);
+    if (raw === null) return [];
+    let list = null;
+    try { list = JSON.parse(raw); } catch (_) { list = null; }
+    if (Array.isArray(list) && list.every(row => row && typeof row === "object" && !Array.isArray(row))) return list;
+    let damaged = null;
+    try { damaged = JSON.parse(localStorage.getItem(k.recoveryDamaged)); } catch (_) { damaged = null; }
+    damaged = Array.isArray(damaged) ? damaged : [];
+    damaged.push(raw);
+    localStorage.setItem(k.recoveryDamaged, JSON.stringify(damaged));
+    localStorage.setItem(k.recovery, "[]");
+    return [];
   }
+  const ridOf = row => row.rid || JSON.stringify([row.id, row.updated ?? null, row.keptAt ?? null]);
   function keepLoser(captured, row, reason) {
     assertAccount(captured);
     const list = readRecovery(captured);
-    list.push({ id: row.id, kind: row.kind, data: structuredClone(row.data), updated: row.updated || null,
+    // Pull and push can settle the same conflict: the same losing version is kept once.
+    if (list.some(kept => kept.id === row.id && (kept.updated ?? null) === (row.updated ?? null) && sameData(kept.data, row.data))) return;
+    list.push({ rid: model.newId(), id: row.id, kind: row.kind, data: structuredClone(row.data), updated: row.updated || null,
       keptAt: new Date().toISOString(), reason });
     localStorage.setItem(model.keys(captured.uid).recovery, JSON.stringify(list));
   }
@@ -98,6 +125,8 @@
           data: structuredClone(item.data), updated_at: stamp }, seen: item.syncedAt,
       });
       assertAccount(captured);
+      // A pull whose list was read before this write must not treat its result as stale.
+      pulling?.pushed.add(id);
       const latest = items.find(row => row.id === id);
       if (!latest) return;
       if (result.conflict) {
@@ -106,6 +135,7 @@
         const now = items.find(row => row.id === id);
         if (!now) return;
         let again = false;
+        // A failed recovery write leaves the item as it is, in conflict (nothing applied).
         try { again = settle(captured, now, remote); } catch (_) { now.state = "conflict"; }
         saveItems(captured);
         if (again) queue.schedule(id);
@@ -129,7 +159,7 @@
   async function pull() {
     const captured = context();
     if (pulling) return;
-    const operation = {}; pulling = operation;
+    const operation = { pushed: new Set() }; pulling = operation;
     try {
       const response = await requestFor(captured)(base(captured, "haedo_items") + "?select=id,kind,name,data,updated_at");
       if (!response.ok) throw new Error("목표와 습관을 불러오지 못했습니다. 연결 후 다시 시도해 주세요.");
@@ -138,6 +168,8 @@
       if (!Array.isArray(rows) || rows.some(row => !model.validItem(row)))
         throw new Error("저장된 항목 형식을 확인해야 합니다. 기기 사본은 보존했습니다.");
       for (const row of rows) {
+        // Written by this device while the list was in flight: the list row is older than it.
+        if (operation.pushed.has(row.id)) continue;
         const local = items.find(item => item.id === row.id);
         if (local && local.updated !== local.syncedAt) {
           // Only this device changed it: the queued upload sends it (a stale conflict mark clears).
@@ -151,7 +183,7 @@
         if (local) Object.assign(local, next); else items.push(next);
       }
       for (const item of [...items]) {
-        if (item.syncedAt && !rows.some(row => row.id === item.id)) {
+        if (item.syncedAt && !operation.pushed.has(item.id) && !rows.some(row => row.id === item.id)) {
           try { settle(captured, item, null); } catch (_) { item.state = "conflict"; }
         }
       }
@@ -164,51 +196,79 @@
     }
   }
   // Documents follow the same rule at document level. The losing copy becomes a new document
-  // "<이름> 복구 사본" in the same list; it is written (body, then the list) before the winner
-  // replaces anything, and it is uploaded like any other unsynced document.
-  function keepLoserDoc(captured, reg, name, data) {
+  // "<이름> 복구 사본 (날짜 시각)" in the same list; it is written (body, then the list) before the
+  // winner replaces anything. The same content is kept once; a copy of a copy keeps the base name.
+  function keepLoserDoc(captured, reg, name, data, winner) {
     assertAccount(captured);
     if (!HaedoData.isDocument(data)) throw new Error("연표 사본 형식을 확인해야 합니다.");
-    const k = model.keys(captured.uid), id = model.newId(), label = (name || "내 연표") + " 복구 사본";
+    const k = model.keys(captured.uid), key = HaedoData.contentKey(data);
+    if (winner && key === HaedoData.contentKey(winner)) return null;
+    const held = reg.docs.find(doc => HaedoData.isRecoveryName(doc.name) && (() => {
+      try { return HaedoData.contentKey(JSON.parse(localStorage.getItem(k.docs + doc.id))) === key; } catch (_) { return false; }
+    })());
+    if (held) return held.id;
+    const id = model.newId(), label = HaedoData.recoveryName(name);
     // The label is also the copy's own name, so a restore or an edit of the copy keeps it.
     localStorage.setItem(k.docs + id, JSON.stringify({ ...data, profile: { ...data.profile, name: label } }));
     reg.docs.push({ id, name: label, updated: new Date().toISOString() });
     localStorage.setItem(k.registry, JSON.stringify(reg));
+    ownedDocs.add(id);
     return id;
   }
-  // meta changed here and row changed on the server. Returns true when the local copy won.
-  function settleDoc(captured, reg, meta, row) {
+  const applyPending = (doc, pending) => [...pending].reduce((next, [date, n]) => model.withHappiness(next, date, n), doc);
+  // meta changed here and row changed on the server. Returns "rebased" | "local" (send again) or
+  // "remote" (the server copy is now local).
+  function reconcileDoc(captured, reg, meta, row) {
     const k = model.keys(captured.uid), local = JSON.parse(localStorage.getItem(k.docs + meta.id));
-    if (model.localWins(meta.updated, row.updated_at)) {
-      keepLoserDoc(captured, reg, row.name || meta.name, row.data);
-      meta.syncedAt = row.updated_at;
-      return true;
+    const pending = pendingHappiness.get(meta.id), known = lastSynced.get(meta.id);
+    // Only 행복도 days changed here since the last known server copy: apply those days on top of
+    // the newer server copy (nothing to keep; the other device's edit stays).
+    if (pending?.size && known && HaedoData.contentKey(applyPending(JSON.parse(known), pending)) === HaedoData.contentKey(local)) {
+      const rebased = applyPending(row.data, pending);
+      localStorage.setItem(k.docs + meta.id, JSON.stringify(rebased));
+      lastSynced.set(meta.id, JSON.stringify(row.data));
+      Object.assign(meta, { syncedAt: row.updated_at, updated: new Date(Math.max(Date.now(), Date.parse(row.updated_at || "") + 1 || 0)).toISOString() });
+      return "rebased";
     }
-    keepLoserDoc(captured, reg, meta.name, local);
+    if (model.localWins(meta.updated, row.updated_at)) {
+      keepLoserDoc(captured, reg, row.name || meta.name, row.data, local);
+      meta.syncedAt = row.updated_at;
+      lastSynced.set(meta.id, JSON.stringify(row.data));
+      return "local";
+    }
+    keepLoserDoc(captured, reg, meta.name, local, row.data);
     localStorage.setItem(k.docs + meta.id, JSON.stringify(row.data));
     Object.assign(meta, { name: row.name, updated: row.updated_at, syncedAt: row.updated_at, cloudAccount: captured.project + "|" + captured.uid });
-    return false;
+    lastSynced.set(meta.id, JSON.stringify(row.data)); pendingHappiness.delete(meta.id);
+    return "remote";
   }
   async function uploadDoc(captured, id) {
     const k = model.keys(captured.uid), request = requestFor(captured);
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       assertAccount(captured);
       const meta = model.registry(localStorage, captured.uid).docs.find(row => row.id === id);
       if (!meta) return;
-      const sent = meta.updated, data = JSON.parse(localStorage.getItem(k.docs + id));
+      // Nothing changed here since the last upload: nothing to send.
+      if (meta.syncedAt && meta.updated === meta.syncedAt) return;
+      const sent = meta.updated, body = localStorage.getItem(k.docs + id), data = JSON.parse(body);
+      const sentPending = [...(pendingHappiness.get(id) || [])];
       const result = await HaedoSync.writeSnapshot({ request, base: base(captured, "haedo_documents"), headers,
         row: { id, user_id: captured.uid, name: meta.name, data, updated_at: sent }, seen: meta.syncedAt });
       assertAccount(captured);
-      const latest = model.registry(localStorage, captured.uid), current = latest.docs.find(row => row.id === id);
-      if (!current) return;
+      const latest = model.registry(localStorage, captured.uid), now = latest.docs.find(row => row.id === id);
+      if (!now) return;
       if (!result.conflict) {
-        current.syncedAt = result.stamp;
-        if (current.updated === sent) current.updated = result.stamp;
-        current.cloudAccount = captured.project + "|" + captured.uid;
+        now.syncedAt = result.stamp;
+        if (now.updated === sent) now.updated = result.stamp;
+        now.cloudAccount = captured.project + "|" + captured.uid;
         localStorage.setItem(k.registry, JSON.stringify(latest));
+        lastSynced.set(id, body);
+        // Days sent with this upload are on the server; a newer value for the same day stays pending.
+        const pending = pendingHappiness.get(id);
+        for (const [date, n] of sentPending) if (pending?.get(date) === n) pending.delete(date);
+        if (pending && !pending.size) pendingHappiness.delete(id);
         return;
       }
-      // The server copy changed: newest wins, the other copy is kept as a recovery document.
       const response = await request(base(captured, "haedo_documents") + "?id=eq." + encodeURIComponent(id) + "&select=id,name,data,updated_at");
       if (!response.ok) throw new Error("서버 연표를 확인하지 못했습니다. 기기 사본은 보존했습니다.");
       const rows = await response.json(); assertAccount(captured);
@@ -216,9 +276,9 @@
       const fresh = model.registry(localStorage, captured.uid), meta2 = fresh.docs.find(row => row.id === id);
       if (!meta2) return;
       if (!rows[0]) { delete meta2.syncedAt; localStorage.setItem(k.registry, JSON.stringify(fresh)); continue; }
-      const again = settleDoc(captured, fresh, meta2, rows[0]);
+      const outcome = reconcileDoc(captured, fresh, meta2, rows[0]);
       localStorage.setItem(k.registry, JSON.stringify(fresh));
-      if (!again) return;
+      if (outcome === "remote") return;
     }
     throw new Error("서버 사본과 계속 충돌했습니다. 기기 사본은 보존했습니다. 잠시 뒤 다시 시도해 주세요.");
   }
@@ -226,15 +286,12 @@
     try { await uploadDoc(captured, id); docErrors.delete(id); }
     catch (error) { if (current(captured)) docErrors.set(id, error?.message || "연표를 계정에 올리지 못했습니다."); }
     notify(captured);
-    // Recovery documents made by this upload are sent too.
+    // Recovery documents this store made are sent too (only its own: see ownedDocs).
     if (current(captured)) for (const meta of model.registry(localStorage, captured.uid).docs)
-      if (!meta.syncedAt && meta.id !== id && !docQueue.pending(meta.id) && !docErrors.has(meta.id)) docQueue.schedule(meta.id);
+      if (ownedDocs.has(meta.id) && meta.updated !== meta.syncedAt && meta.id !== id && !docQueue.pending(meta.id) && !docErrors.has(meta.id)) docQueue.schedule(meta.id);
   }
-  // The timeline document the editor opens by default (registry.current, else the first).
-  function currentDoc(captured) {
-    const reg = model.registry(localStorage, captured.uid);
-    return reg.docs.find(doc => doc.id === reg.current) || reg.docs[0] || null;
-  }
+  // The timeline the schedule uses: the same on every device (see model.baseDocument).
+  function baseDoc(captured) { return model.baseDocument(model.registry(localStorage, captured.uid)); }
   const store = {
     init(account) {
       clearAccount();
@@ -255,10 +312,30 @@
       return store.init(account);
     },
     get account() { return uid && auth.user?.id === uid && accountProject === project() ? uid : null; },
+    // The 일정 screen owns the timeline documents it shows: it keeps them current on wake-ups and
+    // sends what it changed. Pages with their own editor (timeline.html) do not call this.
+    followDocuments() { context(); following = true; },
     // Items kept from the losing side of a conflict (newest first).
     get recovery() {
       if (!store.account) return [];
-      try { return readRecovery(context()).slice().reverse(); } catch (_) { return []; }
+      try { return readRecovery(context()).slice().reverse().map(row => ({ ...row, rid: ridOf(row) })); } catch (_) { return []; }
+    },
+    // Recovery copies the owner has not acknowledged yet (the notice shows only these).
+    get recoveryUnseen() {
+      if (!store.account) return 0;
+      const seen = localStorage.getItem(model.keys(uid).recoverySeen) || "";
+      return store.recovery.filter(row => (row.keptAt || "") > seen).length;
+    },
+    acknowledgeRecovery() {
+      const captured = context(), newest = store.recovery.reduce((at, row) => (row.keptAt || "") > at ? row.keptAt : at, "");
+      localStorage.setItem(model.keys(captured.uid).recoverySeen, newest);
+      notify(captured);
+    },
+    // Puts a kept copy back as a new item (a new ID; the item it lost to is not touched).
+    reviveRecovery(rid) {
+      const captured = context(), row = store.recovery.find(item => item.rid === rid);
+      if (!row) throw new Error("복구 사본을 찾지 못했습니다.");
+      return store.change(null, row.kind, structuredClone(row.data));
     },
     captureAccount() {
       const captured = context();
@@ -269,6 +346,11 @@
       return items.filter(item => !item.data.deleted);
     },
     pull,
+    // A pull settles items left in conflict; then everything unsent is sent.
+    async retry() {
+      await pull().catch(() => {});
+      await store.flush();
+    },
     async syncDocuments() {
       const captured = context();
       const response = await requestFor(captured)(base(captured, "haedo_documents") + "?select=id,name,data,updated_at");
@@ -282,12 +364,15 @@
       for (const row of rows) {
         const meta = reg.docs.find(doc => doc.id === row.id);
         if (meta && meta.updated !== meta.syncedAt) {
-          // Only this device changed it: its upload sends it. Both changed: newest wins.
+          // Only this device changed it: its owner sends it. Both changed: settle now.
           if (meta.syncedAt === row.updated_at || !meta.syncedAt) continue;
-          if (settleDoc(captured, reg, meta, row)) docQueue?.schedule(meta.id);
+          const outcome = reconcileDoc(captured, reg, meta, row);
+          if (outcome !== "remote" && (following || ownedDocs.has(meta.id))) { ownedDocs.add(meta.id); docQueue?.schedule(meta.id); }
           continue;
         }
-        localStorage.setItem(k.docs + row.id, JSON.stringify(row.data));
+        const body = JSON.stringify(row.data);
+        if (!meta || meta.syncedAt !== row.updated_at) localStorage.setItem(k.docs + row.id, body);
+        lastSynced.set(row.id, body);
         const next = { id: row.id, name: row.name, updated: row.updated_at,
           syncedAt: row.updated_at, cloudAccount: account };
         if (meta) Object.assign(meta, next); else reg.docs.push(next);
@@ -337,74 +422,114 @@
         assertAccount(captured);
       }
     },
+    // Explicit upload (goals/habits screens' sync, timeline import): only changed documents are sent.
     async uploadDocuments(ids) {
       const captured = context();
       for (const id of ids) await uploadDoc(captured, id);
       notify(captured);
     },
-    // 행복도 of one day in the current timeline document (null when not recorded).
+    // 행복도 of one day in the base timeline (null when not recorded).
     happiness(date) {
       if (!store.account) return null;
-      const captured = context(), meta = currentDoc(captured);
+      const captured = context(), meta = baseDoc(captured);
       if (!meta) return null;
       try { return model.happinessOn(JSON.parse(localStorage.getItem(model.keys(captured.uid).docs + meta.id)), date); }
       catch (_) { return null; }
     },
-    // Sets (0–10) or clears (null) that day's 행복도. With no timeline document yet, saving the
-    // first value creates "내 연표" (the timeline editor's default); viewing never creates one.
+    // Sets (0–10) or clears (null) that day's 행복도 in the base timeline. With no timeline yet,
+    // saving the first value creates "내 연표" (the timeline editor's default); viewing never does.
     setHappiness(date, n) {
       const captured = context(), k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
-      let meta = reg.docs.find(doc => doc.id === reg.current) || reg.docs[0] || null, doc;
+      let meta = model.baseDocument(reg), doc;
+      if (meta) meta = reg.docs.find(row => row.id === meta.id);
       if (!meta) {
         if (n === null) return null;
         meta = { id: model.newId(), name: "내 연표", updated: null };
         doc = model.emptyDocument("내 연표");
-        reg.docs.push(meta); reg.current = meta.id;
-      } else doc = JSON.parse(localStorage.getItem(k.docs + meta.id));
+        reg.docs.push(meta); reg.current ||= meta.id;
+      } else {
+        const body = localStorage.getItem(k.docs + meta.id);
+        doc = JSON.parse(body);
+        // A clean document is the server copy: remember it for a day-by-day rebase.
+        if (meta.syncedAt && meta.updated === meta.syncedAt) lastSynced.set(meta.id, body);
+      }
       const next = model.withHappiness(doc, date, n);
       meta.updated = new Date(Math.max(Date.now(), Date.parse(meta.updated || "") + 1 || 0)).toISOString();
       // Body first, list last: a failed list write leaves the old list pointing at a valid body.
       localStorage.setItem(k.docs + meta.id, JSON.stringify(next));
       localStorage.setItem(k.registry, JSON.stringify(reg));
+      if (!pendingHappiness.has(meta.id)) pendingHappiness.set(meta.id, new Map());
+      pendingHappiness.get(meta.id).set(date, n);
+      ownedDocs.add(meta.id);
       docErrors.delete(meta.id); docQueue.schedule(meta.id); notify(captured);
       return meta.id;
     },
-    // Upload state of the current document: "ok" | "pending" | "error" (null without one).
+    // Upload state of the base timeline: "ok" | "pending" | "error" (null without one).
     happinessState() {
       if (!store.account) return null;
-      const captured = context(), meta = currentDoc(captured);
+      const captured = context(), meta = baseDoc(captured);
       if (!meta) return null;
       if (docErrors.has(meta.id)) return "error";
       return meta.updated === meta.syncedAt ? "ok" : "pending";
     },
+    // Resends documents this store owns that are not on the server yet.
     retryDocuments() {
       if (!store.account) return;
       const captured = context();
-      for (const meta of model.registry(localStorage, captured.uid).docs) if (meta.updated !== meta.syncedAt) { docErrors.delete(meta.id); docQueue.schedule(meta.id); }
+      for (const meta of model.registry(localStorage, captured.uid).docs)
+        if (ownedDocs.has(meta.id) && meta.updated !== meta.syncedAt) { docErrors.delete(meta.id); docQueue.schedule(meta.id); }
     },
     backup() {
       const captured = context(), reg = model.registry(localStorage, captured.uid), k = model.keys(captured.uid);
+      const recovery = readRecovery(captured);
+      let damaged = null;
+      try { damaged = JSON.parse(localStorage.getItem(k.recoveryDamaged)); } catch (_) { damaged = null; }
       return { format: "haedo-platform-backup-v1", exportedAt: new Date().toISOString(),
         docs: reg.docs.map(doc => ({ id: doc.id, name: doc.name, data: JSON.parse(localStorage.getItem(k.docs + doc.id)) })),
-        items: structuredClone(items), recovery: readRecovery(captured) };
+        items: structuredClone(items), recovery, ...(Array.isArray(damaged) && damaged.length ? { recoveryDamaged: damaged } : {}) };
     },
-    // Restores recovery copies from a backup (added, never replacing what is already kept).
+    // Restores recovery copies (from a backup or another device): added, never replacing what is
+    // already kept. Copies already kept (same rid, or same item version and data) are skipped.
     restoreRecovery(list) {
       const captured = context();
       if (!Array.isArray(list) || list.some(row => !model.validItem(row))) throw new Error("복구 사본 형식을 읽을 수 없습니다.");
-      const kept = readRecovery(captured), seen = new Set(kept.map(row => JSON.stringify([row.id, row.updated, row.keptAt])));
-      for (const row of list) if (!seen.has(JSON.stringify([row.id, row.updated, row.keptAt]))) kept.push(structuredClone(row));
-      localStorage.setItem(model.keys(captured.uid).recovery, JSON.stringify(kept));
-      notify(captured);
+      const kept = readRecovery(captured), rids = new Set(kept.map(ridOf));
+      let added = 0;
+      for (const row of list) {
+        const rid = ridOf(row);
+        if (rids.has(rid) || kept.some(item => item.id === row.id && (item.updated ?? null) === (row.updated ?? null) && sameData(item.data, row.data))) continue;
+        kept.push({ ...structuredClone(row), rid }); rids.add(rid); added++;
+      }
+      // Only a real addition notifies: the 일정 screen mirrors this list with the account on notice.
+      if (added) { localStorage.setItem(model.keys(captured.uid).recovery, JSON.stringify(kept)); notify(captured); }
+      return added;
+    },
+    // Restores damaged recovery values set aside on another copy (raw text, kept as it was).
+    restoreDamaged(list) {
+      const captured = context(), k = model.keys(captured.uid);
+      if (!Array.isArray(list)) return 0;
+      let damaged = null;
+      try { damaged = JSON.parse(localStorage.getItem(k.recoveryDamaged)); } catch (_) { damaged = null; }
+      damaged = Array.isArray(damaged) ? damaged : [];
+      let added = 0;
+      for (const raw of list) if (typeof raw === "string" && !damaged.includes(raw)) { damaged.push(raw); added++; }
+      if (added) localStorage.setItem(k.recoveryDamaged, JSON.stringify(damaged));
+      return added;
     },
   };
   // Account boundary: always bound directly, so sign-out clears this account even without the
   // lifecycle module.
   document.addEventListener("haedo:signed-out", clearAccount);
-  // Wake-ups (S2 shared wiring, assets/life/sync-lifecycle.js): pull when the page shows again or
-  // the network returns, and resend unsent timeline documents. Without the module (an older cached
+  // Wake-ups (S2 shared wiring, assets/life/sync-lifecycle.js): pull goals/habits when the page shows
+  // again or the network returns. The 일정 screen also refreshes its timeline and resends what it
+  // changed; other pages leave documents to their own editor. Without the module (an older cached
   // page) only explicit and start-up syncs run.
-  const wake = () => { if (!store.account) return; pull().catch(() => {}); store.retryDocuments(); };
+  const wake = () => {
+    if (!store.account) return;
+    pull().catch(() => {});
+    if (following) store.syncDocuments().catch(() => {}).finally(() => store.retryDocuments());
+    else store.retryDocuments();
+  };
   const visible = () => { if (!document.hidden) wake(); };
   root.HaedoLife?.SyncLifecycle?.attach(root, { listen: [["document", "visibilitychange", visible], ["window", "online", wake]] });
   root.HaedoPlatformStore = store;

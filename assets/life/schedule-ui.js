@@ -187,7 +187,7 @@
       const slot = el('section', null, 'schedule-entries schedule-entries-' + kind); slot.setAttribute('aria-busy', 'true');
       slot.setAttribute('aria-label', kind === 'year' ? '목표' : kind === 'week' ? '이번 주 습관과 행복도' : '그날 습관과 행복도');
       const paint = entries => {
-        const stop = entries.render(slot, { kind, date: context.date, today: data().today(), storageAccount: storage.account, ...extra,
+        const stop = entries.render(slot, { kind, date: context.date, today: data().today(), storageAccount: storage.account, storage, ...extra,
           isCurrent: () => showing(context), go: (mode, date) => { if (showing(context)) go(mode, date); } });
         entryStops.add(stop);
         slot.setAttribute('aria-busy', 'false');

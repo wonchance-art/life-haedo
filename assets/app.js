@@ -80,7 +80,10 @@ let storageOK=true, REG=null, curDocId=null;
 const newDocId=()=>typeof crypto.randomUUID==='function'?'d'+crypto.randomUUID():'d'+Date.now().toString(36)+Math.random().toString(36).slice(2);
 /* 문서 목록은 다른 탭(일정의 행복도 입력 등)도 쓴다. 저장할 때 디스크 목록과 합친다:
    이 탭이 모르는 문서(본문이 있는 것만 — 지웠거나 되돌린 문서는 다시 넣지 않는다)를 더하고,
-   같은 문서는 updated가 늦은 쪽의 메타를 쓴다. (B2 후속, 2026-11-04) */
+   같은 문서는 서버 시각(syncedAt)끼리, 기기 편집 시각(updated)끼리만 비교한다. 깨끗한 항목의
+   updated는 서버 시각이고 올리지 않은 편집의 updated는 기기 시각이라 서로 비교하지 않는다
+   (기기 시계가 앞서면 올린 편집이 다시 "올리지 않음"으로 보이는 문제). (B2 후속, 2026-11-04) */
+const unsent=d=>!!d.updated&&d.updated!==d.syncedAt;
 function mergeDiskRegistry(){
   let disk=null;try{disk=JSON.parse(localStorage.getItem(REG_KEY));}catch(e){}
   if(!disk||!Array.isArray(disk.docs))return;
@@ -88,9 +91,13 @@ function mergeDiskRegistry(){
     if(!entry||typeof entry.id!=='string'||typeof entry.name!=='string')continue;
     const mine=REG.docs.find(d=>d.id===entry.id);
     if(!mine){if(localStorage.getItem(DOC_PREFIX+entry.id)!==null)REG.docs.push(entry);continue;}
-    // The latest server state any tab saw (for the next compare-and-set) and the latest edit.
-    if(entry.syncedAt&&(!mine.syncedAt||entry.syncedAt>mine.syncedAt)){mine.syncedAt=entry.syncedAt;if(entry.cloudAccount)mine.cloudAccount=entry.cloudAccount;}
-    if(entry.updated&&(!mine.updated||entry.updated>mine.updated)){mine.updated=entry.updated;mine.name=entry.name;}
+    // The latest server state any tab saw (for the next compare-and-set), and an edit not sent yet.
+    const take=()=>{mine.updated=entry.updated;mine.name=entry.name;};
+    if(entry.syncedAt&&(!mine.syncedAt||entry.syncedAt>mine.syncedAt)){
+      const mineUnsent=unsent(mine);
+      mine.syncedAt=entry.syncedAt;if(entry.cloudAccount)mine.cloudAccount=entry.cloudAccount;
+      if(!mineUnsent||unsent(entry)&&entry.updated>mine.updated)take();
+    }else if((entry.syncedAt||'')===(mine.syncedAt||'')&&unsent(entry)&&(!unsent(mine)||entry.updated>mine.updated))take();
   }
 }
 function saveRegistry(){if(window.HAEDO_CONTEXT&&HaedoAuth.user?.id!==window.HAEDO_CONTEXT.uid)return false;try{mergeDiskRegistry();localStorage.setItem(REG_KEY,JSON.stringify(REG));return true;}catch(e){storageOK=false;return false;}}
@@ -98,9 +105,13 @@ function saveRegistry(){if(window.HAEDO_CONTEXT&&HaedoAuth.user?.id!==window.HAE
    실패하면 예외를 던지고, 부르는 쪽은 아무것도 바꾸지 않는다. */
 function keepRecoveryDoc(name,data,winner){
   if(!HaedoData.isDocument(data))throw new Error('복구 사본 형식');
-  // Nothing to keep when the losing copy says exactly what the winner says.
-  if(winner&&JSON.stringify(HaedoData.canonical(data))===JSON.stringify(HaedoData.canonical(winner)))return null;
-  const id=newDocId(),label=(name||'내 연표')+' 복구 사본';
+  // Nothing to keep when the losing copy says exactly what the winner says, or an existing
+  // recovery copy already holds it.
+  const key=HaedoData.contentKey(data);
+  if(winner&&key===HaedoData.contentKey(winner))return null;
+  const held=REG.docs.find(d=>HaedoData.isRecoveryName(d.name)&&HaedoData.contentKey(loadDoc(d.id))===key);
+  if(held)return held.id;
+  const id=newDocId(),label=HaedoData.recoveryName(name);
   // The label is also the copy's own name, so a restore or an edit of the copy keeps it.
   const copy={...data,profile:{...data.profile,name:label}};
   localStorage.setItem(DOC_PREFIX+id,JSON.stringify(copy));
@@ -201,18 +212,8 @@ function parseDateSmart(str){ /* 2024, 2024-3, 2024.03.15, 2024년 3월 15일, 2
 /* 행복 척도 마이그레이션: 구 0~10 / signed10(−10~+10) → 최종 −1~+1 (중앙 0) */
 function migrateScale(d){
   d=HaedoData.structure(d,false);
-  const conv=f=>{
-    (d.events||[]).forEach(e=>{if(e.happiness!=null)e.happiness=f(e.happiness);});
-    (d.spans||[]).forEach(s=>{if(s.happiness!=null)s.happiness=f(s.happiness);});
-    (d.happiness||[]).forEach(h=>{h.v=f(h.v);});
-  };
-  const r2=v=>Math.round(v*100)/100;
   delete d.now; /* 오늘 날짜는 항상 자동 (고정값 폐기) */
-  if(d.scale!=='signed1'){
-    if(d.scale==='signed10')conv(v=>r2(v/10));
-    else conv(v=>r2((v-5)/5)); /* 구 0~10 */
-    d.scale='signed1';
-  }
+  HaedoData.toSignedScale(d); /* 구 0~10·signed10 → signed1. 일정 행복도 입력과 같은 함수 */
   return sanitize(d);
 }
 

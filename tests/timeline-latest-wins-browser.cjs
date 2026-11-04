@@ -17,6 +17,8 @@ const report = { checks: [], consoleErrors: [], pageErrors: [] };
 const DOC = 'd_timeline';
 const timelineDoc = () => ({ profile: { name: '내 연표', birth: '1990-01' }, scale: 'signed1', events: [{ date: '2020-01', title: '익명 사건' }], spans: [], eras: [],
   happiness: [], thoughts: [], records: [], trips: [], layers: [] });
+// Recovery copies are named '<이름> 복구 사본 (YYYY-MM-DD HH:MM)' (B2 review: dated, one suffix).
+const RECOVERY = /^내 연표 복구 사본 \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/;
 const regKey = id => 'caeyeon_life_account_' + id + '_registry', docKey = (id, doc) => 'caeyeon_life_account_' + id + '_doc_' + doc;
 
 async function openTimeline(page) {
@@ -73,7 +75,7 @@ async function main() {
       assert.deepEqual(row.data.happiness.map(h => [h.date, h.v]).sort(), [['2026-11-02', -0.4], ['2026-11-03', 0.6]]);
       assert.deepEqual(row.data.events.map(e => e.title).filter(t => t.startsWith('연표 탭')), ['연표 탭 사건 1', '연표 탭 사건 2']);
       const docs = await allDocs(timeline);
-      assert.equal(docs.filter(d => d.name.endsWith('복구 사본')).length, 0, 'taking turns needs no recovery copy');
+      assert.equal(docs.filter(d => / 복구 사본/.test(d.name)).length, 0, 'taking turns needs no recovery copy');
       assert.equal(tables.owned('haedo_documents', accounts.a.id).length, 1, 'no extra server rows');
     });
 
@@ -88,7 +90,7 @@ async function main() {
       await timeline.evaluate(() => { document.getElementById('popEd').hidden = true; });
       await timelineEdit(timeline, '편집기에서 저장한 사건');
       const docs = await allDocs(timeline);
-      const copy = docs.find(d => d.name === '내 연표 복구 사본');
+      const copy = docs.find(d => RECOVERY.test(d.name));
       assert.ok(copy, 'the 일정 version is kept as a recovery copy');
       assert.deepEqual(copy.data.happiness, [{ date: '2026-11-03', v: 0.8 }]);
       assert.ok(docs.find(d => d.id === DOC).data.events.some(e => e.title === '편집기에서 저장한 사건'));
@@ -97,12 +99,12 @@ async function main() {
       const deadline = Date.now() + 15000;
       while (tables.owned('haedo_documents', accounts.a.id).length < 2 && Date.now() < deadline) await new Promise(done => setTimeout(done, 200));
       const rows = tables.owned('haedo_documents', accounts.a.id);
-      assert.equal(rows.length, 2); assert.ok(rows.some(r => r.name === '내 연표 복구 사본' && r.data.happiness.length === 1));
+      assert.equal(rows.length, 2); assert.ok(rows.some(r => RECOVERY.test(r.name) && r.data.happiness.length === 1));
       // The recovery copy is in the backup and comes back on restore (new copies, nothing replaced).
       const backup = await schedule.evaluate(() => { HaedoPlatformStore.ensure(HaedoAuth.user.id); return HaedoPlatformStore.backup(); });
-      assert.ok(backup.docs.some(d => d.name === '내 연표 복구 사본' && d.data.happiness.length === 1));
+      assert.ok(backup.docs.some(d => RECOVERY.test(d.name) && d.data.happiness.length === 1));
       const restored = await schedule.evaluate(b => HaedoPlatformData.importDocs(localStorage, HaedoAuth.user.id, b).map(d => d.name), backup);
-      assert.ok(restored.includes('내 연표 복구 사본'));
+      assert.ok(restored.some(name => RECOVERY.test(name)), 'restored under the same dated name');
     });
 
     await check('another device\'s server write: the newer side wins and the other is kept first (both directions)', async ({ open, tables }) => {
@@ -113,7 +115,7 @@ async function main() {
       await timelineEdit(timeline, '이 기기 사건');
       await settled(tables, data => data.events.some(e => e.title === '이 기기 사건'), 'local newer');
       let docs = await allDocs(timeline);
-      assert.ok(docs.some(d => d.name === '내 연표 복구 사본' && d.data.events.some(e => e.title === '다른 기기 사건')), 'the overwritten server copy is kept');
+      assert.ok(docs.some(d => RECOVERY.test(d.name) && d.data.events.some(e => e.title === '다른 기기 사건')), 'the overwritten server copy is kept');
       // Server newer: another device wrote after this device's (offline) edit.
       const later = timelineDoc(); later.events.push({ date: '2026-11-04', title: '더 늦은 다른 기기 사건' });
       await timeline.evaluate(() => { const reg = REG.docs.find(d => d.id === curDocId); reg.updated = '2026-11-03T02:00:00.000Z'; });
@@ -122,7 +124,7 @@ async function main() {
       await timeline.evaluate(() => cloudQueue.flush(curDocId));
       await timeline.waitForFunction(() => DATA.events.some(e => e.title === '더 늦은 다른 기기 사건'));
       docs = await allDocs(timeline);
-      assert.ok(docs.some(d => d.name === '내 연표 복구 사본' && d.data.events.some(e => e.title === '오래된 이 기기 사건')), 'this device\'s older edit is kept');
+      assert.ok(docs.some(d => RECOVERY.test(d.name) && d.data.events.some(e => e.title === '오래된 이 기기 사건')), 'this device\'s older edit is kept');
       assert.equal(tables.rows.haedo_documents.get(DOC).updated_at, '2026-11-03T06:00:00.000Z', 'nothing written over the newer server copy');
     });
 
@@ -142,6 +144,50 @@ async function main() {
       // A deleted document is not brought back by the merge.
       await timeline.evaluate(([prefix]) => { localStorage.removeItem(prefix + 'd_other_tab'); REG.docs = REG.docs.filter(d => d.id !== 'd_other_tab'); saveRegistry(); }, ['caeyeon_life_account_' + accounts.a.id + '_doc_']);
       assert.ok(!(await local(timeline)).reg.docs.some(d => d.id === 'd_other_tab'));
+    });
+
+    // B1 (review of d7eae0e): timeline.html had two uploaders for the open document (app.js cloudPush
+    // and the shared store's wake-up). One edit and a tab return must send one PATCH, raise no
+    // conflict, make no recovery copy and leave no orphan; the goals/habits pages send nothing for a
+    // clean document.
+    await check('one uploader per document: edits and tab returns send one PATCH each, with no conflict, copy or orphan', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const patches = () => tables.calls.filter(call => call.table === 'haedo_documents' && call.method === 'PATCH').length;
+      const tabReturn = page => page.evaluate(async () => {
+        for (const hidden of [true, false]) {
+          Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+          Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
+          document.dispatchEvent(new Event('visibilitychange'));
+          await new Promise(done => setTimeout(done, 50));
+        }
+      });
+      const quiet = async page => { await page.waitForTimeout(1500); await page.waitForFunction(() => { const d = REG.docs.find(x => x.id === curDocId); return d && d.syncedAt === d.updated; }, null, { timeout: 15000 }); };
+      const before = patches();
+      // The tab returns while the edit is still unsent (the editor's push is debounced).
+      await timelineEdit(timeline, '편집 1'); await tabReturn(timeline);
+      await settled(tables, data => data.events.some(e => e.title === '편집 1'), 'edit 1'); await quiet(timeline);
+      assert.equal(patches() - before, 1, 'edit 1 and a tab return: one PATCH');
+      await timelineEdit(timeline, '편집 2'); await tabReturn(timeline);
+      await settled(tables, data => data.events.some(e => e.title === '편집 2'), 'edit 2 (no conflict)'); await quiet(timeline);
+      await tabReturn(timeline); await quiet(timeline);
+      assert.equal(patches() - before, 2, 'edit 2 and a tab return: one more PATCH');
+      const docs = await allDocs(timeline);
+      assert.equal(docs.filter(d => / 복구 사본/.test(d.name)).length, 0, 'no recovery copy');
+      assert.equal(await timeline.evaluate(() => document.body.innerText.includes('충돌')), false, 'no conflict shown');
+      // No orphan: every stored body and every server row is listed.
+      const listed = new Set(docs.map(d => d.id));
+      const bodies = await timeline.evaluate(prefix => Object.keys(localStorage).filter(k => k.startsWith(prefix)).map(k => k.slice(prefix.length)), 'caeyeon_life_account_' + accounts.a.id + '_doc_');
+      assert.deepEqual(bodies.filter(id => !listed.has(id)), [], 'no orphan body');
+      assert.deepEqual(tables.owned('haedo_documents', accounts.a.id).map(r => r.id).filter(id => !listed.has(id)), [], 'no orphan server row');
+      assert.equal(tables.owned('haedo_documents', accounts.a.id).length, 1);
+      // A clean document on the goals and habits pages: a tab return sends nothing.
+      for (const name of ['habits', 'goals']) {
+        const other = await open(); await other.goto(base + '/' + name + '.html');
+        await other.locator('#syncMessage').filter({ hasText: '서버와 기기 사본을 확인했습니다.' }).waitFor({ timeout: 15000 });
+        const seen = patches(); await tabReturn(other); await other.waitForTimeout(1500);
+        assert.equal(patches(), seen, name + ': no PATCH for a clean document');
+        await other.close();
+      }
     });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));

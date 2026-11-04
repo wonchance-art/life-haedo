@@ -191,44 +191,59 @@ test('viewing 행복도 creates nothing; the first saved value creates "내 연�
   assert.equal(h.store.happiness('2026-11-04'), null);
 });
 
-test('a timeline document changed on both sides: the newer copy wins, the other becomes "<이름> 복구 사본"', async t => {
+const RECOVERY = /^내 연표 복구 사본 \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/;
+test('a 행복도 change meeting a newer server copy is applied day by day on top of it: nothing is pushed out (M1)', async t => {
   const cloud = server(), h = fixture(t, cloud);
   const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
-  // Server newer: another device changed the document after this device's edit.
-  h.store.setHappiness('2026-11-04', 9);
+  h.store.setHappiness('2026-11-04', 9);                          // a day changed here…
+  const other = h.doc(id); other.happiness = [{ date: '2026-11-03', v: 0 }]; other.events = [{ date: '2026-11-04', title: '다른 기기 사건' }];
+  cloud.write('haedo_documents', { id, name: '내 연표', data: other });   // …while another device edited the timeline
+  await h.store.uploadDocuments([id]);
+  const row = cloud.tables.haedo_documents.get(id).data;
+  assert.deepEqual(row.events.map(e => e.title), ['다른 기기 사건'], 'the other device\'s event stays in the main document');
+  assert.deepEqual(row.happiness.map(e => [e.date, e.v]), [['2026-11-03', 0], ['2026-11-04', 0.8]]);
+  assert.equal(h.registry().docs.length, 1, 'no recovery copy');
+  assert.deepEqual(plain(h.doc(id)), plain(row));
+});
+
+test('a document changed here outside the 행복도 path and on the server: the newer copy wins, the other is kept (dated name, once)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+  // Server newer: this device's older edit (made by another page, e.g. the timeline editor) loses.
+  const mine = h.doc(id); mine.events = [{ date: '2026-01-01', title: '이 기기 편집' }];
+  h.local.setItem(model.keys('A').docs + id, JSON.stringify(mine));
   { const reg = h.registry(); reg.docs[0].updated = '2026-01-01T00:00:00.000Z'; h.local.setItem(model.keys('A').registry, JSON.stringify(reg)); }
-  const other = h.doc(id); other.happiness = [{ date: '2026-11-03', v: -0.6 }];
+  const other = h.doc(id); other.events = [{ date: '2026-11-04', title: '다른 기기 편집' }];
   cloud.write('haedo_documents', { id, name: '내 연표', data: other });
   await h.store.uploadDocuments([id]);
   let reg = h.registry();
-  assert.equal(reg.docs.length, 2);
   const copy = reg.docs.find(doc => doc.id !== id);
-  assert.equal(copy.name, '내 연표 복구 사본');
-  assert.deepEqual(h.doc(copy.id).happiness.map(e => e.date), ['2026-11-03', '2026-11-04'], 'the losing local copy keeps its 11-04 value');
-  assert.deepEqual(h.doc(id).happiness, [{ date: '2026-11-03', v: -0.6 }]);
-  // Local newer: this device edits after another device's write.
-  cloud.write('haedo_documents', { id, name: '내 연표', data: { ...other, happiness: [{ date: '2026-11-01', v: 0.2 }] } });
-  h.store.setHappiness('2026-11-05', 10);
+  assert.match(copy.name, RECOVERY); assert.equal(h.doc(copy.id).profile.name, copy.name);
+  assert.deepEqual(h.doc(copy.id).events.map(e => e.title), ['이 기기 편집']);
+  assert.deepEqual(h.doc(id).events.map(e => e.title), ['다른 기기 편집']);
+  // Local newer: the overwritten server copy is kept; the same content is not kept twice.
+  const again = h.doc(id); again.events.push({ date: '2026-11-05', title: '이 기기 새 편집' });
+  h.local.setItem(model.keys('A').docs + id, JSON.stringify(again));
   reg = h.registry(); reg.docs.find(doc => doc.id === id).updated = '2030-01-01T00:00:00.000Z'; h.local.setItem(model.keys('A').registry, JSON.stringify(reg));
+  cloud.write('haedo_documents', { id, name: '내 연표', data: { ...other, events: [{ date: '2026-11-01', title: '서버 편집' }] } });
   await h.store.uploadDocuments([id]);
   reg = h.registry();
-  assert.equal(reg.docs.filter(doc => doc.name === '내 연표 복구 사본').length, 2);
-  assert.ok(cloud.tables.haedo_documents.get(id).data.happiness.some(e => e.date === '2026-11-05'));
-  const second = reg.docs.filter(doc => doc.name === '내 연표 복구 사본').map(doc => h.doc(doc.id));
-  assert.ok(second.some(d => d.happiness.length === 1 && d.happiness[0].date === '2026-11-01'), 'the overwritten server copy is kept');
+  assert.equal(reg.docs.filter(doc => RECOVERY.test(doc.name)).length, 2);
+  assert.ok(cloud.tables.haedo_documents.get(id).data.events.some(e => e.title === '이 기기 새 편집'));
 });
 
 test('syncDocuments settles a document changed on both sides instead of leaving it unsent', async t => {
   const cloud = server(), h = fixture(t, cloud);
   const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
-  h.store.setHappiness('2026-11-04', 1);
+  const mine = h.doc(id); mine.events = [{ date: '2026-01-01', title: '이 기기 편집' }];
+  h.local.setItem(model.keys('A').docs + id, JSON.stringify(mine));
   const reg = h.registry(); reg.docs[0].updated = '2026-01-01T00:00:00.000Z'; h.local.setItem(model.keys('A').registry, JSON.stringify(reg));
-  cloud.write('haedo_documents', { id, name: '내 연표', data: { ...h.doc(id), happiness: [] } });
+  cloud.write('haedo_documents', { id, name: '내 연표', data: { ...h.doc(id), events: [], happiness: [] } });
   await h.store.syncDocuments();
   const after = h.registry();
   assert.equal(after.docs.length, 2);
   assert.deepEqual(h.doc(id).happiness, []);
-  assert.ok(h.doc(after.docs.find(doc => doc.id !== id).id).happiness.some(e => e.date === '2026-11-04'));
+  assert.ok(h.doc(after.docs.find(doc => doc.id !== id).id).events.some(e => e.title === '이 기기 편집'));
 });
 
 test('a document upload that returns after the account changed does not touch the new account', async t => {
@@ -253,4 +268,98 @@ test('ensure() keeps the open account (and its queue); a different account re-in
   h.store.ensure('B');
   assert.equal(h.store.items.length, 0);
   assert.equal(h.store.account, 'B');
+});
+
+test('an item written while a pull\'s list is in flight is not treated as deleted on the server', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  let release; const held = new Promise(done => { release = done; });
+  const original = cloud.request;
+  cloud.request = async (url, options = {}) => {
+    if (!options.method && !new URL(url).searchParams.get('id') && new URL(url).pathname.endsWith('haedo_items')) { const rows = await original(url, options); await held; return rows; }
+    return original(url, options);
+  };
+  const pulling = h.store.pull();                       // the list is read before the item exists
+  const id = h.store.change(null, 'goal', goal(15));
+  await h.store.flush();                                // the new item reaches the server
+  release(); await pulling;
+  assert.deepEqual(plain(h.store.items.map(item => item.id)), [id], 'the new goal stays');
+  assert.equal(h.recovery().length, 0, 'no false "deleted on the server" copy');
+});
+
+test('a damaged recovery list is set aside: conflicts still settle, backup and restore still work', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  h.local.setItem(model.keys('A').recovery, '{not json');
+  h.store.change(id, 'goal', goal(30)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(70) });
+  await h.store.pull();
+  assert.equal(h.store.items[0].data.progress, 70);
+  assert.equal(h.recovery().length, 1, 'a new list holds the loser');
+  assert.deepEqual(JSON.parse(h.values.get(model.keys('A').recoveryDamaged)), ['{not json'], 'the damaged value is kept aside');
+  const backup = plain(h.store.backup());
+  assert.equal(backup.recovery.length, 1); assert.deepEqual(backup.recoveryDamaged, ['{not json']);
+});
+
+test('the recovery list grows: two conflicts keep two copies, the same conflict once, and a restore adds (M-mutants)', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  for (const [mine, theirs] of [[30, 70], [35, 75]]) {
+    h.store.change(id, 'goal', goal(mine)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';
+    cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(theirs) });
+    await h.store.pull();
+  }
+  assert.deepEqual(h.recovery().map(row => row.data.progress), [30, 35], 'appended, not replaced');
+  // The same losing version settled again (pull, then a push path) is not kept twice.
+  const same = h.recovery()[1];
+  h.context.HaedoPlatformStore.restoreRecovery([{ ...same, rid: undefined, keptAt: 'later' }]);
+  assert.equal(h.recovery().length, 2);
+  // A restore from another source adds next to what is kept.
+  const added = h.store.restoreRecovery([{ id: 'other', kind: 'goal', data: goal(5), updated: '2026-10-01T00:00:00.000Z', keptAt: '2026-10-02T00:00:00.000Z', reason: 'remote_newer' }]);
+  assert.equal(added, 1); assert.deepEqual(h.recovery().map(row => row.data.progress), [30, 35, 5]);
+});
+
+test('push path: if the recovery copy cannot be written the server copy is not applied (item stays in conflict)', async t => {
+  const cloud = server(), h = fixture(t, cloud, { failRecovery: true }), id = await syncedGoal(h, cloud);
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(75) });
+  h.store.change(id, 'goal', goal(35)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';
+  await h.store.flush();
+  assert.equal(h.store.items[0].state, 'conflict'); assert.equal(h.store.items[0].data.progress, 35);
+  assert.equal(cloud.tables.haedo_items.get(id).data.progress, 75);
+});
+
+test('retry() settles an item left in conflict and sends what is unsent', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  h.store.change(id, 'goal', goal(80)); h.store.items[0].updated = '2030-01-01T00:00:00.000Z'; h.store.items[0].state = 'conflict';
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(55) });
+  await h.store.retry(); await h.store.flush();
+  assert.equal(h.store.items[0].state, 'ok');
+  assert.equal(cloud.tables.haedo_items.get(id).data.progress, 80);
+  assert.equal(h.recovery()[0].data.progress, 55);
+});
+
+test('one uploader per document: clean documents are not sent, and documents this store did not write are left to their editor (B1)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+  const writes = () => cloud.calls.filter(call => call.method !== 'GET' && call.table === 'haedo_documents').length;
+  const before = writes();
+  await h.store.uploadDocuments([id]);
+  assert.equal(writes(), before, 'a clean document is not sent again');
+  // Another page (the timeline editor) changes a different document: this store does not send it.
+  const other = h.store.setHappiness === undefined ? null : 'd_editor';
+  h.local.setItem(model.keys('A').docs + other, JSON.stringify(model.emptyDocument('편집기 문서')));
+  { const reg = h.registry(); reg.docs.push({ id: other, name: '편집기 문서', updated: '2026-11-04T00:00:00.000Z' }); h.local.setItem(model.keys('A').registry, JSON.stringify(reg)); }
+  h.store.retryDocuments();
+  await new Promise(done => setTimeout(done, 1700));
+  assert.equal(writes(), before, 'not owned: not sent');
+});
+
+test('recovery notice: unseen copies until acknowledged; a copy can be put back as a new item', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  h.store.change(id, 'goal', goal(30)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(70) });
+  await h.store.pull();
+  assert.equal(h.store.recoveryUnseen, 1);
+  h.store.acknowledgeRecovery();
+  assert.equal(h.store.recoveryUnseen, 0);
+  const revived = h.store.reviveRecovery(h.store.recovery[0].rid);
+  assert.notEqual(revived, id);
+  assert.deepEqual(plain(h.store.items.map(item => [item.id === id ? 'old' : 'new', item.data.progress])).sort(), [['new', 30], ['old', 70]]);
 });

@@ -178,6 +178,15 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }
 .schedule-happiness-day { min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
 .schedule-happiness-day:hover { background: var(--haedo-soft); }
+/* Phone width: all seven days fit without sideways scrolling; the habit name column shortens
+   (the full name stays in each check box's label). */
+@media (max-width: 760px) {
+  .schedule-habit-grid { width: 100%; table-layout: fixed; }
+  .schedule-habit-grid th, .schedule-habit-grid td { min-width: 0; padding: 0; }
+  .schedule-habit-grid tr > th:first-child { width: 4.5em; padding-right: 6px; }
+  .schedule-habit-grid tbody th { max-width: none; }
+  .schedule-happiness-day { width: 100%; min-width: 0; }
+}
 .schedule-entry-status { margin: 4px 0 0; }
 .schedule-entry-status[data-state=error] { color: var(--color-error); }
 

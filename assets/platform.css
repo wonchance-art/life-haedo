@@ -87,6 +87,10 @@
 .p-dialog .ownership-check { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .p-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .p-dialog-actions .p-text-link { margin-right: auto; }
+.p-status-actions { display: inline-flex; gap: 12px; margin-left: 8px; }
+.p-recovery-list { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.p-recovery-row { display: grid; gap: 4px; justify-items: start; }
+.p-recovery-meta { color: var(--ink-soft); font-size: var(--haedo-text-meta); }
 .p-toast { position: fixed; z-index: 1000; bottom: 24px; left: 50%; transform: translateX(-50%); max-width: min(540px,calc(100% - 32px)); padding: 12px 20px; border-radius: 8px; background: var(--ink); color: var(--paper); font-size: var(--haedo-text-meta); line-height: 1.75; overflow-wrap: anywhere; }
 .login-copy { max-width: 420px; padding-top: 36px; }
 .login-copy > p:first-child { margin-bottom: 24px; color: var(--ink-soft); font-size: 16px; line-height: 1.8; }

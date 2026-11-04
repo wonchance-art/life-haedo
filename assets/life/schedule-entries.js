@@ -36,15 +36,41 @@
     if (started !== uid) {
       started = uid;
       // Fresh copies from the account; the panel paints the device copy first and repaints on notice.
+      // This screen owns the timeline documents it shows: wake-ups refresh and resend them.
+      store().followDocuments();
       store().pull().catch(() => {});
       store().syncDocuments().catch(() => {});
     }
     return store();
   }
+  // Recovery copies follow the account as an ordinary account document (platformRecovery,
+  // AccountDocsSync): copies from the account are added here, and copies kept here are added
+  // there. Both sides only add (by rid); nothing is replaced or removed. One pass at a time.
+  let mirroring = null, mirrorAgain = false;
+  const accountCopy = row => ({ rid: row.rid, id: row.id, kind: row.kind, data: row.data, updated: row.updated ?? null,
+    keptAt: String(row.keptAt || ''), reason: String(row.reason || '') });
+  function mirrorRecovery(s, storage) {
+    if (typeof storage?.readPlatformRecovery !== 'function' || typeof storage.addPlatformRecovery !== 'function') return;
+    if (mirroring) { mirrorAgain = true; return; }
+    const uid = s.account, same = () => uid && s.account === uid && storage.account?.userId === uid;
+    mirroring = (async () => {
+      do {
+        mirrorAgain = false;
+        if (!same()) return;
+        const account = await storage.readPlatformRecovery();
+        if (!same()) return;
+        if (account.items.length) s.restoreRecovery(account.items);
+        const known = new Set(account.items.map(item => item.rid));
+        const local = s.recovery.filter(row => !known.has(row.rid) && ['goal', 'habit'].includes(row.kind) && typeof row.data?.title === 'string');
+        if (local.length && same()) await storage.addPlatformRecovery(local.reverse().map(accountCopy));
+      } while (mirrorAgain);
+    })().catch(() => {}).finally(() => { mirroring = null; });
+  }
   // A panel host: kind 'day' | 'week' | 'year'. isCurrent() is false once the screen changed.
-  function render(host, { kind, date, week = [], year, today, storageAccount, isCurrent, go }) {
+  function render(host, { kind, date, week = [], year, today, storageAccount, storage, isCurrent, go }) {
     const s = open(storageAccount);
     if (!s) return () => {};
+    mirrorRecovery(s, storage);
     const status = el('p', null, 'life-meta schedule-entry-status'); status.setAttribute('role', 'status');
     const error = el('p', null, 'life-error schedule-entry-error'); error.setAttribute('role', 'alert'); error.hidden = true;
     const body = el('div', null, 'schedule-entry-body');
@@ -142,7 +168,7 @@
       const thead = el('thead'); thead.append(head); table.append(thead);
       const tbody = el('tbody');
       for (const item of habits) {
-        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; tr.append(th);
+        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; th.title = item.data.title; tr.append(th);
         week.forEach((day, i) => {
           const td = el('td');
           if (model().scheduled(item.data, day)) td.append(habitCheck({ item }, day, item.data.title + ', ' + WEEK[i] + '요일'));
@@ -152,9 +178,9 @@
       }
       const mood = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; mood.append(mh);
       week.forEach((day, i) => {
-        const td = el('td'), value = s.happiness(day);
-        const link = el('button', value ? String(value.score) : '–', 'schedule-happiness-day'); link.type = 'button';
-        link.setAttribute('aria-label', WEEK[i] + '요일 행복도 ' + (value ? value.score : '기록 없음') + ', 그날 보기');
+        const td = el('td'), value = s.happiness(day), score = value?.score ?? null;
+        const link = el('button', score != null ? String(score) : '–', 'schedule-happiness-day'); link.type = 'button';
+        link.setAttribute('aria-label', WEEK[i] + '요일 행복도 ' + (score != null ? score : '기록 없음') + ', 그날 보기');
         link.dataset.focusKey = 'schedule:happiness-day:' + day;
         link.addEventListener('click', () => { if (alive()) go('day', day); });
         td.append(link); mood.append(td);
@@ -182,18 +208,27 @@
       const focusKey = host.contains(active) ? active?.dataset?.focusKey : null;
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
       painted = true;
-      const state = saveState(s.items, s.happinessState());
-      status.hidden = !dirty && state === 'ok';
+      const state = saveState(s.items, s.happinessState()), unseen = s.recoveryUnseen;
+      status.hidden = !dirty && state === 'ok' && !unseen;
       status.replaceChildren(el('span', STATE_TEXT[state]));
       status.dataset.state = state;
       if (state === 'error') {
+        // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
         const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
-        retry.addEventListener('click', () => { if (!alive()) return; s.retryDocuments(); s.flush().catch(() => {}).finally(paint); });
+        retry.addEventListener('click', () => { if (!alive()) return; s.retryDocuments(); s.retry().catch(() => {}).finally(paint); });
         status.append(' ', retry);
+      }
+      // Shown until acknowledged; the copies stay (list: habits.html#recovery, and in backups).
+      if (unseen) {
+        const view = el('a', '보기', 'life-text-button'); view.href = 'habits.html#recovery'; view.setAttribute('aria-label', '복구 사본 보기');
+        const seen = el('button', '확인', 'life-text-button'); seen.type = 'button'; seen.dataset.focusKey = 'schedule:entry:recovery-seen';
+        seen.setAttribute('aria-label', '복구 사본 알림 확인');
+        seen.addEventListener('click', () => { if (alive()) s.acknowledgeRecovery(); });
+        status.append(el('span', ' 다른 기기와 겹친 변경 ' + unseen + '개를 복구 사본으로 남겼습니다. ', 'schedule-entry-recovery'), view, ' ', seen);
       }
       if (focusKey) [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }
-    const onStore = () => { if (alive()) paint(); };
+    const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); } };
     document.addEventListener('haedo:store', onStore);
     paint();
     return () => document.removeEventListener('haedo:store', onStore);

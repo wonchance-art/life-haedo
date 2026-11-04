@@ -7,6 +7,10 @@
     items: prefix(uid) + "items",
     // The side that lost a sync conflict (newest edit wins, 2026-11-01). Never cleared automatically.
     recovery: prefix(uid) + "items_recovery",
+    // A recovery list that could not be read is set aside here (raw values), never discarded.
+    recoveryDamaged: prefix(uid) + "items_recovery_damaged",
+    // keptAt of the newest recovery copy the owner has acknowledged (hides the notice).
+    recoverySeen: prefix(uid) + "items_recovery_seen",
   });
   function read(storage, key, fallback) {
     const value = storage.getItem(key);
@@ -218,17 +222,22 @@
   }
   const isDay = (date) => typeof date === "string" && date.length === 10 && root.HaedoData.validDate(date);
   // The day's own entry (date YYYY-MM-DD); month-level points of the timeline are not a day's input.
+  // Values are read on the document's own scale (an older document without `scale` is 0–10),
+  // through the same conversion the timeline editor applies when it opens it.
   function happinessOn(doc, date) {
     if (!isDay(date) || !Array.isArray(doc?.happiness)) return null;
     const entry = doc.happiness.find((h) => h && h.date === date && Number.isFinite(h.v));
-    return entry ? { v: entry.v, score: happinessScore(entry.v) } : null;
+    if (!entry) return null;
+    const v = root.HaedoData.scaleValue(entry.v, doc.scale), score = happinessScore(v);
+    return score === null ? null : { v, score };
   }
   // A copy of doc with that day's entry set (n) or removed (null). Other entries are untouched; an
   // existing value that already shows as n (e.g. 0.35 shown as 7) is kept as it is.
   function withHappiness(doc, date, n) {
     if (!isDay(date)) throw new Error("행복도를 기록할 날짜를 확인해 주세요.");
     if (!root.HaedoData.isDocument(doc)) throw new Error("연표 문서를 읽지 못했습니다. 원본은 보존했습니다.");
-    const next = structuredClone(doc);
+    // Migrate the whole document to signed1 first, as the editor does, so scales never mix.
+    const next = root.HaedoData.toSignedScale(structuredClone(doc));
     next.happiness = Array.isArray(next.happiness) ? next.happiness : [];
     const at = next.happiness.findIndex((h) => h && h.date === date);
     if (n === null) { if (at >= 0) next.happiness.splice(at, 1); return next; }
@@ -237,6 +246,13 @@
       if (happinessScore(next.happiness[at].v) !== n) next.happiness[at] = { ...next.happiness[at], v };
     } else next.happiness.push({ date, v });
     return next;
+  }
+  // The timeline the schedule reads and writes: the same one on every device. Recovery copies
+  // are skipped; among the rest the smallest document ID is chosen (IDs are the same everywhere,
+  // unlike the device-local registry.current).
+  function baseDocument(reg) {
+    const docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name));
+    return docs.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] || null;
   }
   // Habits that apply on date (created on or before it, on one of its weekdays), with their check.
   function dueHabits(items, date) {
@@ -274,6 +290,7 @@
     happinessValue,
     happinessOn,
     withHappiness,
+    baseDocument,
     dueHabits,
     activeGoals,
     localWins,

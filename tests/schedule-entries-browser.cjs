@@ -208,6 +208,56 @@ async function main() {
       assert.equal(await page.locator('#conflictDialog[open]').count(), 0);
     });
 
+    await check('a recovery copy: the notice shows until acknowledged, the list revives it as a new item, and it follows the account', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.waitForFunction(() => HaedoPlatformStore.items[0]?.state === 'ok');
+      page.__expectFailure = true; tables.fail = 'haedo_items';
+      await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
+      await statusOf(page).filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 10000 });
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData(['2026-11-01']) });
+      tables.fail = null;
+      await statusOf(page).getByRole('button', { name: '다시 시도' }).click();
+      await statusOf(page).filter({ hasText: '1개를 복구 사본으로 남겼습니다' }).waitFor({ timeout: 10000 });
+      // The copy reaches the account document list (platformRecovery) on this device.
+      const mirrored = () => page.evaluate(async () => (await HaedoLife.Storage.forAccount(HaedoAuth.getAccount()).readPlatformRecovery()).items);
+      const deadline = Date.now() + 10000; let rows = [];
+      while (Date.now() < deadline && !(rows = await mirrored()).length) await page.waitForTimeout(200);
+      assert.equal(rows.length, 1); assert.deepEqual(rows[0].data.checks, ['2026-11-03']);
+      // 확인 hides the sentence; the copy stays.
+      await statusOf(page).getByRole('button', { name: '복구 사본 알림 확인' }).click();
+      await page.waitForFunction(() => !document.querySelector('.schedule-entry-status')?.textContent.includes('복구 사본'));
+      assert.equal(await page.evaluate(() => HaedoPlatformStore.recovery.length), 1);
+      // The list (habits.html#recovery) revives it as a new item; the item it lost to is unchanged.
+      await page.goto(base + '/habits.html#recovery');
+      const dialog = page.locator('#recoveryDialog[open]'); await dialog.waitFor();
+      assert.match(await dialog.innerText(), /아침 산책/);
+      await dialog.getByRole('button', { name: '새 항목으로 되살리기' }).click();
+      await page.waitForFunction(() => HaedoPlatformStore.items.filter(i => i.data.title === '아침 산책').length === 2);
+      const [kept, revived] = await page.evaluate(() => [HaedoPlatformStore.items.find(i => i.id === 'h1').data.checks, HaedoPlatformStore.items.find(i => i.id !== 'h1').data.checks]);
+      assert.deepEqual(kept, ['2026-11-01']); assert.deepEqual(revived, ['2026-11-03']);
+      assert.equal(await page.evaluate(() => HaedoPlatformStore.recovery.length), 1, 'the kept copy stays');
+      await page.waitForFunction(() => HaedoPlatformStore.items.every(i => i.state === 'ok'), null, { timeout: 10000 });
+      assert.equal(tables.owned('haedo_items', accounts.a.id).length, 2, 'the revived item is a new row');
+    });
+
+    await check('another device\'s newer timeline edit stays in the main document when 행복도 meets a conflict (rebased, no copy)', async ({ page, tables }) => {
+      const doc = { profile: { name: '내 연표', birth: '1990-01' }, scale: 'signed1', events: [], spans: [], eras: [], happiness: [], thoughts: [], records: [], trips: [], layers: [] };
+      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: doc });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.waitForFunction(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_registry') || '{"docs":[]}').docs.some(d => d.id === 'd_timeline' && d.syncedAt), accounts.a.id);
+      // Another device adds an event after this page read the document.
+      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: { ...doc, events: [{ date: '2026-11-02', title: '다른 기기 사건' }] } });
+      await page.locator('.schedule-happiness-option', { hasText: /^8$/ }).click();
+      await page.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 10000 });
+      const rows = tables.owned('haedo_documents', accounts.a.id);
+      assert.equal(rows.length, 1, 'no recovery row');
+      assert.deepEqual(rows[0].data.events.map(e => e.title), ['다른 기기 사건'], 'the other device\'s event stays');
+      assert.deepEqual(rows[0].data.happiness, [{ date: '2026-11-03', v: 0.6 }]);
+      const names = await page.evaluate(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_registry')).docs.map(d => d.name), accounts.a.id);
+      assert.deepEqual(names, ['내 연표'], 'no recovery copy on the device');
+    });
+
     await check('a late store response after signing out shows nothing of account A to account B', async ({ page, server, device, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: 'A만의 습관', data: { ...habitData([]), title: 'A만의 습관' } });
       let release; tables.hold = new Promise(done => { release = done; });
@@ -234,6 +284,13 @@ async function main() {
         await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
         await page.waitForFunction(() => HaedoPlatformStore.items.length === 3);
         await overflow(page, view + ' ' + width);
+        if (view === 'week') {
+          // All seven days show without sideways scrolling inside the grid either (Sunday included).
+          const fit = await page.evaluate(() => { const scroll = document.querySelector('.schedule-habit-scroll'), sunday = document.querySelector('.schedule-habit-grid thead th:last-child');
+            const box = scroll.getBoundingClientRect(), day = sunday.getBoundingClientRect();
+            return { scrolls: scroll.scrollWidth > scroll.clientWidth + 1, sunday: sunday.textContent, inside: day.right <= box.right + 1 && day.right <= innerWidth }; });
+          assert.deepEqual(fit, { scrolls: false, sunday: '일', inside: true }, 'week ' + width + ': Monday to Sunday visible');
+        }
         const small = await page.locator('.schedule-entries input, .schedule-entries button, .schedule-happiness-option').evaluateAll(nodes => nodes.filter(n => n.checkVisibility()).map(n => {
           const box = (n.matches('input[type=checkbox],input[type=radio]') ? n.closest('label,td') || n : n).getBoundingClientRect(); return { w: box.width, h: box.height, name: n.getAttribute('aria-label') || n.textContent };
         }).filter(r => r.h < 44 || r.w < 24));
