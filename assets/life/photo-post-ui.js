@@ -877,6 +877,54 @@
       if (nextStatus === "saved") await saveServer();
     }
     const duplicate = () => saveIndependent("draft");
+    // Deleting from the read view uses the same path as 글 공개·보관: BlogSync
+    // writes the deletion record so every signed-in device removes the post too.
+    async function removePost() {
+      if (mode !== "read" || !doc) return;
+      guard();
+      await flush();
+      const token = epoch, id = doc.id, revision = doc.revision;
+      if (!current(token) || mode !== "read" || doc?.id !== id || doc.revision !== revision) return;
+      // Deleting only on this device would not reach the others (the post comes back with the next sync).
+      if (staleApp()) throw new Error("앱을 새로고침한 뒤 다시 시도해 주세요. 글은 이 기기에 그대로 있습니다.");
+      const label = doc.title?.trim() || "제목 없는 글";
+      if (typeof root.confirm === "function" && !root.confirm("“" + label + "”을 삭제할까요? 로그인한 모든 기기에서 함께 삭제됩니다.")) return;
+      if (!current(token) || doc?.id !== id || doc.revision !== revision) return;
+      setBusy(true);
+      try {
+        if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, id, { expectedRevision: revision });
+        else await storage.deletePhotoPost(workspaceId, id, revision);
+      } catch (e) {
+        // The shared refusal names the list; from here the post itself has to be opened again.
+        if (e?.code === "photo_post_conflict")
+          throw Object.assign(new Error("다른 탭이나 기기에서 글이 바뀌어 삭제하지 않았습니다. 글을 다시 연 뒤 삭제해 주세요."), { code: e.code });
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+      if (!current(token)) return;
+      doc = null;
+      dirtyTick = storedTick = 0;
+      committed = false;
+      error = null;
+      onSaved();
+      // Leave the read view the way its back control would; the caller forgets the deleted post.
+      const left = onReturn && (await onReturn({ id: null, deletedId: id, committed: false })) !== false;
+      if (!current(token)) return;
+      // A return that did not replace this view must not leave the deleted post on screen.
+      if (left && !(host?.isConnected && host.querySelector(".photo-article"))) return;
+      mode = "list";
+      render();
+      if (!left && statusText) statusText.textContent = "글을 삭제했습니다. 다른 기기에서도 삭제됩니다.";
+      if (!document.activeElement || document.activeElement === document.body)
+        for (const node of [...host.querySelectorAll("h2,h3,summary,button"), host]) {
+          // A control inside a closed <details> has boxes but cannot take focus; the host is the last resort.
+          if (node !== host && (!node.getClientRects().length || node.disabled || node.parentElement?.closest("details:not([open])") && node.tagName !== "SUMMARY")) continue;
+          if (!node.hasAttribute("tabindex") && !/^(BUTTON|SUMMARY)$/.test(node.tagName)) node.tabIndex = -1;
+          node.focus({ preventScroll: true });
+          if (document.activeElement === node) break;
+        }
+    }
     function serverCurrent(token, id, revision, sequence) {
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
         doc.revision === revision && sequence === serverSequence;
@@ -2086,6 +2134,10 @@
         );
         if (!doc.archived)
           menu.append(button("보관함으로 옮기기", () => archive(true)));
+        const remove = button("삭제", removePost);
+        remove.dataset.postAction = "delete";
+        remove.classList.add("photo-delete");
+        menu.append(remove);
         actions.append(more);
         host.append(actions);
         if (doc.status === "saved") {

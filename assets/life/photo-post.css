@@ -192,6 +192,7 @@
   border-radius: 10px;
 }
 .photo-more-menu > button:hover { background: var(--soft, #f7f7f8); }
+.photo-more-menu > button.photo-delete { margin-top: 4px; color: var(--color-error, #a3243d); }
 .photo-more-menu > .photo-server-scope { margin: 4px 12px 8px; font-size: 13px; line-height: 1.6; color: var(--ink-soft, #66666f); }
 .photo-read-actions { max-width: 680px; margin-inline: auto; gap: 8px; padding-block: 8px; flex-wrap: nowrap; }
 .photo-read-actions > :nth-child(2) { margin-right: auto; }

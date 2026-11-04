@@ -48,6 +48,12 @@ function memoryAdapter() {
             },
             async getAll() { return structuredClone([...map.values()]); },
             async getAllKeys() { return [...map.keys()].map(JSON.parse); },
+            async getKey(value) {
+              if (control.failRead?.name === name && (!control.failRead.key || control.failRead.key === value)) {
+                control.failRead = null; throw new DOMException('read failed', 'UnknownError');
+              }
+              return map.has(key(value)) ? structuredClone(value) : undefined;
+            },
             put: value => write('put', value), add: value => write('add', value), delete: value => write('delete', value),
             index(field) { return { async getAll(value) { return structuredClone([...map.values()].filter(row => row[field] === value)); } }; }
           };

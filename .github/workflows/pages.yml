@@ -164,6 +164,12 @@ jobs:
       - name: Verify schedule list, year to day views, old addresses, offline dated reloads and keyboard guards
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-browser.cjs
+      - name: Verify schedule habit checks, goal progress, read-only happiness and item recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-entries-browser.cjs
+      - name: Verify the timeline editor stays the only writer of timeline documents
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/timeline-single-writer-browser.cjs
       - name: Verify settings items, hash entries, narrow groups, device values and leave protection
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/settings-browser.cjs
@@ -560,6 +566,12 @@ jobs:
       - name: Verify readonly local post finding and original preservation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/local-post-finder-browser.cjs
+      - name: Verify posts of a space missing on this device stay readable and save back to their space
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/other-space-post-browser.cjs
+      - name: Verify deleting a post from its read view asks first, deletes only that post and returns to the schedule
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-delete-browser.cjs
       - name: Verify workbench storage boundaries in the browser
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/workbench-storage-browser.cjs

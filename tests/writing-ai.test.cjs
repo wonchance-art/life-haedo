@@ -17,7 +17,7 @@ const EDIT = AI.create({ isCurrent: ALWAYS, request: async () => ({}) });
 const PROJECT = 'https://anonymous-ai.example.invalid';
 const OWNER = randomUUID(); // the one allowed account, random per run (HAEDO_AI_OWNER_ID)
 // Synthetic per-run secrets: not keys, never written to the repository.
-const SECRET = { provider: 'test-provider-' + randomUUID(), service: 'test-service-' + randomUUID(), publicKey: 'test-public-' + randomUUID(), session: 'test-session-' + randomUUID() };
+const SECRET = { provider: 'test-provider-' + randomUUID(), service: 'test-service-' + randomUUID(), publicKey: 'test-public-' + randomUUID(), session: 'eyJ0ZXN0.session-' + randomUUID() + '.signature' };
 const SELECTION = '익명 샘플 문장을 다듬어 주세여. 두번째 문장은 그대로 둔다.';
 const GUIDANCE = '익명 지침: 존댓말을 쓰지 않는다.';
 const SUGGESTION = '익명 샘플 문장을 다듬어 주세요. 두 번째 문장은 그대로 둔다.';
@@ -154,9 +154,15 @@ test('handler: unauthenticated and unconfigured requests are refused before any 
   let response = await handler(post(polishBody(), { token: null }));
   assert.equal(response.status, 401); assert.deepEqual(await response.json(), { error: 'unauthorized' });
   assert.deepEqual(w.state.calls, []);
-  response = await handler(post(polishBody(), { token: 'wrong-session' }));
+  // verify_jwt=false (2026-11-04): a Bearer that is not JWT-shaped (an API key, any other string) is refused before the body is read.
+  for (const token of ['wrong-session', 'sb_secret_synthetic_key_value', 'sb_publishable_synthetic_key', 'a.b', 'a.b.c.d', 'a.b.c d']) {
+    response = await handler(post('{not json', { token }));
+    assert.equal(response.status, 401, token); assert.deepEqual(await response.json(), { error: 'unauthorized' });
+  }
+  assert.deepEqual(w.state.calls, [], 'no Auth call for a non-JWT Bearer');
+  response = await handler(post(polishBody(), { token: 'eyJ3cm9uZw.wrong-session.signature' }));
   assert.equal(response.status, 401);
-  assert.deepEqual(w.state.calls, [PROJECT + '/auth/v1/user'], 'Auth decides; no RPC or provider call');
+  assert.deepEqual(w.state.calls, [PROJECT + '/auth/v1/user'], 'Auth decides a JWT-shaped session; no RPC or provider call');
   const anon = world({ provider: editReply, user: { id: OWNER, role: 'anon' } });
   assert.equal((await (await handlerFor(anon))(post(polishBody()))).status, 401);
   const nokey = world({ provider: editReply, keys: { ANTHROPIC_API_KEY: undefined } });

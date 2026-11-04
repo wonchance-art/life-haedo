@@ -1,4 +1,5 @@
 import { failure } from './collector.mjs';
+import { serverHeaders } from '../_shared/supabase-keys.mjs';
 import { extractHTML, parseInventory, sha256, imageURL } from './extractor.mjs';
 import { createNetwork, imageMetadata, readBytes, MEDIA_MAX_BYTES } from './harvest-network.mjs';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -77,7 +78,7 @@ export function createHarvestWorker({ rpc, fetcher = fetch, load, model, origin,
   async function upload(claim, bytes, metadata) {
     const digest = await sha256(bytes), path = claim.owner_id + '/naver/' + claim.blog_id + '/' + claim.log_no + '/' + digest;
     const url = origin + '/storage/v1/object/haedo-naver-originals/' + path.split('/').map(encodeURIComponent).join('/');
-    const headers = { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': metadata.mimeType, 'x-upsert': 'false' };
+    const headers = { ...serverHeaders(key), 'Content-Type': metadata.mimeType, 'x-upsert': 'false' };
     const result = await fetcher(url, { method: 'POST', redirect: 'error', signal: network.timeout(), headers, body: bytes });
     if (!result.ok) {
       await result.body?.cancel();
@@ -85,7 +86,7 @@ export function createHarvestWorker({ rpc, fetcher = fetch, load, model, origin,
       // acknowledgement can also be ambiguous. Never trust an error label:
       // reuse only after reading this exact owner/hash object and proving bytes.
       const previous = await fetcher(origin + '/storage/v1/object/authenticated/haedo-naver-originals/' + path.split('/').map(encodeURIComponent).join('/'), {
-        redirect: 'error', signal: network.timeout(), headers: { apikey: key, Authorization: 'Bearer ' + key, 'Accept-Encoding': 'identity' } });
+        redirect: 'error', signal: network.timeout(), headers: { ...serverHeaders(key), 'Accept-Encoding': 'identity' } });
       if (!previous.ok) { await previous.body?.cancel(); throw failure('network_error'); }
       const old = await readBytes(previous, MEDIA_MAX_BYTES);
       need(old.length === bytes.length && await sha256(old) === digest && (previous.headers.get('content-type') || '').split(';')[0] === metadata.mimeType, 'invalid_image');

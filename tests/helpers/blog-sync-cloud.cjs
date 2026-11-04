@@ -38,6 +38,7 @@ function memoryIdb() {
           if (method === 'get') return copy(store.get(key(value)));
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(item => JSON.parse(item));
+          if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
           if (method === 'indexGetAll') { const field = indexes.get(name).get(value.index); return copy([...store.values()].filter(row => key(row[field]) === key(value.value))); }
           assert.equal(mode, 'readwrite');
           const path = paths.get(name), id = method === 'delete' ? value : Array.isArray(path) ? path.map(field => value[field]) : value[path];
@@ -47,7 +48,7 @@ function memoryIdb() {
           if (method === 'delete') store.delete(key(id)); else store.set(key(id), copy(value)); return id;
         }
         return { done, abort, objectStore(name) { return {
-          get: item => request(name, 'get', item), getAll: () => request(name, 'getAll'), getAllKeys: () => request(name, 'getAllKeys'),
+          get: item => request(name, 'get', item), getAll: () => request(name, 'getAll'), getAllKeys: () => request(name, 'getAllKeys'), getKey: item => request(name, 'getKey', item),
           put: item => request(name, 'put', item), add: item => request(name, 'add', item), delete: item => request(name, 'delete', item),
           index: index => ({ getAll: item => request(name, 'indexGetAll', { index, value: item }) })
         }; } };

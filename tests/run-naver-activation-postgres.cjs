@@ -45,7 +45,7 @@ async function main() {
       create table haedo_naver_private.runtime(singleton boolean,ready boolean);insert into haedo_naver_private.runtime values(true,false);
       create table public.life_naver_captures(payload text);insert into public.life_naver_captures values('immutable fixture body/photo receipt');
       create table vault.decrypted_secrets(name text,decrypted_secret text);
-      insert into vault.decrypted_secrets values('haedo_naver_project_url','https://fixture.supabase.co'),('haedo_naver_service_role_key',repeat('synthetic-',8));
+      insert into vault.decrypted_secrets values('haedo_naver_project_url','https://fixture.supabase.co'),('haedo_naver_service_role_key','eyJsynthetic-header.synthetic-payload.synthetic-signature');
       create table extension_calls(name text);create table cron.job(jobname text primary key,schedule text,command text);
       insert into cron.job values('unrelated-job','0 1 * * *','unrelated fixture');
       create function cron.schedule(job_name text,job_schedule text,job_command text) returns bigint language plpgsql as $$begin
@@ -62,15 +62,17 @@ async function main() {
       assert.deepEqual(state(), before);
     });
     check('duplicate Vault secret blocks public mode atomically', () => {
-      sql("insert into vault.decrypted_secrets values('haedo_naver_service_role_key',repeat('duplicate-',8));");
+      sql("insert into vault.decrypted_secrets values('haedo_naver_service_role_key','eyJduplicate-header.duplicate-payload.duplicate-signature');");
       const before = state(); rejected(activate('public'), 'Exactly one server-only'); assert.deepEqual(state(), before);
-      sql("delete from vault.decrypted_secrets where decrypted_secret=repeat('duplicate-',8);");
+      sql("delete from vault.decrypted_secrets where decrypted_secret='eyJduplicate-header.duplicate-payload.duplicate-signature';");
     });
     check('public mode creates only the PC run schedule and preserves unrelated work', () => {
       run(activate('public')); const current = state(); assert.equal(current.ready, true);
       assert.deepEqual(current.jobs.map(j => j.jobname), ['haedo-naver-capture-poll', 'unrelated-job']);
       const job = current.jobs[0]; assert.equal(job.schedule, '*/15 * * * *'); assert.match(job.command, /body:='\{"action":"run"\}'::jsonb/);
       assert.match(job.command, /\/functions\/v1\/haedo-naver-blog/); assert.match(job.command, /vault\.decrypted_secrets/);
+      assert.match(job.command, /'apikey',\s*\(select decrypted_secret from vault\.decrypted_secrets where name='haedo_naver_service_role_key'\)/);
+      assert.equal(job.command.includes('Authorization'), false, 'an sb_secret_ key is never sent as a Bearer token');
       assert.equal(job.command.includes('synthetic-'), false); assert.equal(current.preserved, 'immutable fixture body/photo receipt');
     });
     check('default all mode schedules RSS cron and PC run without duplicating named jobs', () => {

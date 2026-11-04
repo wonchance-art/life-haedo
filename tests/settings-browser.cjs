@@ -9,6 +9,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const out = path.resolve('.local/settings-browser');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual SDK/IndexedDB with intercepted anonymous Auth; Chromium widths, not Apple devices', checks: [], visual: [], consoleErrors: [], pageErrors: [] };
 const ITEMS = ['계정', '자료공간', '뉴스', '일정', '백업', '공개 페이지', '단축키'];
@@ -16,6 +17,47 @@ const ITEMS = ['계정', '자료공간', '뉴스', '일정', '백업', '공개 �
 async function mode(page, value) { await page.locator('#lifeMain[data-mode="' + value + '"]').waitFor(); await settle(page); }
 async function openSettings(page) { await nav(page, 'manage'); await mode(page, 'manage'); await page.locator('#lifeSettings').waitFor(); }
 const activeId = page => page.evaluate(() => document.activeElement?.id || '');
+// The address as the page has it now. page.url() follows history.replaceState through a later browser event
+// and can still name the previous item right after a press (seen 1 in 240 presses).
+const addressHash = page => page.evaluate(() => location.hash);
+// Two animation frames and a short task: any focus placed "in the next frame" has run.
+const frames = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)))));
+// Focus that 설정 places in a frame after its screen has settled: a returned-to row (ui.js
+// restoreOriginView) and an item named by the address (SettingsUI.mount). A same-document history move to
+// an address with a fragment (#settings-…) also clears focus natively at the end of that task (Chromium
+// fragment focus reset), so a read right after settle() can see <body>. Wait shortly for exactly the
+// expected element, then require focus not to leave it during the following frames.
+const focusMatches = ({ id, focusKey }) => { const el = document.activeElement; return !!el && el.isConnected && (id ? el.id === id : el.dataset.focusKey === focusKey); };
+async function focusSettles(page, expected, label) {
+  await awaitCondition(page, focusMatches, expected, { timeout: 5000, label: label + ': focus on ' + JSON.stringify(expected) });
+  const moves = await page.evaluate(async () => {
+    const seen = [], record = event => seen.push(event.target.id || event.target.dataset?.focusKey || event.target.tagName);
+    document.addEventListener('focusout', record, true);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100))));
+    document.removeEventListener('focusout', record, true);
+    return seen;
+  });
+  assert.deepEqual(moves, [], label + ': focus does not move away afterwards');
+  assert.equal(await page.evaluate(focusMatches, expected), true, label + ': focus stays on ' + JSON.stringify(expected));
+}
+// Every element that receives focus from now on (capture phase on document; kept across in-app screens).
+const recordFocus = page => page.evaluate(() => {
+  window.__settingsFocus = [];
+  if (!window.__settingsFocusListener) document.addEventListener('focusin', window.__settingsFocusListener = event => {
+    const el = event.target; window.__settingsFocus.push(el.id ? { id: el.id } : { focusKey: el.dataset?.focusKey, tag: el.tagName });
+  }, true);
+});
+// A return or back focuses its origin control directly: after the control used to leave (if any), the only
+// element that receives focus is the origin row. No heading of 설정 is focused in between (2026-11-04).
+async function returnFocus(page, expected, label, trigger = null) {
+  await focusSettles(page, expected, label);
+  assert.deepEqual(await page.evaluate(() => window.__settingsFocus), [...(trigger ? [trigger] : []), expected], label + ': focus goes to the origin row only');
+}
+// The item named by the address is marked in that same later frame (SettingsUI.mount); until then the first item is.
+const currentItemSettles = (page, text, label) => awaitCondition(page, text => {
+  const marked = [...document.querySelectorAll('.settings-index-link[aria-current]')].map(link => link.textContent);
+  return marked.length === 1 && marked[0] === text;
+}, text, { timeout: 12000, label: label + ': the only current item is ' + text });
 const stored = (page, key) => page.evaluate(key => localStorage.getItem(key), key);
 async function capture(page, scene, width) {
   await page.evaluate(async () => { await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); });
@@ -85,7 +127,7 @@ async function main() {
       await openSettings(page);
       const before = await page.evaluate(() => ({ length: history.length, key: history.state?.haedo?.key }));
       await page.locator('.settings-index-link', { hasText: '백업' }).click();
-      assert.equal(new URL(page.url()).hash, '#settings-backup');
+      assert.equal(await addressHash(page), '#settings-backup');
       assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '백업');
       assert.equal(await activeId(page), 'settings-heading-backup');
       // The item starts just below the fixed header: html scroll-padding-top plus the section's scroll-margin-top.
@@ -94,7 +136,7 @@ async function main() {
       assert(Math.abs(place.top - place.expected) <= 1 && place.top >= place.header, 'selected item is brought to the top: ' + JSON.stringify(place));
       // Keyboard: Tab to the item, Enter.
       await page.locator('.settings-index-link', { hasText: '단축키' }).focus(); await page.keyboard.press('Enter');
-      assert.equal(new URL(page.url()).hash, '#settings-keys'); assert.equal(await activeId(page), 'settings-heading-keys');
+      assert.equal(await addressHash(page), '#settings-keys'); assert.equal(await activeId(page), 'settings-heading-keys');
       assert.deepEqual(await page.evaluate(() => ({ length: history.length, key: history.state?.haedo?.key })), before, 'item moves replace the address; the app entry is kept');
       // Scrolling by hand moves the current item and the address with it; focus stays where it was.
       await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await page.mouse.move(900, 500);
@@ -114,13 +156,13 @@ async function main() {
       assert.match(await described('#lifeCurrentWorkspace'), /내 자료.*이 브라우저 · 자료 0개.*다른 작업공간을 선택/);
       // Reload and direct addresses open the named item.
       await page.reload(); await ready(page); await mode(page, 'manage');
-      assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '단축키'); assert.equal(await activeId(page), 'settings-heading-keys');
+      await currentItemSettles(page, '단축키', 'reload of #settings-keys'); await focusSettles(page, { id: 'settings-heading-keys' }, 'reload of #settings-keys');
       // Fresh loads (a bookmark), not same-document fragment moves.
       await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#settings-news'); await ready(page); await mode(page, 'manage');
-      assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '뉴스'); assert.equal(await activeId(page), 'settings-heading-news');
+      await currentItemSettles(page, '뉴스', 'fresh load of #settings-news'); await focusSettles(page, { id: 'settings-heading-news' }, 'fresh load of #settings-news');
       // An item moved to from the list survives leaving and returning with the browser.
-      await page.locator('#lifeBackupOpen').click(); await mode(page, 'backup'); await page.goBack(); await mode(page, 'manage');
-      assert.equal(await activeId(page), 'lifeBackupOpen', 'browser back restores the row that was used');
+      await page.locator('#lifeBackupOpen').click(); await mode(page, 'backup'); await recordFocus(page); await page.goBack(); await mode(page, 'manage');
+      await returnFocus(page, { id: 'lifeBackupOpen' }, 'browser back restores the row that was used');
       // The three former settings-file hashes open 백업·복원 with the format list focused.
       for (const hash of ['#lifeBackupChoices', '#lifeBackupMaterials', '#lifeBackupPlanning']) {
         await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage' + hash); await ready(page); await mode(page, 'backup');
@@ -131,16 +173,17 @@ async function main() {
       // old backup anchor back to 설정 (review m3 of bundle E).
       await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#settings-public'); await ready(page); await mode(page, 'manage');
       await nav(page, 'news'); await mode(page, 'external-discovery');
-      assert.equal(new URL(page.url()).hash, '', 'another section does not carry #settings-public');
+      assert.equal(await addressHash(page), '', 'another section does not carry #settings-public');
       await nav(page, 'manage'); await mode(page, 'manage');
       // The address may then name the item that the restored scroll position shows (scroll following).
-      assert.match(new URL(page.url()).hash, /^(#settings-[a-z]+)?$/);
+      assert.match(await addressHash(page), /^(#settings-[a-z]+)?$/);
+      await frames(page);
       assert.notEqual(await activeId(page), 'settings-heading-public', 'returning to 설정 does not reselect the item of an earlier visit');
       await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage#lifeBackupMaterials'); await ready(page); await mode(page, 'backup');
-      assert.equal(new URL(page.url()).hash, '#lifeBackupMaterials');
+      assert.equal(await addressHash(page), '#lifeBackupMaterials');
       await nav(page, 'manage'); await mode(page, 'manage');
       // 설정 may name the item its restored scroll position shows, never the backup anchor.
-      assert.match(new URL(page.url()).hash, /^(#settings-[a-z]+)?$/, '설정 does not keep the backup anchor');
+      assert.match(await addressHash(page), /^(#settings-[a-z]+)?$/, '설정 does not keep the backup anchor');
       await page.reload(); await ready(page); await mode(page, 'manage');
       await page.goto(base + '/workspace.html?section=manage#backupAll');
       await page.locator('#backupAll').waitFor({ state: 'visible' });
@@ -162,26 +205,27 @@ async function main() {
       await openSettings(page);
       // 백업·복원: in-app back, browser back and forward.
       await page.locator('#lifeBackupOpen').tap(); await mode(page, 'backup');
-      await page.getByRole('button', { name: '설정으로 돌아가기', exact: true }).tap(); await mode(page, 'manage');
-      assert.equal(await activeId(page), 'lifeBackupOpen');
+      await recordFocus(page); await page.getByRole('button', { name: '설정으로 돌아가기', exact: true }).tap(); await mode(page, 'manage');
+      await returnFocus(page, { id: 'lifeBackupOpen' }, '설정으로 돌아가기 from 백업·복원', { id: 'lifeSubviewReturn' });
       await page.locator('#lifeBackupOpen').tap(); await mode(page, 'backup');
-      await page.goBack(); await mode(page, 'manage'); assert.equal(await activeId(page), 'lifeBackupOpen');
+      await recordFocus(page); await page.goBack(); await mode(page, 'manage'); await returnFocus(page, { id: 'lifeBackupOpen' }, 'browser back from 백업·복원');
       await page.goForward(); await mode(page, 'backup'); await page.locator('#fbInventory [data-kind]').first().waitFor();
       await capture(page, 'backup', 390);
-      await page.goBack(); await mode(page, 'manage');
+      // The restore frame also scrolls back to the row; a tap aimed before it lands on the neighbouring row.
+      await recordFocus(page); await page.goBack(); await mode(page, 'manage'); await returnFocus(page, { id: 'lifeBackupOpen' }, 'browser back from 백업·복원 after forward');
       // 공개 표지 and 공개한 페이지.
       for (const [name, destination] of [['공개 표지', 'public-cover'], ['공개한 페이지', 'public-pages']]) {
         await page.getByRole('button', { name, exact: true }).tap(); await mode(page, destination);
-        await page.goBack(); await mode(page, 'manage');
-        assert.equal(await page.evaluate(() => document.activeElement?.dataset.focusKey), 'manage:' + destination);
+        await recordFocus(page); await page.goBack(); await mode(page, 'manage');
+        await returnFocus(page, { focusKey: 'manage:' + destination, tag: 'BUTTON' }, 'browser back from ' + name);
       }
       // 뉴스: the existing news settings screen and the existing topic editor.
       await page.getByRole('button', { name: '뉴스 설정', exact: true }).tap(); await mode(page, 'external-discovery');
       await page.locator('#discoveryNewsSettingsPanel').waitFor({ state: 'visible' });
       assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="news"]').getAttribute('aria-current'), 'page');
-      await page.goBack(); await mode(page, 'manage');
+      await recordFocus(page); await page.goBack(); await mode(page, 'manage'); await returnFocus(page, { focusKey: 'manage:news-settings', tag: 'BUTTON' }, 'browser back from 뉴스 설정');
       await page.getByRole('button', { name: '관심 주제 편집', exact: true }).tap(); await mode(page, 'interests');
-      await page.goBack(); await mode(page, 'manage');
+      await recordFocus(page); await page.goBack(); await mode(page, 'manage'); await returnFocus(page, { focusKey: 'manage:news-interests', tag: 'BUTTON' }, 'browser back from 관심 주제 편집');
       // 로그인 opens the one account menu; 로그아웃 stays there only.
       await page.locator('#lifeSettingsAccount').tap();
       await page.waitForFunction(() => document.getElementById('lifeAccount').open && document.activeElement?.id === 'lifeLogout');

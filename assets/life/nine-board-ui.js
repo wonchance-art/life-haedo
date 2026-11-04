@@ -392,7 +392,9 @@
     // Completed receipts belong to this storage/workspace instance, not a mounted view.
     // Keep one across editor/open failures; pending previews are always discarded.
     function detach(){epoch++;clearCompose();clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
-    return {mount,flush,dirty,detach,hasBlockedInput:()=>evidencePending||!!manual||pendingFields.size>0||composing.size>0||busy};
+    // A post deleted elsewhere (its read view) must not stay behind the 보관된 초안 열기 receipt.
+    function forgetPost(postId){if(composeReceipt&&composeReceipt.postId===postId){composeReceipt=null;host?.querySelector('.nb-compose-result')?.remove();}}
+    return {mount,flush,dirty,detach,forgetPost,hasBlockedInput:()=>evidencePending||!!manual||pendingFields.size>0||composing.size>0||busy};
   }
   life.NineBoardUI={create};
 })(globalThis);
