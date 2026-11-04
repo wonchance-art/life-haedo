@@ -138,11 +138,11 @@
         const b = button(label, () => { mode = id; views.querySelectorAll('button').forEach(el => el.setAttribute('aria-pressed', String(el === b))); renderResults(); }, icon);
         b.setAttribute('aria-pressed', String(mode === id)); views.append(b);
       }
-      const archive = button(archived ? '전체 목록 보기' : '보관한 항목 보기', () => { archived = !archived; limit = 40; draw(); screen.querySelector('#clArchiveToggle')?.focus(); }, 'bookmark');
+      const archive = button(archived ? '전체 목록 보기' : '숨긴 항목 보기', () => { archived = !archived; limit = 40; draw(); screen.querySelector('#clArchiveToggle')?.focus(); }, 'bookmark');
       archive.id = 'clArchiveToggle'; archive.setAttribute('aria-pressed', String(archived)); views.append(archive); resultLine.append(count, views); screen.append(resultLine);
       const grid = node('div'); grid.id = 'clGrid'; screen.append(grid); renderResults();
       const files = node('details', null, 'cl-files'); files.append(node('summary', '백업·복구'));
-      files.append(node('p', '컬렉션 정보·비공개 메모·보관 상태만 포함합니다. 원문·발췌·내 페이지·연표 백업과 별도이며 자동 동기화되지 않습니다.', 'life-help'));
+      files.append(node('p', '컬렉션 정보·비공개 메모·숨김 상태만 포함합니다. 원문·발췌·내 페이지·연표 백업과 별도이며 자동 동기화되지 않습니다.', 'life-help'));
       files.append(button('컬렉션 백업 받기', backup));
       const label = node('label', null, 'life-field'); label.append(node('span', '컬렉션 백업 파일 선택'));
       const input = node('input'); input.type = 'file'; input.accept = '.json,application/json'; input.id = 'clRestoreFile';
@@ -166,7 +166,7 @@
     function renderResults() {
       const grid = screen.querySelector('#clGrid'); if (!grid) return; clearMedia(); grid.replaceChildren(); grid.className = 'cl-grid' + (mode === 'note' ? ' cl-notes' : '');
       const shown = state.items.filter(item => C.matches(item, { query, category, type, tag, archived }));
-      screen.querySelector('#clCount').textContent = `${archived ? '보관한 항목 · ' : ''}${shown.length}개`;
+      screen.querySelector('#clCount').textContent = `${archived ? '숨긴 항목 · ' : ''}${shown.length}개`;
       if (!shown.length) {
         const empty = node('div', null, 'cl-empty'); empty.append(node('h2', state.items.length ? '찾는 항목이 없어요' : '좋아하는 것을 모아 보세요'));
         empty.append(node('p', state.items.length ? '검색어나 분류를 바꿔 보세요.' : '음악, 책, 작품, 도구와 인물을 한곳에 보관합니다.', 'life-help'));
@@ -201,10 +201,10 @@
       if (item.url) { const a = node('a', '원래 출처 열기', 'life-button'); a.href = item.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; screen.append(a); }
       screen.append(node('h3', '비공개 메모'), node('p', item.note || '남긴 메모가 없습니다.', 'cl-note'));
       screen.append(usedIn(item));
-      const manage = node('details', null, 'cl-files'); manage.append(node('summary', '항목 관리'), node('p', '보관한 항목은 목록에서 숨기며 백업에는 계속 포함됩니다.', 'life-help'));
-      manage.append(button(item.archived ? '목록에 다시 표시' : '항목 보관', async () => {
+      const manage = node('details', null, 'cl-files'); manage.append(node('summary', '항목 관리'), node('p', '숨긴 항목은 목록에 보이지 않으며 백업에는 계속 포함됩니다.', 'life-help'));
+      manage.append(button(item.archived ? '목록에 다시 보이기' : '목록에서 숨기기', async () => {
         const next = C.clone(state); const target = next.items.find(i => i.id === item.id); target.archived = !item.archived; target.updatedAt = now(item.createdAt);
-        await commit(next, () => { status = target.archived ? '항목을 보관했습니다.' : '목록에 다시 표시했습니다.'; back(); });
+        await commit(next, () => { status = target.archived ? '항목을 목록에서 숨겼습니다.' : '항목을 목록에 다시 보이게 했습니다.'; back(); });
       })); screen.append(manage);
     }
     // Posts of this workspace whose attachments match the item (same rule that keeps the collection
@@ -434,7 +434,7 @@
     function renderRestore() {
       const host = screen.querySelector('#clRestoreReview'); if (!host) return; host.replaceChildren(); if (!restore) return;
       const backup = restore.backup;
-      host.append(node('p', `${restore.name} · ${backup.items.length}개 (보관한 항목 ${backup.items.filter(i => i.archived).length}개)`), node('p', '기존 항목을 덮어쓰지 않고 새 사본으로 추가합니다. 같은 파일을 다시 복구하면 사본이 더 생깁니다.', 'life-help'));
+      host.append(node('p', `${restore.name} · ${backup.items.length}개 (숨긴 항목 ${backup.items.filter(i => i.archived).length}개)`), node('p', '기존 항목을 덮어쓰지 않고 새 사본으로 추가합니다. 같은 파일을 다시 복구하면 사본이 더 생깁니다.', 'life-help'));
       const preview = node('ul'); backup.items.slice(0, 5).forEach(item => preview.append(node('li', item.title))); host.append(preview);
       host.append(button('새 항목 사본으로 복구', async () => {
         const next = C.appendBackup(state, backup, () => root.HaedoLife.Core.id());

@@ -269,7 +269,7 @@
       throw fault("사진 글 형식을 확인해 주세요.");
     if (v2) {
       if (typeof d.archived !== "boolean")
-        throw fault("글의 보관 상태를 확인해 주세요.");
+        throw fault("글의 숨김 상태를 확인해 주세요.");
       posts().validateAttachments(d.attachments);
     }
     id(d.id);
