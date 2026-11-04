@@ -15,8 +15,8 @@
     - sql-replay에 전환 SQL의 점검·갱신·되돌리기·거절을 넣었다.
   - 상세: [writing-ai-suggestions.md](../design-review/writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비), [naver-operational-readiness.md](../design-review/naver-operational-readiness.md#새-api-키로-전환-2026-11-04-레거시-키-폐지-대비)
 - **남은 조건(총괄·소유자):**
-  1. 세 함수 배포
-  2. 전환 SQL 실행
+  1. 세 함수 배포(네이버는 런타임 소스 9개)
+  2. 전환 SQL 실행과 `net._http_response` 상태 코드 확인
   3. Vault 값 교체
   4. 레거시 키 끄기
 

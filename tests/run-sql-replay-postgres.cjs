@@ -16,9 +16,10 @@
  *     sessions of two DIFFERENT accounts race for the last of the project-wide monthly AI
  *     budget: exactly one reservation wins.
  * 4.7 Runs supabase/operations/20261104-naver-cron-apikey.sql on a fresh replayed copy with a
- *     pg_cron schedule shim: inspect changes nothing; apikey rewrites only the two existing
- *     Naver schedules (same jobid/schedule, no key value in the command), is idempotent and
- *     reversible; unknown modes, an sb_secret_ Bearer and a row-count change roll back.
+ *     pg_cron alter_job shim: inspect changes nothing; apikey rewrites only the two existing
+ *     Naver schedules' commands (same jobid/schedule/active/database/user, no key value in the
+ *     command), is idempotent and reversible; unknown modes, an sb_secret_ Bearer, a change
+ *     beyond the command, a row-count change and a database without the schedules roll back.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -224,15 +225,17 @@ async function main() {
         const bearer = action => `select net.http_post(url:=(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_project_url')||'/functions/v1/haedo-naver-blog',
           headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_service_role_key')),
           body:='{"action":"${action}"}'::jsonb,timeout_milliseconds:=120000);`;
-        await db.query(`alter table cron.job add column command text, add column username text default current_user;
-          create unique index on cron.job(jobname, username);
-          create function cron.schedule(job_name text, job_schedule text, job_command text) returns bigint language plpgsql as $f$
-          declare id bigint; begin
+        // Same signature as pg_cron 1.6 cron.alter_job; test settings inject the failures the SQL must catch.
+        await db.query(`alter table cron.job add column command text, add column database text default current_database(), add column username text default current_user;
+          create function cron.alter_job(job_id bigint, schedule text default null, command text default null, database text default null,
+            username text default null, active boolean default null) returns void language plpgsql as $f$ begin
             if current_setting('test.cron_insert_extra', true) = 'yes' then
-              insert into cron.job(jobname, schedule, command, active) values ('extra-' || job_name, job_schedule, job_command, true); end if;
-            insert into cron.job(jobname, schedule, command, active) values (job_name, job_schedule, job_command, true)
-              on conflict (jobname, username) do update set schedule = excluded.schedule, command = excluded.command returning jobid into id;
-            return id; end $f$;`);
+              insert into cron.job(jobname, schedule, command, active) select 'extra-' || j.jobname, j.schedule, j.command, j.active from cron.job j where j.jobid = job_id; end if;
+            update cron.job j set schedule = coalesce(alter_job.schedule, j.schedule), command = coalesce(alter_job.command, j.command),
+              active = case when current_setting('test.cron_flip_active', true) = 'yes' then not j.active else coalesce(alter_job.active, j.active) end
+              where j.jobid = job_id;
+            if not found then raise exception 'could not find valid entry for job %', job_id; end if;
+            end $f$;`);
         await db.query(`insert into vault.decrypted_secrets values ('haedo_naver_project_url', 'https://fixture.supabase.co'), ('haedo_naver_service_role_key', $1)`, [SECRET]);
         await db.query(`insert into cron.job(jobname, schedule, command, active) values
           ('haedo-naver-blog-poll', '*/15 * * * *', $1, true), ('haedo-naver-capture-poll', '7,22,37,52 * * * *', $2, false),
@@ -245,6 +248,7 @@ async function main() {
         await refused("set local haedo.naver_cron_action='other';", 'Unknown Naver cron header operation');
         await refused("set local haedo.naver_cron_action='bearer';", 'cannot be sent as a Bearer token');
         await refused("set local haedo.naver_cron_action='apikey';set local test.cron_insert_extra='yes';", 'Row count changed in cron.job');
+        await refused("set local haedo.naver_cron_action='apikey';set local test.cron_flip_active='yes';", 'changed beyond its command');
         assert.deepEqual(await jobs(), initial, 'refused runs roll back');
         for (let i = 0; i < 2; i++) {
           const rows = await run("set local haedo.naver_cron_action='apikey';");
@@ -264,7 +268,12 @@ async function main() {
         const back = await run("set local haedo.naver_cron_action='bearer';");
         assert.deepEqual(back.map(r => [r.header, r.ok]), [['bearer', false], ['bearer', false]]);
         assert(!(await jobs()).some(j => j.command.includes(JWT)), 'no key value in any command');
-        pass('naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, sb_secret_ Bearer and row-count change rolled back');
+        // A database where collection was never activated: nothing to switch, nothing changes.
+        await db.query("delete from cron.job where jobname like 'haedo-naver-%'");
+        const empty = await jobs();
+        await refused("set local haedo.naver_cron_action='apikey';", 'No Naver schedule to change');
+        assert.deepEqual(await jobs(), empty);
+        pass('naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, sb_secret_ Bearer, non-command change, row-count change and no schedules rolled back');
       } finally { await db.end(); }
     }
 

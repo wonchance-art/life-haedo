@@ -40,7 +40,6 @@ test('shared key rules: new keys first, legacy fallback, never a public key as t
     assert.equal(keys.publicKey, EXPECTED[name].publicKey, name);
     assert.equal(serverKey(key => env[key]), keys.server, 'blog-media inline copy agrees: ' + name);
   }
-  assert.deepEqual(supabaseKeys(key => ENVIRONMENTS.both[key]).servers, [NEW.secret, LEGACY.service]);
   const refused = [
     {},
     { SUPABASE_SECRET_KEYS: JSON.stringify({ default: NEW.publishable }) },
@@ -106,12 +105,22 @@ test('haedo-ai verifies the user with the publishable key and reserves with the 
   }
 });
 
-function naverWorld(env) {
+// A legacy service JWT with this project's claims (signature is not checked
+// locally; the gateway decides). OTHER_SECRET is a second, non-default secret key.
+const jwtPart = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const ROTATED_JWT = [jwtPart({ alg: 'HS256', typ: 'JWT' }), jwtPart({ role: 'service_role', ref: 'fixture', exp: Math.floor(Date.now() / 1000) + 3600 }), 'synthetic-signature'].join('.');
+const OTHER_SECRET = 'sb_secret_fixture_second_key_abcdef';
+// The gateway accepts these keys; anything else gets 401 at the remote check.
+const GATEWAY = new Set([NEW.secret, LEGACY.service, ROTATED_JWT, OTHER_SECRET]);
+function naverWorld(env, gateway = GATEWAY) {
   const calls = [];
   const fetcher = async (url, options) => {
     calls.push({ url, headers: options.headers });
     if (url === PROJECT + '/auth/v1/user') return Response.json({ id: OWNER });
-    if (url === PROJECT + '/rest/v1/rpc/life_naver_ready') return Response.json(true);
+    if (url === PROJECT + '/rest/v1/rpc/life_naver_ready') {
+      if (!gateway.has(options.headers.apikey)) return new Response('private gateway detail', { status: 401 });
+      return Response.json(true);
+    }
     throw new Error('unexpected fetch ' + url);
   };
   const handler = createNaver => createNaver({ fetcher, environment: key => ({ SUPABASE_URL: PROJECT, ...env })[key] });
@@ -120,7 +129,7 @@ function naverWorld(env) {
   return { calls, handler, request };
 }
 
-test('haedo-naver-blog accepts the server key in the apikey header and keeps legacy Bearer cron working', async () => {
+test('haedo-naver-blog accepts its own server key in the apikey header without a remote check', async () => {
   const { createHandler } = await naver;
   for (const [name, env] of Object.entries(ENVIRONMENTS)) {
     const presented = name === 'legacy' ? LEGACY.service : NEW.secret;
@@ -131,24 +140,50 @@ test('haedo-naver-blog accepts the server key in the apikey header and keeps leg
     assert.deepEqual(w.calls.map(c => c.url), [PROJECT + '/rest/v1/rpc/life_naver_ready'], name);
     assert.deepEqual(credentials(w.calls[0].headers), EXPECTED[name].server, name);
   }
-  for (const name of ['legacy', 'both']) {
-    // Current cron (operations/naver-collection-activation.sql): legacy service JWT as Bearer.
-    const w = naverWorld(ENVIRONMENTS[name]);
-    const result = await w.handler(createHandler)(w.request({ action: 'readiness' }, { Authorization: 'Bearer ' + LEGACY.service }));
-    assert.equal(result.status, 200, name);
-    assert.deepEqual(credentials(w.calls[0].headers), EXPECTED[name].server, name);
+});
+
+test('haedo-naver-blog verifies any other server key remotely with that key only', async () => {
+  const { createHandler } = await naver;
+  // Current cron (Bearer) and switched cron (apikey) with a legacy service JWT in Vault, and a second sb_secret_ key.
+  for (const [env, headers, sent] of [
+    [ENVIRONMENTS.legacy, { Authorization: 'Bearer ' + ROTATED_JWT }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
+    [ENVIRONMENTS.both, { Authorization: 'Bearer ' + ROTATED_JWT }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
+    [ENVIRONMENTS.new, { apikey: ROTATED_JWT }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
+    [ENVIRONMENTS.both, { apikey: OTHER_SECRET }, { apikey: OTHER_SECRET }],
+    // The retired legacy key is no longer this function's key in a new-key environment: it must prove itself too.
+    [ENVIRONMENTS.both, { apikey: ROTATED_JWT, Authorization: 'Bearer user-session-fixture' }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
+  ]) {
+    const label = JSON.stringify(Object.keys(headers));
+    const w = naverWorld(env), result = await w.handler(createHandler)(w.request({ action: 'readiness' }, headers));
+    assert.equal(result.status, 200, label);
+    assert.deepEqual(await result.json(), { ingestionEnabled: false, ready: true }, label);
+    assert.equal(w.calls.length, 1, 'the remote check answers readiness itself: ' + label);
+    assert.deepEqual(credentials(w.calls[0].headers), sent, 'only the presented credential is sent: ' + label);
+    // A disabled or deleted key: the gateway refuses it and so does the function, after exactly one remote check.
+    const off = naverWorld(env, new Set([NEW.secret, LEGACY.service]));
+    const refused = await off.handler(createHandler)(off.request({ action: 'cron' }, headers));
+    assert.equal(refused.status, 401, label); assert.deepEqual(await refused.json(), { error: 'unauthorized' });
+    assert.deepEqual(off.calls.map(c => c.url), [PROJECT + '/rest/v1/rpc/life_naver_ready'], label);
   }
-  // A public key, an unknown secret or the retired legacy key alone never authorizes a service action.
+  // In the both environment the legacy key the runtime still holds is not accepted locally.
+  const both = naverWorld(ENVIRONMENTS.both, new Set([NEW.secret]));
+  const retired = await both.handler(createHandler)(both.request({ action: 'cron' }, { apikey: LEGACY.service }));
+  assert.equal(retired.status, 401); assert.deepEqual(both.calls, [], 'a non-JWT legacy value is never even forwarded');
+});
+
+test('haedo-naver-blog refuses public keys and malformed server credentials without any call', async () => {
+  const { createHandler } = await naver;
   for (const [env, headers] of [
     [ENVIRONMENTS.new, { apikey: NEW.publishable }],
-    [ENVIRONMENTS.new, { apikey: 'sb_secret_fixture_unknown' }],
+    [ENVIRONMENTS.new, { apikey: 'sb_secret_short' }],
+    [ENVIRONMENTS.new, { Authorization: 'Bearer ' + OTHER_SECRET }],
     [ENVIRONMENTS.new, { apikey: LEGACY.service }],
     [ENVIRONMENTS.new, { Authorization: 'Bearer ' + NEW.publishable }],
     [ENVIRONMENTS.legacy, { apikey: LEGACY.anon }],
     [ENVIRONMENTS.both, { apikey: LEGACY.anon, Authorization: 'Bearer ' + LEGACY.anon }],
   ]) {
     const w = naverWorld(env), result = await w.handler(createHandler)(w.request({ action: 'cron' }, headers));
-    assert.equal(result.status, 401, JSON.stringify(Object.keys(headers)));
+    assert.equal(result.status, 401, JSON.stringify(headers));
     assert.deepEqual(await result.json(), { error: 'unauthorized' });
     assert.deepEqual(w.calls, []);
   }

@@ -30,10 +30,9 @@ export function supabaseKeys(environment) {
   const serverOnly = key => !!key && !key.startsWith('sb_publishable_') && !publicKeys.includes(key);
   const server = [text(secrets?.default), legacyService].find(serverOnly) || null;
   const publicKey = [text(publishables?.default), ...legacyPublic].find(Boolean) || null;
-  // Every current server key may authenticate an incoming service call
-  // (rotation keeps more than one); outgoing calls use only `server`.
-  const servers = [...Object.values(secrets || {}).map(text), legacyService].filter(serverOnly);
-  return { server, publicKey, servers };
+  // Incoming service calls are compared with `server` only; haedo-naver-blog
+  // verifies any other presented server key remotely with that key itself.
+  return { server, publicKey };
 }
 
 /** Headers for a server-key call to PostgREST or Storage. */

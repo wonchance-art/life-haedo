@@ -163,10 +163,10 @@ skill 문서(`claude-api/curl/examples.md`, `shared/models.md`, `shared/model-mi
 - **보내는 방식:** `sb_secret_` 키는 JWT가 아니므로 `apikey` 헤더로만 보낸다. 레거시 JWT 키는 예전처럼 `apikey`와 `Authorization: Bearer`를 함께 보낸다.
 - **받는 방식:**
   - `Authorization`에는 사용자 세션만 받는다. `sb_`로 시작하는 값이 오면 Auth에 넘기지 않고 `unauthorized`로 거절한다.
-  - 네이버 cron은 서버 키를 `apikey` 헤더로 보낸다. 함수는 그 값을 현재 서버 키 전부(`SUPABASE_SECRET_KEYS`의 모든 값과 레거시 키)와 상수 시간으로 비교한다.
+  - 네이버 cron은 서버 키를 `apikey` 헤더로 보낸다. 함수가 그 자리에서 받는 것은 자기가 쓰는 서버 키(위 순서로 고른 하나)와 상수 시간으로 같은 값뿐이다. 다른 서버 키(회전된 레거시 service JWT, 이름이 다른 `sb_secret_` 키)는 그 키 하나로 `life_naver_ready`를 원격 호출해 게이트웨이가 받을 때만 통과한다. 그래서 끄거나 지운 키는 런타임에 옛 값이 남아 있어도 통과하지 못한다.
   - 기존 Bearer cron도 전환 기간에는 계속 받는다.
 - **`verify_jwt=false`:** `haedo-ai`는 플랫폼 JWT 검증을 끄고 배포한다. 함수가 `/auth/v1/user`로 세션을 직접 확인하므로, JWT 서명 키를 회전해도 플랫폼 검증 단계에서 깨지지 않는다. 네이버 함수는 이미 `verify_jwt=false`로 배포되어 있다.
-- **검사:** `tests/supabase-keys.test.cjs`가 새 키만 / 레거시만 / 둘 다인 환경에서 세 함수의 요청 헤더를 단언한다. 공개 키·모르는 키·폐지된 레거시 키로는 서비스 작업이 거절되는 것도 단언한다. 변이 6종(Bearer 복귀, 레거시 우선, apikey 무시 등)이 모두 실패로 잡힌다.
+- **검사:** `tests/supabase-keys.test.cjs`가 새 키만 / 레거시만 / 둘 다인 환경에서 세 함수의 요청 헤더를 단언한다. 공개 키·형식이 틀린 키로는 호출 없이 거절되는 것, 다른 서버 키는 그 키 하나로 원격 확인하고 끈 키는 거절되는 것도 단언한다. 변이 11종(Bearer 복귀, 레거시 우선, apikey 무시, 레거시 로컬 수락, 원격 확인 생략 등)이 모두 실패로 잡힌다. 독립 검수(블로커·메이저 0, 마이너 5)는 모두 반영했다.
 
 ## 연결 지점 함수 (`HaedoLife.WritingAI`, 화면 연결 때 사용)
 

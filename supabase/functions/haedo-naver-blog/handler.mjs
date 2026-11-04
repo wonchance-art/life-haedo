@@ -2,6 +2,7 @@ import { collect, failure, feedURL, readBounded } from './collector.mjs';
 import { createHarvestWorker } from './harvest-worker.mjs';
 import { supabaseKeys, serverHeaders } from '../_shared/supabase-keys.mjs';
 
+const SECRET_KEY = /^sb_secret_[A-Za-z0-9_-]{16,256}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -52,9 +53,14 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       check(object(input));
       const readiness = input.action === 'readiness';
       const harvest = ['inventory','capture','run'].includes(input.action);
-      const exactService = [apikey, token].some(presented => keys.servers.some(server => secretEqual(presented, server)));
+      // Only the key this function itself uses is accepted locally. Any other
+      // server key (a rotated legacy service JWT, or another sb_secret_ key in
+      // the apikey header) must prove itself remotely below, so a key that was
+      // disabled or deleted stops working even if this runtime still holds it.
+      const exactService = [apikey, token].some(presented => secretEqual(presented, key));
       const serviceToken = ['cron','run','readiness'].includes(input.action) ?
-        [apikey, token].find(presented => typeof presented === 'string' && legacyServiceCandidate(presented, project.hostname)) : undefined;
+        [apikey, token].find(presented => typeof presented === 'string' && !secretEqual(presented, key) &&
+          (legacyServiceCandidate(presented, project.hostname) || presented === apikey && SECRET_KEY.test(presented))) : undefined;
       const candidate = !!serviceToken;
       const cron = input.action === 'cron' || input.action === 'run' && (exactService || candidate || Object.keys(input).length === 1);
       let owner = null, verifiedReady;
@@ -62,13 +68,13 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         check(Object.keys(input).length === 1, 'unauthorized');
         if (!exactService) {
           check(candidate, 'unauthorized');
-          // Key rotation can leave two valid service JWTs with different bytes.
+          // Key rotation can leave two valid server keys with different bytes.
           // Authenticate this candidate remotely using ONLY its own credential,
           // never the environment key; do not persist or cache it across requests.
           const endpoint = origin + '/rest/v1/rpc/life_naver_ready';
           const result = await fetcher(endpoint, { method: 'POST', redirect: 'error',
             signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10000, deadline - Date.now()))]),
-            headers: { apikey: serviceToken, Authorization: 'Bearer ' + serviceToken, 'Content-Type': 'application/json' }, body: '{}' });
+            headers: { ...serverHeaders(serviceToken), 'Content-Type': 'application/json' }, body: '{}' });
           if (result.redirected || result.url && result.url !== endpoint) {
             await result.body?.cancel(); throw failure('unauthorized');
           }

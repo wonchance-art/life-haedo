@@ -22,8 +22,11 @@
 --   * 전체가 DO 블록 한 문장이다. 어느 단계에서 실패하면 전체가 되돌려진다.
 --   * 실행 전후로 public·haedo_* 스키마의 모든 테이블, storage.objects, cron.job의 행 수를 비교하고
 --     하나라도 달라지면 예외를 내서 전체를 되돌린다.
---   * 이미 있는 haedo-naver-blog-poll·haedo-naver-capture-poll 일정의 명령만 바꾼다.
---     새 일정을 만들거나 지우지 않고, 일정 주기는 그대로 둔다. 수집 활성화(ready)는 바꾸지 않는다.
+--   * 이미 있는 haedo-naver-blog-poll·haedo-naver-capture-poll 일정의 명령만 cron.alter_job으로 바꾼다.
+--     새 일정을 만들거나 지우지 않는다. 바꾸기 전후로 두 일정의 명령 외 모든 열(jobid·주기·활성·
+--     database·username 등)을 비교해 하나라도 다르면 되돌린다. 수집 활성화(ready)는 바꾸지 않는다.
+--   * 바꿀 일정이 하나도 없으면(수집을 켜지 않았거나 보이지 않으면) 아무것도 바꾸지 않고 멈춘다.
+--   * 실행 중에 다른 저장이 행 수를 바꾸면 안전하게 되돌려진다. 그때는 다시 실행한다.
 --   * 사용자 데이터 삭제·권한 완화가 없다. 다시 실행해도 된다.
 -- 실행 후 맨 아래 결과 표: 있는 일정마다 header가 'apikey'이고 ok가 true인지 확인한다.
 begin;
@@ -34,6 +37,7 @@ declare
  action text:=coalesce(nullif(current_setting('haedo.naver_cron_action',true),''),'inspect');
  jobs constant text[]:=array['haedo-naver-blog-poll','haedo-naver-capture-poll'];
  job record; r record; n bigint; present boolean; before jsonb:='{}'::jsonb; credential text; changed int:=0;
+ meta jsonb; meta_sql constant text:=$m$select coalesce(jsonb_agg(to_jsonb(j)-'command' order by j.jobid),'[]'::jsonb) from cron.job j where j.jobname = any($1)$m$;
 begin
  if action='inspect' then return;end if;
  if action not in ('apikey','bearer') then raise exception 'Unknown Naver cron header operation';end if;
@@ -62,11 +66,13 @@ begin
   before := before || jsonb_build_object(r.relation, n);
  end loop;
 
+ execute meta_sql into meta using jobs;
  credential := case when action='apikey'
   then $h$'apikey',(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_service_role_key')$h$
   else $h$'Authorization','Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_service_role_key')$h$ end;
- for job in execute 'select jobname, schedule from cron.job where jobname = any($1) order by jobname' using jobs loop
-  execute 'select cron.schedule($1,$2,$3)' using job.jobname, job.schedule, format($job$
+ for job in execute 'select jobid, jobname from cron.job where jobname = any($1) order by jobname' using jobs loop
+  -- alter_job changes the command only; schedule, active, database and user stay as they are.
+  execute 'select cron.alter_job(job_id := $1, command := $2)' using job.jobid, format($job$
   select net.http_post(
    url:=(select decrypted_secret from vault.decrypted_secrets where name='haedo_naver_project_url')||'/functions/v1/haedo-naver-blog',
    headers:=jsonb_build_object('Content-Type','application/json',%s),
@@ -74,6 +80,11 @@ begin
   $job$, credential, case when job.jobname='haedo-naver-blog-poll' then '{"action":"cron"}' else '{"action":"run"}' end);
   changed := changed + 1;
  end loop;
+ if changed = 0 then raise exception 'No Naver schedule to change (collection not activated, or its jobs are not visible to this role)';end if;
+ declare after_meta jsonb; begin
+  execute meta_sql into after_meta using jobs;
+  if after_meta is distinct from meta then raise exception 'A Naver schedule changed beyond its command; rolled back';end if;
+ end;
 
  for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
   execute format('select count(*) from %s', r.relation) into n;
