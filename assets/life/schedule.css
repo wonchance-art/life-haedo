@@ -169,7 +169,15 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-habit-grid thead th { color: var(--ink-soft); font-size: var(--haedo-text-meta); }
 .schedule-habit-grid tr > th:first-child { position: sticky; left: 0; z-index: 1; background: var(--paper); text-align: left; }
 .schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }
-.schedule-happiness-value { margin: 0; font-size: var(--haedo-text-body); font-variant-numeric: tabular-nums; }
+.schedule-happiness { min-width: 0; margin: 8px 0 0; border: 0; padding: 0; }
+.schedule-happiness > legend { margin: 16px 0 4px; padding: 0; font-size: var(--haedo-text-body); font-weight: 750; }
+.schedule-happiness-scale { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; max-width: 528px; }
+.schedule-happiness-option { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; border-radius: 12px; background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; cursor: pointer; }
+.schedule-happiness-option > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.schedule-happiness-option:has(input:checked) { background: var(--color-primary); color: var(--haedo-on-accent); font-weight: 750; }
+.schedule-happiness-option:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.schedule-happiness-option:has(input:disabled) { opacity: .5; cursor: default; }
+.schedule-happiness-clear { min-height: 44px; margin-top: 4px; }
 .schedule-happiness-day { min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
 .schedule-happiness-day:hover { background: var(--haedo-soft); }
 /* Phone width: all seven days fit without sideways scrolling; the habit name column shortens

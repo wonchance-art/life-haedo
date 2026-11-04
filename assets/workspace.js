@@ -147,7 +147,10 @@
     const file = event.target.files[0]; if (!file || RO) return;
     let previous; const staged = [];
     try {
-      const input = JSON.parse(await file.text());
+      const raw = JSON.parse(await file.text());
+      // 행복도(happinessDays) in a timeline backup goes into the restored copies (restoreBackupDays).
+      const restored = window.HaedoPlatformData?.restoreBackupDays ? HaedoPlatformData.restoreBackupDays(raw) : { backup: raw, happinessOnly: false, days: 0 };
+      const input = restored.backup;
       const entries = HaedoData.prepareImport(input, newDocId, migrateScale);
       previous = structuredClone(REG);
       for (const entry of entries) {
@@ -156,9 +159,11 @@
       const updated = new Date().toISOString();
       REG.docs.push(...entries.map(({ id, name }) => ({ id, name, updated })));
       if (!saveRegistry()) throw new Error('저장 공간이 부족합니다.');
-      switchDoc(entries[0].id);
+      // A '행복도 복원' timeline (행복도 only) does not replace the timeline being viewed.
+      if (!restored.happinessOnly) switchDoc(entries[0].id); else refreshDocSel();
       for (const entry of entries) if (CLOUD) cloudQueue.schedule(entry.id);
-      showToast(`${entries.length}개 문서를 새 사본으로 가져왔습니다. 기존 문서는 그대로 있습니다.`);
+      showToast(`${entries.length}개 문서를 새 사본으로 가져왔습니다. 기존 문서는 그대로 있습니다.` +
+        (restored.happinessOnly ? ' 행복도 복원 연표를 새로 만들었습니다.' : restored.days ? ' 하루 행복도는 백업 당시 보이던 값으로 사본에 넣었습니다.' : ''));
     } catch (error) {
       if (previous) REG = previous;
       for (const id of staged) { try { localStorage.removeItem(DOC_PREFIX + id); } catch (_) {} }

@@ -97,7 +97,8 @@ async function main() {
       assert.deepEqual(scripts.sort(), ['/assets/life/schedule-entries.js', '/assets/platform-store.js', '/assets/sync.js']);
       const box = page.getByRole('checkbox', { name: '아침 산책', exact: true });
       await box.waitFor(); assert.equal(await box.isChecked(), true, 'the server check of 11-02 is shown');
-      assert.equal(await page.locator('.schedule-entries').getByRole('radio').count(), 0, '행복도 is not entered here');
+      // 2026-11-04 owner decision (happiness-single-writer.md): 행복도 is entered in 일정 D, 0–10.
+      assert.equal(await page.locator('.schedule-entries').getByRole('radio').count(), 11, '행복도 0–10 is entered here');
     });
 
     await check('a habit check saves on the device first, then reaches the account (two-step state)', async ({ page, tables }) => {
@@ -115,32 +116,26 @@ async function main() {
       assert.equal(tables.owned('haedo_documents', accounts.a.id).length, 0, 'no timeline was made');
     });
 
-    // 2026-11-04 owner decision ("습관·목표 먼저"): 행복도 is shown in 일정 and entered in the timeline editor.
-    await check('the 일정 shows 행복도 read only and never writes a timeline; its link opens the timeline editor', async ({ page, tables }) => {
+    // 2026-11-04 owner decision (happiness-single-writer.md): 일정 D enters 행복도 into the account
+    // document (happinessDays). The timeline keeps its own points: the 일정 never writes a timeline.
+    await check('the 일정 shows a timeline\'s 행복도 as the chosen score and never writes a timeline or its list', async ({ page, tables }) => {
       const doc = { profile: { name: '내 연표', birth: '1990-01' }, scale: 'signed1', events: [], spans: [], eras: [], happiness: [{ date: '2026-11-03', v: 0.6 }], thoughts: [], records: [], trips: [], layers: [] };
       tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: doc });
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
-      await page.locator('.schedule-happiness-value', { hasText: '8 / 10' }).waitFor();
-      assert.equal(await page.locator('.schedule-entries input[type=radio]').count(), 0, 'no 행복도 control');
+      await page.waitForFunction(() => document.querySelector('.schedule-happiness input[value="8"]')?.checked);
       // Nor on the device: the timeline's body and the document list stay exactly as they were
       // (watched through every localStorage write the page makes from here on).
       const keys = await page.evaluate(id => ['caeyeon_life_account_' + id + '_registry', 'caeyeon_life_account_' + id + '_doc_d_timeline'], accounts.a.id);
       const before = await page.evaluate(list => list.map(key => localStorage.getItem(key)), keys);
       await page.evaluate(list => { window.__docWrites = []; const set = Storage.prototype.setItem;
         Storage.prototype.setItem = function (key, value) { if (list.includes(key)) window.__docWrites.push(key); return set.call(this, key, value); }; }, keys);
-      await page.getByRole('button', { name: /다음|›/ }).first().click().catch(() => {});
+      await page.getByRole('radio', { name: '행복도 9' }).check();
       await page.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); dispatchEvent(new Event('online')); });
       await page.waitForTimeout(1500);
       assert.deepEqual(await page.evaluate(() => window.__docWrites), [], 'no write to the timeline or the list');
       assert.deepEqual(await page.evaluate(list => list.map(key => localStorage.getItem(key)), keys), before);
-      const edit = page.getByRole('link', { name: '행복도를 연표에서 기록 (내 연표)' });
-      assert.equal(await edit.getAttribute('href'), 'timeline.html?doc=d_timeline');
-      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day'); await entries(page);
-      assert.equal(await page.locator('.schedule-happiness-value').innerText(), '기록 없음');
-      await page.getByRole('link', { name: '행복도를 연표에서 기록 (내 연표)' }).click();
-      await page.waitForURL(url => url.pathname.endsWith('/timeline.html') && url.searchParams.get('doc') === 'd_timeline');
-      await page.waitForFunction(() => typeof DATA === 'object' && DATA?.happiness?.some(h => h.date === '2026-11-03'));
       assert.equal(tables.calls.filter(call => call.table === 'haedo_documents' && call.method !== 'GET').length, 0, 'the 일정 sent no timeline');
+      assert.equal(tables.rows.haedo_documents.get('d_timeline').data.happiness[0].v, 0.6, 'the timeline keeps its own point');
     });
 
     await check('a future day cannot be checked; a repeated click toggles from the stored state', async ({ page, tables }) => {
@@ -170,7 +165,7 @@ async function main() {
       await page.locator('.schedule-happiness-day[data-focus-key$="2026-11-02"]').click(); await shown(page, 'day');
       assert.equal(new URL(page.url()).searchParams.get('date'), '2026-11-02');
       await entries(page);
-      assert.equal(await page.locator('.schedule-happiness-value').innerText(), '7 / 10');
+      await page.waitForFunction(() => document.querySelector('.schedule-happiness input[value="7"]')?.checked);
     });
 
     await check('the year shows unfinished goals and saves a progress change', async ({ page, tables }) => {

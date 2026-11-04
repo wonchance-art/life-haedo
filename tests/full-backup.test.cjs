@@ -768,3 +768,55 @@ test('timeline snapshot: a damaged goal/habit recovery value is written as it is
   assert.deepEqual(fine.recovery, [row]);
   assert.equal(Object.hasOwn(fine, 'recoveryDamaged'), false);
 });
+
+// 하루 행복도(happinessDays, 2026-11-04): carried as a field of the timeline part. account-documents.json
+// and the ZIP file list are unchanged, so this release and older ones still open the bundle.
+test('행복도: the timeline part carries happinessDays; account-documents.json and the file list are unchanged and the bundle opens', async () => {
+  const memory = memoryIdb(), storage = createStorage({ idb: memory.idb, core: Core, channelFactory: null, account: owner });
+  const plain = await fullBundle(storage);
+  await storage.writeHappinessDay('2026-11-01', 0.4); await storage.writeHappinessDay('2026-11-02', 0.2); await storage.writeHappinessDay('2026-11-02', null);
+  const { built } = await fullBundle(storage);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
+  const timeline = JSON.parse(Buffer.from(files['timeline-goals-habits.json']).toString());
+  assert.deepEqual(timeline.happinessDays.entries.map(entry => [entry.date, entry.v]), [['2026-11-01', 0.4], ['2026-11-02', null]]);
+  assert.deepEqual(built.manifest.files.find(file => file.kind === 'timeline').counts, { timelines: 1, goals: 1, habits: 1, days: 1 });
+  assert.deepEqual(built.manifest.files.map(file => file.path).sort(), plain.built.manifest.files.map(file => file.path).sort(), 'no new file in the ZIP');
+  const docs = JSON.parse(Buffer.from(files['account-documents.json']).toString());
+  assert.equal(docs.documents.some(doc => doc.prefix === 'happinessDays'), false, 'account-documents.json keeps only the kinds older releases know');
+  const opened = await Full.open(new Blob([await built.blob.arrayBuffer()]));
+  assert.equal(opened.type, 'bundle');
+  assert.equal(opened.entries.find(entry => entry.kind === 'timeline').data.happinessDays.entries.length, 2);
+  // A timeline file without the field (older backups) is still read.
+  const older = await Full.open(new Blob([JSON.stringify({ format: 'haedo-platform-backup-v1', exportedAt: '2026-11-01T00:00:00.000Z', docs: [], items: [] })]));
+  assert.equal(older.kind, 'timeline');
+});
+
+test('행복도 복원: copies get the points shown at backup time on signed1, every copy the same; 행복도 only makes one new timeline', () => {
+  const day = (date, v, extra = {}) => ({ date, v, at: '2026-11-01T00:00:00.000Z', ...extra });
+  const docA = { profile: { name: 'A', birth: '1990-01' }, events: [], spans: [], happiness: [{ date: '2026-10', v: 6 }, { date: '2026-10-01', v: 3 }, { date: '2026-10-02', v: 7 }, { date: '2026-10-05', v: 9 }] };
+  const docB = { profile: { name: 'B', birth: '1990-01' }, scale: 'signed1', events: [], spans: [], happiness: [] };
+  const backup = { format: 'haedo-platform-backup-v1', docs: [{ id: 'a', name: 'A', data: docA }, { id: 'b', name: 'B', data: docB }],
+    happinessDays: { entries: [day('2026-10-01', 0.8), day('2026-10-02', null), day('2026-10-09', -0.2, { future: true })] } };
+  const restored = PlatformData.restoreBackupDays(backup);
+  assert.equal(restored.happinessOnly, false); assert.equal(restored.days, 2);
+  const [a, b] = restored.backup.docs.map(entry => entry.data);
+  assert.equal(a.scale, 'signed1');
+  assert.deepEqual(a.happiness.map(p => [p.date, p.v, !!p.future]),
+    [['2026-10', 0.2, false], ['2026-10-05', 0.8, false], ['2026-10-01', 0.8, false], ['2026-10-09', -0.2, true]],
+    'months stay, a day the account had is replaced, a deleted day is left out, a day only in the timeline stays');
+  assert.deepEqual(b.happiness.filter(p => p.date.length === 10).map(p => [p.date, p.v]), [['2026-10-01', 0.8], ['2026-10-09', -0.2]], 'every copy gets the same days');
+  assert.equal(docA.happiness[1].v, 3, 'the backup itself is not changed');
+  // 행복도 only: one new timeline named 행복도 복원; the importer keeps the timeline being viewed.
+  const only = PlatformData.restoreBackupDays({ format: 'haedo-platform-backup-v1', docs: [], items: [], happinessDays: { entries: [day('2026-10-01', 0.3)] } });
+  assert.equal(only.happinessOnly, true);
+  assert.deepEqual(only.backup.docs.map(entry => [entry.name, entry.data.happiness]), [['행복도 복원', [{ date: '2026-10-01', v: 0.3 }]]]);
+  const local = memoryLocal(), keys = PlatformData.keys('u1');
+  local.setItem(keys.registry, JSON.stringify({ docs: [{ id: 'mine', name: '내 연표' }], current: 'mine' }));
+  globalThis.crypto ||= require('node:crypto').webcrypto;
+  PlatformData.importDocs(local, 'u1', only.backup, undefined, false, { keepCurrent: only.happinessOnly });
+  const reg = JSON.parse(local.getItem(keys.registry));
+  assert.equal(reg.current, 'mine'); assert.deepEqual(reg.docs.map(doc => doc.name), ['내 연표', '행복도 복원']);
+  // A backup without the field passes through as it was.
+  const none = { format: 'haedo-platform-backup-v1', docs: [{ data: docA }] };
+  assert.equal(PlatformData.restoreBackupDays(none).backup, none);
+});

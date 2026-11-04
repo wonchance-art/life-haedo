@@ -43,7 +43,7 @@
     naverCaptures: Object.freeze({ label: '네이버 원문 사진', detail: '원문 판별 ZIP · 원문과 사진 사본' }),
     accountDocuments: Object.freeze({ label: '계정 설정·기록 문서', detail: '뉴스 설정·관심·연간 계획·읽던 위치·페이지 초안·인용 근거' }),
     originals: Object.freeze({ label: '원본 첨부', detail: '원본 파트 ZIP' }),
-    timeline: Object.freeze({ label: '연표·목표·습관', detail: '이 기기에 내려받은 사본 · 연표 목록 화면에서 복원' }),
+    timeline: Object.freeze({ label: '연표·목표·습관·행복도', detail: '이 기기에 내려받은 사본 · 연표 목록 화면에서 복원' }),
     preservation: Object.freeze({ label: '보관 범위·근거 파일', detail: '선택한 글·9칸과 정확한 원문 근거' }),
     annualPlan: Object.freeze({ label: '연간 계획 파일', detail: '연간 계획 화면에서 복원' })
   });
@@ -119,12 +119,17 @@
     accountDocuments: data => ({ documents: data.documents.length }),
     originals: part => ({ parts: 1, files: part.count || 0 }),
     timeline: data => ({ timelines: (data.docs || []).length, goals: (data.items || []).filter(item => item?.kind === 'goal').length,
-      habits: (data.items || []).filter(item => item?.kind === 'habit').length })
+      habits: (data.items || []).filter(item => item?.kind === 'habit').length, ...happinessCount(data) })
   };
+  // 하루 행복도 기록일(값이 있는 날): only counted when the file carries happinessDays.
+  function happinessCount(data) {
+    const days = (Array.isArray(data?.happinessDays?.entries) ? data.happinessDays.entries : []).filter(entry => entry && entry.v !== null).length;
+    return days ? { days } : {};
+  }
   const COUNT_LABELS = { sources: '자료', sourceVersions: '원문 버전', records: '발췌', groups: '묶음', pageEntries: '페이지 항목', books: '책', folders: '폴더',
     items: '항목', archived: '보관', boards: '구성', posts: '글', photos: '사진', views: 'HEIC 보기용', attachments: '첨부', documents: '문서',
     series: '모음', seriesPosts: '모음 글', plans: '준비', captures: '원문', parts: '파트', files: '파일',
-    timelines: '연표', goals: '목표', habits: '습관', workspaces: '자료공간', drafts: '초안' };
+    timelines: '연표', goals: '목표', habits: '습관', days: '행복도 기록일', workspaces: '자료공간', drafts: '초안' };
   function countText(counts) {
     return Object.entries(counts || {}).filter(([key, value]) => value || ['sources', 'items', 'boards', 'posts', 'documents', 'timelines', 'plans'].includes(key))
       .map(([key, value]) => (COUNT_LABELS[key] || key) + ' ' + value).join(' · ');
@@ -305,7 +310,16 @@
       return { value: { format: DOCS_FORMAT, exportedAt: new Date().toISOString(), documents },
         skipped: count ? [{ kind: 'accountDocuments', workspace: null, error: '계정 자료공간 목록에 없는 공간(' + others.size + '개)의 문서 ' + count + '개는 복원할 곳이 없어 담지 않았습니다.' }] : [] };
     }
-    if (task.kind === 'timeline') return { value: timeline() };
+    if (task.kind === 'timeline') {
+      // 하루 행복도(계정 문서 happinessDays)는 연표 부분의 필드로 담는다: account-documents.json과 ZIP 파일
+      // 목록은 그대로라 옛 판도 이 ZIP을 연다(옛 판은 이 필드를 무시한다). 복원은 연표 가져오기가 한다.
+      const value = await timeline();
+      if (typeof storage?.readHappinessDays === 'function') {
+        const days = await storage.readHappinessDays();
+        if (days.entries.length) value.happinessDays = { entries: days.entries };
+      }
+      return { value };
+    }
     throw fault('unknown_part', '알 수 없는 백업 항목입니다.');
   }
   // Light count pass shown before download. Photo bytes are summed from the

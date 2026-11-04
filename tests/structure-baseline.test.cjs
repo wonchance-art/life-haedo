@@ -260,6 +260,7 @@ module.exports = { SITES, CORPUS, extract, groups, currentOutputs, storageApis }
 // Pinned values (main c108dbb). Regenerate with STRUCTURE_BASELINE_PRINT=1 only for a reviewed change.
 // ---------------------------------------------------------------------------------------------
 const FOR_ACCOUNT_API = [
+  "absorbTimelineDays:function",
   "account:object",
   "accountDocHash:function",
   "accountDocKinds:object",
@@ -361,6 +362,7 @@ const FOR_ACCOUNT_API = [
   "readDiscoveryProfile:function",
   "readDiscoveryReading:function",
   "readDiscoverySettings:function",
+  "readHappinessDays:function",
   "readInterestProfile:function",
   "readLibraryBackupSnapshot:function",
   "readLibraryMetaEditedAt:function",
@@ -433,10 +435,12 @@ const FOR_ACCOUNT_API = [
   "writeAccountDocCursor:function",
   "writeAccountDocSync:function",
   "writeBlogSyncState:function",
+  "writeHappinessDay:function",
   "writeMaterialContinuityState:function"
 ];
 
 const STORAGE_API = [
+  "absorbTimelineDays:function",
   "account:object",
   "accountDocHash:function",
   "accountDocKinds:object",
@@ -540,6 +544,7 @@ const STORAGE_API = [
   "readDiscoveryProfile:function",
   "readDiscoveryReading:function",
   "readDiscoverySettings:function",
+  "readHappinessDays:function",
   "readInterestProfile:function",
   "readLibraryBackupSnapshot:function",
   "readLibraryMetaEditedAt:function",
@@ -612,6 +617,7 @@ const STORAGE_API = [
   "writeAccountDocCursor:function",
   "writeAccountDocSync:function",
   "writeBlogSyncState:function",
+  "writeHappinessDay:function",
   "writeMaterialContinuityState:function"
 ];
 
