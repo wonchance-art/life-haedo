@@ -1943,17 +1943,16 @@ test('sign-in adoption copies every account-less workspace once, keeps originals
   assert.deepEqual(again.adopted.map(row => row.from), [original.workspaceId]); assert.equal((await account.listWorkspaces()).length, 3);
 });
 
-// 2026-11-04 (status reads without full validation): a status read returns no content, so it checks
-// only the owner, existence, id and revision. A workspace whose content is corrupted still stops every
-// next step that reads content or writes: sync upload, applying originals, sending compositions and
-// backup export. Nothing stored is replaced, and the sync record is left as it was.
 function statusFixture() {
   const adapter = memoryAdapter();
   const storage = createStorage({ idb: adapter.idb, core: Core, workbench: Workbench, sourceFolders: require('../assets/life/source-folders.js'), collection: require('../assets/life/collection.js'), channelFactory: null,
     account: { projectUrl: 'https://anonymous-test.supabase.co', userId: 'account-a' } });
   return { ...adapter, storage };
 }
-test('a corrupted workspace passes status reads but stops upload, apply, composition send and backup export, changing nothing', async t => {
+// 2026-11-04 (kept from the status-read experiment, which was not adopted): a workspace whose content
+// is corrupted stops every step that reads its status or content or writes it: status reads, sync upload,
+// applying originals, sending compositions and backup export. Nothing stored is replaced or removed.
+test('a corrupted workspace stops status reads, upload, apply, composition send and backup export, changing nothing', async t => {
   const { storage, rows } = statusFixture(); t.after(() => storage.close());
   const good = await initialImport(storage), binding = await uploaded(storage, good);
   assert.equal((await storage.bindCompositionSync(good.workspaceId, binding)).enabled, true);
@@ -1962,31 +1961,13 @@ test('a corrupted workspace passes status reads but stops upload, apply, composi
   const corrupted = structuredClone(stored.get(key));
   corrupted.sourceVersions[0].contentHash = 'not-a-hash';
   stored.set(key, corrupted);
-  const rawBefore = structuredClone(rows), state = await storage.getSyncState(good.workspaceId);
-  assert.equal(state.status, 'synced', 'the status read answers from the sync record');
-  assert.equal((await storage.getCompositionState(good.workspaceId)).enabled, true);
-  assert.equal((await storage.getLibraryMetaState(good.workspaceId)).enabled, true);
+  const rawBefore = structuredClone(rows);
   const corrupt = error => { assert.equal(error.code, 'invalid_hash'); return true; };
+  for (const read of ['getSyncState', 'getCompositionState', 'getLibraryMetaState']) await assert.rejects(storage[read](good.workspaceId), corrupt, read);
   await assert.rejects(storage.read(good.workspaceId), corrupt);
   await assert.rejects(storage.prepareSyncUpload(good.workspaceId, binding), corrupt);
   await assert.rejects(storage.applySyncRemote(good.workspaceId, binding, serverRow(good, 2)), corrupt);
   await assert.rejects(storage.prepareCompositionUpload(good.workspaceId, binding), corrupt);
   await assert.rejects(storage.readLibraryBackupSnapshot(good.workspaceId), corrupt);
   assert.deepEqual(rows, rawBefore, 'no stored record was replaced or removed');
-  assert.deepEqual(await storage.getSyncState(good.workspaceId), state);
-});
-
-test('a status read still rejects a workspace whose id or revision is malformed, with the full check\'s error', async t => {
-  const { storage, rows } = syncFixture(); t.after(() => storage.close());
-  const good = await initialImport(storage); await uploaded(storage, good);
-  const key = JSON.stringify(good.workspaceId), stored = rows.get('bundles'), original = structuredClone(stored.get(key));
-  for (const [change, code] of [[value => { value.revision = 'x'; }, 'invalid_revision'], [value => { value.revision = -1; }, 'invalid_revision']]) {
-    const broken = structuredClone(original); change(broken); stored.set(key, broken);
-    let expected; try { Core.validateWorkspace(broken); } catch (error) { expected = error.code; }
-    assert.equal(expected, code);
-    for (const read of ['getSyncState', 'getCompositionState', 'getLibraryMetaState'])
-      await assert.rejects(storage[read](good.workspaceId), error => error.code === code, read);
-  }
-  stored.set(key, original);
-  assert.equal((await storage.getSyncState(good.workspaceId)).status, 'synced');
 });

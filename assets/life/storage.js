@@ -408,19 +408,6 @@
       core().validateWorkspace(bundle);
       return bundle;
     }
-    // Status reads (getSyncState, getCompositionState, getLibraryMetaState) return no content, so they
-    // check what their own answer depends on: the owner, that the workspace exists, its id and its
-    // revision (compared with the sync record). The full content check (validateWorkspace) stays on
-    // every path that reads content or writes, uploads, applies, resolves or deletes (2026-11-04: a
-    // first sign-in made ~180 status reads, each re-validating the whole workspace). A bundle whose
-    // id or revision is malformed still gets the full check, so its error is the same as before.
-    async function statusBundle(store, workspaceId, meta) {
-      if (account) await assertOwner(meta, workspaceId);
-      const bundle = await store.get(workspaceId);
-      if (!bundle) throw fault('workspace_not_found', '작업공간을 찾을 수 없습니다. 기존 백업과 작업공간 목록을 확인하세요.');
-      if (!plain(bundle) || bundle.workspaceId !== workspaceId || !Number.isSafeInteger(bundle.revision) || bundle.revision < 0) core().validateWorkspace(bundle);
-      return bundle;
-    }
     function onlyFields(value, allowed, code = 'invalid_sync_metadata') {
       if (!plain(value) || Object.keys(value).some(key => !allowed.includes(key))) {
         throw fault(code, '동기화 정보의 형식을 확인할 수 없습니다. 기존 자료를 보존하고 연결 상태를 확인하세요.');
@@ -3304,7 +3291,7 @@
     async function getSyncState(workspaceId) {
       requireId(workspaceId, '작업공간');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const bundle = await statusBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
         return clone(await readSyncState(tx.objectStore('meta'), workspaceId, bundle));
       });
     }
@@ -3688,7 +3675,7 @@
       requireId(workspaceId, '작업공간');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta');
-        await statusBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const state = await workbenchValue(meta, workspaceId);
         return clone(await readCompositionState(meta, workspaceId, state));
       });
@@ -4109,7 +4096,7 @@
       requireId(workspaceId, '작업공간');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta');
-        await statusBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const state = await libraryMetaValue(meta, workspaceId);
         return clone(await readLibraryMetaState(meta, workspaceId, state));
       });
