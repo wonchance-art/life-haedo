@@ -19,6 +19,10 @@
     if (!api?.canonical) throw Object.assign(new Error('동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.'), { code: 'sync_common_missing' });
     return api;
   }
+  // S2b: page-lifecycle wiring (sync-lifecycle.js), as the other sync engines (S2a). An older cached
+  // page may lack it: the engine then binds no page events and keeps its own scheduled passes and
+  // explicit syncs, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const CONFLICT_PREFIX = '복구 사본 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
   // A concurrent local change (another tab) is simply decided again next cycle.
@@ -51,7 +55,7 @@
     let unplacedDelay = 0;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
     let parked = false;
-    const removers = [];
+    let wiring = null;
     const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, posts: null, drafts: null, lastSyncAt: null, lastError: null, running: false };
     const canonical = syncCommon().canonical; // S0 group G3, shared with material-continuity-sync
     const key = (ws, id) => ws + '/' + id;
@@ -779,22 +783,27 @@
       if (draftTimer) timers.clearTimeout(draftTimer);
       draftTimer = timers.setTimeout(() => { draftTimer = null; void syncNow({ uploadOnly: true }); }, DRAFT_DELAY + 50);
     }
+    // Page events. A restored connection does not wait for backoff; a page that is not kept
+    // flushes its uploads and drafts; a parked page (back/forward cache) starts nothing.
+    function online() { void syncNow({ force: true }); }
+    function focus() { kick(0); }
+    function pagehide(event) { if (event?.persisted) parked = true; else void syncNow({ uploadOnly: true, flushDrafts: true }); }
+    // The resumed page verifies its account first; each later cycle verifies again.
+    function pageshow(event) { if (event?.persisted && parked) { parked = false; schedule(interval); } }
+    function visibility() {
+      if (events?.document?.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
+    }
     function start() {
       if (disposed || started) return; started = true;
-      const on = (target, name, handler) => { if (typeof target?.addEventListener === 'function') { target.addEventListener(name, handler); removers.push(() => target.removeEventListener(name, handler)); } };
-      const doc = events?.document;
-      on(events, 'online', () => { void syncNow({ force: true }); });
-      on(events, 'focus', () => kick(0));
-      on(events, 'pagehide', event => { if (event?.persisted) parked = true; else void syncNow({ uploadOnly: true, flushDrafts: true }); });
-      // The resumed page verifies its account first; each later cycle verifies again.
-      on(events, 'pageshow', event => { if (event?.persisted && parked) { parked = false; schedule(interval); } });
-      on(doc, 'visibilitychange', () => {
-        if (doc.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
-      });
+      // No poll: each pass schedules the next one itself (interval, backoff, drafts).
+      wiring = events ? syncLifecycle()?.attach(events, {
+        listen: [['window', 'online', online], ['window', 'focus', focus], ['window', 'pagehide', pagehide],
+          ['window', 'pageshow', pageshow], ['document', 'visibilitychange', visibility]],
+      }) || null : null;
       schedule(0);
     }
     function stop() {
-      started = false; removers.splice(0).forEach(remove => remove());
+      started = false; wiring?.detach(); wiring = null;
       if (timer) timers.clearTimeout(timer); if (draftTimer) timers.clearTimeout(draftTimer); timer = draftTimer = null;
     }
     // Per-post status for lists, computed locally without network.

@@ -32,6 +32,7 @@
 | `material-continuity-sync.js` 자동 관리자 | online·focus→`pass`, pagehide·pageshow | visibilitychange→`pass`, page-suspend→`suspend`, page-ready→`resume` | `every`(기본 60초) `pass` |
 | `account-docs-sync.js` | online·focus→`wake`, pagehide·pageshow | visibilitychange→`visibility`, page-suspend→`suspend`, page-ready→`ready` | `intervalMs`(기본 30초) 숨김이 아닐 때 `run` |
 | `account-library.js` | online·focus→`lifecycle` | visibilitychange→`visible` | 30초 `lifecycle`(`polling`일 때) |
+| `blog-sync.js` (S2b, `autoSync`일 때) | online→`online`, focus→`focus`, pagehide→`pagehide`, pageshow→`pageshow` | visibilitychange→`visibility` | 없음(주기마다 다음 주기를 스스로 예약) |
 
 - 표의 처리기 이름은 엔진 안 함수 이름이다. 같은 함수 객체가 같은 대상·이벤트에 같은 순서로 붙는지를 비교한다.
 - 해제(`dispose`, `sync.js`의 `setAutomatic(false)`) 뒤에는 남는 등록과 타이머가 0이다.
@@ -72,3 +73,33 @@
 - `writing-sync.js`·`material-continuity-sync.js`는 이전에 타이머를 이벤트 등록보다 먼저 만들었다. 지금은 등록 뒤에 만든다. 타이머 콜백은 등록이 끝난 뒤 다음 작업 단위에서만 돌기 때문에 관찰되는 차이는 없다.
 - `dispose`에서 이벤트 해제 위치가 앞당겨졌다(원격 해제·구독 해제보다 먼저). 그 사이에 동기적으로 발생하는 DOM 이벤트는 없다.
 - 실제 Mac·iPad·iPhone의 bfcache·앱 전환 확인은 하지 않았다.
+
+## S2b 블로그 동기화 (2026-11-04)
+
+총괄 지시서 범위 2다. 최적화 세션이 맡았고, 기준은 PR185 head `ea27890`이다.
+
+- **바꾼 것:** `blog-sync.js`의 `start()`가 직접 부르던 `addEventListener` 다섯 개를 `SyncLifecycle.attach`로 옮겼다.
+  - 처리기는 이름을 붙인 함수(`online`·`focus`·`pagehide`·`pageshow`·`visibility`)로 꺼냈고, 하는 일은 그대로다.
+  - `stop()`은 `detach()`로 지운다.
+  - 등록 대상은 이전처럼 `events`(기본 `window`)와 `events.document`다.
+- **주기 타이머는 옮기지 않았다.** BlogSync는 고정 간격 대신 주기가 끝날 때 다음 주기를 예약한다(간격·백오프·초안 지연·새 기기 재시도). `poll`을 쓰면 이 계산이 바뀌므로 `poll: null`로 둔다.
+- **처리기 동작은 그대로다.**
+  - online: 백오프를 무시하고 전체 주기
+  - focus: 다음 주기를 즉시 예약
+  - visibilitychange: 숨김이면 올리기만(초안 포함), 보이면 즉시 예약
+  - pagehide: persisted면 멈춤 표시, 아니면 올리기만
+  - pageshow: persisted 복귀면 정규 간격 뒤
+- **검사(`tests/sync-lifecycle.test.cjs`)**
+  - 대상·이벤트·순서와 각 처리기의 결과를 단언한다. 결과는 계정 확인과 목록 요청 여부, 다음 예약 지연이다.
+  - 처리기 동작 단언은 변경 전 코드(`ea27890`)에서도 통과한다. 이름 단언은 S2b부터 적용된다.
+  - dispose 뒤 남는 등록은 0이다.
+- **모듈이 없을 때(섞인 판):** S2a와 같이 페이지 이벤트를 등록하지 않는다.
+  - 시작 주기와 스스로 예약하는 주기, 명시 동기화는 그대로 돈다.
+  - 그 판에서는 숨김·이탈 때 즉시 올리지 않는다. 글과 초안은 이 기기에 남고, 다음 주기(최대 30초)나 다음 열기에 올라간다.
+  - `OLDER_PAGE`에 BlogSync 사례를 더했다(등록 0, 첫 주기의 계정 확인 1회, 오류 없음).
+- **브라우저:** 로컬에서 다음 검사를 통과했다.
+  - `sync-lifecycle-browser` 4
+  - `sync-common-mixed-browser` 5
+  - `structure-baseline-browser`(전역 이름 수 변화 없음)
+  - `blog-autosave-browser` 4
+- **sync-lifecycle.js 공통 모듈은 바꾸지 않았다.**
