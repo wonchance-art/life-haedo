@@ -148,7 +148,7 @@
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
     let naverCaptureUI = null, naverCaptureService = null, naverReaderService = null, naverPhotoView = null, naverCaptureTarget = null;
-    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null, backupInterruption = '', backupOriginals = null, settingsUI = null;
+    let obsidianUpdateUI = null, originalAttachmentsUI = null, fullBackupUI = null, backupInterruption = '', backupOriginals = null, settingsUI = null, renderRestoresFocus = false;
     let sourceFoldersUI = null, sourceFoldersWorkspace = null, sourceFoldersMount = null, sourceFoldersUpdate = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
@@ -304,7 +304,7 @@
         if (state.busy) throw new Error('다른 작업을 처리하는 중입니다. 끝난 뒤 다시 돌아가기를 눌러 주세요.');
         await guarded(async () => {
           if (await navigate('source', { preserveContext: true, navigationMotion: 'back', sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
-            returnContext: origin.returnContext || null, locator: null }) !== false) restoreOriginView(origin);
+            returnContext: origin.returnContext || null, locator: null, restoresFocus: true }) !== false) restoreOriginView(origin);
         })();
         return true;
       },
@@ -1401,7 +1401,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
@@ -1473,7 +1473,10 @@
           global.scrollTo({ top: 0, behavior: 'instant' });
       } : null;
       navigationRender = token;
-      const rendering = render();
+      // 설정's item named by the address is not focused first when the return focuses its origin row.
+      renderRestoresFocus = !!restoresFocus;
+      let rendering;
+      try { rendering = render(); } finally { renderRestoresFocus = false; }
       const generation = renderGeneration, input = inputGeneration;
       const rendered = () => current() && generation === renderGeneration && state.mode === mode;
       // Motion observes a completed navigation; it never holds input or focus.
@@ -1506,7 +1509,8 @@
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
+      // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
+      if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
         if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }
@@ -2026,7 +2030,8 @@
       // the browser at the entry being opened.
       historyPending = { idx: record.idx, key: record.key };
       let opened;
-      try { opened = await navigate(view.mode, await historyOptions(view, record.idx < from)); }
+      const restoresFocus = !view.blog && !view.material;
+      try { opened = await navigate(view.mode, { ...await historyOptions(view, record.idx < from), restoresFocus }); }
       catch (cause) {
         // Saving failed or input is still composing: stay, and move the
         // browser back to the entry of the screen that is still shown.
@@ -2034,7 +2039,7 @@
         if (fromKey && global.history.state?.haedo?.key !== fromKey) { historyIndex = from; historyKey = fromKey; historyAim(from, fromKey); }
         throw cause;
       } finally { historyPending = null; }
-      if (opened && !view.blog && !view.material) restoreOriginView(view);
+      if (opened && restoresFocus) restoreOriginView(view);
     });
     // The browser moved while a save or move was running: return it to the
     // entry of the screen that is still shown. The back press is not applied.
@@ -2073,7 +2078,7 @@
       if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
-      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back',
+      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget,
         ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
@@ -2084,8 +2089,16 @@
     function restoreOriginView(origin, anchor = null) {
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
-        const controls = [...root.querySelectorAll('button,a,summary,input')];
+        if (disposed || token !== navigationGeneration || anchor) return;
+        if (state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId) {
+          // The return skipped the heading focus; a screen other than the origin still gets its first heading, never <body>.
+          if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
+          return;
+        }
+        // A control inside a closed <details> is opened below, so it still counts; one hidden at this width
+        // (e.g. the wide-only menu link at 390) cannot take focus and is passed over.
+        const shown = el => el.getClientRects().length > 0 || !!el.closest('details:not([open])');
+        const controls = [...root.querySelectorAll('button,a,summary,input')].filter(shown);
         const remoteId = origin.mode === 'account-blog' && /^account-blog:(?:open|receive|received|manage):([^:]+)(?::[^:]+)?$/.exec(origin.focusKey || '')?.[1];
         const receivedActions = remoteId ? controls.filter(el => el.dataset.remoteId === remoteId && el.dataset.action === 'open') : [];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
@@ -2094,6 +2107,8 @@
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
+        // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
+        if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
         if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
@@ -2826,7 +2841,7 @@
         account: { email: auth?.getAccount?.()?.email || '' }, news,
         isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId
       });
-      settingsUI.mount(main);
+      settingsUI.mount(main, { focusItem: !renderRestoresFocus });
       if (sync) refreshSync().catch(failure);
     }
 

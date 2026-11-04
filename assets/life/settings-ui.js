@@ -320,7 +320,7 @@
     listen(root, 'touchmove', () => { unpin(); schedule(); }, { passive: true });
     listen(root, 'keydown', event => { if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) { unpin(); schedule(); } });
 
-    function mount(host) {
+    function mount(host, { focusItem = true } = {}) {
       host.append(element);
       const match = HASH.exec(root.location.hash || '');
       const id = match && sections.has(match[1]) ? match[1] : null;
@@ -328,13 +328,13 @@
       mark(null);
       if (!id) return element;
       if (element.getClientRects().length) {
-        // 이동을 마친 앱은 화면의 첫 제목에 초점을 둔다. 해시 항목의 초점은 그 뒤에 둔다
-        // (뒤로 가기의 초점·위치 복원은 이보다 나중에 등록되므로 그쪽이 이긴다).
-        if (select(id, { scroll: true })) root.requestAnimationFrame(() => { if (!disposed && element.isConnected) focusTarget(sections.get(id))?.focus({ preventScroll: true }); });
+        // 이동을 마친 앱은 화면의 첫 제목에 초점을 둔다. 해시 항목의 초점은 그 뒤에 둔다.
+        // 돌아오기·뒤로 가기는 focusItem false로 항목을 보여 주기만 하고, 앱이 떠날 때 쓴 행에 바로 초점을 둔다.
+        if (select(id, { scroll: true }) && focusItem) root.requestAnimationFrame(() => { if (!disposed && element.isConnected) focusTarget(sections.get(id))?.focus({ preventScroll: true }); });
       } else {
         // 첫 화면은 계정 확인 뒤에 보인다(shell의 haedo:page-ready). 보이기 전에는 옮길 수 없다.
         const ready = () => root.requestAnimationFrame(() => {
-          if (!disposed && element.isConnected && element.getClientRects().length && HASH.exec(root.location.hash || '')?.[1] === id) select(id, { focus: true, scroll: true });
+          if (!disposed && element.isConnected && element.getClientRects().length && HASH.exec(root.location.hash || '')?.[1] === id) select(id, { focus: focusItem, scroll: true });
         });
         listen(root.document, 'haedo:page-ready', ready, { once: true });
       }

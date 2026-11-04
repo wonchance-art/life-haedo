@@ -8,7 +8,8 @@
  * HOME_PERF_STATIC_LATENCY (40 ms per static file), HOME_PERF_TRACE=1 (request initiators before the shell),
  * HOME_PERF_PROFILE=1 (off by default and in CI: a Chromium trace of each cold open, summarised as main-thread
  * time by kind before the shell and from the shell to 20 rows; tracing itself adds overhead, so its timings are
- * not comparable with an unprofiled run). */
+ * not comparable with an unprofiled run), HOME_PERF_STORAGE=1 (off by default and in CI: counts account storage
+ * calls by name and IndexedDB transactions before the shell and from the shell to 20 rows). */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4373';
 const assert = require('node:assert/strict');
@@ -29,6 +30,7 @@ const latencyMin = Number(process.env.HOME_PERF_LATENCY_MIN || 150), latencyMax 
 const staticLatency = Number(process.env.HOME_PERF_STATIC_LATENCY ?? 40);
 const trace = process.env.HOME_PERF_TRACE === '1';
 const profile = process.env.HOME_PERF_PROFILE === '1';
+const storageCount = process.env.HOME_PERF_STORAGE === '1';
 // Trace event names grouped by what the main thread was doing. First-level children of each task are
 // counted, so nested work is attributed to the kind that started it.
 const KINDS = [
@@ -135,6 +137,17 @@ async function main() {
   let counter = 0, requestNo = 0;
   async function device(server, name, { latency = true } = {}) {
     const context = await makeContext(browser, server, name, accounts.a, { viewport: { width: 1440, height: 1000 } });
+    if (storageCount) await context.addInitScript(() => {
+      // Counting only: every call and transaction goes through unchanged.
+      const calls = window.__storageCalls = [], transactions = window.__idbTransactions = [];
+      const proto = IDBDatabase.prototype, open = proto.transaction;
+      proto.transaction = function (...args) { transactions.push(Math.round(performance.now())); return open.apply(this, args); };
+      const wrap = scoped => { const out = {}; for (const key of Object.keys(scoped)) { const value = scoped[key];
+        out[key] = typeof value === 'function' ? function (...args) { calls.push([Math.round(performance.now()), key]); return value.apply(scoped, args); } : value; } return out; };
+      let stored; const life = window.HaedoLife ||= {};
+      Object.defineProperty(life, 'Storage', { configurable: true, get() { return stored; }, set(value) {
+        stored = value?.forAccount ? { ...value, forAccount: (...args) => wrap(value.forAccount.apply(value, args)) } : value; } });
+    });
     await context.addInitScript(() => {
       const m = window.__homePerf = { auth: null, shell: null, firstRow: null, listReady: null, rows20: null, viewportPhotos: null, motionEnd: null, animationsSeen: 0, longTasks: [] };
       try { new PerformanceObserver(list => { for (const e of list.getEntries()) m.longTasks.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ type: 'longtask', buffered: true }); } catch (_) {}
@@ -219,6 +232,18 @@ async function main() {
     if (warm) await d.page.reload({ waitUntil: 'domcontentloaded' }); else await d.page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' });
     await d.page.waitForFunction(() => ['motionEnd', 'listReady', 'rows20', 'viewportPhotos'].every(key => window.__homePerf?.[key] !== null && window.__homePerf?.[key] !== undefined), null, { timeout: 180000 });
     const m = await d.page.evaluate(() => ({ ...__homePerf, origin: performance.timeOrigin }));
+    let storageReads;
+    if (storageCount) {
+      const raw = await d.page.evaluate(() => ({ calls: window.__storageCalls || [], transactions: window.__idbTransactions || [] }));
+      const phase = (from, to) => {
+        const calls = raw.calls.filter(([t]) => t >= from && t < to), byName = {};
+        for (const [, name] of calls) byName[name] = (byName[name] || 0) + 1;
+        const status = ['getSyncState', 'getCompositionState', 'getLibraryMetaState'].reduce((sum, name) => sum + (byName[name] || 0), 0);
+        return { calls: calls.length, transactions: raw.transactions.filter(t => t >= from && t < to).length, statusReads: status,
+          top: Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 10) };
+      };
+      storageReads = { beforeShell: phase(0, m.shell), shellToRows20: phase(m.shell, m.rows20) };
+    }
     let mainThread;
     if (tracing) {
       const buffer = await browser.stopTracing();
@@ -231,11 +256,12 @@ async function main() {
     const row = { label, warm, throttle, shellMs: m.shell, firstRowMs: m.firstRow, listReadyMs: m.listReady, rows20Ms: m.rows20, viewportPhotosMs: m.viewportPhotos, motionEndMs: m.motionEnd, authMs: m.auth,
       beforeShell: waves(rows, at(m.shell)), beforeRows20: waves(rows, at(m.rows20)), animationsSeen: m.animationsSeen, longTasks: m.longTasks.filter(([s]) => s <= (m.rows20 || 0)),
       requests: rows.map(r => ({ path: r.path, start: Math.round(r.start - m.origin), end: r.end === null ? null : Math.round(r.end - m.origin) })),
-      initiators: trace ? d.initiators.slice(traced).filter(r => r.at <= at(m.rows20)).map(r => ({ ...r, at: Math.round(r.at - m.origin) })) : undefined, mainThread };
+      initiators: trace ? d.initiators.slice(traced).filter(r => r.at <= at(m.rows20)).map(r => ({ ...r, at: Math.round(r.at - m.origin) })) : undefined, mainThread, storageReads };
     report.measurements.push(row);
     const r = value => value === null || value === undefined ? null : Math.round(value);
     console.log(JSON.stringify({ label, shell: r(row.shellMs), firstRow: r(row.firstRowMs), listReady: r(row.listReadyMs), rows20: r(row.rows20Ms), viewportPhotos: r(row.viewportPhotosMs), beforeShell: row.beforeShell, beforeRows20: row.beforeRows20 }));
     if (mainThread) console.log(JSON.stringify({ label, mainThread }));
+    if (storageReads) console.log(JSON.stringify({ label, storageReads: { beforeShell: { ...storageReads.beforeShell, top: undefined }, shellToRows20: { ...storageReads.shellToRows20, top: undefined } } }));
     return row;
   }
   try {
