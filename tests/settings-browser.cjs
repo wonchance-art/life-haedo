@@ -16,6 +16,12 @@ const ITEMS = ['계정', '자료공간', '뉴스', '일정', '백업', '공개 �
 async function mode(page, value) { await page.locator('#lifeMain[data-mode="' + value + '"]').waitFor(); await settle(page); }
 async function openSettings(page) { await nav(page, 'manage'); await mode(page, 'manage'); await page.locator('#lifeSettings').waitFor(); }
 const activeId = page => page.evaluate(() => document.activeElement?.id || '');
+// Returning to a screen restores focus in the next animation frame (ui.js restoreOriginView), after
+// the screen has settled. Wait for that frame, then assert the same exact value (2026-11-04: a busy
+// CI frame read focus before it, and a 60ms frame delay reproduces it on main a49c8a3).
+const restoredId = async (page, id) => { await page.waitForFunction(id => document.activeElement?.id === id, id).catch(() => {}); return activeId(page); };
+const restoredKey = async (page, key) => { await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key).catch(() => {});
+  return page.evaluate(() => document.activeElement?.dataset.focusKey); };
 const stored = (page, key) => page.evaluate(key => localStorage.getItem(key), key);
 async function capture(page, scene, width) {
   await page.evaluate(async () => { await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); });
@@ -120,7 +126,7 @@ async function main() {
       assert.equal(await page.locator('.settings-index-link[aria-current]').innerText(), '뉴스'); assert.equal(await activeId(page), 'settings-heading-news');
       // An item moved to from the list survives leaving and returning with the browser.
       await page.locator('#lifeBackupOpen').click(); await mode(page, 'backup'); await page.goBack(); await mode(page, 'manage');
-      assert.equal(await activeId(page), 'lifeBackupOpen', 'browser back restores the row that was used');
+      assert.equal(await restoredId(page, 'lifeBackupOpen'), 'lifeBackupOpen', 'browser back restores the row that was used');
       // The three former settings-file hashes open 백업·복원 with the format list focused.
       for (const hash of ['#lifeBackupChoices', '#lifeBackupMaterials', '#lifeBackupPlanning']) {
         await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage' + hash); await ready(page); await mode(page, 'backup');
@@ -163,9 +169,9 @@ async function main() {
       // 백업·복원: in-app back, browser back and forward.
       await page.locator('#lifeBackupOpen').tap(); await mode(page, 'backup');
       await page.getByRole('button', { name: '설정으로 돌아가기', exact: true }).tap(); await mode(page, 'manage');
-      assert.equal(await activeId(page), 'lifeBackupOpen');
+      assert.equal(await restoredId(page, 'lifeBackupOpen'), 'lifeBackupOpen');
       await page.locator('#lifeBackupOpen').tap(); await mode(page, 'backup');
-      await page.goBack(); await mode(page, 'manage'); assert.equal(await activeId(page), 'lifeBackupOpen');
+      await page.goBack(); await mode(page, 'manage'); assert.equal(await restoredId(page, 'lifeBackupOpen'), 'lifeBackupOpen');
       await page.goForward(); await mode(page, 'backup'); await page.locator('#fbInventory [data-kind]').first().waitFor();
       await capture(page, 'backup', 390);
       await page.goBack(); await mode(page, 'manage');
@@ -173,7 +179,7 @@ async function main() {
       for (const [name, destination] of [['공개 표지', 'public-cover'], ['공개한 페이지', 'public-pages']]) {
         await page.getByRole('button', { name, exact: true }).tap(); await mode(page, destination);
         await page.goBack(); await mode(page, 'manage');
-        assert.equal(await page.evaluate(() => document.activeElement?.dataset.focusKey), 'manage:' + destination);
+        assert.equal(await restoredKey(page, 'manage:' + destination), 'manage:' + destination);
       }
       // 뉴스: the existing news settings screen and the existing topic editor.
       await page.getByRole('button', { name: '뉴스 설정', exact: true }).tap(); await mode(page, 'external-discovery');
