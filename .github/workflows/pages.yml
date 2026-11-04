@@ -164,6 +164,12 @@ jobs:
       - name: Verify schedule list, year to day views, old addresses, offline dated reloads and keyboard guards
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-browser.cjs
+      - name: Verify schedule habit checks, goal progress, read-only happiness and item recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-entries-browser.cjs
+      - name: Verify the timeline editor stays the only writer of timeline documents
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/timeline-single-writer-browser.cjs
       - name: Verify settings items, hash entries, narrow groups, device values and leave protection
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/settings-browser.cjs
