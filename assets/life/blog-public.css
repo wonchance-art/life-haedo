@@ -46,3 +46,17 @@
   .blog-title { font-size: 27px; }
   .blog-line { font-size: 17px; }
 }
+
+/* Owner-only AI authorship mark in private reading views (never in public copies).
+   Tint and dotted underline only: no change to font size, spacing or position. */
+.blog-document .blog-ai-text {
+  background: var(--paper-2, #f4f7f5);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--ink-soft, #5d6b65);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.32em;
+}

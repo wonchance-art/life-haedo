@@ -216,6 +216,37 @@ async function main() {
       assert.equal(await f.page.locator('#bsTitle').inputValue(), ordered.series.title); originals(await state(f.page), mutated);
       assert.equal(f.server.writes().length, 0);
     });
+    await check('The private series view shows the owner\'s AI authorship marks while every public copy of the same post carries none', async () => {
+      const f = await fixture();
+      // Mark one sentence of the first saved post as AI text, the way the editor stores it.
+      await f.page.evaluate(async ({ workspaceId, id }) => {
+        const s = HaedoLife.Shell.storage, doc = await s.readPhotoPost(workspaceId, id);
+        doc.ops = [{ insert: '합성 여행 본문 1 🌱\n' }, { insert: 'AI가 다듬은 문장', attributes: { author: 'ai' } }, { insert: ' 그리고 직접 쓴 문장\n' }];
+        await s.savePhotoPost(workspaceId, doc, doc.revision);
+      }, { workspaceId: f.seed.workspaceId, id: f.seed.ids[0] });
+      await f.go(); await createSeries(f);
+      await f.page.locator('#bsRead').click(); await f.page.locator('.blog-series-reader[data-view=contents]').waitFor();
+      await f.page.locator('.blog-series-toc button[data-entry-id]').nth(0).click(); await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
+      const marks = f.page.locator('.blog-series-reader-body .blog-ai-text');
+      assert.deepEqual(await marks.allTextContents(), ['AI가 다듬은 문장'], 'only the marked sentence is shown as AI text');
+      const looks = await marks.first().evaluate(node => { const style = getComputedStyle(node), parent = getComputedStyle(node.parentElement);
+        return { line: style.textDecorationLine, decoration: style.textDecorationStyle, size: style.fontSize === parent.fontSize, display: style.display, background: style.backgroundColor }; });
+      assert.deepEqual({ line: looks.line, decoration: looks.decoration, size: looks.size, display: looks.display }, { line: 'underline', decoration: 'dotted', size: true, display: 'inline' }, 'a dotted underline, not colour alone, and no size or layout change');
+      assert.notEqual(looks.background, 'rgba(0, 0, 0, 0)');
+      assert((await f.page.locator('.blog-series-reader-body').innerText()).includes('AI가 다듬은 문장 그리고 직접 쓴 문장'), 'the text itself is unchanged');
+      // Every public projection of the same stored post: no mark, and the public renderer refuses a reading copy.
+      const leak = await f.page.evaluate(async ({ workspaceId, id }) => {
+        const life = HaedoLife, doc = await life.Shell.storage.readPhotoPost(workspaceId, id), stored = doc.ops.some(op => op.attributes?.author === 'ai');
+        const pub = life.Blog.publicSnapshot(doc), reading = life.Blog.privateReadingSnapshot(doc);
+        const publicView = life.BlogPublicUI.render(pub), privatePublicCopy = life.BlogPublicUI.render(pub, { privateView: true });
+        let publicRefusesReading = false; try { life.BlogPublicUI.render(reading); } catch (_) { publicRefusesReading = true; }
+        let validateRefusesReading = false; try { life.Blog.validateSnapshot(reading); } catch (_) { validateRefusesReading = true; }
+        return { stored, publicMarks: pub.ops.filter(op => op.attributes && 'author' in op.attributes).length, readingMarks: reading.ops.filter(op => op.attributes?.author === 'ai').length,
+          publicSpans: publicView.querySelectorAll('.blog-ai-text').length + privatePublicCopy.querySelectorAll('.blog-ai-text').length, publicRefusesReading, validateRefusesReading };
+      }, { workspaceId: f.seed.workspaceId, id: f.seed.ids[0] });
+      assert.deepEqual(leak, { stored: true, publicMarks: 0, readingMarks: 1, publicSpans: 0, publicRefusesReading: true, validateRefusesReading: true });
+      await capture(f.page, 'private-ai-mark');
+    });
     await check('The actual downloaded file restores complete text and full-resolution photos into a fresh workspace under new IDs', async () => {
       assert(archive, 'Run the preceding real-download journey');
       const f = await fixture(), before = await state(f.page);

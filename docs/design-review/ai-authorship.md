@@ -82,26 +82,30 @@
 - **더 단순한 대안:** 표시 없이 메모로 남기기. 구간 단위 수정 추적이 불가능해 iA Writer식 "고친 부분은 내 글"을 지킬 수 없다.
 - **실패 후 복구:** 표시는 서식 속성이라 해제해도 본문은 바뀌지 않는다. 서버 적용 전 배포 시 서버 보관만 실패하고 기기 글은 남는다.
 
-## 비공개 연재 보기의 AI 표시 — 설계안 (2026-11-04, 구현 전)
+## 비공개 연재 보기의 AI 표시 (2026-11-04, 구현)
 
-**현재 상태:** 비공개 연재 읽기(`blog-series-reader.js`)는 본문을 직접 그리지 않고 넘겨받은 `renderPhoto`를 쓴다. 그 함수는 `workbench-ui.js`(1254행 부근)에 있고, 아래 순서로 그린다.
-1. `Blog.publicSnapshot(doc)`으로 공개용 사본을 만든다.
-2. `BlogPublicUI.render(snapshot, { privateView: true })`로 화면을 만든다.
+2026-11-04 총괄 결정으로 AI 세션이 네 단계를 한 번에 맡았다. 다른 세션 파일은 정해진 줄 범위만 고쳤다.
 
-공개용 사본은 소유자 결정에 따라 `author`를 지우므로, 내 화면인데도 AI 글 표시가 보이지 않는다.
-
-**제안:** 공개 경로 계약은 바꾸지 않는다.
-
-| 단계 | 파일(담당) | 변경 |
-| --- | --- | --- |
-| 1 | `assets/life/blog.js`(AI) | 비공개 화면 전용 `Blog.privateReadingSnapshot(doc, { photoIds })`를 추가한다. `publicSnapshot`과 같은 사본을 만들되 `author`를 남긴다. 전송·저장·공개에는 쓰지 않는다. `validateSnapshot`(공개 검증)을 거치지 않고, 같은 모양을 확인하는 별도 검증을 둔다. |
-| 2 | `assets/life/blog-public-ui.js`·`blog-public.css`(디자인) | `privateView: true`일 때만 `author:"ai"` 구간을 `span.blog-ai-text`로 감싼다. 편집기와 같은 옅은 바탕과 점선 밑줄로 보이고 색만으로 구분하지 않는다. 공개 읽기(`privateView` 없음)에서는 속성이 와도 무시한다. |
-| 3 | `assets/life/workbench-ui.js`(최적화) | 연재 `renderPhoto`가 `publicSnapshot` 대신 1단계 함수를 쓴다. |
-| 4 | 검사(AI) | 단위 검사에서 privateReadingSnapshot에는 표시가 남고 publicSnapshot에는 없는지 확인한다. 브라우저 검사에서 비공개 연재 읽기에 표시가 보이고, 같은 글의 공개 읽기와 공개 연재에는 없는지 확인한다. |
-
-**보존 조건:**
-- 공개 사본·서버 `publish`·공개 연재 토큰 묶음에는 `author`가 계속 없다.
-- 기존 공개 읽기 화면의 출력은 바이트 단위로 같다.
-
-1~3단계가 세 세션의 파일에 걸쳐 있다. 2026-11-04 총괄 작업 지시서(작업 3)의 담당 범위를 벗어나므로, 총괄이 담당을 정한 뒤 진행한다.
-
+- **`blog.js`**
+  - 비공개 화면 전용 `privateReadingSnapshot(doc, opts)`와 `validateReadingSnapshot`을 추가했다.
+  - 공개 사본과 같은 투영을 쓰되 `author`를 남기고, 형식은 `life-blog-private-reading-v1`이다.
+  - 이 사본은 전송·저장·공개에 쓰지 않는다. 공개 검증 `validateSnapshot`은 이 형식을 거부한다.
+  - `publicSnapshot`은 같은 내부 투영을 쓰며, 결과는 이전과 같다(기존 단위 검사 그대로 통과).
+- **`blog-public-ui.js`·`blog-public.css`**
+  - `privateView`이고 읽기 사본일 때만 별도 검증을 쓰고, `author:"ai"` 구간을 `span.blog-ai-text`로 감싼다.
+  - 표시는 편집기와 같은 옅은 바탕과 점선 밑줄이다. 글자 크기·자리는 바꾸지 않는다.
+  - 공개 읽기는 공개 사본만 받으므로 출력이 같다.
+- **`workbench-ui.js`:** 연재 읽기 `renderPhoto` 호출 한 곳만 `privateReadingSnapshot`으로 바꿨다.
+- **검사**
+  - 단위(`ai-authorship.test.cjs`): 다음을 확인한다.
+    - 읽기 사본은 표시를 그대로 남긴다.
+    - 같은 글의 공개 사본에는 표시가 없다.
+    - 두 검증기는 서로의 형식을 받지 않는다.
+  - 브라우저(`blog-series-browser`, 실제 연재 읽기 경로): 다음을 확인한다.
+    - 표시한 문장만 보인다.
+    - 점선 밑줄이 있고, 글자 크기와 inline 배치가 그대로다.
+    - 본문 글자가 바뀌지 않는다.
+    - 공개 사본·공개 렌더의 표시가 0이고, 공개 렌더는 읽기 사본을 거부한다.
+  - 변이 확인: `workbench-ui.js`를 이전 호출로 되돌리면 브라우저 단계가 실패한다(표시 0개).
+  - 서버 `publish`의 표시 제거는 기존 SQL 검사(`blog-ai-authorship.sql`)가 지킨다. 공개 연재 패키지는 공개 토큰 묶음이라 본문을 담지 않는다.
+- **미검증:** 실제 Apple 기기의 시각 확인.
