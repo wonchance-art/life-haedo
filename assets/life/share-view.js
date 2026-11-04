@@ -93,7 +93,7 @@
         if (part.url) {
           const link = node('a', '원문 보기', 'share-source-link');
           link.href = part.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer';
-          if (life.Icons) link.append(life.Icons.create('arrow'));
+          if (life.Icons) link.append(life.Icons.create('external'));
           actions.append(link);
         }
         const detail = node('details', null, 'share-details');

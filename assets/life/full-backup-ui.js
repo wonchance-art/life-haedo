@@ -105,6 +105,16 @@
       downloadButton.disabled = true;
       const plan = await F.plan({ ...context(), isCurrent: () => alive(token) });
       if (!alive(token)) return;
+      // The planned kinds are the rows the slower inventory fills in, in the
+      // same order: reading every post no longer pushes the rows below. The
+      // placeholders carry no data-kind, which marks a counted row.
+      const plannedKinds = F.ORDER.filter(kind => plan.tasks.some(task => task.kind === kind));
+      if (plannedKinds.length) inventoryList.replaceChildren(...plannedKinds.map(kind => {
+        const item = node('li', null, 'fb-kind'); item.dataset.pendingKind = kind;
+        const copy = node('span', null, 'fb-kind-copy');
+        copy.append(node('strong', F.KINDS[kind].label), node('span', '확인하는 중…', 'life-meta'));
+        item.append(copy); return item;
+      }));
       const value = await F.inventory(plan, context(), { isCurrent: () => alive(token) });
       if (!alive(token)) return;
       inventoryList.replaceChildren();
