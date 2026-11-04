@@ -41,6 +41,8 @@ async function deleteControl(page) {
   await control.waitFor();
   return control;
 }
+// Focus is on a control or heading the keyboard user can see: not <body>, not a screen-reader-only heading.
+const visibleFocus = () => { const node = document.activeElement; return !!node && node !== document.body && !node.closest('.life-sr-only') && node.getClientRects().length > 0; };
 const until = async (read, label, timeout = 15000) => {
   const end = Date.now() + timeout;
   while (!(await read())) { if (Date.now() > end) throw new Error('Timed out: ' + label); await new Promise(done => setTimeout(done, 100)); }
@@ -154,11 +156,26 @@ async function main() {
       await page.locator('.nb-status').waitFor();
       assert.equal(await page.locator('.photo-article').count(), 0);
       assert.equal(await page.locator('#nbComposeOpen').count(), 0, 'the 보관된 초안 열기 receipt is gone');
-      await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body);
+      await page.waitForFunction(visibleFocus);
       await until(() => deletes.length > 0, 'server deletion request'); assert.equal(deletes.length, 1);
       assert.equal((await page.locator('#lifeSaveStatus').textContent()).trim(), DONE);
       assert.deepEqual(await posts(page), [kept], 'only the 9칸 post was deleted');
     }, { start: '/index.html?section=records&view=page', seeded: false });
+    await check('a post opened from the page post list with no return context leaves a list with visible focus', { width: 1440, height: 1000 }, async ({ page, refs, deletes }) => {
+      const [target, kept] = refs.ids;
+      await page.goto(base + '/index.html?section=records&view=page'); await ready(page);
+      const list = page.locator('.wb-page-compatibility'); await list.waitFor();
+      if (!await list.evaluate(node => node.open)) await list.locator(':scope > summary').click();
+      await page.locator(`.wb-page-compatibility [data-photo-post-id="${target}"]`).first().click(); await page.locator('.photo-article').waitFor();
+      await page.locator('#photoServerStatus[data-state="synced"]').waitFor();
+      const control = await deleteControl(page);
+      page.once('dialog', dialog => dialog.accept());
+      await control.click();
+      await page.waitForFunction(() => !document.querySelector('.photo-article'));
+      await page.waitForFunction(visibleFocus);
+      await until(() => deletes.length > 0, 'server deletion request'); assert.equal(deletes.length, 1);
+      assert.deepEqual(await posts(page), [kept]);
+    });
   } finally { await browser.close(); }
   const failed = report.checks.filter(check => !check.pass).length;
   console.log(JSON.stringify({ passed: report.checks.length - failed, failed, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, external: report.external.length }));

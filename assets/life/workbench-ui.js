@@ -74,8 +74,10 @@
     function refocus(session) {
       requestAnimationFrame(() => {
         if (!workspaceIs(session) || current !== session || document.activeElement && document.activeElement !== document.body) return;
-        for (const node of host.querySelectorAll('h1,h2,h3,button')) {
-          if (!node.getClientRects().length) continue;
+        for (const node of host.querySelectorAll('h1,h2,h3,summary,button')) {
+          // Visible targets only: not a screen-reader-only heading, nor a control inside a closed <details>.
+          if (!node.getClientRects().length || node.disabled || node.closest('.life-sr-only') ||
+            node.tagName !== 'SUMMARY' && node.parentElement?.closest('details:not([open])')) continue;
           if (/^H[1-3]$/.test(node.tagName) && !node.hasAttribute('tabindex')) node.tabIndex = -1;
           node.focus({ preventScroll: true });
           if (document.activeElement === node) return;

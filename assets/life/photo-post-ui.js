@@ -917,7 +917,13 @@
       render();
       if (!left && statusText) statusText.textContent = "글을 삭제했습니다. 다른 기기에서도 삭제됩니다.";
       if (!document.activeElement || document.activeElement === document.body)
-        [...host.querySelectorAll("h2,h3,button")].find((node) => node.getClientRects().length)?.focus({ preventScroll: true });
+        for (const node of [...host.querySelectorAll("h2,h3,summary,button"), host]) {
+          // A control inside a closed <details> has boxes but cannot take focus; the host is the last resort.
+          if (node !== host && (!node.getClientRects().length || node.disabled || node.parentElement?.closest("details:not([open])") && node.tagName !== "SUMMARY")) continue;
+          if (!node.hasAttribute("tabindex") && !/^(BUTTON|SUMMARY)$/.test(node.tagName)) node.tabIndex = -1;
+          node.focus({ preventScroll: true });
+          if (document.activeElement === node) break;
+        }
     }
     function serverCurrent(token, id, revision, sequence) {
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
