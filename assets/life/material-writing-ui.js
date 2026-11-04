@@ -331,6 +331,8 @@
       if (!surface) return; sourceView = sources?.getView?.() || sourceView;
       const input = document.activeElement;
       if (!surface.contains(input)) return;
+      // The control that left the screen is not a place to return to: reopening falls back to the default field.
+      if (input.id === 'mwClose') { view = { planId: selected, id: null, focusKey: null, y: root.scrollY || 0 }; return; }
       view = { planId: selected, id: input.id || null, focusKey: input.dataset?.focusKey || null,
         start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, y: root.scrollY || 0 };
     }
@@ -340,9 +342,11 @@
       const typing = document.activeElement;
       return !!surface?.contains(typing) && (/^(input|textarea|select)$/i.test(typing?.tagName || '') || typing?.isContentEditable === true);
     }
+    // render() rebuilt the surface, so any focus inside it now was moved there during the source load.
+    function movedInside() { const active = document.activeElement; return !!surface?.contains(active) && active !== surface; }
     function restoreView() {
       if (!mounted() || view?.planId !== selected) return;
-      if (typingInside()) return;
+      if (movedInside()) return;
       const keyed = view.focusKey && [...surface.querySelectorAll('button')].find(node => node.dataset.focusKey === view.focusKey);
       const input = keyed || (view.id && document.getElementById(view.id)) || surface.querySelector(plan()?.output ? '#mwContinue' : '#mwTitle');
       if (input && surface.contains(input)) { input.focus({ preventScroll: true }); if (typeof view.start === 'number' && input.setSelectionRange) input.setSelectionRange(view.start, view.end, view.direction); }
