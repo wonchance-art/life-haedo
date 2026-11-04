@@ -305,8 +305,7 @@
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
         selected = value.id; sourceView = null; view = null; mark(); await render();
         // render() waits for the sources; input focused meanwhile keeps its focus.
-        const typing = document.activeElement; // only a field the person moved into keeps focus; a stale button does not
-        if (!(surface?.contains(typing) && (/^(input|textarea|select)$/i.test(typing?.tagName || '') || typing?.isContentEditable === true))) surface?.querySelector('#mwTitle')?.focus();
+        if (!typingInside()) surface?.querySelector('#mwTitle')?.focus();
       }, { id: 'mwNew' }));
       if (typeof onClose === 'function') toolbar.append(button('돌아가기', () => navigate(onClose), { id: 'mwClose' }));
       status = el('p', '', 'life-meta mw-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -335,8 +334,15 @@
       view = { planId: selected, id: input.id || null, focusKey: input.dataset?.focusKey || null,
         start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, y: root.scrollY || 0 };
     }
+    // A field the person moved into keeps focus; a stale button does not. render() waits for the
+    // source list, so a focus set after it would take back a field chosen during that load.
+    function typingInside() {
+      const typing = document.activeElement;
+      return !!surface?.contains(typing) && (/^(input|textarea|select)$/i.test(typing?.tagName || '') || typing?.isContentEditable === true);
+    }
     function restoreView() {
       if (!mounted() || view?.planId !== selected) return;
+      if (typingInside()) return;
       const keyed = view.focusKey && [...surface.querySelectorAll('button')].find(node => node.dataset.focusKey === view.focusKey);
       const input = keyed || (view.id && document.getElementById(view.id)) || surface.querySelector(plan()?.output ? '#mwContinue' : '#mwTitle');
       if (input && surface.contains(input)) { input.focus({ preventScroll: true }); if (typeof view.start === 'number' && input.setSelectionRange) input.setSelectionRange(view.start, view.end, view.direction); }
