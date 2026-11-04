@@ -87,11 +87,11 @@ test('haedo-ai verifies the user with the publishable key and reserves with the 
     const handler = createHandler({ fetcher, log: () => {},
       environment: key => ({ SUPABASE_URL: PROJECT, ANTHROPIC_API_KEY: 'provider-fixture', HAEDO_AI_OWNER_ID: OWNER, ...env })[key] });
     const result = await handler(new Request('https://edge.invalid/', { method: 'POST',
-      headers: { Authorization: 'Bearer user-session-fixture', apikey: EXPECTED[name].publicKey, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature', apikey: EXPECTED[name].publicKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId: '22222222-2222-4222-8222-222222222222', task: 'polish', selection: '합성 문장' }) }));
     assert.equal((await result.json()).error, 'ai_monthly_limit', name);
     assert.deepEqual(calls.map(c => c.url), [PROJECT + '/auth/v1/user', PROJECT + '/rest/v1/rpc/life_ai_reserve'], name);
-    assert.deepEqual(calls[0].headers, { apikey: EXPECTED[name].publicKey, Authorization: 'Bearer user-session-fixture' }, name);
+    assert.deepEqual(calls[0].headers, { apikey: EXPECTED[name].publicKey, Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature' }, name);
     assert.deepEqual(credentials(calls[1].headers), EXPECTED[name].server, name);
   }
   // An API key is never accepted as the user's session and is not forwarded to Auth.
@@ -151,7 +151,7 @@ test('haedo-naver-blog verifies any other server key remotely with that key only
     [ENVIRONMENTS.new, { apikey: ROTATED_JWT }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
     [ENVIRONMENTS.both, { apikey: OTHER_SECRET }, { apikey: OTHER_SECRET }],
     // The retired legacy key is no longer this function's key in a new-key environment: it must prove itself too.
-    [ENVIRONMENTS.both, { apikey: ROTATED_JWT, Authorization: 'Bearer user-session-fixture' }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
+    [ENVIRONMENTS.both, { apikey: ROTATED_JWT, Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature' }, { apikey: ROTATED_JWT, Authorization: 'Bearer ' + ROTATED_JWT }],
   ]) {
     const label = JSON.stringify(Object.keys(headers));
     const w = naverWorld(env), result = await w.handler(createHandler)(w.request({ action: 'readiness' }, headers));
@@ -194,11 +194,11 @@ test('haedo-naver-blog verifies a user with the publishable key in each key envi
   for (const [name, env] of Object.entries(ENVIRONMENTS)) {
     const w = naverWorld(env);
     const result = await w.handler(createHandler)(w.request({ subscriptionId: OWNER },
-      { Authorization: 'Bearer user-session-fixture', apikey: EXPECTED[name].publicKey }));
+      { Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature', apikey: EXPECTED[name].publicKey }));
     // Ingestion is disabled in this fixture: the request stops after Auth, before any server-key call.
     assert.deepEqual(await result.json(), { error: 'setup_required' }, name);
     assert.deepEqual(w.calls.map(c => c.url), [PROJECT + '/auth/v1/user'], name);
-    assert.deepEqual(w.calls[0].headers, { apikey: EXPECTED[name].publicKey, Authorization: 'Bearer user-session-fixture' }, name);
+    assert.deepEqual(w.calls[0].headers, { apikey: EXPECTED[name].publicKey, Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature' }, name);
   }
   for (const headers of [{ apikey: NEW.publishable }, { Authorization: 'Bearer ' + NEW.secret }]) {
     const w = naverWorld(ENVIRONMENTS.new);
@@ -212,4 +212,51 @@ test('harvest storage calls never send an sb_secret_ key as a Bearer token', () 
   const source = fs.readFileSync(path.join(__dirname, '../supabase/functions/haedo-naver-blog/harvest-worker.mjs'), 'utf8');
   assert.doesNotMatch(source, /Authorization: 'Bearer ' \+ key/);
   assert.equal((source.match(/serverHeaders\(key\)/g) || []).length, 2);
+});
+
+test('a key with surrounding whitespace is treated as absent in both copies, never trimmed', async () => {
+  const { supabaseKeys } = await shared;
+  const { serverKey } = await media;
+  for (const padded of [' ' + NEW.secret, NEW.secret + '\n', NEW.secret + ' ', '\t' + NEW.secret]) {
+    const alone = { SUPABASE_SECRET_KEYS: JSON.stringify({ default: padded }) };
+    assert.equal(supabaseKeys(key => alone[key]).server, null, JSON.stringify(padded));
+    assert.equal(serverKey(key => alone[key]), null, JSON.stringify(padded));
+    const withLegacy = { ...alone, SUPABASE_SERVICE_ROLE_KEY: LEGACY.service };
+    assert.equal(supabaseKeys(key => withLegacy[key]).server, LEGACY.service);
+    assert.equal(serverKey(key => withLegacy[key]), LEGACY.service);
+    assert.equal(supabaseKeys(key => ({ SUPABASE_SERVICE_ROLE_KEY: padded })[key]).server, null);
+  }
+  const publics = { SUPABASE_PUBLISHABLE_KEYS: JSON.stringify({ default: NEW.publishable + '\n' }), SUPABASE_ANON_KEY: LEGACY.anon };
+  assert.equal(supabaseKeys(key => publics[key]).publicKey, LEGACY.anon);
+  assert.equal(supabaseKeys(key => ({ SUPABASE_ANON_KEY: ' ' + LEGACY.anon })[key]).publicKey, null);
+});
+
+test('without any public key the user path stops with setup_required: the server key never stands in for it', async () => {
+  const { supabaseKeys } = await shared;
+  const secretsOnly = { SUPABASE_SECRET_KEYS: JSON.stringify({ default: NEW.secret }), SUPABASE_SERVICE_ROLE_KEY: LEGACY.service };
+  assert.equal(supabaseKeys(key => secretsOnly[key]).publicKey, null);
+  const { createHandler: createAI } = await ai;
+  const aiHandler = createAI({ fetcher: async () => { throw new Error('no call without a public key'); }, log: () => {},
+    environment: key => ({ SUPABASE_URL: PROJECT, ANTHROPIC_API_KEY: 'provider-fixture', HAEDO_AI_OWNER_ID: OWNER, ...secretsOnly })[key] });
+  const aiResult = await aiHandler(new Request('https://edge.invalid/', { method: 'POST',
+    headers: { Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId: '22222222-2222-4222-8222-222222222222', task: 'polish', selection: '합성 문장' }) }));
+  assert.deepEqual(await aiResult.json(), { error: 'setup_required' });
+  const { createHandler } = await naver;
+  const w = naverWorld(secretsOnly);
+  const result = await w.handler(createHandler)(w.request({ subscriptionId: OWNER }, { Authorization: 'Bearer eyJ1c2Vy.session-fixture.signature' }));
+  assert.deepEqual(await result.json(), { error: 'setup_required' });
+  assert.deepEqual(w.calls, [], 'no Auth call is made with the server key');
+});
+
+test('haedo-naver-blog: its own sb_secret_ key is refused as a Bearer token; a legacy service JWT key still works as Bearer', async () => {
+  const { createHandler } = await naver;
+  for (const env of [ENVIRONMENTS.new, ENVIRONMENTS.both]) {
+    const w = naverWorld(env), result = await w.handler(createHandler)(w.request({ action: 'cron' }, { Authorization: 'Bearer ' + NEW.secret }));
+    assert.equal(result.status, 401); assert.deepEqual(await result.json(), { error: 'unauthorized' });
+    assert.deepEqual(w.calls, []);
+  }
+  const w = naverWorld(ENVIRONMENTS.legacy), result = await w.handler(createHandler)(w.request({ action: 'readiness' }, { Authorization: 'Bearer ' + LEGACY.service }));
+  assert.equal(result.status, 200);
+  assert.deepEqual(credentials(w.calls[0].headers), EXPECTED.legacy.server, 'the legacy exact key as Bearer keeps the current cron working');
 });

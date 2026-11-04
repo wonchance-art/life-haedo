@@ -11,7 +11,9 @@
 // haedo-blog-media/index.ts keeps an equivalent TypeScript copy; the shared
 // key matrix in tests/supabase-keys.test.cjs checks every function.
 
-const text = value => typeof value === 'string' && value.length > 0 ? value : null;
+// A value with surrounding whitespace is a setup mistake: it is treated as absent,
+// never trimmed, so the function sends exactly what the platform holds or nothing.
+const text = value => typeof value === 'string' && value.length > 0 && value.trim() === value ? value : null;
 function named(raw) {
   if (typeof raw !== 'string' || !raw.length) return null;
   try {

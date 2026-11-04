@@ -251,8 +251,9 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       const origin = project.origin, { server: serviceKey, publicKey } = supabaseKeys(environment);
       check(serviceKey && publicKey, 'setup_required');
       const token = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
-      // Only a user session goes in Authorization; an API key is never a user.
-      check(token && token.length <= 8192 && !token.startsWith('sb_'), 'unauthorized');
+      // verify_jwt=false: only a JWT-shaped user session goes on, before the body
+      // is read. An API key (sb_...) or any other string is refused here.
+      check(token && token.length <= 8192 && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token), 'unauthorized');
       let parsed;
       try { parsed = JSON.parse(await readBounded(request, LIMITS.body)); } catch (_) { fail('invalid_request'); }
       input = validateInput(parsed);

@@ -246,6 +246,12 @@ async function main() {
         assert.deepEqual(inspect.map(r => [r.check_name, r.header, r.ok]), [['haedo-naver-blog-poll', 'bearer', false], ['haedo-naver-capture-poll', 'bearer', false]]);
         assert.deepEqual(await jobs(), initial, 'inspect changes nothing');
         await refused("set local haedo.naver_cron_action='other';", 'Unknown Naver cron header operation');
+        // The worker credential must be an sb_secret_ key or JWT-shaped (no length rule; key lengths are undocumented).
+        for (const bad of ['x'.repeat(60), ' ' + SECRET, SECRET + '\n', 'sb_publishable_' + 'synthetic'.repeat(6), 'sb_secret_short', 'a.b']) {
+          await db.query(`update vault.decrypted_secrets set decrypted_secret = $1 where name = 'haedo_naver_service_role_key'`, [bad]);
+          await refused("set local haedo.naver_cron_action='apikey';", 'Exactly one server-only named worker credential is required');
+        }
+        await db.query(`update vault.decrypted_secrets set decrypted_secret = $1 where name = 'haedo_naver_service_role_key'`, [SECRET]);
         await refused("set local haedo.naver_cron_action='bearer';", 'cannot be sent as a Bearer token');
         await refused("set local haedo.naver_cron_action='apikey';set local test.cron_insert_extra='yes';", 'Row count changed in cron.job');
         await refused("set local haedo.naver_cron_action='apikey';set local test.cron_flip_active='yes';", 'changed beyond its command');
@@ -273,7 +279,7 @@ async function main() {
         const empty = await jobs();
         await refused("set local haedo.naver_cron_action='apikey';", 'No Naver schedule to change');
         assert.deepEqual(await jobs(), empty);
-        pass('naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, sb_secret_ Bearer, non-command change, row-count change and no schedules rolled back');
+        pass('naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, malformed or padded credential, sb_secret_ Bearer, non-command change, row-count change and no schedules rolled back');
       } finally { await db.end(); }
     }
 

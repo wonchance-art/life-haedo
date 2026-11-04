@@ -131,7 +131,7 @@ async function readExact(body: ReadableStream<Uint8Array>, size: number): Promis
 // SUPABASE_SECRET_KEYS / SUPABASE_PUBLISHABLE_KEYS are JSON objects keyed by
 // name ("default" is used). sb_secret_ keys are not JWTs: apikey header only.
 type Environment = (name: string) => string | undefined;
-const keyText = (value: unknown) => typeof value === "string" && value.length > 0 ? value : null;
+const keyText = (value: unknown) => typeof value === "string" && value.length > 0 && value.trim() === value ? value : null;
 function namedKeys(raw: string | undefined): Record<string, unknown> | null {
   if (typeof raw !== "string" || !raw.length) return null;
   try {

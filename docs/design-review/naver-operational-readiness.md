@@ -196,7 +196,7 @@ Supabase의 같은 프로젝트 관리 화면에서 운영자가 다음을 준�
 | 위치 | 필요한 설정 | 확인 기준 |
 | --- | --- | --- |
 | Vault | `haedo_naver_project_url` | 이 프로젝트의 HTTPS 루트 URL을 이름 하나로 등록한다. |
-| Vault | `haedo_naver_service_role_key` | 같은 프로젝트의 서버 전용 키를 이름 하나로 등록한다. publishable/anon 키나 다른 프로젝트의 키로 대신하지 않는다. |
+| Vault | `haedo_naver_service_role_key` | 같은 프로젝트의 서버 전용 키를 이름 하나로 등록한다. publishable/anon 키나 다른 프로젝트의 키로 대신하지 않는다. 활성화·전환 SQL은 값이 `sb_secret_` 키이거나 JWT 모양인지만 본다(키 길이는 공식 문서에 없어 길이 조건을 쓰지 않는다). 앞뒤 공백이 있으면 거절한다. |
 | Edge Functions 환경변수/Secrets | 기존 플랫폼 자격과 `HAEDO_NAVER_INGESTION_ENABLED` | 실제 배포 worker의 프로젝트 URL·서버 키·사용자 검증용 공개 키와 가동값을 비공개 관리 화면에서 확인한다. |
 
 Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL의 guard는 URL 형식·키 길이/형식과 정확한 이름 개수만 검사하며, 두 값이 현재 프로젝트와 일치한다는 사실을 증명하지 않는다. 운영자가 같은 프로젝트에서 취득·설정했음을 확인하고, 배포 worker의 인증과 비공개 저장 권한을 별도 검수해야 한다. 자격값을 채팅으로 전달해 달라고 요청하지 않는다.

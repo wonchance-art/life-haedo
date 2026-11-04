@@ -2,7 +2,7 @@ import { collect, failure, feedURL, readBounded } from './collector.mjs';
 import { createHarvestWorker } from './harvest-worker.mjs';
 import { supabaseKeys, serverHeaders } from '../_shared/supabase-keys.mjs';
 
-const SECRET_KEY = /^sb_secret_[A-Za-z0-9_-]{16,256}$/;
+const SECRET_KEY = /^sb_secret_[A-Za-z0-9_-]{16,255}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -57,7 +57,8 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       // server key (a rotated legacy service JWT, or another sb_secret_ key in
       // the apikey header) must prove itself remotely below, so a key that was
       // disabled or deleted stops working even if this runtime still holds it.
-      const exactService = [apikey, token].some(presented => secretEqual(presented, key));
+      // An sb_secret_ key is never a Bearer token, not even this function's own.
+      const exactService = secretEqual(apikey, key) || !key.startsWith('sb_secret_') && secretEqual(token, key);
       const serviceToken = ['cron','run','readiness'].includes(input.action) ?
         [apikey, token].find(presented => typeof presented === 'string' && !secretEqual(presented, key) &&
           (legacyServiceCandidate(presented, project.hostname) || presented === apikey && SECRET_KEY.test(presented))) : undefined;

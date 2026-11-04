@@ -71,7 +71,7 @@ begin
  execute $guard$select count(*)=1 and bool_and(decrypted_secret ~ '^https://[a-z0-9-]+[.]supabase[.]co$')
   from vault.decrypted_secrets where name='haedo_naver_project_url'$guard$ into present;
  if not coalesce(present,false) then raise exception 'Exactly one valid named project URL is required';end if;
- execute $guard$select count(*)=1 and bool_and(length(decrypted_secret)>40 and decrypted_secret not like 'sb_publishable_%')
+ execute $guard$select count(*)=1 and bool_and((decrypted_secret ~ '^sb_secret_[A-Za-z0-9_-]{16,255}$' or decrypted_secret ~ '^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$'))
   from vault.decrypted_secrets where name='haedo_naver_service_role_key'$guard$ into present;
  if not coalesce(present,false) then raise exception 'Exactly one server-only named worker credential is required';end if;
  if to_regclass('public.life_naver_captures') is null then raise exception 'Naver capture schema must be installed first';end if;
