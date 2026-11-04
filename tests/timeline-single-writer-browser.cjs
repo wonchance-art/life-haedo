@@ -105,6 +105,21 @@ async function main() {
       }
     });
 
+
+    // Found at f3bc30a: a page whose view of localStorage lagged wrote the document list back and
+    // hid the timeline tab's unsent edit. With one writer, the 일정 page only reads; opening it
+    // while an edit waits must leave the edit (body and list) as it is, and the editor sends it.
+    await check('opening 일정 while the timeline has an unsent edit leaves the edit alone; the editor sends it', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      await timelineEdit(timeline, '대기 중 편집');
+      const schedule = await open();
+      await schedule.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(schedule);
+      await schedule.waitForFunction(() => document.querySelector('.schedule-entries .schedule-entry-body')?.childElementCount > 0);
+      await settled(tables, data => data.events.some(e => e.title === '대기 중 편집'), 'the edit is sent');
+      const { doc } = await local(timeline, DOC);
+      assert.ok(doc.events.some(e => e.title === '대기 중 편집'), 'the body on the device keeps the edit');
+      assert.equal(tables.calls.filter(call => call.table === 'haedo_documents' && call.method === 'PATCH').length, 1);
+    });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.consoleErrors, [], 'console errors');

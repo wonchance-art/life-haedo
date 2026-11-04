@@ -299,3 +299,16 @@ test('the 일정 store only reads timelines: 행복도 is read from one timeline
   assert.equal(h.store.happiness('2026-11-03').score, 9);
   assert.equal(cloud.calls.filter(call => call.table === 'haedo_documents' && call.method !== 'GET').length, 0, 'nothing sent');
 });
+
+test('syncDocuments writes only what changed on the server (a lagging unchanged copy is never written back)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  cloud.write('haedo_documents', { id: 'd_a', name: '내 연표', data: { ...model.emptyDocument('내 연표'), scale: 'signed1' } });
+  await h.store.syncDocuments();
+  const reg = model.keys('A').registry, body = model.keys('A').docs + 'd_a', writes = [];
+  const setItem = h.local.setItem; h.local.setItem = (k, v) => { if (k === reg || k === body) writes.push(k); return setItem(k, v); };
+  await h.store.syncDocuments();
+  assert.deepEqual(writes, [], 'unchanged: neither the list nor the body is written');
+  cloud.write('haedo_documents', { id: 'd_a', name: '내 연표', data: { ...model.emptyDocument('내 연표'), scale: 'signed1', events: [{ date: '2026-11-02', title: '다른 기기' }] } });
+  await h.store.syncDocuments();
+  assert.deepEqual(writes.sort(), [body, reg].sort(), 'a real change is written');
+});

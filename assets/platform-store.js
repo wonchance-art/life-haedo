@@ -244,8 +244,8 @@
       await pull().catch(() => {});
       await store.flush();
     },
-    // As main: the timeline editor and the goals/habits screens bring the account's timelines
-    // here; a document changed on this device is left to its editor.
+    // As main (the timeline editor and the goals/habits screens bring the account's timelines here;
+    // a document changed on this device is left to its editor), writing only what changed.
     async syncDocuments() {
       const captured = context();
       const response = await requestFor(captured)(base(captured, "haedo_documents") + "?select=id,name,data,updated_at");
@@ -255,17 +255,22 @@
       if (!Array.isArray(rows) || rows.some(row => !HaedoData.isDocument(row.data)))
         throw new Error("연표 응답 형식을 확인해야 합니다.");
       const k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
+      // Only what changed on the server is written, and the list only when this pass changed it:
+      // this page's view of localStorage can lag another tab's write (the timeline editor's
+      // unsent edit), and writing back an unchanged stale copy would hide that edit.
+      const listBefore = JSON.stringify(reg);
       const account = captured.project + "|" + captured.uid;
       for (const row of rows) {
         const meta = reg.docs.find(doc => doc.id === row.id);
         if (meta && meta.updated !== meta.syncedAt) continue;
+        if (meta && meta.syncedAt === row.updated_at) continue;
         localStorage.setItem(k.docs + row.id, JSON.stringify(row.data));
         const next = { id: row.id, name: row.name, updated: row.updated_at,
           syncedAt: row.updated_at, cloudAccount: account };
         if (meta) Object.assign(meta, next); else reg.docs.push(next);
       }
       if (!reg.current && reg.docs.length) reg.current = reg.docs[0].id;
-      localStorage.setItem(k.registry, JSON.stringify(reg));
+      if (JSON.stringify(reg) !== listBefore) localStorage.setItem(k.registry, JSON.stringify(reg));
       notify(captured); return reg;
     },
     change(id, kind, data) {
