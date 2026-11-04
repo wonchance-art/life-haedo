@@ -25,6 +25,8 @@
     return { code, message: messages[code] };
   }
   const copy = value => value == null ? value : structuredClone(value);
+  // Account spaces received or synchronized at the same time in the background pass.
+  const SPACE_CONCURRENCY = 2;
   function create({ storage, core, sync, compositionSync, libraryMetaSync, auth = root.HaedoAuth,
     remote, originalsFactory, naverMediaFactory, polling = true } = {}) {
     if (!storage?.isAccountScoped || !storage.account || !core || !sync || !compositionSync || !libraryMetaSync || !auth?.verify)
@@ -176,18 +178,30 @@
       if (latest !== workspaceId) await step(() => storage.setActive(workspaceId));
       return { workspaceId, background: true };
     }
+    // Spaces are independent (each engine queues per space), so up to SPACE_CONCURRENCY are
+    // received at once (2026-11-04: one after another made later spaces' posts wait). The first
+    // failure stops new work, lets the started ones finish, then is thrown as before.
+    async function eachSpace(items, task) {
+      let next = 0, failure = null;
+      await Promise.all(Array.from({ length: Math.min(SPACE_CONCURRENCY, items.length) }, async () => {
+        while (!failure && next < items.length) {
+          const item = items[next++];
+          try { await task(item); } catch (error) { failure ||= { error }; }
+        }
+      }));
+      if (failure) throw failure.error;
+    }
     async function receiveAndSend(refreshCatalog) {
       if (refreshCatalog) await readCatalog();
       let localRows = await eligible();
       const allLocal = await step(() => storage.listWorkspaces());
       const localIds = new Set(allLocal.map(row => row.workspaceId));
-      for (const row of catalog.values()) {
-        if (localIds.has(row.id)) continue;
+      await eachSpace([...catalog.values()].filter(row => !localIds.has(row.id)), async row => {
         await step(() => sync.download(row.id, { activate: false }));
         localIds.add(row.id); emit('catalog', row.id);
-      }
+      });
       localRows = await eligible();
-      for (const row of localRows) await synchronizeRow(row);
+      await eachSpace(localRows, row => synchronizeRow(row));
       // A failed/incomplete catalog never removes local spaces or changes the
       // current workspace. Background downloads never set the active pointer.
       emit('catalog');
