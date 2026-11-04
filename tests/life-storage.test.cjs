@@ -2022,11 +2022,20 @@ test('a corrupted workspace keeps post and list operations working while content
   assert.equal(committed.revision, 1);
   assert.equal((await storage.writeBlogSyncState(ws, saved.id, { ...binding, remoteRevision: 2 }, binding.revision)).remoteRevision, 2);
   assert.deepEqual(await storage.deletePhotoPost(ws, next.id, next.revision), { postId: next.id, remoteId: null });
+  // Deleting a synced post records its deletion; once the server confirms, the record is cleared.
+  const synced = await storage.readBlogSyncState(ws, saved.id);
+  assert.deepEqual(await storage.deletePhotoPost(ws, saved.id, saved.revision), { postId: saved.id, remoteId });
+  const deleted = await storage.listBlogSyncStates(ws);
+  assert.deepEqual(deleted.tombstones.map(row => [row.remoteId, row.remoteRevision]), [[remoteId, synced.remoteRevision]]);
+  assert.equal(await storage.clearBlogTombstone(ws, remoteId), true);
+  assert.deepEqual((await storage.listBlogSyncStates(ws)).tombstones, []);
+  assert.deepEqual((await storage.listPhotoPosts(ws)).map(row => row.id), [received.id], 'the received post is listed');
+  assert.deepEqual((await storage.listBlogCopies(ws)).map(row => row.localPostId), [received.id]);
   assert.deepEqual(stored.get(key), corrupted, 'the workspace content itself was never rewritten');
   await assert.rejects(storage.read(ws), corrupt);
 
   // A corrupted post record is still refused by its own check.
-  const postKey = JSON.stringify(`photo-post:${ws}:${saved.id}`), meta = rows.get('meta'), row = structuredClone(meta.get(postKey));
+  const postKey = JSON.stringify(`photo-post:${ws}:${received.id}`), meta = rows.get('meta'), row = structuredClone(meta.get(postKey));
   row.value.title = 42; meta.set(postKey, row);
-  await assert.rejects(storage.readPhotoPost(ws, saved.id), { code: 'invalid_photo_post' });
+  await assert.rejects(storage.readPhotoPost(ws, received.id), { code: 'invalid_photo_post' });
 });

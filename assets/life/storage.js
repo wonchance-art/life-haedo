@@ -2751,7 +2751,7 @@
     async function clearBlogTombstone(workspaceId, remoteId) {
       blogAccountScope(workspaceId); requireId(remoteId, '서버 글');
       return transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         await meta.delete(blogDeleteKey(workspaceId, remoteId)); return true;
       });
     }

@@ -395,7 +395,7 @@ P1을 접은 뒤 남은 후보였다. 총괄 승인 조건은 다음과 같다: 
 | `installReceivedBlogPost` | 글·글 연결·받기 영수증 | 없음 | `PhotoPost.validate`, `Blog.validateManifest`, `checkBlogReceipt` |
 | `readBlogSyncState`·`writeBlogSyncState` | 글 연결 | 없음 | 쓰기 CAS·크기 제한(이전과 같음) |
 | `listBlogSyncStates`·`listBlogCopies` | 글 연결·삭제 기록·영수증 | 없음 | `blogBindingShape`, 삭제 기록 형식 |
-| `deletePhotoPost` | 글·글 연결·삭제 기록 | 없음 | `PhotoPost.validate` |
+| `deletePhotoPost`·`clearBlogTombstone` | 글·글 연결·삭제 기록 | 없음 | `PhotoPost.validate` |
 | `getActive` | 활성 공간 ID | 없음(여는 쪽 `read`가 검증) | `requireId` |
 | `listWorkspaces`·`listAccountLibraries` | 공간 목록 행 | 식별자·제목·판 번호만 | `listedWorkspace` |
 
@@ -410,6 +410,7 @@ P1을 접은 뒤 남은 후보였다. 총괄 승인 조건은 다음과 같다: 
   - 손상 공간에서 위 글·목록 작업이 동작한다.
   - 내용 경로는 멈추고 저장된 기록을 바꾸지 않는다.
   - 공간 번들 자체는 다시 쓰이지 않는다.
+  - 동기화된 글을 지우면 삭제 기록이 남고, 서버 확인 뒤 지워진다. 독립 검수(마이너)에서 `clearBlogTombstone`이 아직 전체 검증을 해, 손상 공간에서 삭제 기록이 지워지지 않고 재시도가 반복되는 것을 찾아 함께 바꿨다.
   - 손상된 글 기록은 `invalid_photo_post`로 거절된다.
 - 테스트의 메모리 IndexedDB 어댑터에 `getKey`를 더했다. 읽기 실패 주입이 있는 어댑터는 `get`과 같은 주입을 따른다.
 
