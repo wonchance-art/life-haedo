@@ -2,11 +2,11 @@
 
 대표 메뉴는 **뉴스·일정·자료·설정**입니다(2026-11-02). 로그인 뒤 첫 화면은 일정이며 지금은 내 글 목록과 계획을 `보기 단위`로 오갑니다. `글쓰기`는 모든 화면의 같은 자리(데스크톱 왼쪽 메뉴 맨 위, iPhone 오른쪽 위)에 있고, 옛 `?section=home|tools` 주소는 일정으로 이어집니다. 공개 표지·공개 페이지는 설정에 있습니다. 자료 메뉴에서 모아 보기·자료 작성을, 일정의 계획에서 연간 계획·목표·습관·연표를, 읽던 글의 더보기에서 해당 글의 공개·보관과 근거 파일을 엽니다. 설정의 파일은 **자료·글 / 계획·연표**로 모았습니다. [목적별 동선·검수·출시 상태](docs/design-review/purpose-workflow-implementation.md).
 
-[다른 기기에서 같은 글 이어쓰기](docs/design-review/account-blog-continuity.md)의 구현·최종 로컬 검수를 마쳤습니다. **홈 → 서버에 보관한 글**에서 목록을 확인하고, 이미 받은 글은 현재 사본으로 다시 열며 처음 받는 글만 선택한 서버 판의 새 로컬 사본으로 받습니다. 해당 글 관리에서는 서버 새 판을 읽어 비교하고, 내 본문을 바꿀 때는 직접 선택합니다. 초안·보관함·서버 보관 중지와 공개 선택은 유지합니다. 목록 조회나 비교만으로 업로드·공개하지 않습니다. 최종 통합 CI·출시 결과는 [PR123](https://github.com/wonchance-art/life-haedo/pull/123)에 갱신하며 실제 기기 확인은 별도입니다.
+[다른 기기에서 같은 글 이어쓰기](docs/design-review/account-blog-continuity.md)의 구현·최종 로컬 검수를 마쳤습니다. 2026-11-01부터는 저장한 글과 초안(원본 사진 포함)을 BlogSync가 로그인한 모든 기기에 자동으로 올리고 받으며, 글별 받기·서버 보관 중지 선택은 없습니다. 충돌하면 최신 쪽을 남기고 진 쪽은 `복구 사본`으로 남깁니다([계정 연동 규칙](docs/design-review/account-sync-everywhere.md)). 공개는 계속 명시 선택입니다. 최종 통합 CI·출시 결과는 [PR123](https://github.com/wonchance-art/life-haedo/pull/123)에 갱신하며 실제 기기 확인은 별도입니다.
 
-**뉴스 설정 → 추천 → 읽기 비교**에서 현재 조건의 소수 글을 고정하고, 원문을 직접 읽은 뒤 의향·읽은 범위·도움·목록 선호를 이 브라우저에 저장·재열기·삭제합니다. 응답은 좋아요나 학습 신호로 자동 반영하지 않습니다. `언어학`과 `Linguistics`의 좁은 연결, 태그 하나가 여러 추천 근거로 부풀려지지 않는 규칙, 공식 언어교육 연구 공급을 함께 보완했습니다. [사용·보존·검수](docs/design-review/discovery-quality.md).
+**뉴스 설정 → 추천 → 읽기 비교**에서 현재 조건의 소수 글을 고정하고, 원문을 직접 읽은 뒤 의향·읽은 범위·도움·목록 선호를 저장·재열기·삭제합니다. 저장한 판단은 계정 문서 동기화로 로그인한 모든 기기에 올라갑니다(2026-11-01). 응답은 좋아요나 학습 신호로 자동 반영하지 않습니다. `언어학`과 `Linguistics`의 좁은 연결, 태그 하나가 여러 추천 근거로 부풀려지지 않는 규칙, 공식 언어교육 연구 공급을 함께 보완했습니다. [사용·보존·검수](docs/design-review/discovery-quality.md).
 
-작성 중인 글은 입력이 멈춘 뒤 0.3초, 연속 입력 중에는 최대 2초를 기준으로 **이 브라우저에 자동 임시저장**합니다. 같은 계정·작업공간의 **홈 → 초안**에서 이어 씁니다. **글 저장**은 본문·원본 사진의 비공개 서버 보관을 시작하며 공개는 별도로 선택합니다. 저장 완료 전 종료되거나 브라우저 자료를 삭제한 경우에는 마지막 입력을 복구하지 못할 수 있습니다. [보관·검수 범위](docs/life-tools-design/blog-completion.md).
+작성 중인 글은 입력이 멈춘 뒤 0.3초, 연속 입력 중에는 최대 2초를 기준으로 **자동 임시저장**합니다. 초안은 BlogSync로 계정에 올라가 로그인한 모든 기기의 초안 목록에서 이어 씁니다(2026-11-01). **글 저장**한 본문·원본 사진도 비공개로 계정에 보관되며 공개는 별도로 선택합니다. 저장 완료 전 종료되거나 브라우저 자료를 삭제한 경우에는 마지막 입력을 복구하지 못할 수 있습니다. [보관·검수 범위](docs/life-tools-design/blog-completion.md).
 
 [이 브라우저에서 글 찾기](docs/design-review/local-post-finder.md): **홈 → 블로그 메뉴 → 글 공개·보관**에서 목록과 별도로 저장된 글 본문을 읽기 전용으로 확인합니다. 현재 계정의 모든 공간과 명시 선택한 로그인 전 자료를 조사하고, 고른 글만 미리보기·파일 보관합니다. 실제 누락 글의 발견·복구는 사용자 브라우저의 조사 결과로 확인해야 합니다.
 
@@ -35,7 +35,7 @@
 
 [자료에서 내 글 완성하기](docs/design-review/material-writing.md): **자료실 → 선택 자료 페이지 → 자료로 글쓰기**에서 정확한 원문 버전을 비교하고, 내 문단과 채택한 구절을 개요로 정리해 기존 글 작성기로 이어 씁니다. 완성 글은 같은 준비 화면에서 선택 공개·철회와 근거 포함 ZIP 보관·새 공간 복원으로 연결합니다. 질문·자료 메모·작성 준비는 브라우저에 비공개로 남으며 글·공개본·근거 파일에 자동 포함하지 않습니다. 브랜치 구현이며 운영 배포 전입니다.
 
-[기기 간 자료·개요 이어쓰기](docs/design-review/material-continuity.md): 작성 준비 아래 **다른 기기에서 이어쓰기**에서 한 준비의 질문·메모·개요와 선택한 정확 원문 전체를 검토하고 비공개 보관합니다. 다른 기기의 **서버의 작성 준비 찾기**에서 받으면 새 독립 공간으로 이어집니다. 저장한 글과 원본 사진은 별도 동의로 보관하며, 같은 준비의 정확한 근거와 함께 다시 받습니다. 미완성 사진 글·다른 준비·작업공간 전체를 자동 전송하지 않습니다. 신규 SQL 설치와 운영 배포는 아직 수행하지 않았습니다.
+[기기 간 자료·개요 이어쓰기](docs/design-review/material-continuity.md): 2026-11-01부터 계정의 모든 작성 준비(질문·메모·개요와 선택한 정확 원문 전체)를 `material-continuity-sync.js`가 자동으로 비공개 송수신하고 삭제도 전파합니다. 검토·동의 단계는 없습니다. 저장한 글과 원본 사진은 BlogSync 자동 동기화로 옮기고, 같은 준비의 정확한 근거와 함께 설치합니다.
 
 [공개 표지](docs/design-review/public-cover.md): **설정 → 공개 표지 → 새 표지**에서 이미 공개한 글·연재·9칸 형식 페이지를 골라 순서와 제목·소개를 정합니다. 전체 미리보기와 별도 동의 뒤 한 주소로 게시하며, 방문자는 현재 공개본을 읽고 정확한 표지 항목으로 돌아옵니다. 표지에는 본문·사진을 복사하지 않으며 표지 철회와 개별 항목 철회는 독립적입니다. 공개 표지는 기존 Share-v1을 재사용하며 새 SQL은 추가하지 않습니다.
 
@@ -96,13 +96,13 @@
 
 기존 메모·글을 가져와 필요한 구절과 출처를 주제로 모으는 개인 도구다. [통합 홈](index.html)의 기록에서 연다. 기존 [life.html](life.html) 주소도 유지한다.
 
-[직접 글쓰기](docs/design-review/direct-writing.md): 홈·기록의 연필 아이콘에서 제목과 본문을 쓰고 기록으로 저장한다. 초안은 이 브라우저에서 이어 쓰며, 저장한 글은 검색·발췌·묶음·내 페이지 선택에 사용할 수 있다. 수정은 새 본문 버전을 만들고 기존 발췌를 보존한다. 초안은 TXT로, 저장한 글은 기존 자료 백업으로 옮긴다.
+[직접 글쓰기](docs/design-review/direct-writing.md): 홈·기록의 연필 아이콘에서 제목과 본문을 쓰고 기록으로 저장한다. 초안은 계정에 자동 동기화되어 로그인한 모든 기기에서 이어 쓰며(2026-11-01, `writing-sync.js`), 저장한 글은 검색·발췌·묶음·내 페이지 선택에 사용할 수 있다. 수정은 새 본문 버전을 만들고 기존 발췌를 보존한다. 초안은 TXT로, 저장한 글은 기존 자료 백업으로 옮긴다.
 
 [앱 표면 개선](docs/design-review/app-feel.md)은 옅은 색상·공통 탐색·검색 조작과 모바일 하단 편집 시트를 적용한다. 본문·원문 출처와 기존 기능은 유지하며 화면 크기 검증과 실제 기기 체험을 구분한다.
 
 [선택한 페이지 공개](docs/design-review/page-publication.md)는 별도 사본의 게시·갱신·철회와 로그인 없는 방문 화면, 다른 기기에서도 접근하는 소유자 관리 목록을 구현한다. 운영 설치·배포 상태는 해당 기록을 따른다. 구성 동기화와 공개 게시를 구분하며, 초안 편집만으로 공개본을 바꾸지 않는다.
 
-[영역별 최소 동작](docs/life-tools-design/working-sections.md): 기록의 `묶음`에서 원문을 묶고, `내 페이지`에서 보여줄 부분과 메모를 골라 비공개로 미리 본다. 도구의 [다시 찾기](docs/design-review/rediscovery.md)는 정확 검색과 기준 기록의 관련 자료 최대 3개·근거·제외/복원을 제공한다. 선택 자료 `회고`도 유지한다. 새 구성은 우선 이 브라우저·계정·작업공간에 저장된다. 기존 원문 동기화와 별개로 연결하는 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)의 운영 준비 전에는 관리의 `자료·구성 백업`으로 다른 기기에 새 사본을 옮긴다. SNS 자동 연결·공개 게시·AI 분석 기능은 아니다.
+[영역별 최소 동작](docs/life-tools-design/working-sections.md): 기록의 `묶음`에서 원문을 묶고, `내 페이지`에서 보여줄 부분과 메모를 골라 비공개로 미리 본다. 도구의 [다시 찾기](docs/design-review/rediscovery.md)는 정확 검색과 기준 기록의 관련 자료 최대 3개·근거·제외/복원을 제공한다. 선택 자료 `회고`도 유지한다. 구성은 계정·작업공간별로 저장되며 2026-11-01부터 `CompositionSync`가 원문 연결 뒤 자동으로 모든 기기에 동기화한다([구성 이어쓰기](docs/life-tools-design/device-continuity.md)). 설정의 `자료·구성 백업`은 파일 사본용이다. SNS 자동 연결·공개 게시·AI 분석 기능은 아니다.
 
 1. `가져오기`에서 Apple 메모·Obsidian·네이버 블로그·인스타그램 등 원천을 고르고 본문, UTF-8 `.txt`/`.md` 파일 또는 링크를 제공한다.
 2. 받은 원문과 누락 범위를 확인한다. `자료만 보관`으로 끝내거나 필요한 구절을 선택해 주제와 보완 메모를 붙인다.
@@ -126,7 +126,7 @@
 
 ## 로컬 실행과 검사
 
-새 글 찾기 체험은 로그인 후 **도구 → 관심 확인 → `AI` 또는 `전시` 입력·보관 → 새 글 찾기**로 진행한다. 준비된 카탈로그에서는 각각 5개·3개가 표시되며 관심에 맞는 글이 없으면 수를 채우지 않는다. 제목으로 원문을 열고 돌아온 뒤 `링크 보관 검토 → 원문·출처 확인 → 자료만 보관`을 누른다. 보관한 글을 확인하고 목록으로 돌아오면 같은 URL은 제외된다. 읽음·관련 없음은 직접 누를 때만 반영하며 되돌릴 수 있다. 개인 화면에는 공용 인증 설정이 필요하고 검사에서 사용한 익명 인증 모사는 실제 Google 로그인을 대신하지 않는다.
+새 글 찾기 체험은 로그인 후 **뉴스 → 관심 확인 → `AI` 또는 `전시` 입력·보관 → 새 글 찾기**로 진행한다. 준비된 카탈로그에서는 각각 5개·3개가 표시되며 관심에 맞는 글이 없으면 수를 채우지 않는다. 제목으로 원문을 열고 돌아온 뒤 `링크 보관 검토 → 원문·출처 확인 → 자료만 보관`을 누른다. 보관한 글을 확인하고 목록으로 돌아오면 같은 URL은 제외된다. 읽음·관련 없음은 직접 누를 때만 반영하며 되돌릴 수 있다. 개인 화면에는 공용 인증 설정이 필요하고 검사에서 사용한 익명 인증 모사는 실제 Google 로그인을 대신하지 않는다.
 
 공급을 새로 수집하려면 `python3 scripts/update-discovery-feed.py --report /tmp/haedo-discovery-update.json`을 명시 실행한다. 일부 출처 실패는 종료 코드 2와 출처별 실패·이전 성공 자료로 남는다. 현재 D2는 robots의 HTTP 이동으로 실패 상태다. 화면의 `목록 다시 불러오기`는 준비된 JSON을 다시 받으며 원천 피드를 갱신하거나 사이트를 배포하지 않는다.
 
@@ -171,7 +171,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 | 경로 | 역할 |
 | --- | --- |
 | `index.html`, `login.html`, `workspace.html` | 통합 홈·Google 로그인·연표 목록/관리 |
-| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 홈·기록·도구·관리 공통 탐색과 화면 스타일 |
+| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 뉴스·일정·자료·설정 공통 탐색과 화면 스타일 |
 | `timeline.html`, `goals.html`, `habits.html` | 계정별 연표·목표·습관 |
 | `assets/platform-*.js` | 공용 인증·계정 저장·플랫폼 화면·자료 원격 어댑터 |
 | `assets/app.css` | 테마·그래프·반응형 레이아웃 |
@@ -190,15 +190,15 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - [프로젝트 스킬](.agents/skills/life-haedo-dev/SKILL.md): 실행·검증 절차
 - [현재 구조와 과거 설계](docs/architecture.md)
 - [GPT-6 설정 조사](docs/codex-setup.md)
-- [이번 리뷰와 변경 기록](docs/review-update.md)
+- [2026-09-10 리뷰 이력](docs/review-update.md)
 
 스크러버·검색 등 일부 UX 패턴은 [Timelines Studio](https://github.com/sreegjl/timelines)(GPL-3.0)에서 착안해 독자 구현했다.
 
 ### 컬렉션 보관함
 
-로그인 후 기록 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 이 브라우저의 계정·작업공간별 저장이며 자동 동기화·공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
+로그인 후 자료 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 계정·작업공간별 저장이며 2026-11-01부터 자료 분류 메타와 함께 계정에 자동 동기화됩니다. 공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
 
-컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드·기기 간 동기화는 이번 범위가 아닙니다.
+컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드는 이번 범위가 아닙니다.
 
 컬렉션의 **외부 이미지 보기**는 책(Open Library ISBN/edition)·영상(YouTube)의 표지/썸네일을 선택적으로 표시합니다. 책 편집의 **표지·썸네일**에서 ISBN을 출처로 연결할 수 있으며 저장·백업 형식은 그대로입니다. 외부 이미지는 기본 꺼짐이고 파일로 백업하지 않습니다. [검증 화면·제공자 접속 제한·Local 인계](docs/design-review/collection-covers.md). 현재 Cloud 검증은 이미지 응답 fixture 기준이며 실제 제공자 접속은 네트워크 설정 또는 Local 검증이 필요합니다.
 
@@ -206,13 +206,13 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 
 ### Obsidian 보관함 전체 가져오기
 
-깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. `review.html`·`review.json`은 판단할 노트와 첨부/외부 주소/보조 파일 안내를 구분하고 중복 참조를 묶습니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 관리의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).
+깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. `review.html`·`review.json`은 판단할 노트와 첨부/외부 주소/보조 파일 안내를 구분하고 중복 참조를 묶습니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 설정의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).
 
 `review-tool.html`에서는 같은 폴더의 변환 파일 6개를 선택해 원문/후보를 비교하고, 참조별 선택 저장·재열기 → 변경 미리보기 → 새 사본 ZIP을 사용할 수 있습니다. 기존 패키지에는 `node scripts/create-obsidian-review-tool.mjs --output /private/review-tool.html`로 도구만 추가하세요. CLI의 `node scripts/apply-obsidian-decisions.mjs --input PATH --decisions FILE --preview`는 검증·집계만, `--output NEW_PRIVATE_PATH`는 별도 새 패키지를 만듭니다. 실제 연결은 명시 선택만 반영하며 원문과 기존 작업공간을 유지합니다. [사용 순서·보존·검수](docs/design-review/obsidian-decisions.md).
 
-변환기는 `vault-package.zip`도 만듭니다. 관리 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.
+변환기는 `vault-package.zip`도 만듭니다. 설정 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.
 
 
-네이버 블로그 연결은 로그인 뒤 **도구 → 네이버 블로그 연결** 또는 **가져오기 → 네이버 블로그 아이디로 연결**에서 연다. 실행 주소는 `index.html?section=tools&view=naver-blog`다. 같은 계정의 기존 연결을 고른 뒤 확인한 공개 목록과 현재 공간 자료를 대조하고, 과거 글의 본문·사진 수집을 명시 요청한다. 수집 사본 검토 → 자료로 받기/새 원문 버전으로 보완 → 정확 원문과 사진 보기 → 선택 사진의 새 비공개 글 초안 또는 전용 ZIP 저장으로 이어진다. 원문 전체를 새 글에 자동 복사하거나 공개하지 않는다.
+네이버 블로그 연결은 로그인 뒤 **자료 → 네이버 블로그 연결** 또는 **가져오기 → 네이버 블로그 아이디로 연결**에서 연다. 실행 주소는 `index.html?section=records&view=naver-blog`다(옛 `section=tools` 주소도 열린다). 같은 계정의 기존 연결을 고른 뒤 확인한 공개 목록과 현재 공간 자료를 대조하고, 과거 글의 본문·사진 수집을 명시 요청한다. 수집 사본 검토 → 자료로 받기/새 원문 버전으로 보완 → 정확 원문과 사진 보기 → 선택 사진의 새 비공개 글 초안 또는 전용 ZIP 저장으로 이어진다. 원문 전체를 새 글에 자동 복사하거나 공개하지 않는다.
 
-수집 사진은 최초 업로드 원본 여부 미확인이며 실패/미보관 범위를 따로 표시한다. 전용 ZIP은 선택한 원문 한 버전과 사진만 담고 개인 메모·발췌·작성 글·계정 연결을 제외해 새 독립 공간으로 복원한다. 기존 자료 JSON·글 ZIP과는 별도다. 현재 네이버 접근이 차단되어 실제 본문/사진 수집과 예약 실행은 비활성이며, 구현·합성 검수를 실제 수집 완료로 표시하지 않는다. [기존 연결·설치](docs/design-review/naver-blog-connection.md), [본문·사진 구현과 실제 가동 조건](docs/design-review/naver-capture-completion.md).
+수집 사진은 최초 업로드 원본 여부 미확인이며 실패/미보관 범위를 따로 표시한다. 전용 ZIP은 선택한 원문 한 버전과 사진만 담고 개인 메모·발췌·작성 글·계정 연결을 제외해 새 독립 공간으로 복원한다. 기존 자료 JSON·글 ZIP과는 별도다. 운영 수집·예약 상태는 [최신 로드맵](docs/life-tools-design/roadmap.md)과 `PRODUCT.md`의 네이버 절을 따르며, 구현·합성 검수를 실제 수집 완료로 표시하지 않는다. [기존 연결·설치](docs/design-review/naver-blog-connection.md), [본문·사진 구현과 실제 가동 조건](docs/design-review/naver-capture-completion.md).

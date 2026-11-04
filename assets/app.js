@@ -160,18 +160,8 @@ function parseDateSmart(str){ /* 2024, 2024-3, 2024.03.15, 2024년 3월 15일, 2
 /* 행복 척도 마이그레이션: 구 0~10 / signed10(−10~+10) → 최종 −1~+1 (중앙 0) */
 function migrateScale(d){
   d=HaedoData.structure(d,false);
-  const conv=f=>{
-    (d.events||[]).forEach(e=>{if(e.happiness!=null)e.happiness=f(e.happiness);});
-    (d.spans||[]).forEach(s=>{if(s.happiness!=null)s.happiness=f(s.happiness);});
-    (d.happiness||[]).forEach(h=>{h.v=f(h.v);});
-  };
-  const r2=v=>Math.round(v*100)/100;
   delete d.now; /* 오늘 날짜는 항상 자동 (고정값 폐기) */
-  if(d.scale!=='signed1'){
-    if(d.scale==='signed10')conv(v=>r2(v/10));
-    else conv(v=>r2((v-5)/5)); /* 구 0~10 */
-    d.scale='signed1';
-  }
+  HaedoData.toSignedScale(d); /* 구 0~10·signed10 → signed1. 일정의 행복도 표시와 같은 공용 함수 */
   return sanitize(d);
 }
 

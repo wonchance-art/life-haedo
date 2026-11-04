@@ -140,9 +140,16 @@
   function timelineSnapshot({ platformData, localStorage, uid, now = () => new Date().toISOString() }) {
     // Byte-for-byte the shape of platform-store backup(): local account copy only.
     const reg = platformData.registry(localStorage, uid), keys = platformData.keys(uid);
+    // Losing sides of goal/habit conflicts (B2), kept with the items they belonged to. A value
+    // that cannot be read is written as it is (recoveryDamaged), never blocking the backup.
+    const parsed = key => { try { return { value: JSON.parse(localStorage.getItem(key)) }; } catch (_) { return null; } };
+    const raw = localStorage.getItem(keys.recovery), list = raw === null ? { value: [] } : parsed(keys.recovery);
+    const readable = Array.isArray(list?.value) && list.value.every(row => row && typeof row === 'object' && !Array.isArray(row));
+    const held = parsed(keys.recoveryDamaged)?.value, damaged = [...(Array.isArray(held) ? held : []), ...(readable ? [] : [raw])];
     return { format: 'haedo-platform-backup-v1', exportedAt: now(),
       docs: reg.docs.map(doc => ({ id: doc.id, name: doc.name, data: JSON.parse(localStorage.getItem(keys.docs + doc.id)) })),
-      items: clone(platformData.read(localStorage, keys.items, [])) };
+      items: clone(platformData.read(localStorage, keys.items, [])),
+      recovery: readable ? clone(list.value) : [], ...(damaged.length ? { recoveryDamaged: damaged } : {}) };
   }
   function notIncluded(kind, count = null) { return { kind, ...NOT_INCLUDED[kind], ...(count === null ? {} : { count }) }; }
   // Each lister reads one list and returns its tasks and skipped rows. A list

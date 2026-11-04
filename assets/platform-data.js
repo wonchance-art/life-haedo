@@ -5,6 +5,13 @@
     registry: prefix(uid) + "registry",
     docs: prefix(uid) + "doc_",
     items: prefix(uid) + "items",
+    // The side that lost a sync conflict (newest edit wins, 2026-11-01). Never cleared automatically.
+    recovery: prefix(uid) + "items_recovery",
+    // A recovery list that could not be read is set aside here (raw values), never discarded.
+    recoveryDamaged: prefix(uid) + "items_recovery_damaged",
+    // rids of the recovery copies the owner has acknowledged (hides the notice). By id, not by
+    // time: a copy from another device can arrive after an acknowledgement and still be new.
+    recoverySeen: prefix(uid) + "items_recovery_seen",
   });
   function read(storage, key, fallback) {
     const value = storage.getItem(key);
@@ -204,6 +211,56 @@
       )
     );
   }
+  // 행복도: the timeline stores v in [-1, 1] (scale signed1); the schedule shows 0–10. The mapping
+  // is the timeline's own 0–10 → signed1 migration (app.js migrateScale): v = (n - 5) / 5.
+  function happinessScore(v) {
+    if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > 1) return null;
+    return Math.min(10, Math.max(0, Math.round(5 + 5 * v)));
+  }
+  const isDay = (date) => typeof date === "string" && date.length === 10 && root.HaedoData.validDate(date);
+  // The day's own entry (date YYYY-MM-DD); month-level points of the timeline are not a day's input.
+  // Values are read on the document's own scale (an older document without `scale` is 0–10),
+  // through the same conversion the timeline editor applies when it opens it.
+  function happinessOn(doc, date) {
+    if (!isDay(date) || !Array.isArray(doc?.happiness)) return null;
+    const entry = doc.happiness.find((h) => h && h.date === date && Number.isFinite(h.v));
+    if (!entry) return null;
+    const v = root.HaedoData.scaleValue(entry.v, doc.scale), score = happinessScore(v);
+    return score === null ? null : { v, score };
+  }
+  // The timeline the 일정 screen reads 행복도 from (it does not write it): the same one on every
+  // device. Recovery copies and documents without a body (read → null) are skipped; among the
+  // rest, the timeline with the most daily 행복도 (with read), then the smallest document ID
+  // (IDs are the same everywhere, unlike the device-local registry.current).
+  const dailyCount = (doc) => (Array.isArray(doc?.happiness) ? doc.happiness.filter((point) => isDay(point?.date)).length : 0);
+  function baseDocument(reg, { read = null } = {}) {
+    const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    let docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name));
+    if (read) docs = docs.filter((doc) => read(doc.id) !== null);
+    if (read) {
+      const scored = docs.map((doc) => ({ doc, n: dailyCount(read(doc.id)) })).filter((row) => row.n > 0)
+        .sort((a, b) => b.n - a.n || byId(a.doc, b.doc));
+      if (scored.length) return scored[0].doc;
+    }
+    return docs.sort(byId)[0] || null;
+  }
+  // Habits that apply on date (created on or before it, on one of its weekdays), with their check.
+  function dueHabits(items, date) {
+    if (!isDay(date)) return [];
+    return (items || []).filter((item) => item.kind === "habit" && !item.data.deleted && scheduled(item.data, date))
+      .map((item) => ({ item, checked: item.data.checks.includes(date) }));
+  }
+  // Goals not yet finished whose target date (if any) is not before the period start.
+  function activeGoals(items, from) {
+    return (items || []).filter((item) => item.kind === "goal" && !item.data.deleted && item.data.progress < 100 &&
+      (!item.data.target || !from || item.data.target >= from))
+      .sort((a, b) => (a.data.target || "9999").localeCompare(b.data.target || "9999") || a.data.title.localeCompare(b.data.title));
+  }
+  // Newest edit wins; a tie (or an unreadable stamp) goes to the server copy, as in the other engines.
+  function localWins(localStamp, remoteStamp) {
+    const local = Date.parse(localStamp || ""), remote = Date.parse(remoteStamp || "");
+    return Number.isFinite(local) && (!Number.isFinite(remote) || local > remote);
+  }
   const api = {
     keys,
     read,
@@ -219,6 +276,12 @@
     streak,
     toggleHabit,
     validItem,
+    happinessScore,
+    happinessOn,
+    baseDocument,
+    dueHabits,
+    activeGoals,
+    localWins,
   };
   if (typeof module !== "undefined" && module.exports) {
     root.HaedoData = require("./data.js");

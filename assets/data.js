@@ -86,7 +86,29 @@
     }
     return runs;
   }
-  const api = { curveIntervals, object, validDate, daysInMonth, withDay, localDate, isDocument, structure, canonical, prepareImport };
+  // 행복 척도: 문서마다 scale이 있다. 최종 형식은 signed1(−1~+1, 중앙 0)이다.
+  // 이전 형식: signed10(−10~+10) → v/10, scale 없음·그 밖(옛 0~10) → (v−5)/5. 둘째 자리 반올림.
+  // 연표 편집기(app.js migrateScale)와 일정의 행복도 표시가 이 한 함수를 함께 쓴다(B2 검수 M2).
+  const round2 = v => Math.round(v * 100) / 100;
+  function scaleValue(v, scale) {
+    if (scale === 'signed1') return v;
+    return scale === 'signed10' ? round2(v / 10) : round2((v - 5) / 5);
+  }
+  // Converts a document's happiness values to signed1 in place and returns it.
+  function toSignedScale(d) {
+    if (!object(d) || d.scale === 'signed1') return d;
+    const scale = d.scale, f = v => scaleValue(v, scale);
+    for (const item of [...(Array.isArray(d.events) ? d.events : []), ...(Array.isArray(d.spans) ? d.spans : [])])
+      if (object(item) && item.happiness != null) item.happiness = f(item.happiness);
+    for (const point of Array.isArray(d.happiness) ? d.happiness : []) if (object(point)) point.v = f(point.v);
+    d.scale = 'signed1';
+    return d;
+  }
+  // A losing copy kept by the timeline tools is named "<이름> 복구 사본" (optionally with a time);
+  // such copies are never the timeline the schedule reads 행복도 from.
+  const isRecoveryName = name => / 복구 사본(?: \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\))?$/.test(String(name || ''));
+  const api = { curveIntervals, object, validDate, daysInMonth, withDay, localDate, isDocument, structure, canonical, prepareImport,
+    scaleValue, toSignedScale, isRecoveryName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HaedoData = api;
 })(globalThis);
