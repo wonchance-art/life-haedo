@@ -2128,7 +2128,9 @@ function placePop(ax,ay){
   y=Math.max(8,Math.min(y,innerHeight-r.height-8)); /* 하한이 마지막에 이겨야 화면 밖으로 안 나감 */
   popEd.style.left=x+'px';popEd.style.top=y+'px';
 }
-function closePop(){popEd.hidden=true;popAnchor=null;}
+/* Closing the item editor takes in another tab's write that waited for it (adoptFromDisk), after
+   the handler that closed it has saved its own change (next task). */
+function closePop(){popEd.hidden=true;popAnchor=null;setTimeout(()=>{if(REG&&popEd.hidden)adoptFromDisk();},0);}
 document.addEventListener('click',e=>{if(!popEd.hidden&&!popEd.contains(e.target))closePop();});
 
 /* ==========================================================================
@@ -3029,6 +3031,7 @@ async function settleWithServer(docId,cfg,epoch){
   if(CLOUD!==cfg||cloudEpoch!==epoch||!Array.isArray(rows))return null;
   const reg=REG.docs.find(d=>d.id===docId);
   if(!reg)return null;
+  if(!openDocCurrent(docId))return 'later';
   const row=rows[0];
   if(!row){delete reg.syncedAt;if(!saveRegistry())return null;return 'local';} /* server row gone: send this edit again */
   if(!HaedoData.isDocument(row.data))return null;
@@ -3091,6 +3094,8 @@ async function cloudPushNow(docId){
   const state=value=>setCloudState(value,docId);
   const source=docId===curDocId?DATA:loadDoc(docId);
   if(!source||isPristineSample(source))return;
+  // Another tab's newer version of the open document waits for the editor: sent after it closes.
+  if(!openDocCurrent(docId))return;
   let disk=null;try{disk=JSON.parse(localStorage.getItem(REG_KEY))?.docs?.find(d=>d?.id===docId)||null;}catch(e){disk=null;}
   if(disk&&disk.syncedAt&&disk.updated===disk.syncedAt&&disk.syncedAt===reg.syncedAt){
     let body=null;try{body=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){body=null;}
@@ -3107,19 +3112,21 @@ async function cloudPushNow(docId){
   if(cfg.session?.uid)row.user_id=cfg.session.uid;
   state('sync');
   try{
-    const result=await HaedoSync.writeSnapshot({request:(url,opts)=>{if(CLOUD!==cfg||cloudEpoch!==epoch)throw new Error('연결이 변경됐습니다.');return cloudFetch(url,opts);},base:cloudBase(),headers:cloudHeaders,row,seen:reg.syncedAt});
+    // A stalled request does not hold the document's lock: it times out and is sent again later.
+    const result=await HaedoSync.writeSnapshot({request:HaedoSync.timed((url,opts)=>{if(CLOUD!==cfg||cloudEpoch!==epoch)throw new Error('연결이 변경됐습니다.');return cloudFetch(url,()=>opts);}),base:cloudBase(),headers:cloudHeaders,row,seen:reg.syncedAt});
     if(CLOUD!==cfg||cloudEpoch!==epoch||!REG.docs.includes(reg))return;
     if(result.conflict){
       // The server copy changed since this device last saw it: newest edit wins (2026-11-01).
       const settled=await settleWithServer(docId,cfg,epoch);
       if(settled==='local'){cloudQueue.schedule(docId);return;}
+      if(settled==='later')return;
       if(settled!=='remote')state('conflict');
       return;
     }
     reg.syncedAt=result.stamp;reg.cloudAccount=account;
     if(reg.updated===stamp||!reg.updated)reg.updated=result.stamp;
     if(!saveRegistry())throw new Error('로컬 저장 실패');state(reg.updated===reg.syncedAt?'ok':'sync');
-  }catch(e){if(CLOUD===cfg&&cloudEpoch===epoch)state(cloudState==='auth'?'auth':'err');}
+  }catch(e){if(CLOUD===cfg&&cloudEpoch===epoch)state(cloudState==='auth'?'auth':e?.code==='timeout'?'pending':'err');}
 }
 /* 한 번도 편집 안 된 기본 샘플은 DB로 올리지 않는다 (기기마다 샘플이 쌓이는 것 방지) */
 const PRISTINE_SEED=(()=>{const issues=DATA_ISSUES;const sample=migrateScale(structuredClone(DEFAULT_DATA));DATA_ISSUES=issues;return JSON.stringify(HaedoData.canonical(sample));})();
@@ -3155,7 +3162,8 @@ async function cloudPullAll(autoSwitch){
       if(dirty){
         /* Only this device changed it: send it (after a reopen nothing is queued yet). */
         if(row.updated_at===local.syncedAt){if(!cloudQueue.pending(local.id))cloudQueue.schedule(local.id);continue;}
-        // Both changed: newest edit wins, the other copy is kept first.
+        // Both changed: newest edit wins, the other copy is kept first (from the version on disk).
+        if(!openDocCurrent(local.id))continue;
         try{if(settleRow(local,row,cfg))cloudQueue.schedule(local.id);else if(local.syncedAt!==row.updated_at){conflict=true;setCloudState('conflict',row.id);}}
         catch(e){conflict=true;setCloudState('conflict',row.id);}
         continue;
@@ -3195,7 +3203,19 @@ async function cloudPullAll(autoSwitch){
 /* Another tab (일정의 행복도 입력, 다른 연표 탭) wrote the open document or the list: adopt it
    while no item editor is open. With an editor open, the next save keeps that version as a
    recovery copy before replacing it (persist). */
-let pointerBusy=false,adoptLater=false;
+var pointerBusy=false,adoptLater=false;
+/* The open document may be sent or settled only as the version on disk: when another tab wrote a
+   newer one (disk differs from bodySeen), it is taken in first. With the item editor open (or a
+   pointer gesture under way) nothing is sent or settled until it closes; this tab's memory never
+   goes out over another tab's write. */
+function openDocCurrent(docId){
+  if(docId!==curDocId)return true;
+  const raw=localStorage.getItem(DOC_PREFIX+docId);
+  if(raw===null||raw===bodySeen)return true;
+  if(!document.getElementById('popEd').hidden||pointerBusy)return false;
+  adoptFromDisk();
+  return localStorage.getItem(DOC_PREFIX+docId)===bodySeen;
+}
 function adoptFromDisk(){
   if(!REG||!curDocId||!document.getElementById('popEd').hidden)return;
   // Not under a drag or another pointer gesture: adopted when it ends.

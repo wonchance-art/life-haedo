@@ -314,7 +314,16 @@ async function main() {
           // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
           const names = await page.locator('.schedule-grid-label td').evaluateAll(cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
           if (width <= 760) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true], ['행복도', true]]);
-          else assert.deepEqual(names, [], 'wide: names stay in the row headers');
+          else {
+            assert.deepEqual(names, [], 'wide: names stay in the row headers');
+            // Wide: the row header wraps instead of cutting, and keeps the name as its title.
+            const heads = await page.locator('.schedule-habit-grid tbody th').evaluateAll(cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
+            assert.deepEqual(heads.filter(([text]) => text !== '행복도'), [['아침 산책', '아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true]]);
+          }
+          // The whole cell takes the tap, not only the 22px box.
+          const targets = await page.locator('.schedule-grid-check').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
+            const inner = cell.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight); return b.height >= 44 && b.width >= inner - 1; }));
+          assert.ok(targets.length && targets.every(Boolean), 'week ' + width + ': each check cell is a full-size target');
           // All seven days show without sideways scrolling inside the grid either (Sunday included).
           const fit = await page.evaluate(() => { const scroll = document.querySelector('.schedule-habit-scroll'), sunday = document.querySelector('.schedule-habit-grid thead th:last-child');
             const box = scroll.getBoundingClientRect(), day = sunday.getBoundingClientRect();

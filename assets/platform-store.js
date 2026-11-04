@@ -310,7 +310,8 @@
     return HaedoSync.exclusive("haedo-doc:" + captured.uid + ":" + id, () => uploadDocNow(captured, id));
   }
   async function uploadDocNow(captured, id) {
-    const k = model.keys(captured.uid), request = requestFor(captured);
+    // A stalled request times out (HaedoSync.timed) so it does not hold the document's lock.
+    const k = model.keys(captured.uid), request = HaedoSync.timed(requestFor(captured));
     for (let attempt = 0; attempt < 3; attempt++) {
       assertAccount(captured);
       const meta = model.registry(localStorage, captured.uid).docs.find(row => row.id === id);
@@ -355,7 +356,10 @@
   }
   async function uploadQueued(id, captured) {
     try { await uploadDoc(captured, id); docErrors.delete(id); }
-    catch (error) { if (current(captured)) docErrors.set(id, error?.message || "연표를 계정에 올리지 못했습니다."); }
+    catch (error) {
+      // A timeout is "not sent yet" (waiting), sent again on the next wake-up or retry.
+      if (current(captured)) { if (error?.code === "timeout") docErrors.delete(id); else docErrors.set(id, error?.message || "연표를 계정에 올리지 못했습니다."); }
+    }
     notify(captured);
     // Recovery documents this store made are sent too (only its own: see ownedDocs).
     if (current(captured)) for (const meta of model.registry(localStorage, captured.uid).docs)
@@ -372,6 +376,13 @@
     const value = { docId, chosenAt };
     localStorage.setItem(model.keys(captured.uid).base, JSON.stringify(value)); baseMemo = null;
     return value;
+  }
+  // A recorded timeline this device has not received yet (another device chose it): 행복도 waits
+  // for it, instead of going to another timeline or replacing the account's choice.
+  function waitingFor(captured) {
+    const record = readBase(captured);
+    if (!record) return null;
+    return model.registry(localStorage, captured.uid).docs.some(doc => doc.id === record.docId) ? null : record.docId;
   }
   function baseDoc(captured) {
     const k = model.keys(captured.uid), regText = localStorage.getItem(k.registry), baseText = localStorage.getItem(k.base);
@@ -477,15 +488,41 @@
         if (meta) Object.assign(meta, next); else reg.docs.push(next);
       }
       if (!reg.current && reg.docs.length) reg.current = reg.docs[0].id;
+      // 행복도 pressed while its timeline had not arrived: applied now that it is here (a value the
+      // other device set later for the same day wins; this device's is kept as a recovery copy).
+      for (const [id, days] of [...pendingHappiness]) {
+        const meta = reg.docs.find(doc => doc.id === id);
+        if (!meta || meta.updated !== meta.syncedAt) continue;     // a changed document already carries its days
+        let doc;
+        try { doc = JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { continue; }
+        if (!doc) continue;
+        let next = doc, lost = false;
+        for (const [date, entry] of days) {
+          const there = scoreOn(doc, date);
+          if (there !== null && there !== entry.n && !model.localWins(entry.at, meta.syncedAt)) { lost = true; continue; }
+          next = model.withHappiness(next, date, entry.n);
+        }
+        if (lost) keepLoserDoc(captured, reg, meta.name, applyPending(doc, days), next);
+        if (HaedoData.contentKey(next) === HaedoData.contentKey(doc)) { pendingHappiness.delete(id); continue; }
+        lastSynced.set(id, JSON.stringify(doc));
+        localStorage.setItem(k.docs + id, JSON.stringify(next));
+        meta.updated = new Date(Math.max(Date.now(), Date.parse(meta.updated || "") + 1 || 0)).toISOString();
+        ownedDocs.add(id); docQueue?.schedule(id);
+      }
+      savePending(captured);
       localStorage.setItem(k.registry, JSON.stringify(reg));
       serverIds = new Set(rows.map(row => row.id)); baseMemo = null;
       serverSeen = rows.reduce((latest, row) => (row.updated_at || "") > latest ? row.updated_at : latest, "");
-      // Changed documents this store wrote that the server does not have yet (new ones).
+      // Changed documents this store wrote that the server does not have yet (new ones), and on the
+      // 일정 screen recovery copies never sent (a copy made before a reopen is remembered by no page).
       for (const meta of reg.docs)
-        if (ownedDocs.has(meta.id) && !meta.syncedAt && meta.updated && !serverIds.has(meta.id)) docQueue?.schedule(meta.id);
-      // A recorded timeline deleted on another device: choose again and record it.
-      const record = readBase(captured);
-      if (record && !reg.docs.some(doc => doc.id === record.docId && (!doc.syncedAt || serverIds.has(doc.id) || doc.syncedAt > serverSeen))) {
+        if (!meta.syncedAt && meta.updated && !serverIds.has(meta.id) && (ownedDocs.has(meta.id) || following && HaedoData.isRecoveryName(meta.name))) {
+          ownedDocs.add(meta.id); docQueue?.schedule(meta.id);
+        }
+      // A recorded timeline deleted on another device (this device had it on the account and it is
+      // gone): choose again and record it. One not received yet is waited for, not replaced.
+      const record = readBase(captured), recorded = record && reg.docs.find(doc => doc.id === record.docId);
+      if (recorded && recorded.syncedAt && !serverIds.has(recorded.id) && recorded.syncedAt <= serverSeen) {
         localStorage.removeItem(k.base); baseMemo = null;
         const next = baseDoc(captured);
         if (next) writeBase(captured, next.id);
@@ -542,7 +579,9 @@
     // 행복도 of one day in the base timeline (null when not recorded).
     happiness(date) {
       if (!store.account) return null;
-      const captured = context(), meta = baseDoc(captured);
+      const captured = context(), waiting = waitingFor(captured);
+      if (waiting) { const entry = pendingHappiness.get(waiting)?.get(date); return entry && entry.n !== null ? { score: entry.n } : null; }
+      const meta = baseDoc(captured);
       if (!meta) return null;
       try { return model.happinessOn(JSON.parse(localStorage.getItem(model.keys(captured.uid).docs + meta.id)), date); }
       catch (_) { return null; }
@@ -551,6 +590,14 @@
     // saving the first value creates "내 연표" (the timeline editor's default); viewing never does.
     setHappiness(date, n) {
       const captured = context(), k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
+      const waiting = waitingFor(captured);
+      if (waiting) {
+        // Kept on this device until the recorded timeline arrives (applied in syncDocuments).
+        if (!pendingHappiness.has(waiting)) pendingHappiness.set(waiting, new Map());
+        pendingHappiness.get(waiting).set(date, { n, at: new Date().toISOString() });
+        savePending(captured); ownedDocs.add(waiting); notify(captured);
+        return waiting;
+      }
       let meta = baseDoc(captured), doc;
       if (meta) meta = reg.docs.find(row => row.id === meta.id);
       if (!meta) {
@@ -583,8 +630,13 @@
     // chosenAt) that the 일정 screen mirrors to the account (platformBase).
     get base() {
       if (!store.account) return null;
-      const captured = context(), meta = baseDoc(captured), record = readBase(captured);
-      return { docId: meta?.id || null, name: meta?.name || null, record };
+      const captured = context(), record = readBase(captured), waiting = waitingFor(captured);
+      if (waiting) return { docId: waiting, name: null, waiting: true, record };
+      const meta = baseDoc(captured);
+      // Two timelines with the same name (each device made "내 연표"): the date it was last changed tells them apart.
+      const twins = meta && model.registry(localStorage, captured.uid).docs.filter(doc => doc.name === meta.name && !HaedoData.isRecoveryName(doc.name)).length > 1;
+      const when = meta?.updated && !Number.isNaN(Date.parse(meta.updated)) ? new Date(meta.updated).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : "";
+      return { docId: meta?.id || null, name: meta ? meta.name + (twins && when ? " (" + when + " 수정)" : "") : null, waiting: false, record };
     },
     // A choice recorded on the account (another device): the later choice wins.
     adoptBase(value) {
@@ -598,7 +650,9 @@
     // Upload state of the base timeline: "ok" | "pending" | "error" (null without one).
     happinessState() {
       if (!store.account) return null;
-      const captured = context(), meta = baseDoc(captured);
+      const captured = context(), waiting = waitingFor(captured);
+      if (waiting) return pendingHappiness.get(waiting)?.size ? "pending" : null;
+      const meta = baseDoc(captured);
       if (!meta) return null;
       if (docErrors.has(meta.id)) return "error";
       return meta.updated === meta.syncedAt ? "ok" : "pending";

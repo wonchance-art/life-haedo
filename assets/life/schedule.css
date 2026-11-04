@@ -172,7 +172,8 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-habit-scroll { max-width: 100%; overflow-x: auto; }
 .schedule-habit-grid { border-collapse: collapse; font-size: var(--haedo-text-control); }
 .schedule-habit-grid th, .schedule-habit-grid td { min-width: 44px; height: 44px; padding: 0 4px; text-align: center; font-weight: 500; }
-.schedule-habit-grid tbody th { max-width: 12em; overflow: hidden; padding-right: 12px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-habit-grid tbody th { max-width: 12em; padding-right: 12px; text-align: left; overflow-wrap: anywhere; }
+.schedule-grid-check { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; cursor: pointer; }
 .schedule-habit-grid thead th { color: var(--ink-soft); font-size: var(--haedo-text-meta); }
 .schedule-habit-grid tr > th:first-child { position: sticky; left: 0; z-index: 1; background: var(--paper); text-align: left; }
 .schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }

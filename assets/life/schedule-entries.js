@@ -128,8 +128,9 @@
       const current = s.happiness(day), name = 'schedule-happiness-' + day;
       field.append(legend);
       // Which timeline it is written to (the account's choice), named plainly.
-      const target = s.base?.name;
-      if (target) field.append(el('p', '기록할 연표: ' + target, 'life-meta schedule-happiness-target'));
+      const target = s.base;
+      if (target?.waiting) field.append(el('p', '기록할 연표: 다른 기기에서 받는 중 · 받으면 기록합니다', 'life-meta schedule-happiness-target'));
+      else if (target?.name) field.append(el('p', '기록할 연표: ' + target.name, 'life-meta schedule-happiness-target'));
       const scale = el('div', null, 'schedule-happiness-scale');
       for (let n = 0; n <= 10; n++) {
         const label = el('label', null, 'schedule-happiness-option');
@@ -197,10 +198,11 @@
       const label = (text, cls = '') => { const row = el('tr', null, 'schedule-grid-label ' + cls); row.setAttribute('aria-hidden', 'true'); const cell = el('td', text); cell.colSpan = 8; row.append(cell); return row; };
       for (const item of habits) {
         tbody.append(label(item.data.title));
-        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; tr.append(th);
+        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; th.title = item.data.title; tr.append(th);
         week.forEach((day, i) => {
           const td = el('td');
-          if (model().scheduled(item.data, day)) td.append(habitCheck({ item }, day, item.data.title + ', ' + WEEK[i] + '요일'));
+          // The whole cell is the target (a label around the box), not only the 22px box.
+          if (model().scheduled(item.data, day)) { const hit = el('label', null, 'schedule-grid-check'); hit.append(habitCheck({ item }, day, item.data.title + ', ' + WEEK[i] + '요일')); td.append(hit); }
           tr.append(td);
         });
         tbody.append(tr);

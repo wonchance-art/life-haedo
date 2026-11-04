@@ -273,6 +273,81 @@ async function main() {
       const copy = (await allDocs(timeline)).find(d => RECOVERY.test(d.name));
       assert.ok(copy, 'the adopted version is kept'); assert.deepEqual(copy.data.happiness.map(({ date, v }) => ({ date, v })), [{ date: '2026-11-03', v: 0.6 }]);
     });
+
+    // Third re-review (0b328f7) blocker: with the item editor open, the timeline tab's memory must
+    // never go out over the 일정 tab's write. P1–P3 are the reviewer's reproductions.
+    const editorOpen = page => page.evaluate(() => { document.getElementById('popEd').hidden = false; });
+    const editorCancel = page => page.evaluate(() => closePop());
+    const pending = page => page.evaluate(id => localStorage.getItem('caeyeon_life_account_' + id + '_happiness_pending'), accounts.a.id);
+    await check('P3: the 일정 tab closes right after a 행복도 while the timeline editor is open; closing the editor takes it in and sends it', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await editorOpen(timeline);
+      await happiness(schedule, 9); await schedule.waitForTimeout(300); await schedule.close();   // before its 1.5 s upload
+      await timeline.waitForTimeout(300);
+      await editorCancel(timeline); await tabReturn(timeline);
+      await settled(tables, data => data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.8), 'the 일정 value on the account');
+      assert.equal(await timeline.evaluate(() => DATA.happiness.some(h => h.date === '2026-11-03' && h.v === 0.8)), true);
+      await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
+    });
+    await check('P2: the same while document writes fail; back online, the value still reaches the account', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await editorOpen(timeline);
+      tables.fail = 'haedo_documents';
+      await happiness(schedule, 9); await schedule.waitForTimeout(300); await schedule.close();
+      await editorCancel(timeline); await timeline.waitForTimeout(2500);
+      assert.notEqual((await timeline.locator('#saveStatus').textContent()).trim(), '동기화됨');
+      tables.fail = null;
+      await tabReturn(timeline);
+      await settled(tables, data => data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.8), 'the 일정 value after the network returns');
+    });
+    await check('P1: the timeline\'s own upload is waiting and its editor is open when the 일정 tab writes: both edits reach the account', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await timelineEdit(timeline, '대기 중 편집'); await editorOpen(timeline);
+      await happiness(schedule, 9);
+      await settled(tables, data => data.events.some(e => e.title === '대기 중 편집') && data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.8), 'both edits');
+      await schedule.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 15000 });
+      await schedule.waitForFunction(id => !localStorage.getItem('caeyeon_life_account_' + id + '_happiness_pending'), accounts.a.id, { timeout: 15000 });
+      await editorCancel(timeline);
+      await timeline.waitForFunction(() => DATA.happiness.some(h => h.date === '2026-11-03'));
+      assert.equal(await pending(timeline), null);
+    });
+
+    // Minor 5: the lock and the "already sent" skip each have a check of their own.
+    await check('two uploads of the same change at once send one PATCH (the per-document lock)', async ({ open, tables }) => {
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await schedule.waitForFunction(([reg, id]) => JSON.parse(localStorage.getItem(reg) || '{"docs":[]}').docs.some(d => d.id === id && d.syncedAt), [regKey(accounts.a.id), DOC]);
+      const patches = () => tables.calls.filter(call => call.table === 'haedo_documents' && call.method === 'PATCH').length, before = patches();
+      let release; tables.hold = new Promise(done => { release = done; });
+      const both = schedule.evaluate(() => { HaedoPlatformStore.setHappiness('2026-11-03', 4); const id = HaedoPlatformStore.base.docId;
+        return Promise.all([HaedoPlatformStore.uploadDocuments([id]), HaedoPlatformStore.uploadDocuments([id])]).then(() => 'ok', e => e.message); });
+      await schedule.waitForTimeout(800); tables.hold = null; release();
+      assert.equal(await both, 'ok');
+      await schedule.waitForTimeout(2500);                                       // the queued upload finds it clean
+      assert.equal(patches() - before, 1, 'one PATCH for one change');
+      assert.equal((await allDocs(schedule)).filter(d => / 복구 사본/.test(d.name)).length, 0);
+    });
+    await check('a version another page already sent is not sent again by the timeline (skip when the disk copy is clean)', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      const patches = () => tables.calls.filter(call => call.table === 'haedo_documents' && call.method === 'PATCH').length, before = patches();
+      await timelineEdit(timeline, '한 번만 보낼 편집');                            // its own upload waits 1.5 s…
+      await schedule.evaluate(id => HaedoPlatformStore.uploadDocuments([id]), DOC);   // …the 일정 page sends it first
+      await settled(tables, data => data.events.some(e => e.title === '한 번만 보낼 편집'), 'sent by the 일정 page');
+      await timeline.waitForTimeout(3000);
+      assert.equal(patches() - before, 1, 'the timeline does not send the same version again');
+      await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
+    });
+    await check('M1c: a timeline edit left unsent when its tab closed is sent by the 일정 page opened later', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      tables.fail = 'haedo_documents';
+      await timelineEdit(timeline, '닫힌 탭의 편집'); await timeline.waitForTimeout(2000); await timeline.close();
+      tables.fail = null;
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await settled(tables, data => data.events.some(e => e.title === '닫힌 탭의 편집'), 'sent by the 일정 page');
+    });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.consoleErrors, [], 'console errors');

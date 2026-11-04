@@ -459,3 +459,65 @@ test('the recovery notice counts copies by id: one that arrives later with an ea
   h.store.restoreRecovery([{ rid: 'from-ipad', id: 'g_other', kind: 'goal', data: goal(5), updated: null, keptAt: '2020-01-01T00:00:00.000Z', reason: 'remote_newer' }]);
   assert.equal(h.store.recoveryUnseen, 1);
 });
+
+// Third re-review (0b328f7) minors.
+test('a recorded timeline not on this device yet is waited for: 행복도 is kept and applied when it arrives (minor 1)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  // Another device chose d_far and uploaded it; this device has an older "내 연표" of its own.
+  h.local.setItem(model.keys('A').docs + 'd_near', JSON.stringify(model.emptyDocument('내 연표')));
+  h.local.setItem(model.keys('A').registry, JSON.stringify({ docs: [{ id: 'd_near', name: '내 연표', updated: '2026-11-01T00:00:00.000Z' }], current: 'd_near' }));
+  h.store.adoptBase({ docId: 'd_far', chosenAt: '2026-11-04T09:00:00.000Z' });
+  assert.equal(h.store.base.waiting, true);
+  assert.equal(h.store.setHappiness('2026-11-03', 8), 'd_far');
+  assert.deepEqual(plain(h.store.happiness('2026-11-03')), { score: 8 }, 'shown from the queue');
+  assert.equal(h.store.happinessState(), 'pending');
+  assert.equal(h.doc('d_near').happiness.length, 0, 'not written to another timeline');
+  await h.store.syncDocuments();
+  assert.equal(h.store.base.record.docId, 'd_far', 'not chosen again while it has not arrived');
+  cloud.write('haedo_documents', { id: 'd_far', name: '여행 연표', data: { ...model.emptyDocument('여행 연표'), scale: 'signed1' } });
+  h.store.followDocuments();
+  await h.store.syncDocuments(); await queueDelay();
+  assert.deepEqual(cloud.tables.haedo_documents.get('d_far').data.happiness, [{ date: '2026-11-03', v: 0.6 }]);
+  assert.equal(h.store.base.docId, 'd_far'); assert.equal(h.store.happinessState(), 'ok');
+});
+
+test('a recovery copy the 일정 store made but could not send is sent after a reopen (minor 3)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+  h.store.setHappiness('2026-11-03', 3);
+  cloud.advance(3 * 86400000);
+  const other = h.doc(id); other.happiness = [{ date: '2026-11-03', v: 0.8 }]; cloud.write('haedo_documents', { id, name: '내 연표', data: other });
+  cloud.failDocs = true;
+  await assert.rejects(h.store.uploadDocuments([id]));
+  cloud.failDocs = false;
+  await h.store.uploadDocuments([id]);                               // settles: the server's later 9 wins, a copy is made…
+  const copy = h.registry().docs.find(doc => RECOVERY.test(doc.name));
+  assert.ok(copy); assert.equal(cloud.tables.haedo_documents.has(copy.id), false, '…but not sent yet');
+  const again = reopen(t, cloud, h);
+  again.store.followDocuments();
+  await again.store.syncDocuments(); await queueDelay();
+  assert.equal(cloud.tables.haedo_documents.has(copy.id), true, 'the reopened 일정 page sends it');
+});
+
+test('a stalled upload times out and is left waiting, not failed; the next send goes through (minor 4)', async t => {
+  const cloud = server(), h = fixture(t, cloud), before = Sync.timeoutMs;
+  t.after(() => { Sync.timeoutMs = before; cloud.hold = null; });
+  const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+  Sync.timeoutMs = 150; cloud.hold = new Promise(() => {});        // the network never answers
+  h.store.setHappiness('2026-11-04', 7);
+  await new Promise(done => setTimeout(done, 2000));             // the queued upload runs and times out
+  assert.equal(h.store.happinessState(), 'pending', 'waiting, not "failed"');
+  await assert.rejects(h.store.uploadDocuments([id]), { code: 'timeout' });
+  cloud.hold = null;
+  await h.store.uploadDocuments([id]);
+  assert.equal(h.store.happinessState(), 'ok');
+  assert.deepEqual(cloud.tables.haedo_documents.get(id).data.happiness.map(e => e.date), ['2026-11-03', '2026-11-04']);
+});
+
+test('two timelines with the same name are told apart in the schedule label (minor 2)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  h.local.setItem(model.keys('A').docs + 'd_1', JSON.stringify(model.emptyDocument('내 연표')));
+  h.local.setItem(model.keys('A').docs + 'd_2', JSON.stringify(model.emptyDocument('내 연표')));
+  h.local.setItem(model.keys('A').registry, JSON.stringify({ docs: [{ id: 'd_1', name: '내 연표', updated: '2026-11-02T00:00:00.000Z' }, { id: 'd_2', name: '내 연표', updated: '2026-11-03T00:00:00.000Z' }], current: 'd_1' }));
+  assert.match(h.store.base.name, /^내 연표 \(.+ 수정\)$/);
+});

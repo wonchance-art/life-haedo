@@ -52,7 +52,23 @@
     const locks = root.navigator?.locks;
     return typeof locks?.request === 'function' ? locks.request(name, () => run()) : run();
   }
-  const api = { createQueue, writeSnapshot, exclusive };
+  // A request that cannot hold a document's lock forever: aborted after ms. The caller treats
+  // the timeout as "not sent yet" (code 'timeout') and sends again later.
+  function timed(request, ms) {
+    return (url, options) => {
+      ms = ms ?? api.timeoutMs;
+      const value = typeof options === 'function' ? options() : (options || {});
+      const controller = new AbortController(), late = () => Object.assign(new Error('응답이 늦어 잠시 뒤 다시 보냅니다.'), { code: 'timeout' });
+      let timer;
+      // Rejects at the limit even if the request ignores the abort (the request is aborted too).
+      const limit = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(late()); }, ms); });
+      const sent = Promise.resolve().then(() => request(url, { ...value, signal: controller.signal }))
+        .catch(error => { if (controller.signal.aborted) throw late(); throw error; });
+      return Promise.race([sent, limit]).finally(() => clearTimeout(timer));
+    };
+  }
+  // 30 s by default; checks shorten it.
+  const api = { createQueue, writeSnapshot, exclusive, timed, timeoutMs: 30000 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HaedoSync = api;
 })(globalThis);
