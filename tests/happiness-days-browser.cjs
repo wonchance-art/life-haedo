@@ -7,7 +7,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { PlatformTables } = require('./schedule-entries-browser.cjs');
@@ -32,7 +31,7 @@ async function until(check, label, ms = 15000) {
 async function shown(page, mode) {
   await page.waitForFunction(m => document.querySelector('#lifeMain')?.dataset.mode === m && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false', mode);
 }
-async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.querySelector('.schedule-happiness'); }); }
+async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.dataset.happiness !== 'loading' && slot.querySelector('.schedule-happiness'); }); }
 async function openDay(page, date) {
   await page.goto(base + '/index.html?section=schedule&view=day&date=' + date); await ready(page); await shown(page, 'day'); await entries(page);
 }
@@ -252,10 +251,19 @@ async function main() {
     });
 
     await check('mixed versions: an older storage.js next to the new 일정 writes nothing and asks for a refresh; the choice stays on screen', async ({ page, context, server }) => {
-      const older = execFileSync('git', ['show', process.env.HAPPINESS_OLD_REF || 'origin/main:assets/life/storage.js'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-      assert.equal(older.includes('writeHappinessDay'), false, 'the older module has no happinessDays');
-      await context.route('**/assets/life/storage.js', route => route.fulfill({ status: 200, contentType: 'application/javascript', body: older }));
+      // This release's storage.js without the happinessDays API (as an older cached module), made from the
+      // served file itself: no git history needed (CI checks out one commit), like sync-common-mixed-browser.
+      const api = 'readHappinessDays, writeHappinessDay, absorbTimelineDays,';
+      let replaced = 0;
+      await context.route('**/assets/life/storage.js', async route => {
+        const response = await route.fetch(), text = await response.text();
+        assert.equal(text.split(api).length, 2, 'the API line to remove is in storage.js exactly once');
+        replaced++;
+        await route.fulfill({ response, body: text.replace(api, '') });
+      });
       await openDay(page, '2026-11-03');
+      assert.ok(replaced >= 1, 'the older module was served');
+      assert.equal(await page.evaluate(() => typeof HaedoLife.Shell.storage.writeHappinessDay), 'undefined');
       await page.getByRole('radio', { name: '행복도 8' }).check();
       const notice = page.locator('.schedule-happiness-error[data-code="app_refresh_required"]');
       await notice.waitFor();
@@ -264,6 +272,52 @@ async function main() {
       await page.waitForTimeout(1500);
       assert.equal(accountDoc(server), null, 'nothing written');
       assert.equal(server.accountDocWrites().filter(row => String(row.body.p_doc_key).startsWith('happinessDays:')).length, 0);
+    });
+
+    // Review MINOR-3: 3 then 7 at once; the first write ends after the second failed. 7 stays chosen.
+    await check('a quick second choice stays on screen when its write fails after the first one ends', async ({ page, context, server }) => {
+      const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);let n=0;return Object.freeze({...actual,async writeHappinessDay(...a){n++;if(n===1){await new Promise(r=>setTimeout(r,800));return actual.writeHappinessDay(...a);}if(n===2)throw Object.assign(new Error('저장하지 못했습니다. 다시 시도해 주세요.'),{code:'storage_aborted'});return actual.writeHappinessDay(...a);}});}});})();`;
+      await context.route('**/assets/life/storage.js', async route => { const response = await route.fetch(); await route.fulfill({ response, body: (await response.text()) + hook }); });
+      await openDay(page, '2026-11-03');
+      await page.getByRole('radio', { name: '행복도 3' }).check();
+      await page.getByRole('radio', { name: '행복도 7' }).check();
+      await page.locator('.schedule-happiness-error').filter({ hasText: '저장하지 못했습니다' }).waitFor();
+      await page.waitForTimeout(1500); // the first write (3) ends here
+      assert.equal(await chosen(page), '7', 'the later choice stays on screen');
+      await until(() => entryOn(server, '2026-11-03')?.v === -0.4, 'the first write reached the account');
+    });
+
+    // Review nit: before the account document is read, no day shows a timeline's old value (a day
+    // deleted in 일정 D must not come back for a moment).
+    await check('while the account document is being read, a deleted day does not show the timeline\'s old value', async ({ page, context, server, tables }) => {
+      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: timeline([{ date: '2026-11-02', v: 0.4 }]) });
+      await openDay(page, '2026-11-02');
+      await page.waitForFunction(() => document.querySelector('.schedule-happiness input:checked')?.value === '7');
+      await page.getByRole('button', { name: '이 날 행복도 지우기' }).click();
+      await until(() => entryOn(server, '2026-11-02')?.v === null, 'deleted');
+      const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readHappinessDays(...a){await new Promise(r=>{window.__releaseRead=r;});return actual.readHappinessDays(...a);}});}});})();`;
+      await context.route('**/assets/life/storage.js', async route => { const response = await route.fetch(); await route.fulfill({ response, body: (await response.text()) + hook }); });
+      await page.reload(); await ready(page); await shown(page, 'day');
+      await page.waitForFunction(() => typeof window.__releaseRead === 'function' && document.querySelector('.schedule-entries')?.dataset.happiness === 'loading' && document.querySelector('.schedule-happiness'));
+      assert.equal(await chosen(page), null, 'nothing chosen while the read is held');
+      await page.evaluate(() => window.__releaseRead());
+      await entries(page);
+      assert.equal(await chosen(page), null, 'still deleted after the read');
+    });
+
+    await check('the editor drops a 행복도 read that ends after its account session changed', async ({ page, server, tables }) => {
+      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: timeline([{ date: '2026-10', v: 0.1 }]) });
+      server.accountDocs.set(accounts.a.id, new Map([[key(accounts.a), { revision: 1, data: { revision: 1, format: 1, entries: [{ date: '2026-10-02', v: 0.5, at: EPOCH }], migrated: [] }, deleted: false, client_updated_at: null, seq: 1 }]]));
+      await openEditor(page, 'd_timeline');
+      await page.waitForFunction(() => HAPDAYS.state === 'ready');
+      let release; server.accountDocReadHold = new Promise(done => { release = done; });
+      const pending = page.evaluate(() => loadHappinessDays());
+      await until(() => server.accountDocReads.length >= 2, 'second read started');
+      await page.evaluate(() => { cloudEpoch++; }); // the account session changed (dropSession/epoch), as on a switch
+      server.accountDocs.get(accounts.a.id).get(key(accounts.a)).data.entries[0].v = -0.9;
+      release(); server.accountDocReadHold = null; await pending;
+      assert.deepEqual(await page.evaluate(() => [HAPDAYS.state, HAPDAYS.entries.map(e => e.v)]), ['ready', [0.5]], 'the late result was not taken');
+      assert.deepEqual(await page.evaluate(() => HAPVIEW.filter(p => p.account).map(p => p.v)), [0.5], 'the drawing keeps the earlier value');
     });
 
     for (const width of [1440, 390]) await check('the day input fits ' + width + ' with 44px targets and no horizontal scroll', async ({ page }) => {

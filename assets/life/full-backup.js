@@ -313,12 +313,17 @@
     if (task.kind === 'timeline') {
       // 하루 행복도(계정 문서 happinessDays)는 연표 부분의 필드로 담는다: account-documents.json과 ZIP 파일
       // 목록은 그대로라 옛 판도 이 ZIP을 연다(옛 판은 이 필드를 무시한다). 복원은 연표 가져오기가 한다.
-      const value = await timeline();
+      const value = await timeline(), skipped = [];
       if (typeof storage?.readHappinessDays === 'function') {
-        const days = await storage.readHappinessDays();
-        if (days.entries.length) value.happinessDays = { entries: days.entries };
+        // A 행복도 read failure (e.g. a newer app's format) never takes the timeline part down with it.
+        try {
+          const days = await storage.readHappinessDays();
+          if (days.entries.length) value.happinessDays = { entries: days.entries };
+        } catch (error) {
+          skipped.push({ kind: 'timeline', workspace: null, error: '하루 행복도를 읽지 못해 이 파일에 담지 않았습니다. ' + message(error) });
+        }
       }
-      return { value };
+      return { value, skipped };
     }
     throw fault('unknown_part', '알 수 없는 백업 항목입니다.');
   }

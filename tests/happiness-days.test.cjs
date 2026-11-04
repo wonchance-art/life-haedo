@@ -491,3 +491,26 @@ test('happinessFor: the account entry first (a deletion shows nothing), else a d
   assert.deepEqual(Model.happinessFor(entries, timeline, '2026-10-02'), { v: 0.4, score: 7 });
   assert.equal(Model.happinessFor(entries, timeline, '2026-10-03'), null);
 });
+
+// Review MINOR-4: a row recorded from a server version is not read again with a device time (an older
+// page, or a registry whose syncedAt was lost): stale, nothing written.
+test('a timeline recorded from its server version refuses a device-time pass', async t => {
+  const local = device(); t.after(() => local.base.close());
+  const store = local.base.forAccount(accountA);
+  await absorb(store, 'd1', { '2026-10-01': { v: 0.1 } }, { server: '2026-11-01T00:00:00.000Z' });
+  const revision = (await store.readHappinessDays()).revision;
+  const result = await absorb(store, 'd1', { '2026-10-01': { v: 0.9 }, '2026-10-02': { v: 0.5 } }, { local: '2026-12-01T00:00:00.000Z' });
+  assert.equal(result.status, 'stale');
+  const value = await store.readHappinessDays();
+  assert.equal(value.revision, revision);
+  assert.deepEqual(value.entries.map(e => [e.date, e.v]), [['2026-10-01', 0.1]]);
+});
+
+test('validator: at most 1000 migrated rows', async t => {
+  const local = device(); t.after(() => local.base.close());
+  const store = local.base.forAccount(accountA), key = docKey(), record = await store.readAccountDocRecord(key);
+  const rows = n => Array.from({ length: n }, (_, i) => ({ docId: 'd' + i, at: EPOCH, seenAt: null, localSeenAt: null, dates: {} }));
+  const base = { revision: 1, format: 1, entries: [] };
+  assert.equal((await store.applyAccountDoc(key, { value: { ...base, migrated: rows(1001) }, expectedHash: record.hash })).error.code, 'invalid_happiness_days');
+  assert.equal((await store.applyAccountDoc(key, { value: { ...base, migrated: rows(1000) }, expectedHash: record.hash })).status, 'applied');
+});

@@ -820,3 +820,16 @@ test('행복도 복원: copies get the points shown at backup time on signed1, e
   const none = { format: 'haedo-platform-backup-v1', docs: [{ data: docA }] };
   assert.equal(PlatformData.restoreBackupDays(none).backup, none);
 });
+
+test('행복도를 읽지 못해도(새 앱의 형식 등) 연표 부분은 담기고, 담지 못한 이유가 목록에 남는다', async () => {
+  const memory = memoryIdb(), storage = createStorage({ idb: memory.idb, core: Core, channelFactory: null, account: owner });
+  const newer = Object.create(storage, { readHappinessDays: { value: async () => { throw Object.assign(new Error('앱을 새로고침한 뒤 다시 시도해 주세요. 값은 그대로 있습니다.'), { code: 'app_refresh_required' }); } } });
+  const { built, failed } = await fullBundle(newer);
+  assert.deepEqual(failed, []);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
+  const timeline = JSON.parse(Buffer.from(files['timeline-goals-habits.json']).toString());
+  assert.equal(timeline.format, 'haedo-platform-backup-v1'); assert.equal(Object.hasOwn(timeline, 'happinessDays'), false);
+  const missing = built.manifest.missing.filter(row => row.kind === 'timeline');
+  assert.equal(missing.length, 1); assert.equal(missing[0].reason, 'skipped');
+  assert.match(missing[0].error, /하루 행복도를 읽지 못해/);
+});

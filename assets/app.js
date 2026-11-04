@@ -502,8 +502,10 @@ async function loadHappinessDays(){
     else next={state:'ready',entries:data.entries.filter(e=>e&&isDayDate(e.date)&&(e.v===null||(typeof e.v==='number'&&Math.abs(e.v)<=1)))};
   }catch(e){next={state:'failed',entries:null};}
   if(stale())return;
+  /* 같은 판이면 다시 그리지 않는다(60초 주기·탭 복귀마다 곡선을 새로 만들지 않게) */
+  const same=JSON.stringify([HAPDAYS.state,HAPDAYS.entries])===JSON.stringify([next.state,next.entries]);
   HAPDAYS={...next,token};
-  repaintHappiness();
+  if(!same)repaintHappiness();
 }
 let hapHeld=false;
 window.addEventListener('pointerdown',()=>{hapHeld=true;},true);

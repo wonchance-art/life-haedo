@@ -51,7 +51,7 @@
           try {
             const value = await storage.readHappinessDays();
             if (!same()) return;
-            m.entries = value.entries; m.refresh = false;
+            m.entries = value.entries; m.refresh = false; m.error = null;
           } catch (error) {
             if (!same()) return;
             if (error?.code === 'app_refresh_required') m.refresh = true;
@@ -86,7 +86,11 @@
             isCurrent: () => same() && s.account === uid });
         } while (m.absorbAgain && same());
       })().catch(error => {
-        if (error?.code === 'app_refresh_required' && same()) { m.refresh = true; repaint(); }
+        if (!same() || ['storage_scope_closed', 'auth_scope_required', 'account_changed'].includes(error?.code)) return;
+        // Said on the 일정 (one line), not swallowed: e.g. a full 행복도 document stops moving timeline days.
+        if (error?.code === 'app_refresh_required') m.refresh = true;
+        else m.error = '연표의 하루 행복도를 옮기지 못했습니다. 연표의 값은 그대로 있습니다. ' + (error?.message || '');
+        repaint();
       }).finally(() => { m.absorbing = null; });
     };
     // 일정 D: score 0–10 or null (지우기). The choice stays on screen until it is stored.
@@ -96,7 +100,8 @@
       try {
         await storage.writeHappinessDay(date, score === null ? null : (score - 5) / 5);
         if (!same()) return;
-        m.pending.delete(date);
+        // A later choice for the same day stays on screen until its own write ends.
+        if (m.pending.get(date) === score) m.pending.delete(date);
         await m.load();
       } catch (error) {
         if (!same()) return;
@@ -344,9 +349,14 @@
       const active = document.activeElement;
       if (active && host.contains(active) && active.matches('input[type=range]') && active.matches(':active')) return;
       const focusKey = host.contains(active) ? active?.dataset?.focusKey : null;
-      if (kind !== 'year') mood = s.happinessReader(days?.entries ?? null);
+      // Until the account document is read (or when it cannot be), no day shows a timeline's old point:
+      // a day deleted in 일정 D must not come back as its old value for a moment. A page whose storage has
+      // no happinessDays (mixed versions) shows the timeline's points as before.
+      if (kind !== 'year') mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
       painted = true;
+      // 'loading' until the 행복도 document is read here (one more repaint follows), then 'ready'.
+      host.dataset.happiness = kind !== 'year' && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
       const itemState = saveState(s.items), moodState = kind === 'day' && days ? days.sync : 'ok';
       const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
       const unseen = s.recoveryUnseen;

@@ -56,7 +56,7 @@ const statusOf = page => page.locator('.schedule-entry-status').first();
 async function shown(page, mode) {
   await page.waitForFunction(m => document.querySelector('#lifeMain')?.dataset.mode === m && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false', mode);
 }
-async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }); }
+async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.dataset.happiness !== 'loading' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }); }
 async function overflow(page, label) {
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   if (wide) report.overflow.push(label);
