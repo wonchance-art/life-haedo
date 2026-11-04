@@ -1732,7 +1732,6 @@
         const active = document.activeElement;
         if (active && form.contains(active)) active.blur();
       });
-      history.append(hideKeyboard);
       const photoInput = el("input");
       photoInput.type = "file";
       photoInput.multiple = true;
@@ -1749,7 +1748,22 @@
       const insertPhoto = button("사진", () => photoInput.click());
       insertPhoto.classList.add("photo-insert-photo");
       insertPhoto.prepend(glyph("image"));
-      toolbar.append(insertPhoto, primaryFormats, extraFormats, history, photoInput);
+      // The floating bar is one ordered list of items (D1). A later control,
+      // e.g. the planned AI 제안, joins this list with its own id. Width budget:
+      // seven 44px controls fit 360px; an eighth needs another item moved into
+      // 서식 below 390px (photo-post.css, floating tools on phones).
+      const toolItems = [
+        ["photo", insertPhoto],
+        ["inline", primaryFormats],
+        ["formats", extraFormats],
+        ["history", history],
+        ["keyboard", hideKeyboard],
+      ];
+      for (const [id, node] of toolItems) {
+        node.dataset.tool = id;
+        toolbar.append(node);
+      }
+      toolbar.append(photoInput);
       const area = el("div", null, "photo-quill");
       // The tools float at the bottom of the screen (above the keyboard on
       // phones) instead of a row between the title and the text.
