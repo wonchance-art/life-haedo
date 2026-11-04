@@ -20,7 +20,8 @@
   // Local saves of these types may change a synced document.
   const TRIGGERS = new Set(['account_doc_changed', 'reading_position_changed', 'interest_profile_changed', 'annual_plan_changed',
     'discovery_profile_changed', 'discovery_settings_changed', 'discovery_language_settings_changed', 'discovery_actions_changed',
-    'discovery_reading_changed', 'public_cover_changed', 'photo_posts_changed', 'workbench_changed', 'platform_recovery_changed']);
+    'discovery_reading_changed', 'public_cover_changed', 'photo_posts_changed', 'workbench_changed', 'platform_recovery_changed',
+    'happiness_days_changed']);
   const STOP = new Set(['auth_required', 'request_cancelled', 'schema_missing', 'permission_denied', 'storage_scope_closed', 'storage_closed']);
   const fault = (code, message) => Object.assign(new Error(message || '자동 저장을 진행하지 못했습니다.'), { code });
   const time = value => { const parsed = Date.parse(value || EPOCH); return Number.isFinite(parsed) ? parsed : 0; };
@@ -38,7 +39,10 @@
     interestProfile: [{ path: 'manual', key: 'id' }, { path: 'confirmedIds' }],
     annualPlan: [{ path: 'rows', key: 'year', sort: (a, b) => a.year - b.year }, { path: 'entries', key: 'id', sort: byDate('date') }],
     // Recovery copies of goals/habits: added on any device, never edited, so the union is kept.
-    platformRecovery: [{ path: 'items', key: 'rid', time: 'keptAt', sort: byDate('keptAt') }]
+    platformRecovery: [{ path: 'items', key: 'rid', time: 'keptAt', sort: byDate('keptAt') }],
+    // 하루 행복도: 날짜마다 한 항목, 같은 날을 두 기기가 고치면 늦게 고친 쪽(at). 연표 문서마다 한
+    // 줄인 이행 표시(migrated)도 연표별로 합친다(happiness-single-writer.md).
+    happinessDays: [{ path: 'entries', key: 'date', time: 'at', sort: byDate('date') }, { path: 'migrated', key: 'docId', time: 'at' }]
   });
   function canonical(value) {
     if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';

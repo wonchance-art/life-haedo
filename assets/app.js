@@ -463,7 +463,74 @@ const valAtY=y=>2*(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)-1;
 /* ==========================================================================
    전처리 + 레이아웃
    ========================================================================== */
-let LAYOUT={}, NLANES=1, HAPPTS=[];
+let LAYOUT={}, NLANES=1, HAPPTS=[], HAPVIEW=[];
+/* 하루 행복도(2026-11-04 소유자 결정, happiness-single-writer.md 1단계): 정본은 계정 문서 happinessDays이고
+   입력은 일정 D에서만 한다. 이 편집기는 계정 화면에서 하루 값을 보기만 한다(HAPDAY_LOCK).
+   곡선의 점은 연표 문서의 점에 계정 문서의 하루 값을 더한 사본(HAPVIEW)이다 — DATA.happiness에는
+   넣지 않는다(persist가 DATA를 연표 문서로 저장하므로, 넣으면 쓰는 곳이 둘이 된다). */
+const HAPDAY_LOCK=!!window.HAEDO_CONTEXT&&!RO;
+const isDayDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d);
+let HAPDAYS={state:HAPDAY_LOCK?'loading':'off',entries:null,token:0};
+function hapView(){
+  const own=DATA.happiness.map(h=>({date:h.date,v:h.v,future:!!h.future,day:isDayDate(h.date),account:false,src:h}));
+  let pts=own;
+  if(HAPDAY_LOCK){
+    const shown=HAPDAYS.state==='ready'||HAPDAYS.state==='none';
+    /* 읽지 못했거나 읽는 중: 하루 점을 모두 숨긴다(옛 값을 최신처럼 보이지 않게). 월 점은 그대로 */
+    if(!shown)pts=own.filter(p=>!p.day);
+    else if(window.HaedoPlatformData?.curvePoints)pts=HaedoPlatformData.curvePoints({happiness:DATA.happiness,scale:'signed1'},HAPDAYS.entries||[]);
+  }
+  return pts.map(p=>{const t=T(p.date);return{date:p.date,v:p.v,future:p.future,day:p.day,account:p.account,src:p.src,
+    locked:HAPDAY_LOCK&&p.day,t,fut:!!p.future||t>NOW};});
+}
+const scheduleDayHref=d=>'index.html?section=schedule&view=day&date='+encodeURIComponent(d);
+/* 계정 문서 한 개를 GET 한 번으로 읽는다(쓰지 않는다). IDB는 storage.js의 판 올림과 얽히므로 열지 않는다.
+   계정이 바뀌거나 다시 읽기를 시작하면 늦게 온 결과는 버린다. 끌기·팝업·입력 중에는 다시 그리지 않고 끝난 뒤 그린다 */
+async function loadHappinessDays(){
+  if(!HAPDAY_LOCK||!CLOUD?.session?.uid)return;
+  const token=++HAPDAYS.token,uid=CLOUD.session.uid,epoch=cloudEpoch;
+  const stale=()=>token!==HAPDAYS.token||epoch!==cloudEpoch||CLOUD?.session?.uid!==uid||window.HaedoAuth?.user?.id!==uid;
+  let next;
+  try{
+    const origin=new URL(CLOUD.url).origin,key='happinessDays:'+JSON.stringify([origin,uid])+':days';
+    const r=await cloudFetch(origin+'/rest/v1/life_account_documents?select=data,deleted&doc_key=eq.'+encodeURIComponent(key),()=>({headers:cloudHeaders()}));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const rows=await r.json();
+    const row=Array.isArray(rows)?rows[0]:null,data=row&&!row.deleted?row.data:null;
+    if(!data)next={state:'none',entries:[]};
+    else if(data.format!==1||!Array.isArray(data.entries))next={state:'failed',entries:null};
+    else next={state:'ready',entries:data.entries.filter(e=>e&&isDayDate(e.date)&&(e.v===null||(typeof e.v==='number'&&Math.abs(e.v)<=1)))};
+  }catch(e){next={state:'failed',entries:null};}
+  if(stale())return;
+  /* 같은 판이면 다시 그리지 않는다(60초 주기·탭 복귀마다 곡선을 새로 만들지 않게) */
+  const same=JSON.stringify([HAPDAYS.state,HAPDAYS.entries])===JSON.stringify([next.state,next.entries]);
+  HAPDAYS={...next,token};
+  if(!same)repaintHappiness();
+}
+let hapHeld=false;
+window.addEventListener('pointerdown',()=>{hapHeld=true;},true);
+window.addEventListener('pointerup',()=>{hapHeld=false;},true);
+window.addEventListener('pointercancel',()=>{hapHeld=false;},true);
+let hapRepaintTimer=null;
+function repaintHappiness(){
+  clearTimeout(hapRepaintTimer);hapRepaintTimer=null;
+  const el=document.activeElement;
+  const typing=el&&el!==document.body&&(el.matches?.('input,textarea,select,[contenteditable="true"]'));
+  if(hapHeld||!popEd.hidden||typing){hapRepaintTimer=setTimeout(repaintHappiness,400);return;}
+  prepare();render();updateHapNote();
+}
+function updateHapNote(){
+  let note=document.getElementById('hapDaysNote');
+  const failed=HAPDAY_LOCK&&HAPDAYS.state==='failed';
+  if(!failed){if(note)note.hidden=true;return;}
+  if(!note){
+    note=document.createElement('p');note.id='hapDaysNote';note.className='hap-days-note';note.setAttribute('role','status');
+    note.append('하루 행복도를 불러오지 못해 하루 값은 숨겼어요. ');
+    const a=document.createElement('a');a.href='index.html?section=schedule&view=day';a.textContent='일정에서 보기';note.append(a);
+    document.querySelector('#chartView .chart-help')?.before(note);
+  }
+  note.hidden=false;
+}
 function prepare(){
   NOW=T(HaedoData.localDate());
   /* fut = 화면상 '예정' — 예정 체크했거나 아직 오지 않은 날. 저장값 future는 건드리지 않는다 */
@@ -473,6 +540,7 @@ function prepare(){
   DATA.spans.sort((a,b)=>a.t0-b.t0);
   DATA.happiness.forEach(h=>{h.t=T(h.date);h.fut=!!h.future||h.t>NOW;});
   DATA.happiness.sort((a,b)=>a.t-b.t);
+  HAPVIEW=hapView();
   DATA.records=DATA.records||[];
   DATA.records.forEach(r=>r.t=T(r.m));
   (DATA.layers||[]).forEach(l=>{l.pts.forEach(p=>p.t=T(p.date));l.pts.sort((a,b)=>a.t-b.t);});
@@ -490,7 +558,7 @@ function prepare(){
     c.vals.push(v);
     if(!future)c.fut=false;
   };
-  DATA.happiness.forEach(h=>addC(h.date,h.t,h.v,h.fut));
+  HAPVIEW.forEach(h=>addC(h.date,h.t,h.v,h.fut));
   DATA.events.filter(e=>e.happiness!=null).forEach(e=>addC(e.date,e.t,e.happiness,e.fut));
   /* 기간 행복도 = 그 시기의 기조 — 기록이 없는 달만 메운다. 겹치면 짧은 기간이 이긴다 */
   {
@@ -541,7 +609,7 @@ function prepare(){
   LAYOUT=L;
 
   const allT=[...DATA.events.map(e=>e.t),...DATA.spans.flatMap(s=>[s.t0,s.t1??NOW+0.5]),
-              ...DATA.happiness.map(h=>h.t),...DATA.eras.flatMap(e=>[T(e.start),T(e.end)]),
+              ...HAPVIEW.map(h=>h.t),...DATA.eras.flatMap(e=>[T(e.start),T(e.end)]),
               ...(DATA.layers||[]).flatMap(l=>l.pts.map(p=>p.t)),...DATA.thoughts.map(th=>th.t)];
   const mn=allT.length?Math.min(...allT):NOW-10, mx=allT.length?Math.max(...allT):NOW+2;
   FULL=[Math.min(mn,NOW)-1.2,Math.max(mx,NOW)+1.5]; BOUND=[Math.min(mn,NOW)-4,Math.max(mx,NOW)+5];
@@ -958,7 +1026,7 @@ function render(){
   /* 표식 자리를 먼저 잡아 둔다 — 글자가 점·막대·생각표식 위에 얹히지 않게 */
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
   if(SHOW.ev)DATA.events.forEach(e=>{const x=X(e.t),y=HY(e.happiness!=null?e.happiness:0);reserve(x-7,y-7,x+7,y+7);});
-  if(SHOW.hap)DATA.happiness.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
+  if(SHOW.hap)HAPVIEW.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
   /* 생각 ❝ — 화면 26px 격자로 묶는다. 매달 이어지면 표식이 띠가 되어 곡선을 덮는다.
      사건처럼 '붙은 것끼리 연쇄로' 묶으면 전체 보기에서 통째로 한 덩어리가 된다 */
   const TH_GAP=26;
@@ -1302,7 +1370,7 @@ function render(){
   if(SHOW.span)spGroups.forEach(q=>{if(q.list.length>1)renderSpanCluster(q);else renderSpan(q.list[0]);});
 
   /* 독립 행복도 값 — 각자 자기 높이에 (곡선은 월 평균을 지나감) */
-  const hpDots=SHOW.hap?DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.fut}})):[];
+  const hpDots=SHOW.hap?HAPVIEW.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h.src,date:h.date,v:h.v,future:h.fut,locked:h.locked,account:h.account}})):[];
   hpDots.forEach(p=>{
     if(p.x<-20||p.x>W+20)return;
     const pt=p.pt, isEv=pt.kind==='event';
@@ -1317,12 +1385,13 @@ function render(){
       ?el('circle',{cx:p.x,cy:p.y,r:4,fill:'none',stroke:PIN_GRAY,'stroke-width':2.2,'stroke-dasharray':'3 2.4'})
       :el('circle',{cx:p.x,cy:p.y,r:4,fill:PIN_GRAY,stroke:PIN_PAPER,'stroke-width':1.6});
     g.appendChild(dot);
-    const getV=()=>isEv?pt.src.happiness:pt.src.v;
-    const setV=v=>{if(isEv)pt.src.happiness=v;else pt.src.v=v;};
+    const getV=()=>isEv?pt.src.happiness:(pt.src?pt.src.v:pt.v);
+    const setV=v=>{if(isEv)pt.src.happiness=v;else if(pt.src)pt.src.v=v;};
     const tipHtml=v=>`<span class="yy">${esc(pt.date)}</span> · 행복도 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
     let drag=null;
+    if(pt.locked)g.setAttribute('cursor','pointer');
     g.addEventListener('pointerdown',ev=>{ /* 자유 드래그: 상하 = 값, 좌우 = 시기 */
-      if(RO)return;
+      if(RO||pt.locked)return; /* 하루 값은 일정 D에서 고친다(1단계) */
       ev.stopPropagation();
       try{g.setPointerCapture(ev.pointerId);}catch(_){}
       const q=svgXY(ev);
@@ -1360,6 +1429,8 @@ function render(){
       if(isEv){ /* 사건 값 → 사건 팝오버로 통합 편집 */
         selected=pt.src;render();renderDetail();
         openPop(pt.src,rc.left+p.x,rc.top+p.y);
+      }else if(pt.locked){
+        openPopHapDay(pt,rc.left+p.x,rc.top+p.y);
       }else{
         openPopHap(pt.src,rc.left+p.x,rc.top+p.y);
       }
@@ -1372,6 +1443,8 @@ function render(){
           openPop(pt.src,rc.left+p.x,rc.top+p.y);
         }],
         ['곡선에서 제외 (행복도 해제)','',()=>{pt.src.happiness=undefined;afterMutate(selected!=null);}],
+      ]:pt.locked?[
+        ['일정에서 고치기','',()=>{location.href=scheduleDayHref(pt.date);}],
       ]:[
         [`✕ 값 삭제 (${pt.date} · ${getV().toFixed(1)})`,'danger',()=>{
           const i=DATA.happiness.indexOf(pt.src);
@@ -1857,6 +1930,21 @@ function openPop(it,ax,ay){
   placePop(ax,ay);
   requestAnimationFrame(()=>q('.pe-title').focus());
 }
+/* 하루 값(1단계): 보기와 일정 D로 가는 링크만. 값·날짜·삭제는 일정에서 한다 */
+function openPopHapDay(pt,ax,ay){
+  popAnchor={x:ax,y:ay};
+  const v=(pt.v>0?'+':'')+pt.v.toFixed(2);
+  popEd.innerHTML=`
+    <div class="pe-row" style="justify-content:space-between">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">하루 행복도</span>
+      ${pt.future?'<span class="dt-lab">예정</span>':''}
+    </div>
+    <p class="pe-row hap-day-value"><span>${esc(pt.date)}</span> <strong>${esc(v)}</strong></p>
+    <p class="pe-row hap-day-help">하루 행복도는 일정에서 입력하고 고칩니다.</p>
+    <div class="pe-actions"><a class="btn btn-xs" data-a="schedule" href="${esc(scheduleDayHref(pt.date))}">일정에서 고치기</a></div>`;
+  placePop(ax,ay);
+  requestAnimationFrame(()=>popEd.querySelector('[data-a="schedule"]')?.focus());
+}
 function openPopHap(h,ax,ay){
   if(RO)return;
   popAnchor={x:ax,y:ay};
@@ -1871,7 +1959,11 @@ function openPopHap(h,ax,ay){
     </div>
     <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
-  bindDate(q('[data-f="date"]'),v=>{h.date=v;popCommit();});
+  bindDate(q('[data-f="date"]'),v=>{
+    /* 1단계: 월 점을 하루 점으로 바꾸면 연표 문서에 하루 값을 쓰게 된다 — 하루 값은 일정 D에서만 */
+    if(HAPDAY_LOCK&&isDayDate(v)&&!isDayDate(h.date)){q('[data-f="date"]').value=h.date;window.showToast?.('하루 행복도는 일정에서 입력합니다.');return;}
+    h.date=v;popCommit();
+  });
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){h.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=h.v;};
   q('[data-f="future"]').onchange=e=>{h.future=e.target.checked||undefined;popCommit();};
   q('[data-a="del"]').onclick=()=>{
@@ -3030,8 +3122,8 @@ async function cloudPullAll(autoSwitch){
 }
 /* 온라인 전용 사용: 자동 풀 — 탭 복귀 시 + 60초 주기 (다른 기기의 수정이 저절로 반영) */
 if(!RO){
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CLOUD)cloudPullAll();});
-  setInterval(()=>{if(CLOUD&&!document.hidden)cloudPullAll();},60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CLOUD){cloudPullAll();loadHappinessDays();}});
+  setInterval(()=>{if(CLOUD&&!document.hidden){cloudPullAll();loadHappinessDays();}},60000);
 }
 (function cloudUI(){
   if(RO)return;
@@ -3829,4 +3921,4 @@ prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebu
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
   addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
-if(!RO&&CLOUD)cloudPullAll(); /* 온라인 DB에서 최신 문서 당겨오기 */
+if(!RO&&CLOUD){cloudPullAll();loadHappinessDays();} /* 온라인 DB에서 최신 문서 당겨오기 · 하루 행복도 읽기 */
