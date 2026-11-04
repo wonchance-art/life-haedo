@@ -44,7 +44,15 @@
     if (!Array.isArray(saved) || saved.length !== 1) return { conflict: true };
     return { stamp: saved[0].updated_at || row.updated_at };
   }
-  const api = { createQueue, writeSnapshot };
+  // One upload of a document at a time across this browser's tabs and pages (Web Locks). A second
+  // writer waits for the first and then reads what it stored (its own dirty check sees a clean
+  // document and sends nothing). Without the API it just runs: the dirty check and the
+  // conditional write still keep both copies (at worst one extra request).
+  function exclusive(name, run) {
+    const locks = root.navigator?.locks;
+    return typeof locks?.request === 'function' ? locks.request(name, () => run()) : run();
+  }
+  const api = { createQueue, writeSnapshot, exclusive };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HaedoSync = api;
 })(globalThis);

@@ -37,6 +37,15 @@ async function settled(tables, test, label) {
   while (Date.now() < deadline) { const row = tables.rows.haedo_documents.get(DOC); if (row && test(row.data)) return row; await new Promise(done => setTimeout(done, 200)); }
   throw new Error('server copy never reached: ' + label + '\n' + JSON.stringify(tables.rows.haedo_documents.get(DOC)?.data));
 }
+// The tab is hidden and shown again (visibilitychange), as when returning to it.
+const tabReturn = page => page.evaluate(async () => {
+  for (const hidden of [true, false]) {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(done => setTimeout(done, 50));
+  }
+});
 const local = (page, id) => page.evaluate(([reg, key]) => ({ reg: JSON.parse(localStorage.getItem(reg)), doc: key && JSON.parse(localStorage.getItem(key)) }), [regKey(accounts.a.id), id ? docKey(accounts.a.id, id) : null]);
 const allDocs = page => page.evaluate(([reg, prefix]) => JSON.parse(localStorage.getItem(reg)).docs.map(d => ({ ...d, data: JSON.parse(localStorage.getItem(prefix + d.id)) })), [regKey(accounts.a.id), 'caeyeon_life_account_' + accounts.a.id + '_doc_']);
 
@@ -53,7 +62,12 @@ async function main() {
     const open = async () => {
       const page = await context.newPage(); page.setDefaultTimeout(15000); await page.clock.setFixedTime(new Date(TODAY));
       page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
-      page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); });
+      page.on('console', event => {
+        if (event.type() !== 'error') return;
+        // Document writes the check makes fail on purpose (offline).
+        if (tables.fail && /Failed to load resource:.*500/.test(event.text())) return;
+        report.consoleErrors.push({ check: name, message: event.text() });
+      });
       pages.push(page); return page;
     };
     console.log('RUN ' + name);
@@ -153,14 +167,6 @@ async function main() {
     await check('one uploader per document: edits and tab returns send one PATCH each, with no conflict, copy or orphan', async ({ open, tables }) => {
       const timeline = await open(); await openTimeline(timeline);
       const patches = () => tables.calls.filter(call => call.table === 'haedo_documents' && call.method === 'PATCH').length;
-      const tabReturn = page => page.evaluate(async () => {
-        for (const hidden of [true, false]) {
-          Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
-          Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
-          document.dispatchEvent(new Event('visibilitychange'));
-          await new Promise(done => setTimeout(done, 50));
-        }
-      });
       const quiet = async page => { await page.waitForTimeout(1500); await page.waitForFunction(() => { const d = REG.docs.find(x => x.id === curDocId); return d && d.syncedAt === d.updated; }, null, { timeout: 15000 }); };
       const before = patches();
       // The tab returns while the edit is still unsent (the editor's push is debounced).
@@ -188,6 +194,84 @@ async function main() {
         assert.equal(patches(), seen, name + ': no PATCH for a clean document');
         await other.close();
       }
+    });
+
+    // Re-review of 3e9ecfb. R3: a page that wrote 행복도 is closed while documents cannot be written;
+    // reopened with the network back, it sends the value itself (no other page needed).
+    await check('R3: a 행복도 that failed is sent after the 일정 page is reopened', async ({ open, tables }) => {
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await schedule.waitForFunction(([reg, id]) => JSON.parse(localStorage.getItem(reg) || '{"docs":[]}').docs.some(d => d.id === id && d.syncedAt), [regKey(accounts.a.id), DOC]);
+      tables.fail = 'haedo_documents';
+      await happiness(schedule, 7);
+      await schedule.locator('.schedule-entry-status').filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 15000 });
+      tables.fail = null;
+      await openDay(schedule, '2026-11-03');                                     // reopened (new page load)
+      await settled(tables, data => data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.4), 'sent after the reopen');
+      await schedule.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 15000 });
+    });
+
+    // R6: the timeline tab adopts the 일정 tab's write (which holds its own pending edit), the 일정
+    // tab closes while documents cannot be written: nothing is dropped and nothing claims "동기화됨".
+    await check('R6: the timeline tab keeps its pending edit when it adopts another tab\'s write and sends both after that tab closes', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      tables.fail = 'haedo_documents';
+      await timelineEdit(timeline, '편집 E');                                    // its upload waits (debounced)
+      await happiness(schedule, 6);
+      await timeline.waitForFunction(() => DATA.happiness.some(h => h.date === '2026-11-03') && DATA.events.some(e => e.title === '편집 E'));
+      await schedule.close();
+      await timeline.waitForTimeout(2500);
+      assert.notEqual((await timeline.locator('#saveStatus').textContent()).trim(), '동기화됨', 'nothing on the account yet: not shown as synced');
+      tables.fail = null;
+      await tabReturn(timeline);
+      await settled(tables, data => data.events.some(e => e.title === '편집 E') && data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.2), 'E and 행복도');
+      await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
+      assert.equal((await allDocs(timeline)).filter(d => / 복구 사본/.test(d.name)).length, 0);
+    });
+
+    // R6b: the 일정 tab closes before its own (debounced) upload starts; no tab return, no pull. The
+    // timeline tab that adopted the write sends it, and an edit waiting to go is never "동기화됨".
+    await check('R6b: the adopting timeline tab sends the merged version itself; a waiting edit is shown as waiting', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const status = () => timeline.locator('#saveStatus').textContent().then(text => text.trim());
+      await timelineEdit(timeline, '먼저 올린 편집');
+      await settled(tables, data => data.events.some(e => e.title === '먼저 올린 편집'), 'first edit');
+      await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await timelineEdit(timeline, '대기 편집');
+      assert.equal(await status(), '계정에 올리기 대기', 'an edit not on the account yet is not "동기화됨"');
+      await happiness(schedule, 9); await schedule.close();
+      await settled(tables, data => data.events.some(e => e.title === '대기 편집') && data.happiness.some(h => h.date === '2026-11-03' && h.v === 0.8), 'the merged version');
+      await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
+    });
+
+    await check('a document another tab deleted does not come back with a save in a tab that still lists it (re-review minor 3)', async ({ open }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      // Deleted in another tab (body and list entry gone) while this tab's list still has it.
+      await timeline.evaluate(() => { REG.docs.push({ id: 'd_gone', name: '지운 문서', updated: '2026-11-03T03:00:00.000Z' }); });
+      await timelineEdit(timeline, '지운 뒤 저장');
+      assert.equal((await local(timeline)).reg.docs.some(d => d.id === 'd_gone'), false);
+      assert.equal(await timeline.evaluate(() => REG.docs.some(d => d.id === 'd_gone')), false);
+    });
+
+    await check('another tab\'s write waits for a pointer gesture to end; history and selection stay, and undo across it keeps a recovery copy (re-review minor 6)', async ({ open }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      await timelineEdit(timeline, '편집 1');
+      await timeline.evaluate(() => { selected = DATA.events.find(e => e.title === '편집 1'); });
+      const schedule = await open(); await openDay(schedule, '2026-11-03');
+      await timeline.evaluate(() => document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));   // a drag starts
+      await happiness(schedule, 8);
+      await schedule.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 15000 });
+      await timeline.waitForTimeout(500);
+      assert.equal(await timeline.evaluate(() => DATA.happiness.length), 0, 'not adopted during the gesture');
+      await timeline.evaluate(() => dispatchEvent(new PointerEvent('pointerup')));
+      await timeline.waitForFunction(() => DATA.happiness.length === 1);
+      assert.deepEqual(await timeline.evaluate(() => [UNDO.length > 0, selected?.title]), [true, '편집 1'], 'history and selection stay');
+      // Undo steps back over the adoption: the adopted version (with 행복도) is kept first.
+      await timeline.evaluate(() => undo());
+      assert.equal(await timeline.evaluate(() => DATA.happiness.length), 0);
+      const copy = (await allDocs(timeline)).find(d => RECOVERY.test(d.name));
+      assert.ok(copy, 'the adopted version is kept'); assert.deepEqual(copy.data.happiness.map(({ date, v }) => ({ date, v })), [{ date: '2026-11-03', v: 0.6 }]);
     });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));

@@ -134,3 +134,4 @@ html.auth-pending body > :not(.timeline-access):not(script):not(noscript) { visi
 @media (prefers-reduced-motion: reduce) {
   .platform :is(.p-button,.p-icon-button,.p-filter button,.habit-check) { transition: none; }
 }
+#recoveryDialogTitle:focus { outline: none; }

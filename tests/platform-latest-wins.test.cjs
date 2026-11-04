@@ -26,6 +26,8 @@ function server() {
     const id = u.searchParams.get('id')?.replace(/^eq\./, ''), seen = u.searchParams.get('updated_at')?.replace(/^eq\./, '');
     calls.push({ method: options.method || 'GET', table, id: id || null });
     if (server.hold) await server.hold;
+    // Offline for documents (an iPhone without network): every document request fails.
+    if (server.failDocs && table === 'haedo_documents') return { ok: false, status: 503, async json() { return {}; } };
     if (!options.method) return json(id ? (rows.has(id) ? [rows.get(id)] : []) : [...rows.values()]);
     const body = JSON.parse(options.body);
     if (options.method === 'POST') {
@@ -40,15 +42,15 @@ function server() {
     }
     throw new Error('unexpected ' + options.method);
   }
-  const server = { tables, calls, request, stamp, hold: null,
+  const server = { tables, calls, request, stamp, hold: null, failDocs: false,
     // Another device's write, stamped now (later than every earlier server write).
     write(table, row) { const next = { ...row, user_id: 'A', updated_at: stamp() }; tables[table].set(row.id, next); return next; },
     advance(ms) { clock += ms; } };
   return server;
 }
 
-function fixture(t, cloud, { failRecovery = false } = {}) {
-  const values = new Map(), listeners = new Map();
+function fixture(t, cloud, { failRecovery = false, values = new Map() } = {}) {
+  const listeners = new Map();
   const local = { getItem: key => values.get(key) ?? null,
     setItem: (key, value) => { if (failRecovery && key.endsWith('_items_recovery')) throw new Error('quota'); values.set(key, value); },
     removeItem: key => values.delete(key), get length() { return values.size; }, key: index => [...values.keys()][index] };
@@ -362,4 +364,98 @@ test('recovery notice: unseen copies until acknowledged; a copy can be put back 
   const revived = h.store.reviveRecovery(h.store.recovery[0].rid);
   assert.notEqual(revived, id);
   assert.deepEqual(plain(h.store.items.map(item => [item.id === id ? 'old' : 'new', item.data.progress])).sort(), [['new', 30], ['old', 70]]);
+});
+
+// Re-review (3e9ecfb) M1 and minors. A reopened page is a new store over the same device storage.
+const reopen = (t, cloud, h) => { h.logout(); return fixture(t, cloud, { values: h.values }); };
+const queueDelay = () => new Promise(done => setTimeout(done, 1700));
+
+test('a 행복도 that failed to upload is sent by the 일정 page after a reopen (re-review M1)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-02', 5); await h.store.uploadDocuments([id]);
+  cloud.failDocs = true;
+  h.store.setHappiness('2026-11-03', 7);
+  await assert.rejects(h.store.uploadDocuments([id]));
+  const again = reopen(t, cloud, h);
+  cloud.failDocs = false;
+  again.store.followDocuments();
+  await again.store.syncDocuments(); await queueDelay();
+  assert.deepEqual(cloud.tables.haedo_documents.get(id).data.happiness.map(e => [e.date, e.v]), [['2026-11-02', 0], ['2026-11-03', 0.4]]);
+  assert.equal(again.store.happinessState(), 'ok');
+});
+
+test('after a reopen a 행복도 conflict is still rebased day by day (the pending days are kept on the device)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-02', 5); await h.store.uploadDocuments([id]);
+  cloud.failDocs = true;
+  h.store.setHappiness('2026-11-04', 9);
+  await assert.rejects(h.store.uploadDocuments([id]));
+  const again = reopen(t, cloud, h);
+  cloud.failDocs = false;
+  const other = again.doc(id); other.happiness = [{ date: '2026-11-02', v: 0 }]; other.events = [{ date: '2026-11-03', title: '다른 기기 사건' }];
+  cloud.write('haedo_documents', { id, name: '내 연표', data: other });
+  again.store.followDocuments();
+  await again.store.syncDocuments(); await queueDelay();
+  const row = cloud.tables.haedo_documents.get(id).data;
+  assert.deepEqual(row.events.map(e => e.title), ['다른 기기 사건']);
+  assert.deepEqual(row.happiness.map(e => [e.date, e.v]), [['2026-11-02', 0], ['2026-11-04', 0.8]]);
+  assert.equal(again.registry().docs.length, 1, 'no recovery copy');
+});
+
+test('the same day changed on both sides: the later value wins and the other is kept as a recovery copy (re-review minor 1)', async t => {
+  // Server newer: another device's later 9 beats this device's earlier 3.
+  { const cloud = server(), h = fixture(t, cloud);
+    const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+    h.store.setHappiness('2026-11-03', 3);
+    cloud.advance(3 * 86400000);                                    // the other device's upload is later than the press here
+    const other = h.doc(id); other.happiness = [{ date: '2026-11-03', v: 0.8 }]; cloud.write('haedo_documents', { id, name: '내 연표', data: other });
+    await h.store.uploadDocuments([id]);
+    assert.deepEqual(cloud.tables.haedo_documents.get(id).data.happiness, [{ date: '2026-11-03', v: 0.8 }], 'the later 9 stays');
+    const copy = h.registry().docs.find(doc => RECOVERY.test(doc.name));
+    assert.ok(copy, 'the losing 3 is kept'); assert.deepEqual(h.doc(copy.id).happiness, [{ date: '2026-11-03', v: -0.4 }]); }
+  // This device newer: its 3 wins; the server's 9 is kept.
+  { const cloud = server(), h = fixture(t, cloud);
+    const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+    const other = h.doc(id); other.happiness = [{ date: '2026-11-03', v: 0.8 }]; cloud.write('haedo_documents', { id, name: '내 연표', data: other });
+    h.store.setHappiness('2026-11-03', 3);                           // pressed after (the server clock is behind this device)
+    await h.store.uploadDocuments([id]);
+    assert.deepEqual(cloud.tables.haedo_documents.get(id).data.happiness, [{ date: '2026-11-03', v: -0.4 }]);
+    const copy = h.registry().docs.find(doc => RECOVERY.test(doc.name));
+    assert.ok(copy); assert.deepEqual(h.doc(copy.id).happiness, [{ date: '2026-11-03', v: 0.8 }]); }
+});
+
+test('the timeline 행복도 goes to is recorded once and followed; one deleted elsewhere is not sent again (re-review minor 2)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const put = (id, name, happiness = []) => {
+    h.local.setItem(model.keys('A').docs + id, JSON.stringify({ ...model.emptyDocument(name), happiness }));
+    const reg = h.registry(); reg.docs.push({ id, name, updated: '2026-11-01T00:00:00.000Z' }); h.local.setItem(model.keys('A').registry, JSON.stringify(reg));
+  };
+  put('d_a', '여행 연표'); put('d_b', '내 연표', [{ date: '2026-10-01', v: 0.2 }]);
+  // Nothing recorded: the timeline that already has daily 행복도 (not the smallest id).
+  assert.equal(h.store.base.docId, 'd_b');
+  // Another device recorded d_a (later choice): this device follows it.
+  assert.equal(h.store.adoptBase({ docId: 'd_a', chosenAt: '2026-11-04T09:00:00.000Z' }), true);
+  assert.equal(h.store.setHappiness('2026-11-03', 6), 'd_a');
+  assert.equal(h.store.adoptBase({ docId: 'd_b', chosenAt: '2026-11-04T08:00:00.000Z' }), false, 'an earlier choice does not replace it');
+  await h.store.uploadDocuments(['d_a', 'd_b']);
+  // d_a is deleted on another device while this device has an unsent value in it.
+  h.store.setHappiness('2026-11-04', 2);
+  cloud.tables.haedo_documents.delete('d_a');
+  await h.store.uploadDocuments(['d_a']);
+  assert.equal(cloud.tables.haedo_documents.has('d_a'), false, 'not brought back');
+  assert.equal(h.registry().docs.some(doc => doc.id === 'd_a'), false);
+  const copy = h.registry().docs.find(doc => / 복구 사본/.test(doc.name));
+  assert.ok(copy, 'the unsent version is kept'); assert.ok(h.doc(copy.id).happiness.some(e => e.date === '2026-11-04'));
+  assert.equal(h.store.base.docId, 'd_b', 'chosen again'); assert.equal(h.store.base.record.docId, 'd_b');
+});
+
+test('the recovery notice counts copies by id: one that arrives later with an earlier time is still new (re-review minor 5)', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  h.store.change(id, 'goal', goal(30)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(70) });
+  await h.store.pull();
+  h.store.acknowledgeRecovery();
+  assert.equal(h.store.recoveryUnseen, 0);
+  h.store.restoreRecovery([{ rid: 'from-ipad', id: 'g_other', kind: 'goal', data: goal(5), updated: null, keptAt: '2020-01-01T00:00:00.000Z', reason: 'remote_newer' }]);
+  assert.equal(h.store.recoveryUnseen, 1);
 });

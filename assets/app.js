@@ -87,6 +87,10 @@ const unsent=d=>!!d.updated&&d.updated!==d.syncedAt;
 function mergeDiskRegistry(){
   let disk=null;try{disk=JSON.parse(localStorage.getItem(REG_KEY));}catch(e){}
   if(!disk||!Array.isArray(disk.docs))return;
+  // A document another tab deleted (gone from the list and its body removed) leaves this list too;
+  // the open document stays while it is being edited.
+  const listed=new Set(disk.docs.map(entry=>entry?.id));
+  REG.docs=REG.docs.filter(d=>listed.has(d.id)||d.id===curDocId||localStorage.getItem(DOC_PREFIX+d.id)!==null);
   for(const entry of disk.docs){
     if(!entry||typeof entry.id!=='string'||typeof entry.name!=='string')continue;
     const mine=REG.docs.find(d=>d.id===entry.id);
@@ -173,8 +177,11 @@ function updateSaveState(){
   if(RO)return set(false,'공유 화면 — 읽기 전용');
   if(!storageOK)return set(false,'저장 공간 부족 · 파일로 백업하세요');
   if(typeof CLOUD!=='undefined'&&CLOUD){
-    const own=cloudDocStates.get(curDocId);
-    const state=['err','auth'].includes(cloudState)?cloudState:(own?.epoch===cloudEpoch?own.state:cloudState);
+    const own=cloudDocStates.get(curDocId),meta=REG?.docs.find(x=>x.id===curDocId);
+    let state=['err','auth'].includes(cloudState)?cloudState:(own?.epoch===cloudEpoch?own.state:cloudState);
+    // The open document's own state: an edit not on the account yet is never shown as synced.
+    if(['ok',''].includes(state)&&meta&&unsent(meta)&&!isPristineSample(DATA))state='pending';
+    if(state==='pending')return set(true,'계정에 올리기 대기');
     if(state==='sync')return set(true,'동기화 중…');
     if(state==='auth')return set(false,'로그인 필요 — 클릭해 로그인');
     if(state==='conflict')return set(false,'다른 기기와 충돌 · 로컬 기록은 보존됨');
@@ -324,16 +331,29 @@ function histPush(){
   histCur=now;
   updateHistBtns();
 }
+/* Another tab's version adopted into this tab (adoptActive) stays in the history. Older entries
+   do not have that tab's change: stepping back over the adoption first keeps the adopted version
+   as a recovery copy, so going back never drops it silently. */
+function crossAdoption(entry){
+  if(!entry||typeof entry!=='object')return entry;
+  try{keepRecoveryDoc(REG.docs.find(d=>d.id===curDocId)?.name||DATA.profile?.name||'연표',JSON.parse(histCur),JSON.parse(entry.before));}
+  catch(e){window.showToast?.('복구 사본을 남기지 못해 되돌리지 않았습니다.');return null;}
+  return entry.before;
+}
 function undo(){
   if(!UNDO.length)return;
+  const entry=UNDO.pop(),prev=crossAdoption(entry);
+  if(prev===null){UNDO.push(entry);return;}
   REDO.push(histCur);
-  histCur=UNDO.pop();
+  histCur=prev;
   restoreHist();
 }
 function redo(){
   if(!REDO.length)return;
+  const entry=REDO.pop(),next=crossAdoption(entry);
+  if(next===null){REDO.push(entry);return;}
   UNDO.push(histCur);
-  histCur=REDO.pop();
+  histCur=next;
   restoreHist();
 }
 function restoreHist(){
@@ -3035,18 +3055,50 @@ function settleRow(reg,row,cfg){
   return false;
 }
 // Replace the open document with another copy (a server or another tab's write).
-function adoptActive(data,body){
-  DATA=data;bodySeen=body;
-  selected=null;closePop();prepare();render();rebuildMapBase();rebuildTripBar();rebuildScrubber();
-  histCur=JSON.stringify(DATA);UNDO=[];REDO=[];updateHistBtns();window.refreshWorkspace?.();updateSaveState();
+/* The same item in a newly adopted version (by content), so a selection survives another tab's write. */
+function reselect(old){
+  if(!old)return null;
+  const key=JSON.stringify(old);
+  for(const list of Object.values(DATA))if(Array.isArray(list)){const hit=list.find(x=>x&&typeof x==='object'&&JSON.stringify(x)===key);if(hit)return hit;}
+  return null;
 }
-async function cloudPush(docId){
+function adoptActive(data,body){
+  const before=histCur,was=selected;
+  DATA=data;bodySeen=body;
+  selected=reselect(was);if(!selected)closePop();
+  prepare();render();rebuildMapBase();rebuildTripBar();rebuildScrubber();
+  if(selected&&typeof renderDetail==='function')renderDetail();
+  // Undo and redo stay; entries from before the adoption are marked (see crossAdoption).
+  const now=JSON.stringify(DATA);
+  if(now!==before){
+    UNDO.push({before});if(UNDO.length>60)UNDO.shift();
+    for(let i=0;i<REDO.length;i++)if(typeof REDO[i]==='string')REDO[i]={before:REDO[i]};
+  }
+  histCur=now;updateHistBtns();window.refreshWorkspace?.();updateSaveState();
+}
+/* One upload of a document at a time across pages and tabs (the same lock as the shared store,
+   HaedoSync.exclusive). Inside it, the list on disk is read first: another page may have sent
+   this exact version already. */
+function cloudPush(docId){
   if(!CLOUD||RO)return;
+  return HaedoSync.exclusive('haedo-doc:'+(CLOUD.session?.uid||'anon')+':'+docId,()=>cloudPushNow(docId));
+}
+async function cloudPushNow(docId){
+  if(!CLOUD||RO)return;
+  mergeDiskRegistry();
   const cfg=CLOUD,epoch=cloudEpoch,reg=REG.docs.find(d=>d.id===docId);
   if(!reg)return;
   const state=value=>setCloudState(value,docId);
   const source=docId===curDocId?DATA:loadDoc(docId);
   if(!source||isPristineSample(source))return;
+  let disk=null;try{disk=JSON.parse(localStorage.getItem(REG_KEY))?.docs?.find(d=>d?.id===docId)||null;}catch(e){disk=null;}
+  if(disk&&disk.syncedAt&&disk.updated===disk.syncedAt&&disk.syncedAt===reg.syncedAt){
+    let body=null;try{body=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){body=null;}
+    if(body&&JSON.stringify(HaedoData.canonical(body))===JSON.stringify(HaedoData.canonical(source))){
+      reg.updated=reg.syncedAt;if(!saveRegistry())return;state('ok');return;
+    }
+  }
+  if(reg.syncedAt&&reg.updated===reg.syncedAt){state('ok');return;}
   const account=cfg.url+'|'+(cfg.session?.uid||'anon');
   if(reg.cloudAccount&&reg.cloudAccount!==account){state('conflict');return;}
   // Capture the data and its revision together, before the first network await.
@@ -3101,7 +3153,8 @@ async function cloudPullAll(autoSwitch){
       if(local?.cloudAccount&&local.cloudAccount!==cfg.url+'|'+(cfg.session?.uid||'anon')){conflict=true;continue;}
       const dirty=local&&((local.updated&&local.updated!==local.syncedAt)||cloudQueue.pending(local.id));
       if(dirty){
-        if(row.updated_at===local.syncedAt)continue; /* only this device changed it: the queued push sends it */
+        /* Only this device changed it: send it (after a reopen nothing is queued yet). */
+        if(row.updated_at===local.syncedAt){if(!cloudQueue.pending(local.id))cloudQueue.schedule(local.id);continue;}
         // Both changed: newest edit wins, the other copy is kept first.
         try{if(settleRow(local,row,cfg))cloudQueue.schedule(local.id);else if(local.syncedAt!==row.updated_at){conflict=true;setCloudState('conflict',row.id);}}
         catch(e){conflict=true;setCloudState('conflict',row.id);}
@@ -3142,16 +3195,34 @@ async function cloudPullAll(autoSwitch){
 /* Another tab (일정의 행복도 입력, 다른 연표 탭) wrote the open document or the list: adopt it
    while no item editor is open. With an editor open, the next save keeps that version as a
    recovery copy before replacing it (persist). */
+let pointerBusy=false,adoptLater=false;
+function adoptFromDisk(){
+  if(!REG||!curDocId||!document.getElementById('popEd').hidden)return;
+  // Not under a drag or another pointer gesture: adopted when it ends.
+  if(pointerBusy){adoptLater=true;return;}
+  const raw=localStorage.getItem(DOC_PREFIX+curDocId);
+  if(raw===null||raw===bodySeen)return;
+  let data;try{data=JSON.parse(raw);}catch(_){return;}
+  if(!HaedoData.isDocument(data))return;
+  adoptActive(migrateScale(data),raw);
+  // The adopted version holds this tab's saved edits too. Whatever is not on the account yet is
+  // sent (the lock makes the page that comes second find it clean); nothing pending is dropped.
+  mergeDiskRegistry();
+  const meta=REG.docs.find(d=>d.id===curDocId);
+  if(meta&&unsent(meta))cloudQueue.schedule(curDocId);
+  updateSaveState();
+}
+if(!RO){
+  const release=()=>{pointerBusy=false;if(adoptLater){adoptLater=false;adoptFromDisk();}};
+  document.addEventListener('pointerdown',()=>{pointerBusy=true;},true);
+  addEventListener('pointerup',release,true);addEventListener('pointercancel',release,true);addEventListener('blur',release);
+}
 if(!RO)addEventListener('storage',e=>{
   if(e.storageArea!==localStorage||!REG)return;
   if(window.HAEDO_CONTEXT&&HaedoAuth.user?.id!==window.HAEDO_CONTEXT.uid)return;
   if(e.key===REG_KEY){mergeDiskRegistry();refreshDocSel();updateSaveState();return;}
-  if(e.key!==DOC_PREFIX+curDocId||e.newValue===null||e.newValue===bodySeen)return;
-  if(!document.getElementById('popEd').hidden)return;
-  let data;try{data=JSON.parse(e.newValue);}catch(_){return;}
-  if(!HaedoData.isDocument(data))return;
-  cloudQueue.cancel(curDocId);
-  adoptActive(migrateScale(data),e.newValue);
+  if(e.key!==DOC_PREFIX+curDocId)return;
+  adoptFromDisk();
 });
 if(!RO){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CLOUD)cloudPullAll();});

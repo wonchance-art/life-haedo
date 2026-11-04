@@ -3,15 +3,23 @@
   let uid = null, items = [], epoch = 0, accountProject = null, queue = null, docQueue = null, pulling = null;
   // Document uploads that failed in this page (id -> message), shown as "계정에 올리지 못함".
   const docErrors = new Map();
-  // One uploader per document (B2 review B1). This store sends only documents this page wrote
-  // through it (행복도, its own recovery copies); the timeline editor (app.js) and the goals/habits
-  // screens' explicit sync send the rest. `following` is set by the 일정 screen, which owns the
-  // documents it shows.
+  // Who sends a document (B2 review B1, re-review M1). Every page that shows a changed document
+  // sends it: the timeline editor (app.js) its open documents, the 일정 screen (`following`) the
+  // changed documents it reads from the account and its own, the goals/habits screens through
+  // their explicit sync. Uploads of one document never overlap across pages and tabs
+  // (HaedoSync.exclusive, a Web Lock per document); the next writer finds it clean.
+  // ownedDocs: documents this page wrote (행복도, its recovery copies), rebuilt when it opens.
   const ownedDocs = new Set();
   let following = false;
-  // 행복도 changes not yet on the server, per document (date -> 0–10 or null), and the body this
-  // page last knew to be on the server. Together they let a conflict be rebased day by day (M1).
+  // 행복도 days pressed here and not on the server yet, per document (date -> {n, at}), and the
+  // body this page last knew to be on the server. Kept on the device (happinessPending) so a
+  // reopened page still rebases a conflict day by day (M1) and sends the days.
   const pendingHappiness = new Map(), lastSynced = new Map();
+  // Server documents seen by the last successful syncDocuments (null before one): a document
+  // this device synced that is no longer there was deleted elsewhere.
+  // serverSeen: the latest server stamp in that list. A document stamped later (sent after it,
+  // by any page) is not taken for deleted.
+  let serverIds = null, serverSeen = "";
   const project = () => auth.config?.url.replace(/\/+$/, "");
   const headers = () => ({ "Content-Type": "application/json", Prefer: "return=representation" });
   function accountError() {
@@ -49,7 +57,7 @@
   function clearAccount() {
     epoch++;
     queue?.clear(); queue = null; docQueue?.clear(); docQueue = null; pulling = null; docErrors.clear();
-    ownedDocs.clear(); pendingHappiness.clear(); lastSynced.clear(); following = false;
+    ownedDocs.clear(); pendingHappiness.clear(); lastSynced.clear(); following = false; serverIds = null; serverSeen = ""; baseMemo = null;
     uid = null; accountProject = null; items = [];
   }
   // 2026-11-01 owner rule: when both sides changed, the newest edit wins and the other side is
@@ -215,18 +223,58 @@
     ownedDocs.add(id);
     return id;
   }
-  const applyPending = (doc, pending) => [...pending].reduce((next, [date, n]) => model.withHappiness(next, date, n), doc);
+  const applyPending = (doc, pending) => [...pending].reduce((next, [date, entry]) => model.withHappiness(next, date, entry.n), doc);
+  function savePending(captured) {
+    const out = {};
+    for (const [id, days] of pendingHappiness) if (days.size) out[id] = { base: lastSynced.get(id) ?? null, days: Object.fromEntries(days) };
+    try {
+      const key = model.keys(captured.uid).happinessPending;
+      if (Object.keys(out).length) localStorage.setItem(key, JSON.stringify(out)); else localStorage.removeItem(key);
+    } catch (_) { /* No room: this page still holds the days; the edit itself is in the document. */ }
+  }
+  function loadPending(captured) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(model.keys(captured.uid).happinessPending)); } catch (_) { saved = null; }
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+    for (const [id, row] of Object.entries(saved)) {
+      if (!row || typeof row.days !== "object" || !row.days) continue;
+      const days = new Map(Object.entries(row.days).filter(([date, entry]) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(date) && entry && (entry.n === null || Number.isInteger(entry.n)) && typeof entry.at === "string"));
+      if (!days.size) continue;
+      pendingHappiness.set(id, days); ownedDocs.add(id);
+      if (typeof row.base === "string") lastSynced.set(id, row.base);
+    }
+  }
+  const scoreOn = (doc, date) => model.happinessOn(doc, date)?.score ?? null;
   // meta changed here and row changed on the server. Returns "rebased" | "local" (send again) or
   // "remote" (the server copy is now local).
   function reconcileDoc(captured, reg, meta, row) {
     const k = model.keys(captured.uid), local = JSON.parse(localStorage.getItem(k.docs + meta.id));
     const pending = pendingHappiness.get(meta.id), known = lastSynced.get(meta.id);
     // Only 행복도 days changed here since the last known server copy: apply those days on top of
-    // the newer server copy (nothing to keep; the other device's edit stays).
-    if (pending?.size && known && HaedoData.contentKey(applyPending(JSON.parse(known), pending)) === HaedoData.contentKey(local)) {
-      const rebased = applyPending(row.data, pending);
+    // the newer server copy; the other device's edits stay. When the other device changed the
+    // same day too, the later one wins (press time here, upload time there) and the losing
+    // version is kept as a recovery copy, never dropped.
+    const base = known && JSON.parse(known);
+    if (pending?.size && base && HaedoData.contentKey(applyPending(base, pending)) === HaedoData.contentKey(local)) {
+      let rebased = row.data, lostHere = false, lostThere = false;
+      for (const [date, entry] of [...pending]) {
+        const there = scoreOn(row.data, date), sameDay = there !== scoreOn(base, date) && there !== entry.n;
+        if (sameDay && !model.localWins(entry.at, row.updated_at)) { lostHere = true; pending.delete(date); continue; }
+        if (sameDay) lostThere = true;
+        rebased = model.withHappiness(rebased, date, entry.n);
+      }
+      if (lostHere) keepLoserDoc(captured, reg, meta.name, local, rebased);
+      if (lostThere) keepLoserDoc(captured, reg, row.name || meta.name, row.data, rebased);
       localStorage.setItem(k.docs + meta.id, JSON.stringify(rebased));
       lastSynced.set(meta.id, JSON.stringify(row.data));
+      if (!pending.size) pendingHappiness.delete(meta.id);
+      savePending(captured);
+      // Nothing of this device's left to send: the server copy is the document now.
+      if (HaedoData.contentKey(rebased) === HaedoData.contentKey(row.data)) {
+        Object.assign(meta, { updated: row.updated_at, syncedAt: row.updated_at, cloudAccount: captured.project + "|" + captured.uid });
+        return "remote";
+      }
       Object.assign(meta, { syncedAt: row.updated_at, updated: new Date(Math.max(Date.now(), Date.parse(row.updated_at || "") + 1 || 0)).toISOString() });
       return "rebased";
     }
@@ -239,10 +287,29 @@
     keepLoserDoc(captured, reg, meta.name, local, row.data);
     localStorage.setItem(k.docs + meta.id, JSON.stringify(row.data));
     Object.assign(meta, { name: row.name, updated: row.updated_at, syncedAt: row.updated_at, cloudAccount: captured.project + "|" + captured.uid });
-    lastSynced.set(meta.id, JSON.stringify(row.data)); pendingHappiness.delete(meta.id);
+    lastSynced.set(meta.id, JSON.stringify(row.data)); pendingHappiness.delete(meta.id); savePending(captured);
     return "remote";
   }
-  async function uploadDoc(captured, id) {
+  // A document this device synced is gone from the server (deleted on another device): it is not
+  // sent again. The unsent version here is kept as a recovery copy first, then the document leaves
+  // this device's list; the schedule picks its timeline again.
+  function dropDeleted(captured, reg, meta) {
+    const k = model.keys(captured.uid);
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(k.docs + meta.id)); } catch (_) { local = null; }
+    if (local) keepLoserDoc(captured, reg, meta.name, local, null);
+    reg.docs = reg.docs.filter(doc => doc.id !== meta.id);
+    if (reg.current === meta.id) reg.current = reg.docs[0]?.id || null;
+    localStorage.setItem(k.registry, JSON.stringify(reg));
+    localStorage.removeItem(k.docs + meta.id);
+    pendingHappiness.delete(meta.id); lastSynced.delete(meta.id); ownedDocs.delete(meta.id); docErrors.delete(meta.id);
+    savePending(captured);
+    if (readBase(captured)?.docId === meta.id) { localStorage.removeItem(k.base); baseMemo = null; const next = baseDoc(captured); if (next) writeBase(captured, next.id); }
+  }
+  function uploadDoc(captured, id) {
+    return HaedoSync.exclusive("haedo-doc:" + captured.uid + ":" + id, () => uploadDocNow(captured, id));
+  }
+  async function uploadDocNow(captured, id) {
     const k = model.keys(captured.uid), request = requestFor(captured);
     for (let attempt = 0; attempt < 3; attempt++) {
       assertAccount(captured);
@@ -262,11 +329,12 @@
         if (now.updated === sent) now.updated = result.stamp;
         now.cloudAccount = captured.project + "|" + captured.uid;
         localStorage.setItem(k.registry, JSON.stringify(latest));
-        lastSynced.set(id, body);
+        lastSynced.set(id, body); serverIds?.add(id); baseMemo = null;
         // Days sent with this upload are on the server; a newer value for the same day stays pending.
         const pending = pendingHappiness.get(id);
-        for (const [date, n] of sentPending) if (pending?.get(date) === n) pending.delete(date);
+        for (const [date, entry] of sentPending) if (pending?.get(date) === entry) pending.delete(date);
         if (pending && !pending.size) pendingHappiness.delete(id);
+        savePending(captured);
         return;
       }
       const response = await request(base(captured, "haedo_documents") + "?id=eq." + encodeURIComponent(id) + "&select=id,name,data,updated_at");
@@ -275,7 +343,10 @@
       if (!Array.isArray(rows) || rows[0] && !HaedoData.isDocument(rows[0].data)) throw new Error("연표 응답 형식을 확인해야 합니다.");
       const fresh = model.registry(localStorage, captured.uid), meta2 = fresh.docs.find(row => row.id === id);
       if (!meta2) return;
-      if (!rows[0]) { delete meta2.syncedAt; localStorage.setItem(k.registry, JSON.stringify(fresh)); continue; }
+      if (!rows[0]) {
+        if (meta2.syncedAt) { dropDeleted(captured, fresh, meta2); notify(captured); return; }
+        continue;
+      }
       const outcome = reconcileDoc(captured, fresh, meta2, rows[0]);
       localStorage.setItem(k.registry, JSON.stringify(fresh));
       if (outcome === "remote") return;
@@ -290,8 +361,28 @@
     if (current(captured)) for (const meta of model.registry(localStorage, captured.uid).docs)
       if (ownedDocs.has(meta.id) && meta.updated !== meta.syncedAt && meta.id !== id && !docQueue.pending(meta.id) && !docErrors.has(meta.id)) docQueue.schedule(meta.id);
   }
-  // The timeline the schedule uses: the same on every device (see model.baseDocument).
-  function baseDoc(captured) { return model.baseDocument(model.registry(localStorage, captured.uid)); }
+  // The timeline the schedule uses (model.baseDocument): the account's recorded choice when it is
+  // here, chosen the same way on every device otherwise. Memoised on the list and record text.
+  let baseMemo = null;
+  function readBase(captured) {
+    try { const value = JSON.parse(localStorage.getItem(model.keys(captured.uid).base)); return value && typeof value.docId === "string" && typeof value.chosenAt === "string" ? value : null; }
+    catch (_) { return null; }
+  }
+  function writeBase(captured, docId, chosenAt = new Date().toISOString()) {
+    const value = { docId, chosenAt };
+    localStorage.setItem(model.keys(captured.uid).base, JSON.stringify(value)); baseMemo = null;
+    return value;
+  }
+  function baseDoc(captured) {
+    const k = model.keys(captured.uid), regText = localStorage.getItem(k.registry), baseText = localStorage.getItem(k.base);
+    const key = [captured.uid, regText, baseText, serverIds ? [...serverIds].join() : ""].join("\u0000");
+    if (baseMemo?.key === key) return baseMemo.meta && { ...baseMemo.meta };
+    const read = id => { try { return JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { return null; } };
+    const gone = serverIds ? doc => !!doc.syncedAt && !serverIds.has(doc.id) && doc.syncedAt <= serverSeen : null;
+    const meta = model.baseDocument(model.registry(localStorage, captured.uid), { record: readBase(captured)?.docId || null, read, gone });
+    baseMemo = { key, meta: meta && { ...meta } };
+    return meta;
+  }
   const store = {
     init(account) {
       clearAccount();
@@ -304,6 +395,7 @@
       // Each account generation owns its queue; an old running job cannot pick up B's same ID.
       queue = HaedoSync.createQueue(id => pushItem(id, captured));
       docQueue = HaedoSync.createQueue(id => uploadQueued(id, captured));
+      loadPending(captured);
       return store;
     },
     // Initialise only when this account is not the one already open (keeps a running queue).
@@ -320,15 +412,18 @@
       if (!store.account) return [];
       try { return readRecovery(context()).slice().reverse().map(row => ({ ...row, rid: ridOf(row) })); } catch (_) { return []; }
     },
-    // Recovery copies the owner has not acknowledged yet (the notice shows only these).
+    // Recovery copies the owner has not acknowledged yet (the notice shows only these). Judged by
+    // id: a copy that arrives later from another device is new even with an earlier keptAt.
     get recoveryUnseen() {
       if (!store.account) return 0;
-      const seen = localStorage.getItem(model.keys(uid).recoverySeen) || "";
-      return store.recovery.filter(row => (row.keptAt || "") > seen).length;
+      let seen = [];
+      try { seen = JSON.parse(localStorage.getItem(model.keys(uid).recoverySeen)); } catch (_) { seen = []; }
+      const ids = new Set(Array.isArray(seen) ? seen : []);
+      return store.recovery.filter(row => !ids.has(row.rid)).length;
     },
     acknowledgeRecovery() {
-      const captured = context(), newest = store.recovery.reduce((at, row) => (row.keptAt || "") > at ? row.keptAt : at, "");
-      localStorage.setItem(model.keys(captured.uid).recoverySeen, newest);
+      const captured = context();
+      localStorage.setItem(model.keys(captured.uid).recoverySeen, JSON.stringify(store.recovery.map(row => row.rid)));
       notify(captured);
     },
     // Puts a kept copy back as a new item (a new ID; the item it lost to is not touched).
@@ -364,8 +459,12 @@
       for (const row of rows) {
         const meta = reg.docs.find(doc => doc.id === row.id);
         if (meta && meta.updated !== meta.syncedAt) {
-          // Only this device changed it: its owner sends it. Both changed: settle now.
-          if (meta.syncedAt === row.updated_at || !meta.syncedAt) continue;
+          // Only this device changed it: the 일정 screen sends it (also after a reopen, when no
+          // page remembers having written it); other pages leave it to their own uploader.
+          if (meta.syncedAt === row.updated_at || !meta.syncedAt) {
+            if (following || ownedDocs.has(meta.id)) { ownedDocs.add(meta.id); docQueue?.schedule(meta.id); }
+            continue;
+          }
           const outcome = reconcileDoc(captured, reg, meta, row);
           if (outcome !== "remote" && (following || ownedDocs.has(meta.id))) { ownedDocs.add(meta.id); docQueue?.schedule(meta.id); }
           continue;
@@ -379,6 +478,18 @@
       }
       if (!reg.current && reg.docs.length) reg.current = reg.docs[0].id;
       localStorage.setItem(k.registry, JSON.stringify(reg));
+      serverIds = new Set(rows.map(row => row.id)); baseMemo = null;
+      serverSeen = rows.reduce((latest, row) => (row.updated_at || "") > latest ? row.updated_at : latest, "");
+      // Changed documents this store wrote that the server does not have yet (new ones).
+      for (const meta of reg.docs)
+        if (ownedDocs.has(meta.id) && !meta.syncedAt && meta.updated && !serverIds.has(meta.id)) docQueue?.schedule(meta.id);
+      // A recorded timeline deleted on another device: choose again and record it.
+      const record = readBase(captured);
+      if (record && !reg.docs.some(doc => doc.id === record.docId && (!doc.syncedAt || serverIds.has(doc.id) || doc.syncedAt > serverSeen))) {
+        localStorage.removeItem(k.base); baseMemo = null;
+        const next = baseDoc(captured);
+        if (next) writeBase(captured, next.id);
+      }
       notify(captured); return reg;
     },
     change(id, kind, data) {
@@ -440,7 +551,7 @@
     // saving the first value creates "내 연표" (the timeline editor's default); viewing never does.
     setHappiness(date, n) {
       const captured = context(), k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
-      let meta = model.baseDocument(reg), doc;
+      let meta = baseDoc(captured), doc;
       if (meta) meta = reg.docs.find(row => row.id === meta.id);
       if (!meta) {
         if (n === null) return null;
@@ -458,11 +569,31 @@
       // Body first, list last: a failed list write leaves the old list pointing at a valid body.
       localStorage.setItem(k.docs + meta.id, JSON.stringify(next));
       localStorage.setItem(k.registry, JSON.stringify(reg));
+      // The first value records which timeline the schedule writes to (mirrored to the account;
+      // every device follows it). A recorded timeline not on this device yet is not replaced.
+      if (!readBase(captured)) writeBase(captured, meta.id);
       if (!pendingHappiness.has(meta.id)) pendingHappiness.set(meta.id, new Map());
-      pendingHappiness.get(meta.id).set(date, n);
+      pendingHappiness.get(meta.id).set(date, { n, at: meta.updated });
+      savePending(captured);
       ownedDocs.add(meta.id);
       docErrors.delete(meta.id); docQueue.schedule(meta.id); notify(captured);
       return meta.id;
+    },
+    // The timeline the schedule writes to: its id and name, and the recorded choice (docId,
+    // chosenAt) that the 일정 screen mirrors to the account (platformBase).
+    get base() {
+      if (!store.account) return null;
+      const captured = context(), meta = baseDoc(captured), record = readBase(captured);
+      return { docId: meta?.id || null, name: meta?.name || null, record };
+    },
+    // A choice recorded on the account (another device): the later choice wins.
+    adoptBase(value) {
+      const captured = context();
+      if (!value || typeof value.docId !== "string" || typeof value.chosenAt !== "string") return false;
+      const local = readBase(captured);
+      if (local && (local.docId === value.docId || local.chosenAt >= value.chosenAt)) return false;
+      writeBase(captured, value.docId, value.chosenAt); notify(captured);
+      return true;
     },
     // Upload state of the base timeline: "ok" | "pending" | "error" (null without one).
     happinessState() {
@@ -476,8 +607,10 @@
     retryDocuments() {
       if (!store.account) return;
       const captured = context();
+      // The 일정 screen also sends changed documents it read from the account (a reopened page
+      // remembers no writes); a never-sent document is sent only by the page that made it.
       for (const meta of model.registry(localStorage, captured.uid).docs)
-        if (ownedDocs.has(meta.id) && meta.updated !== meta.syncedAt) { docErrors.delete(meta.id); docQueue.schedule(meta.id); }
+        if (meta.updated !== meta.syncedAt && (ownedDocs.has(meta.id) || following && meta.syncedAt)) { docErrors.delete(meta.id); docQueue.schedule(meta.id); }
     },
     backup() {
       const captured = context(), reg = model.registry(localStorage, captured.uid), k = model.keys(captured.uid);

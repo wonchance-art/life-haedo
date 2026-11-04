@@ -180,13 +180,22 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-happiness-day:hover { background: var(--haedo-soft); }
 /* Phone width: all seven days fit without sideways scrolling; the habit name column shortens
    (the full name stays in each check box's label). */
+/* Phone width: each name gets a full line of its own above its seven days, so nothing is cut
+   ("아침 …" stayed cut on touch, where a title does not show). */
+.schedule-grid-label { display: none; }
 @media (max-width: 760px) {
   .schedule-habit-grid { width: 100%; table-layout: fixed; }
   .schedule-habit-grid th, .schedule-habit-grid td { min-width: 0; padding: 0; }
-  .schedule-habit-grid tr > th:first-child { width: 4.5em; padding-right: 6px; }
-  .schedule-habit-grid tbody th { max-width: none; }
+  .schedule-habit-grid tr > th:first-child { display: none; }
+  .schedule-grid-label { display: table-row; }
+  .schedule-grid-label > td { padding: 8px 0 0; color: var(--ink); font-weight: 600; text-align: left; overflow-wrap: anywhere; }
   .schedule-happiness-day { width: 100%; min-width: 0; }
 }
+/* Text actions in the entry status line (확인, 다시 시도, 보기): the shared tokens, 44px tall. */
+.schedule-entries .life-text-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-control); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.schedule-entries .life-text-button:hover { color: var(--color-primary); }
+.schedule-entries .life-text-button:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
+.schedule-happiness-target { margin: 0 0 8px; }
 .schedule-entry-status { margin: 4px 0 0; }
 .schedule-entry-status[data-state=error] { color: var(--color-error); }
 

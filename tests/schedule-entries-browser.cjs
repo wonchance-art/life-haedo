@@ -114,6 +114,8 @@ async function main() {
       const docs = tables.owned('haedo_documents', accounts.a.id);
       assert.equal(docs.length, 1); assert.equal(docs[0].name, '내 연표');
       assert.deepEqual(docs[0].data.happiness, [{ date: '2026-11-03', v: 0.6 }]);
+      // Which timeline it went to is named (re-review minor 2).
+      assert.match(await entryText(page), /기록할 연표: 내 연표/);
       // Reopening shows the saved values.
       await page.reload(); await ready(page); await shown(page, 'day'); await entries(page);
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isChecked(), true);
@@ -182,6 +184,10 @@ async function main() {
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isChecked(), true, 'the check stays');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, []);
       tables.fail = null;
+      // A text action styled with the shared tokens, 44px tall (re-review minor 7).
+      const look = await page.locator('.schedule-entry-status').getByRole('button', { name: '다시 시도' }).evaluate(node => {
+        const style = getComputedStyle(node), box = node.getBoundingClientRect(); return { h: box.height >= 44, border: style.borderTopStyle, bg: style.backgroundColor }; });
+      assert.deepEqual(look, { h: true, border: 'none', bg: 'rgba(0, 0, 0, 0)' });
       await page.locator('.schedule-entry-status').getByRole('button', { name: '다시 시도' }).click();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
@@ -220,7 +226,7 @@ async function main() {
       await statusOf(page).getByRole('button', { name: '다시 시도' }).click();
       await statusOf(page).filter({ hasText: '1개를 복구 사본으로 남겼습니다' }).waitFor({ timeout: 10000 });
       // The copy reaches the account document list (platformRecovery) on this device.
-      const mirrored = () => page.evaluate(async () => (await HaedoLife.Storage.forAccount(HaedoAuth.getAccount()).readPlatformRecovery()).items);
+      const mirrored = () => page.evaluate(async () => (await HaedoLife.Shell.storage.readPlatformRecovery()).items);
       const deadline = Date.now() + 10000; let rows = [];
       while (Date.now() < deadline && !(rows = await mirrored()).length) await page.waitForTimeout(200);
       assert.equal(rows.length, 1); assert.deepEqual(rows[0].data.checks, ['2026-11-03']);
@@ -231,6 +237,7 @@ async function main() {
       // The list (habits.html#recovery) revives it as a new item; the item it lost to is unchanged.
       await page.goto(base + '/habits.html#recovery');
       const dialog = page.locator('#recoveryDialog[open]'); await dialog.waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'recoveryDialogTitle', 'starts on the title, no tooltip over the text');
       assert.match(await dialog.innerText(), /아침 산책/);
       await dialog.getByRole('button', { name: '새 항목으로 되살리기' }).click();
       await page.waitForFunction(() => HaedoPlatformStore.items.filter(i => i.data.title === '아침 산책').length === 2);
@@ -239,6 +246,25 @@ async function main() {
       assert.equal(await page.evaluate(() => HaedoPlatformStore.recovery.length), 1, 'the kept copy stays');
       await page.waitForFunction(() => HaedoPlatformStore.items.every(i => i.state === 'ok'), null, { timeout: 10000 });
       assert.equal(tables.owned('haedo_items', accounts.a.id).length, 2, 'the revived item is a new row');
+    });
+
+    await check('a full account recovery list is said in the status line, not swallowed (re-review minor 4)', async ({ page, context, tables }) => {
+      await context.route('**/assets/life/storage.js', async route => {
+        const response = await route.fetch();
+        const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async addPlatformRecovery(){throw Object.assign(new Error('full'),{code:'platform_recovery_too_large'});}});}});})();`;
+        await route.fulfill({ response, body: (await response.text()) + hook });
+      });
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.waitForFunction(() => HaedoPlatformStore.items[0]?.state === 'ok');
+      page.__expectFailure = true; tables.fail = 'haedo_items';
+      await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
+      await statusOf(page).filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 10000 });
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData(['2026-11-01']) });
+      tables.fail = null;
+      await statusOf(page).getByRole('button', { name: '다시 시도' }).click();
+      await statusOf(page).filter({ hasText: '복구 사본 목록이 가득 차 새 사본은 이 기기와 백업에만 남습니다.' }).waitFor({ timeout: 10000 });
+      assert.equal(await page.evaluate(() => HaedoPlatformStore.recovery.length), 1, 'the copy stays on this device');
     });
 
     await check('another device\'s newer timeline edit stays in the main document when 행복도 meets a conflict (rebased, no copy)', async ({ page, tables }) => {
@@ -285,6 +311,10 @@ async function main() {
         await page.waitForFunction(() => HaedoPlatformStore.items.length === 3);
         await overflow(page, view + ' ' + width);
         if (view === 'week') {
+          // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
+          const names = await page.locator('.schedule-grid-label td').evaluateAll(cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
+          if (width <= 760) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true], ['행복도', true]]);
+          else assert.deepEqual(names, [], 'wide: names stay in the row headers');
           // All seven days show without sideways scrolling inside the grid either (Sunday included).
           const fit = await page.evaluate(() => { const scroll = document.querySelector('.schedule-habit-scroll'), sunday = document.querySelector('.schedule-habit-grid thead th:last-child');
             const box = scroll.getBoundingClientRect(), day = sunday.getBoundingClientRect();

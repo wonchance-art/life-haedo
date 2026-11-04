@@ -46,25 +46,47 @@
   // Recovery copies follow the account as an ordinary account document (platformRecovery,
   // AccountDocsSync): copies from the account are added here, and copies kept here are added
   // there. Both sides only add (by rid); nothing is replaced or removed. One pass at a time.
-  let mirroring = null, mirrorAgain = false;
+  let mirroring = null, mirrorAgain = false, mirrorError = null, mirrorStorage = null;
   const accountCopy = row => ({ rid: row.rid, id: row.id, kind: row.kind, data: row.data, updated: row.updated ?? null,
     keptAt: String(row.keptAt || ''), reason: String(row.reason || '') });
-  function mirrorRecovery(s, storage) {
-    if (typeof storage?.readPlatformRecovery !== 'function' || typeof storage.addPlatformRecovery !== 'function') return;
+  function mirrorRecovery(s, given) {
+    if (typeof given?.readPlatformRecovery !== 'function' || typeof given.addPlatformRecovery !== 'function') return;
+    // The newest scope the shell handed over (an older one closes when the screen is rebuilt).
+    mirrorStorage = given;
     if (mirroring) { mirrorAgain = true; return; }
-    const uid = s.account, same = () => uid && s.account === uid && storage.account?.userId === uid;
+    const uid = s.account;
+    let storage = mirrorStorage;
+    const same = () => uid && s.account === uid && storage.account?.userId === uid;
     mirroring = (async () => {
       do {
-        mirrorAgain = false;
+        mirrorAgain = false; storage = mirrorStorage;
         if (!same()) return;
+        // The timeline 행복도 goes to: one choice per account, the later one wins.
+        if (typeof storage.readPlatformBase === 'function') {
+          const chosen = await storage.readPlatformBase();
+          if (!same()) return;
+          if (chosen.docId) s.adoptBase(chosen);
+          const local = s.base?.record;
+          if (local && (local.docId !== chosen.docId || local.chosenAt !== chosen.chosenAt) && (!chosen.chosenAt || local.chosenAt > chosen.chosenAt))
+            await storage.savePlatformBase({ docId: local.docId, chosenAt: local.chosenAt });
+        }
         const account = await storage.readPlatformRecovery();
         if (!same()) return;
         if (account.items.length) s.restoreRecovery(account.items);
         const known = new Set(account.items.map(item => item.rid));
         const local = s.recovery.filter(row => !known.has(row.rid) && ['goal', 'habit'].includes(row.kind) && typeof row.data?.title === 'string');
         if (local.length && same()) await storage.addPlatformRecovery(local.reverse().map(accountCopy));
+        if (mirrorError) { mirrorError = null; document.dispatchEvent(new Event('haedo:store')); }
       } while (mirrorAgain);
-    })().catch(() => {}).finally(() => { mirroring = null; });
+    })().catch(error => {
+      // A closed or signed-out scope is not a failure: the next screen starts a new pass.
+      if (['storage_scope_closed', 'auth_scope_required', 'account_changed'].includes(error?.code)) return;
+      // Said in the status line, not swallowed: a full account list (5,000 copies or 2 MB) stops
+      // only the account copy; new copies stay on this device and in its backups.
+      const full = ['platform_recovery_too_large', 'invalid_platform_recovery'].includes(error?.code);
+      const next = full ? '복구 사본 목록이 가득 차 새 사본은 이 기기와 백업에만 남습니다.' : '복구 사본을 계정에 올리지 못했습니다. 이 기기에는 남아 있습니다.';
+      if (mirrorError !== next && same()) { mirrorError = next; document.dispatchEvent(new Event('haedo:store')); }
+    }).finally(() => { mirroring = null; });
   }
   // A panel host: kind 'day' | 'week' | 'year'. isCurrent() is false once the screen changed.
   function render(host, { kind, date, week = [], year, today, storageAccount, storage, isCurrent, go }) {
@@ -105,6 +127,9 @@
       const field = el('fieldset', null, 'schedule-happiness'); const legend = el('legend', '행복도');
       const current = s.happiness(day), name = 'schedule-happiness-' + day;
       field.append(legend);
+      // Which timeline it is written to (the account's choice), named plainly.
+      const target = s.base?.name;
+      if (target) field.append(el('p', '기록할 연표: ' + target, 'life-meta schedule-happiness-target'));
       const scale = el('div', null, 'schedule-happiness-scale');
       for (let n = 0; n <= 10; n++) {
         const label = el('label', null, 'schedule-happiness-option');
@@ -167,8 +192,12 @@
       week.forEach((day, i) => { const th = el('th', WEEK[i]); th.scope = 'col'; if (day === today) th.dataset.today = 'true'; head.append(th); });
       const thead = el('thead'); thead.append(head); table.append(thead);
       const tbody = el('tbody');
+      // Phone width: the name gets a full-width line of its own above its seven days (the row
+      // header carries it for screen readers; this line is visual only).
+      const label = (text, cls = '') => { const row = el('tr', null, 'schedule-grid-label ' + cls); row.setAttribute('aria-hidden', 'true'); const cell = el('td', text); cell.colSpan = 8; row.append(cell); return row; };
       for (const item of habits) {
-        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; th.title = item.data.title; tr.append(th);
+        tbody.append(label(item.data.title));
+        const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; tr.append(th);
         week.forEach((day, i) => {
           const td = el('td');
           if (model().scheduled(item.data, day)) td.append(habitCheck({ item }, day, item.data.title + ', ' + WEEK[i] + '요일'));
@@ -176,6 +205,7 @@
         });
         tbody.append(tr);
       }
+      tbody.append(label('행복도'));
       const mood = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; mood.append(mh);
       week.forEach((day, i) => {
         const td = el('td'), value = s.happiness(day), score = value?.score ?? null;
@@ -226,6 +256,7 @@
         seen.addEventListener('click', () => { if (alive()) s.acknowledgeRecovery(); });
         status.append(el('span', ' 다른 기기와 겹친 변경 ' + unseen + '개를 복구 사본으로 남겼습니다. ', 'schedule-entry-recovery'), view, ' ', seen);
       }
+      if (mirrorError) { status.hidden = false; status.append(el('span', ' ' + mirrorError, 'schedule-entry-recovery-error')); }
       if (focusKey) [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }
     const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); } };

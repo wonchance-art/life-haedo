@@ -9,8 +9,14 @@
     recovery: prefix(uid) + "items_recovery",
     // A recovery list that could not be read is set aside here (raw values), never discarded.
     recoveryDamaged: prefix(uid) + "items_recovery_damaged",
-    // keptAt of the newest recovery copy the owner has acknowledged (hides the notice).
+    // rids of the recovery copies the owner has acknowledged (hides the notice). By id, not by
+    // time: a copy from another device can arrive after an acknowledgement and still be new.
     recoverySeen: prefix(uid) + "items_recovery_seen",
+    // 행복도 days pressed here and not on the server yet, with the server body they apply to
+    // ({docId: {base, days: {date: {n, at}}}}): a reopened page still rebases and sends them.
+    happinessPending: prefix(uid) + "happiness_pending",
+    // The timeline the schedule writes 행복도 to ({docId, chosenAt}); mirrored to the account.
+    base: prefix(uid) + "happiness_base",
   });
   function read(storage, key, fallback) {
     const value = storage.getItem(key);
@@ -250,9 +256,23 @@
   // The timeline the schedule reads and writes: the same one on every device. Recovery copies
   // are skipped; among the rest the smallest document ID is chosen (IDs are the same everywhere,
   // unlike the device-local registry.current).
-  function baseDocument(reg) {
-    const docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name));
-    return docs.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] || null;
+  // The timeline 행복도 goes to: the one the account recorded (record) when it is still there;
+  // otherwise the timeline that already has the most daily 행복도, then the smallest id. Recovery
+  // copies, documents without a body (read → null) and documents gone from the server (gone)
+  // are never chosen. Every device decides the same way from the same data.
+  const dailyCount = (doc) => (Array.isArray(doc?.happiness) ? doc.happiness.filter((point) => isDay(point?.date)).length : 0);
+  function baseDocument(reg, { record = null, read = null, gone = null } = {}) {
+    const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    let docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name) && !(gone && gone(doc)));
+    if (read) docs = docs.filter((doc) => read(doc.id) !== null);
+    const recorded = record && docs.find((doc) => doc.id === record);
+    if (recorded) return recorded;
+    if (read) {
+      const scored = docs.map((doc) => ({ doc, n: dailyCount(read(doc.id)) })).filter((row) => row.n > 0)
+        .sort((a, b) => b.n - a.n || byId(a.doc, b.doc));
+      if (scored.length) return scored[0].doc;
+    }
+    return docs.sort(byId)[0] || null;
   }
   // Habits that apply on date (created on or before it, on one of its weekdays), with their check.
   function dueHabits(items, date) {

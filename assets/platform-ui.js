@@ -280,7 +280,12 @@
       list.append(item);
     }
     if (!store.recovery.length) list.append(el("li", "p-recovery-row", "남긴 복구 사본이 없습니다."));
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      dialog.showModal();
+      // Start on the title, not the close button, whose label would cover the text.
+      const title = byId("recoveryDialogTitle");
+      title.tabIndex = -1; title.focus();
+    }
   }
   function resolveButton(item, parent) {
     if (item.state !== "conflict") return;
