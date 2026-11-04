@@ -1168,3 +1168,36 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - 도구 사용을 넣을 때.
   - 요청 모양이 바뀌는 새 API 판으로 옮길 때. 이때 SDK 도입을 다시 비교한다.
   - 모델·요금이 바뀌면 마이그레이션의 단가 함수와 이 기록을 함께 고친다.
+
+## D2 준비 — Tiptap 채택 조건 대조와 Delta → Markdown 변환기, 2026-11-04 KST
+
+총괄 작업 지시서(11-04) 작업 2다. 화면·편집기는 바꾸지 않았고 새 vendor 파일도 넣지 않았다. 상세 형식과 검사는 [D2 Markdown 형식](../design-review/post-markdown-d2.md)에 있다.
+
+- **확인한 배포(확인일 2026-11-04, npm 공식 레지스트리):**
+  - `@tiptap/core`·`@tiptap/markdown`·`@tiptap/pm`·`@tiptap/starter-kit`: 최신 3.32.2(2026-10-30 배포, `dist-tags.latest`), MIT. 11-02 기록 이후 새 판은 없다.
+  - `@tiptap/markdown`은 `marked ^17.0.1`을 쓰고, 설치 결과는 17.0.6이다. marked 최신은 18.1.3(2026-11-02)이지만 Tiptap이 ^17로 묶는다.
+  - 격리 폴더에 위 4개를 새로 설치했다. 함께 설치된 44개 패키지가 모두 MIT이고 `npm audit` 0건이다.
+  - npm 보안 권고 일괄 조회(`/-/npm/v1/security/advisories/bulk`, 위 4개 + marked 17.0.6 + prosemirror-model)도 0건이었다.
+  - GitHub 보안 권고 목록과 OSV는 이 세션에서 접근이 막혀 다시 조회하지 못했다. 11-02까지 기록한 Tiptap 권고 3개(속성 병합 3.30.4, Markdown 정규식 3.30.5, CollaborationCaret 3.31.3)는 모두 3.32.2보다 이전 판에서 고쳐졌다.
+  - 이 조회는 의존성 전체의 안전을 보증하지 않는다.
+- **번들(esbuild IIFE, minify, 같은 날 측정):**
+  - `Editor`+`StarterKit`+`Markdown`: min 455,791B, gzip 143,733B, brotli 122,888B
+  - 지금 vendor `quill.js`: 209,274B, gzip 58,787B. Tiptap 쪽이 gzip 약 2.4배다.
+  - 측정 방법: Node `zlib.gzipSync(level 9)`·`brotliCompressSync`(기본값). 도구마다 값이 다르다. 같은 `quill.js`가 `gzip -9`로는 59,009B, `gzip -6`으로는 59,229B다(11-04 재확인).
+  - 공식 UMD가 없으므로 도입한다면 빌드 명령·lock·SHA-256을 vendor 기록에 둔다.
+  - 11-02 실험의 값(min 492,588B)은 Link와 직접 만든 확장을 포함한 크기라 이번 값과 묶음이 다르다.
+- **채택 조건 5가지(11-02 실험) — 지금 상태:**
+
+| 조건 | 상태 | 할 일(D2 본 작업) |
+|---|---|---|
+| 1. 편집기마다 `Marked` 인스턴스를 따로 둔다(전역 규칙 누수 방지) | 미착수 | 편집기 생성 때 새 인스턴스를 넘기고, 두 편집기 동시 열기 검사를 둔다 |
+| 2. 줄머리 기호 이스케이프 | **변환기 쪽 해결** | `post-markdown.js`가 줄 첫머리 `#`·`>`·`-`·`+`·`1.`·`1)`·`---`·`===`를 이스케이프하고, markdown-it 재판독 검사가 있다. 편집기 직렬화도 같은 시험 문서로 맞춘다 |
+| 3. 잠긴 인용 카드 보호 | 미착수 | 카드 노드에 선택 시 입력 차단을 두고 검사한다 |
+| 4. 고치지 않은 블록의 원래 바이트 유지 | 부분 | v2 → Markdown은 결정적(같은 입력은 같은 출력)이다. Obsidian 원문 바이트 보존은 편집기 직렬화 몫으로 남는다 |
+| 5. 읽기(markdown-it)와 편집(marked)의 규칙 일치 | 부분 | 변환기 출력은 markdown-it으로 검증했다. 편집기 쪽 marked 결과를 같은 시험 문서로 맞추는 검사가 필요하다 |
+
+- **변환기 비교(같은 날, npm 메타데이터):**
+  - `quill-delta-to-markdown` 0.6.0(2019-01-23, ISC)과 `@slite/quill-delta-markdown` 0.0.8(2017-09-27, ISC)은 유지되지 않는다. 사진 embed·AI 표시·CommonMark 이스케이프도 보장하지 않는다.
+  - **선택: 순수 모듈 `assets/life/post-markdown.js`를 자체 유지한다(약 200줄).** 무작위 v2 문서를 시드 4개 × 20,000개 돌려 markdown-it 재판독 일치를 확인했다.
+  - 바꿀 조건: Tiptap 직렬화가 같은 시험·무작위 문서를 통과하면, 새 글 저장은 그쪽으로 옮기고 이 모듈은 v2 이행에만 쓴다.
+- **선택:** Tiptap 3.32.2를 후보로 유지한다. 엔진 연결과 번들 도입은 D1 뒤 D2 본 작업에서 위 조건 1·3·4·5의 검사와 함께 한다.
