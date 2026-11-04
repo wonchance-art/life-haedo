@@ -112,11 +112,17 @@
     if (Object.keys(rest).length) next.attributes = copy(rest);
     return next;
   }
-  function validateSnapshot(value) {
+  // A private reading copy has the public copy's shape but keeps the owner's
+  // AI authorship marks. It is only rendered in the owner's own views; it is
+  // never sent, stored or published, and validateSnapshot (public) rejects it.
+  const READING_FORMAT = "life-blog-private-reading-v1";
+  function validateSnapshot(value) { return checkSnapshot(value, false); }
+  function validateReadingSnapshot(value) { return checkSnapshot(value, true); }
+  function checkSnapshot(value, reading) {
     const code = "invalid_blog_snapshot";
     fields(value, ["format", "title", "ops", "attachments", "photos", "author"], code);
-    check(value.format === "life-blog-public-v1", code);
-    check(Array.isArray(value.ops) && value.ops.every((op) => !plain(op?.attributes) || !Object.hasOwn(op.attributes, "author")), code);
+    check(value.format === (reading ? READING_FORMAT : "life-blog-public-v1"), code);
+    if (!reading) check(Array.isArray(value.ops) && value.ops.every((op) => !plain(op?.attributes) || !Object.hasOwn(op.attributes, "author")), code);
     fields(value.author, ["name", "intro"], code);
     text(value.author.name, LIMITS.name, code); text(value.author.intro, LIMITS.intro, code);
     check(Array.isArray(value.photos), code);
@@ -140,7 +146,10 @@
   // then shows that copy's metadata, exactly as the server publishes it.
   // Without `copies` the projection keeps the original's (or HEIC view's)
   // metadata for private reading only; publication always supplies them.
-  function publicSnapshot(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}) {
+  function publicSnapshot(doc, options = {}) { return project(doc, options, false); }
+  // Owner-only reading (private series view): the same projection, AI marks kept.
+  function privateReadingSnapshot(doc, options = {}) { return project(doc, options, true); }
+  function project(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}, reading) {
     model().validate(doc);
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
     check(Array.isArray(photoIds) && photoIds.every((id) => typeof id === "string") && new Set(photoIds).size === photoIds.length, "invalid_blog_selection");
@@ -160,8 +169,8 @@
       }
     }
     const mapping = new Map(doc.photos.filter((p) => selected.has(p.id)).map((p) => [p.id, crypto.randomUUID()]));
-    const snapshot = { format: "life-blog-public-v1", title: doc.title,
-      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? withoutAuthorship(op) :
+    const snapshot = { format: reading ? READING_FORMAT : "life-blog-public-v1", title: doc.title,
+      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
         { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
       // An original is never projected publicly when copies are given; the
       // public photo for that position is its copy. A HEIC original is never
@@ -170,8 +179,8 @@
         const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
-    validateSnapshot(snapshot);
+    checkSnapshot(snapshot, reading);
     return snapshot;
   }
-  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, validateSnapshot });
+  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, validateSnapshot, privateReadingSnapshot, validateReadingSnapshot });
 });

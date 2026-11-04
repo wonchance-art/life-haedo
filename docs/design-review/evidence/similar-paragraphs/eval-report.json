@@ -1,0 +1,1402 @@
+{
+  "set": "heldout",
+  "freezeSHA256": "5c1b4ebd2926d1159e76d2bd664e31eb98b0c45e2c733d5e2bf92d89bf90e046",
+  "evaluatorSHA256": "642f6f89267cfbbef2dd679d88f30c133539253ecc9e6ae87b17f3e494e13b40",
+  "parameters": {
+    "variant": "TP",
+    "threshold": 0.61
+  },
+  "decision": "reject",
+  "checks": {
+    "hit3": {
+      "value": 0.2286,
+      "limit": "≥ 0.7",
+      "pass": false
+    },
+    "margin": {
+      "value": 0,
+      "baseline": "paragraphNoTitle",
+      "baselineHit3": 0.2286,
+      "limit": "≥ 0.15",
+      "pass": false
+    },
+    "unrelatedFP": {
+      "value": 0,
+      "limit": "≤ 0.2",
+      "pass": true
+    },
+    "indexMs": {
+      "corpusPool": 59168,
+      "longPool": 242785.3,
+      "limit": "≤ 60000",
+      "pass": false
+    },
+    "queryMs": {
+      "corpusPoolMax": 5.6,
+      "longPoolMax": 0.6,
+      "limit": "≤ 200",
+      "pass": true
+    },
+    "storageBytes": {
+      "corpusPool": 434179,
+      "longPool": 434379,
+      "limit": "≤ 2000000",
+      "pass": true
+    },
+    "throttleApplied": {
+      "iframeRatio": 4.1243,
+      "note": "판정 조건이 아니라 측정 유효성 확인: iframe 주 스레드 감속비",
+      "valid": true
+    },
+    "sameVectors": {
+      "maxAbsDifference": 0,
+      "inputs": 32,
+      "note": "같은 배치 입력에서 워커 경로와 iframe 경로 비교",
+      "valid": true
+    },
+    "networkViolations": {
+      "count": 0,
+      "valid": true
+    },
+    "productUnchanged": {
+      "valid": true
+    }
+  },
+  "method": {
+    "hit3": 0.2286,
+    "hits": 8,
+    "relatedSeeds": 35,
+    "mrr": 0.2143,
+    "goldRecall3": 0.2051,
+    "returnedPrecision": 0.6667,
+    "returnedOnRelated": 12,
+    "emptyOnRelated": 25,
+    "unrelatedFP": 0,
+    "unrelatedWithOutput": 0,
+    "unrelatedSeeds": 16,
+    "perSeed": [
+      {
+        "seed": "E01:1",
+        "type": "question",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E02:2"
+        ],
+        "scores": [
+          0.6272
+        ]
+      },
+      {
+        "seed": "E01:2",
+        "type": "experience",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E25:2"
+        ],
+        "scores": [
+          0.6149
+        ]
+      },
+      {
+        "seed": "E01:3",
+        "type": "question",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E01:4",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E03:1",
+        "type": "experience",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E04:1"
+        ],
+        "scores": [
+          0.6764
+        ]
+      },
+      {
+        "seed": "E03:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [
+          "E04:1"
+        ],
+        "scores": [
+          0.6934
+        ]
+      },
+      {
+        "seed": "E03:4",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E04:4",
+        "type": "topic",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E26:2"
+        ],
+        "scores": [
+          0.7169
+        ]
+      },
+      {
+        "seed": "E25:1",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E26:3",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E05:1",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E05:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E05:4",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E06:3",
+        "type": "experience",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E20:2"
+        ],
+        "scores": [
+          0.6805
+        ]
+      },
+      {
+        "seed": "E08:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E08:3",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E08:4",
+        "type": "question",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E18:1",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E18:2",
+        "type": "experience",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E19:2",
+          "E19:0"
+        ],
+        "scores": [
+          0.6496,
+          0.6207
+        ]
+      },
+      {
+        "seed": "E18:3",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E10:1",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E10:3",
+        "type": "experience",
+        "hit": true,
+        "rank": 2,
+        "returned": [
+          "E11:4",
+          "E11:3"
+        ],
+        "scores": [
+          0.6435,
+          0.6375
+        ]
+      },
+      {
+        "seed": "E12:1",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E12:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E12:3",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E14:1",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E14:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E14:3",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E15:4",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E20:1",
+        "type": "topic",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E16:1",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E16:2",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E16:4",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E23:0",
+        "type": "topic",
+        "hit": true,
+        "rank": 1,
+        "returned": [
+          "E24:4"
+        ],
+        "scores": [
+          0.6675
+        ]
+      },
+      {
+        "seed": "E23:1",
+        "type": "experience",
+        "hit": false,
+        "rank": null,
+        "returned": [
+          "E09:3"
+        ],
+        "scores": [
+          0.6463
+        ]
+      }
+    ],
+    "unrelated": [
+      {
+        "seed": "E08:1",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E10:2",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E12:4",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E14:4",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E17:2",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E20:3",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E22:3",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E23:2",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E27:1",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E27:2",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E28:1",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E28:2",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E29:0",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E29:1",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E30:1",
+        "returned": [],
+        "scores": []
+      },
+      {
+        "seed": "E30:2",
+        "returned": [],
+        "scores": []
+      }
+    ]
+  },
+  "baselines": {
+    "paragraphNoTitle": {
+      "hit3": 0.2286,
+      "hits": 8,
+      "relatedSeeds": 35,
+      "mrr": 0.181,
+      "goldRecall3": 0.2051,
+      "returnedPrecision": 0.3333,
+      "returnedOnRelated": 24,
+      "emptyOnRelated": 20,
+      "unrelatedFP": 0.25,
+      "unrelatedWithOutput": 4,
+      "unrelatedSeeds": 16,
+      "perSeed": [
+        {
+          "seed": "E01:1",
+          "type": "question",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E02:1"
+          ]
+        },
+        {
+          "seed": "E01:2",
+          "type": "experience",
+          "hit": true,
+          "rank": 2,
+          "returned": [
+            "E08:2",
+            "E25:2"
+          ]
+        },
+        {
+          "seed": "E01:3",
+          "type": "question",
+          "hit": true,
+          "rank": 3,
+          "returned": [
+            "E05:4",
+            "E09:4",
+            "E13:4"
+          ]
+        },
+        {
+          "seed": "E01:4",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E03:3"
+          ]
+        },
+        {
+          "seed": "E03:1",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E04:1"
+          ]
+        },
+        {
+          "seed": "E03:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E22:3"
+          ]
+        },
+        {
+          "seed": "E03:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E20:2"
+          ]
+        },
+        {
+          "seed": "E04:4",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E25:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E26:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E23:0"
+          ]
+        },
+        {
+          "seed": "E05:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E05:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E05:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E01:3",
+            "E13:4",
+            "E30:3"
+          ]
+        },
+        {
+          "seed": "E06:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E08:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E01:2",
+            "E23:0",
+            "E25:2"
+          ]
+        },
+        {
+          "seed": "E08:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E08:4",
+          "type": "question",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E18:4"
+          ]
+        },
+        {
+          "seed": "E18:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E18:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E18:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E10:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E10:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E12:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E12:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E04:0"
+          ]
+        },
+        {
+          "seed": "E12:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E02:0"
+          ]
+        },
+        {
+          "seed": "E14:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E14:2",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E21:2"
+          ]
+        },
+        {
+          "seed": "E14:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E15:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E20:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E23:0",
+          "type": "topic",
+          "hit": true,
+          "rank": 2,
+          "returned": [
+            "E08:2",
+            "E24:4",
+            "E26:3"
+          ]
+        },
+        {
+          "seed": "E23:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        }
+      ],
+      "unrelated": [
+        {
+          "seed": "E08:1",
+          "returned": [
+            "E26:1"
+          ]
+        },
+        {
+          "seed": "E10:2",
+          "returned": [
+            "E23:2"
+          ]
+        },
+        {
+          "seed": "E12:4",
+          "returned": []
+        },
+        {
+          "seed": "E14:4",
+          "returned": []
+        },
+        {
+          "seed": "E17:2",
+          "returned": []
+        },
+        {
+          "seed": "E20:3",
+          "returned": []
+        },
+        {
+          "seed": "E22:3",
+          "returned": [
+            "E03:2",
+            "E19:1"
+          ]
+        },
+        {
+          "seed": "E23:2",
+          "returned": [
+            "E10:2"
+          ]
+        },
+        {
+          "seed": "E27:1",
+          "returned": []
+        },
+        {
+          "seed": "E27:2",
+          "returned": []
+        },
+        {
+          "seed": "E28:1",
+          "returned": []
+        },
+        {
+          "seed": "E28:2",
+          "returned": []
+        },
+        {
+          "seed": "E29:0",
+          "returned": []
+        },
+        {
+          "seed": "E29:1",
+          "returned": []
+        },
+        {
+          "seed": "E30:1",
+          "returned": []
+        },
+        {
+          "seed": "E30:2",
+          "returned": []
+        }
+      ]
+    },
+    "paragraphDocumentTitle": {
+      "hit3": 0.2,
+      "hits": 7,
+      "relatedSeeds": 35,
+      "mrr": 0.1571,
+      "goldRecall3": 0.1795,
+      "returnedPrecision": 0.25,
+      "returnedOnRelated": 28,
+      "emptyOnRelated": 19,
+      "unrelatedFP": 0.3125,
+      "unrelatedWithOutput": 5,
+      "unrelatedSeeds": 16,
+      "perSeed": [
+        {
+          "seed": "E01:1",
+          "type": "question",
+          "hit": true,
+          "rank": 2,
+          "returned": [
+            "E02:0",
+            "E02:1"
+          ]
+        },
+        {
+          "seed": "E01:2",
+          "type": "experience",
+          "hit": true,
+          "rank": 2,
+          "returned": [
+            "E08:2",
+            "E25:2"
+          ]
+        },
+        {
+          "seed": "E01:3",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E09:0",
+            "E09:4",
+            "E26:1"
+          ]
+        },
+        {
+          "seed": "E01:4",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E03:3"
+          ]
+        },
+        {
+          "seed": "E03:1",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E04:1"
+          ]
+        },
+        {
+          "seed": "E03:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E22:3"
+          ]
+        },
+        {
+          "seed": "E03:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E20:2"
+          ]
+        },
+        {
+          "seed": "E04:4",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E25:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E26:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E01:3",
+            "E23:0",
+            "E24:1"
+          ]
+        },
+        {
+          "seed": "E05:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E05:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E05:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E01:3",
+            "E13:4",
+            "E30:3"
+          ]
+        },
+        {
+          "seed": "E06:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E08:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E01:2",
+            "E23:0",
+            "E25:2"
+          ]
+        },
+        {
+          "seed": "E08:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E08:4",
+          "type": "question",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E18:4"
+          ]
+        },
+        {
+          "seed": "E18:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E05:0"
+          ]
+        },
+        {
+          "seed": "E18:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E18:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E10:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E10:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E12:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E12:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E04:0"
+          ]
+        },
+        {
+          "seed": "E12:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "E02:0"
+          ]
+        },
+        {
+          "seed": "E14:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E14:2",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "E21:2"
+          ]
+        },
+        {
+          "seed": "E14:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E15:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E20:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E16:4",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "E23:0",
+          "type": "topic",
+          "hit": true,
+          "rank": 2,
+          "returned": [
+            "E08:2",
+            "E24:4",
+            "E26:3"
+          ]
+        },
+        {
+          "seed": "E23:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        }
+      ],
+      "unrelated": [
+        {
+          "seed": "E08:1",
+          "returned": [
+            "E26:1"
+          ]
+        },
+        {
+          "seed": "E10:2",
+          "returned": [
+            "E23:2"
+          ]
+        },
+        {
+          "seed": "E12:4",
+          "returned": []
+        },
+        {
+          "seed": "E14:4",
+          "returned": []
+        },
+        {
+          "seed": "E17:2",
+          "returned": []
+        },
+        {
+          "seed": "E20:3",
+          "returned": []
+        },
+        {
+          "seed": "E22:3",
+          "returned": [
+            "E03:2",
+            "E19:1"
+          ]
+        },
+        {
+          "seed": "E23:2",
+          "returned": [
+            "E10:2"
+          ]
+        },
+        {
+          "seed": "E27:1",
+          "returned": []
+        },
+        {
+          "seed": "E27:2",
+          "returned": []
+        },
+        {
+          "seed": "E28:1",
+          "returned": []
+        },
+        {
+          "seed": "E28:2",
+          "returned": [
+            "E10:0"
+          ]
+        },
+        {
+          "seed": "E29:0",
+          "returned": []
+        },
+        {
+          "seed": "E29:1",
+          "returned": []
+        },
+        {
+          "seed": "E30:1",
+          "returned": []
+        },
+        {
+          "seed": "E30:2",
+          "returned": []
+        }
+      ]
+    },
+    "documentLevelReference": {
+      "hit3": 0.3143,
+      "hits": 11,
+      "relatedSeeds": 35,
+      "mrr": 0.2143,
+      "goldRecall3": 0.2821,
+      "returnedPrecision": 0.1048,
+      "returnedOnRelated": 105,
+      "emptyOnRelated": 0,
+      "unrelatedFP": 1,
+      "unrelatedWithOutput": 16,
+      "unrelatedSeeds": 16,
+      "note": "현재 제품 동작(문서 단위). 문단을 짚지 못해 후하게 센 참고값이며 판정에 쓰지 않는다."
+    }
+  },
+  "byType": {
+    "question": {
+      "seeds": 3,
+      "methodHits": 1,
+      "baselineHits": 3
+    },
+    "experience": {
+      "seeds": 23,
+      "methodHits": 5,
+      "baselineHits": 4
+    },
+    "topic": {
+      "seeds": 9,
+      "methodHits": 2,
+      "baselineHits": 1
+    }
+  },
+  "lexicalOverlap": {
+    "goldPairs": 39,
+    "withTwoCommonTerms": 8,
+    "ratio": 0.2051
+  },
+  "descriptive": {
+    "rankOnly": {
+      "hit3": 0.7429,
+      "hits": 26,
+      "relatedSeeds": 35,
+      "mrr": 0.5476,
+      "goldRecall3": 0.6923,
+      "returnedPrecision": 0.2571,
+      "returnedOnRelated": 105,
+      "emptyOnRelated": 0,
+      "unrelatedFP": 1,
+      "unrelatedWithOutput": 16,
+      "unrelatedSeeds": 16
+    },
+    "distribution": {
+      "goldPairBestScore": {
+        "min": 0.1851,
+        "median": 0.5143,
+        "max": 0.7169
+      },
+      "unrelatedSeedTopScore": {
+        "min": 0.3883,
+        "median": 0.4969,
+        "max": 0.5731
+      },
+      "goldAboveThreshold": 8,
+      "unrelatedAboveThreshold": 0
+    },
+    "adjustedTo4x": {
+      "factor": 0.9699,
+      "corpusPoolIndexMs": 57385.3744,
+      "longPoolIndexMs": 235470.6147,
+      "corpusPoolQueryMaxMs": 5.4313,
+      "longPoolQueryMaxMs": 0.5819
+    }
+  },
+  "cost": {
+    "workerPrepareMsUnthrottled": 3931.3000000000466,
+    "hostPrepareMsThrottled": 10499.40000000014,
+    "corpusPool": {
+      "paragraphs": 200,
+      "inputs": 200,
+      "characters": {
+        "min": 25,
+        "median": 55,
+        "max": 96,
+        "total": 11006
+      },
+      "indexMs": 59168,
+      "batchMs": [
+        10379.30000000028,
+        10331.299999999814,
+        9218.600000000093,
+        9425.600000000093,
+        9178,
+        9060.5,
+        1573.7999999998137
+      ],
+      "storageBytes": 434179,
+      "query": {
+        "decodeMs": 116.79999999981374,
+        "count": 200,
+        "medianMs": 0.10000000009313226,
+        "p95Ms": 1.3999999999068677,
+        "maxMs": 5.600000000093132
+      }
+    },
+    "longPool": {
+      "paragraphs": 200,
+      "inputs": 200,
+      "characters": {
+        "min": 208,
+        "median": 275,
+        "max": 350,
+        "total": 55830
+      },
+      "indexMs": 242785.30000000028,
+      "batchMs": [
+        40952.60000000009,
+        40349.60000000009,
+        34222.5,
+        35042.89999999991,
+        42717,
+        41353,
+        8147.600000000093
+      ],
+      "storageBytes": 434379,
+      "query": {
+        "decodeMs": 79.5,
+        "count": 200,
+        "medianMs": 0.10000000009313226,
+        "p95Ms": 0.20000000018626451,
+        "maxMs": 0.6000000000931323
+      }
+    },
+    "singleLongParagraphEmbedMedianMs": 1212,
+    "batchComposition": {
+      "maxAbsDifference": 0.024869415909051895,
+      "minCosine": 0.9874141318267402
+    },
+    "memory": {
+      "method": "250ms 간격 /proc 브라우저 프로세스 트리 VmRSS 합(공유 페이지 중복 포함, 표본 사이 최대치 누락 가능)",
+      "peakSummedRSSBytes": 1940017152,
+      "samples": 1396,
+      "byPhase": {
+        "worker-prepare": 1836388352,
+        "quality-embed": 1940017152,
+        "host-prepare-throttled": 1899438080,
+        "cost-corpus-throttled": 1710006272,
+        "cost-long-throttled": 1706323968,
+        "single-embed-throttled": 1499254784
+      }
+    },
+    "externalBytes": 2917,
+    "calibration": {
+      "page1": 336.19999999995343,
+      "iframe1": 302.60000000009313,
+      "page4": 1323.9000000001397,
+      "iframe4": 1248,
+      "pageRatio": 3.9378346222496226,
+      "iframeRatio": 4.124256444149425
+    }
+  }
+}

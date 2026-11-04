@@ -1,5 +1,14 @@
 # 오픈소스 검토와 재사용 결정
 
+## 기기 안 비슷한 문단 — Obsidian Smart Connections 비교, 실험 후 기각 — 2026-11-02
+
+| 비교 | 확인 내용(2026-11-02 KST) | 판단 |
+| --- | --- | --- |
+| [Smart Connections](https://github.com/brianpetro/obsidian-smart-connections) | README 기준 v4다. 플러그인에 로컬 임베딩 모델이 들어 있고, 지금 보는 노트와 의미가 비슷한 노트를 점수와 함께 Connections 보기에 보여 준다(점수는 모델에 따라 달라진다고 명시). "Private and offline by default". 문단(블록) 단위 연결과 점수·순위 설정은 유료 Pro 기능이다. 라이선스는 Smart Plugins License(소스 공개, 경쟁 제품 제한)다. GitHub Releases 항목은 비어 있다. | **설계 참고만 하고 직접 도입하지 않는다.** Obsidian 플러그인 API와 라이선스 제한 때문에 해도에 코드를 가져올 수 없다. "후보와 점수만 보여 주고 연결은 사람이" 원칙만 참고했다. |
+| 기존 해도 임베딩 워커 재사용 | 해도의 워커는 Transformers.js 4.3.1 + MiniLM-L12 다국어, 고정 revision, 명시 준비 방식이다. 새 의존성 없이 문단 색인 실험에 그대로 썼다(제품 파일 무수정). | 합성 평가 세트에서 오탐 ≤ 0.20 임계값의 Hit@3가 0.229로, 기존 공통어 규칙과 같았다. 275자 문단 200개 색인이 CPU 4배 감속에서 243초였다. **기각.** 기존 `rediscovery.js` 규칙을 유지한다. 근거는 [실험 문서](../design-review/similar-paragraphs-experiment.md). |
+
+다시 검토할 조건은 실험 문서의 "바꿀 조건"을 따른다. 같은 크기 안의 문장 유사도 보정 모델과 개발 세트 선행 기준이 필요하다. 이번 조회는 README 확인이며 플러그인 설치·실행·보안 감사는 하지 않았다.
+
 ## 자료실 기본 계정 보관과 기존 CAS/outbox 재사용 — 2026-10-24
 
 사용자 요청으로 자료 영역의 기본 정책을 비공개 계정 자동 보관으로 바꾼다. 새 프레임워크보다 기존 단일 Supabase SDK/인증·Core Sync/CompositionSync의 두 엔진·owner/revision CAS·영속 operation 영수증과 IDB 캐시를 재사용하고 LibraryMeta를 도메인 adapter로 연결한다. 원본 첨부도 기존 ZIP 검증/Blob DB를 재사용한다. [대상·이관·순서·실패 복구](../design-review/account-library.md). 앱의 새 런타임 의존성은0이며 범용 복제 엔진·SDK 업그레이드는 추가하지 않았다.
@@ -1135,6 +1144,30 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - **선택: 공식 tarball의 SVG 원본 중 쓰는 것만 `vendor/lucide/icons/`에 두고, `assets/life/icons.js`가 그 기하를 그대로 쓴다.** 파일마다 SHA-256을 `vendor/lucide/UPSTREAM.json`에 남기고 `tests/icons.test.cjs`가 기하·해시·한 그림 한 개념을 확인한다. 런타임·글꼴·외부 요청은 없다.
 - **개념별 그림:** 일정 = calendar, 자료 = book-open, 뉴스 = newspaper, 설정 = settings, 글쓰기 = pencil(데스크톱 메뉴의 `+ 글쓰기`는 plus), 편집 = square-pen, 인용 = text-quote, 웹 주소 = link, 뒤로 = chevron-left. 이전의 해도 A 따옴표는 결정 15의 "인용 = 줄과 세로 바"로 대체했다.
 - **선택을 바꿀 조건:** 쓰려는 개념에 1.51.0 모양이 없거나, 최신 판에서 쓰는 모양이 바뀌어 시안을 새로 정할 때 판을 올리고 해시와 고지를 함께 갱신한다.
+
+## 글쓰기 AI 제안의 공급자 호출 — 2026-11-04 KST
+
+- **확인한 근거(확인일 2026-11-04, 공식 문서):**
+  - [요금표](https://platform.claude.com/docs/en/about-claude/pricing)
+    - Claude Haiku 5.5: 입력 $0.10, 출력 $0.50 /MTok(프롬프트 10만 토큰 이하). 넘으면 $0.50/$2.50.
+    - Claude Sonnet 5.5: 입력 $2, 출력 $10 /MTok.
+  - [API 보존](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
+    - 프롬프트·출력은 기본 보존하지 않는다고 적는다. Covered Model(Fable 5/5.1·Mythos 5/5.1)만 30일 보존이 필요하다.
+    - 상용 보존 정책은 30일 안 자동 삭제라고 적어 표현이 다르다. 소유자에게는 긴 쪽(최대 30일)으로 알린다([검토 문서 §8.2](writing-ai-review.md)).
+    - 보존 데이터는 명시 허락 없이는 학습에 쓰지 않는다.
+    - 구조화 출력은 JSON 스키마만 최대 24시간 캐시한다.
+- **비교:**
+  - 공식 SDK(`@anthropic-ai/sdk`): Edge 함수에 npm 의존성과 잠금 파일이 늘어난다. 쓰는 기능도 요청 1회(비스트리밍)뿐이다.
+  - **선택: SDK 없이 Messages API를 fetch로 직접 호출한다.** 헤더 세 개와 본문을 Claude API skill의 curl 참조 그대로 쓴다. 의존성 0개.
+  - 이 앱에 맞지 않아 쓰지 않은 기능:
+    - 스트리밍: 출력 상한이 16K 이하다.
+    - prompt caching: 사용량이 적고 지시문이 짧다.
+    - server-side fallback: Haiku 5.5에는 없다.
+- **선택을 바꿀 조건:**
+  - 긴 출력이 필요해 스트리밍을 써야 할 때.
+  - 도구 사용을 넣을 때.
+  - 요청 모양이 바뀌는 새 API 판으로 옮길 때. 이때 SDK 도입을 다시 비교한다.
+  - 모델·요금이 바뀌면 마이그레이션의 단가 함수와 이 기록을 함께 고친다.
 
 ## D2 준비 — Tiptap 채택 조건 대조와 Delta → Markdown 변환기, 2026-11-04 KST
 
