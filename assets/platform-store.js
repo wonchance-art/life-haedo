@@ -169,9 +169,10 @@
   function keepLoserDoc(captured, reg, name, data) {
     assertAccount(captured);
     if (!HaedoData.isDocument(data)) throw new Error("연표 사본 형식을 확인해야 합니다.");
-    const k = model.keys(captured.uid), id = model.newId();
-    localStorage.setItem(k.docs + id, JSON.stringify(data));
-    reg.docs.push({ id, name: (name || "내 연표") + " 복구 사본", updated: new Date().toISOString() });
+    const k = model.keys(captured.uid), id = model.newId(), label = (name || "내 연표") + " 복구 사본";
+    // The label is also the copy's own name, so a restore or an edit of the copy keeps it.
+    localStorage.setItem(k.docs + id, JSON.stringify({ ...data, profile: { ...data.profile, name: label } }));
+    reg.docs.push({ id, name: label, updated: new Date().toISOString() });
     localStorage.setItem(k.registry, JSON.stringify(reg));
     return id;
   }

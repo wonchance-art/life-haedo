@@ -17,7 +17,7 @@ const headers = { 'access-control-allow-origin': '*', 'access-control-allow-head
 
 // Owner-scoped tables with a server clock (later than the page's fixed clock by default).
 class PlatformTables {
-  constructor() { this.rows = { haedo_items: new Map(), haedo_documents: new Map() }; this.clock = Date.parse('2026-11-03T04:00:00Z'); this.fail = null; this.hold = null; this.calls = []; }
+  constructor(start = '2026-11-03T04:00:00Z') { this.rows = { haedo_items: new Map(), haedo_documents: new Map() }; this.clock = Date.parse(start); this.fail = null; this.hold = null; this.calls = []; }
   stamp() { this.clock += 1000; return new Date(this.clock).toISOString(); }
   seed(table, owner, row) { const next = { ...row, user_id: owner, updated_at: this.stamp() }; this.rows[table].set(row.id, next); return next; }
   owned(table, owner) { return [...this.rows[table].values()].filter(row => row.user_id === owner); }
@@ -247,4 +247,5 @@ async function main() {
   assert(report.checks.length && report.checks.every(item => item.pass), 'all checks pass');
   console.log(JSON.stringify({ checks: report.checks.length, expectedErrors: report.expectedErrors }));
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { PlatformTables };
