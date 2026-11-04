@@ -1,5 +1,8 @@
 /* Optional two-device writing regression. Real SDK/app/IndexedDB with only
  * anonymous intercepted Supabase HTTP, not live SQL/RLS or Apple hardware.
+ * The fixture is the old backend (library capability 0): the workspace originals
+ * sync is enabled explicitly; writing drafts then follow the account automatically
+ * (2026-11-01 owner rule) through life_writing_draft_*, never inside the bundle.
  * BASE_URL=http://127.0.0.1:4184 node tests/life-writing-sync-browser.cjs */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
@@ -13,7 +16,8 @@ const { playwright, ready, settle, makeContext, observe } = require('./unified-h
 const out = path.resolve(__dirname, '../.local/writing-sync');
 const originalText = '오늘 읽은 책에서 나만의 질문을 찾았다.\n다른 기기에서도 그대로 이어 읽을 글🌱';
 const revisedText = originalText + '\n기기 B에서 다시 읽고 생각을 한 문장 더 보탰다.';
-const draftText = '기기 A에만 남길 미완성 초안 — 동기화 대상이 아니다.';
+// 2026-11-01: an unfinished draft is no longer device-only; it follows the account.
+const draftText = '기기 A에서 쓰다 만 초안 — 로그인한 다른 기기에도 그대로 이어진다.';
 const bundle = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.read(id), id);
 const stages = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.listStages(id), id);
 
@@ -58,6 +62,8 @@ async function main() {
     await a.waitForFunction(() => document.querySelector('#lifeWritingStatus')?.dataset.state === 'draft');
     const localDraft = (await stages(a, id)).find(stage => stage.kind === 'writing' && stage.state === 'draft');
     assert.equal(localDraft.text, draftText); assert.equal(server.writes().length, 0, 'No upload before explicit sync opt-in');
+    // 2026-11-01 keeps the originals-first rule: no draft leaves before its originals sync.
+    assert.equal(server.draftWrites().length, 0, 'No draft upload before its originals sync');
 
     await a.evaluate(id => HaedoLife.Shell.sync.enable(id), id);
     await a.evaluate(id => HaedoLife.Shell.sync.syncNow(id), id);
@@ -67,12 +73,27 @@ async function main() {
     assert.deepEqual(firstRemote.data.sourceVersions, first.sourceVersions);
     assert(!JSON.stringify(firstRemote.data).includes(draftText));
     assert(!JSON.stringify(firstRemote.data).includes(localDraft.stageId));
+    // 2026-11-01: the draft syncs automatically once its originals sync, to the draft table only.
+    await a.evaluate(() => HaedoLife.Shell.writingSync.refresh());
+    const remoteDraft = server.draft(accounts.a.id, id, localDraft.stageId);
+    assert.equal(remoteDraft?.data.text, draftText, 'Device A uploads its draft automatically');
+    assert.equal(remoteDraft.data.state, 'draft'); assert.equal(remoteDraft.data.title, localDraft.title);
+    assert.deepEqual(server.row(accounts.a.id, id).data, firstRemote.data, 'The draft upload leaves the original bundle unchanged');
 
     await b.evaluate(async id => { await HaedoLife.Shell.sync.download(id); await HaedoLife.Shell.storage.setActive(id); }, id);
     await b.goto(base + '/index.html?section=records'); await ready(b); await settle(b);
     assert.deepEqual((await bundle(b, id)).sourceVersions, first.sourceVersions);
     assert.equal((await bundle(b, id)).sources[0].sourceKey, first.sources[0].sourceKey);
-    assert.deepEqual(await stages(b, id), [], 'No local draft or applied stage crosses devices');
+    // 2026-11-01: device A's draft (not its applied stage) reaches B with identical text and stageId.
+    // Waiting for it removes the race the old "nothing arrives" assertion depended on.
+    await awaitCondition(b, ({ id, stageId }) => HaedoLife.Shell.storage.listStages(id).then(list => list.some(stage => stage.stageId === stageId)),
+      { id, stageId: localDraft.stageId }, { timeout: 12000, label: 'device A draft on device B' });
+    const receivedDraft = await stages(b, id);
+    assert.equal(receivedDraft.length, 1, 'Only the draft crosses devices, not A\'s applied stage');
+    assert.deepEqual([receivedDraft[0].kind, receivedDraft[0].state, receivedDraft[0].stageId, receivedDraft[0].title, receivedDraft[0].text],
+      ['writing', 'draft', localDraft.stageId, localDraft.title, draftText]);
+    assert.deepEqual((await bundle(b, id)).sourceVersions, first.sourceVersions, 'The received draft leaves the original versions unchanged');
+    assert(!JSON.stringify(await bundle(b, id)).includes(draftText));
     await b.locator('.life-source-open[data-version-id="' + originalVersion.id + '"]').click(); await settle(b);
     assert.equal(await b.locator('#lifeSourceText').textContent(), originalText);
     await b.getByRole('button', { name: '내 글 수정', exact: true }).click();
@@ -84,6 +105,8 @@ async function main() {
     assert.equal(revised.sources.length, 1); assert.equal(revised.sources[0].sourceKey, first.sources[0].sourceKey);
     assert.deepEqual(revised.sourceVersions.find(value => value.id === originalVersion.id), originalVersion);
     assert.equal(revised.sourceVersions.at(-1).contentText, revisedText);
+    // 2026-11-01: B's own edit and save leave the received draft as it arrived.
+    assert.equal((await stages(b, id)).find(stage => stage.stageId === localDraft.stageId).text, draftText);
 
     await a.evaluate(id => HaedoLife.Shell.sync.download(id), id);
     const received = await bundle(a, id);
@@ -98,10 +121,17 @@ async function main() {
     assert.equal(await a.locator('#lifeWritingBody').inputValue(), draftText);
     assert.equal(server.writes(accounts.a.id, bEmptyId).length, 0, 'Downloading does not upload the blank workspace');
     assert(server.writes().every(request => request.owner === accounts.a.id && request.id === id));
-    report.checks.push({ name: 'Explicit two-device writing sync preserves source identity and immutable versions while local drafts stay on device A', pass: true });
-    console.log('PASS writing two-device sync, edit, immutable original and draft exclusion');
+    // 2026-11-01: draft writes go to the same owner and workspace only, for writing stages of this
+    // journey; receiving A's draft does not echo it back from B, and the server copy is unchanged.
+    const writingIds = new Set([...await stages(a, id), ...await stages(b, id)].filter(stage => stage.kind === 'writing').map(stage => stage.stageId));
+    assert(server.draftWrites().length > 0 && server.draftWrites().every(request => request.owner === accounts.a.id && request.workspace === id && writingIds.has(request.id)));
+    assert(!server.draftWrites('writing-device-b').some(request => request.id === localDraft.stageId), 'Device B does not send back the draft it received');
+    assert.equal(server.draft(accounts.a.id, id, localDraft.stageId).data.text, draftText);
+    assert(!JSON.stringify(server.row(accounts.a.id, id).data).includes(draftText), 'The draft never enters the original bundle');
+    report.checks.push({ name: 'Two-device writing sync preserves source identity and immutable versions while device A\'s draft follows the account to device B (2026-11-01)', pass: true });
+    console.log('PASS writing two-device sync, edit, immutable original and automatic draft sync');
   } catch (error) {
-    report.checks.push({ name: 'Explicit two-device writing sync', pass: false, error: error.stack }); console.error(error.stack);
+    report.checks.push({ name: 'Two-device writing sync', pass: false, error: error.stack }); console.error(error.stack);
   } finally {
     report.simulatedWrites = server.writes().length;
     for (const context of contexts) await context.close(); await browser.close();
