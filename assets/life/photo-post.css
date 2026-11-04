@@ -508,16 +508,18 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 /* Private AI authorship mark (editor only). A dotted underline carries the
    meaning without color; the soft fill only groups the run. Not rendered in
    reading, HTML files or public copies. */
+/* AI 글 표시 (D1, 2026-11-04): the same mark as the reader's .blog-ai-text
+   (PR #174). The dots are a background along the bottom edge, so an underline
+   or a link drawn as text decoration never covers them. */
 .photo-posts .ql-editor .photo-ai-text {
-  background: var(--paper-2, #f4f7f5);
+  background-color: var(--paper-2, #f4f7f5);
+  background-image: radial-gradient(circle, var(--ink-soft, #5d6b65) 1px, transparent 1.3px);
+  background-size: 5px 3px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
   border-radius: 3px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--ink-soft, #5d6b65);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.32em;
 }
 .photo-posts .ql-toolbar .photo-author-toggle[aria-pressed="true"] { background: #edf1ff; color: #3156d3; }
 .photo-block,

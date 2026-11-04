@@ -123,8 +123,11 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       assert.deepEqual(s.spans, ['AI suggested sentence.']);
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true', 'the selection is all AI text');
       assert.equal(await status(page), 'AI 글로 표시했어요');
-      const style = await page.locator('.ql-editor .photo-ai-text').evaluate(n => { const c = getComputedStyle(n); return { line: c.textDecorationLine, style: c.textDecorationStyle, color: c.color, background: c.backgroundColor }; });
-      assert.equal(style.style, 'dotted'); assert.match(style.line, /underline/);
+      // D1 (2026-11-04): the dots are a background along the bottom edge, like the reader's
+      // .blog-ai-text, so an underline or a link drawn as text decoration cannot cover them.
+      const style = await page.locator('.ql-editor .photo-ai-text').evaluate(n => { const c = getComputedStyle(n); return { image: c.backgroundImage, positionY: c.backgroundPositionY, repeat: c.backgroundRepeat, background: c.backgroundColor }; });
+      assert.match(style.image, /radial-gradient/); assert.equal(style.positionY, '100%'); assert.equal(style.repeat, 'repeat-x');
+      assert.notEqual(style.background, 'rgba(0, 0, 0, 0)');
       await shot('marked');
       await durable(page, d => d.status === 'draft' && aiRuns(d.ops).join('') === 'AI suggested sentence.', 'autosaved mark');
       // The short note gives way to the save state once the autosave completes.

@@ -426,6 +426,8 @@ tags: [도서관, 산책]
 - **공개하기:**
   - 글 관리의 공개 검토를 `공개하기` 카드로 정리했다(제목·테두리, 조작을 아래 한 줄로).
   - 단계·확인·기본 사진 0장·촬영 정보를 뺀 사본은 그대로다.
+- **AI 글 표시(편집기):** `.photo-ai-text`의 점선을 읽기 쪽 `.blog-ai-text`(PR #174)와 같은 방식으로 바꿨다. 아래 가장자리를 따라 점을 배경으로 그리는 방식이라, 밑줄·링크(텍스트 장식)에 덮이지 않는다. 밑줄·링크·굵게·여러 줄을 2배율로 그린 화면에서 확인했다.
+- **화면 근거(익명 합성 자료, Chromium):** [편집 1440](evidence/write-read-d1/edit-1440.jpg) · [읽기 1440](evidence/write-read-d1/read-1440.jpg) · [글 정보 1440](evidence/write-read-d1/read-info-1440.jpg) · [편집 390](evidence/write-read-d1/edit-390.jpg) · [글 정보 시트 390](evidence/write-read-d1/read-info-390.jpg) · [서식 패널 390](evidence/write-read-d1/edit-format-390.jpg) · [긴 제목 320](evidence/write-read-d1/edit-320.jpg) · [공개하기 1440](evidence/write-read-d1/publish-1440.jpg) · [AI 표시 겹침 1440](evidence/write-read-d1/ai-mark-editor-1440.jpg) · [AI 표시 겹침 390](evidence/write-read-d1/ai-mark-editor-390.jpg)
 - **시안과 다른 점(총괄 판단 필요):**
   - 읽기 화면은 공통 머리줄(`‹ 글 읽기`, `ui.js`) 아래에 알약 줄이 한 줄 더 있다. 그래서 편집과 읽기의 제목 높이가 같지 않다. 한 줄로 합치려면 `ui.js` 머리줄을 바꿔야 한다.
   - `공개하기`는 읽기 화면 위 모달이 아니라 글 관리 화면 안의 카드다. 모달로 만들면 공개 경로 시험 6개(`blog-completion` 등)가 바뀌고 공개 경로 독립 검수가 필요하다. 그래서 다음 단계 후보로 남긴다.
