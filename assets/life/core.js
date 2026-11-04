@@ -63,15 +63,25 @@
   function validateText(text) {
     assert(typeof text === 'string' && text.length > 0, 'missing_text', '가져올 본문이나 원문 URL을 넣어 주세요.');
     assert(!text.includes('\u0000'), 'invalid_encoding', '텍스트에 읽을 수 없는 문자가 있습니다. UTF-8 텍스트 파일을 사용해 주세요.');
+    assert(text.length <= MAX_IMPORT_BYTES, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 가져올 수 있습니다. 파일을 나눠 주세요.');
+    // UTF-8 needs at most 3 bytes per UTF-16 unit, so a shorter text cannot exceed the limit; a longer
+    // one is measured in the same pass (2026-11-04: encoding every text again was ~11% of the main
+    // thread while a workspace was validated). The count equals TextEncoder's for well-formed text.
+    const measure = text.length * 3 > MAX_IMPORT_BYTES;
+    let bytes = 0;
     // TextEncoder replaces isolated surrogates. Reject them instead of changing the original silently.
     for (let i = 0; i < text.length; i++) {
       const unit = text.charCodeAt(i);
       if (unit >= 0xd800 && unit <= 0xdbff) {
         const next = text.charCodeAt(++i);
         assert(next >= 0xdc00 && next <= 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
-      } else assert(unit < 0xdc00 || unit > 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
+        bytes += 4;
+      } else {
+        assert(unit < 0xdc00 || unit > 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
+        if (measure) bytes += unit < 0x80 ? 1 : unit < 0x800 ? 2 : 3;
+      }
     }
-    assert(text.length <= MAX_IMPORT_BYTES && utf8(text).length <= MAX_IMPORT_BYTES, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 가져올 수 있습니다. 파일을 나눠 주세요.');
+    assert(!measure || bytes <= MAX_IMPORT_BYTES, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 가져올 수 있습니다. 파일을 나눠 주세요.');
   }
   async function sha256(text) {
     const digest = await cryptoProvider().subtle.digest('SHA-256', utf8(text));

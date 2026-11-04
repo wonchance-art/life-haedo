@@ -5,7 +5,10 @@
  * field measurement.
  * BASE_URL=http://127.0.0.1:4373 HOME_PERF_SOURCE_ROOT=<site> node this-file
  * HOME_PERF_SAMPLES (3), HOME_PERF_THROTTLE (1 or 4), HOME_PERF_OUTPUT (fresh dir),
- * HOME_PERF_STATIC_LATENCY (40 ms per static file), HOME_PERF_TRACE=1 (request initiators before the shell). */
+ * HOME_PERF_STATIC_LATENCY (40 ms per static file), HOME_PERF_TRACE=1 (request initiators before the shell),
+ * HOME_PERF_PROFILE=1 (off by default and in CI: a Chromium trace of each cold open, summarised as main-thread
+ * time by kind before the shell and from the shell to 20 rows; tracing itself adds overhead, so its timings are
+ * not comparable with an unprofiled run). */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4373';
 const assert = require('node:assert/strict');
@@ -25,6 +28,67 @@ const throttle = Number(process.env.HOME_PERF_THROTTLE || 1);
 const latencyMin = Number(process.env.HOME_PERF_LATENCY_MIN || 150), latencyMax = Number(process.env.HOME_PERF_LATENCY_MAX || 300);
 const staticLatency = Number(process.env.HOME_PERF_STATIC_LATENCY ?? 40);
 const trace = process.env.HOME_PERF_TRACE === '1';
+const profile = process.env.HOME_PERF_PROFILE === '1';
+// Trace event names grouped by what the main thread was doing. First-level children of each task are
+// counted, so nested work is attributed to the kind that started it.
+const KINDS = [
+  ['script load (compile + top-level run)', /^(EvaluateScript|v8\.compile|v8\.compileModule|CompileScript|v8\.produceCache|v8\.evaluateModule|ScriptCompile)$/],
+  ['IPC replies (IndexedDB, fetch) and their JS', /^(Receive mojo reply|Receive mojo message|SimpleWatcher::OnHandleReady)$/],
+  ['callbacks (timers, events, promises)', /^(FunctionCall|TimerFire|EventDispatch|FireAnimationFrame|RunMicrotasks|v8\.callFunction|V8\.Execute|FireIdleCallback|XHRReadyStateChange|BlinkScheduler_PerformMicrotaskCheckpoint|v8\.run)$/],
+  ['HTML parse', /^ParseHTML$/],
+  ['style, layout, paint', /^(UpdateLayoutTree|RecalculateStyles|Layout|PrePaint|Paint|Layerize|UpdateLayer|UpdateLayerTree|CompositeLayers|Commit|ScrollLayer|IntersectionObserverController::computeIntersections|HitTest)$/],
+  ['garbage collection', /(GC|gc)/],
+  ['image decode', /(Decode Image|ImageDecodeTask|Decode LazyPixelRef)/],
+];
+function summariseTrace(buffer, origin, shell, rows20) {
+  const events = JSON.parse(buffer.toString('utf8')).traceEvents || [];
+  // The page's renderer main thread: the one that ran navigationStart for index.html.
+  const nav = events.find(e => e.name === 'navigationStart' && String(e.args?.data?.documentLoaderURL || '').includes('index.html'));
+  if (!nav) return { error: 'navigationStart not found' };
+  const pid = nav.pid, tid = nav.tid, zero = nav.ts / 1000; // ms on the trace clock at timeOrigin
+  const main = events.filter(e => e.pid === pid && e.tid === tid && e.ph === 'X' && typeof e.dur === 'number').sort((x, y) => x.ts - y.ts || y.dur - x.dur);
+  const isTask = e => e.name === 'RunTask' || e.name === 'ThreadControllerImpl::RunTask';
+  // Outermost tasks only (a nested RunTask belongs to its outer task).
+  const tasks = []; let taskEnd = -Infinity;
+  for (const e of main) if (isTask(e) && e.ts >= taskEnd) { tasks.push(e); taskEnd = e.ts + e.dur; }
+  const firstAt = ts => { let lo = 0, hi = main.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (main[mid].ts < ts) lo = mid + 1; else hi = mid; } return lo; };
+  // First-level children of a task: events inside it that no earlier child contains.
+  function firstLevel(task) {
+    const out = [], end = task.ts + task.dur; let edge = -Infinity;
+    for (let i = firstAt(task.ts); i < main.length && main[i].ts < end; i++) {
+      const e = main[i]; if (e === task || isTask(e) || e.ts + e.dur > end) continue;
+      if (e.ts >= edge) { out.push(e); edge = e.ts + e.dur; }
+    }
+    return out;
+  }
+  const windows = [['beforeShell', 0, shell], ['shellToRows20', shell, rows20]];
+  const result = {};
+  for (const [key, from, to] of windows) {
+    const length = to - from, kinds = Object.fromEntries(KINDS.map(([name]) => [name, 0])), scripts = new Map();
+    let busy = 0, other = 0;
+    for (const task of tasks) {
+      const start = task.ts / 1000 - zero, end = start + task.dur / 1000;
+      const a = Math.max(start, from), b = Math.min(end, to); if (b <= a) continue;
+      const share = (b - a) / (end - start || 1); busy += b - a;
+      const first = firstLevel(task);
+      let covered = 0;
+      for (const c of first) {
+        const kind = KINDS.find(([, test]) => test.test(c.name));
+        const ms = c.dur / 1000 * share; covered += ms;
+        if (kind) kinds[kind[0]] += ms; else other += ms;
+        const url = c.args?.data?.url || c.args?.data?.stackTrace?.[0]?.url || '';
+        if (url && /\/assets\/|\.html/.test(url)) { const k = url.replace(/^.*\/(assets\/|)/, '$1').replace(/\?.*$/, ''); scripts.set(k, (scripts.get(k) || 0) + ms); }
+      }
+      other += Math.max(0, (b - a) - covered);
+    }
+    const round = v => Math.round(v);
+    result[key] = { lengthMs: round(length), busyMs: round(busy), idleMs: round(length - busy),
+      kinds: Object.fromEntries(Object.entries(kinds).map(([k, v]) => [k, round(v)]).concat([['other task work', round(other)]]).sort((x, y) => y[1] - x[1])),
+      topScripts: [...scripts].sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => [k, round(v)]) };
+  }
+  return result;
+}
+const TRACE_CATEGORIES = ['devtools.timeline', 'v8.execute', 'v8', 'blink.user_timing', 'loading', 'toplevel', 'disabled-by-default-devtools.timeline', 'disabled-by-default-v8.cpu_profiler'];
 const ids = ['20000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000003'];
 const sourceCounts = [300, 60, 40];
 // Saved photo posts and drafts per library; 1–3 photos each.
@@ -89,9 +153,13 @@ async function main() {
           const frames = [...list.querySelectorAll('.home-post-media')].filter(frame => { const r = frame.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
           if (frames.length && frames.every(frame => frame.getAttribute('aria-busy') === 'false' && frame.querySelector('img')?.complete)) m.viewportPhotos = now;
         }
-        const running = app && !app.hidden ? document.getAnimations().filter(a => a.playState === 'running').length : 0;
-        m.animationsSeen = Math.max(m.animationsSeen, running);
-        if (m.listReady !== null && m.motionEnd === null && running === 0) m.motionEnd = now;
+        // Only once the list is ready (motionEnd): calling getAnimations() every frame from the start was
+        // itself ~12% of the throttled main thread before 20 rows (2026-11-04 profile), slowing what is measured.
+        if (m.listReady !== null && m.motionEnd === null) {
+          const running = app && !app.hidden ? document.getAnimations().filter(a => a.playState === 'running').length : 0;
+          m.animationsSeen = Math.max(m.animationsSeen, running);
+          if (running === 0) m.motionEnd = now;
+        }
         if (m.motionEnd === null || m.rows20 === null || m.viewportPhotos === null) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -146,17 +214,28 @@ async function main() {
   }
   async function measure(d, label, warm) {
     const before = d.requests.length, traced = d.initiators.length;
+    const tracing = profile && !warm;
+    if (tracing) await browser.startTracing(d.page, { categories: TRACE_CATEGORIES });
     if (warm) await d.page.reload({ waitUntil: 'domcontentloaded' }); else await d.page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' });
     await d.page.waitForFunction(() => ['motionEnd', 'listReady', 'rows20', 'viewportPhotos'].every(key => window.__homePerf?.[key] !== null && window.__homePerf?.[key] !== undefined), null, { timeout: 180000 });
     const m = await d.page.evaluate(() => ({ ...__homePerf, origin: performance.timeOrigin }));
+    let mainThread;
+    if (tracing) {
+      const buffer = await browser.stopTracing();
+      // HOME_PERF_PROFILE_SAVE=1 keeps the raw trace (gzip) beside the report for a closer look.
+      if (process.env.HOME_PERF_PROFILE_SAVE === '1') await fs.writeFile(path.join(output, label + '.trace.json.gz'), require('node:zlib').gzipSync(buffer));
+      mainThread = summariseTrace(buffer, m.origin, m.shell, m.rows20);
+      mainThread.marks = { shellMs: Math.round(m.shell), rows20Ms: Math.round(m.rows20) };
+    }
     const rows = d.requests.slice(before), at = value => m.origin + value;
     const row = { label, warm, throttle, shellMs: m.shell, firstRowMs: m.firstRow, listReadyMs: m.listReady, rows20Ms: m.rows20, viewportPhotosMs: m.viewportPhotos, motionEndMs: m.motionEnd, authMs: m.auth,
       beforeShell: waves(rows, at(m.shell)), beforeRows20: waves(rows, at(m.rows20)), animationsSeen: m.animationsSeen, longTasks: m.longTasks.filter(([s]) => s <= (m.rows20 || 0)),
       requests: rows.map(r => ({ path: r.path, start: Math.round(r.start - m.origin), end: r.end === null ? null : Math.round(r.end - m.origin) })),
-      initiators: trace ? d.initiators.slice(traced).filter(r => r.at <= at(m.rows20)).map(r => ({ ...r, at: Math.round(r.at - m.origin) })) : undefined };
+      initiators: trace ? d.initiators.slice(traced).filter(r => r.at <= at(m.rows20)).map(r => ({ ...r, at: Math.round(r.at - m.origin) })) : undefined, mainThread };
     report.measurements.push(row);
     const r = value => value === null || value === undefined ? null : Math.round(value);
     console.log(JSON.stringify({ label, shell: r(row.shellMs), firstRow: r(row.firstRowMs), listReady: r(row.listReadyMs), rows20: r(row.rows20Ms), viewportPhotos: r(row.viewportPhotosMs), beforeShell: row.beforeShell, beforeRows20: row.beforeRows20 }));
+    if (mainThread) console.log(JSON.stringify({ label, mainThread }));
     return row;
   }
   try {

@@ -128,3 +128,27 @@ test('a full upload of three new photos makes two network account checks (was ab
   assert.deepEqual(f.state.calls.map(call => call.name), ['life_blog_prepare_asset', 'life_blog_prepare_asset', 'life_blog_prepare_asset', 'life_blog_save']);
   sync.dispose();
 });
+
+// 2026-11-04 (PR183 re-review minor): a photo download in progress is aborted by dispose or an
+// account change instead of running to the end; a finished one releases its controller.
+test('an in-progress photo download is aborted by dispose or an account change, and nothing is returned', async () => {
+  for (const end of ['dispose', 'change']) {
+    const f = fixture(), signals = [];
+    f.auth.client.storage.from = bucket => ({ download(path, options, parameters) {
+      signals.push(parameters?.signal); f.state.downloads.push({ bucket, path });
+      return new Promise((resolve, reject) => parameters.signal.addEventListener('abort', () => reject(Object.assign(Error('aborted'), { name: 'AbortError' })), { once: true }));
+    } });
+    const pending = f.adapter.downloadAsset({ bucket: 'haedo-blog-originals', path: UID + '/' + POST + '/photo' });
+    await new Promise(done => setImmediate(done));
+    assert.equal(signals.length, 1); assert.equal(signals[0].aborted, false);
+    if (end === 'dispose') f.adapter.dispose(); else f.change();
+    await assert.rejects(pending, { code: 'request_cancelled' });
+    assert.equal(signals[0].aborted, true, end + ' aborts the transfer');
+    if (end === 'change') f.adapter.dispose();
+  }
+  // A completed download passes a signal that is never aborted later.
+  const f = fixture(); let seen = null; f.state.blob = new Blob(['x']);
+  f.auth.client.storage.from = () => ({ async download(path, options, parameters) { seen = parameters.signal; return { data: f.state.blob, error: null }; } });
+  assert.equal(await (await f.adapter.downloadAsset({ bucket: 'haedo-blog-originals', path: UID + '/x' })).text(), 'x');
+  f.adapter.dispose(); assert.equal(seen.aborted, false, 'a finished transfer is no longer tracked');
+});

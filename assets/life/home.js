@@ -365,14 +365,16 @@
         frame._homeLoadCover = readCover; mediaObserver.observe(frame);
       } else Promise.resolve().then(readCover);
     }
+    // Formatters are made once (2026-11-04: two new Intl.DateTimeFormat per row were ~3% of the
+    // main thread while the first list was drawn); the output is the same.
+    const dateFormats = {};
+    const dateFormat = withYear => dateFormats[withYear] ||= new Intl.DateTimeFormat('ko-KR', withYear ? { year: 'numeric', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' });
     function modifiedDate(value, prefix = '수정 ') {
       const date = new Date(value);
       if (!Number.isFinite(date.getTime())) return null;
-      const options = { month: 'long', day: 'numeric' };
-      if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
-      const time = el('time', prefix + new Intl.DateTimeFormat('ko-KR', options).format(date));
+      const time = el('time', prefix + dateFormat(date.getFullYear() !== new Date().getFullYear()).format(date));
       time.dateTime = value;
-      time.title = prefix + new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+      time.title = prefix + dateFormat(true).format(date);
       return time;
     }
     // 일정 목록 rows: a time column and an icon column before the content (decision 2026-11-02).

@@ -498,3 +498,22 @@ test('source and note search share strict query/options validation and native li
     assert.throws(() => search({ normalized: true }), errorCode('unsupported_field'));
   }
 });
+
+// 2026-11-04 startup latency: validateText counts UTF-8 bytes in its own pass instead of encoding the
+// text again. The size decision must equal TextEncoder's at the 1 MiB edge for 1-, 2-, 3- and 4-byte
+// characters, mixed text and a lone surrogate.
+test('the UTF-8 size limit decides exactly as TextEncoder at the 1 MiB edge', { timeout: 60000 }, async () => {
+  const limit = core.MAX_IMPORT_BYTES, bytes = text => new TextEncoder().encode(text).length;
+  const workspace = core.createWorkspace({ title: '크기 경계' });
+  const fits = async text => { try { await core.prepareImport(input({ text }), workspace); return true; } catch (error) { if (error.code === 'text_too_large') return false; throw error; } };
+  const cases = [];
+  for (const [char, size] of [['a', 1], ['é', 2], ['한', 3], ['🌱', 4]]) {
+    const at = Math.floor(limit / size);
+    cases.push(char.repeat(at), char.repeat(at + 1));
+  }
+  const mixed = 'a한é🌱\n';
+  const unit = bytes(mixed), n = Math.floor(limit / unit);
+  cases.push(mixed.repeat(n) + 'a'.repeat(limit - n * unit), mixed.repeat(n) + 'a'.repeat(limit - n * unit + 1));
+  for (const text of cases) assert.equal(await fits(text), bytes(text) <= limit && text.length <= limit, 'length ' + text.length + ', ' + bytes(text) + ' bytes');
+  await assert.rejects(core.prepareImport(input({ text: 'a'.repeat(400000) + '\ud800' + 'a' }), workspace), errorCode('invalid_encoding'));
+});
