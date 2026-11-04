@@ -4,6 +4,10 @@
   // Set by the 일정 screen, which shows 행복도 from the timelines: wake-ups bring them here too
   // (read only). Pages with the timeline editor leave documents to it.
   let watchingDocuments = false;
+  // The ids of this account's timelines in the last server list this page received (syncDocuments),
+  // or null before one arrived. The 일정 shell uses it to tell a timeline never sent from one whose
+  // send succeeded while the registry save after it failed (happiness-single-writer.md).
+  let serverIds = null;
   // Timeline documents (haedo_documents): this store only brings them here (syncDocuments) and
   // sends them on an explicit request (uploadDocuments), as on main. Their writer is the timeline
   // editor; the 일정 screen only reads 행복도 (B2 scope, 2026-11-04 owner decision).
@@ -43,7 +47,7 @@
   }
   function clearAccount() {
     epoch++;
-    queue?.clear(); queue = null; pulling = null; watchingDocuments = false;
+    queue?.clear(); queue = null; pulling = null; watchingDocuments = false; serverIds = null;
     uid = null; accountProject = null; items = [];
   }
   // 2026-11-01 owner rule: when both sides changed, the newest edit wins and the other side is
@@ -264,6 +268,7 @@
       assertAccount(captured);
       if (!Array.isArray(rows) || rows.some(row => !HaedoData.isDocument(row.data)))
         throw new Error("연표 응답 형식을 확인해야 합니다.");
+      serverIds = { account: captured.project + "|" + captured.uid, ids: new Set(rows.map(row => row.id)) };
       const k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
       // Only what changed on the server is written, and the list only when this pass changed it:
       // this page's view of localStorage can lag another tab's write (the timeline editor's
@@ -347,11 +352,17 @@
     },
     // The 일정 screen reads the timelines: wake-ups also bring them here (read only).
     watchDocuments() { context(); watchingDocuments = true; },
-    // 행복도 read only (the 일정 screen shows it; it is entered in the timeline editor), from the
-    // timeline chosen the same way on every device (model.baseDocument): the non-recovery timeline
-    // with the most daily 행복도, then the smallest id. Scales as the editor reads them. One reader
-    // reads the timelines once; a screen makes one per paint.
-    happinessReader() {
+    // The last server list of this account's timelines (ids), or null before one arrived here.
+    get serverDocumentIds() {
+      if (!store.account || !serverIds || serverIds.account !== project() + "|" + uid) return null;
+      return new Set(serverIds.ids);
+    },
+    // 행복도 for the 일정 screen. The account document (happinessDays, entered in 일정 D) comes
+    // first; a day not in it shows a daily point still only in a timeline (not migrated yet), from
+    // the timeline chosen the same way on every device (model.baseDocument): the non-recovery
+    // timeline with the most daily 행복도, then the smallest id. Scales as the editor reads them.
+    // One reader reads the timelines once; a screen makes one per paint.
+    happinessReader(entries = null) {
       if (!store.account) return { source: null, on: () => null };
       const captured = context(), k = model.keys(captured.uid), bodies = new Map();
       const read = id => {
@@ -359,7 +370,8 @@
         return bodies.get(id);
       };
       const meta = model.baseDocument(model.registry(localStorage, captured.uid), { read }), doc = meta ? read(meta.id) : null;
-      return { source: meta ? { id: meta.id, name: meta.name } : null, on: date => (doc ? model.happinessOn(doc, date) : null) };
+      const on = model.happinessFor ? date => model.happinessFor(entries, doc, date) : date => (doc ? model.happinessOn(doc, date) : null);
+      return { source: meta ? { id: meta.id, name: meta.name } : null, on };
     },
     happiness(date) { return store.happinessReader().on(date); },
     get happinessSource() { return store.happinessReader().source; },

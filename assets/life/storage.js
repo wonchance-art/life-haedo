@@ -234,6 +234,10 @@
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'source_folders_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'happiness_days_changed' && data.workspaceId === 'days' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'happiness_days_changed', workspaceId: 'days', revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'reading_position_changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -873,6 +877,158 @@
       });
       if (added) accountDocChanged(platformRecoveryKey());
       return added;
+    }
+    // 하루 행복도(2026-11-04 소유자 결정, docs/life-tools-design/happiness-single-writer.md). 계정에
+    // 하나인 계정 문서이고, 날짜마다 한 항목이다. 쓰는 곳은 일정 D 한 곳(writeHappinessDay)과, 연표
+    // 문서의 옛 하루 점을 옮기거나 옛 편집기가 더한 값을 받아들이는 일정 셸(absorbTimelineDays)이다.
+    // 두 쓰기 모두 트랜잭션 안에서 현재 문서를 읽고 그 날짜만 바꾼다(메모리 사본을 되쓰지 않는다).
+    // 연표 문서의 하루 점은 지우지 않는다. 다른 기기와는 AccountDocsSync가 날짜별로 합친다.
+    const HAPPINESS_FORMAT = 1;
+    const HAPPINESS_EPOCH = '1970-01-01T00:00:00.000Z';
+    const happinessDaysKey = () => `happinessDays:${accountKey}:days`;
+    const isoTime = value => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
+    const happinessTime = value => { const parsed = Date.parse(value || ''); return Number.isFinite(parsed) ? parsed : 0; };
+    function happinessDay(value) {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const parsed = new Date(value + 'T00:00:00.000Z');
+      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    }
+    const happinessValue = value => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1;
+    const happinessRound = value => Math.round(value * 100) / 100;
+    function validateHappinessDays(value) {
+      const bad = () => fault('invalid_happiness_days', '행복도 기록의 형식을 확인할 수 없습니다. 기존 기록은 보존했습니다.');
+      onlyFields(value, ['revision', 'format', 'entries', 'migrated'], 'invalid_happiness_days'); requireRevision(value.revision);
+      if (!Number.isSafeInteger(value.format) || value.format < 1) throw bad();
+      // A newer app wrote this document: this page does not write over a format it does not know.
+      if (value.format > HAPPINESS_FORMAT) throw fault('app_refresh_required', '앱을 새로고침한 뒤 다시 시도해 주세요. 값은 그대로 있습니다.');
+      if (!Array.isArray(value.entries) || !Array.isArray(value.migrated) || value.migrated.length > 1000) throw bad();
+      const dates = new Set();
+      for (const entry of value.entries) {
+        onlyFields(entry, ['date', 'v', 'at', 'future', 'src'], 'invalid_happiness_days');
+        if (!happinessDay(entry.date) || dates.has(entry.date) || !(entry.v === null || happinessValue(entry.v)) || !isoTime(entry.at) ||
+          (entry.future !== undefined && typeof entry.future !== 'boolean') ||
+          // src (the timeline a migrated value came from) only on migrated values (at 1970).
+          (entry.src !== undefined && (typeof entry.src !== 'string' || !ACCOUNT_DOC_ID.test(entry.src) || entry.at !== HAPPINESS_EPOCH))) throw bad();
+        dates.add(entry.date);
+      }
+      const docs = new Set();
+      for (const row of value.migrated) {
+        onlyFields(row, ['docId', 'at', 'seenAt', 'localSeenAt', 'dates'], 'invalid_happiness_days');
+        if (typeof row.docId !== 'string' || !ACCOUNT_DOC_ID.test(row.docId) || docs.has(row.docId) || !isoTime(row.at) ||
+          !(row.seenAt === null || isoTime(row.seenAt)) || !(row.localSeenAt === null || isoTime(row.localSeenAt)) || !plain(row.dates) ||
+          Object.entries(row.dates).some(([date, v]) => !happinessDay(date) || !happinessValue(v))) throw bad();
+        docs.add(row.docId);
+      }
+      if (new TextEncoder().encode(stablePayload(value)).length > 2 * 1024 * 1024)
+        throw fault('happiness_days_too_large', '행복도 기록이 너무 큽니다. 기존 기록은 보존했습니다.');
+    }
+    async function happinessDaysValue(meta) {
+      const row = await meta.get(happinessDaysKey());
+      const value = row === undefined ? { revision: 0, format: HAPPINESS_FORMAT, entries: [], migrated: [] } : row.value;
+      validateHappinessDays(value);
+      return value;
+    }
+    function happinessScope() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 행복도를 기록해 주세요.');
+    }
+    function happinessChanged(revision) {
+      accountDocChanged(happinessDaysKey());
+      const event = { type: 'happiness_days_changed', workspaceId: 'days', revision };
+      notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+    }
+    async function writeHappinessValue(meta, value) {
+      value.entries.sort((a, b) => a.date.localeCompare(b.date));
+      validateHappinessDays(value);
+      await meta.put({ key: happinessDaysKey(), value });
+    }
+    async function readHappinessDays() {
+      happinessScope();
+      return transaction(['meta'], 'readonly', async tx => clone(await happinessDaysValue(tx.objectStore('meta'))));
+    }
+    // 일정 D의 입력 하나: 그 날짜 항목만 바꾼다. v는 signed1(−1~+1), null은 지우기(삭제 표시).
+    // 사람이 고친 값이므로 src(이행 출처)는 남기지 않는다. 고친 시각은 그 날짜의 이전 값보다 늘 늦다.
+    async function writeHappinessDay(date, v, { future = false } = {}) {
+      happinessScope();
+      if (!happinessDay(date)) throw fault('invalid_request', '행복도를 기록할 날짜를 확인해 주세요.');
+      if (!(v === null || happinessValue(v))) throw fault('invalid_request', '행복도 값을 확인해 주세요.');
+      const next = v === null ? null : happinessRound(v);
+      const result = await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), previous = await happinessDaysValue(meta);
+        const old = previous.entries.find(entry => entry.date === date);
+        if (old && old.v === next && !!old.future === !!future && old.src === undefined) return { status: 'unchanged', revision: previous.revision };
+        const at = new Date(Math.max(Date.now(), happinessTime(old?.at) + 1)).toISOString();
+        const entry = { date, v: next, at, ...(future ? { future: true } : {}) };
+        const value = { ...clone(previous), revision: previous.revision + 1, format: HAPPINESS_FORMAT,
+          entries: [...previous.entries.filter(item => item.date !== date).map(clone), entry] };
+        await writeHappinessValue(meta, value);
+        return { status: 'stored', revision: value.revision, entry: clone(entry) };
+      });
+      if (result.status === 'stored') happinessChanged(result.revision);
+      return result;
+    }
+    // 연표 문서 하나의 하루 점을 받는다(이행·옛 편집기 받아들이기·동률 맞추기, 설계 "이행 계획" 2).
+    // points: { 'YYYY-MM-DD': { v, future? } } — signed1로 바꾸고 둘째 자리로 맞춘, 날짜마다 하나인 그 판의
+    // 하루 점 전체. stamp: { server: T }(올린 연표, 그 판의 서버 updated_at) 또는 { local: S }(올린 적 없는
+    // 연표, 그 판의 로컬 updated). account: 이 일을 시작할 때 잡아 둔 계정 — 지금 계정이 아니면 쓰지 않는다.
+    async function absorbTimelineDays({ account: owner, docId, points, stamp } = {}) {
+      happinessScope();
+      let given;
+      try { given = accountValue(owner); } catch (_) { given = null; }
+      if (!sameAccount(given, account)) throw fault('account_changed', '계정이 바뀌어 행복도를 옮기지 않았습니다.');
+      if (typeof docId !== 'string' || !ACCOUNT_DOC_ID.test(docId)) throw fault('invalid_request', '연표를 확인해 주세요.');
+      if (!plain(points) || Object.entries(points).some(([date, point]) => !happinessDay(date) || !plain(point) || !happinessValue(point.v) ||
+        (point.future !== undefined && typeof point.future !== 'boolean'))) throw fault('invalid_request', '연표의 행복도 값을 확인해 주세요.');
+      const server = plain(stamp) && Object.hasOwn(stamp, 'server') ? stamp.server : null;
+      const local = plain(stamp) && Object.hasOwn(stamp, 'local') ? stamp.local : null;
+      if ((server === null) === (local === null) || !isoTime(server ?? local)) throw fault('invalid_request', '연표 판의 시각을 확인해 주세요.');
+      const days = Object.fromEntries(Object.entries(points).map(([date, point]) => [date, happinessRound(point.v)]));
+      const result = await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), previous = await happinessDaysValue(meta);
+        const value = clone(previous), entries = new Map(value.entries.map(entry => [entry.date, entry]));
+        const row = value.migrated.find(item => item.docId === docId), kept = [];
+        let added = 0, overlap = 0, accepted = 0, aligned = 0;
+        if (!row) {
+          // 1. 첫 이행: 계정 문서에 없는 날짜만 옮긴다. 이미 있는 날짜(값이든 삭제 표시든)는 그대로 둔다.
+          for (const [date, v] of Object.entries(days)) {
+            const existing = entries.get(date);
+            if (existing) { if (existing.v !== v) overlap++; continue; }
+            entries.set(date, { date, v, at: HAPPINESS_EPOCH, src: docId, ...(points[date].future ? { future: true } : {}) }); added++;
+          }
+          value.migrated.push({ docId, dates: days, at: server ?? HAPPINESS_EPOCH, seenAt: server, localSeenAt: server === null ? local : null });
+        } else {
+          // 판 시각이 저장된 시각보다 이르면 이미 본 판보다 오래된 판이다. 서버 시각과 기기 시각은 서로
+          // 비교하지 않는다: 올리기 전에 본 줄(seenAt null)은 어떤 서버 시각보다 이른 것으로 본다.
+          if (server !== null && row.seenAt !== null && happinessTime(server) < happinessTime(row.seenAt)) return { status: 'stale' };
+          if (local !== null && (row.seenAt !== null || (row.localSeenAt !== null && happinessTime(local) < happinessTime(row.localSeenAt)))) return { status: 'stale' };
+          const at = server ?? local;
+          // 2. 받아들이기: 이 판에서 새로 생겼거나 값이 바뀐 날짜만. 그보다 늦게 고친 항목은 그대로 둔다.
+          for (const [date, v] of Object.entries(days)) {
+            if (Object.hasOwn(row.dates, date) && row.dates[date] === v) continue;
+            const existing = entries.get(date);
+            if (existing && !(happinessTime(existing.at) < happinessTime(at))) continue;
+            if (existing && existing.at !== HAPPINESS_EPOCH) kept.push(clone(existing));
+            entries.set(date, { date, v, at, ...(points[date].future ? { future: true } : {}) }); accepted++;
+          }
+          // 3. 동률 맞추기: 이 연표가 옮긴 이행 값(at 1970, src = 이 연표)만 이 판의 값으로 맞춘다.
+          for (const entry of entries.values()) {
+            if (entry.at !== HAPPINESS_EPOCH || entry.src !== docId || !Object.hasOwn(days, entry.date) || entry.v === days[entry.date]) continue;
+            entries.set(entry.date, { ...entry, v: days[entry.date] }); aligned++;
+          }
+          const seen = JSON.stringify(Object.entries(row.dates).sort()), now = JSON.stringify(Object.entries(days).sort());
+          // 바뀐 것이 없으면 쓰지 않는다(연표를 저장할 때마다 계정 문서가 다시 올라가지 않게).
+          if (seen === now && !accepted && !aligned) return { status: 'unchanged' };
+          row.dates = days;
+          if (server !== null) { row.seenAt = server; row.localSeenAt = null; row.at = server; } else row.localSeenAt = local;
+        }
+        value.revision = previous.revision + 1; value.format = HAPPINESS_FORMAT; value.entries = [...entries.values()];
+        await writeHappinessValue(meta, value);
+        // 받아들이기는 엔진의 병합이 아니라 로컬 쓰기라서 진 쪽이 저절로 남지 않는다: 사람이 입력한 값을 덮으면 남긴다.
+        for (const entry of kept) await addAccountDocRecovery(meta, happinessDaysKey(), { items: [entry] }, 'timeline_import');
+        return { status: row ? 'absorbed' : 'migrated', revision: value.revision, added, overlap, accepted, aligned, recovered: kept.length };
+      });
+      if (result.revision) happinessChanged(result.revision);
+      return result;
     }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
@@ -4952,7 +5108,9 @@
       discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true },
       discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true },
       // Items are only added (union by rid), so merging both sides never loses one.
-      platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false }
+      platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false },
+      // 하루 행복도: 날짜별로 합치고(LISTS), 두 기기가 같은 날을 고치면 늦은 쪽, 진 쪽은 이 기기에 남긴다.
+      happinessDays: { read: meta => happinessDaysValue(meta), event: 'happiness_days_changed', recovery: true }
     });
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
@@ -5103,8 +5261,8 @@
     // release skipped rows of kinds it did not know and still moved its cursor
     // past them, so those rows would never come again (a restored-copy marker
     // is written once). Raise this number whenever a prefix is added above.
-    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery.
-    const ACCOUNT_DOC_SCHEMA = 3;
+    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery. 4: adds happinessDays.
+    const ACCOUNT_DOC_SCHEMA = 4;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
     // reads the change list again from the start. Rows it already has return
@@ -5271,7 +5429,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery,
+      readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery, readHappinessDays, writeHappinessDay, absorbTimelineDays,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,

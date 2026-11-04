@@ -105,6 +105,7 @@
     backup,
     makeId = newId,
     fromLegacy = false,
+    { keepCurrent = false } = {},
   ) {
     assertBackupFormat(backup);
     const reg = registry(storage, uid),
@@ -126,7 +127,8 @@
         ...(fromLegacy ? { legacySource: backup.docs[i].id } : {}),
       })),
     );
-    reg.current = imported[0].id;
+    // A '행복도 복원' timeline (a backup with 행복도 only) does not replace the timeline being viewed.
+    if (!keepCurrent || !reg.current) reg.current = imported[0].id;
     storage.setItem(accountKeys.registry, JSON.stringify(reg));
     return imported;
   }
@@ -244,6 +246,116 @@
     }
     return docs.sort(byId)[0] || null;
   }
+  // ── 하루 행복도의 정본은 계정 문서 happinessDays다(2026-11-04 소유자 결정,
+  // docs/life-tools-design/happiness-single-writer.md). 연표 문서의 하루 점은 지우지 않고, 아래
+  // 함수들이 그 점을 옮길 값으로 읽거나(timelineDays) 보이는 곡선에서 가린다(curvePoints).
+  const HAPPINESS_EPOCH = "1970-01-01T00:00:00.000Z";
+  const round2 = (v) => Math.round(v * 100) / 100;
+  // A timeline's daily points as the account document stores them: signed1, two decimals, one per
+  // date — the last one stored when a date has several (every device picks the same one).
+  function timelineDays(doc) {
+    const days = {};
+    if (!Array.isArray(doc?.happiness)) return days;
+    for (const point of doc.happiness) {
+      if (!point || !isDay(point.date) || typeof point.v !== "number" || !Number.isFinite(point.v)) continue;
+      const v = round2(root.HaedoData.scaleValue(point.v, doc.scale));
+      if (!Number.isFinite(v) || Math.abs(v) > 1) continue;
+      days[point.date] = { v, ...(point.future === true ? { future: true } : {}) };
+    }
+    return days;
+  }
+  // The points a curve shows: the timeline's own points (on its scale, converted to signed1), except
+  // daily points whose date the account document has (also a deletion, v null), plus the account
+  // document's values. Copies only: the result is never stored (the timeline keeps its own points).
+  function curvePoints(doc, entries) {
+    const known = new Map((Array.isArray(entries) ? entries : []).filter((entry) => entry && isDay(entry.date)).map((entry) => [entry.date, entry]));
+    const points = [];
+    for (const point of Array.isArray(doc?.happiness) ? doc.happiness : []) {
+      if (!point || typeof point.date !== "string" || typeof point.v !== "number" || !Number.isFinite(point.v)) continue;
+      const day = isDay(point.date);
+      if (day && known.has(point.date)) continue;
+      points.push({ date: point.date, v: root.HaedoData.scaleValue(point.v, doc.scale), future: !!point.future, day, account: false, src: point });
+    }
+    for (const entry of known.values()) {
+      if (entry.v === null || typeof entry.v !== "number") continue;
+      points.push({ date: entry.date, v: entry.v, future: !!entry.future, day: true, account: true, src: null });
+    }
+    return points;
+  }
+  // Which of this account's timelines the 일정 shell may hand to absorbTimelineDays now, and with
+  // which version time. Recovery copies are skipped. A timeline sent before (syncedAt) is used only
+  // while it has no unsent change ({server: its server time}); one never sent ({local: its device
+  // time}) only when the last server list this page received does not have it. Without such a list
+  // (offline, not read yet) or with the id on it but no syncedAt (the registry save after a send
+  // failed), it waits. In id order: the smaller id's value stays when two timelines differ.
+  function happinessSources(reg, { read, serverIds = null } = {}) {
+    const ready = [], waiting = [];
+    const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    for (const meta of [...(reg?.docs || [])].filter((doc) => doc && typeof doc.id === "string").sort(byId)) {
+      if (root.HaedoData.isRecoveryName(meta.name)) continue;
+      const body = read ? read(meta.id) : null;
+      if (!body || typeof body !== "object") continue;
+      let stamp = null;
+      if (meta.syncedAt) {
+        if (meta.updated && meta.updated !== meta.syncedAt) { waiting.push({ id: meta.id, reason: "unsent" }); continue; }
+        stamp = { server: meta.syncedAt };
+      } else if (!serverIds) { waiting.push({ id: meta.id, reason: "no_server_list" }); continue; }
+      else if (serverIds.has(meta.id)) { waiting.push({ id: meta.id, reason: "unknown" }); continue; }
+      else stamp = { local: typeof meta.updated === "string" && Number.isFinite(Date.parse(meta.updated)) ? meta.updated : HAPPINESS_EPOCH };
+      ready.push({ id: meta.id, name: meta.name, points: timelineDays(body), stamp });
+    }
+    return { ready, waiting };
+  }
+  // Restoring a timeline backup that carries 행복도 (happinessDays, full-backup timeline part): the
+  // timeline pages have no account-document engine, so the values go into the restored copies as the
+  // daily points shown at backup time (curvePoints: a timeline's own daily point stays only where the
+  // account had no entry; a deletion removes it), on signed1. Every copy gets the same points. The 일정
+  // shell then moves only the dates the account document lacks (absorbHappiness), so nothing it has is
+  // replaced and a deleted day does not come back. A backup with 행복도 only gets one new timeline
+  // named '행복도 복원' (happinessOnly: the importer keeps the timeline being viewed).
+  const RESTORED_NAME = "행복도 복원";
+  function restoreBackupDays(backup) {
+    const raw = backup?.happinessDays?.entries;
+    if (!Array.isArray(raw)) return { backup, happinessOnly: false, days: 0 };
+    const entries = raw.filter((entry) => entry && isDay(entry.date) && (entry.v === null || (typeof entry.v === "number" && Number.isFinite(entry.v) && Math.abs(entry.v) <= 1)));
+    const known = new Set(entries.map((entry) => entry.date)), shown = entries.filter((entry) => entry.v !== null);
+    const fill = (data) => {
+      const copy = root.HaedoData.toSignedScale(structuredClone(data));
+      copy.happiness = [...(Array.isArray(copy.happiness) ? copy.happiness : []).filter((point) => !(point && isDay(point.date) && known.has(point.date))),
+        ...shown.map((entry) => ({ date: entry.date, v: entry.v, ...(entry.future ? { future: true } : {}) }))];
+      return copy;
+    };
+    const docs = Array.isArray(backup.docs) ? backup.docs : root.HaedoData.isDocument(backup) ? [{ data: backup }] : [];
+    if (docs.length) return { backup: { ...backup, docs: docs.map((doc) => ({ ...doc, data: fill(doc.data) })) }, happinessOnly: false, days: shown.length };
+    if (!shown.length) return { backup, happinessOnly: false, days: 0 };
+    return { backup: { ...backup, docs: [{ name: RESTORED_NAME, data: fill(emptyDocument(RESTORED_NAME)) }] }, happinessOnly: true, days: shown.length };
+  }
+  // One pass of the 일정 shell: every ready timeline of this account (its own registry only — the
+  // pre-account caeyeon_life_registry list is out of scope) goes to storage.absorbTimelineDays, which
+  // decides inside one transaction what to write. `account` is the account captured when the pass
+  // began; storage refuses it once another account is open. isCurrent() stops a pass that went stale.
+  async function absorbHappiness({ storage, localStorage, uid, account, serverIds = null, isCurrent = () => true }) {
+    const k = keys(uid), reg = registry(localStorage, uid);
+    const read = (id) => { try { return JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { return null; } };
+    const { ready, waiting } = happinessSources(reg, { read, serverIds });
+    const results = [];
+    for (const source of ready) {
+      if (!isCurrent()) break;
+      results.push({ id: source.id, ...(await storage.absorbTimelineDays({ account, docId: source.id, points: source.points, stamp: source.stamp })) });
+    }
+    return { results, waiting };
+  }
+  // The 일정 value of a day: the account document's entry (a deletion shows nothing), else a daily
+  // point still only in the timeline (not migrated yet).
+  function happinessFor(entries, doc, date) {
+    const entry = (Array.isArray(entries) ? entries : []).find((item) => item && item.date === date);
+    if (entry) {
+      if (entry.v === null) return null;
+      const score = happinessScore(entry.v);
+      return score === null ? null : { v: entry.v, score, account: true };
+    }
+    return doc ? happinessOn(doc, date) : null;
+  }
   // Habits that apply on date (created on or before it, on one of its weekdays), with their check.
   function dueHabits(items, date) {
     if (!isDay(date)) return [];
@@ -278,6 +390,13 @@
     validItem,
     happinessScore,
     happinessOn,
+    happinessFor,
+    timelineDays,
+    curvePoints,
+    happinessSources,
+    absorbHappiness,
+    restoreBackupDays,
+    HAPPINESS_EPOCH,
     baseDocument,
     dueHabits,
     activeGoals,

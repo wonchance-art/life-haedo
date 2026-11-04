@@ -11,14 +11,33 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const RPCS = new Set(['life_account_document_put', 'life_account_document_changes']);
 function withAccountDocsCloud(BaseCloud) {
   return class AccountDocsCloud extends BaseCloud {
+    // GET /rest/v1/life_account_documents?select=data,deleted&doc_key=eq.<key>: the owner's rows only.
+    async selectAccountDoc(route, device) {
+      const request = route.request(), url = new URL(request.url());
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers, body: '' });
+      assert.equal(request.method(), 'GET');
+      const owner = this.libraryOwner(request);
+      if (!owner) return route.fulfill({ status: 401, headers, body: '{}' });
+      const key = url.searchParams.get('doc_key')?.replace(/^eq\./, '');
+      this.accountDocReads.push({ owner, device, key });
+      if (this.accountDocReadHold) await this.accountDocReadHold;
+      if (this.offline?.has(device) || this.accountDocsOffline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }
+      if (this.accountDocReadFail) { this.expectedFailures++; return route.fulfill({ status: 500, headers, body: '{"message":"anonymous failure"}' }); }
+      const row = (this.accountDocs.get(owner) || new Map()).get(key);
+      return route.fulfill({ status: 200, headers, body: JSON.stringify(row ? [{ data: copy(row.data), deleted: row.deleted }] : []) });
+    }
     constructor(...args) {
       super(...args);
       this.accountDocs = new Map(); this.accountDocReceipts = new Map(); this.accountDocSeq = 0;
       this.accountDocRequests = []; this.accountDocsOffline = new Set();
+      // The timeline editor reads one document with a plain owner-scoped select (RLS select policy).
+      this.accountDocReads = []; this.accountDocReadFail = false; this.accountDocReadHold = null;
     }
     accountDocWrites(device) { return this.accountDocRequests.filter(row => row.rpc === 'life_account_document_put' && (!device || row.device === device)); }
     async handle(route, device) {
       const request = route.request(), url = new URL(request.url()), rpc = url.pathname.startsWith('/rest/v1/rpc/') ? url.pathname.split('/').at(-1) : null;
+      if (url.pathname === '/rest/v1/life_account_documents') return this.selectAccountDoc(route, device);
       if (!RPCS.has(rpc)) return super.handle(route, device);
       const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store' };
       const send = (value, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(value) });

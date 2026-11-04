@@ -507,6 +507,8 @@ kbd{font-family:'IBM Plex Mono',monospace;font-size:9px;opacity:.65;margin-left:
 #btnShow{font-size:12px;letter-spacing:normal;padding:0}
 #btnSearch{opacity:1}
 .scrub-now{border-left:1px solid var(--cinnabar)}
+.hap-days-note{margin:8px 4px 0;color:var(--ink-soft);font-size:12px}.hap-days-note a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.hap-day-value{gap:8px;font-variant-numeric:tabular-nums}.hap-day-help{color:var(--ink-soft);font-size:12px}
 .chart-help{display:flex;justify-content:space-between;gap:16px;padding:10px 4px 0;color:var(--ink-soft);font-size:10px}
 .pop-ed{width:340px;max-height:calc(100dvh - 24px);overflow:auto;padding:18px;gap:12px}
 .pop-ed .dt-edit{padding:8px 9px}.pop-ed .pe-title{font-size:17px}.pop-ed .pe-desc{min-height:70px}.pe-month{width:133px}.pe-num{width:70px}.pe-actions{border-top-style:solid;padding-top:10px}

@@ -765,9 +765,11 @@
           throw new Error("목표·습관 백업 형식을 읽을 수 없습니다.");
         if (backup.recovery !== undefined && (!Array.isArray(backup.recovery) || backup.recovery.some((item) => !model.validItem(item))))
           throw new Error("복구 사본 형식을 읽을 수 없습니다.");
+        // 행복도(happinessDays) in a timeline backup goes into the restored copies (restoreBackupDays).
+        const restored = model.restoreBackupDays ? model.restoreBackupDays(backup) : { backup, happinessOnly: false, days: 0 };
         const documents =
-          HaedoData.isDocument(backup) || backup.docs?.length
-            ? model.importDocs(localStorage, uid, backup)
+          HaedoData.isDocument(restored.backup) || restored.backup.docs?.length
+            ? model.importDocs(localStorage, uid, restored.backup, undefined, false, { keepCurrent: restored.happinessOnly })
             : [];
         if (!documents.length && !backup.items?.length && !backup.recovery?.length)
           throw new Error("기록이 들어 있는 JSON 백업을 선택해 주세요.");
@@ -776,7 +778,14 @@
         if (backup.recovery?.length) store.restoreRecovery(backup.recovery);
         if (Array.isArray(backup.recoveryDamaged)) store.restoreDamaged(backup.recoveryDamaged);
         render();
-        toast("기기에 새 사본을 가져왔습니다.");
+        toast(
+          "기기에 새 사본을 가져왔습니다." +
+            (restored.happinessOnly
+              ? " 행복도 복원 연표를 새로 만들었습니다."
+              : restored.days
+                ? " 하루 행복도는 백업 당시 보이던 값으로 사본에 넣었습니다."
+                : ""),
+        );
         if (documents.length)
           await store.uploadDocuments(documents.map((doc) => doc.id));
       } catch (e) {

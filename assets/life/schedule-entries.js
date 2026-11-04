@@ -1,9 +1,10 @@
 /* 일정의 습관·행복도·목표 칸(B2, 2026-11-04). 일정 화면이 이 칸을 그릴 때만 불러온다.
  * 습관 체크·목표 진행률은 기존 목표·습관(haedo_items)의 HaedoPlatformStore로 저장한다(저장 형식
  * 그대로, 11-03 결정). 충돌은 최신 쪽을 채택하고 진 쪽은 복구 사본으로 남는다.
- * 행복도는 보기만 한다(2026-11-04 소유자 결정 "습관·목표 먼저"): 연표의 값을 0–10으로 보이고,
- * 기록은 연표 편집기로 가는 링크로 한다. 일정에서 행복도를 쓰는 기능은 쓰는 곳을 하나로 다시
- * 설계해 다음 묶음에서 한다. */
+ * 하루 행복도는 일정 D에서만 입력한다(11-02 결정). 정본은 계정 문서 happinessDays이고 쓰는 곳은
+ * 셸 저장소의 writeHappinessDay 하나다(2026-11-04 소유자 결정, happiness-single-writer.md). 이
+ * 화면은 연표 문서의 옛 하루 점을 계정 문서로 옮기고(지우지 않는다) 옛 편집기가 더한 값을
+ * 받아들인다(absorbHappiness). 연표 편집기는 하루 값을 보기만 한다. */
 (function (global) {
   'use strict';
   const life = global.HaedoLife = global.HaedoLife || {};
@@ -19,6 +20,112 @@
     if (className) node.className = className;
     return node;
   }
+  // ── 하루 행복도(happinessDays) — 셸 저장소 범위마다 하나 ──
+  const REFRESH = '앱을 새로고침한 뒤 다시 시도해 주세요. 값은 그대로 있습니다.';
+  let current = null; // the happinessDays controller of the open storage scope
+  const happinessKey = account => `happinessDays:${JSON.stringify([account.projectUrl, account.userId])}:days`;
+  function moodFor(storage, s) {
+    if (current && current.storage === storage) return current;
+    current?.stop();
+    const m = { storage, entries: null, refresh: false, error: null, sync: 'ok', pending: new Map(), stops: [], loading: null, again: false,
+      absorbing: null, absorbAgain: false };
+    // Repaint only when what the panel shows changed (values, notices, save state): a repaint
+    // rebuilds the panel, so status notices alone must not churn it.
+    let shown = null;
+    const repaint = () => {
+      const now = JSON.stringify([m.entries, m.refresh, m.error, m.sync, [...m.pending]]);
+      if (now === shown) return;
+      shown = now; document.dispatchEvent(new Event('haedo:happiness'));
+    };
+    // A page whose storage.js has no happinessDays (an older cached module next to this one) never writes.
+    m.ready = typeof storage?.writeHappinessDay === 'function' && typeof storage?.readHappinessDays === 'function' &&
+      typeof storage?.absorbTimelineDays === 'function' && !!model()?.absorbHappiness;
+    if (!m.ready) m.refresh = true;
+    const same = () => current === m && storage.account && accountOf(storage.account) === storage.account.userId;
+    m.load = () => {
+      if (!m.ready) return Promise.resolve();
+      if (m.loading) { m.again = true; return m.loading; }
+      m.loading = (async () => {
+        do {
+          m.again = false;
+          try {
+            const value = await storage.readHappinessDays();
+            if (!same()) return;
+            m.entries = value.entries; m.refresh = false; m.error = null;
+          } catch (error) {
+            if (!same()) return;
+            if (error?.code === 'app_refresh_required') m.refresh = true;
+            else if (!['storage_scope_closed', 'auth_scope_required'].includes(error?.code)) m.error = error?.message || '행복도를 읽지 못했습니다.';
+          }
+          await m.syncState();
+        } while (m.again && same());
+        repaint();
+      })().finally(() => { m.loading = null; });
+      return m.loading;
+    };
+    // Two-step save state of this one document (the account engine's view of it).
+    m.syncState = async () => {
+      try {
+        const record = await storage.readAccountDocRecord(happinessKey(storage.account));
+        const engine = life.Shell?.accountDocsSync?.getStatus?.();
+        m.sync = !record.exists || (record.sync && record.hash === record.sync.hash) ? 'ok'
+          : record.sync?.error || ['error', 'unavailable'].includes(engine?.state) ? 'error' : 'pending';
+      } catch (_) { /* The value on screen stays; the status is refreshed on the next notice. */ }
+    };
+    // Old daily points of this account's timelines → the account document (absorbTimelineDays decides
+    // inside one transaction). One pass at a time; the account is captured when the pass begins.
+    m.absorb = () => {
+      if (!m.ready || m.refresh) return;
+      if (m.absorbing) { m.absorbAgain = true; return; }
+      const account = storage.account, uid = account?.userId;
+      if (!uid || accountOf(account) !== uid) return;
+      m.absorbing = (async () => {
+        do {
+          m.absorbAgain = false;
+          await model().absorbHappiness({ storage, localStorage: global.localStorage, uid, account, serverIds: s.serverDocumentIds ?? null,
+            isCurrent: () => same() && s.account === uid });
+        } while (m.absorbAgain && same());
+      })().catch(error => {
+        if (!same() || ['storage_scope_closed', 'auth_scope_required', 'account_changed'].includes(error?.code)) return;
+        // Said on the 일정 (one line), not swallowed: e.g. a full 행복도 document stops moving timeline days.
+        if (error?.code === 'app_refresh_required') m.refresh = true;
+        else m.error = '연표의 하루 행복도를 옮기지 못했습니다. 연표의 값은 그대로 있습니다. ' + (error?.message || '');
+        repaint();
+      }).finally(() => { m.absorbing = null; });
+    };
+    // 일정 D: score 0–10 or null (지우기). The choice stays on screen until it is stored.
+    m.write = async (date, score) => {
+      m.pending.set(date, score); m.error = null; repaint();
+      if (!m.ready || m.refresh) { m.refresh = true; repaint(); return; }
+      try {
+        await storage.writeHappinessDay(date, score === null ? null : (score - 5) / 5);
+        if (!same()) return;
+        // A later choice for the same day stays on screen until its own write ends.
+        if (m.pending.get(date) === score) m.pending.delete(date);
+        await m.load();
+      } catch (error) {
+        if (!same()) return;
+        if (error?.code === 'app_refresh_required') m.refresh = true;
+        else m.error = error?.message || '행복도를 저장하지 못했습니다. 다시 시도해 주세요.';
+        repaint();
+      }
+    };
+    m.stop = () => { for (const stop of m.stops.splice(0)) { try { stop(); } catch (_) { /* Closed scope. */ } } };
+    if (m.ready) {
+      try {
+        m.stops.push(storage.subscribeAll(event => {
+          if (event?.type === 'happiness_days_changed' || (event?.type === 'account_doc_applied' && String(event.key || '').startsWith('happinessDays:'))) m.load();
+          else if (event?.type === 'account_doc_changed' && String(event.key || '').startsWith('happinessDays:')) m.syncState().then(repaint);
+        }));
+      } catch (_) { /* A closed scope: the next screen opens a new one. */ }
+      const engine = life.Shell?.accountDocsSync;
+      if (engine?.subscribe) m.stops.push(engine.subscribe(() => { if (same()) m.syncState().then(repaint); }));
+    }
+    current = m;
+    m.load();
+    return m;
+  }
+  global.document?.addEventListener('haedo:signed-out', () => { current?.stop(); current = null; });
   // Two-step save state (2026-11-02 owner decision).
   const STATE_TEXT = { ok: '저장됨 · 계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 · 다시 시도' };
   function saveState(items) {
@@ -88,10 +195,15 @@
     const s = open(storageAccount);
     if (!s) return () => {};
     mirrorRecovery(s, storage);
+    // 하루 행복도: the shell's storage scope (the same verified account) holds the account document.
+    const days = storage?.account?.userId === s.account ? moodFor(storage, s) : null;
+    days?.absorb();
     const status = el('p', null, 'life-meta schedule-entry-status'); status.setAttribute('role', 'status');
     const error = el('p', null, 'life-error schedule-entry-error'); error.setAttribute('role', 'alert'); error.hidden = true;
     const body = el('div', null, 'schedule-entry-body');
-    host.replaceChildren(body, status, error);
+    // 행복도 notices apart from the goal/habit error line (a save failure there is not hidden by them).
+    const moodNotice = el('p', null, 'life-error schedule-happiness-error'); moodNotice.setAttribute('role', 'alert'); moodNotice.hidden = true;
+    host.replaceChildren(body, status, error, moodNotice);
     let dirty = false, painted = false;
     // 행복도 for this paint: the timelines are read once per paint, not once per day shown.
     let mood = { source: null, on: () => null };
@@ -120,17 +232,32 @@
       }));
       return box;
     }
-    // 행복도 is shown, not entered here: the link opens the timeline it is read from.
+    // 일정 D: 0–10 (signed1 in the account document), 지우기 clears that day only. Days not come yet
+    // cannot be entered. A choice not stored yet stays selected (also when the app must refresh).
     function happinessField(day) {
-      const field = el('section', null, 'schedule-entry-section schedule-happiness'); field.setAttribute('aria-label', '행복도');
-      field.append(el('h3', '행복도', 'schedule-entry-title'));
-      const current = mood.on(day), source = mood.source;
-      field.append(el('p', current ? current.score + ' / 10' : '기록 없음', 'schedule-happiness-value'));
-      const edit = el('a', '연표에서 기록', 'life-text-button schedule-happiness-edit');
-      edit.href = 'timeline.html' + (source ? '?doc=' + encodeURIComponent(source.id) : '');
-      edit.setAttribute('aria-label', '행복도를 연표에서 기록' + (source ? ' (' + source.name + ')' : ''));
-      edit.dataset.focusKey = 'schedule:happiness:edit';
-      field.append(edit);
+      const field = el('fieldset', null, 'schedule-happiness'); field.append(el('legend', '행복도'));
+      const stored = mood.on(day), waiting = days?.pending.has(day) ? days.pending.get(day) : undefined;
+      const chosen = waiting !== undefined ? waiting : stored?.score ?? null, name = 'schedule-happiness-' + day;
+      const scale = el('div', null, 'schedule-happiness-scale');
+      for (let n = 0; n <= 10; n++) {
+        const label = el('label', null, 'schedule-happiness-option');
+        const radio = el('input'); radio.type = 'radio'; radio.name = name; radio.value = String(n);
+        radio.checked = chosen === n; radio.disabled = day > today || !days;
+        radio.dataset.focusKey = 'schedule:happiness:' + day + ':' + n;
+        radio.setAttribute('aria-label', '행복도 ' + n);
+        radio.addEventListener('change', () => { if (alive() && radio.checked && days) { dirty = true; days.write(day, n); } });
+        label.append(radio, el('span', n));
+        scale.append(label);
+      }
+      field.append(scale);
+      if (chosen !== null && day <= today && days) {
+        const clear = el('button', '지우기', 'life-text-button schedule-happiness-clear'); clear.type = 'button';
+        clear.dataset.focusKey = 'schedule:happiness:' + day + ':clear';
+        clear.setAttribute('aria-label', '이 날 행복도 지우기');
+        clear.addEventListener('click', () => { if (alive() && days) { dirty = true; days.write(day, null); } });
+        field.append(clear);
+      }
+      if (day > today) field.append(el('p', '오지 않은 날은 기록할 수 없어요.', 'life-meta'));
       return field;
     }
     function goalRows(goals) {
@@ -222,17 +349,27 @@
       const active = document.activeElement;
       if (active && host.contains(active) && active.matches('input[type=range]') && active.matches(':active')) return;
       const focusKey = host.contains(active) ? active?.dataset?.focusKey : null;
-      if (kind !== 'year') mood = s.happinessReader();
+      // Until the account document is read (or when it cannot be), no day shows a timeline's old point:
+      // a day deleted in 일정 D must not come back as its old value for a moment. A page whose storage has
+      // no happinessDays (mixed versions) shows the timeline's points as before.
+      if (kind !== 'year') mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
       painted = true;
-      const state = saveState(s.items), unseen = s.recoveryUnseen;
+      // 'loading' until the 행복도 document is read here (one more repaint follows), then 'ready'.
+      host.dataset.happiness = kind !== 'year' && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
+      const itemState = saveState(s.items), moodState = kind === 'day' && days ? days.sync : 'ok';
+      const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
+      const unseen = s.recoveryUnseen;
       status.hidden = !dirty && state === 'ok' && !unseen;
       status.replaceChildren(el('span', STATE_TEXT[state]));
       status.dataset.state = state;
       if (state === 'error') {
         // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
         const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
-        retry.addEventListener('click', () => { if (!alive()) return; s.retry().catch(() => {}).finally(paint); });
+        retry.addEventListener('click', () => {
+          if (!alive()) return;
+          Promise.allSettled([s.retry(), life.Shell?.accountDocsSync?.syncNow?.()]).then(() => days?.syncState()).finally(paint);
+        });
         status.append(' ', retry);
       }
       // Shown until acknowledged; the copies stay (list: habits.html#recovery, and in backups).
@@ -244,12 +381,19 @@
         status.append(el('span', ' 다른 기기와 겹친 변경 ' + unseen + '개를 복구 사본으로 남겼습니다. ', 'schedule-entry-recovery'), view, ' ', seen);
       }
       if (mirrorError) { status.hidden = false; status.append(el('span', ' ' + mirrorError, 'schedule-entry-recovery-error')); }
+      // A newer app wrote the 행복도 document, or this page mixes module versions: nothing is written.
+      moodNotice.hidden = !(days?.refresh && kind !== 'year') && !(days?.error && kind === 'day');
+      if (days?.refresh && kind !== 'year') { moodNotice.textContent = REFRESH; moodNotice.dataset.code = 'app_refresh_required'; }
+      else if (days?.error && kind === 'day') { moodNotice.textContent = days.error; delete moodNotice.dataset.code; }
       if (focusKey) [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }
-    const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); } };
+    // Timelines or items changed here: repaint, mirror recovery copies, and absorb timeline days.
+    const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); days?.absorb(); } };
+    const onMood = () => { if (alive()) paint(); };
     document.addEventListener('haedo:store', onStore);
+    document.addEventListener('haedo:happiness', onMood);
     paint();
-    return () => document.removeEventListener('haedo:store', onStore);
+    return () => { document.removeEventListener('haedo:store', onStore); document.removeEventListener('haedo:happiness', onMood); };
   }
   life.ScheduleEntries = Object.freeze({ render, saveState, STATE_TEXT });
 })(globalThis);
