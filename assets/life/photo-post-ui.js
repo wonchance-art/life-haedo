@@ -894,6 +894,11 @@
       try {
         if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, id, { expectedRevision: revision });
         else await storage.deletePhotoPost(workspaceId, id, revision);
+      } catch (e) {
+        // The shared refusal names the list; from here the post itself has to be opened again.
+        if (e?.code === "photo_post_conflict")
+          throw Object.assign(new Error("다른 탭이나 기기에서 글이 바뀌어 삭제하지 않았습니다. 글을 다시 연 뒤 삭제해 주세요."), { code: e.code });
+        throw e;
       } finally {
         setBusy(false);
       }
@@ -903,10 +908,16 @@
       committed = false;
       error = null;
       onSaved();
-      // Leave the read view the way its back control would, without naming the deleted post.
-      if (onReturn && (await onReturn({ id: null, committed: false })) !== false) return;
+      // Leave the read view the way its back control would; the caller forgets the deleted post.
+      const left = onReturn && (await onReturn({ id: null, deletedId: id, committed: false })) !== false;
+      if (!current(token)) return;
+      // A return that did not replace this view must not leave the deleted post on screen.
+      if (left && !(host?.isConnected && host.querySelector(".photo-article"))) return;
       mode = "list";
       render();
+      if (!left && statusText) statusText.textContent = "글을 삭제했습니다. 다른 기기에서도 삭제됩니다.";
+      if (!document.activeElement || document.activeElement === document.body)
+        [...host.querySelectorAll("h2,h3,button")].find((node) => node.getClientRects().length)?.focus({ preventScroll: true });
     }
     function serverCurrent(token, id, revision, sequence) {
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
