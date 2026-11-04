@@ -146,8 +146,48 @@
     pending.finally(() => { if (showing === pending) showing = null; });
     return pending;
   }
+  // Background account receive (other spaces, compositions, metadata) starts once the first screen has
+  // what it needs (2026-11-04, owner-approved P1): the earliest of BlogSync's first pass ending (a failed
+  // pass too), the home list showing its first post, or BACKGROUND_LIMIT_MS after the account was
+  // verified. It used to start right after the shell showed, competing with the first posts for the
+  // device. Its scope is unchanged; only its start moves. A post of a space not yet on this device does
+  // not wait for it: BlogSync places it in the active space and keeps its server space (remoteWorkspaceId).
+  const BACKGROUND_LIMIT_MS = 5000;
+  function afterFirstScreen({ start, storage, container, signal, since }) {
+    let done = false;
+    const stops = [];
+    const finish = () => { done = true; for (const stop of stops.splice(0)) { try { stop(); } catch (_) { /* already gone */ } } };
+    // A page parked in the back/forward cache starts nothing; after it resumes, the start waits for
+    // the resumed page's own account check (haedo:page-ready).
+    const launch = () => {
+      if (signal.aborted) return;
+      if (!suspended) { start(); return; }
+      const ready = () => { signal.removeEventListener('abort', drop); launch(); };
+      const drop = () => root.document.removeEventListener('haedo:page-ready', ready);
+      root.document.addEventListener('haedo:page-ready', ready, { once: true });
+      signal.addEventListener('abort', drop, { once: true });
+    };
+    const begin = () => { if (done) return; finish(); launch(); };
+    signal.addEventListener('abort', finish, { once: true });
+    const timer = root.setTimeout(begin, Math.max(0, since + BACKGROUND_LIMIT_MS - Date.now()));
+    stops.push(() => root.clearTimeout(timer));
+    // An older page without BlogSync's status starts at once, as before.
+    const blog = life.BlogSync?.forStorage?.(storage);
+    if (typeof blog?.subscribe !== 'function' || typeof blog.getStatus !== 'function') { begin(); return; }
+    const passEnded = status => !!status && !status.running && !!(status.lastSyncAt || status.lastError);
+    if (passEnded(blog.getStatus())) { begin(); return; }
+    stops.push(blog.subscribe(event => { if (event?.type === 'status' && passEnded(event.status)) begin(); }));
+    const drawn = () => !!container.querySelector('#homePostList .home-post, #homePostList .home-draft');
+    if (drawn()) { begin(); return; }
+    if (typeof root.MutationObserver === 'function') {
+      const observer = new root.MutationObserver(() => { if (drawn()) begin(); });
+      observer.observe(container, { childList: true, subtree: true });
+      stops.push(() => observer.disconnect());
+    }
+  }
   async function build(account) {
     const key = account.projectUrl + '|' + account.userId;
+    const verifiedAt = Date.now();
     if (activeKey === key && mounted) return mounted;
     hide();
     activeKey = key;
@@ -185,10 +225,10 @@
       reveal(account);
       if (bootstrap?.background) {
         const library = accountLibrary;
-        root.requestAnimationFrame(() => {
+        afterFirstScreen({ storage, container, signal, since: verifiedAt, start: () => {
           if (signal.aborted || token !== generation || mounted !== instance || accountLibrary !== library) return;
           library.reconcile().catch(() => {});
-        });
+        } });
       }
       if (bootstrap?.legacy) sync.setAutomatic?.(true);
       if (!automatic || bootstrap?.legacy) sync.start().catch(() => {
