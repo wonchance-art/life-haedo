@@ -90,8 +90,10 @@
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
-      // A skipped check reuses the state just read: nothing is awaited between that read and here, so a
-      // second read would return the same record (2026-11-04: one status read less per skipped check).
+      // A skipped check reuses the state just read (2026-11-04: one status read less per skipped check).
+      // Nothing is awaited between that read and here. The old second read was a new transaction and
+      // could see a write another tab committed in between; that gap only adds a race that the storage's
+      // atomic source check and the pass's one retry already cover.
       const skip = ctx.reuseSource && ctx.sourceChecked && ready(initial, minimum);
       if (skip) ctx.sourceSkipped = true;
       else { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
