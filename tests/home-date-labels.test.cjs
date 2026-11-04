@@ -37,3 +37,19 @@ for (const zone of ['Asia/Seoul', 'UTC', 'America/Los_Angeles', 'Pacific/Aucklan
     assert.match(result.sample.text, /^수정 .*월 .*일$/, 'Korean month and day');
   });
 }
+
+// #194 review minor 2: a formatter keeps the zone it was made in. When the device moves to another
+// zone while the page stays open, the labels follow the new zone, as a fresh formatter would.
+test('home date labels follow a time zone change while the page stays open', () => {
+  const run = spawnSync(process.execPath, ['-e', `
+    globalThis.window = undefined; require(${JSON.stringify(path.join(__dirname, '../assets/life/home.js'))});
+    const { dateLabels } = globalThis.HaedoLife.HomeUI, now = new Date('2026-06-01T00:00:00Z');
+    const before = dateLabels('2026-11-04T20:00:00Z', '수정 ', now);
+    process.env.TZ = 'Pacific/Kiritimati';
+    const after = dateLabels('2026-11-04T20:00:00Z', '수정 ', now);
+    console.log(JSON.stringify({ before, after }));`], { env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const { before, after } = JSON.parse(run.stdout.trim());
+  assert.deepEqual(before, { text: '수정 11월 4일', title: '수정 2026년 11월 4일' });
+  assert.deepEqual(after, { text: '수정 11월 5일', title: '수정 2026년 11월 5일' });
+});

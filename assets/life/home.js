@@ -129,8 +129,21 @@
   // A row's date and its full form. Formatters are made once (2026-11-04: two new
   // Intl.DateTimeFormat per row were ~3% of the main thread while the first list was drawn);
   // the strings are the same as formatting with a new formatter each time.
-  const dateFormats = {};
-  const dateFormat = withYear => dateFormats[withYear] ||= new Intl.DateTimeFormat('ko-KR', withYear ? { year: 'numeric', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' });
+  // A formatter keeps the time zone it was made in, so the cache is keyed by the device's zone. Asking
+  // for the zone name costs about as much as a new formatter; it is asked again only when the current
+  // UTC offset changes (an open PWA moved to another zone) or a minute has passed.
+  const dateFormats = new Map();
+  let zoneProbe = { offset: null, at: 0, zone: '' };
+  function deviceZone() {
+    const offset = new Date().getTimezoneOffset(), at = Date.now();
+    if (offset !== zoneProbe.offset || !(at - zoneProbe.at < 60000)) zoneProbe = { offset, at, zone: new Intl.DateTimeFormat().resolvedOptions().timeZone || '' };
+    return zoneProbe.zone;
+  }
+  function dateFormat(withYear) {
+    const key = deviceZone() + '|' + withYear;
+    if (!dateFormats.has(key)) dateFormats.set(key, new Intl.DateTimeFormat('ko-KR', withYear ? { year: 'numeric', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' }));
+    return dateFormats.get(key);
+  }
   function dateLabels(value, prefix = '수정 ', now = new Date()) {
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return null;

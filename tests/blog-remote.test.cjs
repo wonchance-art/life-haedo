@@ -136,7 +136,9 @@ test('an in-progress photo download is aborted by dispose or an account change, 
     const f = fixture(), signals = [];
     f.auth.client.storage.from = bucket => ({ download(path, options, parameters) {
       signals.push(parameters?.signal); f.state.downloads.push({ bucket, path });
-      return new Promise((resolve, reject) => parameters.signal.addEventListener('abort', () => reject(Object.assign(Error('aborted'), { name: 'AbortError' })), { once: true }));
+      // As the bundled storage-js does: an aborted fetch resolves with a StorageUnknownError result.
+      return new Promise(resolve => parameters.signal.addEventListener('abort', () => resolve({ data: null,
+        error: Object.assign(Error('Unknown error'), { name: 'StorageUnknownError', originalError: Object.assign(Error('aborted'), { name: 'AbortError' }) }) }), { once: true }));
     } });
     const pending = f.adapter.downloadAsset({ bucket: 'haedo-blog-originals', path: UID + '/' + POST + '/photo' });
     await new Promise(done => setImmediate(done));
