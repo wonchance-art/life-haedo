@@ -6,11 +6,14 @@
  *    the run with its name, SQLSTATE and line.
  * 2. Applies supabase/operations/20261101-account-sync-install.sql on top (its six
  *    migrations then run a second time), then the later installs that redefine the same
- *    functions (20261102-blog-ai-authorship-install.sql), and requires every result check
+ *    functions (20261102-blog-ai-authorship-install.sql) and the idempotent AI cap install
+ *    (20261104-ai-usage-install.sql), and requires every result check
  *    to be true and the schema/grant/policy/bucket catalog to be unchanged.
  * 3. Runs supabase/operations/naver-status-check.sql and requires its 12 rows (1-11 plus 5.5).
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
  * 4.5 Runs supabase/tests/blog-ai-authorship.sql (rolled back) on a fresh replayed copy.
+ * 4.6 Runs supabase/tests/life-ai-usage.sql (rolled back) on a fresh replayed copy, then two
+ *     sessions race for the last of the monthly AI budget: exactly one reservation wins.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -28,8 +31,11 @@ const STATUS = path.join(ROOT, 'supabase/operations/naver-status-check.sql');
 // defines, so the replayed catalog is only restored once all of them have run.
 const LATER_INSTALLS = [
   { file: path.join(ROOT, 'supabase/operations/20261102-blog-ai-authorship-install.sql'), checks: 5 },
+  // Not a redefinition of INSTALL: re-applied to prove the AI cap install is idempotent.
+  { file: path.join(ROOT, 'supabase/operations/20261104-ai-usage-install.sql'), checks: 5 },
 ];
 const AUTHORSHIP_SQL = path.join(ROOT, 'supabase/tests/blog-ai-authorship.sql');
+const AI_USAGE_SQL = path.join(ROOT, 'supabase/tests/life-ai-usage.sql');
 const STUB_SCHEMAS = ['auth', 'storage', 'cron', 'vault', 'net', 'extensions'];
 
 function extraFiles() {
@@ -145,6 +151,55 @@ async function main() {
       assert.equal(await body('haedo_blog_private.valid_document(jsonb,uuid)'), drifted, 'a stopped install changes nothing');
       pass('authorship install proceeds on a re-run and stops unchanged when a function body differs from the repository');
     } finally { await authorship.end(); }
+
+    const usageDb = await pg.cloneDatabase('replay_ai_usage');
+    const usage = await pg.connect(usageDb), rival = await pg.connect(usageDb);
+    try {
+      const rows = [].concat(await pgStub.applyFile(usage, AI_USAGE_SQL)).filter(result => result.rows?.length).at(-1).rows;
+      const result = rows[0].result;
+      assert.equal(result.failures, 0); assert(result.passed >= 50, 'AI usage assertions ran: ' + result.passed);
+      pass(`supabase/tests/life-ai-usage.sql: ${result.passed} assertions on a fresh replayed copy (rolled back)`);
+      // Two Edge requests of one owner race for the last 1,000 micro-USD. Session 1 reserves
+      // and holds its transaction open; session 2 must wait for it, then see the cap.
+      const owner = (await usage.query('select gen_random_uuid() id')).rows[0].id;
+      await usage.query('insert into auth.users(id) values($1)', [owner]);
+      await usage.query(`insert into haedo_ai_private.usage(owner_id,month,cost_micro_usd) values($1,date_trunc('month',clock_timestamp() at time zone 'UTC')::date,9999000)`, [owner]);
+      const reserve = (client, id) => client.query(`select public.life_ai_reserve($1,$2,'claude-haiku-5-5',1000,1000)->>'status' s`, [owner, id]).then(r => r.rows[0].s);
+      const ids = (await usage.query('select gen_random_uuid() a, gen_random_uuid() b')).rows[0];
+      await usage.query('begin'); await usage.query('set local role service_role');
+      await rival.query('begin'); await rival.query('set local role service_role');
+      assert.equal(await reserve(usage, ids.a), 'reserved');
+      const pid = (await rival.query('select pg_backend_pid() p')).rows[0].p;
+      const waiting = reserve(rival, ids.b);
+      let blocked = false;
+      for (let i = 0; i < 100 && !blocked; i++) {
+        blocked = (await pg.connect(usageDb).then(async c => { try { return (await c.query(`select wait_event_type='Lock' w from pg_stat_activity where pid=$1`, [pid])).rows[0]?.w; } finally { await c.end(); } })) === true;
+        if (!blocked) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      assert(blocked, 'the second reservation waits for the first one\'s owner lock');
+      await usage.query('commit');
+      assert.equal(await waiting, 'limit', 'the waiting reservation sees the first one and is refused at the cap');
+      await rival.query('commit');
+      const totals = (await usage.query(`select cost_micro_usd+reserved_micro_usd t, (select count(*)::int from haedo_ai_private.reservations where owner_id=$1) n from haedo_ai_private.usage where owner_id=$1`, [owner])).rows[0];
+      assert.equal(Number(totals.t), 9999600); assert.equal(totals.n, 1);
+      pass('two concurrent reservations for the last budget: one reserved, the other waited on the owner lock and got limit; total 9,999,600 <= 10,000,000 micro-USD');
+    } finally { await usage.end(); await rival.end(); }
+
+    // Production path for the AI cap: a database that has every earlier migration but not
+    // 20261104090000 gets it from the SQL Editor install. The result must equal the replay.
+    {
+      const admin = await pg.connect();
+      try { await admin.query('create database replay_ai_install'); } finally { await admin.end(); }
+      const fresh = await pg.connect('replay_ai_install'), full = await pg.connect(pg.database);
+      try {
+        await pgStub.replayMigrations(fresh, { files: pgStub.migrationFiles().filter(file => path.basename(file) !== '20261104090000_life_ai_usage.sql') });
+        const rows = [].concat(await pgStub.applyFile(fresh, LATER_INSTALLS[1].file)).at(-1).rows;
+        assert(rows.length === LATER_INSTALLS[1].checks && rows.every(row => row.ok === true), 'AI usage install on a database without the migration');
+        const changed = diff(await catalog(full), await catalog(fresh));
+        assert.deepEqual(changed, [], 'the AI usage install differs from the migration:\n' + changed.slice(0, 40).join('\n'));
+        pass(`AI usage install on a database without its migration: ${rows.length} checks true, catalog identical to the replay`);
+      } finally { await fresh.end(); await full.end(); }
+    }
 
     const clone = await pg.cloneDatabase('replay_clone');
     const copy = await pg.connect(clone);
