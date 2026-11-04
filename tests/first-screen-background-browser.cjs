@@ -46,7 +46,7 @@ function seed(rows) {
   return server;
 }
 // A device whose requests are timed (Date.now in Node and in the page share the machine clock).
-async function device(browser, server, name, { hold = null, fail = null, listDelay = 0 } = {}) {
+async function device(browser, server, name, { hold = null, fail = null, listDelay = 0, catalogGate = null } = {}) {
   const context = await makeContext(browser, server, name, accounts.a, { viewport: { width: 1280, height: 900 } });
   const seen = [];
   context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && request.method() !== 'OPTIONS') seen.push({ path: url.pathname, at: Date.now() }); });
@@ -55,6 +55,11 @@ async function device(browser, server, name, { hold = null, fail = null, listDel
     if (fail) return route.abort('internetdisconnected');
     if (listDelay) { await sleep(listDelay); return route.fallback(); }
     await new Promise(() => {}); // never answers
+  });
+  // Holds the background receive (its first request is the catalog) until the test releases it.
+  if (catalogGate) await context.route(cloud + '/rest/v1/rpc/life_library_catalog', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    await catalogGate; return route.fallback();
   });
   await context.addInitScript(() => {
     const m = window.__first = { shell: null, row: null, rowTitle: null, pass: null };
@@ -129,6 +134,47 @@ async function main() {
       assert.equal(placed.active, ids[0]); assert.equal(placed.remoteWorkspaceId, ids[1]);
       // The space itself still arrives through the background receive.
       await until(() => d.page.evaluate(async id => (await HaedoLife.Shell.storage.listWorkspaces()).some(row => row.workspaceId === id), ids[1]), Boolean, 'second space received');
+      assert.deepEqual(d.errors, []);
+      await d.context.close();
+    });
+
+    await check('a post of a space not yet received, edited before that space arrives, is saved to its own server space; the space then arrives without a duplicate', async () => {
+      let release; const gate = new Promise(done => { release = done; });
+      const d = await device(browser, server, 'edit-before-receive', { catalogGate: gate });
+      await d.page.goto(base + '/index.html');
+      await until(() => d.page.evaluate(() => window.__first), m => m.row !== null, 'first row');
+      const before = [...server.posts.values()].find(row => row.id === newest), calls = server.blogCalls.length;
+      const edited = await d.page.evaluate(async ({ ids, newest }) => {
+        const L = HaedoLife, s = L.Shell.storage, active = await s.getActive();
+        const local = (await s.listWorkspaces()).map(row => row.workspaceId);
+        const post = await s.readPhotoPost(active, newest);
+        await s.savePhotoPost(active, { ...post, title: post.title + ' (고침)' }, post.revision);
+        await L.BlogSync.forStorage(s).syncNow({ force: true });
+        const state = await s.readBlogSyncState(active, newest);
+        return { local, remoteWorkspaceId: state.remoteWorkspaceId, remoteRevision: state.remoteRevision, pending: state.pending };
+      }, { ids, newest });
+      assert.ok(!edited.local.includes(ids[1]), 'the post\'s own space is not on this device yet');
+      const after = [...server.posts.values()].find(row => row.id === newest);
+      assert.equal(after.workspace_id, ids[1], 'saved to its own server space');
+      assert.equal(after.revision, before.revision + 1); assert.match(after.data.title, /\(고침\)$/);
+      const save = server.blogCalls.slice(calls).find(call => call.rpc === 'life_blog_save' && call.body.p_post_id === newest);
+      assert.equal(save.body.p_workspace_id, ids[1]); assert.equal(save.body.p_expected_revision, before.revision, 'compare-and-set on the revision it held');
+      assert.ok(server.blogReceipts.has(accounts.a.id + ':' + save.body.p_operation_id), 'the save left its receipt');
+      assert.deepEqual([edited.remoteWorkspaceId, edited.remoteRevision, edited.pending], [ids[1], after.revision, null]);
+      release();
+      await until(() => d.page.evaluate(async id => (await HaedoLife.Shell.storage.listWorkspaces()).some(row => row.workspaceId === id), ids[1]), Boolean, 'own space received');
+      await d.page.evaluate(() => HaedoLife.BlogSync.forStorage(HaedoLife.Shell.storage).syncNow({ force: true }));
+      const copies = await d.page.evaluate(async newest => {
+        const s = HaedoLife.Shell.storage; let n = 0;
+        for (const library of await s.listAccountLibraries()) {
+          const value = await s.listBlogSyncStates(library.workspaceId);
+          n += value.states.filter(entry => entry.state?.remoteId === newest).length;
+        }
+        return n;
+      }, newest);
+      assert.equal(copies, 1, 'the post is installed once across the account\'s spaces');
+      const rows = await until(() => d.page.evaluate(() => [...document.querySelectorAll('#homePostList .home-post')].filter(row => /다른 공간의 최신 글/.test(row.textContent)).length), n => n > 0, 'row shown');
+      assert.equal(rows, 1, 'one row in the list');
       assert.deepEqual(d.errors, []);
       await d.context.close();
     });
