@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v185';
+const CACHE='haedo-v187';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -30,7 +30,7 @@ const SHELL=[
   './assets/life/photo-post.css','./vendor/quill/quill.js','./vendor/quill/quill.snow.css','./vendor/fflate/fflate.js','./assets/life/page-posts.css',
   './assets/life/workbench.js','./assets/life/reflection.js','./assets/life/reflection-lenses.js','./assets/life/reflection-lenses-ui.js','./assets/life/books.js',
   './assets/life/book-history.js','./assets/life/book-print.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js',
-  './assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js','./assets/life/account-materials.js','./assets/life/remote.js','./assets/life/sync-lifecycle.js','./assets/life/sync.js',
+  './assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js','./assets/life/account-materials.js','./assets/life/remote.js','./assets/life/sync-lifecycle.js','./assets/life/schedule-entries.js','./assets/life/sync.js',
   './assets/life/composition-remote.js','./assets/life/composition-sync.js','./assets/life/composition-ui.js','./assets/life/writing-remote.js','./assets/life/writing-sync.js','./assets/life/account-docs-remote.js','./assets/life/account-docs-sync.js',
   './assets/life/writing-sync-ui.js','./assets/life/reading-position.js','./assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js',
   './assets/life/collection.js','./assets/life/collection-media.js','./assets/life/collection-metadata.js','./assets/life/collection-picker.js','./assets/life/collection-ui.js',
