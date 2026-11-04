@@ -133,7 +133,7 @@ Obsidian 자체에는 AI가 없고 모두 커뮤니티 플러그인이다. 공�
 
 | 공급자 | 학습 사용 | 보존 | 확인 근거 | 판단 |
 | --- | --- | --- | --- | --- |
-| **Anthropic Claude API** | 보존한 데이터도 명시 허락 없이는 학습에 쓰지 않는다 | Messages API의 프롬프트·출력은 기본적으로 보존하지 않는다. 예외는 Covered Model(Fable 5/5.1·Mythos)로 30일 보존이 필요하다. 우리가 쓸 Haiku·Sonnet 5.5는 해당하지 않는다. ZDR(보존 0)은 별도 신청이다. | 공식 [API and data retention](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention), [요금](https://platform.claude.com/docs/en/about-claude/pricing) | **권고.** 착수 직전에 [상용 데이터 보존 정책](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data)과 문서를 다시 대조한다. 두 문서의 표현이 다르면 짧은 쪽이 아닌 긴 쪽(30일)을 기준으로 소유자에게 알린다. |
+| **Anthropic Claude API** | 보존한 데이터도 명시 허락 없이는 학습에 쓰지 않는다 | **30일 보존을 전제로 한다.** 개인정보 센터의 상용 보존 정책은 "API 입력·출력은 받은 뒤 30일 안에 백엔드에서 자동 삭제"라고 적는다. 사용 정책 위반으로 표시되면 최대 2년, 분류 점수는 최대 7년 보존한다. 개발자 문서는 "대화 내용은 기본 보존하지 않으며 Covered Model만 30일"이라고 적어 두 문서가 다르다. 그래서 더 긴 쪽을 기준으로 삼는다. 보존 0(ZDR)은 영업 계약으로만 켤 수 있고 기본값이 아니다. | 공식 [상용 데이터 보존 정책](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data), [API and data retention](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention), [요금](https://platform.claude.com/docs/en/about-claude/pricing) | **권고.** 소유자에게는 "최대 30일 보존, 학습 미사용"으로 알린다. 배포 직전에 두 문서를 다시 대조한다. |
 | OpenAI API | 2023-03 이후 API 데이터는 동의 없이는 학습에 쓰지 않는다고 알려져 있다 | 악용 감시 기록에 최대 30일, ZDR은 승인제 | 2차 자료만 확인, 공식 문서 미확인 | 보류. 쓰려면 공식 문서를 먼저 확인한다. |
 | Google Gemini API | 유료 등급은 제품 개선에 쓰지 않고, **무료 등급은 쓴다** | 공식 결제 문서는 약관으로 안내하며 기간은 미확인 | 공식 [Gemini API 결제](https://ai.google.dev/gemini-api/docs/billing) | 보류. 무료 등급은 개인 글에 쓰지 않는다. |
 
@@ -146,7 +146,7 @@ Obsidian 자체에는 AI가 없고 모두 커뮤니티 플러그인이다. 공�
   - Haiku 5.5: 입력 $0.10, 출력 $0.50 /100만 토큰
   - Sonnet 5.5: 입력 $2, 출력 $10
   - Opus 5.5: 입력 $4, 출력 $20
-- 캐시는 계산에서 뺐다. 지시문 캐시가 맞으면 Sonnet·Opus의 해당 입력은 0.05배가 되지만, 이 사용량에서는 차이가 작다.
+- 캐시는 계산에서 뺐다. 공식 요금표(2026-11-04 확인)의 캐시 읽기 단가: Sonnet 5.5는 $0.10/MTok, Opus 5.5는 $0.20/MTok이다. 각주에 따르면 둘 다 기본 입력가의 0.05배다. Haiku 5.5는 $0.01/MTok(0.1배)이다. 지시문 캐시가 맞으면 해당 입력이 이만큼 싸지지만, 이 사용량에서는 차이가 작다.
 
 | 사용량(월) | Haiku 5.5 다듬기 (회당 약 $0.0007) | Sonnet 5.5 질문·개요 (회당 약 $0.024) | Opus 5.5 질문·개요 (회당 약 $0.048) |
 | --- | --- | --- | --- |
