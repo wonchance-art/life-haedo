@@ -2086,13 +2086,22 @@
       restoreOriginView(origin, anchor);
     }
 
+    // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
+    // tabindex, so the toolbar heading is tried next instead of leaving focus on <body>.
+    function focusFirstHeading() {
+      for (const heading of [main.querySelector('h1,h2'), toolbar.querySelector('h1')]) {
+        heading?.focus({ preventScroll: true });
+        if (document.activeElement && document.activeElement !== document.body) return;
+      }
+    }
+
     function restoreOriginView(origin, anchor = null) {
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || anchor) return;
         if (state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId) {
           // The return skipped the heading focus; a screen other than the origin still gets its first heading, never <body>.
-          if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
+          if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
           return;
         }
         // A control inside a closed <details> is opened below, so it still counts; one hidden at this width
@@ -2108,7 +2117,7 @@
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
-        if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
+        if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
         if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
