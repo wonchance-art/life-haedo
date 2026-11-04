@@ -92,7 +92,7 @@
       input.dataset[kind === 'post' ? 'postId' : 'boardId'] = item.id;
       input.setAttribute('aria-label', item.title || (kind === 'post' ? '제목 없는 글' : '제목 없는 9칸 구성'));
       const copy = node('span'); copy.append(node('strong', item.title || (kind === 'post' ? '제목 없는 글' : '제목 없는 9칸 구성')));
-      const detail = kind === 'post' ? [item.archived ? '보관한 글' : '저장한 글', item.photoCount != null ? `사진 ${count(item.photoCount)}장` : ''].filter(Boolean).join(' · ') : `항목 ${count(item.itemCount)}개`;
+      const detail = kind === 'post' ? [item.archived ? '숨긴 글' : '저장한 글', item.photoCount != null ? `사진 ${count(item.photoCount)}장` : ''].filter(Boolean).join(' · ') : `항목 ${count(item.itemCount)}개`;
       copy.append(node('span', detail, 'life-meta')); label.append(input, copy);
       input.addEventListener('change', () => {
         if (!valid() || busy) return;
@@ -184,7 +184,7 @@
       const posts = value.posts || [], boards = value.boards || [], sources = value.sources || [];
       box.append(node('p', `글 ${posts.length}개 · 9칸 구성 ${boards.length}개 · 원문 ${sources.length}개 · 예상 크기 ${size(value.bytes)}`));
       const list = node('ul');
-      posts.forEach(post => list.append(node('li', `${post.title || '제목 없는 글'} · 사진 ${count(amount(post.photos))}장${post.archived ? ' · 보관한 글' : ''}${post.dependency ? ' · 9칸 근거로 함께 포함' : ''}`)));
+      posts.forEach(post => list.append(node('li', `${post.title || '제목 없는 글'} · 사진 ${count(amount(post.photos))}장${post.archived ? ' · 숨긴 글' : ''}${post.dependency ? ' · 9칸 근거로 함께 포함' : ''}`)));
       boards.forEach(board => list.append(node('li', `${board.title || '제목 없는 9칸 구성'} · 9칸 구성`)));
       sources.forEach(source => list.append(node('li', `${source.title || '제목 없는 원문'} · 정확 버전 ${count(amount(source.versions))}개 전체 본문`)));
       box.append(list);

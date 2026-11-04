@@ -230,11 +230,11 @@
         "tabs": [
           "글",
           "초안",
-          "보관함"
+          "숨긴 글"
         ],
         "search": "탭 옆에서 펼치는 내 글 검색; 현재 탭의 전체 읽기 결과; 검색어·펼침 보존; 조합 중 갱신 보류; 부분 실패는 빈 결과와 구별",
         "pageSize": 20,
-        "empty": "글·초안·보관함이 모두 없으면 첫 글 쓰기 하나; 작성 행·탭·검색 숨김",
+        "empty": "글·초안·숨긴 글이 모두 없으면 첫 글 쓰기 하나; 작성 행·탭·검색 숨김",
         "drafts": "새 글 초안과 기존 글 수정 중 구별; 글 탭에서만 최신 초안 이어쓰기",
         "feed": "글별 동일 작성자·아바타 반복 없이 실제 제목·본문을 먼저 표시; 날짜·비공개·브라우저 보관은 하단 메타; 모든 사진 프레임을 화면 접근 때 지연 조회",
         "tabsAppearance": "3px 안쪽 여백·2px 간격·12px 바탕 반경; 조작 최소44px·9px 반경; 현재 탭 흰 면·작은 그림자; 이전 선택선 숨김"
@@ -318,8 +318,8 @@
     {
       "name": "내 글 상태 탭",
       "kind": "custom",
-      "description": "홈 대표 목록의 글·초안·보관함. 흰 현재 선택면·aria-selected·키보드 이동으로 현재 상태를 표시한다.",
-      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"내 글 상태\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" aria-controls=\"ds-posts\">글</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">초안 2</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">보관함</button></div><div id=\"ds-posts\" role=\"tabpanel\" aria-label=\"글\"></div>",
+      "description": "홈 대표 목록의 글·초안·숨긴 글. 흰 현재 선택면·aria-selected·키보드 이동으로 현재 상태를 표시한다.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"내 글 상태\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" aria-controls=\"ds-posts\">글</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">초안 2</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">숨긴 글</button></div><div id=\"ds-posts\" role=\"tabpanel\" aria-label=\"글\"></div>",
       "css": ".ds-tabs{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--haedo-soft,#f4f7f5);font-family:var(--haedo-font,\"Pretendard Variable\", \"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-tabs button{position:relative;flex:1;min-height:44px;padding:8px;border:0;border-radius:9px;background:transparent;color:var(--haedo-muted,#5d6b65);font-family:inherit;font-size:14px;font-weight:550;line-height:1.6;cursor:pointer}.ds-tabs button[aria-selected=true]{background:var(--haedo-paper,#fff);box-shadow:0 1px 3px rgb(24 37 34 / .08);color:var(--haedo-accent,#145b50);font-weight:700}.ds-tabs button:hover{background:var(--haedo-canvas,#f4f6f5)}.ds-tabs button:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}"
     },
     {

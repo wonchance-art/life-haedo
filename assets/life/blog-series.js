@@ -54,7 +54,7 @@
   }
   function item(doc, makeId = fresh) {
     photoPost().validate(doc);
-    if (doc.status !== 'saved' || doc.archived || doc.revision < 1) fail('보관함 밖의 저장한 글만 모음에 담을 수 있습니다.');
+    if (doc.status !== 'saved' || doc.archived || doc.revision < 1) fail('숨기지 않은 저장 글만 모음에 담을 수 있습니다.');
     const value = { id: makeId(), postId: doc.id, postRevision: doc.revision, title: doc.title };
     id(value.id); id(value.postId); revision(value.postRevision, true); text(value.title, LIMITS.title); return value;
   }
