@@ -196,12 +196,28 @@ Supabase의 같은 프로젝트 관리 화면에서 운영자가 다음을 준�
 | 위치 | 필요한 설정 | 확인 기준 |
 | --- | --- | --- |
 | Vault | `haedo_naver_project_url` | 이 프로젝트의 HTTPS 루트 URL을 이름 하나로 등록한다. |
-| Vault | `haedo_naver_service_role_key` | 같은 프로젝트의 서버 전용 키를 이름 하나로 등록한다. publishable/anon 키나 다른 프로젝트의 키로 대신하지 않는다. |
+| Vault | `haedo_naver_service_role_key` | 같은 프로젝트의 서버 전용 키를 이름 하나로 등록한다. publishable/anon 키나 다른 프로젝트의 키로 대신하지 않는다. 활성화·전환 SQL은 값이 `sb_secret_` 키이거나 JWT 모양인지만 본다(키 길이는 공식 문서에 없어 길이 조건을 쓰지 않는다). 앞뒤 공백이 있으면 거절한다. |
 | Edge Functions 환경변수/Secrets | 기존 플랫폼 자격과 `HAEDO_NAVER_INGESTION_ENABLED` | 실제 배포 worker의 프로젝트 URL·서버 키·사용자 검증용 공개 키와 가동값을 비공개 관리 화면에서 확인한다. |
 
 Vault의 이름 존재 여부는 값 검증이 아니다. 기존 활성화 SQL의 guard는 URL 형식·키 길이/형식과 정확한 이름 개수만 검사하며, 두 값이 현재 프로젝트와 일치한다는 사실을 증명하지 않는다. 운영자가 같은 프로젝트에서 취득·설정했음을 확인하고, 배포 worker의 인증과 비공개 저장 권한을 별도 검수해야 한다. 자격값을 채팅으로 전달해 달라고 요청하지 않는다.
 
 배포 함수의 ACTIVE 표시와 환경변수 설정 완료도 실제 외부 수집 성공과 구분한다. 기존 [Edge handler](../../supabase/functions/haedo-naver-blog/handler.mjs)의 기능 관문과 DB `ready` 관문이 모두 충족돼야 수집을 수행한다. 현재 관측에서 어느 관문도 임의로 켜지 않았다.
+
+### 새 API 키로 전환 (2026-11-04, 레거시 키 폐지 대비)
+
+Supabase가 레거시 `anon`·`service_role` 키를 2026년 말까지 폐지한다([API keys](https://supabase.com/docs/guides/api/api-keys), 확인일 2026-11-04). 새 서버 키 `sb_secret_`는 JWT가 아니라서 `Authorization: Bearer`로 보낼 수 없고, `apikey` 헤더로만 보낸다.
+
+- **함수:** `SUPABASE_SECRET_KEYS`·`SUPABASE_PUBLISHABLE_KEYS`의 `default`를 먼저 읽고, 레거시 키는 대체값으로만 쓴다. cron 인증은 `apikey` 헤더 기준이고, 기존 Bearer cron도 받는다. 함수 자신의 서버 키가 아닌 키는 그 키로 원격 확인한다. 규칙과 검사는 [writing-ai-suggestions.md의 Supabase 키 절](writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비)에 있다.
+- **cron:** [20261104-naver-cron-apikey.sql](../../supabase/operations/20261104-naver-cron-apikey.sql)이 이미 있는 두 일정의 명령만 `cron.alter_job`으로 `apikey` 헤더 방식으로 바꾼다. 기본 실행은 점검만 한다. 명령 외의 일정 열(jobid·주기·활성·database·username)이 바뀌거나, 행 수가 바뀌거나, 바꿀 일정이 없으면 전체를 되돌린다. `ready`는 그대로 둔다. [활성화 SQL](../../supabase/operations/naver-collection-activation.sql)도 새로 만드는 일정부터 같은 헤더를 쓴다.
+- **순서(총괄·소유자):**
+  1. 새 함수를 배포한다(`verify_jwt=false` 유지). 배포 입력의 런타임 소스는 이제 **9개**다: `index.ts`·`handler.mjs`·`collector.mjs`·`extractor.mjs`·`harvest-network.mjs`·`harvest-worker.mjs`, `assets/life/naver-blog.js`·`naver-capture.js`, 새 `../_shared/supabase-keys.mjs`. 기존 Deno 설정·lock도 함께 넣는다. 배포 뒤 익명 요청 401을 확인하고, 플랫폼이 돌려준 소스 9개가 검수본과 일치하는지 본다.
+  2. 전환 SQL을 `set local haedo.naver_cron_action='apikey'`와 함께 실행한다. 결과 표의 두 일정(공개 전용이면 하나)이 `apikey`·`ok=true`인지 본다.
+  3. **확인:** 다음 예약 실행(최대 15분) 뒤 `select status_code, count(*) from net._http_response where created > now() - interval '30 minutes' group by 1`로 상태 코드만 읽는다. 본문 열은 읽지 않는다. 이 표는 모든 pg_net 호출을 담으므로, 다른 사용처가 생기면 실행 시각으로 좁힌다. 401이 보이면 Vault 값 교체와 레거시 키 끄기를 멈추고, 함수 배포본과 Vault 값을 확인한다. 필요하면 `'bearer'`로 되돌린다.
+  4. 필요하면 소유자가 Vault `haedo_naver_service_role_key` 값을 `sb_secret_` 키로 바꾼다. 바꾼 뒤 3의 확인을 한 번 더 한다.
+  5. 레거시 키를 끄는 것은 그 뒤에 한다. 끈 뒤에도 3의 확인을 한 번 더 한다.
+
+  순서를 거꾸로 하면 이전 판 함수가 `apikey` 헤더를 읽지 못해 cron이 401로 거절된다. 함수를 이전 판으로 되돌릴 때는 같은 SQL을 `'bearer'`로 실행한다. Vault 값이 `sb_secret_`이면 이 되돌리기를 거부한다.
+- **미검증:** 실제 pg_cron의 `alter_job` 동작, 실제 게이트웨이가 `apikey`만 있는 요청을 함수에 넘기는 동작, Storage가 `sb_secret_` apikey만 있는 요청을 받는 동작, 키를 끈 뒤 런타임이 환경값을 언제 갱신하는지. 격리 PostgreSQL의 `alter_job` shim과 단위 검사로만 확인했다.
 
 공식 운영 참고는 Supabase의 [Schedule Edge Functions](https://supabase.com/docs/guides/functions/schedule-functions), [Vault](https://supabase.com/docs/guides/database/vault), [Storage 접근 제어](https://supabase.com/docs/guides/storage/security/access-control)다. 실제 사용 설정·배포본과 문서를 대조하며 기존 SDK·비공개 버킷을 재사용한다.
 

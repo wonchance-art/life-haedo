@@ -1,6 +1,8 @@
 import { collect, failure, feedURL, readBounded } from './collector.mjs';
 import { createHarvestWorker } from './harvest-worker.mjs';
+import { supabaseKeys, serverHeaders } from '../_shared/supabase-keys.mjs';
 
+const SECRET_KEY = /^sb_secret_[A-Za-z0-9_-]{16,255}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -37,31 +39,43 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
     try {
       const project = new URL(environment('SUPABASE_URL') || '');
       check(project.protocol === 'https:' && !project.username && !project.password && project.pathname === '/' && !project.search && !project.hash, 'setup_required');
-      const origin = project.origin; let key = environment('SUPABASE_SERVICE_ROLE_KEY');
-      check(typeof key === 'string' && key.length > 0 && !key.startsWith('sb_publishable_') &&
-        key !== environment('SUPABASE_ANON_KEY') && key !== environment('SUPABASE_PUBLISHABLE_KEY'), 'setup_required');
+      // New sb_secret_/sb_publishable_ keys first, legacy keys as fallback.
+      const keys = supabaseKeys(environment), origin = project.origin; let key = keys.server;
+      check(key, 'setup_required');
+      // Server calls present their key in the apikey header (sb_secret_ is not
+      // a JWT); legacy cron still sends the service JWT as a Bearer token.
+      // User requests carry the Auth session in Authorization.
       const token = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
-      check(token, 'unauthorized');
+      const apikey = request.headers.get('apikey') || undefined;
+      check(token || apikey, 'unauthorized');
       let input;
       try { input = JSON.parse(await readBounded(request, 4096)); } catch (_) { throw failure('invalid_request'); }
       check(object(input));
       const readiness = input.action === 'readiness';
       const harvest = ['inventory','capture','run'].includes(input.action);
-      const exactService = secretEqual(token, key);
-      const candidate = ['cron','run','readiness'].includes(input.action) && legacyServiceCandidate(token, project.hostname);
+      // Only the key this function itself uses is accepted locally. Any other
+      // server key (a rotated legacy service JWT, or another sb_secret_ key in
+      // the apikey header) must prove itself remotely below, so a key that was
+      // disabled or deleted stops working even if this runtime still holds it.
+      // An sb_secret_ key is never a Bearer token, not even this function's own.
+      const exactService = secretEqual(apikey, key) || !key.startsWith('sb_secret_') && secretEqual(token, key);
+      const serviceToken = ['cron','run','readiness'].includes(input.action) ?
+        [apikey, token].find(presented => typeof presented === 'string' && !secretEqual(presented, key) &&
+          (legacyServiceCandidate(presented, project.hostname) || presented === apikey && SECRET_KEY.test(presented))) : undefined;
+      const candidate = !!serviceToken;
       const cron = input.action === 'cron' || input.action === 'run' && (exactService || candidate || Object.keys(input).length === 1);
       let owner = null, verifiedReady;
       if (cron || readiness) {
         check(Object.keys(input).length === 1, 'unauthorized');
         if (!exactService) {
           check(candidate, 'unauthorized');
-          // Key rotation can leave two valid service JWTs with different bytes.
+          // Key rotation can leave two valid server keys with different bytes.
           // Authenticate this candidate remotely using ONLY its own credential,
           // never the environment key; do not persist or cache it across requests.
           const endpoint = origin + '/rest/v1/rpc/life_naver_ready';
           const result = await fetcher(endpoint, { method: 'POST', redirect: 'error',
             signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10000, deadline - Date.now()))]),
-            headers: { apikey: token, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' });
+            headers: { ...serverHeaders(serviceToken), 'Content-Type': 'application/json' }, body: '{}' });
           if (result.redirected || result.url && result.url !== endpoint) {
             await result.body?.cancel(); throw failure('unauthorized');
           }
@@ -71,7 +85,7 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
           }
           verifiedReady = JSON.parse(await readBounded(result, 1024));
           check(typeof verifiedReady === 'boolean', 'server_error');
-          key = token; // Current request only, after remote signature/privilege validation.
+          key = serviceToken; // Current request only, after remote signature/privilege validation.
         }
       } else {
         check(harvest ? input.action === 'capture' ? Object.keys(input).every(k => ['action','subscriptionId','jobId'].includes(k)) &&
@@ -79,8 +93,9 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
           Object.keys(input).length === 2 && UUID.test(input.subscriptionId || '') :
           Object.keys(input).length === 1 && UUID.test(input.subscriptionId || ''));
         // getUser: validate the JWT with Auth itself, never trust decoded claims.
-        const publicKey = environment('SUPABASE_ANON_KEY') || environment('SUPABASE_PUBLISHABLE_KEY');
-        check(typeof publicKey === 'string' && publicKey.length > 0, 'setup_required');
+        const publicKey = keys.publicKey;
+        check(publicKey, 'setup_required');
+        check(token && !token.startsWith('sb_'), 'unauthorized');
         const authenticated = await fetcher(origin + '/auth/v1/user', { method: 'GET', redirect: 'error',
           signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
           headers: { apikey: publicKey, Authorization: 'Bearer ' + token } });
@@ -92,7 +107,7 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         check(deadline > Date.now() + 100, 'server_error');
         const result = await fetcher(origin + '/rest/v1/rpc/' + name, { method: 'POST', redirect: 'error',
           signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10000, deadline - Date.now()))]),
-          headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+          headers: { ...serverHeaders(key), 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
         if (!result.ok) { await result.body?.cancel(); throw failure('server_error'); }
         return JSON.parse(await readBounded(result, 4 * 1024 * 1024));
       };

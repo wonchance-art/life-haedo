@@ -70,6 +70,20 @@
       if (error?.code === 'storage_scope_closed' || error?.code === 'workspace_access_denied') return '계정 또는 작업공간이 바뀌어 저장을 멈췄습니다. 원래 공간에서 다시 확인해 주세요.';
       return error?.message || '저장하지 못했습니다. 현재 초안을 유지했습니다. 다시 시도해 주세요.';
     }
+    // After a redraw that replaced the focused control, focus must not stay on <body>.
+    function refocus(session) {
+      requestAnimationFrame(() => {
+        if (!workspaceIs(session) || current !== session || document.activeElement && document.activeElement !== document.body) return;
+        for (const node of host.querySelectorAll('h1,h2,h3,summary,button')) {
+          // Visible targets only: not a screen-reader-only heading, nor a control inside a closed <details>.
+          if (!node.getClientRects().length || node.disabled || node.closest('.life-sr-only') ||
+            node.tagName !== 'SUMMARY' && node.parentElement?.closest('details:not([open])')) continue;
+          if (/^H[1-3]$/.test(node.tagName) && !node.hasAttribute('tabindex')) node.tabIndex = -1;
+          node.focus({ preventScroll: true });
+          if (document.activeElement === node) return;
+        }
+      });
+    }
     function announceSafe(message, session = current) {
       if (session && workspaceIs(session)) announce(message);
     }
@@ -1449,6 +1463,21 @@
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), blogSync, onManageServer: onManagePost, onPreservePost, onDirty: () => updateStatus(session), onSaved: onLocalSaved,
         onReturn: async context => {
+          // A post deleted from its read view: forget every reference to it and go where its back control goes.
+          if (context.deletedId) {
+            const deleted = context.deletedId, done = '글을 삭제했습니다. 다른 기기에서도 삭제됩니다.';
+            const material = session.materialReturn && [session.materialReturn.postId, session.materialReturn.targetPostId].includes(deleted) ? session.materialReturn : null;
+            const nine = !!session.ninePostReturn || [session.nineComposeReturn?.postId, session.nineComposeTarget?.postId, session.ninePostReference?.postId].includes(deleted);
+            // The 9칸 receipt names the draft it created; a later save may have replaced that id.
+            for (const id of new Set([deleted, session.nineComposeTarget?.postId === deleted ? session.nineComposeTarget.sourcePostId : null].filter(Boolean))) session.nine?.forgetPost?.(id);
+            if (session.nineComposeTarget?.postId === deleted) session.nineComposeTarget = null;
+            if (session.nineComposeReturn?.postId === deleted) session.nineComposeReturn = null;
+            if (session.ninePostReference?.postId === deleted) session.ninePostReference = null;
+            if (material) { session.materialReturn = null; session.materialPlanId = material.planId; session.searchTarget = null; session.materialOpen = true; clearError(); redraw(); refocus(session); announceSafe(done, session); return true; }
+            if (nine) { session.searchTarget = null; session.nineOpen = true; clearError(); redraw(); refocus(session); announceSafe(done, session); return true; }
+            if (session.blogContext) { await onBlogReturn({ id: null, committed: false, kind: 'photo' }); announceSafe(done, session); return true; }
+            announceSafe(done, session); return false;
+          }
           if (session.materialReturn && context.id) {
             const token = generation, destination = session.materialReturn;
             let related = destination.postId === context.id || destination.targetPostId === context.id;

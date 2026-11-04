@@ -566,6 +566,12 @@ jobs:
       - name: Verify readonly local post finding and original preservation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/local-post-finder-browser.cjs
+      - name: Verify posts of a space missing on this device stay readable and save back to their space
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/other-space-post-browser.cjs
+      - name: Verify deleting a post from its read view asks first, deletes only that post and returns to the schedule
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-delete-browser.cjs
       - name: Verify workbench storage boundaries in the browser
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/workbench-storage-browser.cjs
