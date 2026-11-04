@@ -397,7 +397,11 @@ test('a failed space receive starts no further spaces and settles only after the
     for (let i = 0; i < 50; i++) await new Promise(done => setImmediate(done));
     assert.equal(settled, false, 'the started receive is still running');
     assert.ok(!downloads.gates.has(third), 'no space starts after a failure');
-    downloads.gates.get(first).resolve(); await pending.catch(() => {});
+    downloads.gates.get(first).resolve();
+    // #185 review minor 1: the failed receive is reported, never shown as a finished pass.
+    const result = await pending;
+    assert.equal(result.error?.code, 'network_error', 'the bootstrap reports the failed receive');
+    assert.equal((await manager.getState()).status === 'synced', false, 'the account is not shown as synchronized');
     assert.ok(!downloads.gates.has(third)); assert.equal(downloads.inFlight, 0);
     assert.ok(h.log.includes('receive:' + first) && !h.log.includes('receive:' + second));
   } finally { manager.dispose(); }
