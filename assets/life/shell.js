@@ -147,13 +147,14 @@
     return pending;
   }
   // Background account receive (other spaces, compositions, metadata) starts once the first screen has
-  // what it needs (2026-11-04, owner-approved P1): the earliest of BlogSync's first pass ending (a failed
-  // pass too), the home list showing its first post, or BACKGROUND_LIMIT_MS after the account was
-  // verified. It used to start right after the shell showed, competing with the first posts for the
-  // device. Its scope is unchanged; only its start moves. A post of a space not yet on this device does
-  // not wait for it: BlogSync places it in the active space and keeps its server space (remoteWorkspaceId).
-  const BACKGROUND_LIMIT_MS = 5000;
-  function afterFirstScreen({ start, storage, container, signal, since }) {
+  // its posts (2026-11-04, owner-approved P1): when BlogSync's first pass ends (a failed pass too), or at
+  // the latest BACKGROUND_LIMIT_MS after the screen was shown (an account without posts, a list that
+  // never answers). It used to start right after the shell showed and competed with the first posts for
+  // the device. Its scope is unchanged; only its start moves. A post of a space not yet on this device
+  // does not wait for it: BlogSync places it in the active space and keeps its server space
+  // (remoteWorkspaceId).
+  const BACKGROUND_LIMIT_MS = 8000;
+  function afterFirstScreen({ start, storage, signal }) {
     let done = false;
     const stops = [];
     const finish = () => { done = true; for (const stop of stops.splice(0)) { try { stop(); } catch (_) { /* already gone */ } } };
@@ -169,7 +170,7 @@
     };
     const begin = () => { if (done) return; finish(); launch(); };
     signal.addEventListener('abort', finish, { once: true });
-    const timer = root.setTimeout(begin, Math.max(0, since + BACKGROUND_LIMIT_MS - Date.now()));
+    const timer = root.setTimeout(begin, BACKGROUND_LIMIT_MS);
     stops.push(() => root.clearTimeout(timer));
     // An older page without BlogSync's status starts at once, as before.
     const blog = life.BlogSync?.forStorage?.(storage);
@@ -177,17 +178,9 @@
     const passEnded = status => !!status && !status.running && !!(status.lastSyncAt || status.lastError);
     if (passEnded(blog.getStatus())) { begin(); return; }
     stops.push(blog.subscribe(event => { if (event?.type === 'status' && passEnded(event.status)) begin(); }));
-    const drawn = () => !!container.querySelector('#homePostList .home-post, #homePostList .home-draft');
-    if (drawn()) { begin(); return; }
-    if (typeof root.MutationObserver === 'function') {
-      const observer = new root.MutationObserver(() => { if (drawn()) begin(); });
-      observer.observe(container, { childList: true, subtree: true });
-      stops.push(() => observer.disconnect());
-    }
   }
   async function build(account) {
     const key = account.projectUrl + '|' + account.userId;
-    const verifiedAt = Date.now();
     if (activeKey === key && mounted) return mounted;
     hide();
     activeKey = key;
@@ -225,7 +218,7 @@
       reveal(account);
       if (bootstrap?.background) {
         const library = accountLibrary;
-        afterFirstScreen({ storage, container, signal, since: verifiedAt, start: () => {
+        afterFirstScreen({ storage, signal, start: () => {
           if (signal.aborted || token !== generation || mounted !== instance || accountLibrary !== library) return;
           library.reconcile().catch(() => {});
         } });

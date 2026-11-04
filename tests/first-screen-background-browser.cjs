@@ -1,6 +1,6 @@
 /* P1 (2026-11-04, owner-approved): the background account receive (other spaces, compositions,
- * metadata) starts once the first screen has what it needs: the earliest of BlogSync's first pass
- * ending (a failed pass too), the home list showing its first post, or 5 s after the account check.
+ * metadata) starts when BlogSync's first pass ends (a failed pass too), or at the latest 8 s after
+ * the screen was shown (an account without posts, a list that never answers).
  * Its first request is the account catalog (life_library_catalog), so that request marks the start.
  * Real app, bundled SDK and IndexedDB; anonymous FakeCloud. Not a production or Apple-device check.
  * BASE_URL=http://127.0.0.1:4173 node tests/first-screen-background-browser.cjs */
@@ -14,7 +14,7 @@ const Workbench = require('../assets/life/workbench.js');
 const Metadata = require('../assets/life/library-meta.js');
 
 const ids = ['30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002'];
-const LIMIT = 5000;
+const LIMIT = 8000;
 const copy = value => structuredClone(value);
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 async function until(read, ok, label, timeout = 60000) {
@@ -113,16 +113,16 @@ async function main() {
     await until(() => server.posts.size, n => n === 4, 'posts uploaded');
     await writer.context.close();
 
-    await check('a new device shows the newest post of a space it has not received yet, then starts the background receive after that first row', async () => {
+    await check('a new device shows the newest post of a space it has not received yet, then starts the background receive after the first BlogSync pass', async () => {
       // The post list answers 800 ms late, so the first screen is ready well after the shell shows.
       const d = await device(browser, server, 'new-device', { listDelay: 800 });
       await d.page.goto(base + '/index.html');
       const first = await until(() => d.page.evaluate(() => window.__first), m => m.row !== null, 'first row');
       assert.match(first.rowTitle, /다른 공간의 최신 글/, 'the newest post comes first');
       const catalog = await until(() => catalogAt(d), Boolean, 'background receive started');
-      const marks = await d.page.evaluate(() => window.__first), ready = Math.min(marks.row ?? Infinity, marks.pass ?? Infinity);
-      assert.ok(Number.isFinite(ready), 'a first-screen signal was seen');
-      assert.ok(catalog >= ready - 50, 'the background receive starts after the first row or the first BlogSync pass (' + (catalog - ready) + ' ms)');
+      const marks = await until(() => d.page.evaluate(() => window.__first), m => m.pass !== null, 'first BlogSync pass');
+      assert.ok(catalog >= marks.pass - 50, 'the background receive starts after the first BlogSync pass (' + (catalog - marks.pass) + ' ms)');
+      assert.ok(catalog - marks.pass < 1500, 'and right after it');
       assert.ok(catalog - marks.shell >= 700, 'not right after the shell (' + (catalog - marks.shell) + ' ms)');
       assert.ok(catalog - first.shell <= LIMIT + 2000, 'and within the limit after the screen');
       // The post keeps its own server space while it sits in the active space.
@@ -179,7 +179,7 @@ async function main() {
       await d.context.close();
     });
 
-    await check('when BlogSync never answers and no post shows, the background receive starts at the 5 s limit', async () => {
+    await check('when the post list never answers, the background receive starts at the limit, 8 s after the screen', async () => {
       const d = await device(browser, server, 'held-list', { hold: true });
       await d.page.goto(base + '/index.html');
       const first = await until(() => d.page.evaluate(() => window.__first), m => m.shell !== null, 'shell');
@@ -190,12 +190,23 @@ async function main() {
       await d.context.close();
     });
 
-    await check('a failed BlogSync pass (offline) starts the background receive without waiting for the limit', async () => {
+    await check('a failed BlogSync pass (offline, failing again on retry) starts the background receive without waiting for the limit', async () => {
       const d = await device(browser, server, 'failed-list', { fail: true });
       await d.page.goto(base + '/index.html');
       const first = await until(() => d.page.evaluate(() => window.__first), m => m.shell !== null, 'shell');
       const catalog = await until(() => catalogAt(d), Boolean, 'background receive started', 20000);
       assert.ok(catalog - first.shell < LIMIT - 1500, 'started before the limit (' + (catalog - first.shell) + ' ms)');
+      await d.context.close();
+    });
+
+    await check('an account without posts starts the background receive when its first pass ends, before the limit', async () => {
+      const empty = seed(rows);
+      const d = await device(browser, empty, 'no-posts');
+      await d.page.goto(base + '/index.html');
+      const first = await until(() => d.page.evaluate(() => window.__first), m => m.shell !== null && m.pass !== null, 'shell and first pass');
+      const catalog = await until(() => catalogAt(d), Boolean, 'background receive started', 20000);
+      assert.equal(first.row, null, 'no post');
+      assert.ok(catalog >= first.pass - 50 && catalog - first.shell < LIMIT - 2000, 'started at the pass end (' + (catalog - first.shell) + ' ms after the screen)');
       await d.context.close();
     });
 
