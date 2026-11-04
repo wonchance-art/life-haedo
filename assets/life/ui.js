@@ -100,6 +100,10 @@
     const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
     let syncRefreshSequence = 0;
+    // Status refreshes run one at a time; requests made meanwhile share one more run after it
+    // (SyncCommon.latest, 2026-11-04). An older page without it refreshes on every request as before.
+    let libraryRefreshGate = null, syncRefreshGate = null;
+    const refreshGate = run => global.HaedoLife.SyncCommon?.latest?.(run) || run;
     let stageTimer = null;
     let saveChain = Promise.resolve();
     let batchGeneration = 0;
@@ -1083,7 +1087,8 @@
       if (syncStatus) syncStatus.textContent = presentation.label;
     }
 
-    async function refreshLibrary() {
+    function refreshLibrary() { libraryRefreshGate ||= refreshGate(readLibraryStatus); return libraryRefreshGate(); }
+    async function readLibraryStatus() {
       if (!managedLibrary || disposed) return;
       const sequence = ++libraryRefresh, workspaceId = state.bundle?.workspaceId;
       try {
@@ -1147,7 +1152,8 @@
 
     function syncSummary() { return syncPresentation().label; }
 
-    async function refreshSync() {
+    function refreshSync() { syncRefreshGate ||= refreshGate(readSyncStatus); return syncRefreshGate(); }
+    async function readSyncStatus() {
       if (!sync || !state.bundle || disposed) return;
       const sequence = ++syncRefreshSequence;
       const workspaceId = state.bundle.workspaceId;
