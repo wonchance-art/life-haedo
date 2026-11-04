@@ -11,7 +11,9 @@ const Core = require('../assets/life/core.js'), Photo = require('../assets/life/
 
 const loadHandler = () => import('../supabase/functions/haedo-ai/handler.mjs');
 // An editor instance whose target is always current (target checks have their own test).
-const EDIT = AI.create({ request: async () => ({}) });
+// Explicit always-true target check for tests that do not exercise it.
+const ALWAYS = () => true;
+const EDIT = AI.create({ isCurrent: ALWAYS, request: async () => ({}) });
 const PROJECT = 'https://anonymous-ai.example.invalid';
 const OWNER = randomUUID(); // the one allowed account, random per run (HAEDO_AI_OWNER_ID)
 // Synthetic per-run secrets: not keys, never written to the repository.
@@ -52,7 +54,7 @@ function world({ provider, used = 0, keys = {}, user = { id: OWNER, role: 'authe
       if (r.status !== 'reserved') return { status: 'already_finished', state: r.status };
       const actual = cost(r.model, p_input_tokens, p_output_tokens);
       state.reserved -= r.reserved; state.cost += actual; state.requests++; Object.assign(r, { status: 'settled', cost: actual, input: p_input_tokens, output: p_output_tokens });
-      return { status: 'settled', cost_micro_usd: actual, remaining_micro_usd: 10000000 - state.cost - state.reserved };
+      return { status: 'settled', cost_micro_usd: actual, reserved_micro_usd: r.reserved, remaining_micro_usd: 10000000 - state.cost - state.reserved };
     },
     life_ai_release({ p_request_id }) {
       const r = state.reservations.get(p_request_id); assert(r);
@@ -287,7 +289,7 @@ test('client: prepare builds only the allow-listed fields; the preview is the ex
   ]) assert.throws(() => AI.requestBody(input, randomUUID()), e => e.code === code, code);
 
   const requests = [];
-  const client = AI.create({ request: async (call) => { requests.push(call); return { status: 'ok', requestId: JSON.parse(call.body).requestId, task: 'polish', suggestion: SUGGESTION, reason: REASON, usage: {} }; } });
+  const client = AI.create({ isCurrent: ALWAYS, request: async (call) => { requests.push(call); return { status: 'ok', requestId: JSON.parse(call.body).requestId, task: 'polish', suggestion: SUGGESTION, reason: REASON, usage: {} }; } });
   const prepared = client.prepare({ task: 'polish', selectionText: SELECTION, guidance: GUIDANCE, instruction: '', sources: [] });
   assert.deepEqual(requests, [], 'prepare sends nothing');
   assert.deepEqual(Object.keys(prepared.preview), ['requestId', 'task', 'selection', 'guidance'], 'empty optional fields are left out');
@@ -327,9 +329,9 @@ test('client: a result that arrives after an account, post or screen change is d
   assert.equal((await notSent.send(notSent.prepare({ task: 'polish', selectionText: SELECTION }), { token: 'x' })).code, 'ai_not_current');
   assert.equal(calls, 0, 'nothing is sent for a target that is no longer current');
   // A response for another request ID is not used.
-  const mixed = AI.create({ request: async () => ({ status: 'ok', requestId: randomUUID(), task: 'polish', suggestion: 'x', reason: 'y' }) });
+  const mixed = AI.create({ isCurrent: ALWAYS, request: async () => ({ status: 'ok', requestId: randomUUID(), task: 'polish', suggestion: 'x', reason: 'y' }) });
   assert.equal((await mixed.send(mixed.prepare({ task: 'polish', selectionText: SELECTION }))).code, 'ai_invalid_response');
-  const limited = AI.create({ request: async () => ({ error: 'ai_monthly_limit' }) });
+  const limited = AI.create({ isCurrent: ALWAYS, request: async () => ({ error: 'ai_monthly_limit' }) });
   const limit = await limited.send(limited.prepare({ task: 'polish', selectionText: SELECTION }));
   assert.equal(limit.code, 'ai_monthly_limit'); assert.match(limit.message, /한도/);
 });
@@ -405,7 +407,7 @@ test('client: apply refuses during Korean composition, after the selection chang
 
 test('client: continue inserts after the selection; multi-line AI text keeps newlines unmarked', () => {
   const ops = [{ insert: '첫 문장.', attributes: { underline: true } }, { insert: '\n' }];
-  const client = AI.create({ request: async () => ({}) });
+  const client = AI.create({ isCurrent: ALWAYS, request: async () => ({}) });
   const prepared = client.prepare({ task: 'continue', selectionText: '첫 문장.' });
   assert.equal(prepared.preview.selection, '첫 문장.');
   const ranges = AI.diff('첫 문장.', '첫 문장. 다음 문장.\n새 줄.');
@@ -448,7 +450,7 @@ test('end to end: device module -> handler -> fake provider; the body the handle
       received = options.body;
       return handler(new Request(url, { method: 'POST', headers: options.headers, body: options.body }));
     } });
-  const client = AI.create({ request });
+  const client = AI.create({ isCurrent: ALWAYS, request });
   const prepared = client.prepare({ task: 'ask', instruction: QUESTION, sources: SOURCES, guidance: '' });
   const result = await client.send(prepared, {});
   assert.equal(received, prepared.text);
@@ -513,7 +515,7 @@ test('handler: the owner text reaches the provider byte for byte (no entity esca
   const SPECIAL = 'R&D 팀 <공지> 5 > 3 & "따옴표" &amp; &lt;b&gt; </selection>';
   const echo = body => message({ suggestion: wrapped(body, 'selection'), reason: '고칠 곳 없음' });
   const w = world({ provider: echo }), handler = await handlerFor(w);
-  const client = AI.create({ request: async ({ body }) => (await handler(post(body))).json() });
+  const client = AI.create({ isCurrent: ALWAYS, request: async ({ body }) => (await handler(post(body))).json() });
   const polished = await client.send(client.prepare({ task: 'polish', selectionText: SPECIAL, guidance: '지침 & <규칙> "그대로"' }));
   const sent = w.state.providerBodies[0];
   assert(Buffer.from(wrapped(sent.body, 'selection')).equals(Buffer.from(SPECIAL)), 'the selection is unchanged');
@@ -528,7 +530,7 @@ test('handler: the owner text reaches the provider byte for byte (no entity esca
   const SOURCE = '익명 발췌: R&D 팀 <공지> 5 > 3 & "따옴표" 끝.';
   const asked = world({ provider: body => message({ suggestion: '답', reason: '근거', citations: [{ sourceIndex: 0, quote: wrapped(body, 'source', ' index="0"').slice(7, 30) }] }) });
   const askHandler = await handlerFor(asked);
-  const askClient = AI.create({ request: async ({ body }) => (await askHandler(post(body))).json() });
+  const askClient = AI.create({ isCurrent: ALWAYS, request: async ({ body }) => (await askHandler(post(body))).json() });
   const answer = await askClient.send(askClient.prepare({ task: 'ask', instruction: '질문 <무엇> & "왜"?', sources: [SOURCE] }));
   const askSent = asked.state.providerBodies[0].body;
   assert(Buffer.from(wrapped(askSent, 'source', ' index="0"')).equals(Buffer.from(SOURCE)));
@@ -540,7 +542,7 @@ test('handler: the owner text reaches the provider byte for byte (no entity esca
 
 test('client: apply() refuses when the editor target is no longer current', () => {
   let current = 'account-a/post-1';
-  const ai = AI.create({ request: async () => ({}), isCurrent: token => token === current });
+  const ai = AI.create({ isCurrent: ALWAYS, request: async () => ({}), isCurrent: token => token === current });
   const ops = [{ insert: '첫 문장.\n' }], ranges = AI.diff('첫 문장.', '첫 문장!');
   const options = { index: 0, length: 5, original: '첫 문장.', ranges, accepted: [ranges[0].id] };
   assert.equal(ai.apply(ops, { ...options, token: 'account-a/post-1' }).applied, 1);
@@ -556,3 +558,27 @@ test('handler source: console is used only by the default log writer', () => {
   assert.deepEqual(uses.map(line => line.trim()), ['log = entry => console.log(JSON.stringify(entry)), now = Date.now } = {}) {']);
   assert(!/\bglobalThis\s*\.\s*console|\bDeno\s*\.\s*(stdout|stderr)/.test(source), 'no other output channel');
 });
+
+test('create() requires an explicit target check: leaving isCurrent out is an error, not an open door', () => {
+  assert.throws(() => AI.create({ request: async () => ({}) }), e => e.code === 'ai_not_prepared');
+  assert.throws(() => AI.create({ request: async () => ({}), isCurrent: true }), e => e.code === 'ai_not_prepared');
+});
+
+test('handler: real usage above the reservation is still recorded in full and leaves one fixed-field over_reserved log', async () => {
+  // The provider reports far more input than the byte-based reservation allowed for.
+  const w = world({ provider: () => message({ suggestion: SUGGESTION, reason: REASON }, { usage: { input_tokens: 400000, output_tokens: 300 } }) });
+  const handler = await handlerFor(w), body = polishBody();
+  const response = await handler(post(body));
+  assert.equal(response.status, 200);
+  const settled = w.state.reservations.get(body.requestId);
+  assert.equal(settled.status, 'settled'); assert(settled.cost > settled.reserved, 'the case really exceeds the reservation');
+  assert.equal(w.state.cost, settled.cost, 'the real cost is recorded, not capped at the reservation');
+  const over = w.state.logs.filter(entry => entry.status === 'over_reserved');
+  assert.equal(over.length, 1); assert.equal(over[0].requestId, body.requestId); assert.equal(over[0].inputTokens, 400000);
+  assertCleanLogs(w.state.logs);
+  // Within the reservation there is no such entry.
+  const normal = world({ provider: editReply }), normalHandler = await handlerFor(normal);
+  assert.equal((await normalHandler(post(polishBody()))).status, 200);
+  assert.equal(normal.state.logs.some(entry => entry.status === 'over_reserved'), false);
+});
+

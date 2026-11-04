@@ -66,7 +66,7 @@ begin
  perform pg_temp.ai_ok(u.reserved_micro_usd=600 and u.cost_micro_usd=0 and u.requests=0,'the open reservation is counted before the call');
  perform pg_temp.ai_ok(public.life_ai_reserve(a,r1,'claude-haiku-5-5',1000,1000)->>'status'='duplicate','the same request ID cannot be reserved twice');
  x:=public.life_ai_settle(a,r1,500,200);
- perform pg_temp.ai_ok(x->>'status'='settled' and (x->>'cost_micro_usd')::bigint=150 and (x->>'remaining_micro_usd')::bigint=10000000-150,'settling records the real cost');
+ perform pg_temp.ai_ok(x->>'status'='settled' and (x->>'cost_micro_usd')::bigint=150 and (x->>'reserved_micro_usd')::bigint=600 and (x->>'remaining_micro_usd')::bigint=10000000-150,'settling records the real cost and reports what was reserved');
  u:=pg_temp.ai_row(a,m);
  perform pg_temp.ai_ok(u.reserved_micro_usd=0 and u.cost_micro_usd=150 and u.input_tokens=500 and u.output_tokens=200 and u.requests=1,'the reservation is replaced by the real usage');
  perform pg_temp.ai_ok(public.life_ai_settle(a,r1,999999,999999)->>'status'='already_finished','a second settle changes nothing');

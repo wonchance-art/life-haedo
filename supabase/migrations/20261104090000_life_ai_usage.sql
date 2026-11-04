@@ -139,7 +139,7 @@ begin
   where owner_id=p_owner_id and month=r.month returning * into u;
  update haedo_ai_private.reservations set status='settled', cost_micro_usd=v_cost, finished_at=clock_timestamp()
   where owner_id=p_owner_id and request_id=p_request_id;
- return jsonb_build_object('status','settled','month',r.month,'cost_micro_usd',v_cost,'month_cost_micro_usd',u.cost_micro_usd,
+ return jsonb_build_object('status','settled','month',r.month,'cost_micro_usd',v_cost,'reserved_micro_usd',r.reserved_micro_usd,'month_cost_micro_usd',u.cost_micro_usd,
   'remaining_micro_usd',greatest(0, v_limit-haedo_ai_private.project_used(r.month)));
 end $$;
 

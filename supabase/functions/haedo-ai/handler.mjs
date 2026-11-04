@@ -318,6 +318,10 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       const settled = await rpc('life_ai_settle', { p_owner_id: owner, p_request_id: input.requestId,
         p_input_tokens: usage.input, p_output_tokens: usage.output });
       const tokens = { inputTokens: usage.input, outputTokens: usage.output };
+      // The real cost is recorded even when it exceeds the reservation (the project total can then pass the
+      // cap by that one request's difference); this fixed-field entry makes that visible in the logs.
+      if (Number.isSafeInteger(settled?.cost_micro_usd) && Number.isSafeInteger(settled?.reserved_micro_usd) && settled.cost_micro_usd > settled.reserved_micro_usd)
+        record({ requestId: input.requestId, task: input.task, model: spec.model, status: 'over_reserved', ...tokens });
       if (message.stop_reason === 'refusal') return finish('ai_refused', tokens);
       if (message.stop_reason === 'max_tokens') return finish('ai_max_tokens', tokens);
       if (message.stop_reason !== 'end_turn') return finish('ai_invalid_response', tokens);

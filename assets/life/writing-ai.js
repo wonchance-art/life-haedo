@@ -280,8 +280,10 @@
     };
   }
 
-  function create({ request, isCurrent = () => true, newId = () => root.crypto.randomUUID() } = {}) {
+  // isCurrent is required: a screen that forgot it must not silently turn the target check off.
+  function create({ request, isCurrent, newId = () => root.crypto.randomUUID() } = {}) {
     check(typeof request === "function", "ai_not_prepared");
+    check(typeof isCurrent === "function", "ai_not_prepared");
     const issued = new WeakSet(), sent = new WeakMap();
     function prepare(input) {
       const requestId = newId();

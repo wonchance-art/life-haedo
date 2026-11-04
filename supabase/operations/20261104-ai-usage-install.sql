@@ -1,7 +1,7 @@
 -- 해도 2026-11-04 AI 제안 월 상한 설치 (Supabase SQL Editor에서 한 번에 실행)
 -- 생성: node scripts/build-ai-usage-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
 -- 포함 마이그레이션(원본 sha256):
---   20261104090000_life_ai_usage.sql  48435434bb591f69a63ca1c077a070953e3b12862b1d861c3f7d19c9e58d295c
+--   20261104090000_life_ai_usage.sql  0bd25a476e740c93e825ee9683646ee59e467dc18bfae87efd1feb6aa0fe1b39
 --
 -- 안전 장치:
 --   * 설치 전체가 DO 블록 "한 문장"이다. 어느 단계에서 실패하면 전체가 되돌려져 아무것도 바뀌지 않는다.
@@ -170,7 +170,7 @@ begin
   where owner_id=p_owner_id and month=r.month returning * into u;
  update haedo_ai_private.reservations set status='settled', cost_micro_usd=v_cost, finished_at=clock_timestamp()
   where owner_id=p_owner_id and request_id=p_request_id;
- return jsonb_build_object('status','settled','month',r.month,'cost_micro_usd',v_cost,'month_cost_micro_usd',u.cost_micro_usd,
+ return jsonb_build_object('status','settled','month',r.month,'cost_micro_usd',v_cost,'reserved_micro_usd',r.reserved_micro_usd,'month_cost_micro_usd',u.cost_micro_usd,
   'remaining_micro_usd',greatest(0, v_limit-haedo_ai_private.project_used(r.month)));
 end $$;
 
