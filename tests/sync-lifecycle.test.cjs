@@ -203,6 +203,38 @@ test('BlogSync: online, focus, pagehide, pageshow and visibility, no poll; each 
   assert.deepEqual(r.table(), EMPTY);
 });
 
+// #188 review M6/M8b: what the handlers pass to a pass, on real storage and the fake cloud.
+// online lifts the retry wait (force) and focus does not; hidden flushes a fresh draft
+// (flushDrafts) and a visible pass leaves it waiting.
+test('BlogSync: online sends a post waiting to retry and focus does not; hidden sends a fresh draft and a visible pass does not', async t => {
+  const Cloud = require('./helpers/blog-sync-cloud.cjs');
+  const r = record(t), cloud = Cloud.server(), time = Cloud.clock(), dev = await Cloud.device(cloud, 'mac', { time });
+  const scheduled = [];
+  const sync = BlogSync.create({ storage: dev.storage, auth: dev.auth, blog: Cloud.Blog, photoPost: Cloud.Photo, remote: dev.remote, makeId: Cloud.Core.id,
+    locks: null, now: () => time.now, autoSync: true, interval: 30000, timers: { setTimeout: fn => { scheduled.push(fn); return scheduled.length; }, clearTimeout() {} } });
+  const step = async () => { for (let i = 0; i < 20; i++) await settle(); };
+  const runScheduled = async () => { const due = scheduled.splice(0); for (const fn of due) fn(); await step(); await sync.syncNow().catch(() => {}); };
+  // A saved post whose first upload failed waits to retry.
+  await dev.storage.savePhotoPost(dev.ws, await Cloud.post({ title: '재시도 기다리는 글' }), 0);
+  cloud.control.failSave = () => true;
+  await sync.syncNow(); cloud.control.failSave = null;
+  assert.equal(cloud.rows.size, 0, 'the first upload failed');
+  // focus: a pass at once, which respects the retry wait.
+  fire(r, 'window', 'focus'); await runScheduled();
+  assert.equal(cloud.rows.size, 0, 'focus does not lift the retry wait');
+  // online: a forced pass lifts it.
+  fire(r, 'window', 'online'); await step(); await sync.syncNow().catch(() => {});
+  assert.equal(cloud.rows.size, 1, 'online sends the waiting post');
+  // A draft written just now waits for its typing pause.
+  await dev.storage.savePhotoPost(dev.ws, await Cloud.post({ title: '방금 쓴 초안', status: 'draft', time: new Date(time.now).toISOString() }), 0);
+  globalThis.document.visibilityState = 'visible'; fire(r, 'document', 'visibilitychange'); await runScheduled();
+  assert.equal(cloud.rows.size, 1, 'a visible pass leaves the fresh draft waiting');
+  globalThis.document.visibilityState = 'hidden'; fire(r, 'document', 'visibilitychange'); await step(); await sync.syncNow({ uploadOnly: true }).catch(() => {});
+  assert.equal(cloud.rows.size, 2, 'hidden flushes the draft');
+  sync.dispose();
+  assert.deepEqual(r.table(), EMPTY);
+});
+
 test('SyncLifecycle.attach binds in the given order, starts the poll after them, and detach removes exactly that once', () => {
   const SyncLifecycle = require('../assets/life/sync-lifecycle.js');
   const log = [];
