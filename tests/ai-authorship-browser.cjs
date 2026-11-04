@@ -342,11 +342,14 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       assert.deepEqual((await editorState(page)).ops, before.ops);
     });
     let savedId;
-    await check('① save, read without marks, reopen with marks; ⑧ public copy has no mark', async () => {
+    await check('① save, read with exactly the marked text shown, reopen with marks; ⑧ public copy has no mark', async () => {
       const expected = (await editorState(page)).ops;
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
       await page.locator('.photo-article').waitFor();
-      assert.equal(await page.locator('.photo-article .photo-ai-text').count(), 0, 'reading does not render marks');
+      // Owner decision 2026-11-04: the owner's reading view shows exactly the marked text (the public copy never does).
+      const markedPieces = expected.filter(op => typeof op.insert === 'string' && op.attributes?.author === 'ai').flatMap(op => op.insert.split('\n').filter(Boolean));
+      assert.deepEqual(await page.locator('.photo-article .blog-ai-text').allTextContents(), markedPieces, 'reading renders exactly the marked text as AI text');
+      assert.equal(await page.locator('.photo-article .photo-ai-text').count(), 0, 'the editor-only class is not reused in reading');
       const doc = await durable(page, d => d.status === 'saved', 'saved post');
       savedId = doc.id;
       assert.deepEqual(doc.ops, expected);

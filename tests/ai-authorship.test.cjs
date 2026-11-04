@@ -73,6 +73,15 @@ test('a private reading copy keeps the marks for the owner\'s own views only; pu
   assert.throws(() => Blog.validateReadingSnapshot(bad), e => e.code === 'invalid_blog_snapshot', 'the reading copy still validates the marks');
 });
 
+test('a public series package is only ordered public post links: no body, ops or AI mark can enter it', () => {
+  const Series = require('../assets/life/blog-series-public.js'), { randomUUID } = require('node:crypto');
+  const tokens = [randomUUID(), randomUUID()], wrapper = Series.wrapper('익명 연재', '소개', tokens, 'https://example.org/life-haedo/');
+  const keys = new Set(); JSON.stringify(wrapper, (key, value) => { keys.add(key); return value; });
+  for (const key of ['ops', 'insert', 'attributes', 'author', 'photos', 'doc', 'body']) assert.equal(keys.has(key), false, key);
+  assert.deepEqual(wrapper.entries.map(entry => entry.attachments.map(item => new URL(item.url).searchParams.get('post'))), tokens.map(t => [t]));
+  assert.equal(Series.wrapper.length, 4, 'the wrapper takes a title, an introduction, tokens and a base URL only');
+});
+
 test('the post ZIP and Blog pack/hydrate keep every mark exactly', async () => {
   const value = await withPhoto();
   const restored = await Photo.readBackup(await Photo.backup(value), Core.id);

@@ -47,16 +47,16 @@
   .blog-line { font-size: 17px; }
 }
 
-/* Owner-only AI authorship mark in private reading views (never in public copies).
-   Tint and dotted underline only: no change to font size, spacing or position. */
-.blog-document .blog-ai-text {
-  background: var(--paper-2, #f4f7f5);
+/* Owner-only AI authorship mark in private reading views (never in public copies or the HTML file).
+   A tint plus a dotted line drawn as a background image at the bottom of the inline box, so an
+   underline or link underline on the same text cannot cover it. No change to size, spacing or position. */
+.blog-ai-text {
+  background-color: var(--paper-2, #f4f7f5);
+  background-image: radial-gradient(circle, var(--ink-soft, #5d6b65) 1px, transparent 1.3px);
+  background-size: 5px 3px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
   border-radius: 3px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--ink-soft, #5d6b65);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.32em;
 }
