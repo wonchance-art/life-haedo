@@ -1144,3 +1144,26 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - **선택: 공식 tarball의 SVG 원본 중 쓰는 것만 `vendor/lucide/icons/`에 두고, `assets/life/icons.js`가 그 기하를 그대로 쓴다.** 파일마다 SHA-256을 `vendor/lucide/UPSTREAM.json`에 남기고 `tests/icons.test.cjs`가 기하·해시·한 그림 한 개념을 확인한다. 런타임·글꼴·외부 요청은 없다.
 - **개념별 그림:** 일정 = calendar, 자료 = book-open, 뉴스 = newspaper, 설정 = settings, 글쓰기 = pencil(데스크톱 메뉴의 `+ 글쓰기`는 plus), 편집 = square-pen, 인용 = text-quote, 웹 주소 = link, 뒤로 = chevron-left. 이전의 해도 A 따옴표는 결정 15의 "인용 = 줄과 세로 바"로 대체했다.
 - **선택을 바꿀 조건:** 쓰려는 개념에 1.51.0 모양이 없거나, 최신 판에서 쓰는 모양이 바뀌어 시안을 새로 정할 때 판을 올리고 해시와 고지를 함께 갱신한다.
+
+## 글쓰기 AI 제안의 공급자 호출 — 2026-11-04 KST
+
+- **확인한 근거(확인일 2026-11-04, 공식 문서):**
+  - [요금표](https://platform.claude.com/docs/en/about-claude/pricing)
+    - Claude Haiku 5.5: 입력 $0.10, 출력 $0.50 /MTok(프롬프트 10만 토큰 이하). 넘으면 $0.50/$2.50.
+    - Claude Sonnet 5.5: 입력 $2, 출력 $10 /MTok.
+  - [API 보존](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
+    - 프롬프트·출력은 기본 보존하지 않는다. Covered Model(Fable 5/5.1·Mythos 5/5.1)만 30일 보존이 필요하다.
+    - 보존 데이터는 명시 허락 없이는 학습에 쓰지 않는다.
+    - 구조화 출력은 JSON 스키마만 최대 24시간 캐시한다.
+- **비교:**
+  - 공식 SDK(`@anthropic-ai/sdk`): Edge 함수에 npm 의존성과 잠금 파일이 늘어난다. 쓰는 기능도 요청 1회(비스트리밍)뿐이다.
+  - **선택: SDK 없이 Messages API를 fetch로 직접 호출한다.** 헤더 세 개와 본문을 Claude API skill의 curl 참조 그대로 쓴다. 의존성 0개.
+  - 이 앱에 맞지 않아 쓰지 않은 기능:
+    - 스트리밍: 출력 상한이 16K 이하다.
+    - prompt caching: 사용량이 적고 지시문이 짧다.
+    - server-side fallback: Haiku 5.5에는 없다.
+- **선택을 바꿀 조건:**
+  - 긴 출력이 필요해 스트리밍을 써야 할 때.
+  - 도구 사용을 넣을 때.
+  - 요청 모양이 바뀌는 새 API 판으로 옮길 때. 이때 SDK 도입을 다시 비교한다.
+  - 모델·요금이 바뀌면 마이그레이션의 단가 함수와 이 기록을 함께 고친다.
