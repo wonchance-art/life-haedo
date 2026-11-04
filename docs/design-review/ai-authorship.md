@@ -81,3 +81,27 @@
 - **가정이 틀릴 수 있는 곳:** 소유자가 표시를 실제로 쓸지. 쓰지 않아도 저장 형식·공개·기존 글은 바뀌지 않는다.
 - **더 단순한 대안:** 표시 없이 메모로 남기기. 구간 단위 수정 추적이 불가능해 iA Writer식 "고친 부분은 내 글"을 지킬 수 없다.
 - **실패 후 복구:** 표시는 서식 속성이라 해제해도 본문은 바뀌지 않는다. 서버 적용 전 배포 시 서버 보관만 실패하고 기기 글은 남는다.
+
+## 비공개 연재 보기의 AI 표시 — 설계안 (2026-11-04, 구현 전)
+
+**현재 상태:** 비공개 연재 읽기(`blog-series-reader.js`)는 본문을 직접 그리지 않고 넘겨받은 `renderPhoto`를 쓴다. 그 함수는 `workbench-ui.js`(1254행 부근)에 있고, 아래 순서로 그린다.
+1. `Blog.publicSnapshot(doc)`으로 공개용 사본을 만든다.
+2. `BlogPublicUI.render(snapshot, { privateView: true })`로 화면을 만든다.
+
+공개용 사본은 소유자 결정에 따라 `author`를 지우므로, 내 화면인데도 AI 글 표시가 보이지 않는다.
+
+**제안:** 공개 경로 계약은 바꾸지 않는다.
+
+| 단계 | 파일(담당) | 변경 |
+| --- | --- | --- |
+| 1 | `assets/life/blog.js`(AI) | 비공개 화면 전용 `Blog.privateReadingSnapshot(doc, { photoIds })`를 추가한다. `publicSnapshot`과 같은 사본을 만들되 `author`를 남긴다. 전송·저장·공개에는 쓰지 않는다. `validateSnapshot`(공개 검증)을 거치지 않고, 같은 모양을 확인하는 별도 검증을 둔다. |
+| 2 | `assets/life/blog-public-ui.js`·`blog-public.css`(디자인) | `privateView: true`일 때만 `author:"ai"` 구간을 `span.blog-ai-text`로 감싼다. 편집기와 같은 옅은 바탕과 점선 밑줄로 보이고 색만으로 구분하지 않는다. 공개 읽기(`privateView` 없음)에서는 속성이 와도 무시한다. |
+| 3 | `assets/life/workbench-ui.js`(최적화) | 연재 `renderPhoto`가 `publicSnapshot` 대신 1단계 함수를 쓴다. |
+| 4 | 검사(AI) | 단위 검사에서 privateReadingSnapshot에는 표시가 남고 publicSnapshot에는 없는지 확인한다. 브라우저 검사에서 비공개 연재 읽기에 표시가 보이고, 같은 글의 공개 읽기와 공개 연재에는 없는지 확인한다. |
+
+**보존 조건:**
+- 공개 사본·서버 `publish`·공개 연재 토큰 묶음에는 `author`가 계속 없다.
+- 기존 공개 읽기 화면의 출력은 바이트 단위로 같다.
+
+1~3단계가 세 세션의 파일에 걸쳐 있다. 2026-11-04 총괄 작업 지시서(작업 3)의 담당 범위를 벗어나므로, 총괄이 담당을 정한 뒤 진행한다.
+
