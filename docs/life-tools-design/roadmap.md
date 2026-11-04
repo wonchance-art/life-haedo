@@ -39,7 +39,7 @@
      - 비공개 편집기에서 선택 문장 → 제안 → 적용, 월 한도 동작
 2. **Supabase 새 키 전환(#195)**
    - 이유: 레거시 키가 2026년 말에 폐지된다.
-   - 선행: #195 병합(완료)
+   - 선행: #195 병합·함수 배포·cron 전환(완료). 남은 것은 소유자의 Vault 교체와 레거시 끄기 승인
    - 완료 기준:
      - 세 함수 배포 → cron `apikey` 전환 SQL → 다음 예약의 응답 200
      - Vault를 `sb_secret_`로 바꾼 뒤 다시 200
@@ -51,7 +51,7 @@
      - 기존 글을 처음 고칠 때 새 형식으로 바뀌고 원래 판은 `복구 사본`으로 남는다.
      - 한글 조합·사진·저장 상태 두 단계·두 기기 동기화 회귀 통과
 
-## Supabase 새 API 키 대비 — AI 세션, PR195 병합, 운영 출시 진행 중 (2026-11-04 KST)
+## Supabase 새 API 키 대비 — AI 세션, PR195 병합, 함수 배포·cron 전환 완료, Vault 교체·레거시 끄기 대기 (2026-11-04 KST)
 
 주간 기술 동향 점검 1회차에서 나온 AI 세션 몫이다(총괄 지시). 레거시 `anon`·`service_role` 키가 2026년 말까지 폐지된다.
 
@@ -63,13 +63,31 @@
     - 새 키만 / 레거시만 / 둘 다인 환경에서 세 함수의 단위 검사가 통과한다.
     - sql-replay에 전환 SQL의 점검·갱신·되돌리기·거절을 넣었다.
   - 상세: [writing-ai-suggestions.md](../design-review/writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비), [naver-operational-readiness.md](../design-review/naver-operational-readiness.md#새-api-키로-전환-2026-11-04-레거시-키-폐지-대비)
-- **남은 조건(총괄·소유자):**
-  1. 세 함수 배포(네이버는 런타임 소스 9개)
-  2. 전환 SQL 실행과 `net._http_response` 상태 코드 확인
-  3. Vault 값 교체
-  4. 레거시 키 끄기
-
-  순서를 지킨다. 실제 게이트웨이·pg_cron 동작은 배포 뒤 확인한다.
+- **운영 적용(총괄, 2026-11-04 UTC):**
+  1. 함수 배포
+     - `haedo-blog-media` v3 → v4
+       - 무작위 ID 요청 404: 서버 키로 RPC를 통과했다는 뜻이다.
+       - 잘못된 쿼리 404
+     - `haedo-naver-blog` v9 → v11 (`verify_jwt=false`)
+       - 배포 전 v9 소스는 #195 이전 저장소와 같았다.
+       - 플랫폼이 돌려준 소스 9개 중 7개는 저장소와 바이트까지 같다.
+       - `collector.mjs`·`extractor.mjs`는 정규식 안 `‪-‮`·`⁦-⁩`·`​`·`﻿`·`￾`·`￿` 표기가 같은 글자로 바뀌어 돌아왔다. 두 번 배포해도 같았다(전달 경로의 변환).
+         - 그 표기만 글자로 바꾸면 저장소와 정확히 같다.
+         - 돌려받은 두 파일로 `naver-blog-collector`·`naver-blog`·`naver-media`·`supabase-keys` 검사가 27·10·6·11개 모두 통과했다.
+       - 익명 요청 401
+     - `haedo-ai`는 아직 배포하지 않았다. AI 사용 한도 설치 SQL(소유자 승인 대기)이 먼저다.
+  2. 전환 SQL을 `'apikey'`로 실행했다(`20261104-naver-cron-apikey.sql`, 그 한 줄만 주석 해제).
+     - 활성 일정은 `haedo-naver-capture-poll` 하나다. `header=apikey`, `ok=true`
+     - jobid·주기·활성·database·username은 그대로다.
+     - 행 수 보호 통과
+  3. 상태 코드만 읽었다.
+     - 전환 전 Bearer: 11:45·12:00·12:15에 200. 12:15는 v11 배포 뒤다.
+     - 전환 뒤 apikey: 12:30에 200
+- **남은 조건(소유자):**
+  1. Vault `haedo_naver_service_role_key` 값을 `sb_secret_` 키로 교체한다. 현재 값은 레거시 JWT 형식이다(값은 읽지 않고 형식만 확인).
+     - 교체 뒤 총괄이 상태 코드를 다시 확인한다.
+  2. 레거시 키 끄기. 소유자 승인 뒤 하고, 끈 뒤 다시 확인한다.
+  - `haedo-ai` 배포는 AI 제안 출시 묶음에서 한다.
 
 ## 첫 화면 우선 순서(P1) 시도 — 최적화 세션, 채택하지 않음 (2026-11-04 KST)
 
