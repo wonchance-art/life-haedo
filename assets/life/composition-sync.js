@@ -80,16 +80,18 @@
       const state = await storage.getCompositionState(workspaceId); guard(ctx);
       return state ? { ...clone(state), status: state.enabled ? state.status : 'paused' } : { workspaceId, enabled: false, status: 'not_enabled', conflict: null, error: null, lastRecoveryId: null };
     }
-    // One source head check per engine task (2026-11-04 startup latency): a later call in the
-    // same task (enable → run, the read row's source_revision, resolve) asks the server again
-    // only when the local source is no longer clean or does not hold the revision it needs.
-    // A newer server source is not required here, only one at least as new as the row's.
+    // One source head check per sync pass (2026-11-04 startup latency): inside run(), a later
+    // call (enable → run, the read row's source_revision) asks the server again only when the
+    // local source is no longer clean or does not hold the revision it needs. A newer server
+    // source is not required here, only one at least as new as the row's. compare() and
+    // resolve() themselves still check every time.
     const ready = (state, minimum) => state.enabled && state.status === 'synced' && sameAccount(state.binding) && state.remoteRevision >= minimum;
     async function sources(ctx, minimum = 1) {
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
-      if (!(ctx.sourceChecked && ready(initial, minimum))) { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
+      if (ctx.reuseSource && ctx.sourceChecked && ready(initial, minimum)) ctx.sourceSkipped = true;
+      else { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
       const current = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!ready(current, minimum)) throw fault('composition_source_pending');
       ctx.sourceChecked = true;
@@ -150,6 +152,7 @@
       await conflict(ctx, row); return false;
     }
     async function run(ctx) {
+      ctx.reuseSource = true;
       try {
         await checkedState(ctx); await sources(ctx);
         for (let pass = 0; pass < 8; pass++) {
@@ -180,6 +183,13 @@
         schedule(ctx.workspaceId); return getState(ctx.workspaceId);
       } catch (error) {
         guard(ctx);
+        // A skipped check trusted the stored source status. A local source write that leaves it
+        // stale (a material-continuity install raises the bundle revision) is refused here by
+        // storage; check with the server once more and retry, as every call did before.
+        if (error?.code === 'composition_source_pending' && ctx.sourceSkipped && !ctx.sourceRetried) {
+          Object.assign(ctx, { sourceRetried: true, sourceChecked: false, sourceSkipped: false });
+          return run(ctx);
+        }
         const safe = clean(error);
         if (!['sync_paused', 'not_enabled', 'request_cancelled'].includes(safe.code)) {
           await storage.setCompositionError(ctx.workspaceId, binding(ctx.workspaceId), { code: safe.code, message: safe.message }).catch(() => {});

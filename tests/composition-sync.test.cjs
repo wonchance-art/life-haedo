@@ -346,6 +346,50 @@ test('originals edited on this device during a task are checked with the server 
   assert.ok(f.state.mutations.includes('apply'));
 });
 
+// 2026-11-04 independent review M1: the stored originals status can stay "synced" after a local
+// originals write that raised the bundle revision (material-continuity install). Storage then
+// refuses the row; the pass checks with the server once more and retries instead of failing.
+test('a row refused because the stored originals status was stale is retried after one more originals check', async t => {
+  const f = fixture(t); let refusals = 0;
+  f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };
+  f.state.applyOverride = row => {
+    if (!refusals++) throw Object.assign(Error('원문 동기화를 먼저 완료해 주세요.'), { code: 'composition_source_pending' });
+    f.state.local = { ...copy(row.data), revision: f.state.local.revision + 1 }; f.state.meta.remoteRevision = row.revision; f.state.meta.syncedLocalRevision = f.state.local.revision;
+    return { status: 'stored', revision: f.state.local.revision };
+  };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(refusals, 2); assert.equal(f.state.calls.filter(x => x === 'sources').length, 2, 'the retry checks the originals with the server first');
+  assert.equal(f.state.meta.error, null);
+  // A second refusal in the same task is not retried again.
+  const stuck = fixture(t); let tries = 0;
+  stuck.state.row = { ...stuck.state.row, revision: 2, data: { ...copy(stuck.state.local), revision: 2 } };
+  stuck.state.applyOverride = () => { tries++; throw Object.assign(Error('pending'), { code: 'composition_source_pending' }); };
+  await assert.rejects(stuck.manager.syncNow(WORKSPACE), error => error.code === 'composition_source_pending');
+  assert.equal(tries, 2);
+});
+
+test('compare and resolve still check the originals with the server on every call', async t => {
+  const f = fixture(t);
+  f.state.meta.conflict = { remoteRevision: 1, localRevision: 1, missing: false, row: copy(f.state.row) };
+  await f.manager.compare(WORKSPACE);
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 2, 'compare: its own check and the row\'s check');
+});
+
+// Review M2: the first-write conflict → initial adoption path with a row that needs newer originals.
+test('initial adoption after a first-write conflict waits for the row\'s newer originals revision', async t => {
+  let seen = null; const op = 'initial_operation';
+  const f = fixture(t, { initialReceive(state, id, binding, row) {
+    seen = state.source.local; state.meta.remoteRevision = row.revision; state.meta.syncedLocalRevision = state.local.revision;
+    state.meta.outbox = null; state.meta.status = 'synced'; return { status: 'stored' };
+  } });
+  f.state.local = Workbench.empty(WORKSPACE); f.state.meta.remoteRevision = 0; f.state.meta.syncedLocalRevision = -1;
+  f.state.meta.outbox = { operationId: op, expectedRevision: 0, sourceRevision: 1, localRevision: 0, data: copy(f.state.local) };
+  f.state.writeOverride = () => ({ status: 'conflict', revision: 1 });
+  f.state.readOverride = () => { f.state.source.server = 2; return { ...copy(f.state.row), source_revision: 2, data: copy(f.state.local) }; };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(seen, 2, 'adoption sees originals 2'); assert.equal(f.state.calls.filter(x => x === 'sources').length, 2);
+});
+
 test('default latest-wins keeps the newer server composition and stores the local side as a recovery copy', async t => {
   const f = fixture(t, { defaultResolver: true }), events = [];
   f.manager.subscribe(event => events.push(event));

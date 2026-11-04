@@ -582,11 +582,20 @@
       const c = context('*', 'cycle');
       summary.running = true; publish$({ type: 'status', status: getStatus() });
       let rows = null;
+      // The server post list is requested together with the cycle's account check (2026-11-04:
+      // one round trip less before a new device's first row). It is read only after that check
+      // passes and only when this cycle sent nothing to the server first; otherwise the list is
+      // requested again at the same point as before. Each listed row stays a hint: apply,
+      // install and vanish read the exact server row themselves.
+      const early = uploadOnly ? null : remote.syncList();
+      early?.catch(() => {});
       try {
         await verified(c);
         const libraries = await storage.listAccountLibraries(); guard(c);
         const owned = libraries.map(item => item.workspaceId), eligible = libraries.filter(item => item.eligible !== false).map(item => item.workspaceId);
         let local = await snapshot(c, owned);
+        // Whether this cycle may send anything to the server before it lists (then the early list is not used).
+        let sent = local.tombstones.length > 0 || local.duplicates.length > 0;
         for (const item of local.tombstones) {
           try {
             if (local.byRemote.has(item.remoteId)) await storage.clearBlogTombstone(item.ws, item.remoteId);
@@ -626,8 +635,9 @@
           for (const item of group.edits) if (present(item)) await push(item.ws, item.post.id, { verify: false, byRemote: local.byRemote });
         }));
         if (!uploadOnly) {
+          if (uploads.length || groups.length) sent = true;
           local = await snapshot(c, owned);
-          rows = await remote.syncList(); guard(c);
+          rows = await (early && !sent ? early.catch(() => remote.syncList()) : remote.syncList()); guard(c);
           const deleted = new Set(local.tombstones.map(item => item.remoteId)), seen = new Set(rows.map(row => row.id));
           let fallback = null;
           const target = async row => {
