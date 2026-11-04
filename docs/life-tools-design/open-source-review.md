@@ -1,5 +1,14 @@
 # 오픈소스 검토와 재사용 결정
 
+## 기기 안 비슷한 문단 — Obsidian Smart Connections 비교, 실험 후 기각 — 2026-11-02
+
+| 비교 | 확인 내용(2026-11-02 KST) | 판단 |
+| --- | --- | --- |
+| [Smart Connections](https://github.com/brianpetro/obsidian-smart-connections) | README 기준 v4다. 플러그인에 로컬 임베딩 모델이 들어 있고, 지금 보는 노트와 의미가 비슷한 노트를 점수와 함께 Connections 보기에 보여 준다(점수는 모델에 따라 달라진다고 명시). "Private and offline by default". 문단(블록) 단위 연결과 점수·순위 설정은 유료 Pro 기능이다. 라이선스는 Smart Plugins License(소스 공개, 경쟁 제품 제한)다. GitHub Releases 항목은 비어 있다. | **설계 참고만 하고 직접 도입하지 않는다.** Obsidian 플러그인 API와 라이선스 제한 때문에 해도에 코드를 가져올 수 없다. "후보와 점수만 보여 주고 연결은 사람이" 원칙만 참고했다. |
+| 기존 해도 임베딩 워커 재사용 | 해도의 워커는 Transformers.js 4.3.1 + MiniLM-L12 다국어, 고정 revision, 명시 준비 방식이다. 새 의존성 없이 문단 색인 실험에 그대로 썼다(제품 파일 무수정). | 합성 평가 세트에서 오탐 ≤ 0.20 임계값의 Hit@3가 0.229로, 기존 공통어 규칙과 같았다. 275자 문단 200개 색인이 CPU 4배 감속에서 243초였다. **기각.** 기존 `rediscovery.js` 규칙을 유지한다. 근거는 [실험 문서](../design-review/similar-paragraphs-experiment.md). |
+
+다시 검토할 조건은 실험 문서의 "바꿀 조건"을 따른다. 같은 크기 안의 문장 유사도 보정 모델과 개발 세트 선행 기준이 필요하다. 이번 조회는 README 확인이며 플러그인 설치·실행·보안 감사는 하지 않았다.
+
 ## 자료실 기본 계정 보관과 기존 CAS/outbox 재사용 — 2026-10-24
 
 사용자 요청으로 자료 영역의 기본 정책을 비공개 계정 자동 보관으로 바꾼다. 새 프레임워크보다 기존 단일 Supabase SDK/인증·Core Sync/CompositionSync의 두 엔진·owner/revision CAS·영속 operation 영수증과 IDB 캐시를 재사용하고 LibraryMeta를 도메인 adapter로 연결한다. 원본 첨부도 기존 ZIP 검증/Blob DB를 재사용한다. [대상·이관·순서·실패 복구](../design-review/account-library.md). 앱의 새 런타임 의존성은0이며 범용 복제 엔진·SDK 업그레이드는 추가하지 않았다.
@@ -1170,3 +1179,59 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - 실제 iPhone에서 탐색 움직임이 느리게 느껴진다는 소유자 평가가 있으면 삭제 쪽으로 간다.
   - Safari가 요소 범위 View Transitions를 내놓으면 화면 전환 방식을 다시 본다.
 
+## 글쓰기 AI 제안의 공급자 호출 — 2026-11-04 KST
+
+- **확인한 근거(확인일 2026-11-04, 공식 문서):**
+  - [요금표](https://platform.claude.com/docs/en/about-claude/pricing)
+    - Claude Haiku 5.5: 입력 $0.10, 출력 $0.50 /MTok(프롬프트 10만 토큰 이하). 넘으면 $0.50/$2.50.
+    - Claude Sonnet 5.5: 입력 $2, 출력 $10 /MTok.
+  - [API 보존](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
+    - 프롬프트·출력은 기본 보존하지 않는다고 적는다. Covered Model(Fable 5/5.1·Mythos 5/5.1)만 30일 보존이 필요하다.
+    - 상용 보존 정책은 30일 안 자동 삭제라고 적어 표현이 다르다. 소유자에게는 긴 쪽(최대 30일)으로 알린다([검토 문서 §8.2](writing-ai-review.md)).
+    - 보존 데이터는 명시 허락 없이는 학습에 쓰지 않는다.
+    - 구조화 출력은 JSON 스키마만 최대 24시간 캐시한다.
+- **비교:**
+  - 공식 SDK(`@anthropic-ai/sdk`): Edge 함수에 npm 의존성과 잠금 파일이 늘어난다. 쓰는 기능도 요청 1회(비스트리밍)뿐이다.
+  - **선택: SDK 없이 Messages API를 fetch로 직접 호출한다.** 헤더 세 개와 본문을 Claude API skill의 curl 참조 그대로 쓴다. 의존성 0개.
+  - 이 앱에 맞지 않아 쓰지 않은 기능:
+    - 스트리밍: 출력 상한이 16K 이하다.
+    - prompt caching: 사용량이 적고 지시문이 짧다.
+    - server-side fallback: Haiku 5.5에는 없다.
+- **선택을 바꿀 조건:**
+  - 긴 출력이 필요해 스트리밍을 써야 할 때.
+  - 도구 사용을 넣을 때.
+  - 요청 모양이 바뀌는 새 API 판으로 옮길 때. 이때 SDK 도입을 다시 비교한다.
+  - 모델·요금이 바뀌면 마이그레이션의 단가 함수와 이 기록을 함께 고친다.
+
+## D2 준비 — Tiptap 채택 조건 대조와 Delta → Markdown 변환기, 2026-11-04 KST
+
+총괄 작업 지시서(11-04) 작업 2다. 화면·편집기는 바꾸지 않았고 새 vendor 파일도 넣지 않았다. 상세 형식과 검사는 [D2 Markdown 형식](../design-review/post-markdown-d2.md)에 있다.
+
+- **확인한 배포(확인일 2026-11-04, npm 공식 레지스트리):**
+  - `@tiptap/core`·`@tiptap/markdown`·`@tiptap/pm`·`@tiptap/starter-kit`: 최신 3.32.2(2026-10-30 배포, `dist-tags.latest`), MIT. 11-02 기록 이후 새 판은 없다.
+  - `@tiptap/markdown`은 `marked ^17.0.1`을 쓰고, 설치 결과는 17.0.6이다. marked 최신은 18.1.3(2026-11-02)이지만 Tiptap이 ^17로 묶는다.
+  - 격리 폴더에 위 4개를 새로 설치했다. 함께 설치된 44개 패키지가 모두 MIT이고 `npm audit` 0건이다.
+  - npm 보안 권고 일괄 조회(`/-/npm/v1/security/advisories/bulk`, 위 4개 + marked 17.0.6 + prosemirror-model)도 0건이었다.
+  - GitHub 보안 권고 목록과 OSV는 이 세션에서 접근이 막혀 다시 조회하지 못했다. 11-02까지 기록한 Tiptap 권고 3개(속성 병합 3.30.4, Markdown 정규식 3.30.5, CollaborationCaret 3.31.3)는 모두 3.32.2보다 이전 판에서 고쳐졌다.
+  - 이 조회는 의존성 전체의 안전을 보증하지 않는다.
+- **번들(esbuild IIFE, minify, 같은 날 측정):**
+  - `Editor`+`StarterKit`+`Markdown`: min 455,791B, gzip 143,733B, brotli 122,888B
+  - 지금 vendor `quill.js`: 209,274B, gzip 58,787B. Tiptap 쪽이 gzip 약 2.4배다.
+  - 측정 방법: Node `zlib.gzipSync(level 9)`·`brotliCompressSync`(기본값). 도구마다 값이 다르다. 같은 `quill.js`가 `gzip -9`로는 59,009B, `gzip -6`으로는 59,229B다(11-04 재확인).
+  - 공식 UMD가 없으므로 도입한다면 빌드 명령·lock·SHA-256을 vendor 기록에 둔다.
+  - 11-02 실험의 값(min 492,588B)은 Link와 직접 만든 확장을 포함한 크기라 이번 값과 묶음이 다르다.
+- **채택 조건 5가지(11-02 실험) — 지금 상태:**
+
+| 조건 | 상태 | 할 일(D2 본 작업) |
+|---|---|---|
+| 1. 편집기마다 `Marked` 인스턴스를 따로 둔다(전역 규칙 누수 방지) | 미착수 | 편집기 생성 때 새 인스턴스를 넘기고, 두 편집기 동시 열기 검사를 둔다 |
+| 2. 줄머리 기호 이스케이프 | **변환기 쪽 해결** | `post-markdown.js`가 줄 첫머리 `#`·`>`·`-`·`+`·`1.`·`1)`·`---`·`===`를 이스케이프하고, markdown-it 재판독 검사가 있다. 편집기 직렬화도 같은 시험 문서로 맞춘다 |
+| 3. 잠긴 인용 카드 보호 | 미착수 | 카드 노드에 선택 시 입력 차단을 두고 검사한다 |
+| 4. 고치지 않은 블록의 원래 바이트 유지 | 부분 | v2 → Markdown은 결정적(같은 입력은 같은 출력)이다. Obsidian 원문 바이트 보존은 편집기 직렬화 몫으로 남는다 |
+| 5. 읽기(markdown-it)와 편집(marked)의 규칙 일치 | 부분 | 변환기 출력은 markdown-it으로 검증했다. 편집기 쪽 marked 결과를 같은 시험 문서로 맞추는 검사가 필요하다 |
+
+- **변환기 비교(같은 날, npm 메타데이터):**
+  - `quill-delta-to-markdown` 0.6.0(2019-01-23, ISC)과 `@slite/quill-delta-markdown` 0.0.8(2017-09-27, ISC)은 유지되지 않는다. 사진 embed·AI 표시·CommonMark 이스케이프도 보장하지 않는다.
+  - **선택: 순수 모듈 `assets/life/post-markdown.js`를 자체 유지한다(약 200줄).** 무작위 v2 문서를 시드 4개 × 20,000개 돌려 markdown-it 재판독 일치를 확인했다.
+  - 바꿀 조건: Tiptap 직렬화가 같은 시험·무작위 문서를 통과하면, 새 글 저장은 그쪽으로 옮기고 이 모듈은 v2 이행에만 쓴다.
+- **선택:** Tiptap 3.32.2를 후보로 유지한다. 엔진 연결과 번들 도입은 D1 뒤 D2 본 작업에서 위 조건 1·3·4·5의 검사와 함께 한다.

@@ -505,12 +505,10 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
 .photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
 .photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
-/* Private AI authorship mark (editor only). A dotted underline carries the
-   meaning without color; the soft fill only groups the run. Not rendered in
-   reading, HTML files or public copies. */
-/* AI 글 표시 (D1, 2026-11-04): the same mark as the reader's .blog-ai-text
-   (PR #174). The dots are a background along the bottom edge, so an underline
-   or a link drawn as text decoration never covers them. */
+/* Private AI authorship mark in the editor (D1, 2026-11-04): the same mark as the
+   owner's reading views' .blog-ai-text (blog-public.css). The dots are a background
+   along the bottom edge, so an underline or a link drawn as text decoration never
+   covers them; the soft fill only groups the run. HTML files and public copies carry no mark. */
 .photo-posts .ql-editor .photo-ai-text {
   background-color: var(--paper-2, #f4f7f5);
   background-image: radial-gradient(circle, var(--ink-soft, #5d6b65) 1px, transparent 1.3px);

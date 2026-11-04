@@ -58,6 +58,30 @@ test('a public snapshot drops only the mark, removes an emptied attribute map, a
   assert.equal(JSON.stringify(Blog.publicSnapshot(plain).ops), JSON.stringify(plain.ops));
 });
 
+test('a private reading copy keeps the marks for the owner\'s own views only; public validation refuses it', async () => {
+  const value = await withPhoto(), ids = [value.photos[0].id];
+  const reading = Blog.privateReadingSnapshot(value, { photoIds: ids }), pub = Blog.publicSnapshot(value, { photoIds: ids });
+  assert.equal(reading.format, 'life-blog-private-reading-v1');
+  assert.deepEqual(reading.ops.filter(op => typeof op.insert === 'string'), value.ops.filter(op => typeof op.insert === 'string'), 'text and marks are copied exactly');
+  assert.equal(hasMark(pub.ops), false, 'the public copy of the same post still carries no mark');
+  // Same projection apart from the marks and the format: title, attachments and photo metadata agree.
+  assert.deepEqual({ ...reading, format: null, ops: null, photos: reading.photos.map(({ id, ...rest }) => rest) }, { ...pub, format: null, ops: null, photos: pub.photos.map(({ id, ...rest }) => rest) });
+  assert.throws(() => Blog.validateSnapshot(reading), e => e.code === 'invalid_blog_snapshot', 'a reading copy is never a valid public snapshot');
+  assert.throws(() => Blog.validateReadingSnapshot(pub), e => e.code === 'invalid_blog_snapshot', 'the formats are not interchangeable');
+  Blog.validateReadingSnapshot(reading);
+  const bad = copy(reading); bad.ops[1].attributes = { author: 'human' };
+  assert.throws(() => Blog.validateReadingSnapshot(bad), e => e.code === 'invalid_blog_snapshot', 'the reading copy still validates the marks');
+});
+
+test('a public series package is only ordered public post links: no body, ops or AI mark can enter it', () => {
+  const Series = require('../assets/life/blog-series-public.js'), { randomUUID } = require('node:crypto');
+  const tokens = [randomUUID(), randomUUID()], wrapper = Series.wrapper('익명 연재', '소개', tokens, 'https://example.org/life-haedo/');
+  const keys = new Set(); JSON.stringify(wrapper, (key, value) => { keys.add(key); return value; });
+  for (const key of ['ops', 'insert', 'attributes', 'author', 'photos', 'doc', 'body']) assert.equal(keys.has(key), false, key);
+  assert.deepEqual(wrapper.entries.map(entry => entry.attachments.map(item => new URL(item.url).searchParams.get('post'))), tokens.map(t => [t]));
+  assert.equal(Series.wrapper.length, 4, 'the wrapper takes a title, an introduction, tokens and a base URL only');
+});
+
 test('the post ZIP and Blog pack/hydrate keep every mark exactly', async () => {
   const value = await withPhoto();
   const restored = await Photo.readBackup(await Photo.backup(value), Core.id);
