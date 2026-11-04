@@ -60,18 +60,30 @@
     return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
   }
   function utf8(text) { return new TextEncoder().encode(text); }
-  function validateText(text) {
-    assert(typeof text === 'string' && text.length > 0, 'missing_text', '가져올 본문이나 원문 URL을 넣어 주세요.');
-    assert(!text.includes('\u0000'), 'invalid_encoding', '텍스트에 읽을 수 없는 문자가 있습니다. UTF-8 텍스트 파일을 사용해 주세요.');
-    // TextEncoder replaces isolated surrogates. Reject them instead of changing the original silently.
+  // UTF-8 byte length of well-formed text, counted in one pass with the surrogate check
+  // (2026-11-04: encoding every text again with TextEncoder was ~11% of the main thread while a
+  // workspace was validated). Equal to new TextEncoder().encode(text).length for well-formed text.
+  // TextEncoder replaces isolated surrogates; they are rejected instead of changing the original silently.
+  function utf8Length(text) {
+    let bytes = 0;
     for (let i = 0; i < text.length; i++) {
       const unit = text.charCodeAt(i);
       if (unit >= 0xd800 && unit <= 0xdbff) {
         const next = text.charCodeAt(++i);
         assert(next >= 0xdc00 && next <= 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
-      } else assert(unit < 0xdc00 || unit > 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
+        bytes += 4;
+      } else {
+        assert(unit < 0xdc00 || unit > 0xdfff, 'invalid_encoding', '텍스트의 문자 인코딩을 확인해 주세요.');
+        bytes += unit < 0x80 ? 1 : unit < 0x800 ? 2 : 3;
+      }
     }
-    assert(text.length <= MAX_IMPORT_BYTES && utf8(text).length <= MAX_IMPORT_BYTES, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 가져올 수 있습니다. 파일을 나눠 주세요.');
+    return bytes;
+  }
+  function validateText(text) {
+    assert(typeof text === 'string' && text.length > 0, 'missing_text', '가져올 본문이나 원문 URL을 넣어 주세요.');
+    assert(!text.includes('\u0000'), 'invalid_encoding', '텍스트에 읽을 수 없는 문자가 있습니다. UTF-8 텍스트 파일을 사용해 주세요.');
+    const bytes = utf8Length(text);
+    assert(text.length <= MAX_IMPORT_BYTES && bytes <= MAX_IMPORT_BYTES, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 가져올 수 있습니다. 파일을 나눠 주세요.');
   }
   async function sha256(text) {
     const digest = await cryptoProvider().subtle.digest('SHA-256', utf8(text));
@@ -648,6 +660,6 @@
     return output.join('\n');
   }
 
-  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, findSearchText, toMarkdown,
+  return Object.freeze({ MAX_IMPORT_BYTES, utf8Length, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, findSearchText, toMarkdown,
     sourceState, isSourceActive, isVersionActive, isEditedCopy, editedCopyMarkers, buildSourceStateChanges, assertSourceLinkPreservation });
 });
