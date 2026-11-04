@@ -304,6 +304,15 @@ async function main() {
       const stored = (await readPreparation(page)).plans.find(p => p.id === planId);
       assert.equal(stored.title, '다시 연 준비'); assert.equal(stored.question, '불러오는 중 고친 질문 계속');
     });
+    await check('A control reached with Tab while a new preparation\'s sources load keeps focus instead of being pulled to the title', async () => {
+      const d = await fixture('material-new-control-focus'); page = d.page; await enter(page);
+      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourcesHeld = false; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      await page.locator('#mwNew').click(); await page.waitForFunction(() => window.__mwSourcesHeld === true && !!document.querySelector('#mwAddHeading'));
+      await page.locator('#mwAddHeading').focus();
+      await page.evaluate(() => window.__mwReleaseSources()); await page.locator('.mw-source-search').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'mwAddHeading', 'a control chosen during the load keeps focus');
+    });
     await check('A real SDK account change during exact-source hashing cancels the old account handoff and leaves both accounts free of partial posts', async () => {
       const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id));
       const d = await fixture('material-late-account'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);

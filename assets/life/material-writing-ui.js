@@ -303,9 +303,10 @@
       toolbar.append(selector, button('새 작성 준비', async () => {
         await flushInternal(); guard(); const value = M.create(fresh); state.plans.push(value);
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
-        selected = value.id; sourceView = null; view = null; mark(); await render();
-        // render() waits for the sources; input focused meanwhile keeps its focus.
-        if (!typingInside()) surface?.querySelector('#mwTitle')?.focus();
+        const before = document.activeElement; selected = value.id; sourceView = null; view = null; mark(); await render();
+        // render() rebuilds the surface and waits for the sources: a field or control the person moved into
+        // meanwhile keeps its focus (the element focused before the click never counts as a move).
+        if (!(movedInside() && document.activeElement !== before)) surface?.querySelector('#mwTitle')?.focus();
       }, { id: 'mwNew' }));
       if (typeof onClose === 'function') toolbar.append(button('돌아가기', () => navigate(onClose), { id: 'mwClose' }));
       status = el('p', '', 'life-meta mw-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -335,12 +336,6 @@
       if (input.id === 'mwClose') { view = { planId: selected, id: null, focusKey: null, y: root.scrollY || 0 }; return; }
       view = { planId: selected, id: input.id || null, focusKey: input.dataset?.focusKey || null,
         start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, y: root.scrollY || 0 };
-    }
-    // A field the person moved into keeps focus; a stale button does not. render() waits for the
-    // source list, so a focus set after it would take back a field chosen during that load.
-    function typingInside() {
-      const typing = document.activeElement;
-      return !!surface?.contains(typing) && (/^(input|textarea|select)$/i.test(typing?.tagName || '') || typing?.isContentEditable === true);
     }
     // render() rebuilt the surface, so any focus inside it now was moved there during the source load.
     function movedInside() { const active = document.activeElement; return !!surface?.contains(active) && active !== surface; }
