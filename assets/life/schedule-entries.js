@@ -11,6 +11,8 @@
   const store = () => global.HaedoPlatformStore;
   const WEEK = ['월', '화', '수', '목', '금', '토', '일'];
   let started = null; // the account whose first pull this page started
+  // Signing out ends that account here too: the next account starts its own first pull.
+  global.document?.addEventListener('haedo:signed-out', () => { started = null; });
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text != null) node.textContent = String(text);
@@ -38,7 +40,8 @@
     if (started !== uid) {
       started = uid;
       // Fresh copies from the account; the panel paints the device copy first and repaints on notice.
-      // Timelines are only read here (syncDocuments brings them, as on main; nothing is sent).
+      // Timelines are only read here (syncDocuments brings them, also on wake-ups; nothing is sent).
+      store().watchDocuments();
       store().pull().catch(() => {});
       store().syncDocuments().catch(() => {});
     }
@@ -90,6 +93,8 @@
     const body = el('div', null, 'schedule-entry-body');
     host.replaceChildren(body, status, error);
     let dirty = false, painted = false;
+    // 행복도 for this paint: the timelines are read once per paint, not once per day shown.
+    let mood = { source: null, on: () => null };
     // The first paint may run while the host is still being built (not yet in the page).
     const alive = () => isCurrent() && (host.isConnected || !painted) && s.account === accountOf(storageAccount);
     function fail(message) { error.hidden = false; error.textContent = message; }
@@ -119,7 +124,7 @@
     function happinessField(day) {
       const field = el('section', null, 'schedule-entry-section schedule-happiness'); field.setAttribute('aria-label', '행복도');
       field.append(el('h3', '행복도', 'schedule-entry-title'));
-      const current = s.happiness(day), source = s.happinessSource;
+      const current = mood.on(day), source = mood.source;
       field.append(el('p', current ? current.score + ' / 10' : '기록 없음', 'schedule-happiness-value'));
       const edit = el('a', '연표에서 기록', 'life-text-button schedule-happiness-edit');
       edit.href = 'timeline.html' + (source ? '?doc=' + encodeURIComponent(source.id) : '');
@@ -172,7 +177,9 @@
       const tbody = el('tbody');
       // Phone width: the name gets a full-width line of its own above its seven days (the row
       // header carries it for screen readers; this line is visual only).
-      const label = (text, cls = '') => { const row = el('tr', null, 'schedule-grid-label ' + cls); row.setAttribute('aria-hidden', 'true'); const cell = el('td', text); cell.colSpan = 8; row.append(cell); return row; };
+      // Its first cell lines up with the row headers (hidden at phone width), so the name spans
+      // exactly the seven day columns.
+      const label = (text, cls = '') => { const row = el('tr', null, 'schedule-grid-label ' + cls); row.setAttribute('aria-hidden', 'true'); const cell = el('td', text); cell.colSpan = 7; row.append(el('th'), cell); return row; };
       for (const item of habits) {
         tbody.append(label(item.data.title));
         const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; th.title = item.data.title; tr.append(th);
@@ -185,16 +192,16 @@
         tbody.append(tr);
       }
       tbody.append(label('행복도'));
-      const mood = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; mood.append(mh);
+      const moodRow = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; moodRow.append(mh);
       week.forEach((day, i) => {
-        const td = el('td'), value = s.happiness(day), score = value?.score ?? null;
+        const td = el('td'), value = mood.on(day), score = value?.score ?? null;
         const link = el('button', score != null ? String(score) : '–', 'schedule-happiness-day'); link.type = 'button';
         link.setAttribute('aria-label', WEEK[i] + '요일 행복도 ' + (score != null ? score : '기록 없음') + ', 그날 보기');
         link.dataset.focusKey = 'schedule:happiness-day:' + day;
         link.addEventListener('click', () => { if (alive()) go('day', day); });
-        td.append(link); mood.append(td);
+        td.append(link); moodRow.append(td);
       });
-      tbody.append(mood); table.append(tbody);
+      tbody.append(moodRow); table.append(tbody);
       const scroll = el('div', null, 'schedule-habit-scroll'); scroll.append(table);
       section.append(el('h3', '습관 · 행복도', 'schedule-entry-title'));
       if (!habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'life-meta schedule-empty'));
@@ -211,10 +218,11 @@
     }
     function paint() {
       if (!alive()) return;
-      // Do not rebuild under a control in use (a dragged range, a focused radio being chosen).
+      // Do not rebuild under a control in use (a dragged range).
       const active = document.activeElement;
       if (active && host.contains(active) && active.matches('input[type=range]') && active.matches(':active')) return;
       const focusKey = host.contains(active) ? active?.dataset?.focusKey : null;
+      if (kind !== 'year') mood = s.happinessReader();
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
       painted = true;
       const state = saveState(s.items), unseen = s.recoveryUnseen;

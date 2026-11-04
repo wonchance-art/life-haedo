@@ -553,3 +553,22 @@ test('the account document schema number is pinned to its document kinds', t => 
   const numbers = Object.keys(KINDS).map(Number);
   assert.equal(schema, Math.max(...numbers), 'the newest recorded schema is the one in use');
 });
+
+// B2: goal/habit recovery copies (platformRecovery) merge by rid: two devices adding at the same
+// time both keep both, and neither side's copy is replaced or removed.
+test('platformRecovery: copies two devices add before syncing are both kept on both devices', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), b = ipad.base.forAccount(accountA);
+  const copy = (rid, title, keptAt) => ({ rid, id: 'g_' + rid, kind: 'goal', data: { title, progress: 10, target: '' }, updated: null, keptAt, reason: 'remote_newer' });
+  await a.addPlatformRecovery([copy('mac-1', '맥 사본', '2026-11-04T01:00:00.000Z')]);
+  await b.addPlatformRecovery([copy('ipad-1', '아이패드 사본', '2026-11-04T02:00:00.000Z')]);
+  const now = clock();
+  const macSync = engine(a, server, accountA, { now }), ipadSync = engine(b, server, accountA, { now });
+  await macSync.sync.syncNow(); now.advance(); await ipadSync.sync.syncNow(); now.advance(); await macSync.sync.syncNow();
+  for (const store of [a, b]) assert.deepEqual((await store.readPlatformRecovery()).items.map(item => item.rid).sort(), ['ipad-1', 'mac-1']);
+  // A later addition on one side reaches the other; nothing is removed.
+  await b.addPlatformRecovery([copy('ipad-2', '아이패드 사본 2', '2026-11-04T03:00:00.000Z')]);
+  now.advance(); await ipadSync.sync.syncNow(); now.advance(); await macSync.sync.syncNow();
+  assert.deepEqual((await a.readPlatformRecovery()).items.map(item => item.rid).sort(), ['ipad-1', 'ipad-2', 'mac-1']);
+});

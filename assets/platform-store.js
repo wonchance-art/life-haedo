@@ -1,6 +1,9 @@
 (function (root) {
   const model = root.HaedoPlatformData, auth = root.HaedoAuth;
   let uid = null, items = [], epoch = 0, accountProject = null, queue = null, pulling = null;
+  // Set by the 일정 screen, which shows 행복도 from the timelines: wake-ups bring them here too
+  // (read only). Pages with the timeline editor leave documents to it.
+  let watchingDocuments = false;
   // Timeline documents (haedo_documents): this store only brings them here (syncDocuments) and
   // sends them on an explicit request (uploadDocuments), as on main. Their writer is the timeline
   // editor; the 일정 screen only reads 행복도 (B2 scope, 2026-11-04 owner decision).
@@ -40,7 +43,7 @@
   }
   function clearAccount() {
     epoch++;
-    queue?.clear(); queue = null; pulling = null;
+    queue?.clear(); queue = null; pulling = null; watchingDocuments = false;
     uid = null; accountProject = null; items = [];
   }
   // 2026-11-01 owner rule: when both sides changed, the newest edit wins and the other side is
@@ -125,6 +128,13 @@
         const remote = await remoteItem(captured, id);
         const now = items.find(row => row.id === id);
         if (!now) return;
+        // A pull settled this same conflict meanwhile (it now knows this server copy): settling
+        // again would keep a copy of the winner. Only what it left unsent is sent.
+        if (remote ? now.syncedAt === remote.updated_at : !now.syncedAt) {
+          if (now.updated !== now.syncedAt && now.state !== "conflict") queue.schedule(id);
+          notify(captured);
+          return;
+        }
         let again = false;
         // A failed recovery write leaves the item as it is, in conflict (nothing applied).
         try { again = settle(captured, now, remote); } catch (_) { now.state = "conflict"; }
@@ -335,25 +345,24 @@
       }
       notify(captured);
     },
-    // 행복도 of one day, read only (the 일정 screen shows it; it is entered in the timeline editor).
-    // From the timeline chosen the same way on every device (model.baseDocument): the non-recovery
-    // timeline with the most daily 행복도, then the smallest id. Scales as the editor reads them.
-    happiness(date) {
-      if (!store.account) return null;
-      const captured = context(), k = model.keys(captured.uid);
-      const read = id => { try { return JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { return null; } };
-      const meta = model.baseDocument(model.registry(localStorage, captured.uid), { read });
-      if (!meta) return null;
-      return model.happinessOn(read(meta.id), date);
+    // The 일정 screen reads the timelines: wake-ups also bring them here (read only).
+    watchDocuments() { context(); watchingDocuments = true; },
+    // 행복도 read only (the 일정 screen shows it; it is entered in the timeline editor), from the
+    // timeline chosen the same way on every device (model.baseDocument): the non-recovery timeline
+    // with the most daily 행복도, then the smallest id. Scales as the editor reads them. One reader
+    // reads the timelines once; a screen makes one per paint.
+    happinessReader() {
+      if (!store.account) return { source: null, on: () => null };
+      const captured = context(), k = model.keys(captured.uid), bodies = new Map();
+      const read = id => {
+        if (!bodies.has(id)) { let doc = null; try { doc = JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { doc = null; } bodies.set(id, doc); }
+        return bodies.get(id);
+      };
+      const meta = model.baseDocument(model.registry(localStorage, captured.uid), { read }), doc = meta ? read(meta.id) : null;
+      return { source: meta ? { id: meta.id, name: meta.name } : null, on: date => (doc ? model.happinessOn(doc, date) : null) };
     },
-    // The timeline 행복도 is read from (its id and name), for the link to the editor.
-    get happinessSource() {
-      if (!store.account) return null;
-      const captured = context(), k = model.keys(captured.uid);
-      const read = id => { try { return JSON.parse(localStorage.getItem(k.docs + id)); } catch (_) { return null; } };
-      const meta = model.baseDocument(model.registry(localStorage, captured.uid), { read });
-      return meta ? { id: meta.id, name: meta.name } : null;
-    },
+    happiness(date) { return store.happinessReader().on(date); },
+    get happinessSource() { return store.happinessReader().source; },
     backup() {
       const captured = context(), reg = model.registry(localStorage, captured.uid), k = model.keys(captured.uid);
       const recovery = readRecovery(captured);
@@ -396,12 +405,13 @@
   // lifecycle module.
   document.addEventListener("haedo:signed-out", clearAccount);
   // Wake-ups (S2 shared wiring, assets/life/sync-lifecycle.js): pull goals/habits when the page shows
-  // again or the network returns. Timeline documents are never sent from here: their editor does
-  // (one writer per document). Without the module (an older cached page) only explicit and
+  // again or the network returns, and on the 일정 screen bring the timelines too (read only). Timeline
+  // documents are never sent from here: their editor does (one writer per document). Without the module (an older cached page) only explicit and
   // start-up syncs run.
   const wake = () => {
     if (!store.account) return;
     pull().catch(() => {});
+    if (watchingDocuments) store.syncDocuments().catch(() => {});
   };
   const visible = () => { if (!document.hidden) wake(); };
   root.HaedoLife?.SyncLifecycle?.attach(root, { listen: [["document", "visibilitychange", visible], ["window", "online", wake]] });

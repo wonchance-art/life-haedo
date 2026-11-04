@@ -122,6 +122,17 @@ async function main() {
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
       await page.locator('.schedule-happiness-value', { hasText: '8 / 10' }).waitFor();
       assert.equal(await page.locator('.schedule-entries input[type=radio]').count(), 0, 'no 행복도 control');
+      // Nor on the device: the timeline's body and the document list stay exactly as they were
+      // (watched through every localStorage write the page makes from here on).
+      const keys = await page.evaluate(id => ['caeyeon_life_account_' + id + '_registry', 'caeyeon_life_account_' + id + '_doc_d_timeline'], accounts.a.id);
+      const before = await page.evaluate(list => list.map(key => localStorage.getItem(key)), keys);
+      await page.evaluate(list => { window.__docWrites = []; const set = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) { if (list.includes(key)) window.__docWrites.push(key); return set.call(this, key, value); }; }, keys);
+      await page.getByRole('button', { name: /다음|›/ }).first().click().catch(() => {});
+      await page.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); dispatchEvent(new Event('online')); });
+      await page.waitForTimeout(1500);
+      assert.deepEqual(await page.evaluate(() => window.__docWrites), [], 'no write to the timeline or the list');
+      assert.deepEqual(await page.evaluate(list => list.map(key => localStorage.getItem(key)), keys), before);
       const edit = page.getByRole('link', { name: '행복도를 연표에서 기록 (내 연표)' });
       assert.equal(await edit.getAttribute('href'), 'timeline.html?doc=d_timeline');
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day'); await entries(page);
@@ -292,9 +303,16 @@ async function main() {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData(['2026-11-02']) });
       tables.seed('haedo_items', accounts.a.id, { id: 'h2', kind: 'habit', name: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', data: { ...habitData([]), title: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기' } });
       tables.seed('haedo_items', accounts.a.id, { id: 'g1', kind: 'goal', name: '책 열두 권 읽기', data: goalData(40) });
+      const longGoal = '올해 안에 동네 도서관의 한국 근현대 소설 서가를 처음부터 끝까지 한 권씩 읽어 보기';
+      tables.seed('haedo_items', accounts.a.id, { id: 'g2', kind: 'goal', name: longGoal, data: { ...goalData(10), title: longGoal } });
       for (const view of ['day', 'week']) {
         await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
-        await page.waitForFunction(() => HaedoPlatformStore.items.length === 3);
+        await page.waitForFunction(() => HaedoPlatformStore.items.length === 4);
+        if (view === 'day') {
+          // A long goal title is shown whole (wrapped), not cut with an ellipsis.
+          const title = await page.locator('.schedule-goal-title', { hasText: longGoal }).evaluate(n => ({ text: n.textContent, fits: n.scrollWidth <= n.clientWidth + 1, ellipsis: getComputedStyle(n).textOverflow }));
+          assert.deepEqual(title, { text: longGoal, fits: true, ellipsis: 'clip' });
+        }
         await overflow(page, view + ' ' + width);
         if (view === 'week') {
           // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
@@ -303,13 +321,19 @@ async function main() {
           else {
             assert.deepEqual(names, [], 'wide: names stay in the row headers');
             // Wide: the row header wraps instead of cutting, and keeps the name as its title.
-            const heads = await page.locator('.schedule-habit-grid tbody th').evaluateAll(cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
+            const heads = await page.locator('.schedule-habit-grid tbody tr:not(.schedule-grid-label) > th').evaluateAll(cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
             assert.deepEqual(heads.filter(([text]) => text !== '행복도'), [['아침 산책', '아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true]]);
           }
           // The whole cell takes the tap, not only the 22px box.
           const targets = await page.locator('.schedule-grid-check').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
             const inner = cell.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight); return b.height >= 44 && b.width >= inner - 1; }));
           assert.ok(targets.length && targets.every(Boolean), 'week ' + width + ': each check cell is a full-size target');
+          // Seven day columns only (no empty eighth column at phone width), each at least 44px wide.
+          const columns = await page.evaluate(() => { const row = [...document.querySelectorAll('.schedule-habit-grid tbody tr:not(.schedule-grid-label)')][0];
+            const cells = [...row.children].filter(c => c.checkVisibility()); return { count: cells.filter(c => c.tagName === 'TD').length, narrowest: Math.min(...cells.filter(c => c.tagName === 'TD').map(c => c.getBoundingClientRect().width)),
+              table: document.querySelector('.schedule-habit-grid').getBoundingClientRect().right, last: cells.at(-1).getBoundingClientRect().right }; });
+          assert.equal(columns.count, 7); assert.ok(columns.narrowest >= 44, 'week ' + width + ': day cells ' + columns.narrowest + 'px');
+          assert.ok(Math.abs(columns.table - columns.last) <= 1, 'week ' + width + ': no empty column after Sunday');
           // All seven days show without sideways scrolling inside the grid either (Sunday included).
           const fit = await page.evaluate(() => { const scroll = document.querySelector('.schedule-habit-scroll'), sunday = document.querySelector('.schedule-habit-grid thead th:last-child');
             const box = scroll.getBoundingClientRect(), day = sunday.getBoundingClientRect();

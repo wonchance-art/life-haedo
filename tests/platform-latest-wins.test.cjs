@@ -28,6 +28,9 @@ function server() {
     if (server.hold) await server.hold;
     // Offline for documents (an iPhone without network): every document request fails.
     if (server.failDocs && table === 'haedo_documents') return { ok: false, status: 503, async json() { return {}; } };
+    if (server.failItems && table === 'haedo_items' && options.method) return { ok: false, status: 503, async json() { return {}; } };
+    // Holds one kind of request (e.g. the push path's read of one item) until released.
+    if (server.gate?.match(u)) await server.gate.promise;
     if (!options.method) return json(id ? (rows.has(id) ? [rows.get(id)] : []) : [...rows.values()]);
     const body = JSON.parse(options.body);
     if (options.method === 'POST') {
@@ -42,7 +45,7 @@ function server() {
     }
     throw new Error('unexpected ' + options.method);
   }
-  const server = { tables, calls, request, stamp, hold: null, failDocs: false,
+  const server = { tables, calls, request, stamp, hold: null, failDocs: false, failItems: false, gate: null,
     // Another device's write, stamped now (later than every earlier server write).
     write(table, row) { const next = { ...row, user_id: 'A', updated_at: stamp() }; tables[table].set(row.id, next); return next; },
     advance(ms) { clock += ms; } };
@@ -55,14 +58,17 @@ function fixture(t, cloud, { failRecovery = false, values = new Map() } = {}) {
     setItem: (key, value) => { if (failRecovery && key.endsWith('_items_recovery')) throw new Error('quota'); values.set(key, value); },
     removeItem: key => values.delete(key), get length() { return values.size; }, key: index => [...values.keys()][index] };
   const auth = { user: { id: 'A' }, epoch: 0, config: { url: 'https://test.supabase.co' }, request: (url, options) => cloud.request(url, options) };
-  const context = { HaedoPlatformData: model, HaedoAuth: auth, HaedoData: data, HaedoSync: Sync, localStorage: local, structuredClone, Event, Date,
+  // The shared wake-up wiring (assets/life/sync-lifecycle.js), captured so a check can fire it.
+  const lifecycle = new Map();
+  const HaedoLife = { SyncLifecycle: { attach(host, { listen }) { for (const [, name, fn] of listen) lifecycle.set(name, fn); } } };
+  const context = { HaedoPlatformData: model, HaedoAuth: auth, HaedoData: data, HaedoSync: Sync, HaedoLife, localStorage: local, structuredClone, Event, Date,
     setTimeout, clearTimeout, addEventListener() {}, crypto: globalThis.crypto,
     document: { hidden: false, addEventListener: (name, listener) => listeners.set(name, listener), dispatchEvent() {} } };
   vm.runInNewContext(script, context);
   const store = context.HaedoPlatformStore.init('A');
   const logout = () => { auth.user = null; auth.epoch++; listeners.get('haedo:signed-out')(); };
   t.after(() => { if (auth.user) logout(); });
-  return { store, auth, values, local, logout, context,
+  return { store, auth, values, local, logout, context, wake: name => lifecycle.get(name)(),
     recovery: () => JSON.parse(values.get(model.keys('A').recovery) || '[]'),
     registry: () => model.registry(local, 'A'),
     doc: id => JSON.parse(values.get(model.keys('A').docs + id)) };
@@ -311,4 +317,55 @@ test('syncDocuments writes only what changed on the server (a lagging unchanged 
   cloud.write('haedo_documents', { id: 'd_a', name: '내 연표', data: { ...model.emptyDocument('내 연표'), scale: 'signed1', events: [{ date: '2026-11-02', title: '다른 기기' }] } });
   await h.store.syncDocuments();
   assert.deepEqual(writes.sort(), [body, reg].sort(), 'a real change is written');
+});
+
+// Fifth review (4bb359f) minors.
+const reopen = (t, cloud, h) => { h.logout(); return fixture(t, cloud, { values: h.values }); };
+const settleTime = () => new Promise(done => setTimeout(done, 1800));
+
+test('a habit check that could not be sent goes out after a reopen and after the network returns (the pull resends it)', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  cloud.failItems = true;
+  h.store.change(id, 'goal', goal(40)); await h.store.flush();
+  assert.equal(h.store.items[0].state, 'err');
+  const again = reopen(t, cloud, h);
+  cloud.failItems = false;
+  await again.store.pull(); await settleTime();
+  assert.equal(cloud.tables.haedo_items.get(id).data.progress, 40, 'sent after the reopen');
+  // Network back on an open page: the online wake-up pulls, and the pull resends.
+  cloud.failItems = true;
+  again.store.change(id, 'goal', goal(60)); await again.store.flush();
+  assert.equal(again.store.items[0].state, 'err');
+  cloud.failItems = false;
+  again.wake('online'); await settleTime();
+  assert.equal(cloud.tables.haedo_items.get(id).data.progress, 60, 'sent after online');
+});
+
+test('a push conflict that a pull already settled is not settled again (no copy of the winner)', async t => {
+  const cloud = server(), h = fixture(t, cloud), id = await syncedGoal(h, cloud);
+  h.store.change(id, 'goal', goal(30)); h.store.items[0].updated = '2026-01-01T00:00:00.000Z';    // older than the other device
+  cloud.write('haedo_items', { id, kind: 'goal', name: '익명 목표', data: goal(70) });
+  // The push reads the server item after its conditional write fails; hold that read.
+  let release; cloud.gate = { match: u => u.searchParams.get('id') === 'eq.' + id && u.searchParams.get('select') === 'id,kind,data,updated_at', promise: new Promise(done => { release = done; }) };
+  const pushing = h.store.flush();
+  await new Promise(done => setTimeout(done, 50));
+  cloud.gate = null;
+  await h.store.pull();                                                // the pull settles it first: 70 wins, 30 kept
+  release(); await pushing;
+  assert.equal(h.store.items[0].data.progress, 70);
+  assert.deepEqual(h.recovery().map(row => row.data.progress), [30], 'one copy, of the loser only');
+});
+
+test('on the 일정 screen a wake-up also brings the timelines here (read only); other pages do not', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  cloud.write('haedo_documents', { id: 'd_a', name: '내 연표', data: { ...model.emptyDocument('내 연표'), scale: 'signed1', happiness: [{ date: '2026-11-03', v: 0 }] } });
+  h.wake('visibilitychange'); await settleTime();
+  assert.equal(h.store.happiness('2026-11-03'), null, 'not watching: documents are left to their editor');
+  h.store.watchDocuments();
+  h.wake('online'); await settleTime();
+  assert.equal(h.store.happiness('2026-11-03').score, 5);
+  cloud.write('haedo_documents', { id: 'd_a', name: '내 연표', data: { ...model.emptyDocument('내 연표'), scale: 'signed1', happiness: [{ date: '2026-11-03', v: 0.8 }] } });
+  h.wake('online'); await settleTime();
+  assert.equal(h.store.happiness('2026-11-03').score, 9, 'another device\'s change is shown without a reopen');
+  assert.equal(cloud.calls.filter(call => call.table === 'haedo_documents' && call.method !== 'GET').length, 0, 'nothing sent');
 });
