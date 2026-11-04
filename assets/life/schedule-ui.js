@@ -1,7 +1,9 @@
 /* 일정의 연·분기·월·주·일 보기(2026-11-02 부드러운 판, B1). 읽기 전용 투영이다.
  * 이미 이 화면에서 읽는 자료만 쓴다: 저장한 내 글(사진 글·첨부 글·직접 쓴 글),
- * 발췌, 날짜가 있는 연간 계획 항목. 목표·습관·행복도는 각 편집 화면으로 가는
- * 링크만 둔다(새 동기화나 원격 읽기를 싣지 않는다). 저장·공개·동기화는 하지 않는다. */
+ * 발췌, 날짜가 있는 연간 계획 항목. B2(2026-11-04)부터 습관 체크·목표 진행률은 이 화면에서
+ * 입력하고, 행복도는 보기만 한다(입력은 연표 편집기). 그 칸은 schedule-entries.js가 그리고, 그
+ * 칸을 그릴 때만 기존 목표·습관 저장소(sync.js·platform-store.js)를 불러온다. 불러오지 못하면
+ * 예전처럼 각 편집 화면 링크를 둔다. */
 (function (global) {
   'use strict';
   const life = global.HaedoLife = global.HaedoLife || {};
@@ -12,6 +14,25 @@
   const STEP_NAMES = Object.freeze({ year: '해', quarter: '분기', month: '달', week: '주', day: '날' });
   const FILTERS = Object.freeze([['all', '전체'], ['posts', '글'], ['excerpts', '발췌'], ['photos', '사진']]);
   const data = () => life.ScheduleData;
+  // Loaded on first use, not on the first screen (2026-11-04 lead condition: no startup cost).
+  const ENTRY_SCRIPTS = Object.freeze([['HaedoSync', 'assets/sync.js'], ['HaedoPlatformStore', 'assets/platform-store.js'], ['ScheduleEntries', 'assets/life/schedule-entries.js']]);
+  let entryLoad = null;
+  function loadEntries() {
+    if (life.ScheduleEntries && global.HaedoPlatformStore) return Promise.resolve(life.ScheduleEntries);
+    entryLoad ||= (async () => {
+      for (const [name, src] of ENTRY_SCRIPTS) {
+        if (name === 'ScheduleEntries' ? life.ScheduleEntries : global[name]) continue;
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script'); script.src = src;
+          script.onload = resolve; script.onerror = () => reject(new Error('일정 입력 칸을 불러오지 못했습니다.'));
+          document.head.append(script);
+        });
+      }
+      if (!life.ScheduleEntries || !global.HaedoPlatformStore) throw new Error('일정 입력 칸을 불러오지 못했습니다.');
+      return life.ScheduleEntries;
+    })().catch(error => { entryLoad = null; throw error; });
+    return entryLoad;
+  }
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text != null) node.textContent = String(text);
@@ -31,6 +52,7 @@
   function create({ storage, core, host, getBundle, isDisposed = () => false, announce = () => {}, open, go, links = {} }) {
     let disposed = false, generation = 0, visible = false, filter = 'all';
     let stopWatch = null, watchTimer = null, observer = null, createdScope = null;
+    const entryStops = new Set();
     const createdCache = new Map();
     const urls = new Set();
     const alive = () => !disposed && !isDisposed();
@@ -160,6 +182,27 @@
       control.addEventListener('click', () => { if (showing(context)) go(mode, date); });
       return control;
     }
+    // 습관·행복도·목표 칸. Painted from the device copy right away; a load failure falls back to the
+    // editor links (fallback()).
+    function entrySlot(context, kind, extra, fallback) {
+      const slot = el('section', null, 'schedule-entries schedule-entries-' + kind); slot.setAttribute('aria-busy', 'true');
+      slot.setAttribute('aria-label', kind === 'year' ? '목표' : kind === 'week' ? '이번 주 습관과 행복도' : '그날 습관과 행복도');
+      const paint = entries => {
+        const stop = entries.render(slot, { kind, date: context.date, today: data().today(), storageAccount: storage.account, storage, ...extra,
+          isCurrent: () => showing(context), go: (mode, date) => { if (showing(context)) go(mode, date); } });
+        entryStops.add(stop);
+        slot.setAttribute('aria-busy', 'false');
+        if (!slot.childElementCount && fallback) slot.append(fallback());
+      };
+      // Already loaded: paint now, so a redraw can restore focus to the same control.
+      if (life.ScheduleEntries && global.HaedoPlatformStore) { paint(life.ScheduleEntries); return slot; }
+      loadEntries().then(entries => { if (showing(context) && slot.isConnected) paint(entries); }).catch(() => {
+        if (!showing(context) || !slot.isConnected) return;
+        slot.setAttribute('aria-busy', 'false');
+        if (fallback) slot.replaceChildren(fallback());
+      });
+      return slot;
+    }
     function showError(context, text) {
       context.error.hidden = false; context.error.textContent = text;
     }
@@ -281,7 +324,9 @@
       primary.append(filterTabs(context, draw), rows, legend());
       const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-') && (year !== data().parts(now).year || entry.date >= now)).sort((a, b) => a.date.localeCompare(b.date));
       const yearText = context.result.rows.find(row => row.year === year)?.text;
-      wrap.append(primary, planAside(context, { heading: '예정', entries, empty: '이 해의 남은 예정이 없어요.', yearText }));
+      const aside = planAside(context, { heading: '예정', entries, empty: '이 해의 남은 예정이 없어요.', yearText });
+      aside.append(entrySlot(context, 'year', { year }, null));
+      wrap.append(primary, aside);
       return wrap;
     }
     function quarterView(context) {
@@ -397,7 +442,7 @@
     function weekView(context) {
       const week = data().weekOf(context.date), now = data().today();
       const wrap = el('div', null, 'schedule-week');
-      if (links.habits) wrap.append(links.habits());
+      wrap.append(entrySlot(context, 'week', { week }, links.habits));
       const grid = el('div', null, 'schedule-week-grid');
       for (const day of week) {
         const entry = context.result.days.get(day);
@@ -432,7 +477,7 @@
       const wrap = el('div', null, 'schedule-layout schedule-day');
       const primary = el('section', null, 'schedule-primary'); primary.setAttribute('aria-label', data().dayTitle(context.date) + ' 기록');
       primary.append(weekStrip(context));
-      if (links.day) primary.append(links.day(context.date));
+      primary.append(entrySlot(context, 'day', {}, links.day ? () => links.day(context.date) : null));
       primary.append(dayRows(context, context.date));
       wrap.append(primary);
       const { month, day, year } = data().parts(context.date);
@@ -458,6 +503,15 @@
     async function refresh(context) {
       const result = await load(context);
       if (!showing(context)) return;
+      // A goal slider being moved is not rebuilt under the pointer: redraw once it is let go.
+      const held = document.activeElement;
+      if (held?.matches?.('.schedule-entries input[type=range]') && context.surface.contains(held)) {
+        let later = false;
+        const again = () => { if (later) return; later = true; if (showing(context)) void refresh(context).catch(() => {}); };
+        held.addEventListener('change', again, { once: true }); held.addEventListener('blur', again, { once: true });
+        return;
+      }
+      entryStops.forEach(stop => { try { stop(); } catch (_) {} }); entryStops.clear();
       const focusKey = context.surface.contains(document.activeElement) ? document.activeElement?.dataset?.focusKey : null;
       const scroll = global.scrollY;
       clearMedia();
@@ -505,6 +559,7 @@
     }
     function leave() {
       unwatch();
+      entryStops.forEach(stop => { try { stop(); } catch (_) {} }); entryStops.clear();
       generation += 1; visible = false; clearMedia();
     }
     function dispose() { leave(); disposed = true; createdCache.clear(); createdScope = null; }

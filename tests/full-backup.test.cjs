@@ -752,3 +752,19 @@ test('M4 cost: folding a restore copy reads each workspace once and the view cac
   const base = median(await timed(plain)), folded = median(await timed(marked));
   t.diagnostic('list ' + Math.round(base) + ' ms unmarked, ' + Math.round(folded) + ' ms with a restore copy (median of 3)');
 });
+
+test('timeline snapshot: a damaged goal/habit recovery value is written as it is, never blocking the backup', () => {
+  const uid = '11111111-1111-4111-8111-111111111111', keys = PlatformData.keys(uid), local = memoryLocal();
+  local.setItem(keys.registry, JSON.stringify({ docs: [], current: null }));
+  local.setItem(keys.items, '[]');
+  local.setItem(keys.recovery, '{not json');
+  local.setItem(keys.recoveryDamaged, JSON.stringify(['[1,']));
+  const damaged = Full.timelineSnapshot({ platformData: PlatformData, localStorage: local, uid });
+  assert.deepEqual(damaged.recovery, []);
+  assert.deepEqual(damaged.recoveryDamaged, ['[1,', '{not json']);
+  const row = { rid: 'r1', id: 'g1', kind: 'goal', data: { title: '목표' }, updated: null, keptAt: '2026-11-04T00:00:00.000Z', reason: 'remote-newer' };
+  local.setItem(keys.recovery, JSON.stringify([row])); local.setItem(keys.recoveryDamaged, '[]');
+  const fine = Full.timelineSnapshot({ platformData: PlatformData, localStorage: local, uid });
+  assert.deepEqual(fine.recovery, [row]);
+  assert.equal(Object.hasOwn(fine, 'recoveryDamaged'), false);
+});

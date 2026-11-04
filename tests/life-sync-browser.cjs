@@ -133,6 +133,8 @@ class WorkspaceCloud {
       if (this.loseResponses.has(device)) { this.expectedFailures++; return route.abort('failed'); }
       return send(result);
     }
+    // Goals/habits and timeline tables, read by the 일정 panels since B2: this fake keeps none.
+    if (method === 'GET' && ['/rest/v1/haedo_items','/rest/v1/haedo_documents'].includes(url.pathname)) return send([]);
     throw new Error(`Unexpected anonymous HTTP request: ${method} ${url.pathname}`);
   }
 }

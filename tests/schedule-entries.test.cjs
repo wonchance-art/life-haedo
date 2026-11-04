@@ -1,0 +1,80 @@
+'use strict';
+// B2: the pure helpers the schedule uses for 행복도 (read only), habits and goals (assets/platform-data.js).
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const model = require('../assets/platform-data.js');
+
+test('행복도 is shown 0–10 from the timeline scale by the timeline\'s own rule n = round(5 + 5v)', () => {
+  assert.deepEqual([-1, -0.8, 0, 0.4, 1].map(model.happinessScore), [0, 1, 5, 7, 10]);
+  assert.equal(model.happinessScore(0.35), 7); assert.equal(model.happinessScore(-0.05), 5);
+  for (const bad of [1.2, -3, NaN, '0.2', null]) assert.equal(model.happinessScore(bad), null);
+  assert.equal(typeof model.withHappiness, 'undefined', 'the schedule has no 행복도 write helper (2026-11-04 owner decision)');
+});
+
+test('a day\'s entry is read only from that date; month points of the timeline are not a day\'s input', () => {
+  const doc = { profile: {}, scale: 'signed1', happiness: [{ date: '2026-11', v: 0.2 }, { date: '2026-11-04', v: 0.35 }] };
+  assert.deepEqual(model.happinessOn(doc, '2026-11-04'), { v: 0.35, score: 7 });
+  assert.equal(model.happinessOn(doc, '2026-11-05'), null);
+  assert.equal(model.happinessOn(doc, '2026-11'), null);
+});
+
+test('an older document (no scale 0–10, or signed10) is read through the timeline\'s own scale conversion (M2)', () => {
+  const HaedoData = require('../assets/data.js');
+  const old = { profile: { name: '옛 연표' }, events: [{ date: '2020-01', title: '사건', happiness: 7 }], happiness: [{ date: '2026-11-03', v: 7 }] };
+  assert.deepEqual(model.happinessOn(old, '2026-11-03'), { v: 0.4, score: 7 });
+  assert.deepEqual(model.happinessOn({ profile: {}, scale: 'signed10', happiness: [{ date: '2026-11-03', v: -6 }] }, '2026-11-03'), { v: -0.6, score: 2 });
+  // The same conversion the timeline editor runs when it opens the document (app.js migrateScale).
+  const migrated = HaedoData.toSignedScale(structuredClone(old));
+  assert.equal(migrated.scale, 'signed1'); assert.deepEqual(migrated.happiness, [{ date: '2026-11-03', v: 0.4 }]); assert.equal(migrated.events[0].happiness, 0.4);
+  assert.equal(old.happiness[0].v, 7, 'reading does not modify the document');
+});
+
+test('the timeline 행복도 is read from is the same on every device: most daily 행복도, then smallest ID, never a recovery copy (M3)', () => {
+  assert.equal(model.baseDocument({ current: 'd_z', docs: [{ id: 'd_z', name: '나중 문서' }, { id: 'd_b', name: '내 연표' },
+    { id: 'd_a', name: '내 연표 복구 사본 (2026-11-04 10:00)' }] }).id, 'd_b');
+  assert.equal(model.baseDocument({ docs: [{ id: 'd_a', name: '내 연표 복구 사본' }] }), null);
+  assert.equal(model.baseDocument({ docs: [] }), null);
+  const bodies = { d_a: { happiness: [] }, d_b: { happiness: [{ date: '2026-11-03', v: 0 }, { date: '2026-11', v: 0 }] }, d_c: { happiness: [{ date: '2026-11-01', v: 0 }, { date: '2026-11-02', v: 0 }] } };
+  const reg = { docs: [{ id: 'd_a', name: 'a' }, { id: 'd_b', name: 'b' }, { id: 'd_c', name: 'c' }, { id: 'd_gone', name: '본문 없음' }] };
+  assert.equal(model.baseDocument(reg, { read: id => bodies[id] || null }).id, 'd_c', 'two daily entries beat one (a month point is not daily)');
+  assert.equal(model.baseDocument({ docs: [{ id: 'd_gone', name: 'x' }, { id: 'd_z', name: 'y' }] }, { read: id => id === 'd_z' ? {} : null }).id, 'd_z', 'no body: skipped');
+});
+
+test('due habits follow their weekdays and start date; deleted habits and goals are left out', () => {
+  const habit = (id, days, created, checks = [], deleted) => ({ id, kind: 'habit', data: { title: id, days, created, checks, ...(deleted ? { deleted: true } : {}) } });
+  const items = [habit('weekdays', [1, 2, 3, 4, 5], '2026-11-01', ['2026-11-04']), habit('sunday', [0], '2026-11-01'), habit('later', [3], '2026-11-10'),
+    habit('gone', [3], '2026-11-01', [], true), { id: 'g', kind: 'goal', data: { title: 'g', progress: 10, target: '' } }];
+  const due = model.dueHabits(items, '2026-11-04'); // a Wednesday
+  assert.deepEqual(due.map(row => [row.item.id, row.checked]), [['weekdays', true]]);
+  assert.deepEqual(model.dueHabits(items, '2026-11-08').map(row => row.item.id), ['sunday']);
+  assert.deepEqual(model.dueHabits(items, 'bad'), []);
+});
+
+test('active goals: unfinished, target not before the period, nearest target first', () => {
+  const g = (id, progress, target, deleted) => ({ id, kind: 'goal', data: { title: id, progress, target, ...(deleted ? { deleted: true } : {}) } });
+  const items = [g('open', 30, ''), g('soon', 10, '2026-12-01'), g('past', 20, '2026-10-01'), g('done', 100, '2026-12-31'), g('gone', 5, '2026-12-02', true), g('next', 50, '2026-11-20')];
+  assert.deepEqual(model.activeGoals(items, '2026-11-01').map(item => item.id), ['next', 'soon', 'open']);
+  assert.deepEqual(model.activeGoals(items, null).map(item => item.id), ['past', 'next', 'soon', 'open']);
+});
+
+test('newest edit wins; a tie or an unreadable stamp goes to the server copy', () => {
+  assert.equal(model.localWins('2026-11-04T00:00:02Z', '2026-11-04T00:00:01Z'), true);
+  assert.equal(model.localWins('2026-11-04T00:00:01Z', '2026-11-04T00:00:01Z'), false);
+  assert.equal(model.localWins('2026-11-04T00:00:00Z', '2026-11-04T00:00:01Z'), false);
+  assert.equal(model.localWins('bad', '2026-11-04T00:00:01Z'), false);
+  assert.equal(model.localWins('2026-11-04T00:00:01Z', 'bad'), true);
+  assert.equal(model.keys('A').recovery, 'caeyeon_life_account_A_items_recovery');
+});
+
+test('the full backup\'s timeline part carries the recovery list next to the items', () => {
+  globalThis.HaedoLife ||= {};
+  const Full = require('../assets/life/full-backup.js');
+  const values = new Map([[model.keys('A').items, JSON.stringify([{ id: 'g', kind: 'goal', data: { title: 'g', progress: 1, target: '' } }])],
+    [model.keys('A').recovery, JSON.stringify([{ id: 'g', kind: 'goal', data: { title: 'g', progress: 9, target: '' }, updated: '2026-11-01T00:00:00Z', keptAt: '2026-11-02T00:00:00Z', reason: 'remote_newer' }])]]);
+  const snapshot = Full.timelineSnapshot({ platformData: model, localStorage: { getItem: key => values.get(key) ?? null }, uid: 'A', now: () => 'T' });
+  assert.equal(snapshot.format, 'haedo-platform-backup-v1');
+  assert.equal(snapshot.items.length, 1);
+  assert.deepEqual(snapshot.recovery.map(row => [row.id, row.data.progress, row.reason]), [['g', 9, 'remote_newer']]);
+  const empty = Full.timelineSnapshot({ platformData: model, localStorage: { getItem: () => null }, uid: 'A', now: () => 'T' });
+  assert.deepEqual(empty.recovery, []);
+});

@@ -214,8 +214,78 @@
       (states.includes("sync") || docs.some((d) => !d.syncedAt))
     )
       text = "기기에 저장했습니다. 서버와 동기화하고 있습니다.";
+    // Conflict losers are kept, not shown as items (newest edit wins, 2026-11-01). The sentence
+    // shows until the owner acknowledges it; the copies themselves are never removed.
+    const unseen = store.recoveryUnseen;
+    if (unseen) text += " 다른 기기와 겹친 변경 " + unseen + "개를 복구 사본으로 남겼습니다.";
     byId("syncMessage").textContent = text;
-    byId("syncMessage").closest(".p-status-line").dataset.idle = String(text === "서버와 기기 사본을 확인했습니다.");
+    const line = byId("syncMessage").closest(".p-status-line");
+    let actions = byId("recoveryActions");
+    if (!actions) {
+      actions = el("span", "p-status-actions");
+      actions.id = "recoveryActions";
+      const view = el("button", "p-text-link", "보기"), seen = el("button", "p-text-link", "확인");
+      view.type = seen.type = "button";
+      view.setAttribute("aria-label", "복구 사본 보기");
+      seen.setAttribute("aria-label", "복구 사본 알림 확인");
+      view.onclick = openRecovery;
+      seen.onclick = () => { store.acknowledgeRecovery(); render(); };
+      actions.append(view, seen);
+      line.append(actions);
+    }
+    actions.hidden = !unseen;
+    line.dataset.idle = String(text === "서버와 기기 사본을 확인했습니다.");
+  }
+  // The kept copies, newest first. Reviving adds a new item; the kept copy stays (and in backups).
+  function openRecovery() {
+    let dialog = byId("recoveryDialog");
+    if (!dialog) {
+      dialog = el("dialog", "p-dialog");
+      dialog.id = "recoveryDialog";
+      dialog.setAttribute("aria-labelledby", "recoveryDialogTitle");
+      const head = el("div", "p-dialog-head"), title = el("h2", "", "복구 사본"),
+        close = el("button", "p-icon-button");
+      title.id = "recoveryDialogTitle";
+      close.type = "button";
+      iconControl(close, "닫기", "close");
+      close.onclick = () => dialog.close();
+      head.append(title, close);
+      dialog.append(head, el("p", "", "다른 기기와 겹쳐 남긴 변경입니다. 지우지 않고 백업에도 포함됩니다."), el("ul", "p-recovery-list"));
+      dialog.addEventListener("click", (event) => {
+        if (event.target !== dialog) return;
+        const r = dialog.getBoundingClientRect();
+        if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
+      });
+      document.body.append(dialog);
+    }
+    const list = dialog.querySelector("ul");
+    list.replaceChildren();
+    for (const row of store.recovery) {
+      const item = el("li", "p-recovery-row"), when = new Date(row.keptAt || "");
+      item.append(
+        el("strong", "", row.data?.title || "제목 없음"),
+        el("span", "p-recovery-meta", (row.kind === "goal" ? "목표" : "습관") +
+          (Number.isNaN(when.getTime()) ? "" : " · " + when.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }))),
+      );
+      const revive = el("button", "p-text-link", "새 항목으로 되살리기");
+      revive.type = "button";
+      revive.onclick = () => {
+        try {
+          store.reviveRecovery(row.rid);
+          toast("새 항목으로 되살렸습니다. 복구 사본은 그대로 남습니다.");
+          render();
+        } catch (e) { toast(e.message); }
+      };
+      item.append(revive);
+      list.append(item);
+    }
+    if (!store.recovery.length) list.append(el("li", "p-recovery-row", "남긴 복구 사본이 없습니다."));
+    if (!dialog.open) {
+      dialog.showModal();
+      // Start on the title, not the close button, whose label would cover the text.
+      const title = byId("recoveryDialogTitle");
+      title.tabIndex = -1; title.focus();
+    }
   }
   function resolveButton(item, parent) {
     if (item.state !== "conflict") return;
@@ -693,14 +763,18 @@
             backup.items.some((item) => !model.validItem(item)))
         )
           throw new Error("목표·습관 백업 형식을 읽을 수 없습니다.");
+        if (backup.recovery !== undefined && (!Array.isArray(backup.recovery) || backup.recovery.some((item) => !model.validItem(item))))
+          throw new Error("복구 사본 형식을 읽을 수 없습니다.");
         const documents =
           HaedoData.isDocument(backup) || backup.docs?.length
             ? model.importDocs(localStorage, uid, backup)
             : [];
-        if (!documents.length && !backup.items?.length)
+        if (!documents.length && !backup.items?.length && !backup.recovery?.length)
           throw new Error("기록이 들어 있는 JSON 백업을 선택해 주세요.");
         for (const item of backup.items || [])
           store.change(null, item.kind, structuredClone(item.data));
+        if (backup.recovery?.length) store.restoreRecovery(backup.recovery);
+        if (Array.isArray(backup.recoveryDamaged)) store.restoreDamaged(backup.recoveryDamaged);
         render();
         toast("기기에 새 사본을 가져왔습니다.");
         if (documents.length)
@@ -751,5 +825,7 @@
     if (auth.user?.id === uid) sync();
   });
   render();
+  // The 일정 screen's "보기" opens this list here (habits.html#recovery).
+  if (location.hash === "#recovery") openRecovery();
   await sync();
 })();
