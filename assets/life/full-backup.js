@@ -142,7 +142,9 @@
     const reg = platformData.registry(localStorage, uid), keys = platformData.keys(uid);
     return { format: 'haedo-platform-backup-v1', exportedAt: now(),
       docs: reg.docs.map(doc => ({ id: doc.id, name: doc.name, data: JSON.parse(localStorage.getItem(keys.docs + doc.id)) })),
-      items: clone(platformData.read(localStorage, keys.items, [])) };
+      items: clone(platformData.read(localStorage, keys.items, [])),
+      // Losing sides of goal/habit conflicts (B2), kept with the items they belonged to.
+      recovery: clone(platformData.read(localStorage, keys.recovery, [])) };
   }
   function notIncluded(kind, count = null) { return { kind, ...NOT_INCLUDED[kind], ...(count === null ? {} : { count }) }; }
   // Each lister reads one list and returns its tasks and skipped rows. A list

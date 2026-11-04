@@ -5,6 +5,8 @@
     registry: prefix(uid) + "registry",
     docs: prefix(uid) + "doc_",
     items: prefix(uid) + "items",
+    // The side that lost a sync conflict (newest edit wins, 2026-11-01). Never cleared automatically.
+    recovery: prefix(uid) + "items_recovery",
   });
   function read(storage, key, fallback) {
     const value = storage.getItem(key);
@@ -204,6 +206,55 @@
       )
     );
   }
+  // 행복도: the timeline stores v in [-1, 1] (scale signed1); the schedule shows 0–10. The mapping
+  // is the timeline's own 0–10 → signed1 migration (app.js migrateScale): v = (n - 5) / 5.
+  function happinessScore(v) {
+    if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > 1) return null;
+    return Math.min(10, Math.max(0, Math.round(5 + 5 * v)));
+  }
+  function happinessValue(n) {
+    if (!Number.isInteger(n) || n < 0 || n > 10) throw new Error("행복도는 0부터 10 사이로 골라 주세요.");
+    return Math.round(((n - 5) / 5) * 100) / 100;
+  }
+  const isDay = (date) => typeof date === "string" && date.length === 10 && root.HaedoData.validDate(date);
+  // The day's own entry (date YYYY-MM-DD); month-level points of the timeline are not a day's input.
+  function happinessOn(doc, date) {
+    if (!isDay(date) || !Array.isArray(doc?.happiness)) return null;
+    const entry = doc.happiness.find((h) => h && h.date === date && Number.isFinite(h.v));
+    return entry ? { v: entry.v, score: happinessScore(entry.v) } : null;
+  }
+  // A copy of doc with that day's entry set (n) or removed (null). Other entries are untouched; an
+  // existing value that already shows as n (e.g. 0.35 shown as 7) is kept as it is.
+  function withHappiness(doc, date, n) {
+    if (!isDay(date)) throw new Error("행복도를 기록할 날짜를 확인해 주세요.");
+    if (!root.HaedoData.isDocument(doc)) throw new Error("연표 문서를 읽지 못했습니다. 원본은 보존했습니다.");
+    const next = structuredClone(doc);
+    next.happiness = Array.isArray(next.happiness) ? next.happiness : [];
+    const at = next.happiness.findIndex((h) => h && h.date === date);
+    if (n === null) { if (at >= 0) next.happiness.splice(at, 1); return next; }
+    const v = happinessValue(n);
+    if (at >= 0) {
+      if (happinessScore(next.happiness[at].v) !== n) next.happiness[at] = { ...next.happiness[at], v };
+    } else next.happiness.push({ date, v });
+    return next;
+  }
+  // Habits that apply on date (created on or before it, on one of its weekdays), with their check.
+  function dueHabits(items, date) {
+    if (!isDay(date)) return [];
+    return (items || []).filter((item) => item.kind === "habit" && !item.data.deleted && scheduled(item.data, date))
+      .map((item) => ({ item, checked: item.data.checks.includes(date) }));
+  }
+  // Goals not yet finished whose target date (if any) is not before the period start.
+  function activeGoals(items, from) {
+    return (items || []).filter((item) => item.kind === "goal" && !item.data.deleted && item.data.progress < 100 &&
+      (!item.data.target || !from || item.data.target >= from))
+      .sort((a, b) => (a.data.target || "9999").localeCompare(b.data.target || "9999") || a.data.title.localeCompare(b.data.title));
+  }
+  // Newest edit wins; a tie (or an unreadable stamp) goes to the server copy, as in the other engines.
+  function localWins(localStamp, remoteStamp) {
+    const local = Date.parse(localStamp || ""), remote = Date.parse(remoteStamp || "");
+    return Number.isFinite(local) && (!Number.isFinite(remote) || local > remote);
+  }
   const api = {
     keys,
     read,
@@ -219,6 +270,13 @@
     streak,
     toggleHabit,
     validItem,
+    happinessScore,
+    happinessValue,
+    happinessOn,
+    withHappiness,
+    dueHabits,
+    activeGoals,
+    localWins,
   };
   if (typeof module !== "undefined" && module.exports) {
     root.HaedoData = require("./data.js");

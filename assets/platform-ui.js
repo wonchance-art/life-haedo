@@ -214,6 +214,9 @@
       (states.includes("sync") || docs.some((d) => !d.syncedAt))
     )
       text = "기기에 저장했습니다. 서버와 동기화하고 있습니다.";
+    // Conflict losers are kept, not shown as items (newest edit wins, 2026-11-01).
+    const kept = store.recovery.length;
+    if (kept) text += " 다른 기기와 겹친 변경 " + kept + "개는 복구 사본으로 남겼습니다(백업에 포함).";
     byId("syncMessage").textContent = text;
     byId("syncMessage").closest(".p-status-line").dataset.idle = String(text === "서버와 기기 사본을 확인했습니다.");
   }
@@ -693,14 +696,17 @@
             backup.items.some((item) => !model.validItem(item)))
         )
           throw new Error("목표·습관 백업 형식을 읽을 수 없습니다.");
+        if (backup.recovery !== undefined && (!Array.isArray(backup.recovery) || backup.recovery.some((item) => !model.validItem(item))))
+          throw new Error("복구 사본 형식을 읽을 수 없습니다.");
         const documents =
           HaedoData.isDocument(backup) || backup.docs?.length
             ? model.importDocs(localStorage, uid, backup)
             : [];
-        if (!documents.length && !backup.items?.length)
+        if (!documents.length && !backup.items?.length && !backup.recovery?.length)
           throw new Error("기록이 들어 있는 JSON 백업을 선택해 주세요.");
         for (const item of backup.items || [])
           store.change(null, item.kind, structuredClone(item.data));
+        if (backup.recovery?.length) store.restoreRecovery(backup.recovery);
         render();
         toast("기기에 새 사본을 가져왔습니다.");
         if (documents.length)

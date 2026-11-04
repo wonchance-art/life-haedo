@@ -279,7 +279,10 @@ test("signing out during a pull never writes data into another account", async (
   await assert.rejects(pull);
   assert.deepEqual([...h.local.values], before);
 });
-test("conflicting goal changes stay local until a backed-up copy is chosen", async () => {
+// 2026-11-04 (B2, 11-01 owner rule): conflicts no longer wait for a manual choice; the newest edit
+// wins and the other side is kept (tests/platform-latest-wins.test.cjs). A conflicting server copy
+// that cannot be read is never applied: the local change stays unsent and nothing is kept or lost.
+test("a conflicting server copy that cannot be read leaves the local goal unsent and unchanged", async () => {
   let writes = 0;
   const h = storeHarness(async (_url, options) => {
     if (options.method) writes++;
@@ -291,7 +294,9 @@ test("conflicting goal changes stay local until a backed-up copy is chosen", asy
     progress: 10,
   });
   await h.store.flush();
-  assert.equal(h.store.items[0].state, "conflict");
+  assert.equal(h.store.items[0].state, "err");
+  assert.equal(h.store.items[0].data.progress, 10);
+  assert.equal(h.store.recovery.length, 0);
   assert.equal(writes, 0);
   h.logout();
 });
