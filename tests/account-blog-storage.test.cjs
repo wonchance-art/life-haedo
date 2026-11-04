@@ -28,6 +28,7 @@ function adapter() {
           if (method === 'get') return copy(store.get(key(value)));
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(value => JSON.parse(value));
+          if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
           assert.equal(mode, 'readwrite');
           const path = paths.get(name), id = method === 'delete' ? value : Array.isArray(path) ? path.map(field => value[field]) : value[path];
           const write = { name, method, id, value }; control.writes.push(copy(write));
@@ -36,7 +37,7 @@ function adapter() {
           if (method === 'delete') store.delete(key(id)); else store.set(key(id), copy(value)); control.afterWrite?.(write); return id;
         }
         return { done, abort, objectStore(name) { return {
-          get: value => request(name, 'get', value), getAll: () => request(name, 'getAll'), getAllKeys: () => request(name, 'getAllKeys'),
+          get: value => request(name, 'get', value), getAll: () => request(name, 'getAll'), getAllKeys: () => request(name, 'getAllKeys'), getKey: value => request(name, 'getKey', value),
           put: value => request(name, 'put', value), add: value => request(name, 'add', value), delete: value => request(name, 'delete', value)
         }; } };
       }

@@ -418,8 +418,8 @@
     // and stops on a damaged workspace.
     async function ownedWorkspace(store, workspaceId, meta) {
       if (account) await assertOwner(meta, workspaceId);
-      const bundle = await store.get(workspaceId);
-      if (!bundle) throw fault('workspace_not_found', '작업공간을 찾을 수 없습니다. 기존 백업과 작업공간 목록을 확인하세요.');
+      // The key alone (keyPath workspaceId): the bundle is neither read nor copied.
+      if (await store.getKey(workspaceId) === undefined) throw fault('workspace_not_found', '작업공간을 찾을 수 없습니다. 기존 백업과 작업공간 목록을 확인하세요.');
     }
     // A list row: identity, title and revision only (see ownedWorkspace).
     function listedWorkspace(bundle) {

@@ -63,6 +63,7 @@ function memoryAdapter() {
             async get(key) { return structuredClone(map.get(encode(key))); },
             async getAll() { return structuredClone([...map.values()]); },
             async getAllKeys() { return [...map.keys()].map(key => JSON.parse(key)); },
+            async getKey(key) { return map.has(encode(key)) ? structuredClone(key) : undefined; },
             put: value => requestWrite('put', value), add: value => requestWrite('add', value), delete: key => requestWrite('delete', key),
             index(field) { return { async getAll(value) { return structuredClone([...map.values()].filter(row => row[field] === value)); } }; }
           };

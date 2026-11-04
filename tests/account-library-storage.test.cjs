@@ -39,6 +39,7 @@ function adapter() {
           if (method === 'get') return copy(store.get(key(value)));
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(value => JSON.parse(value));
+          if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
           assert.equal(mode, 'readwrite'); const path = paths.get(name), id = method === 'delete' ? value : Array.isArray(path) ? path.map(field => value[field]) : value[path];
           control.writes.push({ name, method, id }); written++;
           if (control.fail?.({ name, method, id, value })) { control.fail = null; const error = new DOMException('quota', 'QuotaExceededError'); abort(error); throw error; }
@@ -46,7 +47,7 @@ function adapter() {
           else { if (method === 'add' && store.has(key(id))) throw new DOMException('duplicate', 'ConstraintError'); store.set(key(id), copy(value)); }
           control.afterWrite?.({ name, method, id, value }); return id;
         }
-        return { done, abort, objectStore(name) { return { get: value => run(name, 'get', value), getAll: () => run(name, 'getAll'), getAllKeys: () => run(name, 'getAllKeys'),
+        return { done, abort, objectStore(name) { return { get: value => run(name, 'get', value), getAll: () => run(name, 'getAll'), getAllKeys: () => run(name, 'getAllKeys'), getKey: value => run(name, 'getKey', value),
           put: value => run(name, 'put', value), add: value => run(name, 'add', value), delete: value => run(name, 'delete', value),
           index(field) { return { async getAll(value) { return (await run(name, 'getAll')).filter(row => row[field] === value); } }; } }; } };
       }
