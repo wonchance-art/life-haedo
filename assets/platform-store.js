@@ -466,6 +466,10 @@
       if (!Array.isArray(rows) || rows.some(row => !HaedoData.isDocument(row.data)))
         throw new Error("연표 응답 형식을 확인해야 합니다.");
       const k = model.keys(captured.uid), reg = model.registry(localStorage, captured.uid);
+      // The list is written back only when this pass changed it: this page's copy of the list can
+      // lag another tab's write (localStorage reaches other tabs later), and writing an unchanged
+      // stale copy would mark that tab's unsent edit as sent.
+      const listBefore = JSON.stringify(reg);
       const account = captured.project + "|" + captured.uid;
       for (const row of rows) {
         const meta = reg.docs.find(doc => doc.id === row.id);
@@ -481,7 +485,9 @@
           continue;
         }
         const body = JSON.stringify(row.data);
-        if (!meta || meta.syncedAt !== row.updated_at) localStorage.setItem(k.docs + row.id, body);
+        // Unchanged on the server since this device last saw it: nothing to write.
+        if (meta && meta.syncedAt === row.updated_at) { lastSynced.set(row.id, body); continue; }
+        localStorage.setItem(k.docs + row.id, body);
         lastSynced.set(row.id, body);
         const next = { id: row.id, name: row.name, updated: row.updated_at,
           syncedAt: row.updated_at, cloudAccount: account };
@@ -510,7 +516,7 @@
         ownedDocs.add(id); docQueue?.schedule(id);
       }
       savePending(captured);
-      localStorage.setItem(k.registry, JSON.stringify(reg));
+      if (JSON.stringify(reg) !== listBefore) localStorage.setItem(k.registry, JSON.stringify(reg));
       serverIds = new Set(rows.map(row => row.id)); baseMemo = null;
       serverSeen = rows.reduce((latest, row) => (row.updated_at || "") > latest ? row.updated_at : latest, "");
       // Changed documents this store wrote that the server does not have yet (new ones), and on the

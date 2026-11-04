@@ -3097,10 +3097,22 @@ async function cloudPushNow(docId){
   // Another tab's newer version of the open document waits for the editor: sent after it closes.
   if(!openDocCurrent(docId))return;
   let disk=null;try{disk=JSON.parse(localStorage.getItem(REG_KEY))?.docs?.find(d=>d?.id===docId)||null;}catch(e){disk=null;}
+  // The list on disk says another page sent it. A tab's copy of the list can lag (and be written
+  // back stale), so that is checked against the server: skipped only when the server already holds
+  // exactly this version.
   if(disk&&disk.syncedAt&&disk.updated===disk.syncedAt&&disk.syncedAt===reg.syncedAt){
+    const same=value=>JSON.stringify(HaedoData.canonical(value))===JSON.stringify(HaedoData.canonical(source));
     let body=null;try{body=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){body=null;}
-    if(body&&JSON.stringify(HaedoData.canonical(body))===JSON.stringify(HaedoData.canonical(source))){
-      reg.updated=reg.syncedAt;if(!saveRegistry())return;state('ok');return;
+    if(body&&same(body)){
+      try{
+        const r=await HaedoSync.timed((url,o)=>cloudFetch(url,()=>o))(cloudBase()+'?id=eq.'+encodeURIComponent(docId)+'&select=data,updated_at',{headers:cloudHeaders()});
+        const rows=r.ok?await r.json():null;
+        if(CLOUD!==cfg||cloudEpoch!==epoch)return;
+        const row=Array.isArray(rows)?rows[0]:null;
+        if(row&&row.updated_at===disk.syncedAt&&HaedoData.isDocument(row.data)&&same(migrateScale(structuredClone(row.data)))){
+          reg.updated=reg.syncedAt;if(!saveRegistry())return;state('ok');return;
+        }
+      }catch(e){/* not confirmed: sent below (the conditional write keeps both copies) */}
     }
   }
   if(reg.syncedAt&&reg.updated===reg.syncedAt){state('ok');return;}

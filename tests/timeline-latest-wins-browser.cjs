@@ -340,6 +340,17 @@ async function main() {
       assert.equal(patches() - before, 1, 'the timeline does not send the same version again');
       await timeline.waitForFunction(() => document.getElementById('saveStatus').textContent.trim() === '동기화됨', null, { timeout: 15000 });
     });
+    // Found while merging main (bb63ee2→791d719): another page wrote back a stale copy of the list
+    // (its view lagged), marking the timeline's unsent edit clean; the skip then trusted it.
+    await check('a stale clean copy of the list written back by another tab does not mark an unsent edit as sent', async ({ open, tables }) => {
+      const timeline = await open(); await openTimeline(timeline);
+      const stale = await timeline.evaluate(key => localStorage.getItem(key), regKey(accounts.a.id));   // clean, before the edit
+      await timelineEdit(timeline, '덮일 뻔한 편집');
+      const other = await open(); await openDay(other, '2026-11-03');
+      await other.evaluate(([key, value]) => localStorage.setItem(key, value), [regKey(accounts.a.id), stale]);   // the lagging tab writes its copy back
+      await settled(tables, data => data.events.some(e => e.title === '덮일 뻔한 편집'), 'the edit still goes out');
+    });
+
     await check('M1c: a timeline edit left unsent when its tab closed is sent by the 일정 page opened later', async ({ open, tables }) => {
       const timeline = await open(); await openTimeline(timeline);
       tables.fail = 'haedo_documents';

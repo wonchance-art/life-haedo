@@ -521,3 +521,15 @@ test('two timelines with the same name are told apart in the schedule label (min
   h.local.setItem(model.keys('A').registry, JSON.stringify({ docs: [{ id: 'd_1', name: '내 연표', updated: '2026-11-02T00:00:00.000Z' }, { id: 'd_2', name: '내 연표', updated: '2026-11-03T00:00:00.000Z' }], current: 'd_1' }));
   assert.match(h.store.base.name, /^내 연표 \(.+ 수정\)$/);
 });
+
+test('syncDocuments does not write the document list back when nothing changed (a lagging copy would hide another tab\'s edit)', async t => {
+  const cloud = server(), h = fixture(t, cloud);
+  const id = h.store.setHappiness('2026-11-03', 5); await h.store.uploadDocuments([id]);
+  const key = model.keys('A').registry, writes = [];
+  const setItem = h.local.setItem; h.local.setItem = (k, v) => { if (k === key) writes.push(v); return setItem(k, v); };
+  await h.store.syncDocuments();
+  assert.deepEqual(writes, [], 'unchanged: not written');
+  cloud.write('haedo_documents', { id, name: '내 연표', data: { ...h.doc(id), events: [{ date: '2026-11-02', title: '다른 기기' }] } });
+  await h.store.syncDocuments();
+  assert.equal(writes.length, 1, 'a real change is written');
+});
