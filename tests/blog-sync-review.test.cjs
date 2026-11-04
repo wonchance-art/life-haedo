@@ -335,3 +335,48 @@ test('receive: when the account check fails nothing from the early list is insta
   assert.equal((await list(b)).length, 0);
   assert.notEqual(b.sync.getStatus().lastError, null);
 });
+
+// #185 review minor 3: publishing and withdrawing keep the post's remoteRevision, so a list read
+// before this device withdrew (the early list, or any list racing the change) must not put the
+// older publication back.
+test('receive: a list row with an older publication never replaces the one this device recorded later', async () => {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time });
+  const doc = await save(a, await post({ title: '공개했다가 철회한 글' })); await a.sync.syncNow();
+  await a.sync.publish(a.ws, doc.id, { expectedLocalRevision: doc.revision });
+  const listed = a.remote.syncList, stale = await listed.call(a.remote);
+  assert.equal(stale[0].publication.active, true);
+  await a.sync.unpublish(a.ws, doc.id);
+  const withdrawn = (await a.storage.readBlogSyncState(a.ws, doc.id)).publication;
+  assert.equal(withdrawn.active, false);
+  a.remote.syncList = async () => structuredClone(stale);
+  await a.sync.syncNow();
+  const after = (await a.storage.readBlogSyncState(a.ws, doc.id)).publication;
+  assert.equal(after.active, false, 'the withdrawn post is not shown as public again');
+  assert.equal(after.revision, withdrawn.revision);
+  // A newer publication from another device is still taken from the list.
+  a.remote.syncList = listed;
+  const row = cloud.rows.get(stale[0].id); row.publication = { ...row.publication, active: true, revision: withdrawn.revision + 1 };
+  await a.sync.syncNow();
+  assert.equal((await a.storage.readBlogSyncState(a.ws, doc.id)).publication.revision, withdrawn.revision + 1);
+});
+// #185 review minor 2: a cycle that sends a deletion lists again after it (the early list still
+// names the deleted post, which would be received again), and a failed early list is requested again.
+test('receive: a cycle that sends a deletion lists again, so the deleted post is not received back', async () => {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time }), order = [];
+  const doc = await save(a, await post({ title: '지울 글' })); await a.sync.syncNow();
+  await a.sync.deletePost(a.ws, doc.id);
+  const listed = a.remote.syncList, removed = a.remote.deletePost;
+  a.remote.syncList = async () => { order.push('list'); return listed.call(a.remote); };
+  a.remote.deletePost = async (...args) => { order.push('delete'); return removed.apply(a.remote, args); };
+  await a.sync.syncNow();
+  assert.deepEqual(order, ['list', 'delete', 'list']);
+  assert.equal(cloud.rows.has(doc.id), false);
+  assert.equal((await list(a)).length, 0, 'the deleted post is not received again from the early list');
+});
+test('receive: a failed early list is requested again after the account check', async () => {
+  const { b, docs } = await seeded(2, 0), listed = b.remote.syncList; let calls = 0;
+  b.remote.syncList = async () => { if (!calls++) throw Object.assign(Error('offline'), { code: 'network_error' }); return listed.call(b.remote); };
+  assert.equal((await b.sync.syncNow()).state, 'synced');
+  assert.equal(calls, 2);
+  assert.equal((await list(b)).length, docs.length);
+});

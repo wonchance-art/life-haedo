@@ -447,10 +447,15 @@
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
     }
+    // Publishing and withdrawing keep the post's remoteRevision; only the publication's own revision
+    // grows. A list read before this device's later publish or withdrawal (2026-11-04: the list is
+    // requested together with the account check) carries an older publication: it is not taken.
+    const publicRevision = value => value?.revision || 0;
     async function refreshPublication(ws, id, head) {
       return serial(ws, id, async () => {
         const c = context(ws, id), state = await readState(c);
-        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending)
+        if (state?.remoteId === head.id && state.remoteRevision === head.revision && canonical(state.publication ?? null) !== canonical(head.publication ?? null) && !state.publishPending && !state.unpublishPending &&
+            publicRevision(head.publication) >= publicRevision(state.publication))
           await writeState(c, state, { publication: head.publication ?? null });
       });
     }

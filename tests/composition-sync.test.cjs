@@ -349,7 +349,7 @@ test('originals edited on this device during a task are checked with the server 
 // 2026-11-04 independent review M1: the stored originals status can stay "synced" after a local
 // originals write that raised the bundle revision (material-continuity install). Storage then
 // refuses the row; the pass checks with the server once more and retries instead of failing.
-test('a row refused because the stored originals status was stale is retried after one more originals check', async t => {
+test('a row refused because the stored originals status was stale is retried after one more originals check', { timeout: 5000 }, async t => {
   const f = fixture(t); let refusals = 0;
   f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };
   f.state.applyOverride = row => {
@@ -363,7 +363,10 @@ test('a row refused because the stored originals status was stale is retried aft
   // A second refusal in the same task is not retried again.
   const stuck = fixture(t); let tries = 0;
   stuck.state.row = { ...stuck.state.row, revision: 2, data: { ...copy(stuck.state.local), revision: 2 } };
-  stuck.state.applyOverride = () => { tries++; throw Object.assign(Error('pending'), { code: 'composition_source_pending' }); };
+  // Without the one-retry bound the pass would retry at once, forever, without yielding to timers
+  // (so a timeout alone could not end it): the sixth refusal disposes the engine, which ends the
+  // pass with request_cancelled and fails the assertions below instead of hanging the run.
+  stuck.state.applyOverride = () => { if (++tries > 5) stuck.manager.dispose(); throw Object.assign(Error('pending'), { code: 'composition_source_pending' }); };
   await assert.rejects(stuck.manager.syncNow(WORKSPACE), error => error.code === 'composition_source_pending');
   assert.equal(tries, 2);
 });
