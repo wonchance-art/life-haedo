@@ -1942,3 +1942,32 @@ test('sign-in adoption copies every account-less workspace once, keeps originals
   const again = await account.adoptUnownedWorkspaces();
   assert.deepEqual(again.adopted.map(row => row.from), [original.workspaceId]); assert.equal((await account.listWorkspaces()).length, 3);
 });
+
+function statusFixture() {
+  const adapter = memoryAdapter();
+  const storage = createStorage({ idb: adapter.idb, core: Core, workbench: Workbench, sourceFolders: require('../assets/life/source-folders.js'), collection: require('../assets/life/collection.js'), channelFactory: null,
+    account: { projectUrl: 'https://anonymous-test.supabase.co', userId: 'account-a' } });
+  return { ...adapter, storage };
+}
+// 2026-11-04 (kept from the status-read experiment, which was not adopted): a workspace whose content
+// is corrupted stops every step that reads its status or content or writes it: status reads, sync upload,
+// applying originals, sending compositions and backup export. Nothing stored is replaced or removed.
+test('a corrupted workspace stops status reads, upload, apply, composition send and backup export, changing nothing', async t => {
+  const { storage, rows } = statusFixture(); t.after(() => storage.close());
+  const good = await initialImport(storage), binding = await uploaded(storage, good);
+  assert.equal((await storage.bindCompositionSync(good.workspaceId, binding)).enabled, true);
+  await storage.bindLibraryMetaSync(good.workspaceId, binding);
+  const key = JSON.stringify(good.workspaceId), stored = rows.get('bundles');
+  const corrupted = structuredClone(stored.get(key));
+  corrupted.sourceVersions[0].contentHash = 'not-a-hash';
+  stored.set(key, corrupted);
+  const rawBefore = structuredClone(rows);
+  const corrupt = error => { assert.equal(error.code, 'invalid_hash'); return true; };
+  for (const read of ['getSyncState', 'getCompositionState', 'getLibraryMetaState']) await assert.rejects(storage[read](good.workspaceId), corrupt, read);
+  await assert.rejects(storage.read(good.workspaceId), corrupt);
+  await assert.rejects(storage.prepareSyncUpload(good.workspaceId, binding), corrupt);
+  await assert.rejects(storage.applySyncRemote(good.workspaceId, binding, serverRow(good, 2)), corrupt);
+  await assert.rejects(storage.prepareCompositionUpload(good.workspaceId, binding), corrupt);
+  await assert.rejects(storage.readLibraryBackupSnapshot(good.workspaceId), corrupt);
+  assert.deepEqual(rows, rawBefore, 'no stored record was replaced or removed');
+});

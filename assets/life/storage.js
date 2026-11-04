@@ -806,6 +806,54 @@
       }
       return result;
     }
+    // 목표·습관 충돌의 진 쪽(복구 사본) 목록, 계정 하나에 하나(B2 검수 M4, 2026-11-04). 기기에서는
+    // HaedoPlatformStore가 localStorage에 두고, 일정 화면이 이 계정 문서와 서로 합친다. 기존 범용
+    // life_account_documents 동기화로 계정의 다른 기기에 간다. 항목은 rid로 구분하며 더하기만 한다.
+    const platformRecoveryKey = () => `platformRecovery:${accountKey}:items`;
+    function validatePlatformRecovery(value) {
+      const bad = () => fault('invalid_platform_recovery', '복구 사본 목록을 확인할 수 없습니다. 기존 자료는 보존했습니다.');
+      onlyFields(value, ['revision', 'items'], 'invalid_platform_recovery'); requireRevision(value.revision);
+      if (!Array.isArray(value.items) || value.items.length > 5000) throw bad();
+      for (const item of value.items) {
+        onlyFields(item, ['rid', 'id', 'kind', 'data', 'updated', 'keptAt', 'reason'], 'invalid_platform_recovery');
+        if (typeof item.rid !== 'string' || !item.rid || item.rid.length > 300 || typeof item.id !== 'string' || !item.id || item.id.length > 300 ||
+          !['goal', 'habit'].includes(item.kind) || !plain(item.data) || typeof item.data.title !== 'string' ||
+          (item.updated !== null && typeof item.updated !== 'string') || typeof item.keptAt !== 'string' || typeof item.reason !== 'string') throw bad();
+      }
+      if (new TextEncoder().encode(stablePayload(value)).length > 2 * 1024 * 1024)
+        throw fault('platform_recovery_too_large', '복구 사본 목록이 너무 큽니다. 기존 자료는 보존했습니다.');
+    }
+    async function platformRecoveryValue(meta) {
+      const row = await meta.get(platformRecoveryKey());
+      const value = row === undefined ? { revision: 0, items: [] } : row.value;
+      validatePlatformRecovery(value);
+      return value;
+    }
+    function platformRecoveryScope() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 복구 사본을 확인해 주세요.');
+    }
+    async function readPlatformRecovery() {
+      platformRecoveryScope();
+      return transaction(['meta'], 'readonly', async tx => clone(await platformRecoveryValue(tx.objectStore('meta'))));
+    }
+    // Adds copies not kept yet (by rid). Never removes or replaces one. Returns how many were added.
+    async function addPlatformRecovery(items) {
+      platformRecoveryScope();
+      if (!Array.isArray(items)) throw fault('invalid_platform_recovery', '복구 사본 목록을 확인할 수 없습니다.');
+      const added = await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), previous = await platformRecoveryValue(meta);
+        const rids = new Set(previous.items.map(item => item.rid)), add = [];
+        for (const item of items) if (!rids.has(item?.rid)) { rids.add(item.rid); add.push(clone(item)); }
+        if (!add.length) return 0;
+        const value = { revision: previous.revision + 1, items: [...previous.items, ...add] };
+        validatePlatformRecovery(value);
+        await meta.put({ key: platformRecoveryKey(), value });
+        return add.length;
+      });
+      if (added) accountDocChanged(platformRecoveryKey());
+      return added;
+    }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
     }
@@ -4876,7 +4924,9 @@
       discoverySettings: { read: (meta, ws) => discoverySettingsValue(meta, ws), event: 'discovery_settings_changed', recovery: false },
       discoveryLanguageSettings: { read: (meta, ws) => discoveryLanguageSettingsValue(meta, ws), event: 'discovery_language_settings_changed', recovery: false },
       discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true },
-      discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true }
+      discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true },
+      // Items are only added (union by rid), so merging both sides never loses one.
+      platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false }
     });
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
@@ -5027,8 +5077,8 @@
     // release skipped rows of kinds it did not know and still moved its cursor
     // past them, so those rows would never come again (a restored-copy marker
     // is written once). Raise this number whenever a prefix is added above.
-    // 1: the 2026-11-01 kinds. 2: adds restored-copy.
-    const ACCOUNT_DOC_SCHEMA = 2;
+    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery.
+    const ACCOUNT_DOC_SCHEMA = 3;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
     // reads the change list again from the start. Rows it already has return
@@ -5195,7 +5245,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readAnnualPlan, saveAnnualPlan,
+      readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,

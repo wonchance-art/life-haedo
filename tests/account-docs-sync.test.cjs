@@ -500,7 +500,7 @@ test('a device that synced on an older release, which skipped restored-copy mark
   await engine(older, server, accountA, { now }).sync.syncNow();
   // That release kept no schema mark (this storage records one with the first cursor).
   const schemaRow = JSON.stringify(`accountDocSchema:${accountKey(accountA)}`);
-  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 2); ipad.rows.get('meta').delete(schemaRow);
+  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 3); ipad.rows.get('meta').delete(schemaRow);
   assert.equal((await b.readDiscoverySettings(w)).autoRefresh, true);
   assert.equal((await b.readAccountDocRecord(key)).exists, false, 'the older release skipped the marker');
   const passed = await b.readAccountDocCursor();
@@ -520,15 +520,15 @@ test('a device that synced on an older release, which skipped restored-copy mark
   // Once only: later passes continue from the stored cursor.
   await updated.sync.syncNow();
   assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1);
-  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 3, rewound: false });
   assert.ok((await b.readAccountDocCursor()) >= passed);
   // Per account: another account on the same device has its own mark and cursor; returning to A does not re-read.
   const other = ipad.base.forAccount(accountB);
-  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 3, rewound: false });
   assert.equal(await other.readAccountDocCursor(), null);
   assert.equal(ipad.rows.get('meta').has(JSON.stringify(`accountDocSchema:${accountKey(accountB)}`)), false);
   const back = ipad.base.forAccount(accountA);
-  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 2, rewound: false });
+  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 3, rewound: false });
   assert.ok((await back.readAccountDocCursor()) >= passed);
 });
 
@@ -541,6 +541,8 @@ test('the account document schema number is pinned to its document kinds', t => 
     1: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence'] },
     2: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] },
+    3: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading', 'platformRecovery'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] }
   };
   const local = device(); t.after(() => local.base.close());
@@ -550,4 +552,23 @@ test('the account document schema number is pinned to its document kinds', t => 
     'the document kinds changed: raise ACCOUNT_DOC_SCHEMA in storage.js and record the new set here');
   const numbers = Object.keys(KINDS).map(Number);
   assert.equal(schema, Math.max(...numbers), 'the newest recorded schema is the one in use');
+});
+
+// B2: goal/habit recovery copies (platformRecovery) merge by rid: two devices adding at the same
+// time both keep both, and neither side's copy is replaced or removed.
+test('platformRecovery: copies two devices add before syncing are both kept on both devices', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), b = ipad.base.forAccount(accountA);
+  const copy = (rid, title, keptAt) => ({ rid, id: 'g_' + rid, kind: 'goal', data: { title, progress: 10, target: '' }, updated: null, keptAt, reason: 'remote_newer' });
+  await a.addPlatformRecovery([copy('mac-1', '맥 사본', '2026-11-04T01:00:00.000Z')]);
+  await b.addPlatformRecovery([copy('ipad-1', '아이패드 사본', '2026-11-04T02:00:00.000Z')]);
+  const now = clock();
+  const macSync = engine(a, server, accountA, { now }), ipadSync = engine(b, server, accountA, { now });
+  await macSync.sync.syncNow(); now.advance(); await ipadSync.sync.syncNow(); now.advance(); await macSync.sync.syncNow();
+  for (const store of [a, b]) assert.deepEqual((await store.readPlatformRecovery()).items.map(item => item.rid).sort(), ['ipad-1', 'mac-1']);
+  // A later addition on one side reaches the other; nothing is removed.
+  await b.addPlatformRecovery([copy('ipad-2', '아이패드 사본 2', '2026-11-04T03:00:00.000Z')]);
+  now.advance(); await ipadSync.sync.syncNow(); now.advance(); await macSync.sync.syncNow();
+  assert.deepEqual((await a.readPlatformRecovery()).items.map(item => item.rid).sort(), ['ipad-1', 'ipad-2', 'mac-1']);
 });
