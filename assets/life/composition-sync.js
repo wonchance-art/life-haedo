@@ -90,9 +90,12 @@
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
-      if (ctx.reuseSource && ctx.sourceChecked && ready(initial, minimum)) ctx.sourceSkipped = true;
+      // A skipped check reuses the state just read: nothing is awaited between that read and here, so a
+      // second read would return the same record (2026-11-04: one status read less per skipped check).
+      const skip = ctx.reuseSource && ctx.sourceChecked && ready(initial, minimum);
+      if (skip) ctx.sourceSkipped = true;
       else { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
-      const current = await sourceSync.getState(ctx.workspaceId); guard(ctx);
+      const current = skip ? initial : await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!ready(current, minimum)) throw fault('composition_source_pending');
       ctx.sourceChecked = true;
       return current;
