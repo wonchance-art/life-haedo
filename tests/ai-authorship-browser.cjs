@@ -342,11 +342,14 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       assert.deepEqual((await editorState(page)).ops, before.ops);
     });
     let savedId;
-    await check('① save, read without marks, reopen with marks; ⑧ public copy has no mark', async () => {
+    await check('① save, read with exactly the marked text shown, reopen with marks; ⑧ public copy has no mark', async () => {
       const expected = (await editorState(page)).ops;
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
       await page.locator('.photo-article').waitFor();
-      assert.equal(await page.locator('.photo-article .photo-ai-text').count(), 0, 'reading does not render marks');
+      // Owner decision 2026-11-04: the owner's reading view shows exactly the marked text (the public copy never does).
+      const markedPieces = expected.filter(op => typeof op.insert === 'string' && op.attributes?.author === 'ai').flatMap(op => op.insert.split('\n').filter(Boolean));
+      assert.deepEqual(await page.locator('.photo-article .blog-ai-text').allTextContents(), markedPieces, 'reading renders exactly the marked text as AI text');
+      assert.equal(await page.locator('.photo-article .photo-ai-text').count(), 0, 'the editor-only class is not reused in reading');
       const doc = await durable(page, d => d.status === 'saved', 'saved post');
       savedId = doc.id;
       assert.deepEqual(doc.ops, expected);
@@ -367,6 +370,35 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await page.locator('.ql-editor .photo-ai-text').first().waitFor();
       assert.deepEqual((await editorState(page)).ops, expected);
       await shot('reopened');
+    });
+    if (label === 'desktop') await check('the HTML reading file carries no AI mark while the reading view shows every marked run', async () => {
+      // Owner decision 2026-11-04: marks show in the owner's reading view; the exported HTML file is out of that scope.
+      const title = 'HTML 내보내기 AI 표시 글';
+      await page.evaluate(async title => {
+        const s = HaedoLife.Shell.storage, P = HaedoLife.PhotoPost, C = HaedoLife.Core, ws = await s.getActive(), doc = P.create(C.id);
+        doc.status = 'saved'; doc.title = title;
+        doc.ops = [{ insert: '내 문장 ' }, { insert: '일반 AI 문장', attributes: { author: 'ai' } }, { insert: ' ' },
+          { insert: '굵은 밑줄 AI 문장', attributes: { author: 'ai', bold: true, underline: true } }, { insert: ' ' },
+          { insert: '링크 AI 문장', attributes: { author: 'ai', link: 'https://example.org/ai-mark' } }, { insert: '\n' },
+          { insert: '제목 AI 문장', attributes: { author: 'ai' } }, { insert: '\n', attributes: { header: 1 } }];
+        await s.savePhotoPost(ws, doc, 0);
+      }, title);
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      await page.locator('#homePosts').getByRole('button', { name: title, exact: true }).first().click();
+      await page.locator('.photo-article').waitFor();
+      const marked = ['일반 AI 문장', '굵은 밑줄 AI 문장', '링크 AI 문장', '제목 AI 문장'];
+      assert.deepEqual(await page.locator('.photo-article .blog-ai-text').allTextContents(), marked, 'the reading view marks each run');
+      const menu = page.locator('.photo-more');
+      if (!await menu.evaluate(n => n.open)) await menu.locator(':scope > summary').click();
+      const waiting = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'HTML 읽기 파일 받기', exact: true }).click();
+      const html = await fs.readFile(await (await waiting).path(), 'utf8');
+      for (const needle of ['blog-ai-text', 'author', 'ai-text']) assert.equal(html.includes(needle), false, 'the HTML file contains no ' + needle);
+      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      assert(text.includes('내 문장 일반 AI 문장 굵은 밑줄 AI 문장 링크 AI 문장'), 'the body text itself is unchanged');
+      assert(text.includes('제목 AI 문장'), 'the heading text is unchanged');
+      assert.equal((html.match(/<h[1-6][^>]*>\s*제목 AI 문장\s*<\/h[1-6]>/g) || []).length, 1, 'the heading keeps its heading element');
     });
     if (label === 'desktop') await check('two-device sync: the other device receives the exact marks', async () => {
       const other = await makeContext(browser, server, 'ai-' + label + '-b', accounts.a, { viewport });

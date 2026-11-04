@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>워커 소스 주 스레드 실행면</title>
+<script>
+'use strict';
+// 워커 소스의 globalThis.postMessage 응답을 부모 실행면으로 넘긴다. 다른 출처로 보내지 않는다.
+window.postMessage = message => { if (typeof window.__deliver === 'function') window.__deliver(message); };
+</script>
+</head>
+<body></body>
+</html>

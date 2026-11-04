@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "set": "dev",
+  "definition": "관련 문단(gold): 기준 문단과 다른 문서에 있으면서, 같은 질문·같은 종류의 경험·같은 구체 주제(문단의 중심 논점)를 다른 표현으로 다룬 문단. 같은 넓은 분야(예: 둘 다 운동, 둘 다 책)에 속하거나 단어가 겹칠 뿐인 문단은 관련이 아니다. 같은 문서의 문단과 정규화 본문이 같은 복제는 후보에서 제외하므로 gold가 될 수 없다. 관련 문단이 없는 기준 문단(unrelated seed): 그 중심 논점을 다루는 다른 문서 문단이 이 세트에 없는 문단.",
+  "paragraphRule": "'문서 id:번호' — 빈 줄로 나눈 문단의 0부터 센 번호",
+  "relatedSeeds": [
+    {
+      "seed": "D01:1",
+      "related": [
+        "D02:0",
+        "D02:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D03:1",
+      "related": [
+        "D04:0",
+        "D04:1"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "D03:4",
+      "related": [
+        "D04:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "D05:1",
+      "related": [
+        "D06:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D05:2",
+      "related": [
+        "D06:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "D05:3",
+      "related": [
+        "D06:0"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D07:0",
+      "related": [
+        "D08:0"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D07:1",
+      "related": [
+        "D08:1"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "D07:2",
+      "related": [
+        "D08:3"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "D07:3",
+      "related": [
+        "D08:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D09:1",
+      "related": [
+        "D10:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "D09:2",
+      "related": [
+        "D10:0"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D09:3",
+      "related": [
+        "D10:1"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "D12:0",
+      "related": [
+        "D13:0"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D12:1",
+      "related": [
+        "D13:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "D12:2",
+      "related": [
+        "D13:2"
+      ],
+      "type": "topic"
+    }
+  ],
+  "unrelatedSeeds": [
+    "D01:2",
+    "D01:3",
+    "D01:4",
+    "D09:4",
+    "D11:0",
+    "D11:1",
+    "D11:3",
+    "D12:3",
+    "D14:0",
+    "D14:1"
+  ],
+  "counts": {
+    "relatedSeeds": 16,
+    "goldPairs": 18,
+    "unrelatedSeeds": 10
+  },
+  "labeler": "말뭉치를 쓴 구현 작업자 1인이 함께 표시했다. 독립 표시자는 없다."
+}

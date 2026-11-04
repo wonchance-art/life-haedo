@@ -1,0 +1,1749 @@
+{
+  "set": "dev",
+  "evaluatorSHA256": "f5bbcd12e933abaf47d1bcffc9f83f9ca0bba3e741869572cc6dcc87e9348d60",
+  "candidateSHA256": "a3bdc3a22123f7b130d5285a47141d9ff05e860d9a52891d8334b803414f8f5b",
+  "selectionRule": "variant별 개발 오탐률 ≤ 0.10에서 Hit@3 최대·동률은 높은 임계값, 변형은 Hit@3 최대·동률은 P→TP→W2",
+  "chosen": {
+    "variant": "TP",
+    "threshold": 0.61
+  },
+  "variants": {
+    "P": {
+      "selectedThreshold": 0.64,
+      "dev": {
+        "hit3": 0.125,
+        "hits": 2,
+        "relatedSeeds": 16,
+        "mrr": 0.125,
+        "goldRecall3": 0.1111,
+        "returnedPrecision": 1,
+        "returnedOnRelated": 2,
+        "emptyOnRelated": 14,
+        "unrelatedFP": 0.1,
+        "unrelatedWithOutput": 1,
+        "unrelatedSeeds": 10
+      },
+      "grid": [
+        {
+          "threshold": 0.2,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.21,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.22,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.23,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.24,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.25,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.26,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.27,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.28,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.29,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.3,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.31,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.32,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.33,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.34,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.35,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.36,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.37,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.38,
+          "hit3": 0.75,
+          "unrelatedFP": 0.8
+        },
+        {
+          "threshold": 0.39,
+          "hit3": 0.75,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.4,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.41,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.42,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.43,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.44,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.45,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.46,
+          "hit3": 0.5625,
+          "unrelatedFP": 0.6
+        },
+        {
+          "threshold": 0.47,
+          "hit3": 0.5,
+          "unrelatedFP": 0.5
+        },
+        {
+          "threshold": 0.48,
+          "hit3": 0.5,
+          "unrelatedFP": 0.5
+        },
+        {
+          "threshold": 0.49,
+          "hit3": 0.5,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.5,
+          "hit3": 0.4375,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.51,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.52,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.53,
+          "hit3": 0.1875,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.54,
+          "hit3": 0.125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.55,
+          "hit3": 0.125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.56,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.57,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.58,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.59,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.6,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.61,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.62,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.63,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.64,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.65,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.66,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.67,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.68,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.69,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.7,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.71,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.72,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.73,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.74,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.75,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.76,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.77,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.78,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.79,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.8,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.81,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.82,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.83,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.84,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.85,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.86,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.87,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.88,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.89,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.9,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.91,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.92,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.93,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.94,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.95,
+          "hit3": 0,
+          "unrelatedFP": 0
+        }
+      ],
+      "perSeed": [
+        {
+          "seed": "D01:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D03:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D03:4",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:2",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:0",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:2",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D12:0",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:0"
+          ]
+        },
+        {
+          "seed": "D12:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D12:2",
+          "type": "topic",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:2"
+          ]
+        }
+      ],
+      "unrelated": [
+        {
+          "seed": "D01:2",
+          "returned": []
+        },
+        {
+          "seed": "D01:3",
+          "returned": [
+            "D02:3"
+          ]
+        },
+        {
+          "seed": "D01:4",
+          "returned": []
+        },
+        {
+          "seed": "D09:4",
+          "returned": []
+        },
+        {
+          "seed": "D11:0",
+          "returned": []
+        },
+        {
+          "seed": "D11:1",
+          "returned": []
+        },
+        {
+          "seed": "D11:3",
+          "returned": []
+        },
+        {
+          "seed": "D12:3",
+          "returned": []
+        },
+        {
+          "seed": "D14:0",
+          "returned": []
+        },
+        {
+          "seed": "D14:1",
+          "returned": []
+        }
+      ]
+    },
+    "TP": {
+      "selectedThreshold": 0.61,
+      "dev": {
+        "hit3": 0.3125,
+        "hits": 5,
+        "relatedSeeds": 16,
+        "mrr": 0.3125,
+        "goldRecall3": 0.2778,
+        "returnedPrecision": 0.625,
+        "returnedOnRelated": 8,
+        "emptyOnRelated": 9,
+        "unrelatedFP": 0.1,
+        "unrelatedWithOutput": 1,
+        "unrelatedSeeds": 10
+      },
+      "grid": [
+        {
+          "threshold": 0.2,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.21,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.22,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.23,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.24,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.25,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.26,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.27,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.28,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.29,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.3,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.31,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.32,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.33,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.34,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.35,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.36,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.37,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.38,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.39,
+          "hit3": 0.8125,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.4,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.41,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.42,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.43,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.44,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.45,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.46,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.47,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.48,
+          "hit3": 0.625,
+          "unrelatedFP": 0.6
+        },
+        {
+          "threshold": 0.49,
+          "hit3": 0.5625,
+          "unrelatedFP": 0.5
+        },
+        {
+          "threshold": 0.5,
+          "hit3": 0.5625,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.51,
+          "hit3": 0.5625,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.52,
+          "hit3": 0.5,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.53,
+          "hit3": 0.5,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.54,
+          "hit3": 0.5,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.55,
+          "hit3": 0.4375,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.56,
+          "hit3": 0.4375,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.57,
+          "hit3": 0.4375,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.58,
+          "hit3": 0.375,
+          "unrelatedFP": 0.2
+        },
+        {
+          "threshold": 0.59,
+          "hit3": 0.375,
+          "unrelatedFP": 0.2
+        },
+        {
+          "threshold": 0.6,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.2
+        },
+        {
+          "threshold": 0.61,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.62,
+          "hit3": 0.25,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.63,
+          "hit3": 0.25,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.64,
+          "hit3": 0.25,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.65,
+          "hit3": 0.25,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.66,
+          "hit3": 0.25,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.67,
+          "hit3": 0.1875,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.68,
+          "hit3": 0.1875,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.69,
+          "hit3": 0.1875,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.7,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.71,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.72,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.73,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.74,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.75,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.76,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.77,
+          "hit3": 0,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.78,
+          "hit3": 0,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.79,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.8,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.81,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.82,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.83,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.84,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.85,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.86,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.87,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.88,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.89,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.9,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.91,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.92,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.93,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.94,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.95,
+          "hit3": 0,
+          "unrelatedFP": 0
+        }
+      ],
+      "perSeed": [
+        {
+          "seed": "D01:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "D02:2"
+          ]
+        },
+        {
+          "seed": "D03:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D03:4",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:2",
+          "type": "topic",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D06:2"
+          ]
+        },
+        {
+          "seed": "D05:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": [
+            "D06:2"
+          ]
+        },
+        {
+          "seed": "D07:0",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:2",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:2",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D10:0"
+          ]
+        },
+        {
+          "seed": "D09:3",
+          "type": "topic",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D10:1"
+          ]
+        },
+        {
+          "seed": "D12:0",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:0"
+          ]
+        },
+        {
+          "seed": "D12:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D12:2",
+          "type": "topic",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:2",
+            "D13:0"
+          ]
+        }
+      ],
+      "unrelated": [
+        {
+          "seed": "D01:2",
+          "returned": []
+        },
+        {
+          "seed": "D01:3",
+          "returned": [
+            "D02:3"
+          ]
+        },
+        {
+          "seed": "D01:4",
+          "returned": []
+        },
+        {
+          "seed": "D09:4",
+          "returned": []
+        },
+        {
+          "seed": "D11:0",
+          "returned": []
+        },
+        {
+          "seed": "D11:1",
+          "returned": []
+        },
+        {
+          "seed": "D11:3",
+          "returned": []
+        },
+        {
+          "seed": "D12:3",
+          "returned": []
+        },
+        {
+          "seed": "D14:0",
+          "returned": []
+        },
+        {
+          "seed": "D14:1",
+          "returned": []
+        }
+      ]
+    },
+    "W2": {
+      "selectedThreshold": 0.64,
+      "dev": {
+        "hit3": 0.125,
+        "hits": 2,
+        "relatedSeeds": 16,
+        "mrr": 0.125,
+        "goldRecall3": 0.1111,
+        "returnedPrecision": 1,
+        "returnedOnRelated": 2,
+        "emptyOnRelated": 14,
+        "unrelatedFP": 0.1,
+        "unrelatedWithOutput": 1,
+        "unrelatedSeeds": 10
+      },
+      "grid": [
+        {
+          "threshold": 0.2,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.21,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.22,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.23,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.24,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.25,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.26,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.27,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.28,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.29,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.3,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.31,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.32,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.33,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.34,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.35,
+          "hit3": 0.75,
+          "unrelatedFP": 1
+        },
+        {
+          "threshold": 0.36,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.37,
+          "hit3": 0.75,
+          "unrelatedFP": 0.9
+        },
+        {
+          "threshold": 0.38,
+          "hit3": 0.75,
+          "unrelatedFP": 0.8
+        },
+        {
+          "threshold": 0.39,
+          "hit3": 0.75,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.4,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.41,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.42,
+          "hit3": 0.6875,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.43,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.44,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.45,
+          "hit3": 0.625,
+          "unrelatedFP": 0.7
+        },
+        {
+          "threshold": 0.46,
+          "hit3": 0.5625,
+          "unrelatedFP": 0.6
+        },
+        {
+          "threshold": 0.47,
+          "hit3": 0.5,
+          "unrelatedFP": 0.5
+        },
+        {
+          "threshold": 0.48,
+          "hit3": 0.5,
+          "unrelatedFP": 0.5
+        },
+        {
+          "threshold": 0.49,
+          "hit3": 0.5,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.5,
+          "hit3": 0.4375,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.51,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.4
+        },
+        {
+          "threshold": 0.52,
+          "hit3": 0.3125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.53,
+          "hit3": 0.1875,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.54,
+          "hit3": 0.125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.55,
+          "hit3": 0.125,
+          "unrelatedFP": 0.3
+        },
+        {
+          "threshold": 0.56,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.57,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.58,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.59,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.6,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.61,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.62,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.63,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.64,
+          "hit3": 0.125,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.65,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.66,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.67,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.68,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.69,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.7,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.71,
+          "hit3": 0.0625,
+          "unrelatedFP": 0.1
+        },
+        {
+          "threshold": 0.72,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.73,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.74,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.75,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.76,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.77,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.78,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.79,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.8,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.81,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.82,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.83,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.84,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.85,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.86,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.87,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.88,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.89,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.9,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.91,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.92,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.93,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.94,
+          "hit3": 0,
+          "unrelatedFP": 0
+        },
+        {
+          "threshold": 0.95,
+          "hit3": 0,
+          "unrelatedFP": 0
+        }
+      ],
+      "perSeed": [
+        {
+          "seed": "D01:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D03:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D03:4",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:2",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D05:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:0",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:1",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:2",
+          "type": "question",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D07:3",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:1",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:2",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D09:3",
+          "type": "topic",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D12:0",
+          "type": "experience",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:0"
+          ]
+        },
+        {
+          "seed": "D12:1",
+          "type": "experience",
+          "hit": false,
+          "rank": null,
+          "returned": []
+        },
+        {
+          "seed": "D12:2",
+          "type": "topic",
+          "hit": true,
+          "rank": 1,
+          "returned": [
+            "D13:2"
+          ]
+        }
+      ],
+      "unrelated": [
+        {
+          "seed": "D01:2",
+          "returned": []
+        },
+        {
+          "seed": "D01:3",
+          "returned": [
+            "D02:3"
+          ]
+        },
+        {
+          "seed": "D01:4",
+          "returned": []
+        },
+        {
+          "seed": "D09:4",
+          "returned": []
+        },
+        {
+          "seed": "D11:0",
+          "returned": []
+        },
+        {
+          "seed": "D11:1",
+          "returned": []
+        },
+        {
+          "seed": "D11:3",
+          "returned": []
+        },
+        {
+          "seed": "D12:3",
+          "returned": []
+        },
+        {
+          "seed": "D14:0",
+          "returned": []
+        },
+        {
+          "seed": "D14:1",
+          "returned": []
+        }
+      ]
+    }
+  },
+  "baselines": {
+    "paragraphNoTitle": {
+      "hit3": 0.1875,
+      "hits": 3,
+      "relatedSeeds": 16,
+      "mrr": 0.1875,
+      "goldRecall3": 0.1667,
+      "returnedPrecision": 0.6,
+      "returnedOnRelated": 5,
+      "emptyOnRelated": 11,
+      "unrelatedFP": 0.1,
+      "unrelatedWithOutput": 1,
+      "unrelatedSeeds": 10
+    },
+    "paragraphDocumentTitle": {
+      "hit3": 0.3125,
+      "hits": 5,
+      "relatedSeeds": 16,
+      "mrr": 0.3125,
+      "goldRecall3": 0.2778,
+      "returnedPrecision": 0.5556,
+      "returnedOnRelated": 9,
+      "emptyOnRelated": 9,
+      "unrelatedFP": 0.2,
+      "unrelatedWithOutput": 2,
+      "unrelatedSeeds": 10
+    },
+    "documentLevelReference": {
+      "hit3": 0.75,
+      "hits": 12,
+      "relatedSeeds": 16,
+      "mrr": 0.4375,
+      "goldRecall3": 0.6667,
+      "returnedPrecision": 0.2667,
+      "returnedOnRelated": 45,
+      "emptyOnRelated": 0,
+      "unrelatedFP": 0.5,
+      "unrelatedWithOutput": 5,
+      "unrelatedSeeds": 10
+    }
+  },
+  "lexicalOverlap": {
+    "goldPairs": 18,
+    "withTwoCommonTerms": 3,
+    "ratio": 0.1667
+  }
+}

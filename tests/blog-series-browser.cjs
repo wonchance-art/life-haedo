@@ -216,6 +216,44 @@ async function main() {
       assert.equal(await f.page.locator('#bsTitle').inputValue(), ordered.series.title); originals(await state(f.page), mutated);
       assert.equal(f.server.writes().length, 0);
     });
+    await check('The private series view shows the owner\'s AI authorship marks while every public copy of the same post carries none', async () => {
+      const f = await fixture();
+      // Mark one sentence of the first saved post as AI text, the way the editor stores it.
+      await f.page.evaluate(async ({ workspaceId, id }) => {
+        const s = HaedoLife.Shell.storage, doc = await s.readPhotoPost(workspaceId, id);
+        doc.ops = [{ insert: '합성 여행 본문 1 🌱\n' }, { insert: 'AI가 다듬은 문장', attributes: { author: 'ai' } }, { insert: ' 그리고 직접 쓴 문장 ' }, { insert: '밑줄 친 AI 문장', attributes: { author: 'ai', underline: true } }, { insert: ' ' }, { insert: '링크 단 AI 문장', attributes: { author: 'ai', link: 'https://example.org/ai-mark' } }, { insert: '\n' }];
+        await s.savePhotoPost(workspaceId, doc, doc.revision);
+      }, { workspaceId: f.seed.workspaceId, id: f.seed.ids[0] });
+      await f.go(); await createSeries(f);
+      await f.page.locator('#bsRead').click(); await f.page.locator('.blog-series-reader[data-view=contents]').waitFor();
+      await f.page.locator('.blog-series-toc button[data-entry-id]').nth(0).click(); await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
+      const marks = f.page.locator('.blog-series-reader-body .blog-ai-text');
+      assert.deepEqual(await marks.allTextContents(), ['AI가 다듬은 문장', '밑줄 친 AI 문장', '링크 단 AI 문장'], 'only the marked sentences are shown as AI text');
+      // The dotted line is a background image, so an underline or a link on the same text cannot cover it (review m1).
+      const looks = await marks.evaluateAll(nodes => nodes.map(node => { const style = getComputedStyle(node), parent = getComputedStyle(node.parentElement);
+        return { dots: style.backgroundImage.startsWith('radial-gradient'), tint: style.backgroundColor !== 'rgba(0, 0, 0, 0)', size: style.fontSize === parent.fontSize, display: style.display, inUnderlineOrLink: !!node.closest('u, a') || !!node.querySelector('u, a') }; }));
+      assert.deepEqual(looks.map(({ inUnderlineOrLink, ...rest }) => rest), Array(3).fill({ dots: true, tint: true, size: true, display: 'inline' }), 'a dotted line and a tint on every mark, no size or layout change');
+      assert.deepEqual(looks.map(l => l.inUnderlineOrLink), [false, true, true], 'the overlapping cases really share their text with an underline and a link');
+      assert((await f.page.locator('.blog-series-reader-body').innerText()).includes('AI가 다듬은 문장 그리고 직접 쓴 문장 밑줄 친 AI 문장 링크 단 AI 문장'), 'the text itself is unchanged');
+      // Every public projection of the same stored post: no mark, and the public renderer refuses a reading copy.
+      const leak = await f.page.evaluate(async ({ workspaceId, id }) => {
+        const life = HaedoLife, doc = await life.Shell.storage.readPhotoPost(workspaceId, id), stored = doc.ops.some(op => op.attributes?.author === 'ai');
+        const pub = life.Blog.publicSnapshot(doc), reading = life.Blog.privateReadingSnapshot(doc);
+        const publicView = life.BlogPublicUI.render(pub), privatePublicCopy = life.BlogPublicUI.render(pub, { privateView: true });
+        let publicRefusesReading = false; try { life.BlogPublicUI.render(reading); } catch (_) { publicRefusesReading = true; }
+        let validateRefusesReading = false; try { life.Blog.validateSnapshot(reading); } catch (_) { validateRefusesReading = true; }
+        return { stored, publicMarks: pub.ops.filter(op => op.attributes && 'author' in op.attributes).length, readingMarks: reading.ops.filter(op => op.attributes?.author === 'ai').length,
+          publicSpans: publicView.querySelectorAll('.blog-ai-text').length + privatePublicCopy.querySelectorAll('.blog-ai-text').length, publicRefusesReading, validateRefusesReading };
+      }, { workspaceId: f.seed.workspaceId, id: f.seed.ids[0] });
+      assert.deepEqual(leak, { stored: true, publicMarks: 0, readingMarks: 3, publicSpans: 0, publicRefusesReading: true, validateRefusesReading: true });
+      // Visual record of the marks next to an underline and a link (review m1). The body holds an inline
+      // prose link, which the page-level 44px target audit does not apply to, so plain screenshots are kept here.
+      for (const width of [1440, 820, 390]) { await f.page.setViewportSize({ width, height: 1000 }); await f.page.evaluate(() => document.fonts.ready);
+        await f.page.locator('.blog-series-reader-body .blog-ai-text').first().scrollIntoViewIfNeeded();
+        assert.equal(await f.page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no horizontal overflow at ' + width);
+        await f.page.screenshot({ path: path.join(output, 'private-ai-mark-' + width + '.png') }); }
+      await f.page.setViewportSize({ width: 1440, height: 1000 });
+    });
     await check('The actual downloaded file restores complete text and full-resolution photos into a fresh workspace under new IDs', async () => {
       assert(archive, 'Run the preceding real-download journey');
       const f = await fixture(), before = await state(f.page);
