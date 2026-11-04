@@ -200,7 +200,7 @@ async function main() {
       active = a.page; await openBlogMenu(a.page); await a.page.getByRole('button', { name: '글 공개·보관', exact: true }).click();
       await a.page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       const row = a.page.locator('.blog-post[data-post-id="' + first.id + '"]');
-      await row.locator('[data-sync-post]').filter({ hasText: '모든 기기에 저장됨' }).waitFor();
+      await row.locator('[data-sync-post]').filter({ hasText: '계정에 올림' }).waitFor();
       await row.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       const preview = a.page.locator('.blog-manager-preview'); await preview.waitFor();
       assert.equal(await preview.locator('input[data-photo-id]:checked').count(), 0, 'no photo is public by default');

@@ -144,7 +144,7 @@ async function main() {
       const row = f.page.locator('#receiptAccountHost .ab-post[data-remote-id="' + f.original.id + '"]');
       await row.locator('button[data-action="open"]').waitFor();
       assert.equal(await f.page.locator('#receiptAccountHost button[data-action="receive"]').count(), 0, 'no per-device receive choice remains');
-      assert.match(await row.innerText(), /모든 기기에 저장됨/);
+      assert.match(await row.innerText(), /계정에 올림/);
       await row.locator('button[data-action="open"]').click();
       const error = f.page.locator('#receiptAccountHost #accountBlogError'); await error.waitFor(); assert.match(await error.innerText(), /Synthetic display failure/);
       await f.page.setViewportSize({ width: 390, height: 844 });

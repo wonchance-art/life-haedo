@@ -4,7 +4,7 @@
   const life = root.HaedoLife ||= {};
   const el = (tag, text, cls) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (cls) node.className = cls; return node; };
   // One compact status vocabulary for the whole sync.
-  const labels = { synced: '모든 기기에 저장됨', pending: '저장 대기', error: '오류 · 다시 시도' };
+  const labels = { synced: '계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 · 다시 시도' };
   function overall(status) {
     if (!status || status.state === 'idle') return { state: 'pending', text: '동기화 확인 중' };
     if (status.state === 'error') return { state: 'error', text: labels.error };

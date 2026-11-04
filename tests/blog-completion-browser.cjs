@@ -323,7 +323,7 @@ async function main() {
       assert.equal(server.failure, null, 'The explicit save must reach and consume the original-upload failure');
       assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }), null);
       // The manager shows one compact status; its retry starts the same automatic cycle.
-      await manager(page); await syncLine(page, photoPost.doc.id).filter({ hasText: '오류 · 다시 시도' }).waitFor();
+      await manager(page); await syncLine(page, photoPost.doc.id).filter({ hasText: '계정에 올리지 못함' }).waitFor();
       server.failure = 'save-ack'; await page.evaluate(() => { window.__parkBlogSync = false; });
       await syncLine(page, photoPost.doc.id).getByRole('button', { name: '다시 시도', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
       assert.equal(server.failure, null, 'the retry commits SQL and loses its acknowledgement');
@@ -337,7 +337,7 @@ async function main() {
       assert(saves.length >= 2); assert(saves.every(save => save.body.p_operation_id === saves[0].body.p_operation_id), 'every retry reuses the exact operation');
       assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }).revision, 1);
       assert.equal(server.assetRequests.filter(r => r.method === 'POST').length, uploadCount, 'An acknowledged original must not be uploaded twice on save retry');
-      await syncLine(page, photoPost.doc.id).filter({ hasText: '모든 기기에 저장됨' }).waitFor({ timeout: 35000 }).catch(async () => { await manager(page); await syncLine(page, photoPost.doc.id).filter({ hasText: '모든 기기에 저장됨' }).waitFor(); });
+      await syncLine(page, photoPost.doc.id).filter({ hasText: '계정에 올림' }).waitFor({ timeout: 35000 }).catch(async () => { await manager(page); await syncLine(page, photoPost.doc.id).filter({ hasText: '계정에 올림' }).waitFor(); });
       const checked = await page.evaluate(async ({ workspaceId, id }) => { const d = await HaedoLife.Shell.storage.readPhotoPost(workspaceId, id); return Promise.all(d.photos.map(async ({ blob, ...metadata }) => ({ metadata, actualHash: await HaedoLife.PhotoPost.digest(blob) }))); }, { workspaceId: photoPost.workspaceId, id: photoPost.doc.id });
       assert.deepEqual(checked.map(value => value.metadata), photoManifest); assert.deepEqual(checked.map(value => value.actualHash), photoManifest.map(photo => photo.digest));
       assert.deepEqual(await preserved(page), original); report.originalPhotos = images.map(image => ({ width: image.width, height: image.height, type: image.type }));

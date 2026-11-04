@@ -153,7 +153,8 @@
       if (staleApp()) throw refreshRequired();
       if (!blogSync || typeof blogSync[method] !== 'function') throw Object.assign(new Error('서버 동기화를 준비하지 못했습니다. 글은 이 기기에 그대로 있습니다.'), { code: 'schema_missing' });
     }
-    const syncLabels = { synced: '모든 기기에 저장됨', pending: '저장 대기', error: '오류 · 다시 시도' };
+    // Two steps (2026-11-02 decision 4): the account, never "all devices".
+    const syncLabels = { synced: '계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함' };
     function showSyncState(id, node) {
       const value = syncStates[id] || 'pending';
       node.dataset.state = value; node.replaceChildren(document.createTextNode(syncLabels[value] || syncLabels.pending));
@@ -185,8 +186,10 @@
       clearPreview();
       let remoteRevision = capturedState?.remoteRevision || 0, publicRevision = capturedState?.publication?.revision || 0;
       preview = { doc, photoIds: [], snapshot: null, revision: doc.revision, remoteRevision, publicRevision };
-      const panel = el('section', null, 'blog-manager-preview'); panel.setAttribute('aria-label', '공개 내용 검토');
-      panel.append(el('h3', '공개 내용 검토'), meta('이 화면에서 고른 본문과 첨부만 공개합니다. 선택하지 않은 사진은 공개 본문에서도 빠집니다.'));
+      // D1 (soft redesign): the review reads as one 공개하기 sheet; its steps and checks are unchanged.
+      const panel = el('section', null, 'blog-manager-preview'); panel.setAttribute('aria-label', '공개하기');
+      panel.append(el('h3', '공개하기'), meta('이 화면에서 고른 본문과 첨부만 공개합니다. 선택하지 않은 사진은 공개 본문에서도 빠집니다.'));
+      const footer = el('div', null, 'blog-manager-publish-actions');
       const authorLabel = el('label', '공개 이름'), author = el('input'); author.type = 'text'; author.maxLength = 100; author.setAttribute('aria-label', '공개 이름'); authorLabel.append(author); panel.append(authorLabel);
       const introLabel = el('label', '공개 소개'), intro = el('textarea'); intro.maxLength = 500; intro.rows = 2; intro.setAttribute('aria-label', '공개 소개'); introLabel.append(intro); panel.append(introLabel);
       const photos = el('fieldset'); photos.append(el('legend', '공개할 사진'));
@@ -212,7 +215,7 @@
       const copies = new Map();
       function invalidate() { changed = true; consent.checked = false; result.replaceChildren(meta('공개할 내용을 바꿨습니다. 미리보기를 갱신해 확인해 주세요.')); preview.snapshot = null; }
       author.addEventListener('input', invalidate); intro.addEventListener('input', invalidate); selected.forEach(check => check.addEventListener('change', invalidate));
-      panel.append(button('공개 미리보기 갱신', async () => {
+      footer.append(button('공개 미리보기 갱신', async () => {
         if (!valid() || preview?.doc.id !== doc.id) return;
         if (blogSync?.getState) {
           const state = await blogSync.getState(workspaceId, doc.id);
@@ -237,7 +240,7 @@
         preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, copies: uploaded, author: { name: author.value, intro: intro.value } }; changed = false; consent.checked = false;
         announce('이 미리보기와 같은 본문·선택 사진으로 공개합니다.');
       }));
-      panel.append(button('공개 게시·갱신', async () => {
+      footer.append(button('공개 게시·갱신', async () => {
         if (changed || !preview?.snapshot) throw new Error('공개 미리보기를 먼저 갱신해 주세요.');
         if (!consent.checked) throw new Error('미리보기의 공개 내용을 확인해 주세요.');
         requireSync('publish'); const current = await storage.readPhotoPost(workspaceId, doc.id);
@@ -263,8 +266,8 @@
         }
         announce('공개 게시를 확인했습니다. 같은 글의 갱신은 이 주소를 유지합니다.');
       }, true));
-      panel.append(button('공개 철회', async () => { requireSync('unpublish'); await blogSync.unpublish(workspaceId, doc.id, { expectedPublicRevision: preview.publicRevision }); if (!valid()) return; result.replaceChildren(meta('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.')); consent.checked = false; announce('공개 철회를 확인했습니다.'); }));
-      panel.append(button('공개 검토 닫기', async () => clearPreview())); detail.append(panel); panel.querySelector('input')?.focus({ preventScroll: true });
+      footer.append(button('공개 철회', async () => { requireSync('unpublish'); await blogSync.unpublish(workspaceId, doc.id, { expectedPublicRevision: preview.publicRevision }); if (!valid()) return; result.replaceChildren(meta('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.')); consent.checked = false; announce('공개 철회를 확인했습니다.'); }));
+      footer.append(button('공개 검토 닫기', async () => clearPreview())); panel.append(footer); detail.append(panel); panel.querySelector('input')?.focus({ preventScroll: true });
     }
     async function chooseEvidence(seed = {}) {
       if (!life.BlogEvidence?.create || !storage.savePhotoPostWithEvidence) throw new Error('근거를 연결할 준비가 되지 않았습니다. 원문과 글은 그대로 있습니다.');

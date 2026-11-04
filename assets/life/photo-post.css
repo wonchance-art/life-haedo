@@ -101,22 +101,57 @@
 .photo-commandbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 76px;
+  gap: 8px;
+  min-height: 64px;
   padding-block: 10px;
 }
-.photo-command-state { flex: 1; min-width: 0; }
-.photo-command-scope { display: block; color: var(--ink, #18181b); font-size: 13px; font-weight: 600; line-height: 1.5; }
-.photo-editing-label { display: block; font-size: 12px; color: var(--ink-soft, #66666f); line-height: 1.6; }
+/* D1 (2026-11-04): the privacy pill and the quiet autosave state share one line. */
+.photo-command-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+/* The privacy pill opens 글 정보: a 44px button whose face is the 36px pill. */
+.photo-privacy {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 44px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink, #182522);
+  font: inherit;
+  font-size: var(--haedo-text-meta, 13px);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.photo-privacy-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 10px 0 12px;
+  border-radius: 999px;
+  background: var(--soft, #eaf1ed);
+}
+.photo-privacy svg { flex: none; width: 16px; height: 16px; }
+.photo-privacy-face > svg:last-child { color: var(--ink-soft, #5d6b65); }
+.photo-privacy:hover > .photo-privacy-face { background: #dfe9e4; }
+.photo-privacy[data-state="public"] { color: var(--color-primary, #145b50); }
+.photo-privacy[data-state="problem"] > .photo-privacy-face { background: var(--error-soft, #fff2f4); }
+.photo-privacy-problem { color: var(--color-error, #a3243d); }
+.photo-privacy-problem::before { content: "· "; color: var(--ink-soft, #5d6b65); }
 .photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .photo-recovery-actions[hidden] { display: none; }
 .photo-recovery-actions > button { font-size: 13px; padding: 8px 12px; }
 .photo-commandbar .photo-status {
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--ink-soft, #66666f);
-  min-height: 1.6em;
+  flex: 1;
+  margin: 0;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.5;
+  color: var(--ink-soft, #5d6b65);
+  min-height: 0;
   overflow-wrap: anywhere;
 }
 .photo-commandbar .photo-status[data-state="error"] { padding-inline: 4px; }
@@ -193,10 +228,11 @@
 }
 .photo-more-menu > button:hover { background: var(--soft, #f7f7f8); }
 .photo-more-menu > .photo-server-scope { margin: 4px 12px 8px; font-size: 13px; line-height: 1.6; color: var(--ink-soft, #66666f); }
-.photo-read-actions { max-width: 680px; margin-inline: auto; gap: 8px; padding-block: 8px; flex-wrap: nowrap; }
-.photo-read-actions > :nth-child(2) { margin-right: auto; }
-.photo-read-actions.photo-read-standalone > :first-child { margin-right: auto; }
-.photo-read-actions.photo-read-standalone > :nth-child(2) { margin-right: 0; }
+.photo-read-actions { max-width: 680px; margin-inline: auto; display: flex; align-items: center; gap: 8px; padding-block: 8px; flex-wrap: nowrap; }
+.photo-read-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
+.photo-read-tools > .photo-read-edit { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink, #182522); font-size: var(--haedo-text-control, 15px); }
+.photo-read-tools > .photo-read-edit:hover { background: var(--soft, #eaf1ed); }
+.photo-read-tools > .photo-read-edit svg { flex: none; width: 20px; height: 20px; }
 .photo-read-actions .photo-more-menu { max-width: calc(100vw - 40px); }
 .photo-entry-excerpt {
   white-space: pre-wrap;
@@ -307,21 +343,26 @@
   max-width: 680px;
   margin-inline: auto;
 }
+/* Title first (D1): the same 28px title as the reader, at the same height. */
 #photoTitle {
   width: 100%;
   font: inherit;
-  font-size: 30px;
-  font-weight: 650;
+  font-size: var(--haedo-text-title-large, 28px);
+  font-weight: 700;
   color: var(--ink);
   border: 0;
   border-radius: 0;
-  padding: 24px 0 18px;
+  padding: 16px 0 8px;
   background: transparent;
-  min-height: 80px;
-  letter-spacing: -.035em;
-  line-height: 1.45;
+  min-height: 0;
+  letter-spacing: -.03em;
+  line-height: 1.4;
+  display: block;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
-#photoTitle::placeholder { color: var(--ink-soft, #66666f); font-size: 17px; font-weight: 400; letter-spacing: 0; }
+#photoTitle::placeholder { color: var(--ink-soft, #5d6b65); font-weight: 600; }
 /* Text fields show focus with the caret; a ring hugging typed text reads as
    an error frame while writing. Buttons and menus keep their focus rings. */
 #photoTitle:focus-visible { outline: none; box-shadow: inset 0 -1px 0 var(--haedo-focus, var(--color-primary, #145b50)); }
@@ -342,6 +383,30 @@
 }
 .photo-format-primary, .photo-history { display: inline-flex; align-items: center; flex: none; }
 .photo-history { margin-left: auto; }
+/* D1: the Quill tools float as one rounded bar at the bottom of the screen,
+   above an on-screen keyboard (--photo-keyboard from visualViewport). */
+.photo-posts .photo-toolbar.photo-toolbar-floating {
+  position: sticky;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--photo-keyboard, 0px));
+  z-index: 6;
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px auto 0;
+  padding: 4px;
+  gap: 0;
+  border: 1px solid var(--line, #e3e9e6);
+  border-radius: 999px;
+  background: var(--paper, #fff);
+  box-shadow: 0 6px 20px rgb(24 37 34 / .10), 0 1px 3px rgb(24 37 34 / .06);
+}
+.photo-toolbar-floating .photo-history { margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--line, #e3e9e6); }
+.photo-toolbar-floating .ql-formats { margin: 0; }
+.photo-posts .ql-toolbar button,
+.photo-posts .ql-toolbar .photo-format-options > summary { border-radius: 999px; }
+.photo-toolbar-floating .photo-format-panel { top: auto; bottom: calc(100% + 8px); }
+.photo-keyboard-close { display: none !important; }
+@media (pointer: coarse) { .photo-keyboard-close { display: inline-flex !important; } }
+}
 .photo-format-options { position: static; flex: none; border: 0; padding: 0; margin: 0; }
 .photo-format-options > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 12px; border-radius: 999px; font-size: 13px; color: var(--ink-soft, #66666f); cursor: pointer; list-style: none; }
 .photo-format-options > summary::-webkit-details-marker { display: none; }
@@ -400,15 +465,17 @@
   height: auto;
 }
 .photo-posts .ql-editor {
-  min-height: max(320px, calc(100svh - 264px));
+  min-height: max(320px, calc(100svh - 236px));
   height: auto;
   overflow-y: visible;
-  padding: 28px 0 40px;
-  font-size: 18px;
-  line-height: 1.85;
+  padding: 12px 0 40px;
+  font-size: var(--haedo-text-body, 17px);
+  line-height: 1.8;
   overflow-wrap: anywhere;
-  scroll-margin-block: 112px 32px;
+  scroll-margin-block: 96px 96px;
 }
+/* Keep the caret above the floating tools when the browser scrolls it into view. */
+html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-posts .ql-editor.ql-blank::before {
   color: var(--ink-soft);
   left: 0;
@@ -568,22 +635,32 @@
   padding-block: 24px;
   border-block: 1px solid var(--line);
 }
+/* Reading (D1): title first at the editor's height and size; date, marks and
+   the two-step save state end the post. */
 .photo-article {
   max-width: 680px;
-  margin: 36px auto 56px;
-  font-size: 18px;
-  line-height: 1.85;
+  margin: 8px auto 56px;
+  font-size: var(--haedo-text-body, 17px);
+  line-height: 1.8;
   overflow-wrap: anywhere;
 }
 .photo-article .photo-read-heading {
-  font-size: 36px;
+  font-size: var(--haedo-text-title-large, 28px);
   font-weight: 700;
   line-height: 1.4;
-  letter-spacing: -.035em;
-  margin: 0 0 16px;
+  letter-spacing: -.03em;
+  margin: 0;
+  padding: 16px 0 20px;
 }
-.photo-article .photo-read-meta { margin: 0 0 36px; font-size: 13px; line-height: 1.7; color: var(--ink-soft, #66666f); }
-.photo-read-return { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line, #ececee); }
+.photo-read-foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line, #e3e9e6); }
+.photo-article .photo-read-meta { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
+.photo-read-mark::before { content: " · "; }
+.photo-read-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin-top: 4px; }
+.photo-read-sync .photo-server-status { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
+.photo-read-sync .photo-server-status:is([data-state="error"], [data-state="refresh"]) { color: var(--color-error, #a3243d); }
+.photo-read-sync .photo-server-actions { margin: 0; padding: 0; }
+.photo-read-sync .photo-server-actions > button { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--color-primary, #145b50); font-size: var(--haedo-text-meta, 13px); font-weight: 600; }
+.photo-read-return { margin-top: 24px; }
 .photo-line {
   white-space: pre-wrap;
   margin-block: 0 18px;
@@ -646,20 +723,18 @@
   /* One compact row (44px controls + 6px padding = 56px). The scope line is
      still the save button's description and is explained in the more menu. */
   .photo-commandbar { gap: 4px; min-height: 0; padding-block: 6px; }
-  .photo-command-scope { display: none; }
-  .photo-editing-label { font-size: 11px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .photo-command-state { gap: 8px; }
+  /* A compact pill leaves the one-line status room for its short texts. */
+  .photo-privacy-face { padding: 0 10px; }
+  .photo-privacy-face > svg:last-child { display: none; }
   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
-  .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 16px; }
-  /* Keep the caret and the block being typed below the sticky bar. */
+  .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
+  /* Keep the caret and the block being typed between the sticky bar and the floating tools. */
   .photo-posts .ql-editor,
-  .photo-posts .ql-editor > * { scroll-margin-block: 72px 32px; }
+  .photo-posts .ql-editor > * { scroll-margin-block: 72px 88px; }
   html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: 72px; }
 }
 @media (max-width: 600px) {
-  #photoTitle { font-size: 26px; min-height: 72px; padding-block: 20px 16px; }
-  .photo-article { margin-top: 28px; }
-  .photo-article .photo-read-heading { font-size: 30px; }
-  .photo-article .photo-read-meta { margin-bottom: 28px; }
   .photo-entry > strong { font-size: 19px; }
   .photo-posts .ql-editor,
   .photo-article {
@@ -686,17 +761,7 @@
   }
 }
 @media (max-width: 360px) {
-  .photo-posts .photo-toolbar { gap: 0; }
   .photo-format-options > summary { gap: 4px; padding-inline: 6px; }
-  .photo-posts .ql-toolbar .photo-insert-photo {
-    width: 44px;
-    min-width: 44px;
-    padding: 12px;
-    gap: 0;
-    font-size: 0;
-    white-space: nowrap;
-  }
-  .photo-posts .ql-toolbar .photo-insert-photo svg { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .photo-entry, .photo-status { transition: none; }
@@ -734,4 +799,67 @@
 .life-workbench:has(.photo-posts[data-mode="edit"]) > .wb-storage-line,
 .life-workbench:has(.photo-posts[data-mode="read"]) > .wb-storage-line {
   display: none;
+}
+
+/* 글 정보 (D1): visibility, date and save state behind the privacy pill.
+   A centred dialog on wide screens, a bottom sheet at 760px and below. */
+.photo-info {
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(80dvh, 640px);
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line, #e3e9e6);
+  border-radius: 16px;
+  background: var(--paper, #fff);
+  color: var(--ink, #182522);
+  font-family: var(--haedo-font, inherit);
+}
+.photo-info::backdrop { background: rgb(24 37 34 / .32); }
+.photo-info-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 0 20px; }
+.photo-info-head h2 { margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: 700; line-height: 1.4; }
+.photo-info-head .photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink, #182522); cursor: pointer; }
+.photo-info-head .photo-icon-button:hover { background: var(--soft, #eaf1ed); }
+.photo-info-head .photo-icon-button svg { width: 20px; height: 20px; }
+.photo-info-rows { margin: 0; padding: 4px 20px 20px; }
+.photo-info-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line, #e3e9e6); }
+.photo-info-row:first-child { border-top: 0; }
+.photo-info-row > dt { font-size: var(--haedo-text-meta, 13px); line-height: 1.7; color: var(--ink-soft, #5d6b65); }
+.photo-info-row > dd { margin: 0; min-width: 0; font-size: var(--haedo-text-control, 15px); line-height: 1.6; overflow-wrap: anywhere; }
+.photo-info-line { display: inline-flex; align-items: center; gap: 6px; }
+.photo-info-line > svg { flex: none; width: 16px; height: 16px; }
+.photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
+.photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
+.photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
+.photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .photo-info {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85dvh;
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Floating tools on phones (D1). Later in the file than the base toolbar
+   rules so these win. Seven 44px controls fit 360px and wider. */
+.photo-format-options > summary > .photo-format-icon { display: none; }
+@media (max-width: 760px) {
+  .photo-posts .photo-toolbar.photo-toolbar-floating { padding: 2px; }
+  .photo-toolbar-floating .photo-history { margin-left: 2px; padding-left: 2px; }
+  /* Icon-only photo and format buttons; their names stay "사진" and "추가 서식". */
+  .photo-posts .ql-toolbar .photo-insert-photo { width: 44px; min-width: 44px; padding: 12px; gap: 0; font-size: 0; }
+  .photo-posts .ql-toolbar .photo-insert-photo svg { flex: none; }
+  .photo-toolbar-floating .photo-format-options > summary { width: 44px; min-width: 44px; padding: 12px; gap: 0; }
+  .photo-toolbar-floating .photo-format-options > summary > .photo-format-icon { display: block; width: 20px; height: 20px; }
+  .photo-toolbar-floating .photo-format-options > summary > :is(.photo-format-word, .photo-format-chevron) { display: none; }
+  .photo-toolbar-floating .photo-format-panel { left: 0; max-width: calc(100vw - 40px); }
+}
+/* Below 360px the keyboard's own Done key closes it; six controls fit. */
+@media (max-width: 359px) {
+  .photo-keyboard-close { display: none !important; }
 }
