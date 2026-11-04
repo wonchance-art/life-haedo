@@ -82,7 +82,7 @@ B의 [발췌와 내 생각을 연결한 화면](evidence/social/thread-connected
 
 ## 근거와 재사용
 
-- [현재 화면 감사와 스크린샷](current-audit.md)
+- [2026-10-03 화면 감사(이력)](current-audit.md)
 - [최신 오픈소스·실제 제품 화면 비교](references.md)
 - [공식 Impeccable 4.5.0 배포본·라이선스·고정 출처](impeccable.md)
 - [공통 익명 한글 자료와 사례](sample-content.md)
