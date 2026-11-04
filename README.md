@@ -126,7 +126,7 @@
 
 ## 로컬 실행과 검사
 
-새 글 찾기 체험은 로그인 후 **도구 → 관심 확인 → `AI` 또는 `전시` 입력·보관 → 새 글 찾기**로 진행한다. 준비된 카탈로그에서는 각각 5개·3개가 표시되며 관심에 맞는 글이 없으면 수를 채우지 않는다. 제목으로 원문을 열고 돌아온 뒤 `링크 보관 검토 → 원문·출처 확인 → 자료만 보관`을 누른다. 보관한 글을 확인하고 목록으로 돌아오면 같은 URL은 제외된다. 읽음·관련 없음은 직접 누를 때만 반영하며 되돌릴 수 있다. 개인 화면에는 공용 인증 설정이 필요하고 검사에서 사용한 익명 인증 모사는 실제 Google 로그인을 대신하지 않는다.
+새 글 찾기 체험은 로그인 후 **뉴스 → 관심 확인 → `AI` 또는 `전시` 입력·보관 → 새 글 찾기**로 진행한다. 준비된 카탈로그에서는 각각 5개·3개가 표시되며 관심에 맞는 글이 없으면 수를 채우지 않는다. 제목으로 원문을 열고 돌아온 뒤 `링크 보관 검토 → 원문·출처 확인 → 자료만 보관`을 누른다. 보관한 글을 확인하고 목록으로 돌아오면 같은 URL은 제외된다. 읽음·관련 없음은 직접 누를 때만 반영하며 되돌릴 수 있다. 개인 화면에는 공용 인증 설정이 필요하고 검사에서 사용한 익명 인증 모사는 실제 Google 로그인을 대신하지 않는다.
 
 공급을 새로 수집하려면 `python3 scripts/update-discovery-feed.py --report /tmp/haedo-discovery-update.json`을 명시 실행한다. 일부 출처 실패는 종료 코드 2와 출처별 실패·이전 성공 자료로 남는다. 현재 D2는 robots의 HTTP 이동으로 실패 상태다. 화면의 `목록 다시 불러오기`는 준비된 JSON을 다시 받으며 원천 피드를 갱신하거나 사이트를 배포하지 않는다.
 
@@ -171,7 +171,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 | 경로 | 역할 |
 | --- | --- |
 | `index.html`, `login.html`, `workspace.html` | 통합 홈·Google 로그인·연표 목록/관리 |
-| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 홈·기록·도구·관리 공통 탐색과 화면 스타일 |
+| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 뉴스·일정·자료·설정 공통 탐색과 화면 스타일 |
 | `timeline.html`, `goals.html`, `habits.html` | 계정별 연표·목표·습관 |
 | `assets/platform-*.js` | 공용 인증·계정 저장·플랫폼 화면·자료 원격 어댑터 |
 | `assets/app.css` | 테마·그래프·반응형 레이아웃 |
@@ -196,9 +196,9 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 
 ### 컬렉션 보관함
 
-로그인 후 기록 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 이 브라우저의 계정·작업공간별 저장이며 자동 동기화·공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
+로그인 후 자료 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 계정·작업공간별 저장이며 2026-11-01부터 자료 분류 메타와 함께 계정에 자동 동기화됩니다. 공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
 
-컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드·기기 간 동기화는 이번 범위가 아닙니다.
+컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드는 이번 범위가 아닙니다.
 
 컬렉션의 **외부 이미지 보기**는 책(Open Library ISBN/edition)·영상(YouTube)의 표지/썸네일을 선택적으로 표시합니다. 책 편집의 **표지·썸네일**에서 ISBN을 출처로 연결할 수 있으며 저장·백업 형식은 그대로입니다. 외부 이미지는 기본 꺼짐이고 파일로 백업하지 않습니다. [검증 화면·제공자 접속 제한·Local 인계](docs/design-review/collection-covers.md). 현재 Cloud 검증은 이미지 응답 fixture 기준이며 실제 제공자 접속은 네트워크 설정 또는 Local 검증이 필요합니다.
 
@@ -206,13 +206,13 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 
 ### Obsidian 보관함 전체 가져오기
 
-깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. `review.html`·`review.json`은 판단할 노트와 첨부/외부 주소/보조 파일 안내를 구분하고 중복 참조를 묶습니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 관리의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).
+깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. `review.html`·`review.json`은 판단할 노트와 첨부/외부 주소/보조 파일 안내를 구분하고 중복 참조를 묶습니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 설정의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).
 
 `review-tool.html`에서는 같은 폴더의 변환 파일 6개를 선택해 원문/후보를 비교하고, 참조별 선택 저장·재열기 → 변경 미리보기 → 새 사본 ZIP을 사용할 수 있습니다. 기존 패키지에는 `node scripts/create-obsidian-review-tool.mjs --output /private/review-tool.html`로 도구만 추가하세요. CLI의 `node scripts/apply-obsidian-decisions.mjs --input PATH --decisions FILE --preview`는 검증·집계만, `--output NEW_PRIVATE_PATH`는 별도 새 패키지를 만듭니다. 실제 연결은 명시 선택만 반영하며 원문과 기존 작업공간을 유지합니다. [사용 순서·보존·검수](docs/design-review/obsidian-decisions.md).
 
-변환기는 `vault-package.zip`도 만듭니다. 관리 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.
+변환기는 `vault-package.zip`도 만듭니다. 설정 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.
 
 
-네이버 블로그 연결은 로그인 뒤 **도구 → 네이버 블로그 연결** 또는 **가져오기 → 네이버 블로그 아이디로 연결**에서 연다. 실행 주소는 `index.html?section=tools&view=naver-blog`다. 같은 계정의 기존 연결을 고른 뒤 확인한 공개 목록과 현재 공간 자료를 대조하고, 과거 글의 본문·사진 수집을 명시 요청한다. 수집 사본 검토 → 자료로 받기/새 원문 버전으로 보완 → 정확 원문과 사진 보기 → 선택 사진의 새 비공개 글 초안 또는 전용 ZIP 저장으로 이어진다. 원문 전체를 새 글에 자동 복사하거나 공개하지 않는다.
+네이버 블로그 연결은 로그인 뒤 **자료 → 네이버 블로그 연결** 또는 **가져오기 → 네이버 블로그 아이디로 연결**에서 연다. 실행 주소는 `index.html?section=records&view=naver-blog`다(옛 `section=tools` 주소도 열린다). 같은 계정의 기존 연결을 고른 뒤 확인한 공개 목록과 현재 공간 자료를 대조하고, 과거 글의 본문·사진 수집을 명시 요청한다. 수집 사본 검토 → 자료로 받기/새 원문 버전으로 보완 → 정확 원문과 사진 보기 → 선택 사진의 새 비공개 글 초안 또는 전용 ZIP 저장으로 이어진다. 원문 전체를 새 글에 자동 복사하거나 공개하지 않는다.
 
-수집 사진은 최초 업로드 원본 여부 미확인이며 실패/미보관 범위를 따로 표시한다. 전용 ZIP은 선택한 원문 한 버전과 사진만 담고 개인 메모·발췌·작성 글·계정 연결을 제외해 새 독립 공간으로 복원한다. 기존 자료 JSON·글 ZIP과는 별도다. 현재 네이버 접근이 차단되어 실제 본문/사진 수집과 예약 실행은 비활성이며, 구현·합성 검수를 실제 수집 완료로 표시하지 않는다. [기존 연결·설치](docs/design-review/naver-blog-connection.md), [본문·사진 구현과 실제 가동 조건](docs/design-review/naver-capture-completion.md).
+수집 사진은 최초 업로드 원본 여부 미확인이며 실패/미보관 범위를 따로 표시한다. 전용 ZIP은 선택한 원문 한 버전과 사진만 담고 개인 메모·발췌·작성 글·계정 연결을 제외해 새 독립 공간으로 복원한다. 기존 자료 JSON·글 ZIP과는 별도다. 운영 수집·예약 상태는 [최신 로드맵](docs/life-tools-design/roadmap.md)과 `PRODUCT.md`의 네이버 절을 따르며, 구현·합성 검수를 실제 수집 완료로 표시하지 않는다. [기존 연결·설치](docs/design-review/naver-blog-connection.md), [본문·사진 구현과 실제 가동 조건](docs/design-review/naver-capture-completion.md).
