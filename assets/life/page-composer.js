@@ -495,7 +495,7 @@
       const collection = await storage.readCollection(workspaceId);
       if (!valid() || token !== epoch || !host?.isConnected) return '';
       const existing = life.Collection.attachmentMatch(collection.items,item);
-      if (existing) return existing.archived ? '보관함에 있는 항목입니다. 기존 메모를 유지했습니다.' : '이미 컬렉션에 있습니다. 기존 메모를 유지했습니다.';
+      if (existing) return existing.archived ? '컬렉션에서 숨긴 항목입니다. 기존 메모를 유지했습니다.' : '이미 컬렉션에 있습니다. 기존 메모를 유지했습니다.';
       collection.items.push(item);
       try { await storage.saveCollection(workspaceId,collection,collection.revision); }
       catch (e) {

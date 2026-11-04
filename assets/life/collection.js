@@ -51,7 +51,7 @@
     value.tags.forEach(tag => { text(tag, LIMITS.tag, true); if (tag !== tag.trim()) fail('주제 앞뒤의 공백을 지워 주세요.'); });
     if (!plain(value.details) || Reflect.ownKeys(value.details).some(key => !TYPE_FIELDS[value.type].includes(key))) fail('자료 종류에 맞는 상세 정보인지 확인해 주세요.');
     Object.values(value.details).forEach(v => text(v, 500));
-    if (typeof value.archived !== 'boolean') fail('보관 상태를 확인해 주세요.');
+    if (typeof value.archived !== 'boolean') fail('숨김 상태를 확인해 주세요.');
     date(value.createdAt); date(value.updatedAt);
     if (value.updatedAt < value.createdAt) fail('수정 시각이 등록 시각보다 빠릅니다.');
     return value;

@@ -491,7 +491,7 @@
             state.append(retry);
           }
         } else row("저장", el("span", doc.status === "draft" ? "초안" : "", "photo-info-value"));
-        if (doc.archived) row("보관함", el("span", "보관함에 있는 글입니다. 일반 목록과 검색에는 나오지 않습니다.", "photo-info-value"));
+        if (doc.archived) row("목록", el("span", "숨긴 글입니다. 일반 목록과 검색에는 나오지 않습니다.", "photo-info-value"));
       };
       sheet.addEventListener("click", (e) => {
         // A click on the backdrop (outside the sheet's box) closes it.
@@ -1676,7 +1676,7 @@
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
         button("사본으로 이어 쓰기", duplicate),
-        button("보관함으로 옮기기", () => archive(true)),
+        button("목록에서 숨기기", () => archive(true)),
         button("초안 다시 저장", persist),
       );
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
@@ -2229,14 +2229,14 @@
         const list = el("div", null, "photo-feed");
         if (!feedListener) host.append(list);
         const retained = el("details", null, "life-details photo-retained"),
-          retainedTitle = el("summary", "초안·보관함");
+          retainedTitle = el("summary", "초안·숨긴 글");
         const drafts = el("div", null, "photo-draft-list"),
           archived = el("div", null, "photo-archived-list");
         const draftHeading = el("h3", "작성 중인 글"),
-          archiveHeading = el("h3", "보관함"),
+          archiveHeading = el("h3", "숨긴 글"),
           archiveHelp = el(
             "p",
-            "보관한 글과 사진은 그대로 남습니다. 글을 열어 목록으로 복원할 수 있습니다.",
+            "숨긴 글과 사진은 지우지 않고 그대로 남습니다. 글을 열어 목록에 다시 보이게 할 수 있습니다.",
             "life-help",
           );
         retained.hidden = true;
@@ -2323,7 +2323,7 @@
             retainedTitle.textContent =
               "초안 " +
               drafts.children.length +
-              " · 보관함 " +
+              " · 숨긴 글 " +
               archived.children.length;
             draftHeading.hidden = !drafts.children.length;
             archiveHeading.hidden = archiveHelp.hidden =
@@ -2366,7 +2366,7 @@
           actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
         actions.append(privacyPill());
         const tools = el("div", null, "photo-read-tools");
-        if (doc.archived) tools.append(button("목록으로 복원", () => archive(false)));
+        if (doc.archived) tools.append(button("목록에 다시 보이기", () => archive(false)));
         else {
           const edit = button("글 수정", () => open(doc.id, true));
           edit.classList.add("photo-read-edit");
@@ -2394,7 +2394,7 @@
           button("사본으로 이어 쓰기", duplicate),
         );
         if (!doc.archived)
-          menu.append(button("보관함으로 옮기기", () => archive(true)));
+          menu.append(button("목록에서 숨기기", () => archive(true)));
         const remove = button("삭제", removePost);
         remove.dataset.postAction = "delete";
         remove.classList.add("photo-delete");
@@ -2416,7 +2416,7 @@
           time.dateTime = doc.updatedAt;
           dated.append(time);
         }
-        for (const label of [doc.archived && "보관함", doc.status === "draft" && "초안"].filter(Boolean))
+        for (const label of [doc.archived && "숨긴 글", doc.status === "draft" && "초안"].filter(Boolean))
           dated.append(el("span", label, "photo-read-mark"));
         foot.append(dated);
         if (doc.status === "saved") {

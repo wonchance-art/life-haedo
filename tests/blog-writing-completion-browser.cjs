@@ -174,17 +174,17 @@ async function main() {
     await check('Archive failure leaves the reader and index unchanged; a retry hides the post from normal feed/search and explicit restoration keeps every byte', async () => {
       await click('사진 글 목록'); await openPost(page, primaryId); await page.locator('.photo-article').waitFor();
       await page.evaluate(() => { window.__put = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { const r = __put.apply(this, args); if (args[0]?.key?.startsWith('photo-post:')) this.transaction.abort(); return r; }; window.__article = document.querySelector('.photo-article'); });
-      await more('보관함으로 옮기기'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await page.locator('.photo-article').evaluate(n => n === __article), true); assert.equal((await read()).index.find(v => v.id === primaryId).archived, false);
-      await page.evaluate(() => IDBObjectStore.prototype.put = __put); await more('보관함으로 옮기기'); await page.getByRole('button', { name: '목록으로 복원', exact: true }).waitFor(); assert.equal((await read()).docs.find(v => v.id === primaryId).archived, true);
+      await more('목록에서 숨기기'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await page.locator('.photo-article').evaluate(n => n === __article), true); assert.equal((await read()).index.find(v => v.id === primaryId).archived, false);
+      await page.evaluate(() => IDBObjectStore.prototype.put = __put); await more('목록에서 숨기기'); await page.getByRole('button', { name: '목록에 다시 보이기', exact: true }).waitFor(); assert.equal((await read()).docs.find(v => v.id === primaryId).archived, true);
       await click('사진 글 목록'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-archived-list [data-photo-post-id="' + primaryId + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + primaryId + '"]').count(), 0); await capture(page, 'archive');
       await nav(page, 'home'); await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy=false]').waitFor(); await page.locator('#lifeFindQuery').fill(primary.title); await page.locator('#lifeFind[aria-busy=false]').waitFor(); assert.equal(await page.locator('[data-focus-key="find:photo-post:' + primaryId + '"]').count(), 0);
-      await go(); await openPost(page, primaryId); await page.locator('.photo-article').waitFor(); await click('목록으로 복원'); await page.getByRole('button', { name: '글 수정', exact: true }).waitFor();
+      await go(); await openPost(page, primaryId); await page.locator('.photo-article').waitFor(); await click('목록에 다시 보이기'); await page.getByRole('button', { name: '글 수정', exact: true }).waitFor();
       const active = (await read()).docs.find(v => v.id === primaryId); assert.equal(active.archived, false); assert.deepEqual(active.attachments, primary.attachments); assert.deepEqual(active.photos.map(p => p.digest), primary.photos.map(p => p.digest));
     });
 
     await check('Another tab archiving the original cannot be overwritten by an older edit; explicit new-copy recovery preserves both', async () => {
       await click('글 수정'); await page.locator('#photoTitle').fill('다른 탭 보관 후 새 글로 보존'); await stored();
-      await go(other); await openPost(other, primaryId); await other.locator('.photo-article').waitFor(); await more('보관함으로 옮기기', other); await other.getByRole('button', { name: '목록으로 복원', exact: true }).waitFor();
+      await go(other); await openPost(other, primaryId); await other.locator('.photo-article').waitFor(); await more('목록에서 숨기기', other); await other.getByRole('button', { name: '목록에 다시 보이기', exact: true }).waitFor();
       await click('글 저장'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '다른 탭 보관 후 새 글로 보존'); await more('새 글로 저장'); await page.locator('.photo-article').waitFor();
       const docs = (await read()).docs; assert.equal(docs.find(v => v.id === primaryId).archived, true); assert(docs.some(v => v.title === '다른 탭 보관 후 새 글로 보존' && v.status === 'saved' && v.id !== primaryId));
     });

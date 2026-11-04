@@ -69,7 +69,7 @@
   function archiveChapter(state, bookId, chapterId, archived = true) {
     return edit(state, bookId, (_next, book) => {
       const chapter = book.chapters.find(item => item.id === chapterId);
-      if (!chapter) throw fault('book_chapter_missing', '선택한 장을 찾을 수 없습니다. 다른 장을 보관하지 않았습니다.');
+      if (!chapter) throw fault('book_chapter_missing', '선택한 장을 찾을 수 없습니다. 다른 장을 숨기지 않았습니다.');
       chapter.archived = archived;
     });
   }

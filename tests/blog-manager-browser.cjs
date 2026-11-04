@@ -177,7 +177,7 @@ async function main() {
       assert.deepEqual(await page.evaluate(() => testData.deleted), ['draft-photo']);
       assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /다른 기기에서도 삭제됩니다/);
       await page.evaluate(() => { testData.saveFail = true; });
-      await page.locator('.blog-post[data-post-id="saved-photo"]').getByRole('button', { name: '보관함으로', exact: true }).click();
+      await page.locator('.blog-post[data-post-id="saved-photo"]').getByRole('button', { name: '목록에서 숨기기', exact: true }).click();
       assert.equal(await page.evaluate(() => testData.docs.get('saved-photo').archived), false);
     });
     await check('publication freezes editable controls, rechecks consent after await and distinguishes a completed publication from follow-up failure', async page => {

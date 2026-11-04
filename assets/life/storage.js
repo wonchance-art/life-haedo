@@ -2319,7 +2319,7 @@
                 // A conflict recovery may reuse a previously captured exact
                 // version, even after the original was edited or archived.
                 const source = origins.get(origin(item));
-                if (!source) throw fault('blog_series_post_changed', '선택한 저장 글이 바뀌었거나 보관함에 있습니다. 다시 확인해 선택해 주세요.');
+                if (!source) throw fault('blog_series_post_changed', '선택한 저장 글이 바뀌었거나 목록에서 숨긴 글입니다. 다시 확인해 선택해 주세요.');
                 const row = await meta.get(seriesPostKey(workspaceId, source.series.id, source.item.id));
                 if (!row) throw fault('blog_series_missing', '복구할 고정 글 사본을 찾지 못했습니다.');
                 blogSeries().validateSnapshot({ series: { ...source.series, items: [source.item] }, posts: [row.value] }); doc = row.value.doc;

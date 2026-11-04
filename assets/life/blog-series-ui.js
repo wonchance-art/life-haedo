@@ -137,7 +137,7 @@
       if (!catalogReady) { candidates.append(el('p', '저장한 글을 불러와 주세요.', 'life-help')); return; }
       const term = query.trim().toLocaleLowerCase(), chosen = new Set(current().items.map(item => item.postId));
       const matching = posts.filter(post => !term || [post.title, post.body].filter(Boolean).join('\n').toLocaleLowerCase().includes(term));
-      if (!matching.length) candidates.append(el('p', '담을 수 있는 저장 글이 없습니다. 초안과 보관함의 글은 제외합니다.', 'life-help'));
+      if (!matching.length) candidates.append(el('p', '담을 수 있는 저장 글이 없습니다. 초안과 숨긴 글은 제외합니다.', 'life-help'));
       for (const summary of matching.slice(0, shown)) {
         const row = el('div', null, 'bs-candidate'); row.dataset.postId = summary.id;
         row.append(el('span', title(summary), 'bs-candidate-title'));

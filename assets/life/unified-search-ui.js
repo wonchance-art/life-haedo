@@ -87,7 +87,7 @@
       const options = el('details', null, 'life-details'); options.append(el('summary', '검색 범위·옵션'));
       options.append(el('p', '현재 계정·작업공간의 보관 원문과 발췌·메모, 저장한 페이지 글·구성의 코멘트, 컬렉션, 저장한 9칸 구성·영역·선택 이유를 검색합니다. 작성 중인 초안·미반영 입력·가져올 파일 후보·책 원고·공개 서버 사본은 포함하지 않습니다. 검색어는 저장하거나 전송하지 않습니다.', 'life-help'));
       const checkbox = (text, value, change) => { const wrap = el('label', null, 'life-check'), box = el('input'); box.type = 'checkbox'; box.checked = value; box.addEventListener('change', () => { change(box.checked); limits = {}; draw(); }); wrap.append(box, el('span', text)); return wrap; };
-      options.append(checkbox('한글 띄어쓰기 무시', spacing, v => { spacing = v; }), checkbox('보관한 컬렉션 포함', archived, v => { archived = v; }));
+      options.append(checkbox('한글 띄어쓰기 무시', spacing, v => { spacing = v; }), checkbox('숨긴 컬렉션 항목 포함', archived, v => { archived = v; }));
       status = el('p', '', 'life-help'); status.id = 'lifeFindStatus'; status.setAttribute('role', 'status');
       changed = button('변경된 자료 다시 읽기', reload); changed.id = 'lifeFindReload'; changed.hidden = true;
       list = el('div'); list.id = 'lifeFindResults';

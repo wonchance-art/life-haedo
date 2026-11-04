@@ -252,7 +252,7 @@
       if (!line) return;
       const entry = collectState.get(identity(item)), state = entry?.state, kept = row.dataset.collected;
       const text = state === "saving" ? "컬렉션에 저장하는 중…" : state === "failed" ? "컬렉션에 저장하지 못함 · " + entry.reason
-        : kept === "archived" ? "컬렉션에 있음 · 보관한 항목" : kept === "true" ? "컬렉션에 있음" : "";
+        : kept === "archived" ? "컬렉션에 있음 · 숨긴 항목" : kept === "true" ? "컬렉션에 있음" : "";
       line.querySelector(".photo-attachment-collect-text").textContent = text;
       line.classList.toggle("photo-attachment-collected", !state && !!kept);
       line.querySelector(".photo-attachment-collect-retry")?.remove();
