@@ -94,7 +94,7 @@ async function servedBytes(db, copiesPresent) {
     } catch (error) { await db.query('rollback'); throw error; }
   };
   const rpc = (name, args) => as('authenticated', owner, `select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as value`, args);
-  const handler = edge.createHandler({ environment: key => key === 'SUPABASE_URL' ? 'https://anonymous-blog.example.invalid' : 'synthetic-server-only-secret',
+  const handler = edge.createHandler({ environment: key => ({ SUPABASE_URL: 'https://anonymous-blog.example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'synthetic-server-only-secret' })[key],
     fetcher: async (url, options) => {
       if (url.includes('/rest/v1/rpc/life_blog_public_media')) {
         const { p_token, p_photo_id } = JSON.parse(options.body);

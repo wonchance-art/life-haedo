@@ -23,7 +23,7 @@
   - 일정에서 대체 초점 제목 `h2.home-author-name`이 초점을 받지 못해 body에 남을 수 있다. 실제 Chromium에서 닿는 장면은 찾지 못했다.
   - 닫힌 `<details>` 처리(0f59231)를 구분하는 CI 검사가 없다. Chromium은 닫힌 내용에도 상자를 준다.
 - **대기**
-  - #195(Supabase 새 키): CI 뒤 병합, 운영 출시 순서. 레거시 끄기는 소유자 승인이 필요하다.
+  - #195(Supabase 새 키): 병합(`1986322`). 운영 출시 순서는 아래 절. 레거시 끄기는 소유자 승인이 필요하다.
   - P2(글·목록 작업의 검증 범위, `v190`): 최적화 세션이 구현 중이다.
   - #197(행복도 단일 쓰기 설계): 독립 검수 뒤 소유자 결정이 필요하다.
   - AI 사용 한도 설치 SQL: 소유자의 "진행"을 기다린다.
@@ -39,7 +39,7 @@
      - 비공개 편집기에서 선택 문장 → 제안 → 적용, 월 한도 동작
 2. **Supabase 새 키 전환(#195)**
    - 이유: 레거시 키가 2026년 말에 폐지된다.
-   - 선행: #195 병합
+   - 선행: #195 병합(완료)
    - 완료 기준:
      - 세 함수 배포 → cron `apikey` 전환 SQL → 다음 예약의 응답 200
      - Vault를 `sb_secret_`로 바꾼 뒤 다시 200
@@ -50,6 +50,26 @@
    - 완료 기준:
      - 기존 글을 처음 고칠 때 새 형식으로 바뀌고 원래 판은 `복구 사본`으로 남는다.
      - 한글 조합·사진·저장 상태 두 단계·두 기기 동기화 회귀 통과
+
+## Supabase 새 API 키 대비 — AI 세션, PR195 병합, 운영 출시 진행 중 (2026-11-04 KST)
+
+주간 기술 동향 점검 1회차에서 나온 AI 세션 몫이다(총괄 지시). 레거시 `anon`·`service_role` 키가 2026년 말까지 폐지된다.
+
+- **완료(코드·검사):**
+  - `haedo-ai`·`haedo-blog-media`·`haedo-naver-blog`가 `SUPABASE_SECRET_KEYS`·`SUPABASE_PUBLISHABLE_KEYS`의 `default`를 먼저 읽고, 레거시 키는 대체값으로만 쓴다. `sb_secret_`는 `apikey` 헤더로만 보낸다.
+  - 네이버 cron 인증은 `apikey` 헤더 기준이고 기존 Bearer도 받는다. 이미 있는 일정을 바꾸는 운영 SQL `20261104-naver-cron-apikey.sql`을 만들었다(실행하지 않음).
+  - `haedo-ai`는 `verify_jwt=false`로 배포하도록 했다. AI 첫 사용 안내 문구에 30일 보존 문장을 정했다.
+  - 검사:
+    - 새 키만 / 레거시만 / 둘 다인 환경에서 세 함수의 단위 검사가 통과한다.
+    - sql-replay에 전환 SQL의 점검·갱신·되돌리기·거절을 넣었다.
+  - 상세: [writing-ai-suggestions.md](../design-review/writing-ai-suggestions.md#supabase-키-2026-11-04-레거시-키-폐지-대비), [naver-operational-readiness.md](../design-review/naver-operational-readiness.md#새-api-키로-전환-2026-11-04-레거시-키-폐지-대비)
+- **남은 조건(총괄·소유자):**
+  1. 세 함수 배포(네이버는 런타임 소스 9개)
+  2. 전환 SQL 실행과 `net._http_response` 상태 코드 확인
+  3. Vault 값 교체
+  4. 레거시 키 끄기
+
+  순서를 지킨다. 실제 게이트웨이·pg_cron 동작은 배포 뒤 확인한다.
 
 ## 첫 화면 우선 순서(P1) 시도 — 최적화 세션, 채택하지 않음 (2026-11-04 KST)
 
