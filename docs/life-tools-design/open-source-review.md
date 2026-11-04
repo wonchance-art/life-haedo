@@ -1152,7 +1152,8 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
     - Claude Haiku 5.5: 입력 $0.10, 출력 $0.50 /MTok(프롬프트 10만 토큰 이하). 넘으면 $0.50/$2.50.
     - Claude Sonnet 5.5: 입력 $2, 출력 $10 /MTok.
   - [API 보존](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
-    - 프롬프트·출력은 기본 보존하지 않는다. Covered Model(Fable 5/5.1·Mythos 5/5.1)만 30일 보존이 필요하다.
+    - 프롬프트·출력은 기본 보존하지 않는다고 적는다. Covered Model(Fable 5/5.1·Mythos 5/5.1)만 30일 보존이 필요하다.
+    - 상용 보존 정책은 30일 안 자동 삭제라고 적어 표현이 다르다. 소유자에게는 긴 쪽(최대 30일)으로 알린다([검토 문서 §8.2](writing-ai-review.md)).
     - 보존 데이터는 명시 허락 없이는 학습에 쓰지 않는다.
     - 구조화 출력은 JSON 스키마만 최대 24시간 캐시한다.
 - **비교:**
