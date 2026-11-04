@@ -57,7 +57,13 @@
         const next = id ? await manager.getState(workspaceId, id) : null;
         if (!alive() || busy || token !== refreshId || getPlanId() !== id) return;
         state = next; if (!keepError) clear(); renderState(); if (failure) report(failure);
-      } catch (cause) { if (alive() && !busy && token === refreshId && getPlanId() === id) { state = null; renderState(); report(cause); } }
+      } catch (cause) {
+        if (!alive() || busy || token !== refreshId || getPlanId() !== id) return;
+        // A just-created preparation is shown before its first save. That is not a sync
+        // failure: show the waiting state, and the save's own change event refreshes again.
+        if (cause?.code === 'material_writing_missing') { state = { status: 'not_enabled' }; if (!keepError) clear(); renderState(); if (failure) report(failure); return; }
+        state = null; renderState(); report(cause);
+      }
     }
     async function flush() { if (busy) throw Object.assign(new Error('동기화 처리 결과를 확인한 뒤 이동해 주세요. 준비와 입력은 유지했습니다.'), { code: 'material_continuity_busy' }); }
     refresh();

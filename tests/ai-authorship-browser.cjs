@@ -37,6 +37,20 @@ async function durable(page, predicate, label) {
   do { docs = await stored(page); const hit = docs.find(predicate); if (hit) return hit; await new Promise(r => setTimeout(r, 50)); } while (Date.now() < deadline);
   assert.fail(label + ': ' + JSON.stringify(docs.map(d => ({ id: d.id, status: d.status, ops: d.ops }))).slice(0, 1500));
 }
+// Slow storage, deterministically: hold a readwrite transaction on the photo-post stores from
+// a second connection, so the next save waits inside IndexedDB until release().
+async function holdPhotoStores(page) {
+  await page.evaluate(() => new Promise((started, failed) => {
+    const request = indexedDB.open('life-tools-v1'); request.onerror = () => failed(request.error);
+    request.onsuccess = () => {
+      const db = request.result, tx = db.transaction(['bundles', 'meta'], 'readwrite'), meta = tx.objectStore('meta');
+      window.__photoStoreHold = { released: false, done: false };
+      const spin = () => { if (!window.__photoStoreHold.released) meta.get('__ai_authorship_hold__').onsuccess = spin; };
+      tx.oncomplete = () => { db.close(); window.__photoStoreHold.done = true; }; spin(); started();
+    };
+  }));
+  return { release: async () => { await page.evaluate(() => { window.__photoStoreHold.released = true; }); await page.waitForFunction(() => window.__photoStoreHold.done); } };
+}
 const sameOps = expected => doc => JSON.stringify(doc.ops) === JSON.stringify(expected);
 async function settled(page) {
   // Owner text loses an inherited mark right after its change (a microtask)
@@ -253,6 +267,16 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await page.keyboard.press('Escape');
       assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
       assert.equal(await status(page), 'AI 글 붙여넣기 대기를 껐어요');
+      // The Esc notice confirms a state change, not an edit: the save of an earlier edit that
+      // lands after Esc (slow storage) leaves it on screen; the next edit clears it.
+      const revision = Math.max(...(await stored(page)).map(d => d.revision)), hold = await holdPhotoStores(page);
+      await setSelection(page, (await editorState(page)).text.length - 1, 0);
+      await page.keyboard.type('Q'); await page.keyboard.press('Control+z');
+      await clickToggle(); await page.keyboard.press('Escape');
+      assert.equal(await status(page), 'AI 글 붙여넣기 대기를 껐어요');
+      await hold.release(); await durable(page, d => d.revision > revision, 'the earlier edit saved after Esc');
+      assert.equal(await status(page), 'AI 글 붙여넣기 대기를 껐어요');
+      await setSelection(page, (await editorState(page)).text.length - 1, 0);
       await paste(page, ' Plain paste.');
       await clickToggle();
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true');

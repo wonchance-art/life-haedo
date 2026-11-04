@@ -236,3 +236,166 @@
   .discovery-news .discovery-title { font-size: 24px; line-height: 1.48; letter-spacing: -.025em; }
   .discovery-news .discovery-meta { gap: 6px; }
 }
+
+/* 2026-11-03 부드러운 판 묶음 C: 왼쪽 목록과 읽기 칸.
+ * 행: 관심 주제 칸 · 제목 두 줄 · 출처·날짜 시간·언어 · 담기. 1101px 이상은 오른쪽에서 원문을 읽고,
+ * 761–1100px은 읽기가 내용 영역을 쓰며, 760px 이하는 전체 화면으로 읽는다. */
+.discovery-news .discovery-reaction-header { margin: 0; }
+.discovery-news .discovery-status-row { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.discovery-news .discovery-progress { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--news-muted); font-size: 13px; line-height: 1.5; }
+.discovery-news .discovery-failed { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: #a3243d; font-size: 13px; line-height: 1.5; }
+.discovery-news .discovery-failed:hover { text-decoration: underline; text-underline-offset: 4px; }
+.discovery-news .discovery-news-settings-toggle,.discovery-news .discovery-filter > summary {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: 0; padding: 12px;
+  border: 0; border-radius: 12px; background: transparent; color: #182522; cursor: pointer;
+}
+.discovery-news .discovery-status-row[hidden] { display: none; }
+.discovery-news .discovery-filter > summary:hover,.discovery-news .discovery-news-settings-toggle:hover { background: #f4f7f5; color: #145b50; }
+.discovery-news .discovery-news-toolbar { display: flex; align-items: center; gap: 0; min-height: 44px; padding: 0; border: 0; box-shadow: inset 0 -1px 0 var(--news-line); }
+.discovery-news .discovery-news-settings-toggle { margin-right: 0; }
+.discovery-news .discovery-tab-scroller { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.discovery-news .discovery-tab-scroller::-webkit-scrollbar { display: none; }
+.discovery-news .discovery-tab-scroller[data-more=true] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.discovery-news .discovery-list[data-topics=none] > .discovery-article { grid-template-columns: minmax(0, 1fr) 44px; }
+.discovery-news .discovery-list[data-topics=none] > .discovery-article > .discovery-topic { display: none; }
+.discovery-news .discovery-list[data-topics=none] > .discovery-excluded-article { grid-template-columns: 76px minmax(0, 1fr) auto; }
+.discovery-news .discovery-list[data-topics=none] > .discovery-excluded-article > .discovery-topic { display: block; }
+.discovery-news .discovery-collection-tabs { display: flex; flex-wrap: nowrap; gap: 4px; width: max-content; margin: 0; }
+.discovery-news .discovery-collection-tabs .discovery-mode {
+  display: inline-block; flex: none; width: auto; height: 44px; min-width: 0; min-height: 44px; padding: 0 12px; border: 0; border-radius: 0;
+  background: transparent; color: var(--news-muted); font-size: 15px; font-weight: 400; line-height: 44px; white-space: pre;
+}
+@media (min-width: 761px) { .discovery-news .discovery-collection-tabs .discovery-mode { padding: 0 10px; } .discovery-news .discovery-collection-tabs .discovery-mode:first-child { padding-left: 0; } }
+.discovery-news .discovery-collection-tabs .discovery-mode:first-child { padding-left: 0; }
+.discovery-news .discovery-collection-tabs .discovery-mode:hover { background: transparent; color: #182522; }
+.discovery-news .discovery-collection-tabs .discovery-mode[aria-selected=true] { color: #182522; font-weight: 650; background: transparent; box-shadow: inset 0 -2px 0 #145b50; }
+.discovery-news .discovery-collection-tabs .discovery-mode:focus-visible { outline-offset: -3px; }
+.discovery-news .discovery-tab-count { font-variant-numeric: tabular-nums; }
+.discovery-news .discovery-list-tools { display: flex; flex: none; align-items: center; }
+.discovery-news .discovery-filter { position: relative; flex: none; margin: 0; }
+.discovery-news .discovery-filter:not([open]) > .discovery-filter-body { display: none; }
+.discovery-news .discovery-filter > summary { position: relative; list-style: none; }
+.discovery-news .discovery-filter > summary::-webkit-details-marker { display: none; }
+.discovery-news .discovery-filter[open] > summary { color: #145b50; background: #f4f7f5; }
+.discovery-news .discovery-filter-count { position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #145b50; color: #fff; font-size: 12px; font-weight: 650; line-height: 16px; text-align: center; }
+.discovery-news .discovery-filter-count:empty { display: none; }
+.discovery-news .discovery-filter-body { position: absolute; z-index: 30; top: 48px; right: 0; display: grid; gap: 8px; width: 240px; padding: 16px; border: 1px solid var(--news-line); border-radius: 16px; background: #fff; box-shadow: 0 10px 32px rgb(24 24 27 / .09); }
+.discovery-news .discovery-filter-label { color: var(--news-muted); font-size: 13px; }
+.discovery-news .discovery-filter .discovery-sort { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--field-line, #86968d); border-radius: 12px; background: #fff; color: #182522; font: inherit; font-size: 16px; }
+.discovery-news .discovery-filter-body > .life-button { justify-content: flex-start; gap: 6px; min-height: 44px; padding-inline: 0; }
+
+/* 목록 행 */
+.discovery-news .discovery-list { min-width: 0; }
+.discovery-news .discovery-article { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr) 44px; column-gap: 12px; align-items: start; padding: 4px 0; border-bottom: 1px solid var(--news-line); scroll-margin-block: 96px; }
+.discovery-news .discovery-article[data-selected=true]::before { content: ""; position: absolute; inset: 0 -12px; border-radius: 12px; box-shadow: inset 0 0 0 2px #145b50; pointer-events: none; }
+.discovery-news .discovery-topic { min-width: 0; padding-top: 10px; }
+.discovery-news .discovery-topic-badge { display: inline-block; max-width: 100%; min-height: 22px; padding: 0 7px; border-radius: 6px; background: #f4f7f5; color: #5d6b65; font-size: 12px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+.discovery-news .discovery-row-open { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 0; border: 0; border-radius: 0; background: none; color: #182522; font: inherit; text-align: left; }
+.discovery-news div.discovery-row-open { cursor: default; }
+.discovery-news button.discovery-row-open::after { content: ""; position: absolute; inset: 0; }
+.discovery-news .discovery-article > :is(.discovery-reaction,.discovery-restore) { position: relative; z-index: 1; }
+.discovery-news .discovery-row-open .discovery-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: 15px; font-weight: 650; line-height: 1.45; letter-spacing: -.01em; text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
+.discovery-news button.discovery-row-open:hover .discovery-title { color: #145b50; }
+.discovery-news .discovery-row-open .discovery-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; color: var(--news-muted); font-size: 13px; line-height: 1.5; }
+.discovery-news .discovery-meta .discovery-source-name { color: var(--news-muted); font-size: 13px; font-weight: 400; }
+.discovery-news .discovery-language { color: var(--news-muted); font-size: 12px; text-decoration: none; }
+.discovery-news .discovery-liked-mark { color: #145b50; fill: currentColor; }
+.discovery-news .discovery-article > .discovery-reaction { margin-top: 0; }
+.discovery-news .discovery-excluded-article { grid-template-columns: 76px minmax(0, 1fr) auto; }
+.discovery-news .discovery-restore { min-height: 44px; margin: 0; padding: 0 0 0 12px; font-size: 15px; }
+.discovery-news .discovery-new-articles { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: #145b50; font-size: 15px; text-align: left; }
+.discovery-news .discovery-new-articles:hover { text-decoration: underline; text-underline-offset: 4px; }
+.discovery-news .discovery-empty { padding-top: 32px; }
+.discovery-news .discovery-empty-title { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.5; }
+.discovery-news .discovery-empty-text { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 0 0; color: var(--news-muted); font-size: 15px; line-height: 1.6; }
+.discovery-news .discovery-show-all { min-height: 44px; margin-top: 8px; padding: 0; font-size: 15px; }
+.discovery-news .discovery-undo-toast { position: sticky; z-index: 6; bottom: 16px; display: flex; align-items: center; gap: 8px; min-height: 48px; margin-top: 12px; padding: 0 4px 0 16px; border-radius: 12px; background: #182522; color: #fff; font-size: 15px; box-shadow: 0 10px 32px rgb(24 24 27 / .18); }
+.discovery-news .discovery-undo-toast > span { flex: 1; min-width: 0; }
+.discovery-news .discovery-undo-toast-button { min-height: 44px; margin: 0; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #fff; font-size: 15px; font-weight: 650; text-decoration: underline; text-underline-offset: 4px; }
+.discovery-news .discovery-undo-toast-button:hover { background: rgb(255 255 255 / .12); color: #fff; }
+
+/* 읽기 칸 */
+.discovery-news .discovery-reader-host { min-width: 0; }
+.discovery-news .discovery-reader { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.discovery-news .discovery-reader-back { display: none; align-items: center; gap: 4px; width: fit-content; min-height: 44px; margin: 0; padding: 0 8px 0 0; border: 0; border-radius: 8px; background: none; color: #145b50; font-size: 15px; }
+.discovery-news .discovery-reader-head { min-width: 0; }
+.discovery-news .discovery-reader-head .discovery-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--news-muted); font-size: 13px; line-height: 1.5; }
+.discovery-news .discovery-reader-title { margin: 4px 0 0; font-size: 17px; font-weight: 700; line-height: 1.45; letter-spacing: -.01em; overflow-wrap: anywhere; word-break: keep-all; }
+.discovery-news .discovery-reader-title:focus { outline: none; }
+.discovery-news .discovery-reader-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0; min-width: 0; }
+.discovery-news .discovery-reader-tools > :is(.discovery-translation-link,.discovery-reader-external) {
+  display: inline-flex; align-items: center; gap: 6px; width: auto; min-width: 44px; height: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 12px;
+  background: transparent; color: #182522; font-size: 15px; line-height: 1.4; text-decoration: none;
+}
+.discovery-news .discovery-reader-tools > :is(.discovery-translation-link,.discovery-reader-external):hover { background: #f4f7f5; color: #145b50; }
+.discovery-news .discovery-reader-tools > .discovery-reader-external { margin-right: -12px; }
+.discovery-news .discovery-reader-tools svg { flex: none; width: 20px; height: 20px; }
+.discovery-news .discovery-reader-tools .discovery-reaction { color: #182522; }
+.discovery-news .discovery-reader-tools .discovery-reaction[aria-pressed=true] { color: #145b50; }
+.discovery-news .discovery-reader-tools .discovery-more { position: relative; grid-column: auto; grid-row: auto; margin: 0; }
+.discovery-news .discovery-reader-tools .discovery-more > summary { margin: 0; color: #182522; }
+.discovery-news .discovery-reader-tools .discovery-more-body { position: absolute; z-index: 30; top: 48px; right: 0; flex-direction: column; align-items: stretch; flex-wrap: nowrap; width: min(320px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; padding: 12px; border: 1px solid var(--news-line); border-radius: 16px; background: #fff; box-shadow: 0 10px 32px rgb(24 24 27 / .09); }
+.discovery-news .discovery-reader-tools .discovery-more-body .life-button { justify-content: flex-start; }
+.discovery-news .discovery-reader-notes { min-width: 0; }
+.discovery-news .discovery-reader-notes:empty { display: none; }
+.discovery-news .discovery-reader-notes > :is(.life-error,.discovery-recovery) { margin: 0 0 8px; }
+.discovery-news .discovery-reader-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--news-line); overflow: hidden; background: #fff; }
+.discovery-news .discovery-reader-host-bar { display: flex; flex: none; align-items: center; gap: 6px; height: 32px; margin: 0; padding: 0 16px; background: #f4f7f5; color: var(--news-muted); font-size: 13px; }
+.discovery-news .discovery-reader-frame { display: block; flex: 1; width: 100%; height: calc(100vh - 280px); min-height: 480px; border: 0; background: #fff; }
+.discovery-news .discovery-reader-page[data-frame=blocked] { align-items: flex-start; gap: 12px; padding: 24px; }
+.discovery-news .discovery-reader-blocked { margin: 0; color: var(--news-muted); font-size: 15px; line-height: 1.6; }
+.discovery-news .discovery-reader-fallback { min-height: 44px; text-decoration: none; }
+.discovery-news .discovery-reader-empty { display: none; }
+@media (min-width: 1101px) {
+  #lifeMain[data-split=news] .discovery-news { max-width: none; margin-inline: 0; }
+  #lifeMain[data-split=news] .discovery-layout { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); column-gap: 32px; align-items: start; }
+  #lifeMain[data-split=news] .discovery-reader-host { position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
+  .discovery-news .discovery-reader { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; height: 100%; }
+  .discovery-news .discovery-reader-notes { grid-column: 1 / -1; grid-row: 2; }
+  .discovery-news .discovery-reader-head { grid-column: 1; grid-row: 1; padding-top: 6px; }
+  .discovery-news .discovery-reader-tools { grid-column: 2; grid-row: 1; align-self: start; flex-wrap: nowrap; }
+  .discovery-news .discovery-reader-page { grid-column: 1 / -1; grid-row: 3; }
+  .discovery-news .discovery-reader-frame { height: 100%; min-height: 0; }
+  .discovery-news .discovery-reader-empty { position: sticky; top: 16px; display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; color: var(--news-muted); }
+  .discovery-news .discovery-reader-empty > p { margin: 0; font-size: 15px; }
+}
+@media (max-width: 1100px) {
+  .discovery-news[data-reading=true] .discovery-list-pane { display: none; }
+  .discovery-news[data-reading=false] .discovery-reader-host { display: none; }
+  .discovery-news .discovery-reader-back { display: inline-flex; }
+  .discovery-news .discovery-reader-tools { margin-left: -12px; }
+  /* Tools start at the left here, so the options panel opens toward the right. */
+  .discovery-news .discovery-reader-tools .discovery-more-body { right: auto; left: 0; }
+}
+@media (max-width: 760px) {
+  .discovery-news .discovery-article { grid-template-columns: 68px minmax(0, 1fr) 44px; column-gap: 8px; }
+  .discovery-news .discovery-excluded-article { grid-template-columns: 68px minmax(0, 1fr) auto; }
+  .discovery-news .discovery-undo-toast { bottom: calc(var(--haedo-dock-clearance, 84px) + 8px); }
+  body[data-haedo-immersive=news] { overflow: hidden; }
+  /* 전체 화면 읽기: 위 막대(‹ 뉴스 · 제목 · 더보기), 원문, 아래 도구 막대(담기·좋아요·번역·새 탭). */
+  .discovery-news[data-reading=true] .discovery-reader {
+    position: fixed; z-index: 80; inset: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) 52px; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0;
+    padding-top: env(safe-area-inset-top, 0px); background: #fff;
+  }
+  .discovery-news[data-reading=true] .discovery-reader-back { grid-column: 1; grid-row: 1; margin: 4px 0 4px 8px; }
+  .discovery-news[data-reading=true] .discovery-reader-head { grid-column: 2; grid-row: 1; align-self: center; min-width: 0; padding: 0 4px; text-align: center; }
+  .discovery-news[data-reading=true] .discovery-reader-head .discovery-meta { justify-content: center; font-size: 12px; }
+  .discovery-news[data-reading=true] .discovery-reader-title { display: block; margin: 0; overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+  .discovery-news[data-reading=true] .discovery-reader-notes { grid-column: 1 / -1; grid-row: 2; padding: 8px 16px 0; }
+  .discovery-news[data-reading=true] .discovery-reader-page { grid-column: 1 / -1; grid-row: 3; border-radius: 0; box-shadow: inset 0 1px 0 var(--news-line); }
+  .discovery-news[data-reading=true] .discovery-reader-frame { height: 100%; min-height: 0; }
+  .discovery-news[data-reading=true] .discovery-reader-tools {
+    margin: 0; grid-column: 1 / -1; grid-row: 4; display: flex; flex-wrap: nowrap; justify-content: space-around; padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #fff; box-shadow: 0 -1px 0 var(--news-line);
+  }
+  .discovery-news[data-reading=true] .discovery-reader-tools > :is(.discovery-reaction,.discovery-translation-link,.discovery-reader-external) { flex: 1 1 0; width: auto; height: 48px; margin: 0; padding: 0; justify-content: center; }
+  .discovery-news[data-reading=true] .discovery-tool-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .discovery-news[data-reading=true] .discovery-reader-tools .discovery-more { position: fixed; z-index: 81; top: calc(env(safe-area-inset-top, 0px) + 4px); right: 8px; }
+  .discovery-news[data-reading=true] .discovery-reader-tools .discovery-more-body { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px); right: 8px; left: auto; }
+  .discovery-news[data-reading=true] .discovery-reader-tools > .discovery-translation-link { order: 3; }
+  .discovery-news[data-reading=true] .discovery-reader-tools > .discovery-reader-external { order: 4; }
+}
+@media (forced-colors: active) {
+  .discovery-news .discovery-collection-tabs .discovery-mode[aria-selected=true] { box-shadow: none; text-decoration: underline 2px; }
+  .discovery-news .discovery-article[data-selected=true]::before { box-shadow: none; outline: 2px solid Highlight; }
+}

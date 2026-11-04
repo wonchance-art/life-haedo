@@ -154,6 +154,9 @@
     // once no IME composition is active.
     let aiPending = false,
       authorNote = "",
+      // A note about a state change with no edit (Esc, nothing selected) is
+      // not cleared by the save of earlier edits; the next edit clears it.
+      authorNoteKept = false,
       aiInserting = false,
       humanRanges = [],
       settleQueued = false,
@@ -485,7 +488,7 @@
     function setAiPending(value, announce = true) {
       if (aiPending === value) return;
       aiPending = value;
-      if (!value && announce) authorNote = "AI 글 붙여넣기 대기를 껐어요";
+      if (!value && announce) { authorNote = "AI 글 붙여넣기 대기를 껐어요"; authorNoteKept = true; }
       syncAuthorButton();
       showStatus(error);
     }
@@ -502,19 +505,19 @@
       const text = editor.getContents(range.index, range.length).ops
         .filter((op) => typeof op.insert === "string" && /[^\n]/.test(op.insert));
       if (!text.length) {
-        authorNote = "AI 글로 표시할 글자를 선택해 주세요";
+        authorNote = "AI 글로 표시할 글자를 선택해 주세요"; authorNoteKept = true;
         showStatus(error);
         return;
       }
       const marked = text.every((op) => op.attributes?.author === "ai");
       if (aiPending) setAiPending(false, false);
       editor.formatText(range.index, range.length, "author", marked ? false : "ai", "user");
-      authorNote = marked ? "AI 글 표시를 해제했어요" : "AI 글로 표시했어요";
+      authorNote = marked ? "AI 글 표시를 해제했어요" : "AI 글로 표시했어요"; authorNoteKept = false;
       syncAuthorButton();
       showStatus(error);
     }
     function mark() {
-      authorNote = "";
+      authorNote = ""; authorNoteKept = false;
       dirtyTick++;
       doc.updatedAt = new Date().toISOString();
       showStatus();
@@ -548,7 +551,7 @@
           target.revision = saved.revision;
           storedTick = tick;
           // A short AI-mark note gives way to the save state once saved.
-          if (storedTick === dirtyTick) authorNote = "";
+          if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
           if (current(token)) onSaved();
@@ -900,8 +903,10 @@
         not_enabled: "저장됨 · 곧 모든 기기에 올립니다.",
         pending: "저장됨 · 계정에 올리기 대기 중",
         paused: "저장됨 · 곧 모든 기기에 올립니다.",
-        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 별도 초안으로 남습니다.",
+        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 복구 사본으로 남습니다.",
         error: "저장됨 · 계정에 올리지 못했습니다. 자동으로 다시 시도합니다.",
+        // An older page mixed with newer modules (no SyncCommon) has no blog engine until reloaded.
+        refresh: "저장됨 · 앱을 새로고침하면 계정에 올립니다.",
       };
       serverStatus.textContent = labels[state] || labels.error;
       serverStatus.dataset.state = state;
@@ -919,6 +924,8 @@
       }
       serverActions.hidden = !serverActions.children.length;
     }
+    // No blog engine because this page lacks sync-common.js while the blog module is the newer one.
+    const staleApp = () => !blogSync && !!life.BlogSync && !life.SyncCommon;
     async function readServerState() {
       if (mode !== "read" || doc?.status !== "saved" || serverBusy) return;
       const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
@@ -930,7 +937,7 @@
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
-        serverValue = { id, revision, status: "error" };
+        serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       }
       showServerStatus();
     }
@@ -945,7 +952,7 @@
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
-        serverValue = { id, revision, status: "error" };
+        serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       } finally {
         if (sequence === serverSequence) {
           serverBusy = false;
@@ -1649,7 +1656,7 @@
             }
             editor.setSelection(range.index + text.length, 0, "silent");
             if (ai) {
-              authorNote = "붙여넣은 글을 AI 글로 표시했어요";
+              authorNote = "붙여넣은 글을 AI 글로 표시했어요"; authorNoteKept = false;
               syncAuthorButton();
               showStatus(error);
             }

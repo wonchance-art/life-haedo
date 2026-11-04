@@ -2,6 +2,7 @@
 <html lang="ko" data-theme="spring">
 <head>
   <meta charset="UTF-8">
+  <!-- The frame-src policy is added by assets/life/shell.js. A CSP meta here stops Chromium's preload scanner and loads the scripts one by one. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그. 먼저 비공개로 보관하고 공개할 내용은 직접 고릅니다.">
   <meta name="theme-color" content="#ffffff">
@@ -12,6 +13,7 @@
   <link rel="stylesheet" href="assets/life/ui.css">
   <link rel="stylesheet" href="assets/life/source-markdown.css">
   <link rel="stylesheet" href="assets/life/source-folders.css">
+  <link rel="stylesheet" href="assets/life/records.css">
   <link rel="stylesheet" href="assets/life/page-posts.css">
   <link rel="stylesheet" href="vendor/quill/quill.snow.css">
   <link rel="stylesheet" href="assets/life/photo-post.css">
@@ -25,6 +27,7 @@
   <link rel="stylesheet" href="assets/life/interest.css">
   <link rel="stylesheet" href="assets/life/discovery.css">
   <link rel="stylesheet" href="assets/life/annual-plan.css">
+  <link rel="stylesheet" href="assets/life/schedule.css">
   <link rel="stylesheet" href="assets/life/naver-blog.css">
   <link rel="stylesheet" href="assets/life/collection.css">
   <link rel="stylesheet" href="assets/haedo-shell.css">
@@ -32,10 +35,11 @@
   <link rel="stylesheet" href="assets/life/blog-manager.css">
   <link rel="stylesheet" href="assets/life/blog-series.css">
   <link rel="stylesheet" href="assets/life/preservation.css">
+  <link rel="stylesheet" href="assets/life/settings.css">
   <link rel="stylesheet" href="assets/life/original-attachments.css">
   <link rel="stylesheet" href="assets/haedo-motion.css">
 </head>
-<body class="haedo-shell" data-page="home" data-life-home="true" data-haedo-section="home">
+<body class="haedo-shell" data-page="home" data-life-home="true" data-haedo-section="schedule">
   <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
   <div id="lifeAccountHost" class="haedo-account-host">
     <details id="lifeAccount" class="life-account haedo-account" data-private hidden>
@@ -60,7 +64,7 @@
         <div>
           <p class="haedo-blog-example-label">가상 사용 예시</p>
           <h3>산책하면서 떠올린 생각</h3>
-          <p>오래 머물고 싶은 장소에 대해 짧은 글을 쓰고 사진을 붙입니다. 예전에 적어둔 메모를 자료실에서 다시 읽으며 생각을 보탭니다.</p>
+          <p>오래 머물고 싶은 장소에 대해 짧은 글을 쓰고 사진을 붙입니다. 예전에 적어둔 메모를 자료에서 다시 읽으며 생각을 보탭니다.</p>
           <p>저장한 글은 내 블로그에서 다시 읽고 고칠 수 있습니다. 기존 자료에서 고른 내용의 공개 사본은 별도로 검토하고 공개합니다.</p>
         </div>
       </details>
@@ -132,11 +136,14 @@
   <script src="assets/life/discovery-ui.js"></script>
   <script src="assets/life/annual-plan-ui.js"></script>
   <script src="assets/life/annual-plan.js"></script>
+  <script src="assets/life/schedule-data.js"></script>
+  <script src="assets/life/schedule-ui.js"></script>
   <script src="assets/life/library-meta.js"></script>
   <script src="assets/life/storage.js"></script>
   <script src="assets/life/account-materials.js"></script>
   <script src="assets/life/remote.js"></script>
   <script src="assets/platform-life-remote.js"></script>
+  <script src="assets/life/sync-lifecycle.js"></script>
   <script src="assets/life/sync.js"></script>
   <script src="assets/life/composition-remote.js"></script>
   <script src="assets/life/composition-sync.js"></script>
@@ -152,6 +159,7 @@
   <script src="assets/life/source-markdown.js"></script>
   <script src="assets/life/source-folders.js"></script>
   <script src="assets/life/source-folders-ui.js"></script>
+  <script src="assets/life/records-list.js"></script>
   <script src="assets/life/reading-position.js"></script>
   <script src="assets/life/legacy.js"></script>
   <script src="assets/life/icons.js"></script>
@@ -195,6 +203,7 @@
   <script src="assets/life/preservation-ui.js"></script>
   <script src="assets/life/full-backup.js"></script>
   <script src="assets/life/full-backup-ui.js"></script>
+  <script src="assets/life/settings-ui.js"></script>
   <script src="assets/life/blog-public.js"></script>
   <script src="assets/life/blog-series-public.js"></script>
   <script src="assets/life/blog-series.js"></script>

@@ -208,7 +208,7 @@ async function main() {
       let b = (await snapshot(page)).bundle; const record = b.records.find(r => r.note === note); assert(record);
       assert.equal(record.text, quote); assert.deepEqual(record.sourceRefs[0], { sourceId: f.source.id, sourceVersionId: f.version.id, locator: { start, end } });
       if (await page.locator('#lifeSearchReturn').count()) await click(page, '#lifeSearchReturn');
-      else await byName(page, '자료실로 돌아가기');
+      else await byName(page, '자료로 돌아가기');
       await page.locator('#lifeSearch').fill(note);
       const hit = page.locator('.life-excerpt-open').first(), focusKey = await hit.getAttribute('data-focus-key'); await hit.click(); await settle(page);
       await page.waitForFunction(text => getSelection().toString() === text, quote); assert.equal(await page.locator('#lifeSourceText').textContent(), raw);

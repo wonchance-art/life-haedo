@@ -98,6 +98,18 @@ test('blog editor and reader addresses reload from the installed shell offline',
   }
   assert.equal(h.state().fetches, 0);
 });
+test('일정 calendar addresses with a date reload from the installed shell offline', async () => {
+  // ?view=month&date=… (2026-11-02 B1) must not fall through to the network or a mixed online page.
+  const h = harness({ fetchResult: new Error('offline') });
+  h.entries.set(request('index.html').url, new Response('unified home'));
+  h.entries.set(request('life.html').url, new Response('life home'));
+  for (const query of ['section=schedule&view=month&date=2026-10-28', 'section=schedule&view=day&date=2026-10-29', 'section=tools&date=2025-05-01',
+    'section=schedule&view=quarter&date=2026-12-31', 'section=schedule&view=week&date=2027-01-01', 'section=schedule&view=tools&date=2025-05-01']) {
+    assert.equal(await (await h.run('fetch', request('index.html?' + query, 'navigate'))).text(), 'unified home', query);
+    assert.equal(await (await h.run('fetch', request('life.html?' + query, 'navigate'))).text(), 'life home', query);
+  }
+  assert.equal(h.state().fetches, 0);
+});
 test('platform Auth and life modules use one installed bundle without online replacement', async () => {
   const h = harness({ fetchResult: new Response('different online version') });
   for (const path of ['assets/platform-auth.js', 'assets/platform-config.js', 'assets/platform-ui.js', 'assets/app.js', 'timeline.html', 'index.html', 'assets/life/core.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/icons.js', 'assets/life/ui.css', 'assets/life/remote.js', 'assets/life/sync.js', 'vendor/supabase/supabase.js', 'vendor/idb/idb.js', 'vendor/daisyui.css']) {

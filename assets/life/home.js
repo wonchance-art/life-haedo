@@ -291,10 +291,10 @@
       area.open = libraryOpen;
       area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
       const summary = el('summary');
-      summary.append(el('span', '자료실'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
+      summary.append(el('span', '자료'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
       area.append(summary);
-      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료실');
-      [['자료 가져오기', 'import'], ['자료 목록', 'sources'], ['컬렉션', 'collection'], ['연표', 'time']].forEach(([label, mode]) => {
+      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료');
+      [['자료 가져오기', 'import'], ['자료 목록', 'sources'], ['컬렉션', 'collection']].forEach(([label, mode]) => {
         const button = action(context, label, () => navigate(mode));
         button.dataset.homeDestination = mode;
         button.dataset.focusKey = 'home:library:' + mode;
@@ -318,6 +318,7 @@
       return rows;
     }
     function postCover(context, row, article, open) {
+      // `article` is the row's content column (2026-11-02 일정 목록: time · icon · content).
       if (row.kind !== 'photo' || !row.photos) return;
       const epoch = mediaGeneration;
       const frame = action(context, '', open, 'home-post-media');
@@ -374,6 +375,19 @@
       time.title = prefix + new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
       return time;
     }
+    // 일정 목록 rows: a time column and an icon column before the content (decision 2026-11-02).
+    function rowTime(value) {
+      const text = life.ScheduleData?.timeOf(value) || '';
+      const time = el('span', text, 'home-row-time'); if (!text) time.setAttribute('aria-hidden', 'true');
+      return time;
+    }
+    function rowMark(glyph) { const mark = el('span', null, 'home-row-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(life.Icons.create(glyph)); return mark; }
+    function dayHeading(value) {
+      const day = life.ScheduleData?.dayOf(value);
+      if (!day) return el('h2', '날짜 미확인', 'home-day-heading');
+      const heading = el('h2', life.ScheduleData.dayTitle(day), 'home-day-heading'); heading.dataset.day = day;
+      return heading;
+    }
     function blogPost(context, row) {
       const article = el('article', null, 'home-post'); article.dataset.homeKind = row.kind;
       const target = row.kind === 'photo' ? { photoPostId: row.id } : { postId: row.id };
@@ -395,11 +409,13 @@
         const attached = el('p', row.attachments.map(item => item.title).join(' · '), 'home-post-attachments');
         content.append(attached);
       }
-      article.append(content); postCover(context, row, article, open);
+      const body = el('div', null, 'home-post-body');
+      body.append(content); postCover(context, row, body, open);
       const footer = el('div', null, 'home-post-footer');
       const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
       read.append(life.Icons.create('arrow'));
-      footer.append(meta, read); article.append(footer);
+      footer.append(meta, read); body.append(footer);
+      article.append(rowTime(row.updatedAt), rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
       return article;
     }
     // One account, one blog: a post kept in another library of this account
@@ -427,7 +443,7 @@
       if (row.title?.trim() && row.body?.trim()) copy.append(el('span', snippet(row.body), 'home-draft-excerpt'));
       const time = modifiedDate(row.updatedAt);
       if (time) { time.className = 'life-meta'; copy.append(time); }
-      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(open); return article;
+      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowTime(row.updatedAt), rowMark('write'), open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];
@@ -587,7 +603,12 @@
         error.append(el('p', applicable.map(item => item.label).join(', ') + '을 불러오지 못했어요. 확인된 글만 표시합니다.', 'life-meta'),
           action(context, '다시 불러오기', async () => { await load(context, applicable.map(item => item.key)); })); fragment.append(error);
       }
-      matched.slice(0, listState.limit).forEach(row => fragment.append(row.tab === 'drafts' || row.kind === 'photo-draft' ? draftRow(context, row) : blogPost(context, row)));
+      let previousDay;
+      matched.slice(0, listState.limit).forEach(row => {
+        const day = life.ScheduleData?.dayOf(row.updatedAt) || null;
+        if (day !== previousDay) { fragment.append(dayHeading(row.updatedAt)); previousDay = day; }
+        fragment.append(row.tab === 'drafts' || row.kind === 'photo-draft' ? draftRow(context, row) : blogPost(context, row));
+      });
       if (!matched.length && !applicable.length) {
         const empty = el('div', null, 'home-first-post');
         const title = query ? '일치하는 내 글이 없어요.' : listState.tab === 'drafts' ? '작성 중인 초안이 없어요.' : listState.tab === 'archive' ? '보관한 글이 없어요.' : '첫 글을 써보세요.';

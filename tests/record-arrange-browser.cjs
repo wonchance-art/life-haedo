@@ -201,7 +201,7 @@ async function main() {
       await page.locator(`#wbIncomingSelection input[data-version-id="${f.refs[1].versionId}"]`).uncheck();
       await apply(page,'검토에서 원문 하나만 고른 항목'); const after=await waitSaved(page,w=>w.page.entries.length===1);
       assert.deepEqual(after.workbench.page.entries[0].parts.map(p=>p.versionId),[f.refs[0].versionId]);
-      await page.getByRole('button',{name:'자료실로 돌아가기',exact:true}).click(); await settle(page);
+      await page.getByRole('button',{name:'자료로 돌아가기',exact:true}).click(); await settle(page);
       assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(),0);
       await selectMode(page); await page.locator('#lifeSearch').fill(''); await selectVersion(page,f.refs[2].versionId);
       await page.locator(`.life-source-card[data-version-id="${f.refs[1].versionId}"] .life-source-open`).click(); await settle(page);
@@ -214,7 +214,7 @@ async function main() {
     await check('write failure preserves one accepted draft, blocks navigation and retries without duplicate', async ({ page }) => {
       const f = await fixture(page), before = await current(page); await oldSelection(page, f, false); await review(page, 'page'); await abortWorkbenchWrites(page, true); await apply(page, '실패해도 한 번만 담기는 기록');
       await page.locator('#wbError').waitFor({ state: 'visible' }); assert.equal(await page.locator('article[data-entry-id]').count(), 1); assert.deepEqual(await current(page), before);
-      await page.locator('[data-haedo-section="tools"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
+      await page.locator('[data-haedo-section="manage"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'), 'page'); assert.equal(await page.locator('article[data-entry-id]').count(), 1);
       await abortWorkbenchWrites(page, false); await page.getByRole('button', { name: '다시 저장', exact: true }).click(); const after = await waitSaved(page, w => w.page.entries.length === 1);
       assert.equal(after.workbench.page.entries[0].title, '실패해도 한 번만 담기는 기록'); assert.deepEqual(after.workbench.page.entries[0].parts.map(p => p.versionId), [f.refs[0].versionId]); assert.deepEqual(after.bundle, before.bundle);
@@ -223,9 +223,9 @@ async function main() {
       const f = await fixture(page); const other = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, b = await s.createWorkspace('다른 익명 공간'); await s.setActive(id); return b.workspaceId; }, f.workspaceId);
       await oldSelection(page, f, false); await page.evaluate(() => { window.__arrangeHoldRead = true; window.__arrangeReadEntered = false; });
       await page.locator('#lifeSelectionBar .life-arrange-page').click(); await page.waitForFunction(() => __arrangeReadEntered);
-      await page.locator('[data-haedo-section="tools"]').click(); await settle(page); const finished = await page.evaluate(() => window.__arrangeReadsFinished || 0);
+      await page.locator('[data-haedo-section="manage"]').click(); await settle(page); const finished = await page.evaluate(() => window.__arrangeReadsFinished || 0);
       await page.evaluate(() => __arrangeReleaseRead()); await page.waitForFunction(n => window.__arrangeReadsFinished > n, finished);
-      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools'); assert.equal(await page.locator('#wbIncomingSelection').count(), 0);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'manage'); assert.equal(await page.locator('#wbIncomingSelection').count(), 0);
       await nav(page, 'manage'); await page.getByRole('button', { name: '현재 자료공간', exact: true }).click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await nav(page, 'records');
       await nav(page, 'records'); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
       assert.equal((await current(page)).bundle.workspaceId, other); assert.equal((await current(page)).workbench.page.entries.length, 0);

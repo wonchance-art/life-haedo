@@ -39,10 +39,10 @@ const Photo = require("../assets/life/photo-post.js"), Blog = require("../assets
       assert.equal(metrics.horizontalOverflow, false); for (const key of ["smallTargets", "smallInputs", "unnamed", "contrastFailures"]) assert.deepEqual(metrics[key], []);
       await page.screenshot({ path: path.join(out, "post-" + width + ".png") });
     }
-    await page.getByRole("button", { name: "사진 원본 크기로 보기" }).click(); assert.equal(await page.locator(".blog-photo img").evaluate((i) => Math.round(i.getBoundingClientRect().width)), 1600);
+    await page.getByRole("button", { name: "사진 크게 보기" }).click(); assert.equal(await page.locator(".blog-photo img").evaluate((i) => Math.round(i.getBoundingClientRect().width)), 1600);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); report.checks.push("Public photo original bytes/dimensions, safe text, three widths and bounded original-size scrolling");
     photoBroken = true; await page.reload(); await page.locator(".blog-photo-error").waitFor({ state: "visible" });
-    assert.equal(await page.getByRole("button", { name: "사진 원본 크기로 보기" }).isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "사진 크게 보기" }).isDisabled(), true);
     assert.match(await page.locator(".blog-document").innerText(), /익명의 여행/);
     photoBroken = false; await page.reload(); await page.waitForFunction(() => document.querySelector(".blog-photo img")?.naturalWidth === 1600);
     report.checks.push("An undecodable photo retains the article and shows a readable recovery state");

@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const Workbench = require('../assets/life/workbench.js');
 const source = fs.readFileSync(require.resolve('../assets/life/composition-sync.js'), 'utf8');
+// The page loads sync-lifecycle.js before the engines (S2).
+const lifecycleSource = fs.readFileSync(require.resolve('../assets/life/sync-lifecycle.js'), 'utf8');
 const copy = value => structuredClone(value);
 const OWNER = { projectUrl: 'https://composition-fixture.example.invalid', userId: '11111111-1111-4111-8111-111111111111' };
 const WORKSPACE = '33333333-3333-4333-8333-333333333333';
@@ -109,7 +111,7 @@ function fixture(t, options = {}) {
     setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); timerScheduled.resolve(); return id; },
     clearTimeout(id) { timers.delete(id); }, setInterval() { return 1; }, clearInterval() {}
   };
-  vm.runInNewContext(source, context);
+  vm.createContext(context); vm.runInContext(lifecycleSource, context); vm.runInContext(source, context);
   // Engine conflict-recording tests pass autoResolve: null; the default latest-wins
   // resolver is exercised by omitting the option (defaultResolver: true).
   const manager = context.module.exports.create({ storage, sourceSync, remote, auth,

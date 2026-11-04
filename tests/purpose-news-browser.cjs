@@ -10,6 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { CompositionCloud } = require('./composition-sync-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
+const { articleControl, openReader } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
 const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const Core = require('../assets/life/core.js');
@@ -50,7 +51,11 @@ async function reveal(control) {
   // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
   await control.waitFor({ state: 'attached' });
   const inSettings = await settings.locator(control).count() > 0;
-  if (inSettings && !await settings.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  if (inSettings && !await settings.isVisible()) {
+    // 2026-11-03: the settings icon sits with the list; an open reader below 1101px is closed first with ‹ 뉴스.
+    if (await page.locator('#discoveryReaderBack').isVisible()) { await page.locator('#discoveryReaderBack').click(); await idle(page); }
+    await page.locator('#discoveryNewsSettings').click();
+  }
   else if (!inSettings && await settings.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
   const count = await control.locator('xpath=ancestor::details').count();
   for (let index = count; index > 0; index--) {
@@ -117,17 +122,19 @@ async function main() {
       await page.locator('#discoveryTopicRetry').click(); await idle(page);
       await waitForState(page, async value => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(row => row.label === value); }, privateTopic, 'manual topic committed');
       report.nativeIDBAborts = await page.evaluate(() => __purposeIDBAborts); assert.equal(report.nativeIDBAborts, 1); assert.deepEqual((await snapshot(page)).bundle, initial.bundle);
-      await page.locator('#discoveryTopicRelated').click(); await idle(page); assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.equal(await page.locator('#discoverySort').inputValue(), 'related'); assert.equal(await page.evaluate(() => document.activeElement.id), 'discoverySort');
-      await page.locator('#discoverySort').selectOption('latest'); await idle(page);
+      await page.locator('#discoveryTopicRelated').click(); await idle(page); assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.equal(await page.locator('#discoverySort').inputValue(), 'related'); assert.equal(await page.evaluate(() => document.activeElement.id), 'discoveryFilterToggle'); // 2026-11-03: 정렬 moved into the filter disclosure; its icon takes focus.
+      await page.locator('#discoveryFilterToggle').click(); await page.locator('#discoverySort').selectOption('latest'); await idle(page); // 2026-11-03: 정렬 is inside the filter disclosure.
     });
     await check('language and record management preserve feed order, explicit reaction semantics and translation off', async () => {
       const before = await snapshot(page), order = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
       await (await reveal(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
-      await page.locator('#discoveryNewsSettingsBack').click(); assert.equal(await page.locator('#discoveryList [data-discovery-translate]').count(), 3);
-      const first = page.locator('#discoveryList [data-discovery-id="first"]'); await first.locator('[data-discovery-reaction="bookmarked"]').click(); await idle(page);
+      // 2026-11-03: translation is an action of the open article's reader, not of every list row.
+      await page.locator('#discoveryNewsSettingsBack').click(); assert.equal(await page.locator('#discoveryList [data-discovery-translate]').count(), 0);
+      for (const id of ['first', 'second', 'third']) assert.equal(await (await openReader(page, page.locator('#discoveryList [data-discovery-id="' + id + '"]'))).locator('[data-discovery-translate]').count(), 1, id + ' reader offers translation');
+      const first = page.locator('#discoveryList [data-discovery-id="first"]'); await (await articleControl(page, first, '[data-discovery-reaction="bookmarked"]')).click(); await idle(page);
       let after = await snapshot(page); assert.equal(after.actions.entries[0].bookmarked, true); assert.equal(after.actions.entries[0].liked, false); assert.equal(after.actions.personalizationEnabled, false); assert.deepEqual(after.bundle, before.bundle);
       assert.deepEqual(await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), order);
-      await first.locator('[data-discovery-reaction="bookmarked"]').click(); await idle(page); await (await reveal(page.locator('#discoveryCancelled'))).click(); await idle(page);
+      await (await articleControl(page, first, '[data-discovery-reaction="bookmarked"]')).click(); await idle(page); await (await reveal(page.locator('#discoveryCancelled'))).click(); await idle(page);
       assert.equal(await page.locator('#discoveryList [data-discovery-id="first"]').count(), 1); after = await snapshot(page); assert.deepEqual(after.feedback, before.feedback);
       await page.locator('#discoveryDiscover').click(); await idle(page);
       await (await reveal(page.locator('#discoveryTranslationLanguage'))).selectOption('original'); await idle(page);
@@ -136,7 +143,7 @@ async function main() {
     });
     await check('article handoff requires review and explicit storage, preserves exact originals and returns to news', async () => {
       const before = await snapshot(page), first = page.locator('#discoveryList [data-discovery-id="first"]');
-      const action = await reveal(first.locator('[data-discovery-import]')); assert.equal(await action.innerText(), '링크를 자료실에 보관'); await action.click();
+      const action = await reveal(await articleControl(page, first, '[data-discovery-import]')); assert.equal(await action.innerText(), '링크를 자료에 보관'); await action.click();
       await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual((await snapshot(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); assert.deepEqual((await snapshot(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();

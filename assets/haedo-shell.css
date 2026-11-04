@@ -3,7 +3,7 @@
 :root {
   --haedo-paper:#fff; --haedo-ink:#182522; --haedo-muted:#5d6b65;
   --haedo-canvas:#f4f6f5; --haedo-selected:#eaf1ed; --haedo-soft:#f4f7f5;
-  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-link:#145b50; --haedo-focus:#267a69;
+  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-on-accent:#fff; --haedo-accent-hover:#104a41; --haedo-accent-active:#0c3d35; --haedo-link:#145b50; --haedo-focus:#267a69;
   --haedo-radius:16px; --haedo-control-radius:12px; --haedo-nav-width:216px;
   --haedo-dock-clearance:0px; --haedo-header-height:64px;
   --life-font:var(--haedo-font); --field-line:#86968d; --color-primary:var(--haedo-accent);
@@ -35,17 +35,36 @@ body.haedo-shell::before{display:none}
 .haedo-shell :is(button,a,summary){-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .haedo-shell :is(button,summary){cursor:pointer}
 .haedo-shell :is(button,input,select,textarea):disabled{cursor:not-allowed}
+/* 2026-11-02 soft redesign: 글쓰기 on top, then 뉴스·일정·자료·설정 (label menu, rail, bottom tabs). */
 .haedo-nav{
   position:fixed;z-index:60;top:24px;left:max(16px,calc((100vw - 1000px)/2));
-  width:192px;display:flex;flex-direction:column;align-items:stretch;gap:8px;
+  width:192px;display:flex;flex-direction:column;align-items:stretch;gap:4px;
   padding:0;background:transparent;border:0;border-radius:0;
-  color:var(--haedo-muted);font:15px/1.5 var(--haedo-font);
+  color:var(--haedo-muted);font:var(--haedo-text-control)/1.5 var(--haedo-font);
 }
 .haedo-brand{
-  display:flex;align-items:center;gap:10px;min-width:44px;min-height:60px;padding:8px 16px;margin-bottom:20px;
-  color:var(--haedo-accent);font-size:29px;font-weight:800;letter-spacing:-.04em;text-decoration:none;
+  display:flex;align-items:center;gap:12px;min-width:44px;min-height:48px;padding:4px 12px;margin-bottom:12px;
+  color:var(--haedo-ink);font-size:20px;font-weight:750;letter-spacing:-.03em;text-decoration:none;
 }
+.haedo-nav-compose{
+  position:relative;display:flex;align-items:center;gap:8px;min-height:44px;margin:0 0 16px;padding:0 16px;
+  border-radius:var(--haedo-control-radius);background:var(--haedo-accent);
+  font-size:var(--haedo-text-control);font-weight:650;text-decoration:none;
+  transition:background-color 150ms ease-out,color 150ms ease-out;
+}
+/* The 글쓰기 colour is a token on every page; page link rules (e.g. .platform a{color:inherit}) cannot reach it. */
+.haedo-shell a.haedo-nav-compose{color:var(--haedo-on-accent)}
+.haedo-nav-compose>.life-glyph{flex:none;width:var(--haedo-icon-control);height:var(--haedo-icon-control)}
+.haedo-nav-compose>.haedo-compose-narrow{display:none}
+.haedo-nav-compose>.haedo-nav-text{font-weight:inherit}
+.haedo-nav-compose>.haedo-tooltip{display:none}
+.haedo-icon-button.haedo-heading-compose{display:none}
+.haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-accent-hover);color:var(--haedo-on-accent)}
+.haedo-shell a.haedo-nav-compose:active{background:var(--haedo-accent-active)}
+/* While writing a new post, 글쓰기 is the current screen (decision 15). */
+.haedo-shell a.haedo-nav-compose[aria-current=page]{background:var(--haedo-selected);color:var(--haedo-accent)}
 .haedo-brand-mark{display:none;width:28px;height:28px;flex:none}
+.haedo-shell a.haedo-brand{color:var(--haedo-ink)}
 .haedo-icon-button{
   position:relative;display:inline-flex;align-items:center;justify-content:center;
   flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;
@@ -53,17 +72,18 @@ body.haedo-shell::before{display:none}
   transition:color 150ms ease-out,background-color 150ms ease-out,transform 150ms ease-out;
 }
 .haedo-shell .haedo-icon-button{color:var(--haedo-muted)}
-.haedo-nav .haedo-nav-link{justify-content:flex-start;gap:16px;flex:0 0 52px;width:100%;height:52px;padding:12px 16px;border-radius:14px;font-size:16px}
+.haedo-nav .haedo-nav-link{justify-content:flex-start;gap:12px;flex:0 0 44px;width:100%;height:44px;padding:0 12px;border-radius:14px;font-size:var(--haedo-text-control)}
 .haedo-nav-text{display:block;font-weight:550}
-.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:700}
-.haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-accent);background:var(--haedo-selected)}
+.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:650}
+.haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-ink);background:var(--haedo-selected)}
+.haedo-shell .haedo-nav-link[aria-current=page]>.life-glyph{color:var(--haedo-accent)}
 .haedo-nav-link[aria-current=page]::before{display:none}
 .haedo-icon-button .life-glyph,[data-haedo-icon]{display:block;flex:none;width:20px;height:20px}
 .haedo-tooltip{
   display:none;position:absolute;z-index:100;top:calc(100% + 6px);right:0;
-  width:max-content;max-width:min(220px,calc(100vw - 48px));padding:6px 10px;
+  width:max-content;max-width:min(220px,calc(100vw - 48px));padding:8px 12px;
   border-radius:7px;background:var(--haedo-ink);color:var(--haedo-paper);
-  font:400 12px/1.6 var(--haedo-font);word-break:keep-all;overflow-wrap:anywhere;pointer-events:none;
+  font:400 var(--haedo-text-badge)/1.6 var(--haedo-font);word-break:keep-all;overflow-wrap:anywhere;pointer-events:none;
 }
 .haedo-icon-button:focus-visible>.haedo-tooltip{display:block}
 .haedo-icon-button[data-tooltip-dismissed=true]>.haedo-tooltip{display:none!important}
@@ -78,14 +98,21 @@ body.haedo-shell::before{display:none}
 .haedo-icon-button:active:not(:disabled){background:var(--haedo-selected);transform:scale(.96)}
 .haedo-shell .haedo-icon-button:is([aria-current=page],[aria-expanded=true]){color:var(--haedo-accent)}
 .haedo-page-heading{display:flex;align-items:center;justify-content:space-between;min-height:64px;gap:16px;margin:0 0 24px;padding:0;border:0}
-.haedo-heading-title,.haedo-heading-actions{display:flex;align-items:center;gap:6px;min-width:0}
+.haedo-heading-title,.haedo-heading-actions{display:flex;align-items:center;gap:8px;min-width:0}
 .haedo-heading-title{flex:1}.haedo-heading-actions{flex:none}
-.haedo-page-heading h1{margin:0;color:var(--haedo-ink);font:750 22px/1.5 var(--haedo-font);letter-spacing:-.03em;overflow-wrap:anywhere;word-break:keep-all}
-.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar.haedo-page-heading{min-height:56px;margin-bottom:0}
-.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--haedo-muted)}
+.haedo-page-heading h1{margin:0;color:var(--haedo-ink);font:750 var(--haedo-text-title)/1.5 var(--haedo-font);letter-spacing:-.03em;overflow-wrap:anywhere;word-break:keep-all}
+.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar.haedo-page-heading{margin-bottom:0}
+/* 2026-11-02 A: one emphasis per screen. In 일정's list the menu's 글쓰기 is the primary action, so the list's own write buttons are secondary. */
+.haedo-shell #lifeMain[data-mode=home] .life-primary{background:var(--haedo-paper);border-color:var(--haedo-line);color:var(--haedo-accent)}
+.haedo-shell #lifeMain[data-mode=home] .life-primary:hover:not(:disabled){background:var(--haedo-selected);border-color:var(--haedo-line);color:var(--haedo-accent)}
+.haedo-shell #lifeMain[data-mode=home] .life-primary:active:not(:disabled){background:var(--haedo-selected);color:var(--haedo-accent)}
+/* 2026-11-02 A: "일정" is the page title; the blog profile below steps down to a row label so two titles do not compete.
+   The schedule list (bundle B) replaces this profile row. */
+.haedo-shell #lifeMain[data-mode=home] .home-profile-open>.home-author-name{font-size:var(--haedo-text-body);font-weight:650;line-height:1.5;letter-spacing:-.01em}
+.haedo-shell #lifeMain[data-mode=home] .home-profile-copy:not(:has(.home-blog-description:not([hidden]))) .home-author-name{grid-row:1/3;align-self:center}
 .haedo-page-heading h1::after{display:none}
 .haedo-planning-nav{display:flex;align-items:center;gap:4px;margin:0 0 20px;border-bottom:1px solid var(--haedo-line)}
-.haedo-planning-nav>a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:10px 16px;color:var(--haedo-muted);text-decoration:none;font-size:14px;line-height:1.5;font-weight:600;border-bottom:2px solid transparent}
+.haedo-planning-nav>a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:12px 16px;color:var(--haedo-muted);text-decoration:none;font-size:var(--haedo-text-control);line-height:1.5;font-weight:600;border-bottom:2px solid transparent}
 .haedo-planning-nav>a:hover{color:var(--haedo-ink);background:var(--haedo-soft)}
 .haedo-planning-nav>a[aria-current=page]{color:var(--haedo-accent);border-bottom-color:currentColor;font-weight:750}
 .haedo-planning-nav>a:focus-visible{outline:2px solid var(--haedo-focus);outline-offset:-2px}
@@ -95,43 +122,44 @@ body.haedo-shell::before{display:none}
 .haedo-account-panel{
  position:absolute;z-index:70;right:0;top:54px;width:260px;max-width:calc(100vw - 40px);padding:20px;
  border:1px solid var(--haedo-line);border-radius:16px;background:var(--haedo-paper);overflow-wrap:anywhere;
- display:flex;flex-direction:column;align-items:stretch;gap:14px;box-shadow:0 10px 32px rgb(24 24 27 / .09);
+ display:flex;flex-direction:column;align-items:stretch;gap:16px;box-shadow:0 10px 32px rgb(24 24 27 / .09);
 }
-.haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:13px}
+.haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:var(--haedo-text-meta)}
 .haedo-account-host{position:absolute;z-index:45;top:12px;right:max(48px,calc((100% - var(--haedo-nav-width) - 720px)/2));width:44px}
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:12px;font-weight:650}
-.haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:#104a41;border-color:#104a41;color:#fff}
-.haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:#0c3d35;color:#fff}
+.haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
+.haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}
 .haedo-shell .photo-commandbar > .photo-save{background:var(--haedo-accent);border-radius:12px}
-.haedo-shell .photo-commandbar > .photo-save:hover{background:#104a41}
+.haedo-shell .photo-commandbar > .photo-save:hover{background:var(--haedo-accent-hover)}
 .haedo-welcome{
  width:calc(100% - 48px);max-width:900px;margin:24px auto;padding:24px 40px 44px;min-height:calc(100svh - 48px);
  border-radius:0;background:var(--haedo-paper);display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:32px 36px;align-content:start;
 }
-.haedo-welcome>.haedo-page-heading{grid-column:1/-1;margin-bottom:18px}
+.haedo-welcome>.haedo-page-heading{grid-column:1/-1;margin-bottom:20px}
 .haedo-welcome-copy{padding:8px 0;min-width:0}
-.haedo-welcome-copy h2{margin:0;font-size:40px;font-weight:750;line-height:1.3;letter-spacing:-.035em;word-break:keep-all}
-.haedo-welcome-copy p{margin:18px 0 26px;font-size:15px;line-height:1.9;color:var(--haedo-muted);word-break:keep-all}
-.haedo-welcome .life-primary{min-height:48px;padding:10px 22px;gap:14px;text-decoration:none}
-.haedo-welcome-copy .haedo-blog-scope{margin:18px 0 0;font-size:12px;line-height:1.8}
+.haedo-welcome-copy h2{margin:0;font-size:var(--haedo-text-title-large);font-weight:750;line-height:1.3;letter-spacing:-.035em;word-break:keep-all}
+.haedo-welcome-copy p{margin:20px 0 28px;font-size:var(--haedo-text-control);line-height:1.9;color:var(--haedo-muted);word-break:keep-all}
+.haedo-welcome .life-primary{min-height:48px;padding:12px 24px;gap:16px;text-decoration:none}
+.haedo-welcome-copy .haedo-blog-scope{margin:20px 0 0;font-size:var(--haedo-text-badge);line-height:1.8}
 .haedo-blog-example{margin-top:24px;border-top:1px solid var(--haedo-line)}
-.haedo-blog-example summary{min-height:44px;padding:12px 0;font-size:14px;cursor:pointer}
-.haedo-blog-example>div{padding:8px 0 4px}.haedo-blog-example h3{margin:6px 0 0;font-size:18px}
-.haedo-welcome-copy .haedo-blog-example p{margin:10px 0;font-size:14px}
-.haedo-welcome-post{align-self:start;margin:10px 0 0;padding:24px;border:1px solid var(--haedo-line);border-radius:20px;background:white}
+.haedo-blog-example summary{min-height:44px;padding:12px 0;font-size:var(--haedo-text-control);cursor:pointer}
+.haedo-blog-example>div{padding:8px 0 4px}.haedo-blog-example h3{margin:8px 0 0;font-size:var(--haedo-text-body)}
+.haedo-welcome-copy .haedo-blog-example p{margin:12px 0;font-size:var(--haedo-text-control)}
+.haedo-welcome-post{align-self:start;margin:12px 0 0;padding:24px;border:1px solid var(--haedo-line);border-radius:20px;background:white}
 .haedo-welcome-author{display:flex;align-items:center;gap:12px;margin-bottom:20px}
-.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:var(--haedo-selected);color:var(--haedo-accent);border-radius:50%;font-size:15px;font-weight:700}
-.haedo-welcome-author strong{display:block;font-size:14px}.haedo-welcome-author small{display:block;margin-top:2px;font-size:11px;color:var(--haedo-muted)}
-.haedo-welcome-post h3{font-size:22px;line-height:1.55;letter-spacing:-.03em;margin:0 0 12px}
-.haedo-welcome-post p{font-size:15px;line-height:1.9;margin:0 0 16px}
-.haedo-welcome-quote{padding:14px 16px;margin:18px 0;background:var(--haedo-soft);border-radius:12px;font-size:14px;line-height:1.85}
-.haedo-welcome-post-footer{padding-top:16px;border-top:1px solid var(--haedo-line);color:var(--haedo-muted);font-size:11px}
-.haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:10px;color:var(--haedo-muted);font-size:12px}
+.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:var(--haedo-selected);color:var(--haedo-accent);border-radius:50%;font-size:var(--haedo-text-control);font-weight:700}
+.haedo-welcome-author strong{display:block;font-size:var(--haedo-text-control)}.haedo-welcome-author small{display:block;margin-top:4px;font-size:var(--haedo-text-badge);color:var(--haedo-muted)}
+.haedo-welcome-post h3{font-size:var(--haedo-text-title);line-height:1.55;letter-spacing:-.03em;margin:0 0 12px}
+.haedo-welcome-post p{font-size:var(--haedo-text-control);line-height:1.9;margin:0 0 16px}
+.haedo-welcome-quote{padding:16px 16px;margin:20px 0;background:var(--haedo-soft);border-radius:12px;font-size:var(--haedo-text-control);line-height:1.85}
+.haedo-welcome-post-footer{padding-top:16px;border-top:1px solid var(--haedo-line);color:var(--haedo-muted);font-size:var(--haedo-text-badge)}
+.haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:12px;color:var(--haedo-muted);font-size:var(--haedo-text-badge)}
 @media(max-width:1100px) and (min-width:761px){
  :root{--haedo-nav-width:88px}
- .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:12px}
- .haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
+ .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:var(--haedo-text-badge)}
+ .haedo-brand{padding:4px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
+ .haedo-nav-compose{width:64px;height:60px;min-height:60px;flex-direction:column;justify-content:center;gap:4px;margin-bottom:12px;padding:8px 4px;font-size:var(--haedo-text-badge)}
  .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
  .haedo-welcome-post{max-width:460px}
 }
@@ -140,14 +168,38 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  html:has(> body[data-writing-focus]){--haedo-dock-clearance:calc(16px + env(safe-area-inset-bottom,0px))}
  body.haedo-shell{padding-left:0;padding-right:0;padding-bottom:var(--haedo-dock-clearance)}
  body.haedo-shell[data-writing-focus] > .haedo-nav{display:none}
- .haedo-nav{inset:auto 0 0;left:0;right:0;top:auto;width:100%;height:calc(66px + env(safe-area-inset-bottom,0px));flex-direction:row;align-items:stretch;justify-content:space-around;gap:0;padding:4px max(12px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border:0;border-top:1px solid var(--haedo-line);border-radius:0;background:#fff}
- .haedo-nav .haedo-brand{display:none}.haedo-nav .haedo-nav-link{flex:1 1 0;min-width:44px;width:auto;height:56px;min-height:56px;flex-direction:column;justify-content:center;gap:4px;padding:6px 8px;border-radius:12px;background:none!important;font-size:10px}
+ .haedo-nav{inset:auto 0 0;left:0;right:0;top:auto;width:100%;height:calc(64px + env(safe-area-inset-bottom,0px));flex-direction:row;align-items:stretch;justify-content:space-around;gap:0;padding:4px max(12px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border:0;border-top:1px solid var(--haedo-line);border-radius:0;background:#fff}
+ /* iPhone: the pencil sits at the right end of the top row; headings keep room for it. */
+ .haedo-nav-compose{position:fixed;z-index:61;top:calc(8px + env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));width:44px;height:44px;min-height:44px;margin:0;padding:12px;justify-content:center;border-radius:var(--haedo-control-radius);background:transparent;color:var(--haedo-ink)}
+ .haedo-nav-compose>.haedo-compose-wide,.haedo-nav-compose>.haedo-nav-text{display:none}
+ .haedo-nav-compose>.haedo-compose-narrow{display:block}
+ .haedo-shell a.haedo-nav-compose{color:var(--haedo-ink)}
+ .haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-selected);color:var(--haedo-ink)}
+ .haedo-shell a.haedo-nav-compose:active{background:var(--haedo-selected)}
+ .haedo-shell a.haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent)}
+ .haedo-nav-compose:focus-visible>.haedo-tooltip{display:block;top:calc(100% + 4px);right:0;left:auto;transform:none}
+ /* Screens with their own top bar (e.g. the source reader) keep it; the pencil sits only in the shared heading row. */
+ body.haedo-shell:has(.life-toolbar[hidden]) .haedo-nav-compose{display:none}
+ /* The timeline editor's heading row shares the pencil's row and keeps room for it. */
+ body.haedo-shell[data-haedo-compose-inline] > .haedo-nav > .haedo-nav-compose{display:none}
+ .haedo-icon-button.haedo-heading-compose{display:inline-flex}
+
+ .haedo-nav .haedo-brand{display:none}.haedo-nav .haedo-nav-link{flex:1 1 0;min-width:44px;width:auto;height:56px;min-height:56px;flex-direction:column;justify-content:center;gap:4px;padding:8px 8px;border-radius:12px;background:none!important;font-size:var(--haedo-text-badge)}
  .haedo-nav-text{display:block;font-weight:500}.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:750}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none!important}
- .haedo-page-heading{min-height:60px;gap:8px;margin-bottom:18px}.haedo-heading-title,.haedo-heading-actions{gap:2px}
- .haedo-account-host{top:10px;right:20px}.haedo-welcome{width:100%;max-width:none;min-height:calc(100svh - var(--haedo-dock-clearance));margin:0;padding:4px 24px 36px;grid-template-columns:1fr;gap:20px;border-radius:0}
- .haedo-welcome>.haedo-page-heading{margin-bottom:10px}.haedo-welcome-copy{padding:8px 0}.haedo-welcome-copy h2{font-size:30px;line-height:1.45}
- .haedo-welcome-copy p{font-size:15px}.haedo-welcome-post{margin:0;padding:20px}.haedo-welcome-post h3{font-size:21px}
+ .haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-accent)}
+ .haedo-nav > .haedo-nav-indicator{display:none!important}
+ /* The empty 일정 list has no other emphasis on a phone (the pencil is plain), so 첫 글 쓰기 stays the primary action. */
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary{background:var(--haedo-accent);border-color:var(--haedo-accent);color:#fff}
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
+ .haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}
+ /* At least 8px between the 일정 title and its 보기 단위 switch. */
+ .haedo-heading-title > .life-schedule-views{margin-left:4px}
+ .haedo-page-heading h1{font-size:var(--haedo-text-title-large);line-height:1.3}
+ .haedo-page-heading{min-height:60px;gap:8px;margin-bottom:20px}.haedo-heading-title,.haedo-heading-actions{gap:4px}
+ .haedo-account-host{top:8px;right:max(52px,calc(env(safe-area-inset-right,0px) + 44px))}.haedo-welcome{width:100%;max-width:none;min-height:calc(100svh - var(--haedo-dock-clearance));margin:0;padding:4px 24px 36px;grid-template-columns:1fr;gap:20px;border-radius:0}
+ .haedo-welcome>.haedo-page-heading{margin-bottom:12px}.haedo-welcome-copy{padding:8px 0}.haedo-welcome-copy h2{font-size:var(--haedo-text-title-large);line-height:1.45}
+ .haedo-welcome-copy p{font-size:var(--haedo-text-control)}.haedo-welcome-post{margin:0;padding:20px}.haedo-welcome-post h3{font-size:var(--haedo-text-title)}
  .haedo-privacy-link{margin-top:0}
 }
 @media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}.haedo-icon-button{transition:none}}
@@ -162,3 +214,5 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 body.haedo-shell:has(> #lifeWelcome:not([hidden])) { padding-left:0; }
 body:has(> #lifeWelcome:not([hidden])) > .haedo-nav { display:none; }
 @media(max-width:760px){body.haedo-shell:has(> #lifeWelcome:not([hidden])) {padding-bottom:0;}}
+/* Full-screen reading (e.g. a news original on iPhone) hides the bottom tabs and the pencil; closing the reader restores them. */
+@media(max-width:760px){body.haedo-shell[data-haedo-immersive]>.haedo-nav{display:none}}

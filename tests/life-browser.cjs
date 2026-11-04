@@ -159,12 +159,13 @@ async function applicationChecks(browser, observe) {
   const settle = () => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
   async function click(name) {
     if (name === '내보내기·사본 복원') await openBackupCenter(page);
-    if (['자료실','기록 검색','가져오기','연표'].includes(name)) {
+    if (['자료실','기록 검색','가져오기'].includes(name)) {
       await openSection(page, 'records');
       if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(); }
     }
     if (['기록 검색', '자료실'].includes(name)) return;
-    if (name === '연표') await openRecordsMenu(page);
+    // 2026-11-02: 연표 is a row of 일정's 계획 view.
+    if (name === '연표') { await openSection(page, 'schedule'); await page.locator('[data-schedule-view="tools"]').click(); await settle(); }
     await page.getByRole('button',{name,exact:true}).click(); await settle();
   }
   async function mounted() {

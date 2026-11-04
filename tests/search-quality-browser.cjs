@@ -134,15 +134,17 @@ async function spacingCases(page, capture) {
   await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await settle(page);
   await page.locator('#lifeReviewText').evaluate(el => { el.focus(); el.setSelectionRange(0, 4); el.dispatchEvent(new Event('select', { bubbles: true })); });
   await page.getByRole('button', { name: '발췌 후보 추가', exact: true }).click(); await page.getByRole('button', { name: '선택한 발췌 모음에 반영', exact: true }).click(); await page.locator('#lifeSearch').waitFor();
-  assert.equal(await cards(page).count(), 40); assert.equal(await page.locator('#lifeImportResultOpen').isVisible(), true);
-  await page.locator('#lifeImportResultOpen').click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), '새 원문은 최초 40개 표시 밖에서 보관되었다.');
+  // 2026-11-03 soft redesign: the list puts the newest stored version first (date column), so a fresh
+  // save is the first row and needs no separate receipt; off-window returns are covered by shiftedReturn.
   const savedVersion = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, b = await s.read(await s.getActive()); return b.sourceVersions.find(v => v.contentText === '새 원문은 최초 40개 표시 밖에서 보관되었다.').id; });
+  assert.equal(await cards(page).count(), 40); assert.equal(await page.locator('#lifeImportResultOpen').isVisible(), false);
+  assert.equal(await cards(page).first().getAttribute('data-version-id'), savedVersion, 'A fresh save is the newest row');
+  await cards(page).first().locator('.life-source-open').click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), '새 원문은 최초 40개 표시 밖에서 보관되었다.');
   await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); await twoFrames(page);
-  assert.equal(await cards(page).count(), 104, 'Returning to an off-window saved version must reveal its batch');
-  assert.equal(await page.locator('#lifeImportResultOpen').isVisible().catch(() => false), false);
-  assert.equal(await page.locator(`.life-source-open[data-version-id="${savedVersion}"]`).evaluate(el => document.activeElement === el), true, 'Hidden receipt must fall back to its exact saved-version card');
-  await capture('saved-outside-window');
-  return { spacingOptInTitleBodyNote: true, bodyRawRangePreserved: true, titleNoteNoInventedLocator: true, optionRestoredOnReturn: true, savedOutside40RemainsReachable: true };
+  assert.equal(await cards(page).count(), 40);
+  assert.equal(await page.locator(`.life-source-open[data-version-id="${savedVersion}"]`).evaluate(el => document.activeElement === el), true, 'Return focuses the exact saved-version card');
+  await capture('fresh-save-first-row');
+  return { spacingOptInTitleBodyNote: true, bodyRawRangePreserved: true, titleNoteNoInventedLocator: true, optionRestoredOnReturn: true, freshSaveFirstRowReopensExactVersion: true };
 }
 async function shiftedReturn(page, first) {
   await measureInput(page, '정원');

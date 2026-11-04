@@ -4,6 +4,7 @@
 'use strict';
 const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { articleControl, openReader, showList } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
 const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
@@ -41,8 +42,15 @@ async function newsView(control) {
   // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
   await control.waitFor({ state: 'attached' });
   const settingsTarget = await panel.locator(control).count() > 0;
-  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  if (settingsTarget && !await panel.isVisible()) {
+    // 2026-11-03: the settings icon sits with the list; an open reader below 1101px is closed first with ‹ 뉴스.
+    if (await page.locator('#discoveryReaderBack').isVisible()) { await page.locator('#discoveryReaderBack').click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
+    await page.locator('#discoveryNewsSettings').click();
+  }
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+  // 2026-11-03: below 1101px an open reader takes the list's place; ‹ 뉴스 returns to the list before a list control is used.
+  const back = page.locator('#discoveryReaderBack');
+  if (!settingsTarget && await back.count() && await back.isVisible() && !await control.evaluate(element => !!element.closest('#discoveryReader'))) { await back.click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
 }
 async function selectNewsMode(page, value) {
   if (value === 'personal' && await page.locator('#discoverySort option[value="personal"]').isDisabled()) {
@@ -52,6 +60,8 @@ async function selectNewsMode(page, value) {
   }
   await newsView(page.locator('#discoveryDiscover'));
   if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  // 2026-11-03: 정렬 lives in the 정렬·주제·언어 filter disclosure next to the list tabs.
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryFilterToggle').click();
   await page.locator('#discoverySort').selectOption(value);
 }
 async function disclose(details) { await newsView(details); if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click(); }
@@ -70,8 +80,8 @@ async function state(page) {
       settings: await storage.readDiscoverySettings(workspaceId), language: await storage.readDiscoveryLanguageSettings(workspaceId), reading: await storage.readDiscoveryReading(workspaceId) };
   });
 }
-async function reaction(page, id, kind, target) {
-  const control = row(page, id).locator('[data-discovery-reaction="' + kind + '"]');
+async function reaction(page, id, kind, target, scope = null) {
+  const control = scope ? scope.locator('[data-discovery-reaction="' + kind + '"]') : await articleControl(page, row(page, id), '[data-discovery-reaction="' + kind + '"]');
   await newsView(control); assert.equal(await control.isVisible(), true); if ((await control.getAttribute('aria-pressed') === 'true') !== target) await control.click();
   await idle(page); await awaitCondition(page, async ({ address, kind, target }) => {
     const s = HaedoLife.Shell.storage, profile = await s.readDiscoveryActions(await s.getActive()); return profile.entries.some(entry => entry.canonicalUrl === address && entry[kind] === target);
@@ -116,8 +126,10 @@ async function main() {
     await page.goto(entry); await ready(page); await idle(page); const original = await state(page);
     await check('icon-only primary lists keep neutral history and personalization in the separate settings view', async () => {
       assert.equal(await page.locator('.discovery-collection-tabs #discoveryCancelled').count(), 0);
-      assert.deepEqual(await page.locator('.discovery-collection-tabs button').evaluateAll(nodes => nodes.map(node => node.id)), ['discoveryDiscover', 'discoveryLiked', 'discoveryBookmarked']);
-      for (const id of ['discoveryDiscover', 'discoveryLiked', 'discoveryBookmarked']) { const control = page.locator('#' + id); assert.equal(await control.isVisible(), true); assert.equal((await control.innerText()).trim(), ''); assert(await control.getAttribute('aria-label')); assert(await control.getAttribute('title')); }
+      // 2026-11-03 soft redesign: four text tabs (전체·담은 글·좋아요·제외한 글) with their counts replace the three icon lists.
+      assert.deepEqual(await page.locator('.discovery-collection-tabs button').evaluateAll(nodes => nodes.map(node => [node.id, node.getAttribute('role'), node.getAttribute('aria-selected')])),
+        [['discoveryDiscover', 'tab', 'true'], ['discoveryBookmarked', 'tab', 'false'], ['discoveryLiked', 'tab', 'false'], ['discoveryExcluded', 'tab', 'false']]);
+      for (const [id, label] of [['discoveryDiscover', '전체'], ['discoveryBookmarked', '담은 글'], ['discoveryLiked', '좋아요'], ['discoveryExcluded', '제외한 글']]) { const control = page.locator('#' + id); assert.equal(await control.isVisible(), true); assert.match((await control.innerText()).trim(), new RegExp('^' + label + ' \\d+$')); assert(await control.getAttribute('title')); }
       assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.equal(await page.locator('#discoverySort').inputValue(), 'latest'); assert.equal(await page.locator('#discoverySort option[value="personal"]').isDisabled(), true);
       assert.equal(await page.locator('#discoveryNewsPreferences').evaluate(details => details.open), false);
       assert.equal(await page.locator('#discoveryCancelled').isVisible(), false); assert.equal(await page.locator('#discoveryPersonalize').isVisible(), false);
@@ -132,7 +144,7 @@ async function main() {
       await (await revealControl(page.locator('#discoveryNewsPreferences > summary'))).click(); await newsView(page.locator('#discoveryList')); assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.deepEqual(await state(page), original);
     });
     await check('native keyboard article options and information open explicitly and Escape restores their summary focus', async () => {
-      const article = row(page, 'first'), more = article.locator('details.discovery-more'), summary = more.locator(':scope > summary');
+      const article = await openReader(page, row(page, 'first')), more = article.locator('details.discovery-more'), summary = more.locator(':scope > summary');
       assert.equal(await more.evaluate(element => element.open), false); assert.equal(await article.locator('[data-discovery-import]').isVisible(), false);
       assert.equal(await article.locator('[data-discovery-feedback="not_relevant"]').isVisible(), false);
       for (const kind of ['liked', 'bookmarked']) { const control = article.locator('[data-discovery-reaction="' + kind + '"]'); assert.equal(await control.isVisible(), true); assert.equal((await control.innerText()).trim(), ''); assert(await control.getAttribute('aria-label')); assert(await control.getAttribute('title')); }
@@ -144,7 +156,7 @@ async function main() {
       assert.equal(await info.evaluate(element => element.open), false); assert.equal(await info.locator('.discovery-coverage').isVisible(), false);
       await infoSummary.focus(); await page.keyboard.press('Enter'); assert.match(await info.innerText(), /본문 미확보/); await page.keyboard.press('Escape');
       assert.equal(await info.evaluate(element => element.open), false); assert.equal(await infoSummary.evaluate(element => document.activeElement === element), true); await summary.focus(); await page.keyboard.press('Escape');
-      assert.deepEqual(await state(page), original);
+      await showList(page); assert.deepEqual(await state(page), original);
     });
     await check('unlike and unbookmark produce a neutral retained record and independent restoration never creates negative feedback', async () => {
       await reaction(page, 'first', 'liked', true); await reaction(page, 'first', 'bookmarked', true); await reaction(page, 'first', 'liked', false);
@@ -163,7 +175,7 @@ async function main() {
     });
     await check('explicit unrelated feedback hides a feed article and undo remains distinct from reaction-removal history', async () => {
       await click(page, '#discoveryDiscover'); await click(page, '#discoveryLatest');
-      await (await revealControl(row(page, 'negative').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
+      await (await revealControl(await articleControl(page, row(page, 'negative'), '[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
       const after = await state(page); assert(after.feedback.feedback.some(entry => entry.canonicalUrl === url('negative') && entry.kind === 'not_relevant'));
       assert.equal(after.actions.entries.some(entry => entry.canonicalUrl === url('negative')), false); assert.equal(await row(page, 'negative').count(), 0);
       await click(page, '#discoveryCancelled'); assert.equal(await row(page, 'negative').count(), 0);
@@ -191,7 +203,7 @@ async function main() {
       await newsView(page.locator('#discoveryList'));
       for (const width of [390, 820, 1440]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); });
-        const article = row(page, 'first'); assert.equal(await article.locator('[data-discovery-translate]').isVisible(), true);
+        const article = await openReader(page, row(page, 'first')); assert.equal(await article.locator('[data-discovery-translate]').isVisible(), true);
         assert.equal(await article.locator('[data-discovery-import]').isVisible(), false);
         assert.equal(await article.locator('.discovery-article-info').evaluate(element => element.open), false);
         const more = article.locator('.discovery-more'), trigger = more.locator(':scope > summary');
@@ -199,8 +211,8 @@ async function main() {
           const results = [];
           for (const kind of ['liked', 'bookmarked']) {
             const prior = await article.locator('[data-discovery-reaction="' + kind + '"]').getAttribute('aria-pressed') === 'true';
-            await reaction(page, 'first', kind, !prior); assert.equal(await more.evaluate(element => element.open), open);
-            await reaction(page, 'first', kind, prior); assert.equal(await more.evaluate(element => element.open), open);
+            await reaction(page, 'first', kind, !prior, article); assert.equal(await more.evaluate(element => element.open), open);
+            await reaction(page, 'first', kind, prior, article); assert.equal(await more.evaluate(element => element.open), open);
             results.push({ kind, restored: prior, actualClicks: 2 });
           }
           return results;
@@ -217,13 +229,13 @@ async function main() {
         if (width === 390) {
           await disclose(page.locator('#discoveryLanguageOptions')); await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('original'); await idle(page);
           await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'original'; }, undefined, { timeout: 15000, label: 'news-social storage condition' });
-          assert.equal(await article.locator('[data-discovery-translate]').count(), 0);
+          await openReader(page, row(page, 'first')); assert.equal(await article.locator('[data-discovery-translate]').count(), 0);
           translationOffHitTests = await assertReactionHitTests(false);
           await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
           await awaitCondition(page, async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; }, undefined, { timeout: 15000, label: 'news-social storage condition' });
-          await (await revealControl(page.locator('#discoveryLanguageOptions > summary'))).click(); await newsView(article);
+          await (await revealControl(page.locator('#discoveryLanguageOptions > summary'))).click(); await openReader(page, row(page, 'first'));
         }
-        await page.evaluate(() => scrollTo(0, 0));
+        await showList(page); await page.evaluate(() => scrollTo(0, 0));
         const audit = await page.evaluate(() => {
           const article = document.querySelector('#discoveryList [data-discovery-id]'), title = article.querySelector('.discovery-title'), meta = article.querySelector('.discovery-meta');
           const rect = title.getBoundingClientRect(), navigation = document.querySelector('[data-haedo-navigation]').getBoundingClientRect();

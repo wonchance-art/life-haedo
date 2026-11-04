@@ -7,6 +7,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   // Resolved per engine, not at module load: a page that still lacks sync-common.js (an older
   // index.html mixed with newer modules during an update) keeps this module registered and fails
   // only when the engine is created, with a clear code instead of a TypeError.
@@ -53,13 +56,18 @@
   }
   function create({ storage, auth = root.HaedoAuth, model = root.HaedoLife?.MaterialContinuity,
     remote = root.HaedoLife?.MaterialContinuityRemote?.create({ auth }),
-    blogSync = root.HaedoLife?.BlogSync?.create({ storage, auth }),
+    blogSync = null,
     blogRemote = root.HaedoLife?.BlogRemote?.create({ auth }),
     blog = root.HaedoLife?.Blog, photoPost = root.HaedoLife?.PhotoPost,
     makeId = () => root.crypto.randomUUID() } = {}) {
     if (!storage?.account || !model || !remote || !auth) throw fault('request_cancelled');
     const canonical = syncCommon().canonical; // S0 group G3: run-local comparisons and check hashes only
     const owner = storage.account, queues = new Map(), generations = new Map(), listeners = new Set(); let disposed = false;
+    // A saved output is stored through the page's automatic BlogSync for this storage when there is
+    // one, so this share waits in the same per-post queue as the editor's explicit save and the
+    // background cycle instead of racing them on the binding CAS. Otherwise a private instance.
+    let ownBlogSync = null;
+    const posts = () => blogSync || root.HaedoLife?.BlogSync?.forStorage?.(storage) || (ownBlogSync ||= root.HaedoLife?.BlogSync?.create({ storage, auth }));
     const key = (ws, id) => ws + '/' + id;
     const context = (ws = '*', id = '*') => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
     function guard(c) {
@@ -248,7 +256,9 @@
           if (!state.output || state.conflict) throw fault('material_conflict');
           const current = await checkedRow(c, state.remoteId);
           if (current.revision !== state.remoteRevision || await model.fingerprint(current.data) !== await model.fingerprint(state.head.data)) { await conflict(c, state, current); throw fault('material_conflict'); }
-          const postState = await blogSync.save(ws, before.post.id, { expectedManifest: blog.pack(photoPost.compact(before.post)) }); guard(c);
+          // Re-check after the fingerprint awaits: a disposed engine must not lazily create a dedicated BlogSync.
+          guard(c);
+          const postState = await posts().save(ws, before.post.id, { expectedManifest: blog.pack(photoPost.compact(before.post)) }); guard(c);
           if (postState.status !== 'synced' || postState.remoteId !== state.output.postId) throw fault('material_output_changed');
           const storedPost = await blogRemote.read(state.output.postId); guard(c);
           const expectedPost = blog.pack(photoPost.compact(before.post)); expectedPost.id = state.output.postId; expectedPost.replaces = null;
@@ -387,7 +397,7 @@
       const result = await storage.adoptMaterialContinuity(row, completed ? { post: completed.doc, blogRow: completed.row } : {}); guard(c);
       emit(context(ws, planId)); return result;
     }
-    function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); listeners.clear(); }
+    function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); ownBlogSync?.dispose?.(); listeners.clear(); }
     return Object.freeze({ getState: (ws, id) => stateFor(context(ws, id)),
       preview: (ws, id) => review(context(ws, id)), connect, sync, pause, autoSync, adopt, settle, propagateDelete,
       dismissNotice: (ws, id) => serial(ws, id, async c => { const state = await read(c); if (state?.notice) await write(c, state, { notice: null }); }),
@@ -399,7 +409,7 @@
   // account (non-recovery) workspace, plus server preparations not yet on this device.
   function automatic({ storage, auth = root.HaedoAuth, every = 60000, manager = null } = {}) {
     if (!storage?.account || typeof storage.readMaterialWriting !== 'function' || typeof storage.adoptMaterialContinuity !== 'function') return null;
-    let instance = manager, disposed = false, running = null, again = false, timer = null, offAll = null, soon = null;
+    let instance = manager, disposed = false, started = false, running = null, again = false, wiring = null, offAll = null, soon = null;
     try { instance ||= create({ storage, auth }); } catch (_) { return null; }
     shared.set(storage, instance);
     async function workspaces() {
@@ -488,20 +498,19 @@
     return Object.freeze({
       manager: instance, refresh: pass, availability: () => ({ status: availability.status, until: availability.until }),
       start() {
-        if (disposed || timer) return;
-        timer = root.setInterval(pass, every); timer?.unref?.();
-        root.addEventListener?.('online', pass); root.addEventListener?.('focus', pass); root.document?.addEventListener('visibilitychange', pass);
-        root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
-        root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
+        if (disposed || started) return; started = true;
+        wiring = syncLifecycle()?.attach(root, {
+          listen: [['window', 'online', pass], ['window', 'focus', pass], ['document', 'visibilitychange', pass],
+            ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', resume],
+            ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
+          poll: [every, pass],
+        }) || null;
         try { offAll = storage.subscribeAll?.(nudge) || null; } catch (_) { offAll = null; }
         pass();
       },
       dispose() {
-        if (disposed) return; disposed = true; root.clearInterval(timer); root.clearTimeout(soon); offAll?.();
+        if (disposed) return; disposed = true; wiring?.detach(); wiring = null; root.clearTimeout(soon); offAll?.();
         if (shared.get(storage) === instance) shared.delete(storage);
-        root.removeEventListener?.('online', pass); root.removeEventListener?.('focus', pass); root.document?.removeEventListener('visibilitychange', pass);
-        root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
-        root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
         if (!manager) instance.dispose();
       }
     });

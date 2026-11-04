@@ -19,23 +19,30 @@ async function ready(page) {
   await page.evaluate(() => HaedoLife.Shell.ready);
 }
 async function shellReady(page) { await page.waitForFunction(() => globalThis.HaedoLife?.Shell); await page.evaluate(() => HaedoLife.Shell.ready); }
+// 2026-11-02 menu 뉴스·일정·자료·설정: the former home is 일정's list and the former
+// tools (계획) its plan view, opened from the list's 보기 단위 switch as a person does.
 async function nav(page, section) {
-  const control = page.locator('[data-haedo-navigation] [data-haedo-section="' + section + '"]');
-  await control.click(); await settle(page);
+  const control = page.locator('[data-haedo-navigation] [data-haedo-section="' + (section === 'home' || section === 'tools' ? 'schedule' : section) + '"]');
+  const planSwitch = page.locator('#lifeApp [data-schedule-view="tools"]');
+  if (section !== 'tools' || !await planSwitch.isVisible()) { await control.click(); await settle(page); }
+  if (section === 'tools') { await planSwitch.click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor(); }
   assert.equal(await control.getAttribute('aria-current'), 'page');
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
 async function assertCommonNavigation(page) {
-  // The brand is another home link, separate from the five section controls.
+  // The brand is another link to the first screen, separate from the four section
+  // controls (2026-11-02: 뉴스·일정·자료·설정); 글쓰기 is its own control above them.
   assert.deepEqual(await page.locator('[data-haedo-navigation] a[data-haedo-section]').evaluateAll(links => links.map(link => ({
     section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
   }))), [
-    { section: 'home', href: 'index.html', label: '홈' },
     { section: 'news', href: 'index.html?section=news', label: '뉴스' },
-    { section: 'records', href: 'index.html?section=records', label: '자료실' },
-    { section: 'tools', href: 'index.html?section=tools', label: '계획' },
+    { section: 'schedule', href: 'index.html', label: '일정' },
+    { section: 'records', href: 'index.html?section=records', label: '자료' },
     { section: 'manage', href: 'index.html?section=manage', label: '설정' }
   ]);
+  const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+  assert.equal(await write.count(), 1); assert.equal(await write.getAttribute('href'), 'index.html?compose=1');
+  assert.equal(await write.getAttribute('aria-label'), '글쓰기'); assert.equal(await write.getAttribute('data-haedo-section'), null);
   const brand = page.locator('[data-haedo-navigation] .haedo-brand');
   assert.equal(await brand.count(), 1); assert.equal(await brand.getAttribute('href'), 'index.html');
   assert.equal(await brand.getAttribute('aria-label'), '해도 홈');
@@ -131,7 +138,8 @@ async function main() {
         await page.goto(base + '/index.html?section=tools', { waitUntil: 'domcontentloaded' }); await arrived;
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
       } finally { release(); }
-      await ready(page); assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
+      await ready(page); assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
       assert.ok((await page.evaluate(() => __homeDbOpens)).length > 0);
       assert.ok((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
     });
@@ -164,7 +172,7 @@ async function main() {
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       await page.locator('#lifeHome').waitFor();
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(new URL(page.url()).searchParams.has('code'), false);
     }, null);
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
@@ -214,7 +222,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
       await nav(page, 'records'); await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료실로 돌아가기');
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.
@@ -233,15 +241,237 @@ async function main() {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
         await assertCommonNavigation(page);
-        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
       }
-      await openRecordsMenu(page); await button(page, '연표');
+      await nav(page, 'tools'); await button(page, '연표'); // 2026-11-02: 연표 is in 일정's 계획
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
       await assertCommonNavigation(page);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
+    });
+    await check('old section addresses and standalone pages open the new 뉴스·일정·자료·설정 screens', async ({ page }) => {
+      // 2026-11-02: home/tools are aliases of 일정 and addresses are normalized to the new IDs.
+      // The old home links to the public cover/pages (now 설정 views) are covered by feature-flow-browser.
+      const cases = [
+        ['index.html', 'schedule', 'home', '/index.html'],
+        ['index.html?section=home', 'schedule', 'home', '/index.html'],
+        ['index.html?section=schedule', 'schedule', 'home', '/index.html'],
+        ['index.html?section=tools', 'schedule', 'tools', '/index.html?section=schedule&view=tools'],
+        ['index.html?section=tools&view=annual-plan', 'schedule', 'annual-plan', '/index.html?section=schedule&view=annual-plan'],
+        ['index.html?section=records', 'records', 'sources', '/index.html?section=records'],
+        ['index.html?section=manage', 'manage', 'manage', '/index.html?section=manage'],
+        ['index.html?section=manage&view=backup', 'manage', 'backup', '/index.html?section=manage&view=backup'],
+        ['index.html?section=news', 'news', 'external-discovery', '/index.html?section=news'],
+        ['life.html', 'records', 'sources', '/life.html?section=records'],
+        ['life.html?section=tools', 'schedule', 'tools', '/life.html?section=schedule&view=tools']
+      ];
+      for (const [suffix, section, mode, address] of cases) {
+        await page.goto(base + '/' + suffix); await ready(page); await settle(page);
+        await page.locator('#lifeMain[data-mode="' + mode + '"]').waitFor();
+        assert.equal(await page.locator('[data-haedo-navigation] a[aria-current="page"]').evaluateAll(links => links.map(link => link.dataset.haedoSection)).then(list => list.join()), section, suffix);
+        assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), section, suffix);
+        assert.equal(await page.evaluate(() => location.pathname + location.search), address, suffix);
+        await assertCommonNavigation(page);
+      }
+      for (const [file, pageName] of [['timeline.html', 'workspace'], ['workspace.html', 'workspace'], ['goals.html', 'goals'], ['habits.html', 'habits']]) {
+        await page.goto(base + '/' + file);
+        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]').hidden, pageName);
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', file);
+        await assertCommonNavigation(page);
+      }
+      // The former 계획 back link of goals/habits still lands on 일정's plan view.
+      await page.locator('[data-section-back]').click(); await ready(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
+    });
+    await check('only a screen begun with 글쓰기 is the 글쓰기 screen, also after a reload (edit copy and draft tab stay 일정)', async ({ page }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, ws = await s.getActive(), P = HaedoLife.PhotoPost;
+        const saved = P.create(HaedoLife.Core.id); saved.status = 'saved'; saved.title = '저장해 둔 익명 글'; saved.ops = [{ insert: '저장 본문\n' }]; await s.savePhotoPost(ws, saved, 0);
+        const draft = P.create(HaedoLife.Core.id); draft.title = '예전에 남긴 익명 초안'; draft.ops = [{ insert: '초안 본문\n' }]; await s.savePhotoPost(ws, draft, 0);
+      });
+      await page.reload(); await ready(page); await settle(page); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      // (a) Editing a saved post makes a replacing copy; it is not a new post, before or after a reload.
+      await page.getByRole('button', { name: '저장해 둔 익명 글', exact: true }).first().click(); await page.locator('.photo-article').waitFor(); await settle(page);
+      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      await page.locator('#photoTitle').fill('고치는 중인 익명 글');
+      // The open editor's own post (blog=photo.<id>) is the stored copy that replaces the saved post.
+      const copy = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = new URLSearchParams(location.search).get('blog')?.split('.')[1];
+        try { const post = id && await s.readPhotoPost(await s.getActive(), id); return !!post?.replaces && post.status !== 'saved'; } catch (_) { return false; } });
+      for (const deadline = Date.now() + 10000; !await copy();) { assert(Date.now() < deadline, 'edit copy stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      assert.equal(await write.getAttribute('aria-current'), null); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      await page.reload(); await ready(page); await settle(page); await page.locator('#photoTitle').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), null, 'edit copy after reload'); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+      assert.equal(await write.getAttribute('aria-current'), 'page', '글쓰기 starts a new post from the edit copy');
+      // (b) A draft opened from the drafts tab is 일정, also after a reload.
+      await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      await page.locator('#homeTab-drafts').click(); await settle(page);
+      await page.locator('#lifeHome button:visible', { hasText: '예전에 남긴 익명 초안' }).first().click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      await page.reload(); await ready(page); await settle(page); await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '예전에 남긴 익명 초안');
+      assert.equal(await write.getAttribute('aria-current'), null, 'draft tab after reload'); assert.equal(await schedule.getAttribute('aria-current'), 'page');
+    });
+    await check('a successful 글 저장 ends the 글쓰기 screen: editing the saved post is 일정 in the session and after a reload', async ({ page }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      const recorded = () => page.evaluate(() => history.state?.haedo?.entry?.compose ?? null);
+      for (const reload of [true, false]) {
+        await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+        await write.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+        await page.locator('#photoTitle').fill(reload ? '새로고침 전에 저장한 익명 글' : '세션 안에서 저장한 익명 글'); await page.locator('.ql-editor').fill('저장할 본문');
+        assert.equal(await write.getAttribute('aria-current'), 'page');
+        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await settle(page);
+        // The shown entry no longer claims 글쓰기 (replaced, not a new entry).
+        await page.waitForFunction(() => history.state?.haedo?.entry?.compose === undefined);
+        assert.equal(await recorded(), null);
+        if (reload) { await page.reload(); await ready(page); await settle(page); await page.locator('.photo-article').waitFor(); }
+        assert.equal(await write.getAttribute('aria-current'), null, 'saved post ' + (reload ? 'after reload' : 'in session'));
+        await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+        assert.equal(await write.getAttribute('aria-current'), null, 'editing the saved post ' + (reload ? 'after reload' : 'in session'));
+        assert.equal(await schedule.getAttribute('aria-current'), 'page');
+        const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+        await page.locator('#photoTitle').waitFor();
+        assert.equal(await page.locator('#photoTitle').inputValue(), '', '글쓰기 opens a new post');
+        assert.equal(await write.getAttribute('aria-current'), 'page');
+      }
+    });
+    await check('a new post saved in another tab is no longer the 글쓰기 screen here after a reload', async ({ page, context }) => {
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
+      await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+      await write.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      await page.locator('#photoTitle').fill('다른 탭에서 저장할 익명 글'); await page.locator('.ql-editor').fill('두 탭 본문');
+      await page.waitForFunction(() => /^photo\./.test(new URLSearchParams(location.search).get('blog') || ''));
+      const draft = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = new URLSearchParams(location.search).get('blog').split('.')[1];
+        try { return (await s.readPhotoPost(await s.getActive(), id)).title; } catch (_) { return null; } });
+      for (const deadline = Date.now() + 10000; await draft() !== '다른 탭에서 저장할 익명 글';) { assert(Date.now() < deadline, 'draft stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      assert.equal(await page.evaluate(() => history.state?.haedo?.entry?.compose), true);
+      // The second tab opens the same address and saves the post.
+      const other = await context.newPage(); other.setDefaultTimeout(15000);
+      await other.goto(page.url()); await ready(other); await settle(other); await other.locator('#photoTitle').waitFor();
+      await other.getByRole('button', { name: '글 저장', exact: true }).click(); await other.locator('.photo-article').waitFor(); await settle(other);
+      await other.close();
+      // This tab still carries compose: true in its entry; the saved post decides.
+      await page.reload(); await ready(page); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null, 'saved elsewhere, after reload');
+      const edit = page.getByRole('button', { name: '글 수정', exact: true });
+      if (!await edit.isVisible()) { await page.locator('.photo-article').waitFor(); }
+      await edit.click(); await page.locator('#photoTitle').waitFor(); await settle(page);
+      assert.equal(await write.getAttribute('aria-current'), null, 'editing the post saved elsewhere');
+      assert.equal(await schedule.getAttribute('aria-current'), 'page');
+      const editing = page.url(); await write.click(); await settle(page); await page.waitForFunction(url => location.href !== url, editing);
+      await page.locator('#photoTitle').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '');
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+    });
+    // Pages whose heading scrolls with the page carry the phone pencil inside that heading (review M3).
+    async function inlinePencil(page, file) {
+      const fixedPencil = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+      const pencil = page.locator('.haedo-page-heading a[data-haedo-compose="heading"]');
+      assert.equal(await fixedPencil.isVisible(), false, file + ': no floating pencil');
+      assert.equal(await pencil.isVisible(), true, file + ': pencil in the heading');
+      assert.equal(await pencil.getAttribute('aria-label'), '글쓰기'); assert.equal(await pencil.getAttribute('href'), 'index.html?compose=1');
+      // A taller page (spacer added by the check only) shows the pencil leaving with its heading.
+      await page.evaluate(() => { const spacer = document.createElement('div'); spacer.style.height = '2400px'; document.body.append(spacer); });
+      const before = await pencil.evaluate(node => node.getBoundingClientRect().top);
+      await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' }));
+      const after = await pencil.evaluate(node => node.getBoundingClientRect().top);
+      assert(Math.abs(before - after - 300) < 2, file + ': pencil scrolls with the heading');
+      await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+      const overlaps = await pencil.evaluate(node => {
+        const p = node.getBoundingClientRect();
+        return [...document.querySelectorAll('a, button, summary, input, select')].filter(other => other !== node && !other.contains(node) && !other.closest('[data-haedo-navigation]') && other.checkVisibility()).map(other => [other, other.getBoundingClientRect()])
+          .filter(([, r]) => Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 && Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5).map(([other]) => other.getAttribute('aria-label') || other.textContent.trim());
+      });
+      assert.deepEqual(overlaps, [], file + ': pencil overlaps');
+    }
+    await check('phone pencil scrolls with the heading on pages whose heading does not stick and never covers their controls', async ({ page, context }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      // One anonymous timeline document so timeline.html?doc= opens the editor instead of the list.
+      await context.route(`${cloud}/rest/v1/haedo_documents**`, route => route.request().method() !== 'GET' ? route.fallback() : route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify([{ id: 'abc', name: '익명 연표', updated_at: '2026-11-01T00:00:00.000Z', data: { profile: { name: '익명' }, events: [], spans: [], eras: [], happiness: [], thoughts: [], records: [] } }]) }));
+      for (const [file, name] of [['goals.html', 'goals'], ['habits.html', 'habits'], ['workspace.html', 'workspace'], ['timeline.html?doc=abc', 'timeline'], ['privacy.html', 'privacy']]) {
+        await page.goto(base + '/' + file);
+        await page.waitForFunction(name => document.body.dataset.page === name && !document.querySelector('[data-private]')?.hidden && !document.querySelector('#timelineAccess:not([hidden])'), name);
+        await inlinePencil(page, file);
+      }
+      // The app pages keep their sticky heading row and the pencil beside it.
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-compose]').isVisible(), true);
+      assert.equal(await page.locator('a[data-haedo-compose="heading"]').count(), 0);
+      // Wider layouts: one 글쓰기 (the menu's), white on teal on every page, whatever the page's link rules.
+      for (const width of [1440, 820]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const [file, name] of [['goals.html', 'goals'], ['workspace.html', 'workspace'], ['timeline.html?doc=abc', 'timeline'], ['privacy.html', 'privacy'], ['index.html', 'home']]) {
+          await page.goto(base + '/' + file); await page.waitForFunction(name => document.body.dataset.page === name, name);
+          const write = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation] a[data-haedo-compose]'), cs = getComputedStyle(nav);
+            return { visible: nav.checkVisibility(), color: cs.color, background: cs.backgroundColor, heading: !!document.querySelector('a[data-haedo-compose="heading"]')?.checkVisibility() }; });
+          assert.deepEqual(write, { visible: true, color: 'rgb(255, 255, 255)', background: 'rgb(20, 91, 80)', heading: false }, file + ' ' + width);
+        }
+      }
+    });
+    await check('signed-out login page carries the phone pencil in its heading', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(base + '/login.html'); await page.waitForFunction(() => document.body.dataset.page === 'login' && document.querySelector('#googleLogin'));
+      assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
+      await inlinePencil(page, 'login.html');
+    }, null);
+    await check('글쓰기 keeps one place, marks the writing screen current and the 일정 views switch with history', async ({ page }) => {
+      await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+      const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]');
+      await write.click(); await settle(page); await page.locator('#lifeMain[data-mode="page"]').waitFor(); await page.locator('.ql-editor').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section][aria-current]').count(), 0);
+      // A second press on the current 글쓰기 neither opens another post nor moves.
+      await page.waitForFunction(() => new URLSearchParams(location.search).has('blog'));
+      const url = page.url(), posts = await page.evaluate(() => document.querySelectorAll('.ql-editor').length);
+      await write.click(); await settle(page); assert.equal(page.url(), url); assert.equal(await page.evaluate(() => document.querySelectorAll('.ql-editor').length), posts);
+      // A reload keeps a never-saved new post as the 글쓰기 screen, and 글쓰기 still opens no second post.
+      await page.locator('#photoTitle').fill('새로고침 뒤에도 쓰는 중인 글');
+      const stored = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.listPhotoPosts(await s.getActive())).map(post => post.status); });
+      // Poll the awaited IDB read (a pending Promise is truthy inside waitForFunction).
+      for (const deadline = Date.now() + 10000; (await stored()).length !== 1;) { assert(Date.now() < deadline, 'draft stored'); await new Promise(resolve => setTimeout(resolve, 50)); }
+      await page.reload(); await ready(page); await settle(page); await page.locator('#lifeMain[data-mode="page"]').waitFor(); await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '새로고침 뒤에도 쓰는 중인 글');
+      assert.equal(await write.getAttribute('aria-current'), 'page');
+      const reloaded = page.url(); await write.click(); await settle(page);
+      assert.equal(page.url(), reloaded); assert.deepEqual(await stored(), ['draft']);
+      await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="sources"]').waitFor();
+      assert.equal(await write.getAttribute('aria-current'), null);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
+      await nav(page, 'home'); await page.locator('#lifeHome').waitFor();
+      // The 보기 단위 switch keeps one place in the list and in every calendar unit (review M1).
+      const switchX = () => page.locator('#lifeApp nav[aria-label="보기 단위"]').evaluate(node => Math.round(node.getBoundingClientRect().left));
+      for (const width of [1440, 820]) {
+        await page.setViewportSize({ width, height: 900 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
+        const list = await switchX();
+        for (const unit of ['tools', 'quarter', 'month', 'week', 'day']) {
+          await page.locator('[data-schedule-view="' + unit + '"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="' + unit + '"]').waitFor();
+          assert.equal(await switchX(), list, 'switch x of ' + unit + ' at ' + width);
+          assert.equal(await page.locator('#lifeApp .life-toolbar [role="toolbar"][aria-label="화면 동작"]').count(), 1);
+        }
+      }
+      // iPhone (2026-11-02/03 decisions): no unit buttons; the list opens 연 and each unit goes one level up.
+      await page.setViewportSize({ width: 390, height: 844 }); await page.locator('[data-schedule-up="month"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="month"]').waitFor();
+      await page.locator('[data-schedule-up="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('#lifeApp nav[aria-label="보기 단위"]').isVisible(), false);
+      await page.locator('[data-schedule-up="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
+      assert.deepEqual(await page.locator('#lifeApp nav[aria-label="보기 단위"] a').evaluateAll(links => links.filter(link => link.checkVisibility()).map(link => link.dataset.scheduleView)), ['tools']);
+      await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      await page.setViewportSize({ width: 820, height: 1000 }); await page.locator('[data-schedule-view="home"]').click(); await settle(page); await page.locator('#lifeHome').waitFor();
+      const views = page.locator('#lifeApp nav[aria-label="보기 단위"] a');
+      assert.deepEqual(await views.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('aria-label'), link.getAttribute('aria-current')])),
+        [['목록', '목록', 'true'], ['Y', '연', null], ['Q', '분기', null], ['M', '월', null], ['W', '주', null], ['D', '일', null]]);
+      await page.locator('[data-schedule-view="tools"]').click(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset.scheduleView), 'tools');
+      assert.equal(await page.evaluate(() => location.search), '?section=schedule&view=tools');
+      await page.goBack(); await settle(page); await page.locator('#lifeMain[data-mode="home"]').waitFor();
+      await page.goForward(); await settle(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      assert.equal(await page.locator('[aria-current="page"]').count(), 1, 'one current page per document');
+      await page.locator('[data-schedule-view="home"]').focus(); await page.keyboard.press('Enter'); await settle(page); await page.locator('#lifeHome').waitFor();
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {
       await page.goto(base + '/index.html?section=manage&view=transfer'); await ready(page);

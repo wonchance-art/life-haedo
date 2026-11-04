@@ -6,7 +6,7 @@ const Receipt = require('../assets/life/naver-media-receipt.js'), Sync = require
 const F = require('./fixtures/naver-media.cjs'), copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; };
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const restore = F.installDecoder(); t.after(restore);
   const original = await F.fixture(), owner = { userId: F.OWNER, projectUrl: 'https://naver-continuity.invalid' };
   let bundle = Core.applyChanges(original.bundle, original.changes);
@@ -24,9 +24,9 @@ async function fixture(t) {
   const captures = new Map([a, b].map(value => [value.capture.id, copy(value.capture)]));
   const blobs = new Map([a, b].map(value => [value.capture.payload.photos[0].storagePath, value.photos[0].blob]));
   const local = new Map(), pending = new Map(), remote = new Map(descriptors.map(value => [value.sourceVersionId, copy(value)]));
-  const env = { current: true, writes: [], rpcs: [], downloads: [], installs: [], commits: [], stages: 0, rpcHook: null, downloadHook: null, loseReply: false,
+  const env = { current: true, writes: [], rpcs: [], downloads: [], signals: [], installs: [], commits: [], stages: 0, rpcHook: null, downloadHook: null, verifyHook: null, loseReply: false,
     state: { enabled: true, status: 'synced', outbox: null, conflict: null, binding: { ...owner, remoteId: ws }, remoteRevision: 4, syncedLocalRevision: bundle.revision } };
-  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner, userId: auth.user?.id }), async verify() { return auth.user; }, client: {
+  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner, userId: auth.user?.id }), async verify() { if (env.verifyHook) await env.verifyHook(); return auth.user; }, client: {
     async rpc(name, args) {
       env.rpcs.push({ name, args: copy(args) }); if (env.rpcHook) await env.rpcHook(name, args);
       if (name === 'life_naver_media_receipt_find') {
@@ -43,8 +43,8 @@ async function fixture(t) {
         return { data: env.putReply ? env.putReply(copy(value)) : value };
       }
       throw Error('Unexpected RPC ' + name);
-    }, storage: { from(bucket) { assert.equal(bucket, 'haedo-naver-originals'); return { async download(path) {
-      env.downloads.push(path); if (env.downloadHook) await env.downloadHook(path);
+    }, storage: { from(bucket) { assert.equal(bucket, 'haedo-naver-originals'); return { async download(path, _options, parameters) {
+      env.downloads.push(path); env.signals.push(parameters?.signal || null); if (env.downloadHook) await env.downloadHook(path);
       return blobs.has(path) ? { data: blobs.get(path) } : { error: new Error('missing blob') };
     } }; } }
   } };
@@ -68,7 +68,7 @@ async function fixture(t) {
       env.installs.push(copy(receipt)); local.set(receipt.sourceVersionId, checked); pending.set(receipt.sourceVersionId, { receipt: copy(receipt), pending: false }); return { status: 'stored' };
     }
   };
-  const service = Sync.create({ storage, auth, core: Core, model: Capture, identity: Identity, isCurrent: () => env.current }); t.after(() => service.dispose());
+  const service = Sync.create({ storage, auth, core: Core, model: Capture, identity: Identity, isCurrent: () => env.current, ...options }); t.after(() => service.dispose());
   return { env, auth, service, storage, ws, a, b, descriptors, captures, blobs, local, pending, remote, originalBundle: copy(bundle), changedBytes };
 }
 
@@ -151,6 +151,85 @@ test('account or screen transition while photo bytes are in flight cannot instal
     hold.resolve(); await assert.rejects(operation, { code: 'naver_cancelled' });
     assert.deepEqual(f.env.installs, []); assert.equal(f.local.size, 0);
   }
+});
+
+test('a reader restore whose account check or capture read stops answering ends with a timeout, installs nothing and retry restores exact bytes', async t => {
+  for (const kind of ['verify', 'rpc']) {
+    const f = await fixture(t, { restoreRequestLimitMs: 40 }), hold = deferred(); let stalled = false;
+    const stall = async () => { if (!stalled) { stalled = true; await hold.promise; } };
+    if (kind === 'verify') { let calls = 0; f.env.verifyHook = async () => { if (++calls === 3) await stall(); }; }
+    if (kind === 'rpc') f.env.rpcHook = async name => { if (name === 'life_naver_capture_read') await stall(); };
+    await assert.rejects(f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId), { code: 'naver_timeout' }, kind);
+    assert.equal(stalled, true, kind); assert.deepEqual(f.env.installs, []); assert.equal(f.local.size, 0); assert.equal(f.pending.size, 0);
+    hold.resolve(); await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(f.env.installs, [], kind + ' late answer installs nothing');
+    const restored = await f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId);
+    assert.equal(restored.capture.capture_hash, f.a.capture.capture_hash);
+    assert.deepEqual(new Uint8Array(await restored.photos[0].blob.arrayBuffer()), F.bytes);
+    assert.deepEqual(f.env.installs, [f.descriptors[0]]);
+  }
+});
+
+// The photo download limit grows with the recorded size: 30 s plus 64 KiB/s.
+async function bigPhoto(f, size = 8 * 1024 * 1024) {
+  const big = new Uint8Array(size); big.set(F.bytes);
+  const capture = copy(f.captures.get(f.a.capture.id)), photo = capture.payload.photos[0], digest = F.hash(big);
+  Object.assign(photo, { sha256: digest, bytes: big.length, storagePath: F.OWNER + '/naver/fixture_blog/123456789012/' + digest });
+  capture.capture_hash = await Capture.fingerprint(capture.payload);
+  f.captures.set(capture.id, capture); f.blobs.set(photo.storagePath, new Blob([big], { type: 'image/png' }));
+  f.remote.set(f.a.sourceVersionId, { ...f.remote.get(f.a.sourceVersionId), captureHash: capture.capture_hash });
+  return { big, capture };
+}
+// Lets real I/O and microtasks run (no mocked time passes) until the condition holds.
+async function spin(condition) { for (let i = 0; i < 20000 && !condition(); i++) await new Promise(resolve => setImmediate(resolve)); assert.ok(condition(), 'condition reached'); }
+// Drives mocked setTimeout while real I/O and microtasks get turns between ticks.
+async function advance(t, operation, { step = 1000, until, wait = 30000 }) {
+  let settled = null; operation.then(value => { settled = { value }; }, error => { settled = { error }; });
+  for (let elapsed = 0; !settled && elapsed < until; elapsed += step) {
+    for (let i = 0; i < 8; i++) await new Promise(resolve => setImmediate(resolve));
+    t.mock.timers.tick(step);
+  }
+  // Then real time only (hashing, Blob reads): no mocked time passes here.
+  const { performance } = require('node:perf_hooks'), deadline = performance.now() + wait;
+  while (!settled && performance.now() < deadline) await new Promise(resolve => setImmediate(resolve));
+  return settled;
+}
+
+test('the photo download limit grows with the recorded size instead of the fixed request limit', () => {
+  assert.equal(Sync.downloadLimitMs(64 * 1024 * 1024), 30000 + 1024000, '64 MiB: about 17 minutes');
+  assert.equal(Sync.downloadLimitMs(8 * 1024 * 1024), 30000 + 128000);
+  assert.equal(Sync.downloadLimitMs(0), 30000);
+});
+
+test('a large photo arriving slowly within its size limit is restored, although it takes longer than the request limit', async t => {
+  const f = await fixture(t), { big, capture } = await bigPhoto(f);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let started = false; f.env.downloadHook = () => { started = true; return new Promise(resolve => setTimeout(resolve, 150000)); }; // 150 s > 45 s request limit, < 158 s
+  const operation = f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId); await spin(() => started);
+  const result = await advance(t, operation, { until: 170000 });
+  assert.ok(result && !result.error, String(result?.error?.code || 'not settled'));
+  assert.equal(result.value.capture.capture_hash, capture.capture_hash);
+  assert.equal((await result.value.photos[0].blob.arrayBuffer()).byteLength, big.length);
+  assert.equal(f.env.installs.length, 1);
+});
+
+test('a stalled photo download ends with a timeout only after its size limit, aborts and installs nothing', async t => {
+  const f = await fixture(t); await bigPhoto(f);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let started = false; f.env.downloadHook = () => { started = true; return new Promise(() => {}); };
+  const operation = f.service.restoreForVersion(f.ws, f.a.sourceId, f.a.sourceVersionId); await spin(() => started);
+  assert.equal(await advance(t, operation, { until: 157000, wait: 300 }), null, 'still waiting just before 158 s');
+  const result = await advance(t, operation, { until: 3000 });
+  assert.equal(result?.error?.code, 'naver_timeout');
+  assert.equal(f.env.signals[0]?.aborted, true, 'expired photo download is aborted');
+  assert.deepEqual(f.env.installs, []); assert.equal(f.local.size, 0); assert.equal(f.pending.size, 0);
+});
+
+test('capture review reads are not bounded by the reader restore limit', async t => {
+  const f = await fixture(t, { restoreRequestLimitMs: 20 });
+  f.env.downloadHook = () => new Promise(resolve => setTimeout(resolve, 60));
+  const snapshot = await f.service.readCapture(f.ws, f.a.capture.id);
+  assert.deepEqual(new Uint8Array(await snapshot.photos[0].blob.arrayBuffer()), F.bytes);
 });
 
 test('late receipt publication reply after account change leaves the durable local descriptor pending', async t => {

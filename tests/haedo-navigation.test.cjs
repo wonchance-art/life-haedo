@@ -13,7 +13,7 @@ function fixture(search = '') {
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners[name] = listener; }
   }
-  const document = { body: { dataset: { page: 'home', haedoSection: 'home' } }, querySelectorAll: () => [], addEventListener() {}, createElement: tag => new Element(tag) };
+  const document = { body: { dataset: { page: 'home', haedoSection: 'schedule' } }, querySelectorAll: () => [], addEventListener() {}, createElement: tag => new Element(tag) };
   const context = { document, location: { pathname: '/index.html', search, assign: href => moves.push(href) }, URLSearchParams, addEventListener() {} };
   vm.runInNewContext(fs.readFileSync(require.resolve('../assets/haedo-navigation.js'), 'utf8'), context);
   return { api: context.HaedoNavigation, document, moves };
@@ -24,13 +24,31 @@ function event(overrides = {}) {
 const click = (link, value = event()) => link.listeners.click(value);
 
 test('legacy feature links select their current section and unknown views cannot name a section', () => {
-  for (const [query, expected] of [['?section=tools&view=books', 'records'], ['?section=manage&view=public-pages', 'home'],
-    ['?section=tools&view=interests', 'news'], ['?section=manage&view=source-trash', 'records'], ['?section=tools&view=annual-plan', 'tools']]) {
-    assert.equal(fixture(query).document.body.dataset.haedoSection, expected);
+  // 2026-11-02 menu: 뉴스·일정·자료·설정; public cover/pages moved to 설정, the plan into 일정.
+  for (const [query, expected] of [['?section=tools&view=books', 'records'], ['?section=manage&view=public-pages', 'manage'],
+    ['?section=home&view=public-cover', 'manage'], ['?section=tools&view=interests', 'news'], ['?section=manage&view=source-trash', 'records'],
+    ['?section=tools&view=annual-plan', 'schedule'], ['?section=schedule&view=tools', 'schedule']]) {
+    assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
   }
-  assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'home');
+  assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'schedule');
   const { api } = fixture();
   for (const value of ['__proto__', 'constructor', 'toString', 'books-extra', null]) assert.equal(api.getSectionForView(value), null);
+});
+
+test('old section addresses open the new sections and only the four menu IDs or their aliases are accepted', () => {
+  // Every former ?section= value lands on its new section (home/tools are aliases of schedule).
+  for (const [query, expected] of [['', 'schedule'], ['?section=home', 'schedule'], ['?section=tools', 'schedule'], ['?section=schedule', 'schedule'],
+    ['?section=records', 'records'], ['?section=manage', 'manage'], ['?section=news', 'news'], ['?section=unknown', 'schedule'], ['?section=__proto__', 'schedule']]) {
+    assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query || '(none)');
+  }
+  const { api } = fixture();
+  assert.deepEqual([...api.sections], ['news', 'schedule', 'records', 'manage']);
+  for (const [id, expected] of [['home', 'schedule'], ['tools', 'schedule'], ['schedule', 'schedule'], ['news', 'news'], ['records', 'records'],
+    ['manage', 'manage'], ['compose', null], ['hasOwnProperty', null], ['__proto__', null], [undefined, null]]) assert.equal(api.normalizeSection(id), expected, String(id));
+  for (const [view, expected] of [['home', 'schedule'], ['blog', 'schedule'], ['account-blog', 'schedule'], ['tools', 'schedule'], ['annual-plan', 'schedule'],
+    ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'schedule'], ['backup', 'manage'], ['external-discovery', 'news'],
+    // 일정's calendar units (2026-11-02): tools is Y; Q·M·W·D are their own views.
+    ['quarter', 'schedule'], ['month', 'schedule'], ['week', 'schedule'], ['day', 'schedule']]) assert.equal(api.getSectionForView(view), expected, view);
 });
 
 test('planning links wait for saved input, suppress duplicate clicks and navigate once', async () => {

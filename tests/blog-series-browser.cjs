@@ -182,7 +182,7 @@ async function main() {
       await toc.nth(2).click(); await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
       assert.equal(await f.page.locator('#blogSeriesReaderNext').isDisabled(), true);
       await f.page.waitForFunction(() => [...document.querySelectorAll('.blog-series-reader-body img')].some(img => img.complete && img.naturalWidth === 4032 && img.naturalHeight === 3024));
-      await f.page.getByRole('button', { name: '사진 원본 크기로 보기', exact: true }).click();
+      await f.page.getByRole('button', { name: '사진 크게 보기', exact: true }).click();
       const zoom = await f.page.locator('.blog-photo-frame').evaluate(frame => ({ imageWidth: frame.querySelector('img').getBoundingClientRect().width, naturalWidth: frame.querySelector('img').naturalWidth, width: frame.clientWidth, scroll: frame.scrollWidth }));
       assert.equal(zoom.imageWidth, 4032); assert.equal(zoom.imageWidth, zoom.naturalWidth); assert(zoom.scroll > zoom.width);
       await f.page.getByRole('button', { name: '사진 화면에 맞추기', exact: true }).click();
@@ -313,7 +313,7 @@ async function main() {
         } });
       });
       await f.page.locator('#bsImportConfirm').click(); await f.page.waitForFunction(() => __seriesHydrateHeld === true);
-      await f.page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();
+      await f.page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click();
       await f.page.getByText('모음 처리 결과를 확인한 뒤 이동해 주세요. 입력한 내용은 유지됩니다.', { exact: true }).waitFor();
       assert.equal(await f.page.locator('#bsNew').count(), 1); assert.equal(await f.page.locator('#bsImportConfirm').isDisabled(), true);
       assert.equal(await f.page.evaluate(() => HaedoLife.Shell.storage.getActive()), f.seed.workspaceId);
@@ -322,7 +322,7 @@ async function main() {
       await f.page.locator('#bsImportReview').waitFor({ state: 'detached' }); await saved(f.page);
       const committed = await state(f.page); originals(committed, before); assert.equal(committed.snapshots.length, 1);
       assert.deepEqual(content(committed.snapshots[0]), content(exportedSnapshot));
-      await f.page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();
+      await f.page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click();
       await f.page.locator('#bsNew').waitFor({ state: 'detached' }); assert.deepEqual(await state(f.page), committed);
       assert.equal(f.server.writes().length, 0);
     });

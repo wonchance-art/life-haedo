@@ -1,9 +1,11 @@
 'use strict';
 // 2026-11-01 independent review of automatic account blog sync: deletion only
 // of the exact revision a device saw (B1), a draft finished on another device
-// (M1), conflict state cleared when the server wins (M2), no hidden polling (m2).
+// (M1, decided by latest wins since 2026-11-02), conflict state cleared when
+// the server wins (M2), no hidden polling (m2).
 const test = require('node:test'), assert = require('node:assert/strict');
-const { server, device, clock, post, edit, finish, Core, Photo, Blog, Sync } = require('./helpers/blog-sync-cloud.cjs');
+const { server, device, clock, post, edit, finish, Core, Photo, Blog, Sync, memoryIdb, owner, USER } = require('./helpers/blog-sync-cloud.cjs');
+const { createStorage } = require('../assets/life/storage.js');
 
 async function pair() {
   const cloud = server(), time = clock();
@@ -54,7 +56,15 @@ test('B1: the deleting device\'s own unacknowledged revision is still deleted', 
   assert.deepEqual(cloud.stats.deletes.map(call => call.expected), [1, 2]);
 });
 
-test('M1: a draft finished on another device stays saved; this device\'s later draft text is kept as its own draft without an error loop', async () => {
+// 2026-11-02 owner decision: latest wins with no exception for saved posts.
+// These two cases used to assert the removed exception (a post finished on
+// another device always beat a later draft, `finishedElsewhere`). They now
+// assert the latest-wins outcome for the same situations: the saved post stays
+// in place, the later draft becomes its editing draft and the saved content is
+// also kept as a recovery copy. They keep their original purpose: the server's
+// refusal to turn a saved post back into a draft is decided once, without an
+// error or a retry loop.
+test('M1: a later draft wins over a post finished on another device as that post\'s editing draft, without an error loop', async () => {
   const { cloud, time, a, b } = await pair();
   const draft = await save(a, await post({ title: '쓰는 중', status: 'draft', time: '2026-11-01T09:00:00.000Z' }));
   time.advance(60000); await a.sync.syncNow({ flushDrafts: true }); await b.sync.syncNow();
@@ -64,14 +74,21 @@ test('M1: a draft finished on another device stays saved; this device\'s later d
   const bCur = await b.storage.readPhotoPost(b.ws, draft.id);
   await b.storage.savePhotoPost(b.ws, { ...bCur, title: '맥에서 더 쓴 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
   for (let i = 0; i < 3; i++) { time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true }); }
-  const rows = await list(b), x = rows.find(row => row.id === draft.id);
-  assert.equal(x.status, 'saved'); assert.equal(x.title, '완성');
-  assert(rows.some(row => row.status === 'draft' && row.title === Sync.CONFLICT_PREFIX + '맥에서 더 쓴 초안'), 'the later draft text is kept');
+  const rows = await list(b), x = await b.storage.readPhotoPost(b.ws, draft.id);
+  assert.deepEqual(rows.map(row => [row.status, row.title]).sort(), [['draft', '맥에서 더 쓴 초안'], ['draft', '복구 사본 · 완성'], ['saved', '완성']]);
+  assert.equal(x.status, 'saved', 'the server identity never returns to a draft'); assert.equal(x.title, '완성', 'the saved post keeps its place and title');
+  const winner = await b.storage.readPhotoPost(b.ws, rows.find(row => row.title === '맥에서 더 쓴 초안').id);
+  assert.deepEqual(winner.replaces, { id: draft.id, revision: x.revision }, 'the later draft edits the saved post');
   assert.equal((await b.sync.getState(b.ws, draft.id)).status, 'synced'); assert.equal(b.sync.getStatus().state, 'synced');
   assert.equal(cloud.rows.get(draft.id).data.status, 'saved'); assert.equal(cloud.rows.get(draft.id).data.title, '완성');
-  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id).length, saves = count();
+  assert.deepEqual(cloud.rows.get(winner.id).data.replaces, { id: draft.id, revision: cloud.rows.get(draft.id).revision }, 'the server copy of the draft names the exact saved revision');
+  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
   time.advance(20 * 60000); await b.sync.syncNow();
   assert.equal(count(), saves, 'no repeated rejected request');
+  await a.sync.syncNow({ flushDrafts: true });
+  assert.deepEqual((await list(a)).map(row => [row.status, row.title]).sort(), [['draft', '맥에서 더 쓴 초안'], ['draft', '복구 사본 · 완성'], ['saved', '완성']], 'the finishing device ends with the same posts');
+  const atA = await a.storage.readPhotoPost(a.ws, winner.id);
+  assert.deepEqual(atA.replaces, { id: draft.id, revision: (await a.storage.readPhotoPost(a.ws, draft.id)).revision }, 'and the same editing link');
 });
 
 test('M1: the same refusal reached without a revision conflict is decided once, not retried forever', async () => {
@@ -84,9 +101,18 @@ test('M1: the same refusal reached without a revision conflict is decided once, 
   await b.storage.savePhotoPost(b.ws, { ...bCur, title: '이 기기 초안', updatedAt: '2026-11-01T10:05:00.000Z' }, bCur.revision);
   time.advance(20 * 60000); await b.sync.syncNow({ flushDrafts: true });
   const rows = await list(b);
-  assert.equal(rows.find(r => r.id === draft.id).status, 'saved');
-  assert(rows.some(r => r.status === 'draft' && r.title === Sync.CONFLICT_PREFIX + '이 기기 초안'));
+  assert.equal(rows.find(r => r.id === draft.id).status, 'saved'); assert.equal(rows.find(r => r.id === draft.id).title, '다른 기기 완성');
+  assert(rows.some(r => r.status === 'draft' && r.title === '이 기기 초안'), 'the later draft stays current');
+  assert(rows.some(r => r.status === 'draft' && r.title === '복구 사본 · 다른 기기 완성'));
   assert.notEqual(b.sync.getStatus().state, 'error');
+  time.advance(20 * 60000); await b.sync.syncNow();
+  assert.equal(cloud.rows.get(draft.id).data.title, '다른 기기 완성', 'the saved server version stays in place, unrenamed');
+  assert.equal(cloud.rows.get(draft.id).data.status, 'saved');
+  const refused =() => cloud.stats.saves.filter(call => call.device === 'ipad' && call.postId === draft.id && call.data.status === 'draft').length;
+  const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
+  time.advance(20 * 60000); await b.sync.syncNow();
+  assert.equal(count(), saves, 'nothing is sent again once decided');
+  assert.equal(refused(), 1, 'the refused draft request was sent once');
 });
 
 test('M2: when the server version wins, the conflict clears its retry state and ends synced', async () => {
@@ -187,4 +213,73 @@ test('a conflict copy made during a cycle is uploaded by the next cycle at once,
   timers.at(-1).fn(); for (let n = 0; n < 40 && ![...cloud.rows.values()].some(row => row.data.title === kept); n++) await new Promise(done => setTimeout(done, 25));
   assert([...cloud.rows.values()].some(row => row.data.status === 'draft' && row.data.title === kept), 'the kept draft reached the account');
   sync.dispose();
+});
+
+// 2026-11-03 CI (PR #183): a new device listed the account's posts before its
+// first library was stored, skipped them and waited the whole 30 s interval.
+test('posts listed before this device has a library are looked for again within a second, backing off, then received', async () => {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time });
+  const doc = await save(a, await post({ title: '다른 기기의 글', photos: 1 })); await a.sync.syncNow();
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner }), timers = [];
+  const auth = { epoch: 0, getAccount: () => owner, async verify() { return { id: USER }; } };
+  const events = { document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} }, addEventListener() {}, removeEventListener() {} };
+  const sync = Sync.create({ storage, auth, blog: Blog, photoPost: Photo, remote: cloud.client('new-phone'), makeId: Core.id, locks: null, now: () => time.now, events, interval: 30000,
+    timers: { setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; }, clearTimeout() {} } });
+  sync.start();
+  await sync.syncNow(); assert.equal(timers.at(-1).delay, 500, 'no library yet: the next look is soon');
+  await sync.syncNow(); assert.equal(timers.at(-1).delay, 1000, 'still none: it backs off');
+  const ws = (await storage.createWorkspace('새 기기 자료')).workspaceId;
+  await sync.syncNow();
+  assert.deepEqual((await storage.listPhotoPosts(ws)).map(row => row.id), [doc.id], 'the post arrives once a library exists');
+  assert.equal(timers.at(-1).delay, 30000, 'nothing waiting: the regular interval again');
+  sync.dispose();
+});
+
+// 2026-11-03 independent review (M1): the bounded receive keeps its limits, frees them on
+// failure and takes the newest saved posts first. Each case fails when that rule is removed.
+const within = (promise, ms, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Error(label + ' stalled')), ms))]);
+async function seeded(n, photos) {
+  const cloud = server(), time = clock(), a = await device(cloud, 'mac', { time }), b = await device(cloud, 'ipad', { time }), docs = [];
+  for (let i = 0; i < n; i++) docs.push(await save(a, await post({ title: '글 ' + i, photos, time: new Date(Date.UTC(2026, 10, 1, 9, i)).toISOString() })));
+  assert.equal((await a.sync.syncNow()).state, 'synced');
+  return { cloud, time, a, b, docs };
+}
+const hex = async blob => Buffer.from(await blob.arrayBuffer()).toString('hex');
+
+test('receive: failed photo downloads free every transfer slot, never exceed the limit, and a later cycle receives each post exactly', async () => {
+  const { time, b, docs } = await seeded(9, 2), original = b.remote.downloadAsset;
+  let live = 0, peak = 0;
+  b.remote.downloadAsset = async () => { live++; peak = Math.max(peak, live); try { await new Promise(done => setTimeout(done, 2)); throw Object.assign(Error('offline'), { code: 'network_error' }); } finally { live--; } };
+  await within(b.sync.syncNow(), 5000, 'failing cycle');
+  assert.equal((await list(b)).length, 0, 'nothing is half installed');
+  b.remote.downloadAsset = async asset => { live++; peak = Math.max(peak, live); try { await new Promise(done => setTimeout(done, 2)); return await original.call(b.remote, asset); } finally { live--; } };
+  time.advance(10 * 60 * 1000);
+  assert.equal((await within(b.sync.syncNow({ force: true }), 5000, 'retry cycle')).state, 'synced', 'slots released by the failures serve the retry');
+  assert(peak <= 6, 'at most six photo transfers at once, saw ' + peak); assert(peak > 2, 'photos of several posts are fetched together, saw ' + peak);
+  for (const doc of docs) { const got = await b.storage.readPhotoPost(b.ws, doc.id); for (const [i, photo] of doc.photos.entries()) assert.equal(await hex(got.photos[i].blob), await hex(photo.blob)); }
+});
+
+test('receive: saved posts arrive newest first', async () => {
+  const { b, docs } = await seeded(6, 0), order = [], read = b.remote.read;
+  b.remote.read = async id => { order.push(id); return read.call(b.remote, id); };
+  await b.sync.syncNow();
+  assert.deepEqual(order.slice(0, 4), [...docs].reverse().map(doc => doc.id).slice(0, 4));
+});
+
+test('receive: a byte budget makes further posts wait while the ones being received hold it', async () => {
+  const { cloud, time, b, docs } = await seeded(5, 2);
+  const make = receiveBytes => Sync.create({ storage: b.storage, auth: b.auth, blog: Blog, photoPost: Photo, remote: b.remote, makeId: Core.id, locks: null, now: () => time.now, timers: { setTimeout: () => 0, clearTimeout() {} }, interval: 30000, receiveBytes });
+  const original = b.remote.downloadAsset, active = new Map(); let peakPosts = 0, peakFiles = 0, live = 0, failing = true;
+  b.remote.downloadAsset = async asset => {
+    const post = asset.path.split('/')[1]; active.set(post, (active.get(post) || 0) + 1); peakPosts = Math.max(peakPosts, active.size); live++; peakFiles = Math.max(peakFiles, live);
+    try { await new Promise(done => setTimeout(done, 3)); if (failing) throw Object.assign(Error('offline'), { code: 'network_error' }); return await original.call(b.remote, asset); }
+    finally { live--; const left = active.get(post) - 1; if (left) active.set(post, left); else active.delete(post); }
+  };
+  const tight = make(1);
+  await within(tight.syncNow(), 5000, 'failing cycle'); assert.equal((await list(b)).length, 0);
+  failing = false; time.advance(10 * 60 * 1000);
+  await within(tight.syncNow({ force: true }), 5000, 'retry after failures (the budget was given back)'); tight.dispose();
+  assert.equal(peakPosts, 1, 'over the budget one post is received at a time');
+  assert.equal(peakFiles, 2, 'the photos of that one post still download together');
+  assert.equal((await list(b)).length, docs.length); assert.equal(cloud.rows.size, docs.length);
 });

@@ -1128,3 +1128,19 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 소유자 결정은 HEIC 원본 바이트 보존 + 보기용 JPEG다. 이번에는 라이브러리를 추가하지 않고 기기 내장 디코더(`createImageBitmap`/`<img>`)와 캔버스 JPEG 인코딩을 사용한다. iPhone·iPad Safari는 HEIC를 직접 열 수 있어 추가 다운로드·WASM 메모리가 필요 없고, 원본은 어느 경로에서도 다시 쓰지 않는다. 디코더가 없는 브라우저는 명시 오류로 거절한다.
 
 나중 선택지로 WASM 디코더를 확인했다(확인일 2026-11-01, npm 공식 메타데이터): [libheif-js](https://www.npmjs.com/package/libheif-js) 1.23.5 / LGPL-3.0(최근 갱신 2026-10-04), [heic-to](https://www.npmjs.com/package/heic-to) 1.6.7 / LGPL-3.0(최근 갱신 2026-10-27, libheif 기반). 둘 다 수 MB의 WASM과 디코딩 시 전체 비트맵 메모리가 필요하고 LGPL 고지·교체 가능성 요건이 있다. 데스크톱 Chrome에서도 HEIC를 추가해야 하는 요구가 확인되거나 iOS 내장 디코더의 방향·색 결과가 기대와 다를 때 vendor 도입(라이선스 파일 보존, 지연 로드)을 다시 검토한다. 보안 권고는 npm 메타데이터 외에 별도 확인하지 않았다.
+
+## 공통 틀의 아이콘 — Lucide 1.51.0 모양 재확인, 2026-11-02 KST
+
+부드러운 판 묶음 A(공통 틀)에서 앱 전체의 아이콘을 [시안 결정 15](../design-review/write-read-redesign.md)(Lucide 1.51.0 모양, 조작 20px·글 안 16px, 선 굵기 1.8, 같은 개념은 같은 그림)에 맞췄다.
+
+- **확인한 배포(확인일 2026-11-02, npm 공식 레지스트리):**
+  - 최신 릴리스는 `lucide-static` **1.66.0**(2026-10-31 배포)이다. 시안이 기준으로 삼은 **1.51.0**은 2026-10-03 배포이고, 저장소에 이미 같은 판의 GitHub 원본 13개와 고지가 있다.
+  - 라이선스: **ISC**. Feather에서 온 아이콘의 MIT 고지가 `LICENSE`에 함께 있어 `vendor/lucide/LICENSE`에 그대로 보존한다.
+  - 의존성 0개. `npm audit`(lucide-static@1.51.0) 0건, OSV 조회(npm `lucide-static`) 0건. GitHub 보안 권고 목록은 이 세션에서 GitHub API 접근이 막혀 다시 조회하지 못했다. SVG 기하만 쓰고 실행 코드를 넣지 않으므로 패키지 실행 경로의 권고는 해당하지 않는다.
+  - 이번에 쓰는 35개 모양은 1.51.0과 1.66.0의 SVG 본문이 같다(두 tarball 비교). 판을 올려도 모양은 바뀌지 않으므로 시안과 같은 1.51.0을 유지한다.
+- **비교:**
+  - 직접 도입(npm `lucide` 런타임·아이콘 글꼴·CDN): 빌드 없는 정적 앱에 런타임과 수천 개 아이콘이 들어오고, CDN은 프로젝트 규칙(로컬 vendor만)과 오프라인 셸에 맞지 않는다.
+  - 자체 SVG만 그리기(이전 방식의 일부): 관리·클라우드·홈 등 자체 도형과 Lucide 원본이 섞여 같은 개념의 모양과 굵기가 화면마다 달랐다.
+  - **선택: 공식 tarball의 SVG 원본 중 쓰는 것만 `vendor/lucide/icons/`에 두고, `assets/life/icons.js`가 그 기하를 그대로 쓴다.** 파일마다 SHA-256을 `vendor/lucide/UPSTREAM.json`에 남기고 `tests/icons.test.cjs`가 기하·해시·한 그림 한 개념을 확인한다. 런타임·글꼴·외부 요청은 없다.
+- **개념별 그림:** 일정 = calendar, 자료 = book-open, 뉴스 = newspaper, 설정 = settings, 글쓰기 = pencil(데스크톱 메뉴의 `+ 글쓰기`는 plus), 편집 = square-pen, 인용 = text-quote, 웹 주소 = link, 뒤로 = chevron-left. 이전의 해도 A 따옴표는 결정 15의 "인용 = 줄과 세로 바"로 대체했다.
+- **선택을 바꿀 조건:** 쓰려는 개념에 1.51.0 모양이 없거나, 최신 판에서 쓰는 모양이 바뀌어 시안을 새로 정할 때 판을 올리고 해시와 고지를 함께 갱신한다.

@@ -246,7 +246,8 @@
         return { status: result.data.status, revision: result.data.revision };
       } catch (error) { assertAlive(expected); throw cleanError(error); }
     }
-    const getAccount = () => accountWith(serverCheck);
+    // Reading the signed-in identity may reuse the page opening's finished check (platform clients only).
+    const getAccount = () => accountWith(typeof client.auth.getStartupUser === 'function' ? () => client.auth.getStartupUser() : serverCheck);
     const list = () => listWith(serverCheck);
     const read = workspaceId => readWith(workspaceId, serverCheck);
     const head = workspaceId => headWith(workspaceId, serverCheck);

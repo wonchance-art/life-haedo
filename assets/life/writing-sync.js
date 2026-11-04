@@ -6,6 +6,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  // S2: page-lifecycle wiring (sync-lifecycle.js). An older cached page may lack it: the engine
+  // then runs its explicit and start-up passes only, until the page reloads.
+  const syncLifecycle = () => root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
   const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
   // A saved record is terminal: keep it and recover the other input as a new draft.
   // Otherwise the newer edit time wins; ties converge on the server copy.
@@ -23,7 +26,7 @@
     const fault = code => clean({ code });
     if (!storage?.account || !sourceSync || !auth || !remote || !engine) throw fault('account_mismatch');
     const owner = storage.account, entries = new Map(), listeners = new Set();
-    let disposed = false, started = false, interval = null, refreshing = null, again = false, soon = null, offAll = null, material = null;
+    let disposed = false, started = false, wiring = null, refreshing = null, again = false, soon = null, offAll = null, material = null;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const guard = epoch => { if (disposed || !same(auth.getAccount()) || epoch !== undefined && epoch !== auth.epoch) throw fault('request_cancelled'); };
     const binding = ws => ({ ...owner, remoteId: ws });
@@ -238,11 +241,12 @@
       nudge();
     }
     function start() { guard(); if (started) return; started = true;
-      interval = root.setInterval(automatic, every); interval?.unref?.();
-      root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
-      root.document?.addEventListener('visibilitychange', automatic);
-      root.document?.addEventListener?.('haedo:page-suspend', suspend); root.document?.addEventListener?.('haedo:page-ready', resume);
-      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
+      wiring = syncLifecycle()?.attach(root, {
+        listen: [['window', 'online', automatic], ['window', 'focus', automatic], ['document', 'visibilitychange', automatic],
+          ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', resume],
+          ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
+        poll: [every, automatic],
+      }) || null;
       try { offAll = storage.subscribeAll?.(onStorage) || null; } catch (_) { offAll = null; }
       try { offSource = sourceSync.subscribe?.(onSource) || null; } catch (_) { offSource = null; }
       if (materials !== null) {
@@ -251,13 +255,9 @@
       }
       automatic();
     }
-    function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval); root.clearTimeout(soon); soon = null;
+    function dispose() { if (disposed) return; disposed = true; wiring?.detach(); wiring = null; root.clearTimeout(soon); soon = null;
       offAll?.(); offSource?.(); offSource = null; waiting.clear(); sourceAgain = null; material?.dispose(); material = null;
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
-      root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
-      root.document?.removeEventListener('visibilitychange', automatic);
-      root.document?.removeEventListener?.('haedo:page-suspend', suspend); root.document?.removeEventListener?.('haedo:page-ready', resume);
-      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
     }
     // { force: true } (an explicit retry) ignores the unavailable back-off once.
     return Object.freeze({ start, getState, listRemote, download, dispose, refresh: options => { if (options?.force === true) availability.until = 0; return automatic(); },

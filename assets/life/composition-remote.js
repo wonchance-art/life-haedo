@@ -50,14 +50,15 @@
         return JSON.parse(json);
       } catch (error) { throw fault(['payload_too_large', 'workbench_too_large'].includes(error?.code) ? 'payload_too_large' : 'invalid_remote_data'); }
     }
-    async function authorize() {
-      alive(); const result = await client.auth.getUser(); alive();
+    // A read may reuse the page opening's finished check; a write always checks with Auth.
+    async function authorize(read = false) {
+      alive(); const result = await (read && client.auth.getStartupUser ? client.auth.getStartupUser() : client.auth.getUser()); alive();
       if (result.error || !result.data?.user) throw fault('auth_required');
     }
     async function read(workspaceId) {
       if (!identifier(workspaceId)) throw fault('invalid_request');
       try {
-        await authorize();
+        await authorize(true);
         const result = await client.rpc('life_composition_get', { p_workspace_id: workspaceId }); alive();
         if (result.error) throw result.error;
         if (result.data === null) return null;

@@ -41,7 +41,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
         }
         assert.ok(html.indexOf('href="assets/life/ui.css"')<html.indexOf('href="assets/life/workbench.css"'),`${name}: workbench follows shared styles`);
         assert.ok(html.indexOf('href="assets/life/workbench.css"')<html.indexOf('href="assets/life/home.css"'),`${name}: home follows shared styles`);
-        assert.match(html,new RegExp(`data-haedo-section="${name==='index.html'?'home':'records'}"`),`${name}: correct initial section`);
+        assert.match(html,new RegExp(`data-haedo-section="${name==='index.html'?'schedule':'records'}"`),`${name}: correct initial section`);
       }
       for(const tag of html.matchAll(/<(?:script|link|img)\b[^>]*>/gi)){
         for(const attr of tag[0].matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)){

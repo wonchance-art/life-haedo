@@ -2,6 +2,7 @@
  * mocked Auth/FakeCloud + real SDK/IndexedDB. No live account, original page,
  * translation service, actual reading, device or user usefulness claim. */
 'use strict';
+const { articleControl, openReader, showList, readerFirst } = require('./helpers/news-reader.cjs'); // 2026-11-03: row 담기, other article actions in its reader.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -25,8 +26,15 @@ async function newsView(control) {
   // One atomic DOM query: a redraw can replace the control after a handle resolved, and a detached node has no ancestor panel.
   await control.waitFor({ state: 'attached' });
   const settingsTarget = await panel.locator(control).count() > 0;
-  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  if (settingsTarget && !await panel.isVisible()) {
+    // 2026-11-03: the settings icon sits with the list; an open reader below 1101px is closed first with ‹ 뉴스.
+    if (await page.locator('#discoveryReaderBack').isVisible()) { await page.locator('#discoveryReaderBack').click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
+    await page.locator('#discoveryNewsSettings').click();
+  }
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+  // 2026-11-03: below 1101px an open reader takes the list's place; ‹ 뉴스 returns to the list before a list control is used.
+  const back = page.locator('#discoveryReaderBack');
+  if (!settingsTarget && await back.count() && await back.isVisible() && !await control.evaluate(element => !!element.closest('#discoveryReader'))) { await back.click(); await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
 }
 async function selectNewsMode(page, value) {
   if (value === 'personal' && await page.locator('#discoverySort option[value="personal"]').isDisabled()) {
@@ -36,6 +44,8 @@ async function selectNewsMode(page, value) {
   }
   await newsView(page.locator('#discoveryDiscover'));
   if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  // 2026-11-03: 정렬 lives in the 정렬·주제·언어 filter disclosure next to the list tabs.
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryFilterToggle').click();
   await page.locator('#discoverySort').selectOption(value);
 }
 // Open actual native disclosures, outermost first, before using a moved control.
@@ -139,7 +149,7 @@ async function capture(page, scene, selector) {
   try { for (const width of [390, 820, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(() => document.fonts.ready);
     if (selector) await page.locator(selector).first().scrollIntoViewIfNeeded(); else await page.evaluate(() => scrollTo(0, 0));
-    const audit = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, comparisonOpen: document.querySelector('#discoveryReadingComparison')?.open, firstTitle: (() => { const rect = document.querySelector('#discoveryList .discovery-title a')?.getBoundingClientRect(); return rect && { top: rect.top, bottom: rect.bottom }; })(), navTop: document.querySelector('[data-haedo-navigation]')?.getBoundingClientRect().top, controls: [...document.querySelectorAll('#discoveryReadingComparison button,#discoveryReadingComparison select,#discoveryReadingComparison summary')].filter(element => element.checkVisibility()).map(element => { const r = element.getBoundingClientRect(); return { id: element.id || element.dataset.readingField || element.textContent, width: r.width, height: r.height }; }) }));
+    const audit = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, comparisonOpen: document.querySelector('#discoveryReadingComparison')?.open, firstTitle: (() => { const rect = document.querySelector('#discoveryList [data-discovery-select] .discovery-title')?.getBoundingClientRect() /* 2026-11-03: a row opens its reader; the title is inside that control */; return rect && { top: rect.top, bottom: rect.bottom }; })(), navTop: document.querySelector('[data-haedo-navigation]')?.getBoundingClientRect().top, controls: [...document.querySelectorAll('#discoveryReadingComparison button,#discoveryReadingComparison select,#discoveryReadingComparison summary')].filter(element => element.checkVisibility()).map(element => { const r = element.getBoundingClientRect(); return { id: element.id || element.dataset.readingField || element.textContent, width: r.width, height: r.height }; }) }));
     assert(audit.documentWidth <= width, 'No horizontal overflow');
     if (scene === 'first-fold') { assert.equal(audit.comparisonOpen, false); assert.equal(audit.scrollY, 0); assert(audit.firstTitle && audit.firstTitle.top >= 60 && audit.firstTitle.bottom < (width === 390 ? audit.navTop : 1000), 'First article remains in the fresh viewport'); }
     assert(audit.controls.every(row => row.width >= 44 && row.height >= 44), 'Reading controls minimum 44px');
@@ -244,12 +254,14 @@ async function main() {
         await selectNewsMode(page, 'latest'); await idle(page);
         const llt = page.locator('#discoveryList [data-discovery-id]').first(), id = await llt.getAttribute('data-discovery-id');
         const sourceRow = actualFeed.articles.find(row => row.id === id); assert.equal(sourceRow.sourceId, 'llt-journal'); assert.equal(sourceRow.publishedAt, null); assert.equal(sourceRow.author, null); assert.deepEqual(sourceRow.tags, []); assert.equal(sourceRow.summary, ''); assert.equal(sourceRow.coverage, 'link_only');
-        await (await revealControl(llt.locator('.discovery-article-info > summary'))).click();
-        assert((await llt.innerText()).includes(sourceRow.title)); assert((await llt.innerText()).includes('발행일 미확인')); assert.equal(await llt.locator('time').count(), 0);
-        const original = await llt.locator('[data-discovery-open]').getAttribute('href');
-        await popup(page, context, original, '[data-discovery-open]', 'original', llt);
-        await popup(page, context, original, '[data-discovery-translate]', 'translation', llt);
-        const priorReview = await state(page); await (await revealControl(llt.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor();
+        await (await revealControl((await articleControl(page, llt, '.discovery-article-info > summary')))).click();
+        // 2026-11-03: 기사 정보 is in the opened article's reader; the row keeps title and source only.
+        const lltReader = page.locator('#discoveryReader');
+        assert((await llt.innerText()).includes(sourceRow.title)); assert((await lltReader.innerText()).includes('발행일 미확인')); assert.equal(await llt.locator('time').count(), 0); assert.equal(await lltReader.locator('time').count(), 0);
+        const original = await (await articleControl(page, llt, '[data-discovery-open]')).getAttribute('href');
+        await popup(page, context, original, '[data-discovery-open]', 'original', lltReader);
+        await popup(page, context, original, '[data-discovery-translate]', 'translation', lltReader);
+        const priorReview = await state(page); await (await revealControl((await articleControl(page, llt, '[data-discovery-import]')))).click(); await page.locator('#lifeImportTitle').waitFor();
         assert.equal(await page.locator('#lifeImportTitle').inputValue(), sourceRow.title); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.equal(await page.locator('#lifeImportDate').inputValue(), ''); assert.equal(await page.locator('#lifeImportAuthor').inputValue(), '');
         await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
         assert.deepEqual((await state(page)).bundle, priorReview.bundle, 'Review does not automatically import the LLT article');
@@ -298,7 +310,7 @@ async function main() {
       await page.evaluate(() => { window.__readingFail = true; }); await card(page, url).locator('[data-reading-save]').click();
       await page.locator('#discoveryReadingError').waitFor({ state: 'visible' });
       assert.deepEqual((await state(page)).reading, first.reading); assert.equal(await card(page, url).locator('[data-reading-field="reason"]').inputValue(), 'off_topic');
-      const location = page.url(); await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').first().click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
+      const location = page.url(); await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').first().click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal(page.url(), location); assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'no');
       const revision = (await state(page)).reading.revision; await (await revealControl(page.locator('#discoveryReadingRetry'))).click(); await saved(page, revision);
       const after = await preserved(page, before); assert.equal(reviewFor(after.reading, url).reason, 'off_topic');

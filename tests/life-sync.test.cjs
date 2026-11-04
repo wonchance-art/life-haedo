@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const Core = require('../assets/life/core.js');
 const source = fs.readFileSync(require.resolve('../assets/life/sync.js'), 'utf8');
+// The page loads sync-lifecycle.js before sync.js (S2); the engine binds its events through it.
+const lifecycleSource = fs.readFileSync(require.resolve('../assets/life/sync-lifecycle.js'), 'utf8');
 const CONFIG = { url: 'https://sync-fixture.example.invalid', key: 'sb_publishable_fixture_only' };
 const account = id => ({ userId: id, email: `${id}@example.invalid`, projectUrl: CONFIG.url });
 const copy = value => structuredClone(value);
@@ -106,7 +108,7 @@ function fixture(t, options = {}) {
     setInterval: callback => { state.periodic = callback; return { unref() {} }; }, clearInterval() {},
     addEventListener: (type, callback) => events.set(type, callback), removeEventListener: type => events.delete(type),
     document: { visibilityState: 'visible', addEventListener: (type, callback) => visibility.set(type, callback), removeEventListener: type => visibility.delete(type) } };
-  vm.runInNewContext(source, context);
+  vm.createContext(context); vm.runInContext(lifecycleSource, context); vm.runInContext(source, context);
   const core = options.core || Core;
   const manager = context.module.exports.create({ storage, core, remoteFactory: factory, automatic: options.automatic ?? true });
   t.after(() => manager.dispose());

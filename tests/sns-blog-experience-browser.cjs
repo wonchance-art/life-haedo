@@ -20,7 +20,7 @@ const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { wi
 const report = { phase, createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport/touch simulation; anonymous HTTP Auth/share simulator, real local app/SDK/IndexedDB. Synthetic 1800×1200 image. No real Google/remote DB, Apple hardware, native IME, PWA or deployment claim.', checks: [], visual: [], qualityFailures: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
 async function home(page) {
-  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').isVisible()) {
+  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').isVisible()) {
     if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
     else await page.locator('[data-subview-return]').click();
     await settle(page);
@@ -85,13 +85,23 @@ async function snap(page, scene) {
       if (metrics.horizontalOverflow) report.qualityFailures.push({ scene, width: size.width, check: 'horizontalOverflow' });
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) if (metrics[key].length) report.qualityFailures.push({ scene, width: size.width, check: key, details: metrics[key] });
       if (scene !== 'public') {
-        const aligned = metrics.navigation.map(item => item.label).join(',') === '홈,뉴스,자료실,계획,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
-          (['rail', 'bottom'].includes(item.mode) ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 16 && item.centeredY < 1 && item.labelVisible && item.labelGap === 16));
+        const aligned = metrics.navigation.map(item => item.label).join(',') === '뉴스,일정,자료,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
+          (['rail', 'bottom'].includes(item.mode) ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 12 && item.centeredY < 1 && item.labelVisible && item.labelGap === 12));
         if (scene === 'writing' && size.width <= 760) {
           const focusedWriting = await page.evaluate(() => document.body.dataset.writingFocus === 'true');
           if (metrics.navigation.length || !focusedWriting) report.qualityFailures.push({ scene, width: size.width, check: 'focusedMobileWriting', details: metrics.navigation });
         } else if (!aligned) report.qualityFailures.push({ scene, width: size.width, check: 'navigationAlignment', details: metrics.navigation });
-        if (metrics.contentWidth > 721) report.qualityFailures.push({ scene, width: size.width, check: 'contentMaximum720', details: metrics.contentWidth });
+        // 2026-11-02 soft redesign: 일정's calendar units (the tools scene is Y) use the wide frame of the
+        // soft-y board, 1fr beside a 280px plan column, up to 1200px; every other scene keeps the 720px column.
+        // 2026-11-03 soft redesign C: 자료 opened from its list at 1101px+ reads beside the list (soft-library)
+        // in the same wide frame; the reading column itself stays within 720px.
+        const split = await page.evaluate(() => document.querySelector('#lifeMain')?.dataset.split === 'records');
+        const wide = scene === 'tools' || split;
+        if (wide ? metrics.contentWidth > 1152 : metrics.contentWidth > 721) report.qualityFailures.push({ scene, width: size.width, check: scene === 'tools' ? 'calendarMaximum1152' : wide ? 'recordsSplitMaximum1152' : 'contentMaximum720', details: metrics.contentWidth });
+        if (split) {
+          const reader = await page.evaluate(() => { const node = document.querySelector('#lifeMain .records-reader-pane > .life-reader'); return node ? Math.round(node.getBoundingClientRect().width) : null; });
+          if (reader !== null && reader > 721) report.qualityFailures.push({ scene, width: size.width, check: 'recordsReaderMaximum720', details: reader });
+        }
       }
     }
   }
