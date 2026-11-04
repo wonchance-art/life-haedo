@@ -1135,3 +1135,38 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - **선택: 공식 tarball의 SVG 원본 중 쓰는 것만 `vendor/lucide/icons/`에 두고, `assets/life/icons.js`가 그 기하를 그대로 쓴다.** 파일마다 SHA-256을 `vendor/lucide/UPSTREAM.json`에 남기고 `tests/icons.test.cjs`가 기하·해시·한 그림 한 개념을 확인한다. 런타임·글꼴·외부 요청은 없다.
 - **개념별 그림:** 일정 = calendar, 자료 = book-open, 뉴스 = newspaper, 설정 = settings, 글쓰기 = pencil(데스크톱 메뉴의 `+ 글쓰기`는 plus), 편집 = square-pen, 인용 = text-quote, 웹 주소 = link, 뒤로 = chevron-left. 이전의 해도 A 따옴표는 결정 15의 "인용 = 줄과 세로 바"로 대체했다.
 - **선택을 바꿀 조건:** 쓰려는 개념에 1.51.0 모양이 없거나, 최신 판에서 쓰는 모양이 바뀌어 시안을 새로 정할 때 판을 올리고 해시와 고지를 함께 갱신한다.
+
+## 디자인 스킬·모션 오픈소스 재확인 — 2026-11-04 KST
+
+소유자 요청: benji.org/stageshow처럼 최근 1~2개월에 화제가 된 디자인 스킬·오픈소스를 조사한다. 목표는 AI가 만든 듯한 느낌을 없애면서 웹앱다운 모양과 효과를 살리는 것이다. 도입 적절성도 함께 본다. 확인일은 2026-11-04다.
+
+- **판단 기준:**
+  - 빌드 없는 일반 JS·CSS 앱이다. 프레임워크·빌드·AI API를 더하지 않는다(AGENTS).
+  - 시각 기준은 `DESIGN.md`와 소유자 결정이다. 본문 집중, 절제한 틀, 생동감은 담기·선택의 짧은 반응에 한정한다.
+  - 지금 쓰는 것: Impeccable 4.5.0 지침(엔진·훅 꺼짐), Lucide 1.51.0, 자체 `haedo-motion.js`(WAAPI, transform·opacity, 260ms 이하, 동작 줄이기 존중).
+- **benji.org:** 이 세션의 네트워크 허용 목록 밖이라 열지 못했다. GitHub 원본과 2차 보도로 확인했다.
+
+| 이름 | 최근 변화(날짜) | 성격·의존성 | 판단 |
+| --- | --- | --- | --- |
+| [Stageshow](https://github.com/benjitaylor/skills/tree/main/stageshow) (Benji Taylor, MIT) | 2026-10-31 공개 | 제품을 흉내 낸 UI(정지 화면·커서 시연·벤토 그리드)를 만드는 에이전트 스킬. React 18 이상, lucide-react, 녹화 검사(`film.mjs --gate`) | **직접 도입하지 않는다.** 앱 화면이 아니라 홍보용 가짜 UI를 만들고, React가 필요하다. **설계 참고로 쓴다:** "모든 움직임에는 원인이 있다", "내용은 바뀌지 않고 움직인다", 제품의 실제 토큰·아이콘 사용, 반짝이·보라·가짜 로고 금지, 390px 녹화 검사 |
+| [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT, 약 5.3만 별) | `remove-animations` 10-28, `animation-performance` 10-11, `break-ui` 10-02, `mobile-native` 09-15 | 애니메이션 판단 스킬 16개. React·Motion 전용 부분과 CSS·WAAPI 공통 부분이 섞여 있다 | **가장 적합. 일부를 감사 도구로 도입을 권한다.** `remove-animations`의 관문은 하루 100번 이상 보는 탐색·탭·목록 움직임과 키보드로 일어나는 움직임을 삭제하고, 반복 스크롤 등장을 금지한다. `animation-performance`는 transform·opacity만 쓰고, `transition: all`을 금지하고, `will-change`는 마지막에 둔다. 우리 기준과 같은 방향이고 수치가 있다 |
+| [Impeccable](https://github.com/pbakaus/impeccable/releases) | Skill 4.6–4.8(10-15–10-26) | 지금 4.5.0 지침을 쓴다. 4.7에 글자 검사(`straggler`·`unbalanced-heading`), 4.8에 오탐 감소·`detect --github` | **지침 문서만 4.8로 올리기를 권한다.** 엔진·훅은 계속 끈다. CLI 4.x는 Node 24 이상이고 CI는 Node 22다. 한글 줄바꿈(`keep-all`)에서 새 글자 검사가 오탐하는지 먼저 확인한다 |
+| [Taste Skill](https://github.com/Leonxlnx/taste-skill) (MIT, 약 11만 별) | v2 10-13, v2.1 10-18(앱·대시보드 경로, 스크롤 장면 엔진), v2.1.5 10-24 | 20개 아트 디렉션 중 하나를 고르는 방식. 움직임은 GSAP ScrollTrigger와 선택적 Lenis, 수상작 사이트 기준. 사진을 찾으려고 외부 망을 쓴다 | **도입하지 않는다.** 확정된 해도 디자인 체계를 다른 방향으로 바꾸고, 스크롤 장면 연출은 절제 기준과 반대다. 참고만 한다: 앱 경로의 "모든 상태 그리기"와 세 폭 브라우저 검사(우리도 하고 있다) |
+| [AgentsORG/design-engineering](https://github.com/agentsorg/design-engineering) (MIT, 약 40별) | 10월 말 공개, 벤치마크 측정일 09-05·09-28 | 노드 173개짜리 스킬 그래프(Emil·Benji 등 출처 종합) | **지켜본다.** 쓰는 곳이 적고, 위 원 출처와 겹친다 |
+| [avoid-ai-design](https://github.com/funboy322/avoid-ai-design) (MIT, 약 140별) | 날짜를 확인하지 못했다 | 의존성 없는 Node 18 스캐너, AI 티 67가지 | **도입하지 않는다.** Impeccable 탐지와 겹친다. 둘째 단계 기본값(크림색+테라코타, 세리프 제목) 목록만 참고한다 |
+| [Motion](https://motion.dev/changelog?lib=motion) (vanilla `animate`) | 12.x 계열. Emil 스킬이 14.2를 언급하지만 공식 기록으로 확인하지 못했다 | JS 애니메이션 라이브러리 | **도입하지 않는다.** CSS → WAAPI → JS 순서를 지키고, 지금 WAAPI로 충분하다 |
+
+- **플랫폼 기능(오픈소스 아님):** 요소 범위 View Transitions(`element.startViewTransition`)는 Chrome·Edge 147부터만 된다. Safari·Firefox는 아직 안 된다. iPad·iPhone Safari가 주 사용 환경이라 기대지 않는다. 문서 단위 View Transitions와 지금의 WAAPI를 쓴다.
+- **우리 코드에 위 관문을 대 본 결과(2026-11-04):**
+  - `haedo-motion.js`의 화면 진입은 push 220ms, back 200ms, tab 160ms, compose 260ms다. 탐색 메뉴의 선택 표시 이동도 있다. 탭·탐색처럼 하루에도 여러 번 보는 곳이라 `remove-animations` 기준으로는 삭제나 투명도만 남기기 후보다.
+  - 버튼 누름 축소(100ms, 0.975)는 피드백이라 유지 대상이다.
+  - 연표 편집기 `assets/app.css`에 `transition: all .15s`가 2곳, `width` 전환이 1곳 있다. 성능 기준 위반이다.
+  - 무한 반복과 300ms를 넘는 화면 움직임은 없다.
+- **권고(총괄 판단):**
+  - `.agents/skills/`에 Emil의 `remove-animations`·`review-animations`·`animation-performance`·`break-ui`를 Impeccable처럼 커밋을 고정해 넣는다. 탐색·탭 움직임을 한 번 감사하고, 소유자에게 "유지/투명도만/삭제"를 묻는다.
+  - Impeccable 지침을 4.8로 올린다.
+  - `.agents/` 변경은 작업자 금지 범위라 총괄이 한다.
+- **바꿀 조건:**
+  - 실제 iPhone에서 탐색 움직임이 느리게 느껴진다는 소유자 평가가 있으면 삭제 쪽으로 간다.
+  - Safari가 요소 범위 View Transitions를 내놓으면 화면 전환 방식을 다시 본다.
+
