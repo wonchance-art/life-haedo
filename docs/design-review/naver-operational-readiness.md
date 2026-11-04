@@ -212,7 +212,7 @@ Supabase가 레거시 `anon`·`service_role` 키를 2026년 말까지 폐지한�
 - **순서(총괄·소유자):**
   1. 새 함수를 배포한다(`verify_jwt=false` 유지). 배포 입력의 런타임 소스는 이제 **9개**다: `index.ts`·`handler.mjs`·`collector.mjs`·`extractor.mjs`·`harvest-network.mjs`·`harvest-worker.mjs`, `assets/life/naver-blog.js`·`naver-capture.js`, 새 `../_shared/supabase-keys.mjs`. 기존 Deno 설정·lock도 함께 넣는다. 배포 뒤 익명 요청 401을 확인하고, 플랫폼이 돌려준 소스 9개가 검수본과 일치하는지 본다.
   2. 전환 SQL을 `set local haedo.naver_cron_action='apikey'`와 함께 실행한다. 결과 표의 두 일정(공개 전용이면 하나)이 `apikey`·`ok=true`인지 본다.
-  3. **확인:** 다음 예약 실행(최대 15분) 뒤 `select status_code, count(*) from net._http_response where created > now() - interval '30 minutes' group by 1`로 상태 코드만 읽는다. 본문 열은 읽지 않는다. 401이 보이면 Vault 값 교체와 레거시 키 끄기를 멈추고, 함수 배포본과 Vault 값을 확인한다. 필요하면 `'bearer'`로 되돌린다.
+  3. **확인:** 다음 예약 실행(최대 15분) 뒤 `select status_code, count(*) from net._http_response where created > now() - interval '30 minutes' group by 1`로 상태 코드만 읽는다. 본문 열은 읽지 않는다. 이 표는 모든 pg_net 호출을 담으므로, 다른 사용처가 생기면 실행 시각으로 좁힌다. 401이 보이면 Vault 값 교체와 레거시 키 끄기를 멈추고, 함수 배포본과 Vault 값을 확인한다. 필요하면 `'bearer'`로 되돌린다.
   4. 필요하면 소유자가 Vault `haedo_naver_service_role_key` 값을 `sb_secret_` 키로 바꾼다. 바꾼 뒤 3의 확인을 한 번 더 한다.
   5. 레거시 키를 끄는 것은 그 뒤에 한다. 끈 뒤에도 3의 확인을 한 번 더 한다.
 
