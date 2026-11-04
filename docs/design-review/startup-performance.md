@@ -369,6 +369,72 @@ V8 샘플의 구간별 비중이다(셸 전 / 셸→20행).
 
 **남은 후보:** 글·목록 작업의 작업공간 내용 검증 범위(P2)다. 무결성 판단이 필요해 총괄 결정으로 둔다. 구현 판으로 측정해 −5% 미만이면 빼는 조건이다.
 
+### 글·목록 작업의 작업공간 확인 범위 (2026-11-04, P2 채택)
+
+P1을 접은 뒤 남은 후보였다. 총괄 승인 조건은 다음과 같다: 함수별 전수 증명, 글 기록 검증 유지, 손상 번들 회귀 확장, −5% 미만이면 빼기.
+
+**귀속**(측정 전용 사본에서 `validateWorkspace` 호출마다 시간과 호출 함수를 기록, 스로틀 없음 cold, 셸→20행)
+
+- 검증 시간 566 ms 가운데 상태 읽기 세 함수가 295 ms였다. 이것은 D2에서 무결성을 택해 그대로 둔다.
+- 글·목록 작업이 약 206 ms였다.
+  - 글 설치(`commitBlogSync`)는 글 하나에 검증을 두 번 했다. 자기 확인과 안쪽 `writePhotoPost`다(20건 × 2).
+  - 그 밖에 `readPhotoPost`·`listPhotoPosts`·`listAccountLibraries`·`listWorkspaces`·`listBlogSyncStates`다.
+
+**바꾼 것**(`storage.js`)
+
+- `ownedWorkspace`: 소유자 확인 뒤 `bundles` 저장소의 키만 조회한다(keyPath가 `workspaceId`). 번들을 꺼내지도, 구조 복제하지도 않는다.
+- `listedWorkspace`: 목록 행에 쓰는 식별자·제목·판 번호의 형식만 확인한다.
+- 내용을 읽는 경로는 그대로 `checkedBundle`을 쓴다. 열기·동기화·백업·근거·원문 확인이 여기에 해당하며, 손상이면 멈춘다.
+
+| 함수 | 읽고 쓰는 것 | 작업공간 내용 사용 | 그 기록의 자체 검증 |
+| --- | --- | --- | --- |
+| `listPhotoPosts` | 글 색인(`photo-posts:`) | 없음 | 색인 요약(이전과 같음) |
+| `readPhotoPost`·`readPhotoPosts` | 글 기록 | 없음 | `PhotoPost.validate`(손상 글은 오류/`null`) |
+| `writePhotoPost` | 글·색인·근거·글 연결·영수증 | 네이버 사진·근거·근거 승계 때만 | 이 세 경로는 `checkedBundle`(전체 검증) 그대로, 글은 `PhotoPost.validate` |
+| `commitBlogSync` | 글·글 연결·삭제 기록 | 없음(안쪽 `writePhotoPost`는 근거 없음) | 입력 `PhotoPost.validate`, `blogBindingShape` |
+| `installReceivedBlogPost` | 글·글 연결·받기 영수증 | 없음 | `PhotoPost.validate`, `Blog.validateManifest`, `checkBlogReceipt` |
+| `readBlogSyncState`·`writeBlogSyncState` | 글 연결 | 없음 | 쓰기 CAS·크기 제한(이전과 같음) |
+| `listBlogSyncStates`·`listBlogCopies` | 글 연결·삭제 기록·영수증 | 없음 | `blogBindingShape`, 삭제 기록 형식 |
+| `deletePhotoPost`·`clearBlogTombstone` | 글·글 연결·삭제 기록 | 없음 | `PhotoPost.validate` |
+| `getActive` | 활성 공간 ID | 없음(여는 쪽 `read`가 검증) | `requireId` |
+| `listWorkspaces`·`listAccountLibraries` | 공간 목록 행 | 식별자·제목·판 번호만 | `listedWorkspace` |
+
+**손상된 공간에서 달라지는 것**
+
+- 글·목록 작업은 계속 된다. 글은 공간 번들과 따로 저장되고 손상되지 않았기 때문이다.
+- 공간 내용을 읽는 경로는 이전처럼 `invalid_hash`로 멈추고, 아무것도 바꾸지 않는다. 열기·근거 읽기와 저장·근거 있는 새 글·근거를 이어받는 수정이 여기에 해당한다.
+- 활성 공간이 손상된 채 시작하면 main과 이 판 모두 시작 화면에서 멈추고, 번들은 바뀌지 않는다(브라우저 확인).
+  - main은 목록 단계에서 멈춰 "서버에 연결하지 못했습니다"라고 잘못 안내했다.
+  - 이 판은 공간을 여는 단계에서 멈추고 "원문 해시가 올바르지 않습니다"라고 실제 원인을 보인다.
+- 회귀 검사(`tests/life-storage.test.cjs`)
+  - 손상 공간에서 위 글·목록 작업이 동작한다.
+  - 내용 경로는 멈추고 저장된 기록을 바꾸지 않는다.
+  - 공간 번들 자체는 다시 쓰이지 않는다.
+  - 동기화된 글을 지우면 삭제 기록이 남고, 서버 확인 뒤 지워진다. 독립 검수(마이너)에서 `clearBlogTombstone`이 아직 전체 검증을 해, 손상 공간에서 삭제 기록이 지워지지 않고 재시도가 반복되는 것을 찾아 함께 바꿨다.
+  - 손상된 글 기록은 `invalid_photo_post`로 거절된다.
+- 테스트의 메모리 IndexedDB 어댑터에 `getKey`를 더했다. 읽기 실패 주입이 있는 어댑터는 `get`과 같은 주입을 따른다.
+
+**측정**(같은 측정 도구, 합성 지연, 1440폭, 판을 번갈아 1회씩 실행)
+
+| 조건 | main | P2 |
+| --- | ---: | ---: |
+| CPU 4배 cold 셸 / 첫 행 / 20행 / 첫 화면 사진(5회 중앙값) | 9.70 / 13.33 / 20.75 / 22.62초 | 9.44 / 12.48 / 19.47 / 22.38초 |
+| CPU 4배 cold 20행(앞선 번갈아 측정 4회 포함 9회 중앙값) | 20.99초 | 19.81초(−5.6%) |
+| 스로틀 없음 cold 셸 / 첫 행 / 20행(3회) | 4.43 / 5.85 / 8.57초 | 4.49 / 5.69 / 8.56초 |
+| 스로틀 없음 warm 셸(3회) | 1.33초 | 1.33초 |
+
+- 번들을 꺼내되 검증만 뺀 첫 판은 20행 −2.7~−5.8%였다. 기준에 미달하거나 걸쳤다. 번들 구조 복제가 검증만큼 비쌌다.
+- 키 조회로 바꾼 판은 번갈아 측정 4회에서 −9.1%, 확인 측정 5회에서 −6.2%였다.
+- CPU 4배 20행의 회차 편차는 main 20.0~25.7초, P2 17.2~22.0초다. 범위는 겹치지만 중앙값 차이가 두 측정에서 같은 방향이었다.
+- 스로틀 없는 조건과 warm은 편차 안이다(회귀 없음).
+- **미검증:** 실제 iPhone·iPad.
+
+**같이 옮긴 보호 검사:** P1 브랜치에만 있던 다른 공간 글 검사 2건을 main 동작 기준으로 `tests/other-space-post-browser.cjs`에 옮겼다.
+
+- 배경 공간 수신을 막아 두고 다음을 확인한다.
+  - 아직 받지 않은 공간의 글이 활성 공간에 놓이고 서버 공간을 유지한다. 공간이 들어온 뒤에도 사본이 하나다.
+  - 공간이 들어오기 전에 고쳐 저장하면 원래 서버 공간으로 CAS 저장되고 영수증이 남는다. 그 뒤에도 사본이 하나다.
+
 ### 계정 자료 초기화의 경계
 
 초기화는 새 `bootstrap({ foreground: true })` 선택 경로로 분리하고, 인자를 생략한 기존 `bootstrap()`의 전체 수신 장벽은 유지했다. shell이 이 선택 경로를 호출하고 실제 화면을 mount/reveal한 뒤 명시적으로 `reconcile()`을 시작한다.
