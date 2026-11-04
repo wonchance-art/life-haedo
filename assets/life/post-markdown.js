@@ -38,6 +38,9 @@
   // Line breaks inside one value (a photo's alt or caption) stay characters, not line endings.
   const breaks = text => text.replace(/\n/g, '&#10;').replace(/\r/g, '&#13;');
   function escapeLineStart(text) {
+    // A leading U+FEFF is dropped as a byte order mark by readers (source-markdown.js, Obsidian):
+    // the line after it would start a heading, list or rule there. Written as a reference instead.
+    if (text.startsWith('\ufeff')) return '&#xFEFF;' + text.slice(1);
     return text
       .replace(/^(#{1,6})(?=\s|$)/, '\\$1')
       .replace(/^([>+-])(?=\s|$)/, '\\$1')
@@ -68,7 +71,8 @@
     for (const op of ops) {
       if (typeof op.insert !== 'string') {
         if (runs.length) { lines.push({ runs, block: {}, photo: null }); runs = []; }
-        lines.push({ runs: [], block: {}, photo: op.insert.photo });
+        // Quill's formatLine puts align on a photo embed too: counted as dropped, not a block format.
+        lines.push({ runs: [], block: {}, photo: op.insert.photo, align: op.attributes?.align || null });
         continue;
       }
       const parts = op.insert.split('\n');
@@ -174,7 +178,7 @@
     let list = null, number = 0, alternate = false;
     for (const line of linesOf(ops)) {
       for (const run of line.runs) if (run.attrs.underline) stats.underline++;
-      if (line.block.align) stats.align++;
+      if (line.block.align || line.align) stats.align++;
       let text;
       if (line.photo) {
         photos.push(line.photo.id);

@@ -7,7 +7,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const M = require('../assets/life/post-markdown.js');
 const markdownIt = require('../vendor/markdown-it/markdown-it.umd.min.js');
-const parser = markdownIt({ html: true });
+// As the D2 renderer must read it (post-markdown-d2.md): no linkify or typographer, and link and
+// image targets used exactly as stored (escapes undone, no normalizeLink re-encoding).
+const parser = markdownIt({ html: true, linkify: false, typographer: false });
+parser.normalizeLink = url => url;
 
 // Markdown → [{ kind, runs: [{ text, bold, italic, link, ai }], photo }]
 function readBack(markdown) {
@@ -56,7 +59,7 @@ function readBack(markdown) {
 function expected(ops) {
   const lines = []; let runs = [];
   const push = (text, a) => {
-    const attrs = { bold: a.bold === true, italic: a.italic === true, link: a.link ? parser.normalizeLink(a.link) : null, ai: a.author === 'ai' }, last = runs.at(-1);
+    const attrs = { bold: a.bold === true, italic: a.italic === true, link: a.link || null, ai: a.author === 'ai' }, last = runs.at(-1);
     if (last && ['bold', 'italic', 'link', 'ai'].every(key => last[key] === attrs[key])) last.text += text; else runs.push({ text, ...attrs });
   };
   // The one documented equivalence (post-markdown-d2.md): a line whose whole text is one NBSP is
@@ -164,6 +167,11 @@ test('photos are blocks of their own: text after a photo, photos in a row, the e
   assert.equal(check([photo('p1'), { insert: '\n' }], 'photo then the final newline').markdown, '![](haedo-photo:p1)\n\n&nbsp;\n');
   check([photo('a'), photo('b'), photo('c')], 'photos only, no newline');
   check([{ insert: '목록', attributes: {} }, { insert: '\n', attributes: { list: 'bullet' } }, photo('p'), { insert: '목록 둘' }, { insert: '\n', attributes: { list: 'bullet' } }], 'a photo between two list items');
+  // Text not ended by a "\n" before a photo ends as a plain paragraph (the renderer's finish()).
+  const open = check([{ insert: '줄 안 끝남' }, photo('p'), { insert: '\n' }], 'unended text before a photo');
+  assert.equal(open.markdown, '줄 안 끝남\n\n![](haedo-photo:p)\n\n&nbsp;\n');
+  // Quill's formatLine puts align on the photo embed itself: counted as dropped.
+  assert.deepEqual(M.fromDelta([photo('p'), { insert: '\n' }].map((op, i) => i ? op : { ...op, attributes: { align: 'center' } })).dropped, { underline: 0, align: 1 });
   // fromV2 keeps both photos of a row (none is lost from the photo list).
   const doc = { format: 'life-photo-post-v2', id: 'x', ops: [{ insert: '앞\n' }, photo('p1'), photo('p2'), { insert: '뒤\n' }], photos: [{ id: 'p1' }, { id: 'p2' }] };
   assert.deepEqual(M.fromV2(doc).document.photos.map(p => p.id), ['p1', 'p2']);
@@ -179,6 +187,15 @@ test('captions, alt text and link addresses keep every character: line breaks, &
   check([{ insert: '제목\r둘' }, { insert: '\n', attributes: { header: 1 } }, { insert: 'a\r\rb\n' }], 'carriage returns');
 });
 
+test('a leading U+FEFF is written as a reference: a reader that drops a byte order mark sees no heading, list or rule', () => {
+  for (const text of ['\ufeff# 제목 아님', '\ufeff---', '\ufeff- x', '\ufeff1. 아님', '\ufeff> 아님', '\ufeff'.repeat(2) + '둘']) {
+    const ops = [{ insert: text + '\n' }], { markdown } = check(ops, JSON.stringify(text));
+    assert.ok(markdown.startsWith('&#xFEFF;'), JSON.stringify(markdown));
+    // As source-markdown.js reads it (BOM stripped first): the same blocks and text.
+    assert.deepEqual(readBack(markdown.replace(/^\ufeff/, '')), expected(ops));
+  }
+});
+
 test('whitespace for emphasis is markdown-it\'s: U+2028, U+2029 and U+FEFF are not spaces', () => {
   for (const ch of ['\u2028', '\u2029', '\ufeff', '\u00a0', '\u3000', '\u2009'])
     check([{ insert: '가' + ch }, { insert: '（괄호）', attributes: { bold: true } }, { insert: ch + '나\n' }], 'U+' + ch.codePointAt(0).toString(16));
@@ -190,7 +207,7 @@ test(FUZZ.toLocaleString('en-US') + ' random v2 documents read back as the same 
   let seed = Number(process.env.POST_MARKDOWN_SEED || 20261104);
   const rand = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const pick = list => list[Math.floor(rand() * list.length)];
-  const chars = [...'가나다라 마바사 한글 강조 하늘 abcXYZ 012 9 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ “”‘’…·—🌱 \t\u00a0\u2028\u3000\r', '&amp;', '&#65;', '&copy;'];
+  const chars = ['\ufeff', ...'가나다라 마바사 한글 강조 하늘 abcXYZ 012 9 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ “”‘’…·—🌱 \t\u00a0\u2028\u3000\r', '&amp;', '&#65;', '&copy;'];
   const word = () => Array.from({ length: 1 + Math.floor(rand() * 7) }, () => pick(chars)).join('');
   const links = ['https://example.org/', 'https://example.org/a_(b)', 'https://example.org/?q=1&x=*', 'http://ex.invalid/path#frag',
     'https://example.org/?a=1&amp;b=2&copy;', 'https://example.org/한글 경로', 'https://example.org/a\\b<c>'];
@@ -208,6 +225,11 @@ test(FUZZ.toLocaleString('en-US') + ' random v2 documents read back as the same 
         if (rand() < 0.3) attributes.bold = true; if (rand() < 0.3) attributes.italic = true; if (rand() < 0.15) attributes.underline = true;
         if (rand() < 0.15) attributes.link = pick(links); if (rand() < 0.15) attributes.author = 'ai';
         ops.push(Object.keys(attributes).length ? { insert: word(), attributes } : { insert: word() });
+      }
+      // A photo right after text that no "\n" ended (the renderer ends that text as a paragraph).
+      if (ops.length && typeof ops.at(-1).insert === 'string' && !ops.at(-1).insert.endsWith('\n') && rand() < 0.08) {
+        ops.push({ insert: { photo: { id: 'q' + n + '_' + line, alt: '', caption: caption() } }, ...(rand() < 0.3 ? { attributes: { align: 'center' } } : {}) });
+        continue;
       }
       const block = pick([{}, {}, {}, { header: 1 }, { header: 2 }, { list: 'bullet' }, { list: 'ordered' }, { blockquote: true }, { align: 'center' }]);
       ops.push(Object.keys(block).length ? { insert: '\n', attributes: block } : { insert: '\n' });
