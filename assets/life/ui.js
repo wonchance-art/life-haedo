@@ -2095,8 +2095,10 @@
           if (!document.activeElement || document.activeElement === document.body) (main.querySelector('h1,h2') || toolbar.querySelector('h1'))?.focus({ preventScroll: true });
           return;
         }
-        // Only rendered controls: a match hidden at this width (e.g. the wide-only menu link at 390) cannot take focus.
-        const controls = [...root.querySelectorAll('button,a,summary,input')].filter(el => el.getClientRects().length > 0);
+        // A control inside a closed <details> is opened below, so it still counts; one hidden at this width
+        // (e.g. the wide-only menu link at 390) cannot take focus and is passed over.
+        const shown = el => el.getClientRects().length > 0 || !!el.closest('details:not([open])');
+        const controls = [...root.querySelectorAll('button,a,summary,input')].filter(shown);
         const remoteId = origin.mode === 'account-blog' && /^account-blog:(?:open|receive|received|manage):([^:]+)(?::[^:]+)?$/.exec(origin.focusKey || '')?.[1];
         const receivedActions = remoteId ? controls.filter(el => el.dataset.remoteId === remoteId && el.dataset.action === 'open') : [];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
