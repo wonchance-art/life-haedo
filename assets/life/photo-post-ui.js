@@ -1164,6 +1164,8 @@
                 w.append(n);
                 n = w;
               }
+            // Owner decision 2026-11-04: AI marks show in the owner's reading view; not in the HTML file (portable).
+            if (!portable && op.attributes?.author === "ai") { const m = el("span", null, "blog-ai-text"); m.append(n); n = m; }
             if (op.attributes?.link) {
               const a = el("a");
               a.href = op.attributes.link;

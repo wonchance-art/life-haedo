@@ -8,7 +8,8 @@
   "use strict";
   const model = () => root.HaedoLife?.Blog || require("./blog.js");
   function render(snapshot, { document = root.document, photoUrl = () => null, allowOriginal = true, privateView = false } = {}) {
-    model().validateSnapshot(snapshot);
+    // The owner's private views may pass a private reading copy, the only kind that keeps AI marks.
+    if (privateView && snapshot?.format === "life-blog-private-reading-v1") model().validateReadingSnapshot(snapshot); else model().validateSnapshot(snapshot);
     const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
     const article = node("article", undefined, "blog-document");
     article.append(node("h1", snapshot.title || "제목 없는 글", "blog-title"));
@@ -55,6 +56,8 @@
         if (value) {
           let text = document.createTextNode(value);
           for (const [attr, tag] of [["bold", "strong"], ["italic", "em"], ["underline", "u"]]) if (op.attributes?.[attr]) { const wrapper = node(tag); wrapper.append(text); text = wrapper; }
+          // AI authorship mark: private views only (public copies never carry it).
+          if (privateView && op.attributes?.author === "ai") { const mark = node("span", undefined, "blog-ai-text"); mark.append(text); text = mark; }
           if (op.attributes?.link) {
             const link = node("a"); link.href = op.attributes.link; link.target = "_blank"; link.rel = "noopener noreferrer"; link.referrerPolicy = "no-referrer"; link.append(text); text = link;
           }
