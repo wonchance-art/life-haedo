@@ -1254,7 +1254,7 @@
             renderPhoto: doc => {
               const used = new Set(doc.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
               const originals = doc.photos.filter(photo => used.has(photo.id));
-              const snapshot = life.Blog.publicSnapshot(doc, { photoIds: originals.map(photo => photo.id) });
+              const snapshot = life.Blog.privateReadingSnapshot(doc, { photoIds: originals.map(photo => photo.id) });
               const imageUrls = snapshot.photos.map((photo, index) => [photo.id, URL.createObjectURL(originals[index].blob)]);
               try { return { node: life.BlogPublicUI.render(snapshot, { photoUrl: photo => new Map(imageUrls).get(photo.id), privateView: true }), dispose: () => imageUrls.forEach(([, url]) => URL.revokeObjectURL(url)) }; }
               catch (error) { imageUrls.forEach(([, url]) => URL.revokeObjectURL(url)); throw error; }

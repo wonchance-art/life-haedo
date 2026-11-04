@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "status": "sealed_before_any_model_run_on_corpus",
+  "createdAtUTC": "2026-11-02T16:11:21.511Z",
+  "gitHead": "2abbc268b02ced97b8158eec6232a51e9da734a9",
+  "productGitStatus": "clean",
+  "files": {
+    "preregistration.md": "251a08d6342cde447049684657e9a3aaa74d756cebd1789b0e21e6bd1ec96320",
+    "dev-corpus.json": "8ac3ed2b3643461f42795ab9827747579334213422c6c6b04811da0ad23c8479",
+    "dev-gold.json": "5604fcc42b903e1fa37aa056108b5535efb46a6ece787d91bc5a7f7eb7bc922e",
+    "eval-corpus.json": "c397f2c1b7539527a657dbfb6fc751cf9503a6e02fe802d9f6814b841872e861",
+    "eval-gold.json": "de9981ce9f74758ff8037dd0e9a689b8ccb4599136107dfa242d019f6612380d",
+    "build-corpus.py": "caa96bc2c4d5e1930b0c1e17ea38fb2059c1c3f8525c5b42636e8d992aef2b10",
+    "build-gold.py": "3167ac2bc24d0ecbac8d2c1eb345558eba3eb068da057cf5fcc6c582d8b2d25b"
+  },
+  "product": {
+    "assets/life/interest-model-worker.js": "79a29363a4a71754405f3822b805bb9f2b9d3fe7f59cc453c9a9dff607fd0504",
+    "assets/life/interest-model-loader.js": "982f7eb6fb99e2dc4bedce3aba6de349cad2ad6caa2269747cad00e42a61e63c",
+    "assets/life/rediscovery.js": "2f7aa21369f8d5f4d23c27bb44b006ca3fcc9087402699f8defd6ed0aaf0dd19",
+    "assets/life/core.js": "5d38fbcc71cf3b13b03e8683106f8261ff453325092d34437d88014f2c4607a2",
+    "sw.js": "450a5cb8349defa1f62945b25a57afbbca3c0f7b9614a591a67221435eae37c9",
+    "manifest.webmanifest": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e"
+  }
+}

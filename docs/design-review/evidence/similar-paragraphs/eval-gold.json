@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "set": "eval",
+  "definition": "관련 문단(gold): 기준 문단과 다른 문서에 있으면서, 같은 질문·같은 종류의 경험·같은 구체 주제(문단의 중심 논점)를 다른 표현으로 다룬 문단. 같은 넓은 분야(예: 둘 다 운동, 둘 다 책)에 속하거나 단어가 겹칠 뿐인 문단은 관련이 아니다. 같은 문서의 문단과 정규화 본문이 같은 복제는 후보에서 제외하므로 gold가 될 수 없다. 관련 문단이 없는 기준 문단(unrelated seed): 그 중심 논점을 다루는 다른 문서 문단이 이 세트에 없는 문단.",
+  "paragraphRule": "'문서 id:번호' — 빈 줄로 나눈 문단의 0부터 센 번호",
+  "relatedSeeds": [
+    {
+      "seed": "E01:1",
+      "related": [
+        "E02:1",
+        "E02:2"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "E01:2",
+      "related": [
+        "E25:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E01:3",
+      "related": [
+        "E13:4"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "E01:4",
+      "related": [
+        "E03:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E03:1",
+      "related": [
+        "E04:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E03:2",
+      "related": [
+        "E26:2",
+        "E04:4"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E03:4",
+      "related": [
+        "E25:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E04:4",
+      "related": [
+        "E26:2",
+        "E03:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E25:1",
+      "related": [
+        "E26:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E26:3",
+      "related": [
+        "E15:3"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E05:1",
+      "related": [
+        "E06:2",
+        "E07:3"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E05:2",
+      "related": [
+        "E16:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E05:4",
+      "related": [
+        "E06:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E06:3",
+      "related": [
+        "E20:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E08:2",
+      "related": [
+        "E09:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E08:3",
+      "related": [
+        "E09:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E08:4",
+      "related": [
+        "E18:4"
+      ],
+      "type": "question"
+    },
+    {
+      "seed": "E18:1",
+      "related": [
+        "E19:1"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E18:2",
+      "related": [
+        "E19:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E18:3",
+      "related": [
+        "E19:3"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E10:1",
+      "related": [
+        "E11:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E10:3",
+      "related": [
+        "E11:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E12:1",
+      "related": [
+        "E13:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E12:2",
+      "related": [
+        "E13:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E12:3",
+      "related": [
+        "E01:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E14:1",
+      "related": [
+        "E15:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E14:2",
+      "related": [
+        "E21:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E14:3",
+      "related": [
+        "E15:2"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E15:4",
+      "related": [
+        "E20:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E20:1",
+      "related": [
+        "E21:3"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E16:1",
+      "related": [
+        "E17:1"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E16:2",
+      "related": [
+        "E22:2"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E16:4",
+      "related": [
+        "E17:3"
+      ],
+      "type": "experience"
+    },
+    {
+      "seed": "E23:0",
+      "related": [
+        "E24:4"
+      ],
+      "type": "topic"
+    },
+    {
+      "seed": "E23:1",
+      "related": [
+        "E24:2"
+      ],
+      "type": "experience"
+    }
+  ],
+  "unrelatedSeeds": [
+    "E08:1",
+    "E10:2",
+    "E12:4",
+    "E14:4",
+    "E17:2",
+    "E20:3",
+    "E22:3",
+    "E23:2",
+    "E27:1",
+    "E27:2",
+    "E28:1",
+    "E28:2",
+    "E29:0",
+    "E29:1",
+    "E30:1",
+    "E30:2"
+  ],
+  "counts": {
+    "relatedSeeds": 35,
+    "goldPairs": 39,
+    "unrelatedSeeds": 16
+  },
+  "labeler": "말뭉치를 쓴 구현 작업자 1인이 함께 표시했다. 독립 표시자는 없다."
+}

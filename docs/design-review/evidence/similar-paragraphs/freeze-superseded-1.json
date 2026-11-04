@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "status": "frozen_before_eval_run",
+  "createdAtUTC": "2026-11-02T16:24:24.897Z",
+  "gitHead": "ba4f4a09e90de32b593fb7e46dd9fc45df54b88d",
+  "productGitStatus": "clean",
+  "parameters": {
+    "variant": "TP",
+    "threshold": 0.61
+  },
+  "files": {
+    "seal.json": "5f453484dbda279fc598c260c4c7f8dfb6e61fde942e3d18aaececdadd7738b2",
+    "preregistration.md": "251a08d6342cde447049684657e9a3aaa74d756cebd1789b0e21e6bd1ec96320",
+    "candidate.js": "a3bdc3a22123f7b130d5285a47141d9ff05e860d9a52891d8334b803414f8f5b",
+    "run-experiment.cjs": "f553f9181117ee33ac5e52eafac2c97e0e4f1f5a7cbdc39398509d84c26ed461",
+    "evaluate.cjs": "e38b803c7d6566029a01a14075f32d7b1f545003eda9152ee7d6d796c99197d4",
+    "harness.html": "6c2d51f537383a103b37f511937e3d8aa9bbed01f190a424dc06c6db9ca27c5f",
+    "worker-host.html": "6c6eccb9faac864b738fde9b619af9a48a3c1b7554bb8e95446cf12b3d88f42a",
+    "dev-output.json": "7442658268a4599e496217b22a111e8143f5506652e1c7dc6a0614f0c141b90c",
+    "dev-report.json": "c368580b67ee6bbf05ce90a586ecc2245548417029bba86abb138483b3939175"
+  },
+  "product": {
+    "assets/life/interest-model-worker.js": "79a29363a4a71754405f3822b805bb9f2b9d3fe7f59cc453c9a9dff607fd0504",
+    "assets/life/interest-model-loader.js": "982f7eb6fb99e2dc4bedce3aba6de349cad2ad6caa2269747cad00e42a61e63c",
+    "assets/life/rediscovery.js": "2f7aa21369f8d5f4d23c27bb44b006ca3fcc9087402699f8defd6ed0aaf0dd19",
+    "assets/life/core.js": "5d38fbcc71cf3b13b03e8683106f8261ff453325092d34437d88014f2c4607a2",
+    "sw.js": "450a5cb8349defa1f62945b25a57afbbca3c0f7b9614a591a67221435eae37c9",
+    "manifest.webmanifest": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e"
+  }
+}
