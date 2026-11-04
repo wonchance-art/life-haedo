@@ -80,13 +80,19 @@
       const state = await storage.getCompositionState(workspaceId); guard(ctx);
       return state ? { ...clone(state), status: state.enabled ? state.status : 'paused' } : { workspaceId, enabled: false, status: 'not_enabled', conflict: null, error: null, lastRecoveryId: null };
     }
+    // One source head check per engine task (2026-11-04 startup latency): a later call in the
+    // same task (enable → run, the read row's source_revision, resolve) asks the server again
+    // only when the local source is no longer clean or does not hold the revision it needs.
+    // A newer server source is not required here, only one at least as new as the row's.
+    const ready = (state, minimum) => state.enabled && state.status === 'synced' && sameAccount(state.binding) && state.remoteRevision >= minimum;
     async function sources(ctx, minimum = 1) {
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
-      await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx);
+      if (!(ctx.sourceChecked && ready(initial, minimum))) { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
       const current = await sourceSync.getState(ctx.workspaceId); guard(ctx);
-      if (!current.enabled || current.status !== 'synced' || !sameAccount(current.binding) || current.remoteRevision < minimum) throw fault('composition_source_pending');
+      if (!ready(current, minimum)) throw fault('composition_source_pending');
+      ctx.sourceChecked = true;
       return current;
     }
     async function checkedState(ctx) {

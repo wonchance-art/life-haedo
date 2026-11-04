@@ -87,9 +87,12 @@ function fixture(t, options = {}) {
       return { workbench: copy(state.local), metadata: copy(state.meta), recoveryId };
     }
   };
+  // Originals: the revision this device holds and the one on the server. A head check
+  // (syncNow) brings the local copy up to the server's.
+  state.source = { local: 1, server: 1 };
   const sourceSync = {
-    async getState() { return { enabled: true, status: 'synced', binding, remoteRevision: 1 }; },
-    async syncNow() { state.calls.push('sources'); },
+    async getState() { return { enabled: true, status: state.source.pending ? 'pending' : 'synced', binding, remoteRevision: state.source.local }; },
+    async syncNow() { state.calls.push('sources'); state.source.local = Math.max(state.source.local, state.source.server); state.source.pending = false; },
     subscribe() { return () => {}; }
   };
   const remote = {
@@ -261,7 +264,10 @@ test('concurrent identical first writes converge only after the domain atomicall
   const f = fixture(t, { initialReceive(state, id, binding, row, options) {
     observed = copy(options); assert.equal(id, WORKSPACE); assert.equal(binding.remoteId, WORKSPACE);
     assert.equal(state.meta.outbox.operationId, options.outboxOperationId);
-    assert.ok(state.calls.filter(x => x === 'sources').length >= 2, 'Remote source revision must be checked before adoption');
+    // The row's source revision is checked before adoption: this task asked the server once and
+    // the originals it holds are at least as new as the row's.
+    assert.ok(state.calls.includes('sources'), 'Remote source revision must be checked before adoption');
+    assert.ok(state.source.local >= row.source_revision, 'Adoption must wait for the row\'s source revision');
     state.meta.remoteRevision = row.revision; state.meta.syncedLocalRevision = state.local.revision;
     state.meta.outbox = null; state.meta.status = 'synced'; return { status: 'stored' };
   } });
@@ -294,6 +300,50 @@ test('noninitial CAS conflicts and missing first-write replies never invoke init
     const pending = copy(f.state.meta.outbox); assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'conflict');
     assert.equal(calls, 0); assert.deepEqual(f.state.meta.outbox, pending); assert.equal(f.state.meta.conflict.missing, missing);
   }
+});
+
+// 2026-11-04 startup latency: one originals head check per engine task. A later need inside
+// the same task asks the server again only when the local originals cannot satisfy it.
+test('one engine task asks the originals server once when this device already holds the row\'s source revision', async t => {
+  const f = fixture(t);
+  f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 1);
+  assert.ok(f.state.calls.indexOf('sources') < f.state.calls.indexOf('read'));
+  assert.ok(f.state.mutations.includes('apply'));
+  const enabled = fixture(t); enabled.state.meta.enabled = false;
+  assert.equal((await enabled.manager.enable(WORKSPACE)).status, 'synced');
+  assert.equal(enabled.state.calls.filter(x => x === 'sources').length, 1, 'enable and its first pass share one check');
+  // A new task checks again.
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 2);
+});
+
+test('a row that needs newer originals than this device holds asks the server again before it is applied', async t => {
+  const f = fixture(t);
+  // Another device saved originals 2 and then a composition made on them, after this task's first check.
+  f.state.readOverride = () => { f.state.source.server = 2; return { ...copy(f.state.row), revision: 2, source_revision: 2, data: { ...copy(f.state.local), revision: 2 } }; };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 2);
+  assert.equal(f.state.source.local, 2);
+  assert.ok(f.state.calls.lastIndexOf('sources') < f.state.calls.indexOf('prepare'));
+  assert.ok(f.state.mutations.includes('apply'));
+  // When the server still lacks them the row waits, unapplied.
+  const behind = fixture(t);
+  behind.state.readOverride = () => ({ ...copy(behind.state.row), revision: 2, source_revision: 2, data: { ...copy(behind.state.local), revision: 2 } });
+  await assert.rejects(behind.manager.syncNow(WORKSPACE), error => error.code === 'composition_source_pending');
+  assert.equal(behind.state.calls.filter(x => x === 'sources').length, 2);
+  assert.ok(!behind.state.mutations.includes('apply'));
+});
+
+test('originals edited on this device during a task are checked with the server again before the row is applied', async t => {
+  const f = fixture(t);
+  // The originals engine reports pending until its next check sends the edit.
+  f.state.readOverride = () => { f.state.source.pending = true; return { ...copy(f.state.row), revision: 2, data: { ...copy(f.state.local), revision: 2 } }; };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.equal(f.state.calls.filter(x => x === 'sources').length, 2);
+  assert.equal(f.state.source.pending, false);
+  assert.ok(f.state.mutations.includes('apply'));
 });
 
 test('default latest-wins keeps the newer server composition and stores the local side as a recovery copy', async t => {

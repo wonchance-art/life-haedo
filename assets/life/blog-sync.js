@@ -130,10 +130,12 @@
       try { return await task(); }
       finally { heldBytes -= size; waitingBytes.splice(0).forEach(resolve => resolve()); }
     }
-    async function transfer(asset) {
+    // A transfer that waited for a slot starts only while its cycle is still current: after an
+    // account change or dispose the queued files are not fetched (the started ones still finish).
+    async function transfer(c, asset) {
       while (transfers >= downloadConcurrency) await new Promise(resolve => waitingTransfers.push(resolve));
       transfers++;
-      try { return await remote.downloadAsset(asset); }
+      try { guard(c); return await remote.downloadAsset(asset); }
       finally { transfers--; waitingTransfers.shift()?.(); }
     }
     async function download(c, row) {
@@ -142,7 +144,7 @@
       // All of a post's transfers end before it fails, so its byte budget is not given back early.
       const results = await Promise.allSettled(row.data.photos.map(async photo => {
         const asset = row.assets[photo.id];
-        const pair = await Promise.allSettled([transfer({ bucket: asset.bucket, path: asset.path }), photo.view ? transfer(asset.view) : undefined]);
+        const pair = await Promise.allSettled([transfer(c, { bucket: asset.bucket, path: asset.path }), photo.view ? transfer(c, asset.view) : undefined]);
         const rejected = pair.find(result => result.status === 'rejected'); if (rejected) throw rejected.reason; guard(c);
         const blob = typed(pair[0].value, photo), view = photo.view ? typed(pair[1].value, photo.view) : undefined;
         files.set(photo.id, view ? { blob, view } : { blob });

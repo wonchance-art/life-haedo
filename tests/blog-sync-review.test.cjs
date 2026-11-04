@@ -283,3 +283,20 @@ test('receive: a byte budget makes further posts wait while the ones being recei
   assert.equal(peakFiles, 2, 'the photos of that one post still download together');
   assert.equal((await list(b)).length, docs.length); assert.equal(cloud.rows.size, docs.length);
 });
+
+// 2026-11-04 (PR183 re-review minor): after dispose, files still waiting for a transfer slot
+// are not fetched; only those already started finish. Fails when the slot check is removed.
+test('receive: dispose stops queued photo downloads; only the ones already started finish', async () => {
+  const { b } = await seeded(6, 2), original = b.remote.downloadAsset, gates = [];
+  let started = 0;
+  b.remote.downloadAsset = async asset => { started++; await new Promise(done => gates.push(done)); return original.call(b.remote, asset); };
+  const cycle = b.sync.syncNow();
+  for (let i = 0; i < 200 && started < 6; i++) await new Promise(done => setTimeout(done, 1));
+  assert.equal(started, 6, 'six transfers start, the rest wait for a slot');
+  b.sync.dispose();
+  gates.splice(0).forEach(done => done());
+  await within(cycle, 5000, 'disposed cycle');
+  for (let i = 0; i < 20; i++) await new Promise(done => setTimeout(done, 1));
+  assert.equal(started, 6, 'no queued file is fetched after dispose');
+  assert.equal(gates.length, 0);
+});
