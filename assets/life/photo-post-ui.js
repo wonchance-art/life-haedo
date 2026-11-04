@@ -469,7 +469,8 @@
           manage.classList.add("photo-info-action");
           visibility.append(manage);
         }
-        const stamp = when(doc.updatedAt);
+        // A new draft not yet stored has no saved time to show.
+        const stamp = doc.revision > 0 ? when(doc.updatedAt) : "";
         if (stamp) {
           const time = el("time", stamp);
           time.dateTime = doc.updatedAt;
