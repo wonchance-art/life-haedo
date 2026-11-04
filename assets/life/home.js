@@ -126,6 +126,16 @@
     for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws })));
     return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
   }
+  // A row's date and its full form. Formatters are made once (2026-11-04: two new
+  // Intl.DateTimeFormat per row were ~3% of the main thread while the first list was drawn);
+  // the strings are the same as formatting with a new formatter each time.
+  const dateFormats = {};
+  const dateFormat = withYear => dateFormats[withYear] ||= new Intl.DateTimeFormat('ko-KR', withYear ? { year: 'numeric', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' });
+  function dateLabels(value, prefix = '수정 ', now = new Date()) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    return { text: prefix + dateFormat(date.getFullYear() !== now.getFullYear()).format(date), title: prefix + dateFormat(true).format(date) };
+  }
   function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
     // Post contents compared for restore copies, by ID/revision/update time; this view's storage only.
@@ -365,16 +375,12 @@
         frame._homeLoadCover = readCover; mediaObserver.observe(frame);
       } else Promise.resolve().then(readCover);
     }
-    // Formatters are made once (2026-11-04: two new Intl.DateTimeFormat per row were ~3% of the
-    // main thread while the first list was drawn); the output is the same.
-    const dateFormats = {};
-    const dateFormat = withYear => dateFormats[withYear] ||= new Intl.DateTimeFormat('ko-KR', withYear ? { year: 'numeric', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' });
     function modifiedDate(value, prefix = '수정 ') {
-      const date = new Date(value);
-      if (!Number.isFinite(date.getTime())) return null;
-      const time = el('time', prefix + dateFormat(date.getFullYear() !== new Date().getFullYear()).format(date));
+      const labels = dateLabels(value, prefix);
+      if (!labels) return null;
+      const time = el('time', labels.text);
       time.dateTime = value;
-      time.title = prefix + dateFormat(true).format(date);
+      time.title = labels.title;
       return time;
     }
     // 일정 목록 rows: a time column and an icon column before the content (decision 2026-11-02).
@@ -822,5 +828,5 @@
     function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels });
 })(globalThis);
