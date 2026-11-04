@@ -70,9 +70,9 @@ async function main() {
       const state=await read(page); assert.equal(state.items.find(i=>i.id===primary).note,'둘째 탭의 최신 생각'); assert(state.items.some(i=>i.id!==primary&&i.note==='첫 탭에서 남긴 생각')); await second.close();
     });
     await check('Archive and restore preserve the item identity and private note', async () => {
-      const selected=(await read(page)).items[0]; await page.locator('.cl-files summary').click(); await click(page,'항목 보관');
+      const selected=(await read(page)).items[0]; await page.locator('.cl-files summary').click(); await click(page,'목록에서 숨기기');
       assert.equal((await read(page)).items.find(i=>i.id===selected.id).archived,true);
-      await click(page,'보관한 항목 보기'); await page.locator('.cl-card').click(); await page.locator('.cl-files summary').click(); await click(page,'목록에 다시 표시');
+      await click(page,'숨긴 항목 보기'); await page.locator('.cl-card').click(); await page.locator('.cl-files summary').click(); await click(page,'목록에 다시 보이기');
       assert.equal((await read(page)).items.find(i=>i.id===selected.id).archived,false); await go(page);
     });
     await check('Download and recover valid backup as new identities without overwriting', async () => {

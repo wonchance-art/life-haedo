@@ -35,7 +35,7 @@
   // Labels are functional names shown in the UI, README and restore report.
   const KINDS = Object.freeze({
     library: Object.freeze({ label: '자료·구성', detail: '원문·발췌·메모·출처, 자료 폴더·묶음·내 페이지·회고·책' }),
-    collection: Object.freeze({ label: '컬렉션', detail: '컬렉션 항목·비공개 메모·보관 상태' }),
+    collection: Object.freeze({ label: '컬렉션', detail: '컬렉션 항목·비공개 메모·숨김 상태' }),
     photoPosts: Object.freeze({ label: '사진 글', detail: '글별 ZIP · 원본 사진 바이트와 HEIC 보기용 JPEG' }),
     nineBoards: Object.freeze({ label: '9칸 구성', detail: '구성·영역·선택 이유·직접 담은 근거' }),
     blogSeries: Object.freeze({ label: '연재 모음', detail: '모음별 ZIP · 고정한 글과 원본 사진' }),

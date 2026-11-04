@@ -2214,7 +2214,7 @@
         const edit = action('이 장 확인', () => editChapter(chapter.id)); edit.dataset.reviewEdit = chapter.id; row.append(edit); box.append(row);
       }
       if (!result.chapters.length) box.append(empty('목차에서 첫 장을 추가해 주세요.'));
-      box.append(notice('원문은 정확한 버전으로 연결하며 작성일을 경험 시기로 추정하지 않습니다. 타인 글과 미확인 자료는 내 생각의 근거인지 직접 검토하세요. 보관한 장·제외한 해석은 이번 출력에서 빠집니다.'));
+      box.append(notice('원문은 정확한 버전으로 연결하며 작성일을 경험 시기로 추정하지 않습니다. 타인 글과 미확인 자료는 내 생각의 근거인지 직접 검토하세요. 숨긴 장·제외한 해석은 이번 출력에서 빠집니다.'));
       return box;
     }
 
@@ -2251,7 +2251,7 @@
       if (!book) {
         surfaceHeading.append(saveControl); saveControl.hidden = true;
         view.bookId = null; view.chapterId = null; view.reading = false; view.readPosition = null; view.editorPosition = null; view.includeSources = false; view.edition = false; view.editionOptions = null; view.editionPosition = null;
-        if (!activeBooks.length) bodyNode.append(empty(books.length ? '모든 책을 보관 중입니다. 아래에서 원하는 책을 복구해 이어 쓸 수 있습니다.' : '돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
+        if (!activeBooks.length) bodyNode.append(empty(books.length ? '모든 책을 숨겼습니다. 아래에서 원하는 책을 다시 보이게 해 이어 쓸 수 있습니다.' : '돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
         const list = el('div', null, 'wb-book-list'); list.id = 'wbBookList'; list.tabIndex = -1;
         activeBooks.forEach(item => {
           const row = el('article', null, 'wb-row wb-book-row'); row.dataset.bookId = item.id;
@@ -2279,13 +2279,13 @@
           list.append(row);
         });
         bodyNode.append(list);
-        const archived = details('보관한 책 · ' + (books.length - activeBooks.length), { open: !activeBooks.length && books.length > 0 }); archived.id = 'wbArchivedBooks';
+        const archived = details('숨긴 책 · ' + (books.length - activeBooks.length), { open: !activeBooks.length && books.length > 0 }); archived.id = 'wbArchivedBooks';
         for (const item of books.filter(value => value.archived)) {
           const row = el('div', null, 'wb-history-row'); row.append(el('p', item.title));
-          const restore = action('책 복구', () => historyChange(value => life.BookHistory.archiveBook(value, item.id, false), () => {}, 'wbBookList'));
+          const restore = action('책 다시 보이기', () => historyChange(value => life.BookHistory.archiveBook(value, item.id, false), () => {}, 'wbBookList'));
           restore.dataset.bookRestore = item.id; row.append(restore); archived.append(row);
         }
-        archived.append(notice('보관한 책도 개정본·원문 연결과 함께 백업·구성 이어쓰기에 남습니다.'));
+        archived.append(notice('숨긴 책도 개정본·원문 연결과 함께 백업·구성 이어쓰기에 남습니다.'));
         bodyNode.append(archived);
         const createBox = details('새 책', { open: !books.length }); createBox.id = 'wbBookCreateBox';
         const title = field('책 제목', '', { id: 'wbBookCreateTitle' }); title.input.placeholder = '예: 20대, 일과 쉼';
@@ -2350,8 +2350,8 @@
       const period = el('div', null, 'wb-add-row'); period.append(from.wrapper, to.wrapper);
       const question = field('이 책에서 돌아볼 질문', book.question, { id: 'wbBookQuestion', multiline: true, max: limits.text, change: value => { book.question = value; } });
       settings.append(title.wrapper, period, notice('기간은 책의 범위를 적어 두는 정보입니다. 연결한 글을 자동으로 넣거나 빼지 않습니다. 비워 두면 기간을 제한하지 않습니다.'), question.wrapper);
-      const archiveBook = action('책 보관', () => {
-        if (!global.confirm('이 책을 보관함으로 옮길까요? 원고·개정본·원문 연결은 유지되며 보관한 책에서 복구할 수 있습니다.')) return;
+      const archiveBook = action('책 숨기기', () => {
+        if (!global.confirm('이 책을 목록에서 숨길까요? 원고·개정본·원문 연결은 유지되며 숨긴 책에서 다시 보이게 할 수 있습니다.')) return;
         return historyChange(value => life.BookHistory.archiveBook(value, book.id), () => { view.bookId = null; }, 'wbBookList');
       }); archiveBook.id = 'wbBookArchive'; settings.append(archiveBook);
       const activeChapters = book.chapters.filter(item => !item.archived);
@@ -2387,13 +2387,13 @@
         }, 'wbChapterNote');
       }); addChapter.id = 'wbChapterCreate'; addRow.append(chapterTitle.wrapper, addChapter);
       outline.append(chapterList, addRow);
-      const archivedChapters = details('보관한 장 · ' + (book.chapters.length - activeChapters.length)); archivedChapters.id = 'wbArchivedChapters';
+      const archivedChapters = details('숨긴 장 · ' + (book.chapters.length - activeChapters.length)); archivedChapters.id = 'wbArchivedChapters';
       for (const item of book.chapters.filter(value => value.archived)) {
         const row = el('div', null, 'wb-history-row'); row.append(el('p', item.title));
-        const restore = action('장 복구', () => historyChange(value => life.BookHistory.archiveChapter(value, book.id, item.id, false), () => { view.chapterId = item.id; }, 'wbChapterNote'));
+        const restore = action('장 다시 보이기', () => historyChange(value => life.BookHistory.archiveChapter(value, book.id, item.id, false), () => { view.chapterId = item.id; }, 'wbChapterNote'));
         restore.dataset.chapterRestore = item.id; row.append(restore); archivedChapters.append(row);
       }
-      archivedChapters.append(notice('보관한 장은 현재 원고·Markdown·인쇄에서 빠지며 백업에는 남습니다. 복구하면 원래 목차 위치에 다시 나타납니다.'));
+      archivedChapters.append(notice('숨긴 장은 현재 원고·Markdown·인쇄에서 빠지며 백업에는 남습니다. 다시 보이게 하면 원래 목차 위치에 나타납니다.'));
       outline.append(archivedChapters);
       const tools = el('div', null, 'wb-book-controls wb-book-management'); tools.id = 'wbBookManagement';
       tools.append(settings, bookEditions(session, book, view, historyChange), edition);
@@ -2430,8 +2430,8 @@
         }
         chapterNavigation.append(el('span', (index + 1) + ' / ' + activeChapters.length, 'life-meta'));
         editor.append(chapterNavigation, chapterName.wrapper, note.wrapper, length);
-        const archiveChapter = action('이 장 보관', () => {
-          if (!global.confirm('이 장을 보관할까요? 현재 원고 출력에서 빠지며 목차의 보관한 장에서 복구할 수 있습니다.')) return;
+        const archiveChapter = action('이 장 숨기기', () => {
+          if (!global.confirm('이 장을 숨길까요? 현재 원고 출력에서 빠지며 목차의 숨긴 장에서 다시 보이게 할 수 있습니다.')) return;
           return historyChange(value => life.BookHistory.archiveChapter(value, book.id, chapter.id), () => { view.chapterId = null; view.readPosition = null; }, 'wbBookOutlineHeading');
         }); archiveChapter.id = 'wbChapterArchive'; tools.append(archiveChapter);
         const sourceBox = details('이 장의 근거 · ' + chapter.versionIds.length + '개'); sourceBox.id = 'wbChapterEvidence';
@@ -2584,7 +2584,7 @@
         document.body.append(link); link.click(); link.remove();
         global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
       }); exportButton.id = 'wbBookExport';
-      exportBox.append(include, notice('이 책의 보관하지 않은 장과 제외하지 않은 생각을 목차 순서대로 받습니다. 기본은 직접 쓴 원고·해석·출처이며 공개 게시하지 않습니다. 제외한 생각을 이미 원고에 적었다면 그 문장은 직접 검토하세요. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
+      exportBox.append(include, notice('이 책의 숨기지 않은 장과 제외하지 않은 생각을 목차 순서대로 받습니다. 기본은 직접 쓴 원고·해석·출처이며 공개 게시하지 않습니다. 제외한 생각을 이미 원고에 적었다면 그 문장은 직접 검토하세요. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       tools.append(exportBox); bodyNode.append(tools);
       if (view.restoreEditor) {
         view.restoreEditor = false;
@@ -2623,7 +2623,7 @@
           content.dataset.loaded = 'true';
           content.append(el('h5', edition.title), el('p', (edition.fromYear || '미지정') + ' ~ ' + (edition.toYear || '미지정'), 'life-meta'), el('p', edition.question, 'wb-history-text'));
           for (const chapter of edition.chapters) {
-            content.append(el('h5', chapter.title + (chapter.archived ? ' · 보관한 장' : '')), el('p', chapter.note, 'wb-history-text'));
+            content.append(el('h5', chapter.title + (chapter.archived ? ' · 숨긴 장' : '')), el('p', chapter.note, 'wb-history-text'));
             content.append(el('p', '장 원문: ' + chapter.versionIds.map(id => sourceName(id)).join(' · '), 'life-meta'));
             for (const insight of chapter.insights || []) {
               content.append(el('p', '내 해석' + (insight.excluded ? ' · 원고에서 제외' : ''), 'life-meta'), el('p', insight.statement, 'wb-history-text'), el('p', insight.uncertainty, 'wb-history-text'),
@@ -2632,7 +2632,7 @@
           }
         });
         const restore = action('이 개정본으로 복원', () => {
-          if (!global.confirm('현재 원고를 먼저 개정본으로 보관한 뒤 선택한 원고로 되돌릴까요? 보관한 장과 제외한 해석도 선택 당시 상태로 돌아갑니다.')) return;
+          if (!global.confirm('현재 원고를 먼저 개정본으로 보관한 뒤 선택한 원고로 되돌릴까요? 숨긴 장과 제외한 해석도 선택 당시 상태로 돌아갑니다.')) return;
           return change(state => life.BookHistory.restore(state, book.id, edition.id), next => {
             view.chapterId = next.books.find(item => item.id === book.id).chapters.find(item => !item.archived)?.id || null;
             view.readPosition = null; view.editorPosition = null; view.editionsOpen = true;
@@ -2668,7 +2668,7 @@
       paper.addEventListener('change', () => { if (active()) { settings.paper = paper.value; refresh(); } });
       controls.append(paperLabel, insights, sources);
       const scope = details('포함 범위');
-      scope.append(notice('표지·목차·장 원고·출처 부록을 만듭니다. 책 설정의 질문·기간, 제외한 해석과 보관한 장은 넣지 않습니다. 해석을 넣으면 아직 모르는 점과 근거·반례도 함께 넣습니다. 원문 본문은 별도 선택입니다.'));
+      scope.append(notice('표지·목차·장 원고·출처 부록을 만듭니다. 책 설정의 질문·기간, 제외한 해석과 숨긴 장은 넣지 않습니다. 해석을 넣으면 아직 모르는 점과 근거·반례도 함께 넣습니다. 원문 본문은 별도 선택입니다.'));
       scope.append(notice('이 설정은 이 책을 여는 동안만 유지됩니다. 파일을 만들며 저장된 원고·공개 범위를 바꾸지 않습니다.'));
       const status = el('p', '', 'life-meta'); status.id = 'wbEditionStatus'; status.setAttribute('role', 'status');
       const frameHost = el('div', null, 'wb-edition-frame');
@@ -3024,14 +3024,14 @@
         text.push('\n회고 원문', ...state.reflection.versionIds.map(id => sourceName(id)), state.reflection.note);
         function chaptersSummary(chapters, historical = false) {
           chapters.forEach((chapter, index) => {
-            text.push('\n' + (index + 1) + '. ' + chapter.title + (chapter.archived ? ' · 보관한 장' : ''), chapter.note, ...chapter.versionIds.map(id => sourceName(id)));
+            text.push('\n' + (index + 1) + '. ' + chapter.title + (chapter.archived ? ' · 숨긴 장' : ''), chapter.note, ...chapter.versionIds.map(id => sourceName(id)));
             for (const thought of chapter.insights || []) text.push('\n' + (historical ? '당시 해석' : '현재 해석') + (thought.excluded ? ' · 원고에서 제외' : ''), thought.statement,
               '아직 모르는 점: ' + thought.uncertainty, '뒷받침하는 글', ...thought.supportVersionIds.map(id => sourceName(id)),
               '다른 관점의 글', ...thought.counterVersionIds.map(id => sourceName(id)));
           });
         }
         for (const book of state.books || []) {
-          text.push('\n책: ' + book.title + (book.archived ? ' · 보관한 책' : ''), '기간: ' + book.fromYear + ' ~ ' + book.toYear, book.question);
+          text.push('\n책: ' + book.title + (book.archived ? ' · 숨긴 책' : ''), '기간: ' + book.fromYear + ' ~ ' + book.toYear, book.question);
           chaptersSummary(book.chapters);
           for (const edition of book.editions || []) {
             text.push('\n개정본: ' + edition.label, edition.createdAt, edition.title, edition.fromYear + ' ~ ' + edition.toYear, edition.question);
@@ -3087,10 +3087,10 @@
         const books = candidate.workbench.books || [];
         const chapters = books.flatMap(book => book.chapters);
         const activeChapters = books.filter(book => !book.archived).flatMap(book => book.chapters.filter(chapter => !chapter.archived));
-        const bookSummary = notice('책 ' + books.length + '권 · 활성 장 ' + activeChapters.length + '개 · 보관한 책 ' + books.filter(book => book.archived).length +
-          '권 · 보관한 장 ' + chapters.filter(chapter => chapter.archived).length + '개 · 개정본 ' + books.reduce((sum, book) => sum + (book.editions || []).length, 0) + '개');
+        const bookSummary = notice('책 ' + books.length + '권 · 활성 장 ' + activeChapters.length + '개 · 숨긴 책 ' + books.filter(book => book.archived).length +
+          '권 · 숨긴 장 ' + chapters.filter(chapter => chapter.archived).length + '개 · 개정본 ' + books.reduce((sum, book) => sum + (book.editions || []).length, 0) + '개');
         bookSummary.id = 'wbRestoreBookSummary'; previewHost.append(bookSummary);
-        previewHost.append(notice('활성 장은 보관한 책의 장을 제외합니다. 보관한 장은 장별 보관 설정 기준이며, 개정본 안의 장은 중복 집계하지 않습니다.'));
+        previewHost.append(notice('활성 장은 숨긴 책의 장을 제외합니다. 숨긴 장은 장별 숨김 설정 기준이며, 개정본 안의 장은 중복 집계하지 않습니다.'));
         previewHost.append(notice(managed ? '새 자료 사본으로 복원합니다. 기존 자료는 유지합니다.' : '새 작업공간으로 복원합니다. 기존 공간은 유지되고 새 사본은 자동 동기화되지 않습니다.'));
         const install = action('새 사본으로 복원', async () => {
           if (installing) return;

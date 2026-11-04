@@ -132,7 +132,7 @@ async function main() {
       assert.equal(await toggle.getAttribute('aria-label'), '검색어 수정'); await toggle.click(); assert.equal(await input.isVisible(), true); assert.equal(await input.inputValue(), query); assert.equal(await input.evaluate(node => node === document.activeElement), true);
       assert.doesNotMatch(await page.locator('.home-search-scope').innerText(), /글과 초안/);
       await page.locator('#homeTab-drafts').click(); await page.locator('#homePosts .home-draft').waitFor(); assert.equal(await page.locator('#homePosts .home-draft').count(), 1); assert.match(await page.locator('.home-search-scope').innerText(), /초안/); assert.equal(await page.locator('.home-resume').isVisible(), false);
-      await page.locator('#homeTab-archive').click(); const row = page.locator(`[data-photo-post-id="${refs.archived}"]`); await row.waitFor(); assert.match(await page.locator('.home-search-scope').innerText(), /보관/);
+      await page.locator('#homeTab-archive').click(); const row = page.locator(`[data-photo-post-id="${refs.archived}"]`); await row.waitFor(); assert.match(await page.locator('.home-search-scope').innerText(), /숨긴 글/);
       await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /보관함 검색에서만/);
       await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await input.inputValue(), query); assert.equal(await input.isVisible(), true); assert.equal(await page.locator('#homeTab-archive').getAttribute('aria-selected'), 'true');

@@ -158,7 +158,7 @@
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
-    const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
+    const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
     function captureLibraryState() {
       if (visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId) {
         libraryOpen = libraryElement.open;
@@ -487,7 +487,7 @@
         intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
         intro.hidden = !intro.textContent;
       });
-      read('photo', '글·초안·보관함', value => {
+      read('photo', '글·초안·숨긴 글', value => {
         if (!Array.isArray(value?.posts)) throw new Error('invalid_posts');
         rows.push(...value.posts.map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
           tab: post.archived ? 'archive' : post.status === 'draft' ? 'drafts' : 'posts', editing: context.photoDrafts.get(post.workspaceId + ':' + post.id) })));
@@ -617,7 +617,7 @@
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
       const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
       const fragment = document.createDocumentFragment();
-      if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록으로 복원할 수 있어요.', 'life-meta home-archive-note'));
+      if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록에 다시 보이게 할 수 있어요.', 'life-meta home-archive-note'));
       const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
       if (applicable.length) {
         const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');
@@ -632,8 +632,8 @@
       });
       if (!matched.length && !applicable.length) {
         const empty = el('div', null, 'home-first-post');
-        const title = query ? '일치하는 내 글이 없어요.' : listState.tab === 'drafts' ? '작성 중인 초안이 없어요.' : listState.tab === 'archive' ? '보관한 글이 없어요.' : '첫 글을 써보세요.';
-        empty.append(el('h3', title), el('p', query ? '현재 탭의 제목과 본문에서 찾았어요. 검색어나 탭을 바꿔보세요.' : listState.tab === 'drafts' ? '작성 중 닫은 글은 여기에 남습니다.' : listState.tab === 'archive' ? '보관을 지원하는 글만 여기에 표시됩니다.' : '한 문장부터 시작해도 좋아요. 먼저 비공개로 저장됩니다.', 'home-text'));
+        const title = query ? '일치하는 내 글이 없어요.' : listState.tab === 'drafts' ? '작성 중인 초안이 없어요.' : listState.tab === 'archive' ? '숨긴 글이 없어요.' : '첫 글을 써보세요.';
+        empty.append(el('h3', title), el('p', query ? '현재 탭의 제목과 본문에서 찾았어요. 검색어나 탭을 바꿔보세요.' : listState.tab === 'drafts' ? '작성 중 닫은 글은 여기에 남습니다.' : listState.tab === 'archive' ? '목록에서 숨기기를 지원하는 글만 여기에 표시됩니다.' : '한 문장부터 시작해도 좋아요. 먼저 비공개로 저장됩니다.', 'home-text'));
         if (query) empty.append(action(context, '검색어 지우기', () => { listState.query = ''; listState.limit = ROW_LIMIT; const input = context.surface.querySelector('#homePostSearch'); input.value = ''; updateList(context, true); (context.controls.hidden ? context.list.querySelector('#homeFirstWrite') : input)?.focus({ preventScroll: true }); }));
         else if (listState.tab === 'posts') {
           const start = action(context, '첫 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary'); start.id = 'homeFirstWrite'; start.dataset.homeDestination = 'write'; start.dataset.focusKey = 'home:action:write'; empty.append(start);

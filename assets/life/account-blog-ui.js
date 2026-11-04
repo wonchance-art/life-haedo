@@ -88,7 +88,7 @@
         const article = el('article', null, 'ab-post'); article.dataset.remoteId = row.id; article.dataset.state = row.status;
         article.append(el('h3', row.title?.trim() || (row.draft ? '제목 없는 초안' : '제목 없는 글')));
         const local = !!row.localPostId;
-        const parts = [row.draft ? '초안' : row.archived ? '보관한 글' : '글', !row.localPostId ? '이 기기로 받는 중' : labels[row.status] || labels.error];
+        const parts = [row.draft ? '초안' : row.archived ? '숨긴 글' : '글', !row.localPostId ? '이 기기로 받는 중' : labels[row.status] || labels.error];
         if (row.publication?.active) parts.push('공개 중');
         const metadata = el('p', parts.join(' · '), 'life-meta ab-post-state');
         const date = new Date(row.updated_at);

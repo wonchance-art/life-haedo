@@ -3,7 +3,7 @@
   'use strict';
   const life = root.HaedoLife ||= {};
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
-  const stateLabels = { saved: '저장한 글', draft: '초안', archived: '보관한 글' };
+  const stateLabels = { saved: '저장한 글', draft: '초안', archived: '숨긴 글' };
   const kindLabels = { photo: '블로그 글', plain: '첨부 글', source: '기록 글', 'page-draft': '첨부 글 초안', 'writing-draft': '기록 글 초안' };
   const errorText = e => e?.code === 'schema_missing' ? '서버 글 보관 기능이 아직 준비되지 않았습니다. 글은 이 브라우저에 그대로 있습니다.' : e?.message || '처리하지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.';
   function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, onOpenAccountBlog = null, blogSync, isCurrent = () => true }) {
@@ -98,7 +98,7 @@
             const provenance = el('div', null, 'blog-manager-evidence'); actions.append(provenance); pendingEvidence.push(showEvidence(row, provenance));
           }
           if (row.status === 'saved') actions.append(button('공개 내용 검토', () => preparePreview(row)));
-          actions.append(button(row.status === 'archived' ? '보관 해제' : '보관함으로', async () => {
+          actions.append(button(row.status === 'archived' ? '목록에 다시 보이기' : '목록에서 숨기기', async () => {
             const doc = life.PhotoPost.upgrade(await storage.readPhotoPost(workspaceId, row.id));
             if (!valid()) return; doc.archived = !doc.archived;
             await storage.savePhotoPost(workspaceId, doc, doc.revision);
@@ -111,7 +111,7 @@
         }
         list.append(article);
       });
-      if (!matching.length) list.append(meta(selected === 'archived' ? '보관한 글이 없습니다.' : '조건에 맞는 글이 없습니다. 검색이나 상태를 바꿔 주세요.'));
+      if (!matching.length) list.append(meta(selected === 'archived' ? '숨긴 글이 없습니다.' : '조건에 맞는 글이 없습니다. 검색이나 상태를 바꿔 주세요.'));
       if (matching.length > shown) list.append(button('글 더 보기', async () => { shown += 40; renderRows(); }));
       return Promise.all(pendingEvidence);
     }
@@ -177,7 +177,7 @@
     async function preparePreview(row) {
       const doc = await storage.readPhotoPost(workspaceId, row.id);
       if (!valid()) return;
-      if (doc.status !== 'saved' || doc.archived) throw new Error('저장한 보관함 밖 글만 공개할 수 있습니다. 목록을 다시 확인해 주세요.');
+      if (doc.status !== 'saved' || doc.archived) throw new Error('숨기지 않은 저장 글만 공개할 수 있습니다. 목록을 다시 확인해 주세요.');
       if (!life.Blog?.publicSnapshot || !life.BlogPublicUI?.render) throw new Error('공개 미리보기 기능을 불러오지 못했습니다. 다시 진입해 주세요.');
       let capturedState = null;
       try { if (blogSync?.getState) capturedState = await blogSync.getState(workspaceId, row.id); } catch (_) { /* Preview remains local; publication still requires a working server. */ }
@@ -303,7 +303,7 @@
       const header = el('div', null, 'blog-manager-toolbar');
       query = el('input'); query.id = 'blogManagerSearch'; query.type = 'search'; query.placeholder = '내 글 검색'; query.setAttribute('aria-label', '내 글 검색');
       filter = el('select'); filter.id = 'blogManagerFilter'; filter.setAttribute('aria-label', '글 상태');
-      [['all', '전체 글·초안'], ['saved', '저장한 글'], ['draft', '초안'], ['archived', '보관한 글']].forEach(([value, label]) => { const option = el('option', label); option.value = value; filter.append(option); });
+      [['all', '전체 글·초안'], ['saved', '저장한 글'], ['draft', '초안'], ['archived', '숨긴 글']].forEach(([value, label]) => { const option = el('option', label); option.value = value; filter.append(option); });
       query.value = typeof viewState?.query === 'string' ? viewState.query : '';
       filter.value = ['all', 'saved', 'draft', 'archived'].includes(viewState?.filter) ? viewState.filter : 'all';
       query.hidden = filter.hidden = !!focusedPostId;
