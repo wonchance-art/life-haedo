@@ -4437,7 +4437,7 @@
         await commit(changes);
         state.sourceDrafts.delete(version.id);
         render();
-      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 브라우저에 저장됨');
+      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 기기에 저장됨');
       }), 'life-primary');
       saveExcerpt.id = 'lifeSourceExcerptSave';
       saveExcerpt.disabled = true;
@@ -5106,7 +5106,7 @@
         else if (currentExternalImport(externalContext)) await openExternalImportResult(externalContext);
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
-        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 브라우저에 저장됨'));
+        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 기기에 저장됨'));
       };
       const storeOnly = button('자료만 보관', guarded(() => apply([])));
       if (!state.stage.excerpts.length) storeOnly.classList.add('life-primary');

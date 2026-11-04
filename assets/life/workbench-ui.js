@@ -95,7 +95,7 @@
       const nineDirty = !!session.nine?.dirty();
       const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? (managed ? '변경 반영 중…' : '이 기기에 저장 중…') : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : managed ? '변경 반영됨' : '이 기기에 저장됨 · 계정과 자동 동기화';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : managed ? '변경 반영됨' : '이 기기에 저장됨';
       statusNode.hidden = managed && !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
       statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (managed && !session.blogContext && !['public-pages', 'workbench-backup'].includes(mode)) surface.querySelector('.wb-storage-line').hidden = statusNode.hidden;

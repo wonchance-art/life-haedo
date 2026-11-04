@@ -36,3 +36,8 @@ test('attachments and archive state use the existing strict boundary; arbitrary 
  const many=structuredClone(d);many.attachments=Array.from({length:13},()=>({...base}));assert.throws(()=>M.validate(many));
  const state=structuredClone(d);state.archived='false';assert.throws(()=>M.validate(state));const legacy=structuredClone(d);legacy.format='life-photo-post-v1';assert.throws(()=>M.validate(legacy));
 });
+test('a too-long or malformed title is refused with a message that names the title (review of PR #186)',async()=>{
+ const {d}=await fixture();const long=structuredClone(d);long.title='가'.repeat(501);assert.throws(()=>M.validate(long),/^Error: 제목은 500자까지 쓸 수 있습니다\. 줄여 주세요\.$/);
+ const fit=structuredClone(d);fit.title='가'.repeat(500);assert.doesNotThrow(()=>M.validate(fit));
+ const half=structuredClone(d);half.title='제목 \uD83C';assert.throws(()=>M.validate(half),/제목의 문자와 길이를 확인해 주세요/);
+});

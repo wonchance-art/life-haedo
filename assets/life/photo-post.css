@@ -142,6 +142,8 @@
 .photo-privacy[data-state="problem"] > .photo-privacy-face { background: var(--error-soft, #fff2f4); }
 .photo-privacy-problem { color: var(--color-error, #a3243d); }
 .photo-privacy-problem::before { content: "· "; color: var(--ink-soft, #5d6b65); }
+.photo-privacy-note { color: var(--ink-soft, #5d6b65); font-weight: 500; }
+.photo-privacy-note::before { content: "· "; }
 .photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .photo-recovery-actions[hidden] { display: none; }
 .photo-recovery-actions > button { font-size: 13px; padding: 8px 12px; }
@@ -728,6 +730,10 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   /* A compact pill leaves the one-line status room for its short texts. */
   .photo-privacy-face { padding: 0 10px; }
   .photo-privacy-face > svg:last-child { display: none; }
+  /* Revising a saved post on a phone: the icon keeps the visibility, the word gives way to 수정 중
+     (the button's name still says both), so the one-line save status keeps its room. */
+  .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
+  .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
   .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
   /* Keep the caret and the block being typed between the sticky bar and the floating tools. */

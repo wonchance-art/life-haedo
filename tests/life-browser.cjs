@@ -208,7 +208,7 @@ async function applicationChecks(browser, observe) {
       await page.locator('#lifeExcerptTopic').fill('다시 읽기');
       await click('발췌 후보 추가');
       await click('선택한 발췌 모음에 반영');
-      assert.match(await page.locator('#lifeSaveStatus').textContent(),/모음에 반영됨.*이 브라우저에 저장됨/);
+      assert.match(await page.locator('#lifeSaveStatus').textContent(),/모음에 반영됨.*이 기기에 저장됨/);
       const bundle = await savedBundle();
       assert.equal(bundle.records.length,1); assert.equal(bundle.records[0].text,'🌱 다시 읽을 구절');
       assert.equal(bundle.sourceVersions[0].contentText,raw);

@@ -101,6 +101,14 @@
     const context = () => ({ storage, timeline: timelineSource, originals });
     async function loadInventory() {
       const token = generation;
+      try { await readInventory(token); }
+      catch (error) {
+        // A failed check must not leave "확인하는 중…" behind as if it were still running.
+        if (alive(token)) estimateLine.textContent = '';
+        throw error;
+      }
+    }
+    async function readInventory(token) {
       inventoryList.replaceChildren(node('li', '파일에 담길 목록을 확인하는 중…', 'life-help'));
       downloadButton.disabled = true;
       const plan = await F.plan({ ...context(), isCurrent: () => alive(token) });

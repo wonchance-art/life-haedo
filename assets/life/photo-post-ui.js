@@ -390,28 +390,41 @@
     }
     // Publication is read from BlogSync only (never changed here). In the
     // editor it is the saved post being revised; a new draft is private.
+    // publicState: { id, published } once read; { id, checking } while the first read
+    // runs; { id, failed } when it could not be read. Until it is known the pill and
+    // 글 정보 say nothing about visibility (a public post must never look private).
     let publicState = null;
     const publicTarget = () =>
       mode === "read" ? (doc?.status === "saved" ? doc.id : null) : doc?.replaces?.id || null;
-    const isPublished = () => {
+    function publication() {
       const id = publicTarget();
-      return !!id && publicState?.id === id && publicState.published;
-    };
+      if (!id) return "private"; // a new or unsaved draft cannot have a public copy
+      if (publicState?.id !== id || publicState.failed) return "unknown";
+      if (publicState.checking) return "checking";
+      return publicState.published ? "public" : "private";
+    }
+    const isPublished = () => publication() === "public";
     const serverState = () =>
       mode === "read" && doc?.status === "saved" && serverValue?.id === doc.id &&
       serverValue.revision === doc.revision ? serverValue.status : null;
     function updatePill() {
       if (!pill) return;
-      const published = isPublished(), label = published ? "공개" : "비공개",
-        problem = PILL_PROBLEMS[serverState()] || "";
-      pill.dataset.state = problem ? "problem" : published ? "public" : "private";
+      const state = publication(), problem = PILL_PROBLEMS[serverState()] || "",
+        label = state === "public" ? "공개" : state === "private" ? "비공개" : "글 정보",
+        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" ? "공개 여부 확인 못 함" : label;
+      pill.dataset.state = problem ? "problem" : state;
       // The button is the 44px target; the drawn pill is its inner face.
       const face = el("span", null, "photo-privacy-face");
-      face.append(glyph(published ? "globe" : "lock", 16), el("span", label, "photo-privacy-label"));
+      if (state === "public" || state === "private") face.append(glyph(state === "public" ? "globe" : "lock", 16));
+      face.append(el("span", label, "photo-privacy-label"));
       if (problem) face.append(el("span", problem, "photo-privacy-problem"));
+      // 글 저장 replaces the original of a post being revised: say so on the top line.
+      const revising = mode === "edit" && !!doc?.replaces;
+      if (revising && !problem) face.append(el("span", "수정 중", "photo-privacy-note"));
       face.append(glyph("forward", 16));
       pill.replaceChildren(face);
-      pill.setAttribute("aria-label", label + (problem ? " · " + problem : "") + " · 글 정보");
+      pill.setAttribute("aria-label", spoken + (problem ? " · " + problem : "") + (revising ? " · 기존 글 수정 중" : "") +
+        (state === "public" || state === "private" ? " · 글 정보" : ""));
     }
     function privacyPill() {
       const b = el("button", null, "photo-privacy");
@@ -435,12 +448,20 @@
         title = el("h2", "글 정보"),
         rows = el("dl", null, "photo-info-rows");
       title.id = "photoInfoTitle";
+      title.tabIndex = -1;
       sheet.setAttribute("aria-labelledby", title.id);
       const close = iconControl(el("button"), "close", "글 정보 닫기");
       close.type = "button";
       close.addEventListener("click", () => sheet.close());
       head.append(title, close);
       sheet.append(head, rows);
+      // The save state can take focus (tabindex -1) so a finished action can hand focus to its result.
+      const stateValue = (text) => {
+        const value = el("span", text, "photo-info-value");
+        value.dataset.infoFocus = "save-state";
+        value.tabIndex = -1;
+        return value;
+      };
       const row = (name, ...value) => {
         const wrap = el("div", null, "photo-info-row"),
           detail = el("dd");
@@ -451,22 +472,27 @@
       };
       refreshInfo = () => {
         if (info !== sheet || !current(token)) return;
-        const published = isPublished(),
+        const state = publication(), published = state === "public", known = published || state === "private",
           saved = mode === "read" && doc.status === "saved";
+        // Rebuilding the rows must not drop focus to <body>: remember which action had it.
+        const had = rows.contains(document.activeElement) ? document.activeElement.dataset.infoFocus || "save-state" : null;
         rows.replaceChildren();
         const shown = el("span", null, "photo-info-line");
-        shown.append(glyph(published ? "globe" : "lock", 16), el("span", published ? "공개 중" : "비공개", "photo-info-value"));
+        if (known) shown.append(glyph(published ? "globe" : "lock", 16));
+        shown.append(el("span", published ? "공개 중" : state === "private" ? "비공개" : state === "checking" ? "확인 중" : "확인하지 못함", "photo-info-value"));
         const visibility = row("공개", shown);
         visibility.append(el("p", published
           ? "공개 사본은 이 글과 따로 있습니다. 고친 내용은 공개 설정에서 갱신해야 공개 화면에 반영됩니다."
+          : !known ? "공개 여부를 아직 확인하지 못했습니다. 글 공개·보관에서 확인할 수 있습니다."
           : saved ? "공개는 미리보기를 확인한 뒤 따로 선택합니다. 사진은 고른 것만, 촬영·위치 정보를 뺀 사본으로 공개합니다."
             : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
         if (saved && typeof onManageServer === "function") {
-          const manage = button(published ? "공개 설정" : "공개하기", () => {
+          const manage = button(published ? "공개 설정" : known ? "공개하기" : "공개 상태 확인", () => {
             sheet.close();
             return openPostTask(onManageServer, origin.dataset.focusKey);
           });
           manage.classList.add("photo-info-action");
+          manage.dataset.infoFocus = "manage";
           visibility.append(manage);
         }
         // A new draft not yet stored has no saved time to show.
@@ -477,21 +503,24 @@
           row(mode === "edit" ? "마지막 보관" : "저장한 시각", time);
         }
         if (mode === "edit") {
-          const state = row("저장", el("span", statusText?.textContent || "", "photo-info-value"));
+          const state = row("저장", stateValue(statusText?.textContent || ""));
           state.append(el("p", "초안은 계정에 비공개로 자동 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다. 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
           const value = serverState() || "checking";
-          const state = row("저장", el("span", SERVER_LABELS[value] || SERVER_LABELS.error, "photo-info-value"));
+          const state = row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
           state.dataset.state = value;
           if (["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
             const retry = button("계정에 다시 올리기", saveServer);
             retry.classList.add("photo-info-action");
+            retry.dataset.infoFocus = "retry";
             state.append(retry);
           }
         } else row("저장", el("span", doc.status === "draft" ? "초안" : "", "photo-info-value"));
         if (doc.archived) row("목록", el("span", "숨긴 글입니다. 일반 목록과 검색에는 나오지 않습니다.", "photo-info-value"));
+        // The same action again; if it is gone (e.g. 계정에 다시 올리기 while it runs), the save state it changed.
+        if (had) (rows.querySelector('[data-info-focus="' + had + '"]') || rows.querySelector('[data-info-focus="save-state"]') || title).focus({ preventScroll: true });
       };
       sheet.addEventListener("click", (e) => {
         // A click on the backdrop (outside the sheet's box) closes it.
@@ -1143,12 +1172,20 @@
       if (state && typeof state === "object" && Object.hasOwn(state, "publication"))
         publicState = { id, published: state.publication?.active === true };
     }
+    // A read of the publication starts: a value already read for this post stays shown.
+    function checkPublication(id) {
+      if (publicState?.id !== id || publicState.failed) publicState = { id, checking: true };
+    }
+    // The read ended without a publication value: say so instead of guessing.
+    function settlePublication(id) {
+      if (publicState?.id === id && publicState.checking) publicState = { id, failed: true };
+    }
     // No blog engine because this page lacks sync-common.js while the blog module is the newer one.
     const staleApp = () => !blogSync && !!life.BlogSync && !life.SyncCommon;
     async function readServerState() {
       if (mode !== "read" || doc?.status !== "saved" || serverBusy) return;
       const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
-      serverValue = { id, revision, status: "checking" }; showServerStatus();
+      serverValue = { id, revision, status: "checking" }; checkPublication(id); showServerStatus();
       try {
         if (!blogSync?.getState) throw new Error("server_unavailable");
         const state = await blogSync.getState(workspaceId, id);
@@ -1159,6 +1196,7 @@
         if (!serverCurrent(token, id, revision, sequence)) return;
         serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       }
+      settlePublication(id);
       showServerStatus();
     }
     async function saveServer() {
@@ -1638,20 +1676,28 @@
         e.preventDefault();
         editor?.focus();
       });
+      // Line breaks become spaces without moving the caret (same length or shorter).
+      const flattenTitle = () => {
+        if (!/[\r\n]/.test(title.value)) return;
+        const end = title.selectionEnd;
+        title.value = title.value.replace(/[\r\n]+/g, " ");
+        title.setSelectionRange(Math.min(end, title.value.length), Math.min(end, title.value.length));
+      };
       title.addEventListener("paste", (e) => {
         const text = e.clipboardData?.getData("text/plain");
         if (!text || !/[\r\n]/.test(text) || !acceptsInput()) return;
         e.preventDefault();
-        title.setRangeText(text.replace(/\s*[\r\n]+\s*/g, " ").trim(), title.selectionStart, title.selectionEnd, "end");
+        // setRangeText does not apply maxLength: insert only what still fits, so a
+        // long multi-line paste can never make the title (and every save) invalid.
+        const room = title.maxLength - (title.value.length - (title.selectionEnd - title.selectionStart));
+        let insert = text.replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
+        if (/[\uD800-\uDBFF]$/.test(insert)) insert = insert.slice(0, -1);  // never split a surrogate pair
+        title.setRangeText(insert, title.selectionStart, title.selectionEnd, "end");
         title.dispatchEvent(new Event("input", { bubbles: true }));
       });
       title.addEventListener("input", (e) => {
         if (!acceptsInput()) return;
-        if (!composing && !e.isComposing && /[\r\n]/.test(title.value)) {
-          const end = title.selectionEnd;
-          title.value = title.value.replace(/[\r\n]+/g, " ");
-          title.setSelectionRange(end, end);
-        }
+        if (!composing && !e.isComposing) flattenTitle();
         doc.title = title.value;
         fitTitle();
         mark();
@@ -1664,7 +1710,10 @@
       title.addEventListener("compositionend", () => {
         if (!acceptsInput()) return;
         composing = false;
+        // A composed line break (some IMEs commit one) is cleaned only now, after composition.
+        flattenTitle();
         doc.title = title.value;
+        fitTitle();
         mark();
       });
       const sticky = el("div", null, "photo-editor-tools"),
@@ -1697,12 +1746,15 @@
       if (doc.replaces && blogSync?.getState) {
         // Revising a saved post: the pill says whether that post has a public copy.
         const target = doc.replaces.id;
-        blogSync.getState(workspaceId, target).then((state) => {
+        checkPublication(target);
+        const settle = (state) => {
           if (!acceptsInput() || doc.replaces?.id !== target) return;
           notePublication(target, state);
+          settlePublication(target);
           updatePill();
           refreshInfo?.();
-        }, () => {});
+        };
+        blogSync.getState(workspaceId, target).then(settle, () => settle(null));
       }
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
