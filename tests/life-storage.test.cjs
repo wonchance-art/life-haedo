@@ -1971,3 +1971,61 @@ test('a corrupted workspace stops status reads, upload, apply, composition send 
   await assert.rejects(storage.readLibraryBackupSnapshot(good.workspaceId), corrupt);
   assert.deepEqual(rows, rawBefore, 'no stored record was replaced or removed');
 });
+// 2026-11-04 (P2): posts, their index, sync bindings and lists do not read the workspace content, so they
+// keep working on a workspace whose content is corrupted. Every path that reads the content (open, evidence,
+// a replacement that carries evidence over) still stops with the content error and changes nothing, and a
+// corrupted post record still stops the post read.
+test('a corrupted workspace keeps post and list operations working while content paths still stop', async t => {
+  const { storage, rows } = statusFixture(); t.after(() => storage.close());
+  const M = require('../assets/life/photo-post.js'), R = require('../assets/life/source-reference.js');
+  const good = await initialImport(storage), ws = good.workspaceId;
+  await storage.setActive(ws);
+  const source = good.sources[0], version = good.sourceVersions.find(v => v.sourceId === source.id);
+  const ref = await R.build({ bundle: good, sourceId: source.id, versionId: version.id, locator: { start: 0, end: 3 } });
+  const cited = M.create(Core.id); cited.status = 'saved'; cited.title = '근거가 있는 글'; cited.ops = [{ insert: ref.quote + '\n' }];
+  const saved = await storage.savePhotoPostWithEvidence(ws, cited, 0, [ref], 0);
+  const plainDraft = M.create(Core.id); plainDraft.title = '근거 없는 초안'; plainDraft.ops = [{ insert: '본문\n' }];
+  const draft = await storage.savePhotoPost(ws, plainDraft, 0);
+  const remoteId = Core.id(), binding = await storage.writeBlogSyncState(ws, saved.id, { enabled: true, remoteId, remoteRevision: 1, localRevision: saved.revision }, 0);
+  const key = JSON.stringify(ws), stored = rows.get('bundles'), corrupted = structuredClone(stored.get(key));
+  corrupted.sourceVersions[0].contentHash = 'not-a-hash';
+  stored.set(key, corrupted);
+  const corrupt = error => { assert.equal(error.code, 'invalid_hash'); return true; };
+
+  // Content paths stop first, on the untouched records.
+  const before = structuredClone(rows);
+  await assert.rejects(storage.read(ws), corrupt);
+  await assert.rejects(storage.readPostEvidence(ws, saved.id), corrupt);
+  await assert.rejects(storage.savePostEvidence(ws, saved.id, { refs: [ref] }, 1), corrupt);
+  const another = M.create(Core.id); another.title = '새 근거 글'; another.ops = [{ insert: '본문\n' }];
+  await assert.rejects(storage.savePhotoPostWithEvidence(ws, another, 0, [ref], 0), corrupt);
+  // Saving an edit of the cited post carries its evidence over, which reads the source: it stops too.
+  const edit = { ...structuredClone(saved), id: Core.id(), revision: 0, status: 'saved', replaces: { id: saved.id, revision: saved.revision }, title: '고친 글' };
+  await assert.rejects(storage.savePhotoPost(ws, edit, 0), corrupt);
+  assert.deepEqual(rows, before, 'no stored record was replaced or removed');
+
+  // Post and list operations keep working.
+  assert.equal(await storage.getActive(), ws);
+  assert.deepEqual((await storage.listWorkspaces()).map(row => [row.workspaceId, row.title, row.revision]), [[ws, good.title, good.revision]]);
+  assert.deepEqual((await storage.listAccountLibraries()).map(row => row.workspaceId), [ws]);
+  assert.deepEqual((await storage.listPhotoPosts(ws)).map(row => row.id).sort(), [saved.id, draft.id].sort());
+  assert.deepEqual(await storage.readPhotoPost(ws, saved.id), saved);
+  assert.deepEqual(await storage.readPhotoPosts(ws, [draft.id, saved.id]), [draft, saved]);
+  assert.deepEqual(await storage.readBlogSyncState(ws, saved.id), binding);
+  assert.deepEqual((await storage.listBlogSyncStates(ws)).states, [{ localPostId: saved.id, state: binding }]);
+  const next = await storage.savePhotoPost(ws, { ...structuredClone(draft), title: '고친 초안' }, draft.revision);
+  assert.equal(next.revision, 2);
+  const received = M.create(Core.id); received.status = 'saved'; received.title = '받은 글'; received.ops = [{ insert: '받은 본문\n' }];
+  const committed = await storage.commitBlogSync(ws, { postId: received.id, post: received, baseRevision: 0, bindingRevision: 0,
+    binding: { enabled: true, remoteId: Core.id(), remoteRevision: 1, localRevision: 0 } });
+  assert.equal(committed.revision, 1);
+  assert.equal((await storage.writeBlogSyncState(ws, saved.id, { ...binding, remoteRevision: 2 }, binding.revision)).remoteRevision, 2);
+  assert.deepEqual(await storage.deletePhotoPost(ws, next.id, next.revision), { postId: next.id, remoteId: null });
+  assert.deepEqual(stored.get(key), corrupted, 'the workspace content itself was never rewritten');
+  await assert.rejects(storage.read(ws), corrupt);
+
+  // A corrupted post record is still refused by its own check.
+  const postKey = JSON.stringify(`photo-post:${ws}:${saved.id}`), meta = rows.get('meta'), row = structuredClone(meta.get(postKey));
+  row.value.title = 42; meta.set(postKey, row);
+  await assert.rejects(storage.readPhotoPost(ws, saved.id), { code: 'invalid_photo_post' });
+});

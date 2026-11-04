@@ -408,6 +408,26 @@
       core().validateWorkspace(bundle);
       return bundle;
     }
+    // Post and list operations (2026-11-04, P2). Posts, their index, sync
+    // bindings, receipts and deletion records live in `meta`, outside the
+    // workspace bundle, and are checked on their own (PhotoPost.validate,
+    // blogBindingShape, checkBlogReceipt). These operations need the workspace
+    // to exist and to belong to the account, not its content, so they do not
+    // validate the whole bundle. Every path that reads the bundle's content
+    // (open, sync, backup, evidence and source checks) still uses checkedBundle
+    // and stops on a damaged workspace.
+    async function ownedWorkspace(store, workspaceId, meta) {
+      if (account) await assertOwner(meta, workspaceId);
+      const bundle = await store.get(workspaceId);
+      if (!bundle) throw fault('workspace_not_found', '작업공간을 찾을 수 없습니다. 기존 백업과 작업공간 목록을 확인하세요.');
+    }
+    // A list row: identity, title and revision only (see ownedWorkspace).
+    function listedWorkspace(bundle) {
+      if (!plain(bundle) || typeof bundle.workspaceId !== 'string' || !bundle.workspaceId || typeof bundle.title !== 'string' ||
+          !Number.isSafeInteger(bundle.revision) || bundle.revision < 0)
+        throw fault('invalid_workspace', '작업공간 목록의 형식을 확인할 수 없습니다. 기존 자료를 보존했습니다.');
+      return bundle;
+    }
     function onlyFields(value, allowed, code = 'invalid_sync_metadata') {
       if (!plain(value) || Object.keys(value).some(key => !allowed.includes(key))) {
         throw fault(code, '동기화 정보의 형식을 확인할 수 없습니다. 기존 자료를 보존하고 연결 상태를 확인하세요.');
@@ -536,7 +556,7 @@
         const result = [];
         for (const bundle of bundles) {
           if (account && !sameAccount(await workspaceOwner(tx.objectStore('meta'), bundle.workspaceId), account)) continue;
-          core().validateWorkspace(bundle);
+          listedWorkspace(bundle);
           result.push({ workspaceId: bundle.workspaceId, title: bundle.title, revision: bundle.revision });
         }
         return result;
@@ -578,7 +598,7 @@
         const result = [];
         for (const bundle of bundles) {
           if (!sameAccount(await workspaceOwner(meta, bundle.workspaceId), account)) continue;
-          core().validateWorkspace(bundle);
+          listedWorkspace(bundle);
           const role = await meta.get(`libraryRole:${bundle.workspaceId}`);
           if (role && (!plain(role.value) || Object.keys(role.value).some(key => key !== 'kind') || role.value.kind !== 'recovery')) {
             throw fault('invalid_library_role', '자료 보관 역할을 확인할 수 없습니다. 기존 자료는 보존했습니다.');
@@ -1398,14 +1418,14 @@
     async function listPhotoPosts(workspaceId) {
       collectionScope(workspaceId);
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         return clone((await meta.get(`photo-posts:${workspaceId}`))?.value || []);
       });
     }
     async function readPhotoPost(workspaceId, postId) {
       collectionScope(workspaceId); requireId(postId, '사진 글');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
         if (!value) throw fault('photo_post_missing', '사진 글이 바뀌었거나 없습니다. 목록을 다시 확인해 주세요.');
         photoPost().validate(value); return clone(value);
@@ -1419,7 +1439,7 @@
       if (!Array.isArray(postIds) || postIds.length > 10000) throw fault('invalid_request', '읽을 글 목록을 확인해 주세요.');
       postIds.forEach(id => requireId(id, '사진 글'));
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const result = [];
         for (const postId of postIds) {
           const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
@@ -1449,8 +1469,13 @@
       return result;
     }
     async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
-        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        // The bundle's content is read (and the whole bundle validated) only by
+        // the source checks below; a plain post write checks the workspace only.
+        const meta = tx.objectStore('meta'); let checked = null;
+        const contentBundle = async () => checked ||= await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        if (naver || evidence) await contentBundle(); else await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         if (naver) {
+          const bundle = await contentBundle();
           naver.assertCurrent();
           const { sourceId, sourceVersionId, captureHash } = naver.request;
           if (!bundle.sourceVersions.some(version => version.id === sourceVersionId && version.sourceId === sourceId))
@@ -1467,6 +1492,7 @@
             throw fault('nine_board_conflict', '9칸 구성이 바뀌었습니다. 영역을 다시 검토한 뒤 초안을 만들어 주세요.');
         }
         if (evidence) {
+          const bundle = await contentBundle();
           checkEvidenceTargets(evidence.refs, bundle);
           const priorEvidence = (await meta.get(`post-evidence:${workspaceId}:${value.id}`))?.value || { revision: 0, refs: [] };
           if (priorEvidence.revision !== evidence.baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 글의 원문 근거가 바뀌었습니다. 입력은 유지합니다.');
@@ -1487,7 +1513,7 @@
           if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
           const inheritedEvidence = (await meta.get(`post-evidence:${workspaceId}:${target.id}`))?.value;
           if (!evidence && inheritedEvidence && !(await meta.get(`post-evidence:${workspaceId}:${value.id}`))) {
-            checkEvidenceTargets(checkedEvidence(inheritedEvidence.refs, workspaceId), bundle);
+            checkEvidenceTargets(checkedEvidence(inheritedEvidence.refs, workspaceId), await contentBundle());
             await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: 1, refs: clone(inheritedEvidence.refs) } });
           }
           const priorBlog = (await meta.get(`blog-sync:${workspaceId}:${target.id}`))?.value;
@@ -2513,7 +2539,7 @@
     async function listBlogCopies(workspaceId) {
       blogAccountScope(workspaceId);
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         return clone(await blogCopies(meta, workspaceId));
       });
     }
@@ -2540,7 +2566,7 @@
       if (stablePayload(normalized) !== stablePayload(state.remoteManifest)) throw fault('invalid_blog_state', '받은 글과 서버 원본이 다릅니다.');
       const effects = {};
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
         const copies = await blogCopies(meta, workspaceId, state.remoteId); assertCurrent();
         if (copies.length > 1) throw fault('blog_copy_selection_required', '받은 글이 여러 개입니다. 열 글을 선택해 주세요.');
         if (copies.length) {
@@ -2566,7 +2592,7 @@
     async function readBlogSyncState(workspaceId, postId) {
       collectionScope(workspaceId); requireId(postId, '글');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         return clone((await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value || null);
       });
     }
@@ -2581,7 +2607,7 @@
       if (!plain(input) || typeof serialized !== 'string' || new TextEncoder().encode(serialized).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
       const value = { ...JSON.parse(serialized), revision: baseRevision + 1 };
       return transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
         if (options.expectedLocalRevision !== undefined) {
           const post = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value; assertCurrent();
           if (!post || post.id !== postId || post.revision !== options.expectedLocalRevision) throw fault('local_changed', '확인하는 동안 글이 바뀌었습니다. 현재 글을 다시 확인해 주세요.');
@@ -2613,7 +2639,7 @@
     async function listBlogSyncStates(workspaceId) {
       blogAccountScope(workspaceId);
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const prefix = `blog-sync:${workspaceId}:`, deleted = `blog-delete:${workspaceId}:`, states = [], tombstones = [], issues = [];
         // Keys first: no other workspace's private documents are read.
         for (const key of await meta.getAllKeys()) {
@@ -2668,7 +2694,7 @@
       }
       const effects = {};
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
         const bindingKey = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(bindingKey))?.value;
         if ((prior?.revision || 0) !== bindingRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
         const remoteId = binding?.remoteId || prior?.remoteId;
@@ -2702,7 +2728,7 @@
     async function deletePhotoPost(workspaceId, postId, baseRevision) {
       collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const key = `photo-post:${workspaceId}:${postId}`, current = (await meta.get(key))?.value;
         if (!current) throw fault('photo_post_missing', '삭제할 글을 찾지 못했습니다. 목록을 다시 확인해 주세요.');
         photoPost().validate(current);
@@ -2921,7 +2947,7 @@
         const entry = await tx.objectStore('meta').get(activeKey);
         if (entry === undefined) return null;
         requireId(entry.value, '활성 작업공간');
-        await checkedBundle(tx.objectStore('bundles'), entry.value, tx.objectStore('meta'));
+        await ownedWorkspace(tx.objectStore('bundles'), entry.value, tx.objectStore('meta'));
         return entry.value;
       });
     }
