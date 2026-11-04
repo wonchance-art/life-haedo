@@ -3115,7 +3115,7 @@
         const versions = state.bundle.sourceVersions.filter(item => item.sourceId === view.position?.sourceId);
         const versionIndex = versions.findIndex(item => item.id === view.position?.sourceVersionId);
         copy.append(node('p', source ? sourceLabel(source) : '저장한 원문 버전', 'life-reading-resume-title'),
-          node('p', '이 브라우저' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
+          node('p', '읽던 위치 · 모든 기기' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
         row.append(copy);
         if (view.status === 'available') {
           const open = button('이어 읽기', () => {}, 'life-primary life-reading-resume-open');
