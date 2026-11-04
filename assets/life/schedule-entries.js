@@ -1,7 +1,9 @@
 /* 일정의 습관·행복도·목표 칸(B2, 2026-11-04). 일정 화면이 이 칸을 그릴 때만 불러온다.
- * 저장은 기존 목표·습관(haedo_items)과 연표 문서(haedo_documents)의 HaedoPlatformStore를 그대로
- * 쓴다(저장 형식 그대로, 11-03 결정). 충돌은 최신 쪽을 채택하고 진 쪽은 복구 사본으로 남는다.
- * 행복도는 0–10으로 보이고 연표에는 v = (n - 5) / 5로 저장한다. */
+ * 습관 체크·목표 진행률은 기존 목표·습관(haedo_items)의 HaedoPlatformStore로 저장한다(저장 형식
+ * 그대로, 11-03 결정). 충돌은 최신 쪽을 채택하고 진 쪽은 복구 사본으로 남는다.
+ * 행복도는 보기만 한다(2026-11-04 소유자 결정 "습관·목표 먼저"): 연표의 값을 0–10으로 보이고,
+ * 기록은 연표 편집기로 가는 링크로 한다. 일정에서 행복도를 쓰는 기능은 쓰는 곳을 하나로 다시
+ * 설계해 다음 묶음에서 한다. */
 (function (global) {
   'use strict';
   const life = global.HaedoLife = global.HaedoLife || {};
@@ -17,10 +19,10 @@
   }
   // Two-step save state (2026-11-02 owner decision).
   const STATE_TEXT = { ok: '저장됨 · 계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 · 다시 시도' };
-  function saveState(items, docState) {
+  function saveState(items) {
     const states = items.map(item => item.state);
-    if (states.includes('err') || states.includes('conflict') || docState === 'error') return 'error';
-    if (states.includes('sync') || docState === 'pending') return 'pending';
+    if (states.includes('err') || states.includes('conflict')) return 'error';
+    if (states.includes('sync')) return 'pending';
     return 'ok';
   }
   // The open account only after the shell's server check: the shell renders the private
@@ -36,8 +38,7 @@
     if (started !== uid) {
       started = uid;
       // Fresh copies from the account; the panel paints the device copy first and repaints on notice.
-      // This screen owns the timeline documents it shows: wake-ups refresh and resend them.
-      store().followDocuments();
+      // Timelines are only read here (syncDocuments brings them, as on main; nothing is sent).
       store().pull().catch(() => {});
       store().syncDocuments().catch(() => {});
     }
@@ -61,15 +62,6 @@
       do {
         mirrorAgain = false; storage = mirrorStorage;
         if (!same()) return;
-        // The timeline 행복도 goes to: one choice per account, the later one wins.
-        if (typeof storage.readPlatformBase === 'function') {
-          const chosen = await storage.readPlatformBase();
-          if (!same()) return;
-          if (chosen.docId) s.adoptBase(chosen);
-          const local = s.base?.record;
-          if (local && (local.docId !== chosen.docId || local.chosenAt !== chosen.chosenAt) && (!chosen.chosenAt || local.chosenAt > chosen.chosenAt))
-            await storage.savePlatformBase({ docId: local.docId, chosenAt: local.chosenAt });
-        }
         const account = await storage.readPlatformRecovery();
         if (!same()) return;
         if (account.items.length) s.restoreRecovery(account.items);
@@ -123,32 +115,17 @@
       }));
       return box;
     }
+    // 행복도 is shown, not entered here: the link opens the timeline it is read from.
     function happinessField(day) {
-      const field = el('fieldset', null, 'schedule-happiness'); const legend = el('legend', '행복도');
-      const current = s.happiness(day), name = 'schedule-happiness-' + day;
-      field.append(legend);
-      // Which timeline it is written to (the account's choice), named plainly.
-      const target = s.base;
-      if (target?.waiting) field.append(el('p', '기록할 연표: 다른 기기에서 받는 중 · 받으면 기록합니다', 'life-meta schedule-happiness-target'));
-      else if (target?.name) field.append(el('p', '기록할 연표: ' + target.name, 'life-meta schedule-happiness-target'));
-      const scale = el('div', null, 'schedule-happiness-scale');
-      for (let n = 0; n <= 10; n++) {
-        const label = el('label', null, 'schedule-happiness-option');
-        const radio = el('input'); radio.type = 'radio'; radio.name = name; radio.value = String(n);
-        radio.checked = current?.score === n; radio.disabled = day > today;
-        radio.dataset.focusKey = 'schedule:happiness:' + day + ':' + n;
-        radio.addEventListener('change', act(() => { if (radio.checked) s.setHappiness(day, n); }));
-        label.append(radio, el('span', n));
-        scale.append(label);
-      }
-      field.append(scale);
-      if (current) {
-        const clear = el('button', '지우기', 'life-text-button schedule-happiness-clear'); clear.type = 'button';
-        clear.dataset.focusKey = 'schedule:happiness:' + day + ':clear';
-        clear.addEventListener('click', act(() => s.setHappiness(day, null)));
-        field.append(clear);
-      }
-      if (day > today) field.append(el('p', '오지 않은 날은 기록할 수 없어요.', 'life-meta'));
+      const field = el('section', null, 'schedule-entry-section schedule-happiness'); field.setAttribute('aria-label', '행복도');
+      field.append(el('h3', '행복도', 'schedule-entry-title'));
+      const current = s.happiness(day), source = s.happinessSource;
+      field.append(el('p', current ? current.score + ' / 10' : '기록 없음', 'schedule-happiness-value'));
+      const edit = el('a', '연표에서 기록', 'life-text-button schedule-happiness-edit');
+      edit.href = 'timeline.html' + (source ? '?doc=' + encodeURIComponent(source.id) : '');
+      edit.setAttribute('aria-label', '행복도를 연표에서 기록' + (source ? ' (' + source.name + ')' : ''));
+      edit.dataset.focusKey = 'schedule:happiness:edit';
+      field.append(edit);
       return field;
     }
     function goalRows(goals) {
@@ -240,14 +217,14 @@
       const focusKey = host.contains(active) ? active?.dataset?.focusKey : null;
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
       painted = true;
-      const state = saveState(s.items, s.happinessState()), unseen = s.recoveryUnseen;
+      const state = saveState(s.items), unseen = s.recoveryUnseen;
       status.hidden = !dirty && state === 'ok' && !unseen;
       status.replaceChildren(el('span', STATE_TEXT[state]));
       status.dataset.state = state;
       if (state === 'error') {
         // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
         const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
-        retry.addEventListener('click', () => { if (!alive()) return; s.retryDocuments(); s.retry().catch(() => {}).finally(paint); });
+        retry.addEventListener('click', () => { if (!alive()) return; s.retry().catch(() => {}).finally(paint); });
         status.append(' ', retry);
       }
       // Shown until acknowledged; the copies stay (list: habits.html#recovery, and in backups).

@@ -97,42 +97,45 @@ async function main() {
       assert.deepEqual(scripts.sort(), ['/assets/life/schedule-entries.js', '/assets/platform-store.js', '/assets/sync.js']);
       const box = page.getByRole('checkbox', { name: '아침 산책', exact: true });
       await box.waitFor(); assert.equal(await box.isChecked(), true, 'the server check of 11-02 is shown');
-      assert.equal(await page.locator('.schedule-entries').getByRole('radio').count(), 11);
+      assert.equal(await page.locator('.schedule-entries').getByRole('radio').count(), 0, '행복도 is not entered here');
     });
 
-    await check('a habit check and 행복도 save on the device first, then reach the account (two-step state)', async ({ page, tables }) => {
+    await check('a habit check saves on the device first, then reaches the account (two-step state)', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
       await page.waitForFunction(() => HaedoPlatformStore.items.length === 1);
-      assert.equal(tables.owned('haedo_documents', accounts.a.id).length, 0);
       assert.equal(await page.evaluate(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_registry') || '{"docs":[]}').docs.length, accounts.a.id), 0, 'viewing creates no timeline');
       await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
       await statusOf(page).filter({ hasText: '계정에 올리기 대기' }).waitFor();
-      await page.locator('.schedule-happiness-option', { hasText: /^8$/ }).click();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
-      const docs = tables.owned('haedo_documents', accounts.a.id);
-      assert.equal(docs.length, 1); assert.equal(docs[0].name, '내 연표');
-      assert.deepEqual(docs[0].data.happiness, [{ date: '2026-11-03', v: 0.6 }]);
-      // Which timeline it went to is named (re-review minor 2).
-      assert.match(await entryText(page), /기록할 연표: 내 연표/);
-      // Reopening shows the saved values.
+      // Reopening shows the saved check.
       await page.reload(); await ready(page); await shown(page, 'day'); await entries(page);
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isChecked(), true);
-      assert.equal(await page.locator('.schedule-happiness-option:has(input:checked)').innerText(), '8');
-      // 지우기 removes only that day's entry.
-      await page.getByRole('button', { name: '지우기' }).click();
-      await page.waitForFunction(() => !document.querySelector('.schedule-happiness-option input:checked'));
-      await page.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok');
-      assert.deepEqual(tables.owned('haedo_documents', accounts.a.id)[0].data.happiness, []);
+      assert.equal(tables.owned('haedo_documents', accounts.a.id).length, 0, 'no timeline was made');
     });
 
-    await check('a future day cannot be checked or rated; a repeated click toggles from the stored state', async ({ page, tables }) => {
+    // 2026-11-04 owner decision ("습관·목표 먼저"): 행복도 is shown in 일정 and entered in the timeline editor.
+    await check('the 일정 shows 행복도 read only and never writes a timeline; its link opens the timeline editor', async ({ page, tables }) => {
+      const doc = { profile: { name: '내 연표', birth: '1990-01' }, scale: 'signed1', events: [], spans: [], eras: [], happiness: [{ date: '2026-11-03', v: 0.6 }], thoughts: [], records: [], trips: [], layers: [] };
+      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: doc });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.locator('.schedule-happiness-value', { hasText: '8 / 10' }).waitFor();
+      assert.equal(await page.locator('.schedule-entries input[type=radio]').count(), 0, 'no 행복도 control');
+      const edit = page.getByRole('link', { name: '행복도를 연표에서 기록 (내 연표)' });
+      assert.equal(await edit.getAttribute('href'), 'timeline.html?doc=d_timeline');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day'); await entries(page);
+      assert.equal(await page.locator('.schedule-happiness-value').innerText(), '기록 없음');
+      await page.getByRole('link', { name: '행복도를 연표에서 기록 (내 연표)' }).click();
+      await page.waitForURL(url => url.pathname.endsWith('/timeline.html') && url.searchParams.get('doc') === 'd_timeline');
+      await page.waitForFunction(() => typeof DATA === 'object' && DATA?.happiness?.some(h => h.date === '2026-11-03'));
+      assert.equal(tables.calls.filter(call => call.table === 'haedo_documents' && call.method !== 'GET').length, 0, 'the 일정 sent no timeline');
+    });
+
+    await check('a future day cannot be checked; a repeated click toggles from the stored state', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-05'); await ready(page); await shown(page, 'day'); await entries(page);
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isDisabled(), true);
-      assert.equal(await page.locator('.schedule-entries input[type=radio]:not(:disabled)').count(), 0);
-      assert.match(await entryText(page), /오지 않은 날은 기록할 수 없어요/);
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
       const box = page.getByRole('checkbox', { name: '아침 산책', exact: true });
       await box.click(); await box.click(); await box.click();
@@ -156,7 +159,7 @@ async function main() {
       await page.locator('.schedule-happiness-day[data-focus-key$="2026-11-02"]').click(); await shown(page, 'day');
       assert.equal(new URL(page.url()).searchParams.get('date'), '2026-11-02');
       await entries(page);
-      assert.equal(await page.locator('.schedule-happiness-option:has(input:checked)').innerText(), '7');
+      assert.equal(await page.locator('.schedule-happiness-value').innerText(), '7 / 10');
     });
 
     await check('the year shows unfinished goals and saves a progress change', async ({ page, tables }) => {
@@ -267,23 +270,6 @@ async function main() {
       assert.equal(await page.evaluate(() => HaedoPlatformStore.recovery.length), 1, 'the copy stays on this device');
     });
 
-    await check('another device\'s newer timeline edit stays in the main document when 행복도 meets a conflict (rebased, no copy)', async ({ page, tables }) => {
-      const doc = { profile: { name: '내 연표', birth: '1990-01' }, scale: 'signed1', events: [], spans: [], eras: [], happiness: [], thoughts: [], records: [], trips: [], layers: [] };
-      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: doc });
-      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
-      await page.waitForFunction(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_registry') || '{"docs":[]}').docs.some(d => d.id === 'd_timeline' && d.syncedAt), accounts.a.id);
-      // Another device adds an event after this page read the document.
-      tables.seed('haedo_documents', accounts.a.id, { id: 'd_timeline', name: '내 연표', data: { ...doc, events: [{ date: '2026-11-02', title: '다른 기기 사건' }] } });
-      await page.locator('.schedule-happiness-option', { hasText: /^8$/ }).click();
-      await page.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 10000 });
-      const rows = tables.owned('haedo_documents', accounts.a.id);
-      assert.equal(rows.length, 1, 'no recovery row');
-      assert.deepEqual(rows[0].data.events.map(e => e.title), ['다른 기기 사건'], 'the other device\'s event stays');
-      assert.deepEqual(rows[0].data.happiness, [{ date: '2026-11-03', v: 0.6 }]);
-      const names = await page.evaluate(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_registry')).docs.map(d => d.name), accounts.a.id);
-      assert.deepEqual(names, ['내 연표'], 'no recovery copy on the device');
-    });
-
     await check('a late store response after signing out shows nothing of account A to account B', async ({ page, server, device, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: 'A만의 습관', data: { ...habitData([]), title: 'A만의 습관' } });
       let release; tables.hold = new Promise(done => { release = done; });
@@ -330,7 +316,7 @@ async function main() {
             return { scrolls: scroll.scrollWidth > scroll.clientWidth + 1, sunday: sunday.textContent, inside: day.right <= box.right + 1 && day.right <= innerWidth }; });
           assert.deepEqual(fit, { scrolls: false, sunday: '일', inside: true }, 'week ' + width + ': Monday to Sunday visible');
         }
-        const small = await page.locator('.schedule-entries input, .schedule-entries button, .schedule-happiness-option').evaluateAll(nodes => nodes.filter(n => n.checkVisibility()).map(n => {
+        const small = await page.locator('.schedule-entries input, .schedule-entries button, .schedule-entries a').evaluateAll(nodes => nodes.filter(n => n.checkVisibility()).map(n => {
           const box = (n.matches('input[type=checkbox],input[type=radio]') ? n.closest('label,td') || n : n).getBoundingClientRect(); return { w: box.width, h: box.height, name: n.getAttribute('aria-label') || n.textContent };
         }).filter(r => r.h < 44 || r.w < 24));
         assert.deepEqual(small, [], view + ' ' + width + ': controls are at least 44px tall');

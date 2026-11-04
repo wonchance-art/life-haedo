@@ -1,15 +1,14 @@
 'use strict';
-// B2: the pure helpers the schedule uses for 행복도, habits and goals (assets/platform-data.js).
+// B2: the pure helpers the schedule uses for 행복도 (read only), habits and goals (assets/platform-data.js).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const model = require('../assets/platform-data.js');
 
-test('행복도 0–10 maps to the timeline scale by the timeline\'s own rule v = (n - 5) / 5', () => {
-  assert.deepEqual([0, 1, 5, 7, 10].map(model.happinessValue), [-1, -0.8, 0, 0.4, 1]);
-  for (let n = 0; n <= 10; n++) assert.equal(model.happinessScore(model.happinessValue(n)), n, 'round trip ' + n);
+test('행복도 is shown 0–10 from the timeline scale by the timeline\'s own rule n = round(5 + 5v)', () => {
+  assert.deepEqual([-1, -0.8, 0, 0.4, 1].map(model.happinessScore), [0, 1, 5, 7, 10]);
   assert.equal(model.happinessScore(0.35), 7); assert.equal(model.happinessScore(-0.05), 5);
-  for (const bad of [-1, 11, 2.5, '5', null]) assert.throws(() => model.happinessValue(bad), /0부터 10/);
   for (const bad of [1.2, -3, NaN, '0.2', null]) assert.equal(model.happinessScore(bad), null);
+  assert.equal(typeof model.withHappiness, 'undefined', 'the schedule has no 행복도 write helper (2026-11-04 owner decision)');
 });
 
 test('a day\'s entry is read only from that date; month points of the timeline are not a day\'s input', () => {
@@ -19,42 +18,26 @@ test('a day\'s entry is read only from that date; month points of the timeline a
   assert.equal(model.happinessOn(doc, '2026-11'), null);
 });
 
-test('setting a day keeps every other entry, keeps a value that already shows as the same score, and clears', () => {
-  const doc = { profile: { name: '익명' }, scale: 'signed1', events: [{ date: '2020-01', title: '익명 사건', happiness: 0.1 }],
-    happiness: [{ date: '2026-11', v: 0.2 }, { date: '2026-11-04', v: 0.35, note: '보존' }] };
-  const same = model.withHappiness(doc, '2026-11-04', 7);
-  assert.deepEqual(same.happiness, doc.happiness, '0.35 shows as 7 and is not rewritten');
-  const changed = model.withHappiness(doc, '2026-11-04', 9);
-  assert.deepEqual(changed.happiness[1], { date: '2026-11-04', v: 0.8, note: '보존' });
-  assert.deepEqual(changed.happiness[0], { date: '2026-11', v: 0.2 }); assert.deepEqual(changed.events, doc.events);
-  assert.equal(doc.happiness[1].v, 0.35, 'the input document is not modified');
-  const added = model.withHappiness(doc, '2026-11-05', 0);
-  assert.deepEqual(added.happiness.at(-1), { date: '2026-11-05', v: -1 });
-  assert.deepEqual(model.withHappiness(doc, '2026-11-04', null).happiness, [{ date: '2026-11', v: 0.2 }]);
-  assert.throws(() => model.withHappiness(doc, '2026-11', 5), /날짜/);
-  assert.throws(() => model.withHappiness({ nope: true }, '2026-11-04', 5), /연표/);
-});
-
-test('an older document (no scale, 0–10) is read and written through the timeline\'s own scale migration (M2)', () => {
+test('an older document (no scale 0–10, or signed10) is read through the timeline\'s own scale conversion (M2)', () => {
   const HaedoData = require('../assets/data.js');
-  const old = { profile: { name: '옛 연표' }, events: [{ date: '2020-01', title: '사건', happiness: 7 }], spans: [{ start: '2020', happiness: 3 }],
-    happiness: [{ date: '2026-11-03', v: 7 }, { date: '2026-10', v: 10 }] };
+  const old = { profile: { name: '옛 연표' }, events: [{ date: '2020-01', title: '사건', happiness: 7 }], happiness: [{ date: '2026-11-03', v: 7 }] };
   assert.deepEqual(model.happinessOn(old, '2026-11-03'), { v: 0.4, score: 7 });
-  const next = model.withHappiness(old, '2026-11-04', 8);
-  assert.equal(next.scale, 'signed1');
-  assert.deepEqual(next.happiness, [{ date: '2026-11-03', v: 0.4 }, { date: '2026-10', v: 1 }, { date: '2026-11-04', v: 0.6 }], 'no mixed scales');
-  assert.equal(next.events[0].happiness, 0.4); assert.equal(next.spans[0].happiness, -0.4);
-  // The same function the timeline editor runs (app.js migrateScale → HaedoData.toSignedScale).
-  assert.deepEqual(next.events, HaedoData.toSignedScale(structuredClone(old)).events);
   assert.deepEqual(model.happinessOn({ profile: {}, scale: 'signed10', happiness: [{ date: '2026-11-03', v: -6 }] }, '2026-11-03'), { v: -0.6, score: 2 });
-  assert.equal(old.happiness[0].v, 7, 'the input is not modified');
+  // The same conversion the timeline editor runs when it opens the document (app.js migrateScale).
+  const migrated = HaedoData.toSignedScale(structuredClone(old));
+  assert.equal(migrated.scale, 'signed1'); assert.deepEqual(migrated.happiness, [{ date: '2026-11-03', v: 0.4 }]); assert.equal(migrated.events[0].happiness, 0.4);
+  assert.equal(old.happiness[0].v, 7, 'reading does not modify the document');
 });
 
-test('the base timeline is the same on every device: not a recovery copy, smallest ID (M3)', () => {
+test('the timeline 행복도 is read from is the same on every device: most daily 행복도, then smallest ID, never a recovery copy (M3)', () => {
   assert.equal(model.baseDocument({ current: 'd_z', docs: [{ id: 'd_z', name: '나중 문서' }, { id: 'd_b', name: '내 연표' },
     { id: 'd_a', name: '내 연표 복구 사본 (2026-11-04 10:00)' }] }).id, 'd_b');
   assert.equal(model.baseDocument({ docs: [{ id: 'd_a', name: '내 연표 복구 사본' }] }), null);
   assert.equal(model.baseDocument({ docs: [] }), null);
+  const bodies = { d_a: { happiness: [] }, d_b: { happiness: [{ date: '2026-11-03', v: 0 }, { date: '2026-11', v: 0 }] }, d_c: { happiness: [{ date: '2026-11-01', v: 0 }, { date: '2026-11-02', v: 0 }] } };
+  const reg = { docs: [{ id: 'd_a', name: 'a' }, { id: 'd_b', name: 'b' }, { id: 'd_c', name: 'c' }, { id: 'd_gone', name: '본문 없음' }] };
+  assert.equal(model.baseDocument(reg, { read: id => bodies[id] || null }).id, 'd_c', 'two daily entries beat one (a month point is not daily)');
+  assert.equal(model.baseDocument({ docs: [{ id: 'd_gone', name: 'x' }, { id: 'd_z', name: 'y' }] }, { read: id => id === 'd_z' ? {} : null }).id, 'd_z', 'no body: skipped');
 });
 
 test('due habits follow their weekdays and start date; deleted habits and goals are left out', () => {

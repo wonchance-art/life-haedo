@@ -12,11 +12,6 @@
     // rids of the recovery copies the owner has acknowledged (hides the notice). By id, not by
     // time: a copy from another device can arrive after an acknowledgement and still be new.
     recoverySeen: prefix(uid) + "items_recovery_seen",
-    // 행복도 days pressed here and not on the server yet, with the server body they apply to
-    // ({docId: {base, days: {date: {n, at}}}}): a reopened page still rebases and sends them.
-    happinessPending: prefix(uid) + "happiness_pending",
-    // The timeline the schedule writes 행복도 to ({docId, chosenAt}); mirrored to the account.
-    base: prefix(uid) + "happiness_base",
   });
   function read(storage, key, fallback) {
     const value = storage.getItem(key);
@@ -222,10 +217,6 @@
     if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > 1) return null;
     return Math.min(10, Math.max(0, Math.round(5 + 5 * v)));
   }
-  function happinessValue(n) {
-    if (!Number.isInteger(n) || n < 0 || n > 10) throw new Error("행복도는 0부터 10 사이로 골라 주세요.");
-    return Math.round(((n - 5) / 5) * 100) / 100;
-  }
   const isDay = (date) => typeof date === "string" && date.length === 10 && root.HaedoData.validDate(date);
   // The day's own entry (date YYYY-MM-DD); month-level points of the timeline are not a day's input.
   // Values are read on the document's own scale (an older document without `scale` is 0–10),
@@ -237,36 +228,15 @@
     const v = root.HaedoData.scaleValue(entry.v, doc.scale), score = happinessScore(v);
     return score === null ? null : { v, score };
   }
-  // A copy of doc with that day's entry set (n) or removed (null). Other entries are untouched; an
-  // existing value that already shows as n (e.g. 0.35 shown as 7) is kept as it is.
-  function withHappiness(doc, date, n) {
-    if (!isDay(date)) throw new Error("행복도를 기록할 날짜를 확인해 주세요.");
-    if (!root.HaedoData.isDocument(doc)) throw new Error("연표 문서를 읽지 못했습니다. 원본은 보존했습니다.");
-    // Migrate the whole document to signed1 first, as the editor does, so scales never mix.
-    const next = root.HaedoData.toSignedScale(structuredClone(doc));
-    next.happiness = Array.isArray(next.happiness) ? next.happiness : [];
-    const at = next.happiness.findIndex((h) => h && h.date === date);
-    if (n === null) { if (at >= 0) next.happiness.splice(at, 1); return next; }
-    const v = happinessValue(n);
-    if (at >= 0) {
-      if (happinessScore(next.happiness[at].v) !== n) next.happiness[at] = { ...next.happiness[at], v };
-    } else next.happiness.push({ date, v });
-    return next;
-  }
-  // The timeline the schedule reads and writes: the same one on every device. Recovery copies
-  // are skipped; among the rest the smallest document ID is chosen (IDs are the same everywhere,
-  // unlike the device-local registry.current).
-  // The timeline 행복도 goes to: the one the account recorded (record) when it is still there;
-  // otherwise the timeline that already has the most daily 행복도, then the smallest id. Recovery
-  // copies, documents without a body (read → null) and documents gone from the server (gone)
-  // are never chosen. Every device decides the same way from the same data.
+  // The timeline the 일정 screen reads 행복도 from (it does not write it): the same one on every
+  // device. Recovery copies and documents without a body (read → null) are skipped; among the
+  // rest, the timeline with the most daily 행복도 (with read), then the smallest document ID
+  // (IDs are the same everywhere, unlike the device-local registry.current).
   const dailyCount = (doc) => (Array.isArray(doc?.happiness) ? doc.happiness.filter((point) => isDay(point?.date)).length : 0);
-  function baseDocument(reg, { record = null, read = null, gone = null } = {}) {
+  function baseDocument(reg, { read = null } = {}) {
     const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-    let docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name) && !(gone && gone(doc)));
+    let docs = (reg?.docs || []).filter((doc) => doc && typeof doc.id === "string" && !root.HaedoData.isRecoveryName(doc.name));
     if (read) docs = docs.filter((doc) => read(doc.id) !== null);
-    const recorded = record && docs.find((doc) => doc.id === record);
-    if (recorded) return recorded;
     if (read) {
       const scored = docs.map((doc) => ({ doc, n: dailyCount(read(doc.id)) })).filter((row) => row.n > 0)
         .sort((a, b) => b.n - a.n || byId(a.doc, b.doc));
@@ -307,9 +277,7 @@
     toggleHabit,
     validItem,
     happinessScore,
-    happinessValue,
     happinessOn,
-    withHappiness,
     baseDocument,
     dueHabits,
     activeGoals,

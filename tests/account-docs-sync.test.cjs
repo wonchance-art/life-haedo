@@ -542,7 +542,7 @@ test('the account document schema number is pinned to its document kinds', t => 
       workspace: ['public-cover', 'page-drafts', 'post-evidence'] },
     2: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] },
-    3: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading', 'platformRecovery', 'platformBase'],
+    3: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading', 'platformRecovery'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] }
   };
   const local = device(); t.after(() => local.base.close());

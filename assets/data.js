@@ -88,7 +88,7 @@
   }
   // 행복 척도: 문서마다 scale이 있다. 최종 형식은 signed1(−1~+1, 중앙 0)이다.
   // 이전 형식: signed10(−10~+10) → v/10, scale 없음·그 밖(옛 0~10) → (v−5)/5. 둘째 자리 반올림.
-  // 연표 편집기(app.js migrateScale)와 일정 행복도 입력이 이 한 함수를 함께 쓴다(B2 검수 M2).
+  // 연표 편집기(app.js migrateScale)와 일정의 행복도 표시가 이 한 함수를 함께 쓴다(B2 검수 M2).
   const round2 = v => Math.round(v * 100) / 100;
   function scaleValue(v, scale) {
     if (scale === 'signed1') return v;
@@ -104,24 +104,11 @@
     d.scale = 'signed1';
     return d;
   }
-  // Name of a kept losing copy: "<base> 복구 사본 (YYYY-MM-DD HH:MM)". A copy of a copy keeps the
-  // original base name instead of stacking suffixes.
-  const RECOVERY_NAME = / 복구 사본(?: \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\))?$/;
-  function recoveryName(name, at = new Date()) {
-    const base = String(name || '내 연표').replace(RECOVERY_NAME, '') || '내 연표';
-    const pad = n => String(n).padStart(2, '0');
-    return base + ' 복구 사본 (' + localDate(at) + ' ' + pad(at.getHours()) + ':' + pad(at.getMinutes()) + ')';
-  }
-  const isRecoveryName = name => RECOVERY_NAME.test(String(name || ''));
-  // What a document says, without its name (a recovery copy differs from its source only by name).
-  function contentKey(d) {
-    if (!object(d)) return JSON.stringify(d);
-    const profile = object(d.profile) ? { ...d.profile } : d.profile;
-    if (object(profile)) delete profile.name;
-    return JSON.stringify(canonical({ ...d, profile }));
-  }
+  // A losing copy kept by the timeline tools is named "<이름> 복구 사본" (optionally with a time);
+  // such copies are never the timeline the schedule reads 행복도 from.
+  const isRecoveryName = name => / 복구 사본(?: \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\))?$/.test(String(name || ''));
   const api = { curveIntervals, object, validDate, daysInMonth, withDay, localDate, isDocument, structure, canonical, prepareImport,
-    scaleValue, toSignedScale, recoveryName, isRecoveryName, contentKey };
+    scaleValue, toSignedScale, isRecoveryName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HaedoData = api;
 })(globalThis);

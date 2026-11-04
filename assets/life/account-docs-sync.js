@@ -20,7 +20,7 @@
   // Local saves of these types may change a synced document.
   const TRIGGERS = new Set(['account_doc_changed', 'reading_position_changed', 'interest_profile_changed', 'annual_plan_changed',
     'discovery_profile_changed', 'discovery_settings_changed', 'discovery_language_settings_changed', 'discovery_actions_changed',
-    'discovery_reading_changed', 'public_cover_changed', 'photo_posts_changed', 'workbench_changed', 'platform_recovery_changed', 'platform_base_changed']);
+    'discovery_reading_changed', 'public_cover_changed', 'photo_posts_changed', 'workbench_changed', 'platform_recovery_changed']);
   const STOP = new Set(['auth_required', 'request_cancelled', 'schema_missing', 'permission_denied', 'storage_scope_closed', 'storage_closed']);
   const fault = (code, message) => Object.assign(new Error(message || '자동 저장을 진행하지 못했습니다.'), { code });
   const time = value => { const parsed = Date.parse(value || EPOCH); return Number.isFinite(parsed) ? parsed : 0; };

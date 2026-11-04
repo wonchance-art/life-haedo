@@ -44,31 +44,7 @@
     if (!Array.isArray(saved) || saved.length !== 1) return { conflict: true };
     return { stamp: saved[0].updated_at || row.updated_at };
   }
-  // One upload of a document at a time across this browser's tabs and pages (Web Locks). A second
-  // writer waits for the first and then reads what it stored (its own dirty check sees a clean
-  // document and sends nothing). Without the API it just runs: the dirty check and the
-  // conditional write still keep both copies (at worst one extra request).
-  function exclusive(name, run) {
-    const locks = root.navigator?.locks;
-    return typeof locks?.request === 'function' ? locks.request(name, () => run()) : run();
-  }
-  // A request that cannot hold a document's lock forever: aborted after ms. The caller treats
-  // the timeout as "not sent yet" (code 'timeout') and sends again later.
-  function timed(request, ms) {
-    return (url, options) => {
-      ms = ms ?? api.timeoutMs;
-      const value = typeof options === 'function' ? options() : (options || {});
-      const controller = new AbortController(), late = () => Object.assign(new Error('응답이 늦어 잠시 뒤 다시 보냅니다.'), { code: 'timeout' });
-      let timer;
-      // Rejects at the limit even if the request ignores the abort (the request is aborted too).
-      const limit = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(late()); }, ms); });
-      const sent = Promise.resolve().then(() => request(url, { ...value, signal: controller.signal }))
-        .catch(error => { if (controller.signal.aborted) throw late(); throw error; });
-      return Promise.race([sent, limit]).finally(() => clearTimeout(timer));
-    };
-  }
-  // 30 s by default; checks shorten it.
-  const api = { createQueue, writeSnapshot, exclusive, timed, timeoutMs: 30000 };
+  const api = { createQueue, writeSnapshot };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HaedoSync = api;
 })(globalThis);

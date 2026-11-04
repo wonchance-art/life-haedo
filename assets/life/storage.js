@@ -854,42 +854,6 @@
       if (added) accountDocChanged(platformRecoveryKey());
       return added;
     }
-    // The timeline the schedule writes 행복도 to (B2 re-review): one choice per account, so every
-    // device writes to the same timeline. The later choice wins (whole-document latest-wins).
-    const platformBaseKey = () => `platformBase:${accountKey}:timeline`;
-    function validatePlatformBase(value) {
-      const bad = () => fault('invalid_platform_base', '행복도를 기록할 연표 정보를 확인할 수 없습니다.');
-      onlyFields(value, ['revision', 'docId', 'chosenAt'], 'invalid_platform_base'); requireRevision(value.revision);
-      if (value.docId === null && value.chosenAt === null) return;
-      if (typeof value.docId !== 'string' || !value.docId || value.docId.length > 300 || typeof value.chosenAt !== 'string' || !value.chosenAt || value.chosenAt.length > 40) throw bad();
-    }
-    async function platformBaseValue(meta) {
-      const row = await meta.get(platformBaseKey());
-      const value = row === undefined ? { revision: 0, docId: null, chosenAt: null } : row.value;
-      validatePlatformBase(value);
-      return value;
-    }
-    async function readPlatformBase() {
-      platformRecoveryScope();
-      return transaction(['meta'], 'readonly', async tx => clone(await platformBaseValue(tx.objectStore('meta'))));
-    }
-    // Records a choice unless the stored one is the same or later. Returns the stored value.
-    async function savePlatformBase(choice) {
-      platformRecoveryScope();
-      onlyFields(choice, ['docId', 'chosenAt'], 'invalid_platform_base');
-      let changed = false;
-      const saved = await transaction(['meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'), previous = await platformBaseValue(meta);
-        if (previous.chosenAt !== null && (previous.docId === choice.docId || previous.chosenAt >= choice.chosenAt)) return previous;
-        const value = { revision: previous.revision + 1, docId: choice.docId, chosenAt: choice.chosenAt };
-        validatePlatformBase(value);
-        await meta.put({ key: platformBaseKey(), value });
-        changed = true;
-        return value;
-      });
-      if (changed) accountDocChanged(platformBaseKey());
-      return clone(saved);
-    }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
     }
@@ -4962,9 +4926,7 @@
       discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true },
       discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true },
       // Items are only added (union by rid), so merging both sides never loses one.
-      platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false },
-      // One small choice; the later one wins and the earlier needs no copy (the timelines stay).
-      platformBase: { read: meta => platformBaseValue(meta), event: 'platform_base_changed', recovery: false }
+      platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false }
     });
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
@@ -5115,7 +5077,7 @@
     // release skipped rows of kinds it did not know and still moved its cursor
     // past them, so those rows would never come again (a restored-copy marker
     // is written once). Raise this number whenever a prefix is added above.
-    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery and platformBase.
+    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery.
     const ACCOUNT_DOC_SCHEMA = 3;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
@@ -5283,7 +5245,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery, readPlatformBase, savePlatformBase,
+      readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
