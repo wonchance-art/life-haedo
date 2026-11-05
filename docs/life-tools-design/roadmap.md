@@ -34,16 +34,22 @@ Codex 토큰 마무리 지시(#212 6659238530)에 따라 작업자는 현재 단
   - #224: `account-library`가 `storage_*` 코드를 `network_error` 문구로 보인다(새로고침 안내 필요). WebKit(iOS Safari·PWA)의 versionchange·blocked는 미검증.
   - #228: 글 200개에서 제자리 전환은 복구 사본 때문에 `photo_post_limit`로 되돌아간다(UI 연결 때 안내). 전환 영수증은 기기 안에만 있다. codec 압축의 운영 완료는 B3 Edge 재배포 뒤다.
   - B2 편집기 연결 인계: `codex/post-markdown-b2-ui-handoff` `4ccb711`, `docs/design-review/post-markdown-b2-handoff.md`.
-- **운영 대기 (소유자 "운영 적용" 뒤 총괄)**
-  - 마이그레이션: B1 이력 1행, D RSS `20261105051010_rss_private_intake`, B3 `20261105081055_life_post_markdown_publish`
-  - Edge: `haedo-blog-publish`(B3·#228 codec), `haedo-rss`(D 마이그레이션과 함께, verify_jwt=false), `haedo-discovery-private` 재배포
-  - 적용 방식: SQL Editor는 임시 표 보호가 걸리지 않으므로 `apply_migration`이나 한 세션 실행. 승인 질문이 표시되지 않던 문제는 미해결.
+- **운영 적용 완료 (소유자 "운영 적용", 14:43–14:51 UTC, 총괄)**
+  - 적용 전 기록: B3·RSS 객체 0, 블로그 행 수 posts 6 · assets 0 · receipts 12 · publications 0 · profiles 0, md 글 0, cron 1. B1 이력 1행은 이미 있음.
+  - 마이그레이션 `apply_migration` 2건(이번에는 승인 질문 없이 실행됨): B3 `life_post_markdown_publish`(운영 이력 `20261105144316`), RSS `rss_private_intake`(`20261105144502`). 저장소 파일 번호와 운영 이력 번호는 다르다.
+    - B3 함수 7개, RSS 함수 15개의 본문 md5가 저장소 파일에서 뽑은 본문과 모두 같다. ACL: prepare·list·save·control은 authenticated, commit·claim·finish·due·known은 service_role만.
+    - B3 안의 행 수·해시 보호 통과, 적용 뒤 행 수 동일. RSS: 표 5개 RLS 켜짐, 표 권한 0, `runtime.ready=false`·허용 피드 0·연결 0(수집 비활성), cron 1(추가 없음).
+  - Edge 3건은 Supabase CLI 2.122.1 `functions deploy --use-api`로 배포했다(MCP 배포는 저장소 공통 파일 약 229KB를 손으로 옮겨야 해서 쓰지 않음). 배포본 파일을 모두 저장소와 대조했다.
+    - `haedo-blog-publish` v1, `verify_jwt=false`, 파일 11개 일치(codec·vendor 포함). 인증 없음 401, 위조 JWT·빈 본문 400, OPTIONS 204.
+    - `haedo-rss` v1, `verify_jwt=false`, 파일 5개 일치. 인증 없는 `list`·`run` 401. 허용 호스트 0이라 피드 요청 없음.
+    - `haedo-discovery-private` v1 → v2, `verify_jwt=true` 유지(#214 결정), 새 키 계약(`_shared/supabase-keys.mjs`) 포함 파일 8개 일치. 인증 헤더 없음 401.
+  - 미검증: 실제 계정으로 Markdown 공개 왕복(운영에 md 글 0), RSS 실제 피드(#225·#227 보류), discovery-private 실제 인증 왕복.
 - **미검증:** 실제 Apple 기기·한글 입력기, 운영 Edge·Cron, 실제 RSS 피드
 
 ### 다음 큰 작업 묶음 (우선순위 순)
 
 1. **Markdown 글쓰기 완주 (B3 운영 → B2 편집기 연결):** 운영 마이그레이션·Edge 반영 → B2 인계대로 편집기 연결 → 처음 고칠 때 변환·복구 사본 → 저장·두 기기 동기화 → 선택 공개 → 백업 복원.
-   - 선행: 소유자 "운영 적용", #229 MAJOR 2건 수정과 재검수(같은 저장 경로)
+   - 선행: #229 MAJOR 2건 수정과 재검수(같은 저장 경로). B3 운영은 적용됨
    - 완료 기준: 위 후속 중 #226·#228 안내 항목 해결, 공개 사본과 v2 렌더 일치, 독립 검수 통과
 2. **RSS 수신 완주:** #227 BLOCKER·MAJOR 수정(공용 알림 없는 검증, 겹침 재조회, ACK 비용) → #225 검사 보강 → 운영 적용 → 실제 피드 1개로 비공개 보관·읽기·검색 확인
    - 선행: 소유자의 피드 주소
