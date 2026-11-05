@@ -35,6 +35,17 @@
     return el;
   }
   const glyph = name => life().Icons.create(name);
+  // Load the private connection controls only after the owner opens this row.
+  let rssLoading = null;
+  function loadRss() {
+    if (life().RssConnection && life().RssConnectionUI) return Promise.resolve();
+    if (!rssLoading) rssLoading = ['rss-connection.js', 'rss-connection-ui.js'].reduce((chain, name) => chain.then(() => new Promise((resolve, reject) => {
+      const script = root.document.createElement('script'); script.src = new URL('assets/life/' + name, root.document.baseURI).href;
+      script.onload = resolve; script.onerror = () => { script.remove(); reject(new Error('rss_module_unavailable')); };
+      root.document.head.append(script);
+    })), Promise.resolve()).catch(error => { rssLoading = null; throw error; });
+    return rssLoading;
+  }
 
   // 저장값 읽기: app.js와 같은 규칙(없음·빈 값·숫자 아님 = 36, 다른 값은 가까운 칸, 동점은 큰 쪽). 읽기만 하고 고쳐 쓰지 않는다.
   function readCurve(storage) {
@@ -137,7 +148,22 @@
         listen(panel, 'toggle', () => { if (!element.isConnected) return dispose(); control.setAttribute('aria-expanded', String(!!panel.open)); });
         out.push(control);
       }
-      return out.concat(rows.account || []);
+      const rssHost = node('div'), rssError = node('p', '', 'life-error'); rssError.setAttribute('role', 'alert'); rssError.hidden = true;
+      let rssPanel = null, opening = false;
+      const rss = row({ label: 'RSS/Atom 연결', sub: '새 글 비공개 보관', ariaLabel: 'RSS/Atom 연결', id: 'lifeRssOpen', onClick: async () => {
+        if (opening || disposed || !isCurrent()) return;
+        if (rssPanel) { rssPanel.element.querySelector('h3')?.focus(); return; }
+        opening = true; rss.disabled = true; rssError.textContent = ''; rssError.hidden = true;
+        try {
+          await loadRss();
+          if (disposed || !isCurrent() || !element.isConnected) return;
+          const service = life().RssConnection.create({ storage: options.storage, workspaceId: options.workspaceId, isCurrent: () => !disposed && isCurrent() });
+          rssPanel = life().RssConnectionUI.create({ service, container: rssHost, isCurrent: () => !disposed && isCurrent(), onClose: () => { rssPanel = null; if (!disposed && isCurrent() && rss.isConnected) rss.focus(); } });
+        } catch (_) { if (!disposed && isCurrent()) { rssError.textContent = '연결 화면을 준비하지 못했습니다. 로그인 상태를 확인한 뒤 다시 열어 주세요.'; rssError.hidden = false; } }
+        finally { opening = false; if (!disposed) rss.disabled = false; }
+      } });
+      cleanups.push(() => { rssPanel?.dispose(); rssPanel = null; });
+      return out.concat(rows.account || [], rss, rssError, rssHost);
     }
 
     // ---------- 뉴스 ----------

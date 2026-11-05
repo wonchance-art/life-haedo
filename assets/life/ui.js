@@ -2846,6 +2846,7 @@
         readLanguages: storage.readDiscoveryLanguageSettings ? () => storage.readDiscoveryLanguageSettings(workspaceId) : null
       } : null;
       settingsUI = Settings.create({
+        storage, workspaceId,
         rows: { account: accountRows, workspace: [manage, management], backup: [open], public: [cover, pages] },
         account: { email: auth?.getAccount?.()?.email || '' }, news,
         isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId
