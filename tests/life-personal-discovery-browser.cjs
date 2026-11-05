@@ -281,7 +281,8 @@ async function main() {
       await page.reload(); await ready(page); await idle(page); await open(page, 'alpha'); assert.equal(await readText(page), catalog.articles[0].bodyText); assert.equal(await page.locator('#discoveryReader [data-discovery-reaction="liked"]').getAttribute('aria-pressed'), 'true');
       assert.deepEqual((await state(page)).actions, saved); await privateCacheAbsent(page);
       const newWorker = await fs.readFile(path.join(project, 'sw.js')), cache = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
-      assert.equal(cache(newWorker), cache(pinnedLegacy['sw.js']), 'Worker task does not change CACHE version');
+      // The orchestrator bumps CACHE at merge; the update must install that current cache (not merely reuse the old one).
+      assert.ok((await page.evaluate(() => caches.keys())).includes(cache(newWorker)), 'updated worker installed the current CACHE');
       report.mixedWorker = { oldCommit, oldWorkerSHA256: sha(pinnedLegacy['sw.js']), currentWorkerSHA256: sha(newWorker), oldHTMLSHA256: sha(pinnedLegacy['index.html']), previousScriptURL: previous, cacheVersionChangedByWorker: cache(newWorker) !== cache(pinnedLegacy['sw.js']) };
       await capture(page, 'private-after-worker-update-390');
     });
