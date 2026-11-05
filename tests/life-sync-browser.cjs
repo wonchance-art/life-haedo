@@ -80,6 +80,14 @@ class WorkspaceCloud {
     if (url.pathname === '/auth/v1/logout') {this.requests.push({kind:'logout',device,owner:account?.id});return send(null,204);}
     if (!account) return send({code:'PGRST301',message:'No test account'},401);
     if (this.schemaMissing) { this.expectedFailures++; return send({code:'PGRST205',message:'Anonymous test schema is unavailable'},404); }
+    // The idle RSS reflector probes once; this shared fixture has no RSS setup.
+    // Collection/control actions remain unregistered and fail below.
+    if (url.pathname === '/functions/v1/haedo-rss' && method === 'POST' && body.action === 'list') {
+      assert.ok(Object.keys(body).every(key => ['action', 'workspaceId', 'before'].includes(key)));
+      assert.match(body.workspaceId, /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i);
+      this.requests.push({kind:'rss-list',owner:account.id,id:body.workspaceId,device});
+      return send({configured:false,connections:[],other_connections:[],items:[],has_more:false,next_cursor:null});
+    }
     if (url.pathname === '/rest/v1/rpc/life_naver_media_receipt_read' && method === 'POST') {
       // These legacy source fixtures have no registered version/media mapping.
       // Keep this one authenticated read explicit; unknown RPCs still fail.

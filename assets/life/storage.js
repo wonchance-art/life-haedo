@@ -5464,6 +5464,107 @@
       }
       return { adopted, failed, repaired };
     }
+    // Device-local evidence of an exact RSS inbox prefix. It is deliberately
+    // absent from account documents and backup exports: another installation
+    // must verify its own originals before advancing its cursor.
+    const rssProgressKey = workspaceId => `rssInboxProgress:${accountKey}:${workspaceId}`;
+    const rssProgressError = () => fault('invalid_rss_progress', 'RSS 자료 반영 기록을 확인하지 못했습니다. 원문은 유지됩니다.');
+    function rssCursorStamp(cursor) {
+      if (!plain(cursor) || Object.keys(cursor).length !== 2 ||
+        !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(cursor.id || '') ||
+        typeof cursor.fetched_at !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(cursor.fetched_at) ||
+        !Number.isFinite(Date.parse(cursor.fetched_at))) throw rssProgressError();
+      const fraction = (cursor.fetched_at.match(/\.(\d+)/)?.[1] || '').padEnd(6, '0');
+      return BigInt(Date.parse(cursor.fetched_at)) * 1000n + BigInt(fraction.slice(3));
+    }
+    function rssProgressShape(input) {
+      if (!plain(input) || Object.keys(input).some(key => !['cursor', 'receipts'].includes(key)) || !Array.isArray(input.receipts)) throw rssProgressError();
+      let previous = null; const ids = new Set();
+      for (const receipt of input.receipts) {
+        if (!plain(receipt) || !['stored', 'held', 'trashed'].includes(receipt.kind)) throw rssProgressError();
+        const stamp = rssCursorStamp(receipt.cursor);
+        if (receipt.itemId !== receipt.cursor.id || ids.has(receipt.itemId) || previous &&
+          (stamp < previous.stamp || stamp === previous.stamp && receipt.itemId <= previous.id)) throw rssProgressError();
+        const fields = ['kind', 'itemId', 'cursor', ...(receipt.kind === 'stored' ? ['sourceId', 'sourceVersionId', 'contentHash'] :
+          receipt.kind === 'trashed' ? ['sourceId', 'trashLinkId', 'trashLinkRevision'] : [])];
+        if (Object.keys(receipt).some(key => !fields.includes(key))) throw rssProgressError();
+        if (receipt.kind !== 'held' && (typeof receipt.sourceId !== 'string' || !receipt.sourceId || receipt.sourceId.length > 128)) throw rssProgressError();
+        if (receipt.kind === 'stored' && (typeof receipt.sourceVersionId !== 'string' || !receipt.sourceVersionId || receipt.sourceVersionId.length > 128 || !/^[a-f\d]{64}$/.test(receipt.contentHash || ''))) throw rssProgressError();
+        if (receipt.kind === 'trashed' && (typeof receipt.trashLinkId !== 'string' || !receipt.trashLinkId || !Number.isSafeInteger(receipt.trashLinkRevision) || receipt.trashLinkRevision < 1)) throw rssProgressError();
+        ids.add(receipt.itemId); previous = { stamp, id: receipt.itemId };
+      }
+      const last = input.receipts.at(-1)?.cursor || null;
+      if (stablePayload(input.cursor) !== stablePayload(last)) throw rssProgressError();
+      return input;
+    }
+    async function rssBodyProofs(bundle, receipts) {
+      const needed = new Set(receipts.filter(receipt => receipt.kind === 'stored').map(receipt => receipt.sourceVersionId));
+      const versions = bundle.sourceVersions.filter(version => needed.has(version.id));
+      // Digest outside an IDB transaction; WebCrypto must not let it auto-close.
+      const hashes = await preparedStageHashes({ put: { sourceVersions: versions } }, 'rss-progress');
+      scopeGuard();
+      return new Map(versions.map(version => [version.id, { hash: hashes.get(version.id), text: version.contentText }]));
+    }
+    function rssValidPrefix(bundle, receipts, proofs) {
+      const sources = new Set(bundle.sources.map(source => source.id));
+      const versions = new Map(bundle.sourceVersions.map(version => [version.id, version]));
+      const trash = new Map(bundle.links.filter(link => link.kind === 'source_trash').map(link => [link.entityRefs?.[0]?.entityId, link]));
+      let count = 0;
+      for (const receipt of receipts) {
+        if (receipt.kind === 'stored') {
+          const version = versions.get(receipt.sourceVersionId);
+          const proof = proofs.get(receipt.sourceVersionId);
+          if (!sources.has(receipt.sourceId) || version?.sourceId !== receipt.sourceId || version.contentHash !== receipt.contentHash ||
+            proof?.hash !== receipt.contentHash || proof.text !== version.contentText) break;
+        } else if (receipt.kind === 'trashed') {
+          const link = trash.get(receipt.sourceId);
+          if (!sources.has(receipt.sourceId) || link?.id !== receipt.trashLinkId || link.revision !== receipt.trashLinkRevision) break;
+        }
+        count++;
+      }
+      return receipts.slice(0, count);
+    }
+    async function readRssInboxProgress(workspaceId) {
+      scopeGuard(); requireId(workspaceId, '작업공간');
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 RSS 자료를 확인해 주세요.');
+      const { raw, bundle } = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const raw = (await meta.get(rssProgressKey(workspaceId)))?.value;
+        return { raw: clone(raw), bundle: clone(bundle) };
+      });
+      const revision = Number.isSafeInteger(raw?.revision) && raw.revision >= 0 ? raw.revision : 0;
+      let receipts = [], needsRepair = false;
+      if (raw !== undefined) {
+        try {
+          if (!plain(raw) || revision !== raw.revision) throw rssProgressError();
+          rssProgressShape({ cursor: raw.cursor, receipts: raw.receipts });
+          receipts = rssValidPrefix(bundle, raw.receipts, await rssBodyProofs(bundle, raw.receipts));
+          needsRepair = receipts.length !== raw.receipts.length;
+        } catch (error) { if (error?.code !== 'invalid_rss_progress') throw error; needsRepair = true; }
+      }
+      return { revision, cursor: clone(receipts.at(-1)?.cursor || null), receipts: clone(receipts), bundleRevision: bundle.revision, needsRepair };
+    }
+    async function saveRssInboxProgress(workspaceId, input, expectedRevision, { expectedBundleRevision, isCurrent = () => true } = {}) {
+      scopeGuard(); requireId(workspaceId, '작업공간'); requireRevision(expectedRevision); requireRevision(expectedBundleRevision);
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 RSS 자료를 확인해 주세요.');
+      if (typeof isCurrent !== 'function') throw rssProgressError();
+      const candidate = clone(input); rssProgressShape(candidate);
+      const snapshot = await read(workspaceId), proofs = await rssBodyProofs(snapshot, candidate.receipts);
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const current = () => { scopeGuard(); if (!isCurrent()) throw fault('request_cancelled', '이전 계정의 RSS 반영을 중지했습니다.'); };
+        current();
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const raw = (await meta.get(rssProgressKey(workspaceId)))?.value;
+        const revision = Number.isSafeInteger(raw?.revision) && raw.revision >= 0 ? raw.revision : 0;
+        current();
+        if (revision !== expectedRevision || bundle.revision !== expectedBundleRevision) return { status: 'conflict' };
+        if (revision === Number.MAX_SAFE_INTEGER || rssValidPrefix(bundle, candidate.receipts, proofs).length !== candidate.receipts.length) throw rssProgressError();
+        const value = { revision: revision + 1, cursor: candidate.cursor, receipts: candidate.receipts };
+        await meta.put({ key: rssProgressKey(workspaceId), value });
+        current();
+        return { status: 'stored', ...clone(value), bundleRevision: bundle.revision };
+      });
+    }
     function subscribeAll(listener) {
       scopeGuard();
       if (!account) throw fault('auth_scope_required', '확인된 계정의 자료 알림만 받을 수 있습니다.');
@@ -5485,6 +5586,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readRssInboxProgress, saveRssInboxProgress,
       readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery, readHappinessDays, writeHappinessDay, absorbTimelineDays,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,

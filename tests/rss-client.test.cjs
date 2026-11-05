@@ -107,15 +107,18 @@ test('registration and control requests contain only whitelisted transport field
   assert.throws(() => f.service.action('delete', f.conn));
   assert.throws(() => f.service.register('javascript:alert(1)'));
 });
-test('connection history and automatic pagination project the 101st item without clicking more', async () => {
+test('connection history and explicit pages retain the 101st exact item without duplicate projection', async () => {
   const f = fixture(); f.page.connections.push({ ...f.conn, id: Core.id(), status: 'disconnected' });
   f.page.items = Array.from({ length: 100 }, (_, index) => f.item({ identity: 'guid:' + index })); f.page.has_more = true;
   f.page.next_cursor = { fetched_at: f.page.items[99].fetched_at, id: f.page.items[99].id, privateField: 'must-not-send' };
   const later = { ...f.page, items: [f.item({ identity: 'guid:later' })], has_more: false, next_cursor: null };
   f.env.pageFor = request => request.before ? later : f.page;
   const progress = []; const first = await f.service.list(count => progress.push(count));
-  assert.equal(first.hasMore, true); assert.equal(first.items.length, 100); assert.equal(first.checkedItems, 101);
-  assert.equal(f.bundle.sources.length, 101); assert.deepEqual(progress, [100]);
+  assert.equal(first.hasMore, true); assert.equal(first.items.length, 100); assert.equal(first.checkedItems, 100);
+  assert.equal(f.bundle.sources.length, 100); assert.deepEqual(progress, [100]); assert.equal(f.env.requests.length, 1);
+  const more = await f.service.more(first.nextCursor);
+  assert.equal(f.bundle.sources.length, 101); assert.equal(more.items[0].id, later.items[0].id);
+  assert.equal(f.bundle.sourceVersions.find(version => version.id === more.items[0].sourceVersionId).contentText, later.items[0].content_text);
   assert.deepEqual(f.env.requests[1].before, first.nextCursor);
   assert.deepEqual(Object.keys(f.env.requests[1].before).sort(), ['fetched_at', 'id']);
   await f.service.more(first.nextCursor); assert.equal(f.bundle.sources.length, 101);

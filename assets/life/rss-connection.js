@@ -1,7 +1,11 @@
 /* Private RSS inbox transport. Feed text is preserved verbatim; no remote media or public writes. */
 (function (root, factory) {
   'use strict';
-  const api = factory(root); (root.HaedoLife ||= {}).RssConnection = api;
+  // Settings and the account shell can request this lazy module together.
+  // Reuse the browser instance; CommonJS fixtures still get their own factory.
+  const commonJS = typeof module === 'object' && module.exports;
+  const api = !commonJS && root.HaedoLife?.RssConnection?.createReflection ? root.HaedoLife.RssConnection : factory(root);
+  (root.HaedoLife ||= {}).RssConnection = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
@@ -59,10 +63,29 @@
     const bytes = await root.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
   }
+  const cursorFor = row => ({ fetched_at: row.fetched_at, id: row.id });
+  function cursorTime(value) {
+    // PostgreSQL keeps microseconds. Date.parse alone would collapse distinct
+    // feed batches in the same millisecond and misorder their UUID tie-breaks.
+    const match = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/.exec(value || '');
+    need(match && timestamp(value));
+    return BigInt(Date.parse(match[1] + match[3])) * 1000n + BigInt((match[2] || '').padEnd(6, '0'));
+  }
+  function compareCursor(a, b) {
+    need(a && b && UUID.test(a.id || '') && UUID.test(b.id || ''));
+    const left = cursorTime(a.fetched_at), right = cursorTime(b.fetched_at);
+    if (left !== right) return left < right ? -1 : 1;
+    const x = a.id.toLowerCase(), y = b.id.toLowerCase(); return x === y ? 0 : x < y ? -1 : 1;
+  }
+  function registered(workspaceId, account) {
+    if (typeof root.CustomEvent === 'function') root.document?.dispatchEvent?.(new root.CustomEvent('haedo:rss-registered', {
+      detail: { workspaceId, projectUrl: account.projectUrl, userId: account.userId }
+    }));
+  }
   function create({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core, workspaceId, isCurrent = () => true } = {}) {
     need(storage?.isAccountScoped && storage.account && auth?.verify && auth?.client?.functions?.invoke && core && UUID.test(workspaceId || ''), 'rss_auth_required');
     const owner = { ...storage.account }, client = auth.client, openingEpoch = auth.epoch;
-    let disposed = false, generation = 0;
+    let disposed = false, generation = 0, reflecting = null;
     const controllers = new Set();
     const cancel = () => { generation++; controllers.forEach(controller => controller.abort()); controllers.clear(); };
     const unlisten = auth.onAccountChange?.(() => {
@@ -126,6 +149,9 @@
         if (response.error) {
           // FunctionsHttpError carries the response body separately. Only accept known error codes.
           let body; try { body = await response.error.context?.json?.(); } catch (_) { /* retain safe generic message */ }
+          // An undeployed Edge function is a setup state, not a feed/network
+          // failure to retry every minute. Do not infer it from arbitrary text.
+          if (response.error.context?.status === 404 && body?.code === 'NOT_FOUND') throw fault('rss_setup_required');
           throw clean(body || response.error);
         }
         return await step(context, () => snapshot(context, response.data));
@@ -144,10 +170,13 @@
           need(existing.origin === 'other' && existing.sourceKey === sourceKey);
           if (version) {
             need(version.contentHash === row.content_hash && version.contentText === row.content_text);
-            return { sourceId, sourceVersionId: versionId, alreadyReceived: true };
+            return { sourceId, sourceVersionId: versionId, alreadyReceived: true, bundleRevision: bundle.revision };
           }
           // A new feed revision never restores a source the owner put in the trash.
-          if (!core.isSourceActive(bundle, sourceId)) return { materialStatus: 'trashed' };
+          if (!core.isSourceActive(bundle, sourceId)) {
+            const state = core.sourceState(bundle, sourceId);
+            return { materialStatus: 'trashed', sourceId, trashLinkId: state.link.id, trashLinkRevision: state.revision, bundleRevision: bundle.revision };
+          }
         }
         const prepared = await step(context, () => core.prepareImport({ origin: 'other', title: row.title || '제목 없는 RSS 글', text: row.content_text,
           ...(row.url === null ? {} : { url: row.url }), fileName: sourceKey, originalCreatedAt: row.published_at, authorRelation: 'unknown', forceSeparate: true,
@@ -165,7 +194,7 @@
           { isCurrent: () => { try { guard(context); return true; } catch (_) { return false; } } }));
         if (result.status === 'conflict') continue;
         need(result.status === 'stored', 'rss_receive_conflict');
-        return { sourceId, sourceVersionId: versionId, alreadyReceived: false };
+        return { sourceId, sourceVersionId: versionId, alreadyReceived: false, bundleRevision: result.revision ?? bundle.revision + 1 };
       }
       throw fault('rss_receive_conflict');
     }
@@ -174,34 +203,89 @@
       for (const row of page.items) {
         // Stopping collection never hides already archived items from another device.
         if (row.disposition !== 'stored') { items.push(row); continue; }
-        try { items.push({ ...row, ...await receive(context, row) }); }
+        try {
+          const result = await receive(context, row);
+          items.push({ ...row, ...(result.materialStatus === 'trashed' ? { materialStatus: 'trashed' } : result) });
+        }
         catch (error) { guard(context); errors.push(clean(error).message); items.push(row); }
       }
       return { ...page, items, receiveError: errors[0] || null };
     }
     async function run(action, input = {}, onProgress) {
       const context = token();
-      const first = await apply(context, await request(context, action, input));
-      let page = first, count = first.items.length, pages = 1;
-      const cursors = new Set();
-      // Keep only the visible page. Drain the server inbox in bounded pages so
-      // the 101st item reaches materials/search without a separate user action.
-      while (page.hasMore && !page.receiveError) {
-        guard(context);
-        const key = JSON.stringify(page.nextCursor); need(!cursors.has(key)); cursors.add(key);
-        onProgress?.(count);
-        if (pages % 5 === 0) await step(context, () => new Promise(resolve => setTimeout(resolve, 0)));
-        page = await apply(context, await request(context, 'list', { before: page.nextCursor }));
-        count += page.items.length; pages++;
+      // An explicit settings page may display/project that page, but is not
+      // proof of a contiguous inbox prefix. In particular, More never ACKs.
+      const page = await apply(context, await request(context, action, input));
+      onProgress?.(page.items.length);
+      return { ...page, checkedItems: page.items.length };
+    }
+    async function reflectInbox(onProgress) {
+      need(typeof storage.readRssInboxProgress === 'function' && typeof storage.saveRssInboxProgress === 'function', 'rss_receive_conflict');
+      const context = token();
+      let checkedItems = 0, appliedItems = 0, conflicts = 0, pages = 0;
+      while (true) {
+        const progress = await step(context, () => storage.readRssInboxProgress(workspaceId));
+        const page = await request(context, 'list', progress.cursor ? { before: progress.cursor } : {});
+        const summary = () => ({ configured: page.configured, connections: page.connections, otherConnections: page.otherConnections,
+          checkedItems, appliedItems, receiveError: null });
+        // Runtime configuration controls future collection, not ownership of
+        // archived items. Finish this initial drain even when collection is off;
+        // the scheduler then parks until an explicit registration wakes it.
+        // p_before is the historical wire name: the SQL list is ASC and >.
+        // Validate the whole page before writing any part of this prefix.
+        let previous = progress.cursor;
+        for (const row of page.items) {
+          const cursor = cursorFor(row); cursorTime(cursor.fetched_at);
+          if (previous) need(compareCursor(previous, cursor) < 0);
+          previous = cursor;
+        }
+        if (page.hasMore) need(previous && page.items.length > 0 && compareCursor(previous, page.nextCursor) === 0);
+        const received = []; let receiveError = null;
+        for (const row of page.items) {
+          guard(context); checkedItems++;
+          try {
+            const receipt = { cursor: cursorFor(row), itemId: row.id };
+            if (row.disposition === 'held') received.push({ ...receipt, kind: 'held' });
+            else {
+              const result = await receive(context, row);
+              if (result.materialStatus === 'trashed') received.push({ ...receipt, kind: 'trashed', sourceId: result.sourceId,
+                trashLinkId: result.trashLinkId, trashLinkRevision: result.trashLinkRevision });
+              else {
+                received.push({ ...receipt, kind: 'stored', sourceId: result.sourceId, sourceVersionId: result.sourceVersionId, contentHash: row.content_hash });
+                if (!result.alreadyReceived) appliedItems++;
+              }
+            }
+          } catch (error) { guard(context); receiveError = clean(error).message; break; }
+        }
+        if (received.length || progress.needsRepair) {
+          const receipts = [...progress.receipts, ...received], cursor = receipts.at(-1)?.cursor || null;
+          // Successful material commits precede this separate ACK. A crash or
+          // failed ACK only causes deterministic re-receipt, never a skipped row.
+          const bundle = await step(context, () => storage.read(workspaceId));
+          const saved = await step(context, () => storage.saveRssInboxProgress(workspaceId, { cursor, receipts }, progress.revision,
+            { expectedBundleRevision: bundle.revision, isCurrent: () => { try { guard(context); return true; } catch (_) { return false; } } }));
+          if (saved.status === 'conflict') {
+            if (++conflicts >= 3) throw fault('rss_receive_conflict');
+            continue;
+          }
+          need(saved.status === 'stored', 'rss_receive_conflict'); conflicts = 0;
+        }
+        onProgress?.(checkedItems);
+        if (receiveError || !page.hasMore) return { ...summary(), receiveError };
+        if (++pages % 5 === 0) await step(context, () => new Promise(resolve => root.setTimeout(resolve, 0)));
       }
-      // Never persist a cursor after a failed projection. Refresh replays the
-      // immutable inbox and deterministic source/version IDs safely.
-      return { ...first, receiveError: page.receiveError || first.receiveError, checkedItems: count };
+    }
+    function reflect(onProgress) {
+      if (reflecting) return reflecting;
+      const pending = reflectInbox(onProgress); reflecting = pending;
+      pending.then(() => { if (reflecting === pending) reflecting = null; }, () => { if (reflecting === pending) reflecting = null; });
+      return pending;
     }
     return Object.freeze({
+      reflect,
       list: onProgress => run('list', {}, onProgress),
       more: (before, onProgress) => { need(before && timestamp(before.fetched_at) && UUID.test(before.id || '')); return run('list', { before: { fetched_at: before.fetched_at, id: before.id } }, onProgress); },
-      register: (value, onProgress) => { url(value); need(new URL(value).protocol === 'https:'); return run('register', { url: value }, onProgress); },
+      register: (value, onProgress) => { url(value); need(new URL(value).protocol === 'https:'); return run('register', { url: value }, onProgress).then(page => { registered(workspaceId, owner); return page; }); },
       action: (action, conn, onProgress) => {
         need(['preview', 'poll', 'activate', 'pause', 'resume', 'retry', 'disconnect'].includes(action));
         need(UUID.test(conn?.id || '') && Number.isSafeInteger(conn.revision) && conn.revision > 0);
@@ -212,5 +296,108 @@
       dispose() { disposed = true; cancel(); unlisten?.(); }
     });
   }
-  return Object.freeze({ create, fault, messages, messageFor: code => clean({ error: code }).message });
+  function createReflection({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core, isCurrent = () => true,
+    intervalMs = 60000, polling = true, host = root, now = () => Date.now() } = {}) {
+    need(storage?.isAccountScoped && storage.account && auth?.verify && core, 'rss_auth_required');
+    const owner = { ...storage.account }; let openingEpoch = auth.epoch;
+    const lifecycle = root.HaedoLife?.SyncLifecycle || (typeof require === 'function' ? require('./sync-lifecycle.js') : null);
+    const services = new Map(), targets = new Set();
+    let disposed = false, started = false, suspended = false, parked = false, stopped = false, resumePending = false, generation = 0, running = null, wiring = null;
+    let nextRetryAt = 0, status = { state: 'idle', checkedItems: 0, receiveError: null };
+    function current() {
+      const account = auth.getAccount?.();
+      return !disposed && !suspended && !parked && isCurrent() && auth.epoch === openingEpoch && auth.user?.id === owner.userId &&
+        account?.userId === owner.userId && account?.projectUrl === owner.projectUrl;
+    }
+    function guard(token) { need(current() && token === generation, 'rss_cancelled'); }
+    function cancel() { generation++; for (const service of services.values()) service.dispose(); services.clear(); }
+    const unlisten = auth.onAccountChange?.(() => { if (!current()) cancel(); });
+    function serviceFor(workspaceId) {
+      if (!services.has(workspaceId)) services.set(workspaceId, create({ storage, auth, core, workspaceId, isCurrent: current }));
+      return services.get(workspaceId);
+    }
+    function syncNow(workspaceId) {
+      if (workspaceId !== undefined) { need(UUID.test(workspaceId || '')); targets.add(workspaceId); }
+      if (targets.size) { stopped = false; nextRetryAt = 0; }
+      if (running) return running;
+      if (!current() || stopped || now() < nextRetryAt || host.navigator?.onLine === false || host.document?.visibilityState === 'hidden') return Promise.resolve({ ...status });
+      const context = generation;
+      const pending = (async () => {
+        // Consume this wake before any await. A failed verification must wait
+        // for the next timer/event rather than requeueing itself in finally.
+        const requested = [...targets]; targets.clear();
+        try {
+          // Each inbox request verifies the owner immediately before HTTP.
+          // Avoid a second verification just to read local workspace metadata.
+          guard(context);
+          const active = requested.length ? null : await storage.getActive(); guard(context);
+          const queue = requested.length ? requested : active ? [active] : [];
+          const seen = new Set(); let connected = false, configured = true, checkedItems = 0, receiveError = null;
+          status = { state: 'reflecting', checkedItems, receiveError };
+          for (let index = 0; index < queue.length; index++) {
+            const id = queue[index]; if (seen.has(id)) continue; seen.add(id); guard(context);
+            // Server metadata may point at another workspace. The scoped store
+            // must prove local ownership before that workspace receives anything.
+            await storage.read(id); guard(context);
+            const result = await serviceFor(id).reflect(); guard(context);
+            checkedItems += result.checkedItems; receiveError ||= result.receiveError;
+            configured = configured && result.configured;
+            // A disabled collector can still own archived items in its actual
+            // workspace; finish that one initial receive before parking.
+            connected ||= result.connections.length > 0;
+            for (const conn of result.otherConnections) {
+              if (!seen.has(conn.workspace_id)) queue.push(conn.workspace_id);
+            }
+          }
+          stopped = !configured || !connected;
+          nextRetryAt = receiveError && !stopped ? now() + intervalMs : 0;
+          status = { state: stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError };
+        } catch (error) {
+          if (current() && context === generation) {
+            const errorInfo = clean(error);
+            if (errorInfo.code === 'rss_setup_required') stopped = true;
+            else nextRetryAt = now() + intervalMs;
+            status = { ...status, state: stopped ? 'stopped' : 'error', receiveError: errorInfo.message };
+          }
+        }
+        return { ...status };
+      })();
+      running = pending;
+      pending.finally(() => {
+        if (running === pending) running = null;
+        if ((targets.size || resumePending) && current()) { resumePending = false; syncNow(); }
+      });
+      return pending;
+    }
+    const wake = () => { if (!stopped) syncNow(); };
+    const suspend = () => { suspended = true; cancel(); status = { ...status, state: 'paused' }; };
+    const ready = () => {
+      const account = auth.getAccount?.();
+      // The shell emits ready only after a fresh account verification. A bfcache
+      // return advances Auth's epoch even for the same owner; adopt that epoch
+      // here, never from an arbitrary account-change notification.
+      if (disposed || !isCurrent() || auth.user?.id !== owner.userId || account?.userId !== owner.userId || account?.projectUrl !== owner.projectUrl) return;
+      openingEpoch = auth.epoch; suspended = false; parked = false;
+      if (running) resumePending = true; else wake();
+    };
+    const pagehide = event => { if (event?.persisted) { parked = true; cancel(); } };
+    const onRegistered = event => {
+      const detail = event?.detail;
+      if (detail?.projectUrl !== owner.projectUrl || detail.userId !== owner.userId || !UUID.test(detail.workspaceId || '')) return;
+      syncNow(detail.workspaceId);
+    };
+    function start() {
+      if (disposed || started) return; started = true;
+      wiring = lifecycle?.attach(host, {
+        listen: [['window', 'online', wake], ['window', 'focus', wake], ['document', 'visibilitychange', wake],
+          ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', ready],
+          ['document', 'haedo:rss-registered', onRegistered], ['window', 'pagehide', pagehide]],
+        poll: polling ? [intervalMs, wake] : null,
+      }) || null;
+      syncNow();
+    }
+    function dispose() { if (disposed) return; disposed = true; cancel(); targets.clear(); wiring?.detach(); wiring = null; unlisten?.(); }
+    return Object.freeze({ start, syncNow, getStatus: () => ({ ...status }), dispose });
+  }
+  return Object.freeze({ create, createReflection, fault, messages, messageFor: code => clean({ error: code }).message });
 });
