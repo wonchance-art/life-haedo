@@ -12,8 +12,15 @@
     rss_cancelled: '계정이나 화면이 바뀌어 이전 작업을 중지했습니다.',
     rss_auth_required: '로그인을 확인한 뒤 다시 시도해 주세요.',
     rss_invalid_data: '받은 자료를 확인하지 못했습니다. 기존 자료는 유지됩니다.',
+    rss_invalid_item: '피드 항목 형식을 확인하지 못해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다.',
+    rss_invalid_hash: '피드 본문 검증에 실패해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다.',
+    rss_invalid_cursor: '피드의 다음 쪽 주소를 확인하지 못해 자동 확인을 멈췄습니다. 피드 구성을 확인해 주세요.',
+    rss_invalid_result: '수집 결과 형식을 확인하지 못해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다.',
+    rss_text_limit: '수집한 본문이 용량 한도를 넘어 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다.',
     rss_conflict: '다른 화면에서 연결이 변경되었습니다. 새로고침 후 다시 시도해 주세요.',
     rss_network_error: '연결을 완료하지 못했습니다. 입력과 기존 자료는 유지됩니다.',
+    network_error: '피드에 일시적으로 연결하지 못했습니다. 받은 자료는 유지됩니다.',
+    rate_limited: '피드의 요청 한도에 도달했습니다. 받은 자료는 유지됩니다.',
     rss_setup_required: 'RSS 연결을 준비 중입니다. 피드 주소가 확정되면 연결할 수 있습니다.',
     rss_host_not_allowed: '아직 연결할 수 없는 피드입니다. 확정된 피드 주소를 확인해 주세요.',
     rss_busy: '현재 수집 중입니다. 잠시 뒤 상태를 확인해 주세요.',
@@ -26,7 +33,7 @@
     rss_not_found: '이 자료공간에서 해당 RSS 연결을 찾지 못했습니다. 연결된 자료공간을 확인해 주세요.',
     baseline_page_limit: '기준 목록이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 피드 범위를 확인해 주세요.',
     catchup_page_limit: '남은 새 글 확인이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다. 피드 범위를 확인해 주세요.',
-    baseline_stalled: '새 항목이 없는 빈 쪽이나 반복되는 쪽을 만나 기준 목록 확인을 멈췄습니다. 피드 구성을 확인해 주세요.',
+    baseline_stalled: '새 항목이 없는 빈 쪽이나 반복되는 쪽을 만나 기준 목록 확인을 멈췄습니다. 다시 시도하면 첫 쪽부터 확인합니다. 이미 받은 기준 목록과 자료는 유지됩니다.',
     rss_receive_conflict: '자료 보관을 마치지 못했습니다. 기존 자료는 유지되며 다시 시도할 수 있습니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.rss_network_error), { code });
@@ -37,7 +44,8 @@
     if (code === 'setup_required' || code === 'not_configured') code = 'rss_setup_required';
     if (code === 'unauthorized') code = 'rss_auth_required';
     code = ({ blocked_url: 'rss_host_not_allowed', revision_conflict: 'rss_conflict', not_due: 'rss_not_due',
-      rate_limited: 'rss_busy', invalid_feed: 'rss_invalid_feed', feed_too_large: 'rss_invalid_data' })[code] || code;
+      invalid_feed: 'rss_invalid_feed', feed_too_large: 'rss_invalid_data' })[code] || code;
+    if (!Object.hasOwn(messages, code) && /^rss_invalid_[a-z_]+$/.test(code || '')) code = 'rss_invalid_result';
     return fault(Object.hasOwn(messages, code) ? code : 'rss_network_error');
   }
   function url(value) {
@@ -72,6 +80,10 @@
     function connection(value, elsewhere = false) {
       need(value && UUID.test(value.id || '') && UUID.test(value.workspace_id || '') && (elsewhere ? value.workspace_id !== workspaceId : value.workspace_id === workspaceId) && STATES.includes(value.status) &&
         Number.isSafeInteger(value.revision) && value.revision > 0 && Number.isSafeInteger(value.baseline_count) && value.baseline_count >= 0);
+      need(value.failure_count === undefined || Number.isSafeInteger(value.failure_count) && value.failure_count >= 0 && value.failure_count <= 3);
+      need(value.auto_retry === undefined || typeof value.auto_retry === 'boolean');
+      if (value.auto_retry === true) need(['pending', 'active'].includes(value.status) && ['network_error', 'rate_limited'].includes(value.last_error) &&
+        Number.isSafeInteger(value.failure_count) && value.failure_count < 3);
       url(value.feed_url); return { ...value };
     }
     async function snapshot(context, value) {
@@ -200,5 +212,5 @@
       dispose() { disposed = true; cancel(); unlisten?.(); }
     });
   }
-  return Object.freeze({ create, fault, messages });
+  return Object.freeze({ create, fault, messages, messageFor: code => clean({ error: code }).message });
 });

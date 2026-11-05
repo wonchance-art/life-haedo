@@ -169,3 +169,31 @@ test('bounded baseline failures retain their specific reason and stopped connect
     assert.equal(f.commits, 0);
   }
 });
+test('transient retry state keeps the server retry clock through failures one and two, then stops at three', async () => {
+  for (const code of ['network_error', 'rate_limited']) {
+    for (const count of [1, 2, 3]) {
+      const f = fixture(); Object.assign(f.conn, { last_error: code, failure_count: count, auto_retry: count < 3, next_check_at: '2026-11-05T03:00:00.000Z' });
+      f.page.execution = { status: 'error', error: code };
+      const result = await f.service.list();
+      assert.equal(result.connections[0].auto_retry, count < 3); assert.equal(result.connections[0].failure_count, count);
+      assert.equal(result.connections[0].next_check_at, f.conn.next_check_at); assert.equal(result.execution.error, code);
+      assert.equal(f.commits, 0);
+    }
+  }
+});
+test('third failure or malformed feed cannot be mislabeled as an automatic transient retry', async () => {
+  for (const override of [{ last_error: 'network_error', failure_count: 3 }, { last_error: 'rss_invalid_item', failure_count: 1 }, { status: 'paused', last_error: 'network_error', failure_count: 1 }]) {
+    const f = fixture(); Object.assign(f.conn, { auto_retry: true }, override);
+    await assert.rejects(f.service.list(), { code: 'rss_invalid_data' }); assert.equal(f.commits, 0);
+  }
+});
+test('finish validation failures display safe stopped-collection guidance without backend error content', async () => {
+  for (const code of ['rss_invalid_result', 'rss_invalid_pages', 'rss_invalid_item', 'rss_invalid_hash', 'rss_invalid_date', 'rss_text_limit']) {
+    const f = fixture(); Object.assign(f.conn, { last_error: code, failure_count: 1, auto_retry: false });
+    f.page.execution = { status: 'error', error: code, detail: 'private upstream content' };
+    const result = await f.service.list();
+    assert.match(Rss.messageFor(result.execution.error), /자동 확인을 멈췄습니다/);
+    assert.match(Rss.messageFor(result.connections[0].last_error), /자동 확인을 멈췄습니다/);
+    assert.doesNotMatch(JSON.stringify(result.execution), /private upstream/);
+  }
+});

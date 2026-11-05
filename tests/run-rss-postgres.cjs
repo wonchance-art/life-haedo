@@ -104,7 +104,7 @@ async function main(){try{
  control('retry');lease=claim();finish(lease,[],{complete:false,error:'network_error'});
  control('retry');lease=claim();finish(lease,[],{complete:false,error:'network_error'});
  test('failure retry limited to two per sixty minutes',()=>error(()=>control('retry'),'rss_retry_limit'));
- test('failed collection is not automatically claimable',()=>{due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ test('a reset transient failure series remains automatically retryable at its deadline',()=>{assert.equal(state().failure_count,1);due();assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));assert(claim());});
  sql(`update haedo_rss_private.connections set retry_window_at=clock_timestamp()-interval '2 hours' where id='${c.id}';`);control('retry');
  due();test('scheduler is bounded and service-only',()=>{assert(worker('select public.life_rss_due(2);').some(i=>i.connection_id===c.id));error(()=>worker('select public.life_rss_due(3);'),'rss_invalid_limit');error(()=>actor(A,'select public.life_rss_due(2);'),'permission denied');});
  lease=claim();finish(lease,Array.from({length:100},(_,i)=>entry('page'+i)));
@@ -182,20 +182,87 @@ async function main(){try{
  test('exact two-MiB feed survives JSON escaping and preserves the held original',()=>{const stored=json(sql(`select jsonb_build_object('bytes',octet_length(content_text),'hash',content_hash,'reason',reason) from haedo_rss_private.items where connection_id='${c.id}' and identity='guid:wire-boundary';`));assert.equal(stored.bytes,escapedBody.length);assert.equal(stored.hash,hash(escapedBody));assert.equal(stored.reason,'content_too_large');assert.equal(state().last_error,null);});
  due();lease=claim();const escapedScalar='\u0001'.repeat(2097152),oversizedScalar=escapedScalar+'x';
  test('JSON sixfold escaping preserves the raw two-MiB SQL boundary',()=>{error(()=>finish(lease,[entry('raw-too-large',{content_text:oversizedScalar,content_hash:hash(oversizedScalar)})]),'rss_text_limit');const result=finish(lease,[entry('raw-boundary',{content_text:escapedScalar,content_hash:hash(escapedScalar)})]);assert.equal(result.held,1);const saved=json(sql(`select jsonb_build_object('bytes',octet_length(content_text),'hash',content_hash) from haedo_rss_private.items where connection_id='${c.id}' and identity='guid:raw-boundary';`));assert.equal(saved.bytes,2097152);assert.equal(saved.hash,hash(escapedScalar));});control('disconnect');
+ // Unidentifiable records can never be a known-page boundary. Completing
+ // such a sweep must nevertheless return to the ordinary hourly interval.
+ for(const shape of [3,5,'mixed4']){
+  restart();const total=shape==='mixed4'?4:shape;let activatedUnknown=false;
+  const fake=async url=>{const page=Number(new URL(url).searchParams.get('page')||1),next=page<total?pageURL(page+1):null;
+   if(shape==='mixed4'&&page>2)return new Response(xmlFeed([{id:'mixed-stable-'+page,date:'2000-01-01T00:00:00Z'}],next));
+   return new Response(`<feed xmlns="http://www.w3.org/2005/Atom">${next?`<link rel="next" href="${next}"/>`:''}<entry><title>unknown page ${page}</title><content>${activatedUnknown?'new':'initial'} unidentified body ${page}</content></entry></feed>`);
+  };
+  for(let runs=0;state().status==='pending';runs++){assert(runs<3);await tick(fake);}activatedUnknown=true;control('activate');let runs=0;
+  while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(fake);assert(++runs<=3);}
+  test('unidentified '+shape+'-page sweep reaches hourly idle without endless fresh-head scheduling',()=>{assert.equal(state().last_error,null);assert.equal(state().cursor,null);assert.equal(state().sweep_new_count,0);assert(new Date(state().next_check_at).getTime()>Date.now()+3500000);});control('disconnect');
+ }
+ installOld();lease=claim();finish(lease,[],{complete:false,error:'network_error'});due();lease=claim();finish(lease,[entry('success-resets-failures')]);
+ test('successful finish resets an automatic transient failure series',()=>assert.equal(state().failure_count,0));
+ for(let attempt=1;attempt<=3;attempt++){due();lease=claim();assert(lease);finish(lease,[],{complete:false,error:attempt===2?'rate_limited':'network_error'});assert.equal(state().failure_count,attempt);assert.equal(list().connections.find(row=>row.id===c.id).auto_retry,attempt<3);assert.equal(claim(),null);}
+ test('transient failures retry hourly twice then stop across pause and resume',()=>{due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));control('pause');control('resume');assert.equal(state().failure_count,3);assert.equal(claim(),null);control('retry');assert.equal(state().failure_count,0);assert(claim());});control('disconnect');
+ restart();const cyclic=async url=>{const page=Number(new URL(url).searchParams.get('page')||1);return new Response(xmlFeed([{id:'retry-page-'+page,date:'2000-01-01T00:00:00Z'}],pageURL(page===3?1:page+1)));};
+ while(!state().last_error)await tick(cyclic);
+ const originalBaseline=state().baseline_started_at;
+ const originals=()=>sql(`select jsonb_agg(jsonb_build_array(identity,url,first_observed_at,baseline) order by identity) from haedo_rss_private.observations where connection_id='${c.id}';`);
+ const beforeRetry=originals();control('retry');
+ test('stalled baseline retry restarts at head and preserves historical observations',()=>{assert.equal(state().cursor,null);assert.equal(state().baseline_pages,0);assert.equal(state().baseline_generation,2);assert.equal(state().baseline_started_at,originalBaseline);assert.equal(originals(),beforeRetry);assert.deepEqual(rssKnown(['atom:retry-page-1']),[]);});
+ let retryRuns=0;while(!state().last_error){await tick(cyclic);assert(++retryRuns<=2);}
+ test('new baseline attempt detects a repeated old-ID cycle within that attempt',()=>{assert.equal(state().last_error,'baseline_stalled');assert.equal(originals(),beforeRetry);assert.equal(state().baseline_count,3);});
+ control('retry');const repaired=async url=>{const page=Number(new URL(url).searchParams.get('page')||1);return new Response(xmlFeed([{id:'retry-page-'+page,date:'2000-01-01T00:00:00Z'}],page===3?null:pageURL(page+1)));};
+ while(state().status==='pending')await tick(repaired);
+ test('repaired baseline finishes from retained observations without deleting or duplicating them',()=>{assert.equal(state().status,'preview');assert.equal(state().baseline_count,3);assert.equal(originals(),beforeRetry);});control('disconnect');
+ installOld();lease=claim();sql(`update haedo_rss_private.connections set sweep_pages=49 where id='${c.id}';`);
+ const firstCap=entry('direct-cap'),secondCap={...firstCap,content_text:'같은 ID의 다른 쪽 본문',content_hash:hash('같은 ID의 다른 쪽 본문')};
+ const capSnapshot=()=>sql(`select jsonb_build_object('connection',(select to_jsonb(x) from haedo_rss_private.connections x where id='${c.id}'),'observations',(select coalesce(jsonb_agg(to_jsonb(o) order by identity),'[]') from haedo_rss_private.observations o where connection_id='${c.id}'),'items',(select coalesce(jsonb_agg(to_jsonb(i) order by id),'[]') from haedo_rss_private.items i where connection_id='${c.id}'),'receipts',(select coalesce(jsonb_agg(to_jsonb(r) order by lease_token),'[]') from haedo_rss_private.receipts r where connection_id='${c.id}'));`);
+ const capBefore=capSnapshot();
+ test('SQL rejects a two-page finish at forty-nine atomically even when versions share an identity',()=>{error(()=>finish(lease,[firstCap,secondCap],{next:pageURL(3),complete:false,pages:[{url:feed,identities:[firstCap.identity],next:pageURL(2)},{url:pageURL(2),identities:[secondCap.identity],next:pageURL(3)}]}),'rss_invalid_pages');assert.equal(capSnapshot(),capBefore);});
+ test('SQL permits the exact fiftieth page ending at EOF',()=>{const result=finish(lease,[firstCap],{pages:[{url:feed,identities:[firstCap.identity],next:null}]});assert.equal(result.error,null);assert.equal(result.inserted,1);assert.equal(state().cursor,null);assert.equal(state().last_error,null);});control('disconnect');
+ installOld();lease=claim();error(()=>finish(lease,[entry('fallback-invalid',{content_hash:'bad'})]),'rss_invalid_hash');
+ const fallback=finish(lease,[],{complete:false,error:'rss_invalid_hash',pages:[]});
+ test('validation-error fallback records one durable hard failure and stops due work',()=>{assert.equal(fallback.error,'rss_invalid_hash');assert.deepEqual(finish(lease,[],{complete:false,error:'rss_invalid_hash',pages:[]}),fallback);due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));assert.equal(sql(`select count(*) from haedo_rss_private.receipts where connection_id='${c.id}' and lease_token='${lease.lease_token}';`),'1');});control('disconnect');
+ // Bridge the actual Edge handler's HTTP RPC calls into this owned database.
+ // Only the fixture host is fetched; validation failure is a real SQL rollback.
+ const {createHandler}=await import('../supabase/functions/haedo-rss/handler.mjs');
+ for(const scenario of ['blank-title','validation','long-next']){
+  installOld();let finishCalls=0,feedCalls=0,failedLease=null,receivedTitle=null;
+  const environment=name=>({SUPABASE_URL:'https://project.fixture.invalid',SUPABASE_SECRET_KEYS:JSON.stringify({default:'sb_secret_fixture_server'}),SUPABASE_PUBLISHABLE_KEYS:JSON.stringify({default:'sb_publishable_fixture'})}[name]);
+  const bridge=async(url,options={})=>{
+   if(url.startsWith('https://project.fixture.invalid/rest/v1/rpc/')){
+    const name=url.split('/').at(-1);assert(/^life_rss_(due|claim|known|finish)$/.test(name));const args=JSON.parse(options.body);
+    if(name==='life_rss_finish'){finishCalls++;failedLease=args.p_lease_token;receivedTitle=args.p_items[0]?.title||receivedTitle;if(scenario==='validation'&&finishCalls===1)args.p_items[0].content_hash='wrong';}
+    const parts=Object.entries(args).map(([key,value])=>{assert(/^p_[a-z_]+$/.test(key));return key+'=>'+(value===null?'null':typeof value==='object'?jl(value):typeof value==='string'?lit(value):String(value));});
+    try{return new Response(JSON.stringify(worker('select public.'+name+'('+parts.join(',')+');')));}
+    catch(e){const code=String(e.stderr||e.message).match(/ERROR:\s+(rss_[a-z_]+)/)?.[1];if(!code)throw e;return new Response(JSON.stringify({message:code}),{status:400});}
+   }
+   assert.equal(url,feed);feedCalls++;const next=scenario==='long-next'?`<link rel="next" href="https://fixture.example.test/${'한'.repeat(400)}"/>`:'';
+   return new Response(`<feed xmlns="http://www.w3.org/2005/Atom">${next}<entry><id>handler-${scenario}</id><title>   </title><link href="https://fixture.example.test/handler-${scenario}"/><published>${new Date().toISOString()}</published><content>정확한 본문</content></entry></feed>`);
+  };
+  const handler=createHandler({environment,fetcher:bridge,...XML,allowedHosts:['fixture.example.test']});
+  const response=await handler(new Request('https://edge.fixture.invalid',{method:'POST',headers:{apikey:'sb_secret_fixture_server'},body:JSON.stringify({action:'run'})}));assert.equal(response.status,200);const reply=await response.json();
+  test('actual Edge and PostgreSQL '+scenario+' completes without a silent lease retry loop',()=>{
+   assert.equal(feedCalls,1);assert.equal(finishCalls,scenario==='validation'?2:1);assert.equal(reply.checked,1);
+   if(scenario==='blank-title'){assert.equal(receivedTitle,'제목 없음');assert.equal(state().last_error,null);assert(allItems().some(i=>i.connection_id===c.id&&i.title==='제목 없음'&&i.disposition==='stored'));}
+   else{assert.equal(state().last_error,scenario==='validation'?'rss_invalid_hash':'invalid_feed');due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));assert.equal(sql(`select count(*) from haedo_rss_private.observations where connection_id='${c.id}' and identity='atom:handler-${scenario}';`),'0');}
+   assert.equal(sql(`select count(*) from haedo_rss_private.receipts where connection_id='${c.id}' and lease_token='${failedLease}';`),'1');
+  });control('disconnect');
+ }
  // Independent executable mutations: remove whole guards and demand the same assertions fail.
  c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();finish(lease,[]);control('activate');due();lease=claim();control('pause');
  mutation('revision/status lease fencing',"if not found or not(c.feed_url=any((select allowed_feed_urls from haedo_rss_private.runtime where singleton)::text[])) or c.revision<>p_revision or c.lease_token is distinct from p_lease_token or c.lease_until<=stamp or c.status not in('pending','active') then",'if false then',()=>assert.equal(finish(lease,[entry('mutation-late')]).status,'stale'));
  control('resume');due();lease=claim();
  mutation('date quarantine',"if published is null then reason:='date_unknown';","if false then reason:='date_unknown';",()=>{finish(lease,[entry('mutation-unknown',{published_at:null})]);assert.equal(allItems().find(i=>i.identity==='guid:mutation-unknown').disposition,'held');});
  control('disconnect');c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();
- mutation('pending partial continuation stays immediately due',"next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null)) then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ mutation('pending partial continuation stays immediately due',"next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null and sweep_new_count+new_identities>0)) then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  due();
  mutation('scheduler includes pending baseline',"c.status in('pending','active')","c.status='active'",()=>assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)),'haedo_rss_private.due(integer)');
  control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
  mutation('active partial checkpoint is durable',"cursor=case when p_complete then null when p_next_cursor is not null then p_next_cursor else cursor end","cursor=null",()=>{finish(lease,[entry('checkpoint-mutation')],{next:pageURL(3),complete:false});assert.equal(state().cursor,pageURL(3));});
- mutation('known lookup excludes IDs first observed during this sweep',"(c.status='pending' or o.first_observed_at<c.sweep_started_at)",'true',()=>assert.deepEqual(rssKnown(['guid:checkpoint-mutation']),[]),'haedo_rss_private.known(uuid,uuid,jsonb)');
+ mutation('known lookup excludes IDs first observed during this sweep',"((c.status='pending' and o.baseline_generation=c.baseline_generation) or (c.status='active' and o.first_observed_at<c.sweep_started_at))",'true',()=>assert.deepEqual(rssKnown(['guid:checkpoint-mutation']),[]),'haedo_rss_private.known(uuid,uuid,jsonb)');
  control('disconnect');restart();sql(`update haedo_rss_private.connections set baseline_pages=49 where id='${c.id}';`);lease=claim();
  mutation('fifty-page baseline partial halts automatically',"if page_cap+accepted_pages>=50 and not p_complete and p_error is null then","if false then",()=>{finish(lease,[entry('cap-mutation')],{next:pageURL(51),complete:false});assert.equal(state().last_error,'baseline_page_limit');});
+ control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
+ finish(lease,[entry('unknown-one',{identity:'unidentified:one',hold_reason:'missing_identity'})],{next:pageURL(3),complete:false});lease=claim();
+ mutation('completed unidentified sweep returns to hourly cadence',"cursor is not null and sweep_new_count+new_identities>0","cursor is not null",()=>{finish(lease,[entry('unknown-two',{identity:'unidentified:two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
+ mutation('new unidentified identities do not trigger another immediate sweep',"if c.status='active' and not observed_before and item->>'identity' ~ '^(guid:|atom:|url:)' then","if c.status='active' and not observed_before then",()=>{finish(lease,[entry('new-unknown-one',{identity:'unidentified:new-one',hold_reason:'missing_identity'})],{next:pageURL(3),complete:false});const tail=claim();finish(tail,[entry('new-unknown-two',{identity:'unidentified:new-two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  console.log(JSON.stringify({checks,mutations,pass:true,image,migration,liveDatabase:false,realFeed:false}));
  }finally{if(started){const v=docker(['inspect',container,'--format',`{{ index .Config.Labels "${label}" }}`]).trim();assert.equal(v,owner);docker(['rm','-f',container]);}}}
 main().catch(e=>{console.error(e.stderr?.toString()||e.stack||e);process.exitCode=1;});

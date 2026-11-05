@@ -44,7 +44,7 @@ export function safeURL(raw, allowedHosts = ALLOWED_HOSTS) {
     !['.localhost','.local','.internal','.lan'].some(s => authority.endsWith(s)) &&
     allowedHosts.includes(authority), 'blocked_url');
   let url; try { url = new URL(raw); } catch (_) { throw failure('blocked_url'); }
-  need(url.protocol === 'https:' && url.hostname === authority && !url.username && !url.password && !url.port && !url.hash, 'blocked_url');
+  need(url.protocol === 'https:' && url.hostname === authority && !url.username && !url.password && !url.port && !url.hash && url.href.length <= 2048, 'blocked_url');
   return url.href;
 }
 function sourceURL(raw, base) {
@@ -106,7 +106,8 @@ export function createParser({ XMLParser, XMLValidator }) {
       const rawID = text(single(entry, atom ? 'id' : 'guid'));
       const id = rawID?.trim() ? rawID : null;
       need(!id || id.length <= 2043, 'item_limit');
-      const title = text(single(entry, 'title')) || '제목 없음';
+      const rawTitle = text(single(entry, 'title'));
+      const title = rawTitle?.trim() ? rawTitle : '제목 없음';
       need(title.length <= 400, 'item_limit');
       const body = atom ? single(entry, 'content') ?? single(entry, 'summary') : single(entry, 'content:encoded') ?? single(entry, 'description');
       // Unsupported item representations stay held; unrelated feed entries
@@ -131,7 +132,14 @@ export function createParser({ XMLParser, XMLValidator }) {
     const nextLinks = list(feed[atom ? 'link' : 'atom:link']).filter(x => object(x) && x['@_rel'] === 'next');
     need(nextLinks.length <= 1);
     let next = null;
-    if (nextLinks.length) { try { next = new URL(nextLinks[0]['@_href'], baseURL).href; } catch (_) { throw failure('invalid_feed'); } }
+    if (nextLinks.length) {
+      const href = nextLinks[0]['@_href'];
+      // URL(undefined, base) produces a real /undefined path. Validate before
+      // resolution, including whitespace that URL() would silently discard.
+      need(typeof href === 'string' && href.length > 0 && !/[\s\\\u0000-\u001f\u007f]/u.test(href));
+      try { next = new URL(href, baseURL).href; } catch (_) { throw failure('invalid_feed'); }
+      need(next.length <= 2048); // URL percent-encoding may expand a short Unicode href.
+    }
     return { items, next };
   };
 }

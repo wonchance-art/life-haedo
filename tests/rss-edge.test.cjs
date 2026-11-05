@@ -312,3 +312,88 @@ test('handler honors durable page cap before feed requests and records its stop 
     const finish=JSON.parse(fx.calls.find(x=>x.endpoint.endsWith('life_rss_finish')).init.body);assert.deepEqual(finish.p_pages,[]);assert.equal(finish.p_complete,false);
   }
 });
+test('blank titles use a fallback while nonblank exact titles retain their whitespace',async()=>{
+  const parse=await parser();
+  for(const blank of ['   ','\t\n','\u00a0']){
+    const result=await parse(rss(entry().replace('한글 제목',blank)),url);assert.equal(result.items[0].title,'제목 없음');
+  }
+  const exact='  원래 제목  ';assert.equal((await parse(rss(entry().replace('한글 제목',exact)),url)).items[0].title,exact);
+});
+test('URL limits apply after percent-encoding to feed, next and item links',async()=>{
+  const [f]=await modules,parse=await parser(),raw='https://'+host+'/'+ '한'.repeat(250);
+  assert.ok(raw.length<2048);assert.ok(new URL(raw).href.length>2048);
+  assert.throws(()=>f.safeURL(raw,[host]),{code:'blocked_url'});
+  await assert.rejects(parse(rss(entry(),'/'+ '한'.repeat(250)),url),{code:'invalid_feed'});
+  const longSource=await parse(rss(entry().replace('https://'+host+'/post/001?exact=1&amp;x=2',raw)),url);
+  assert.equal(longSource.items[0].url,null);assert.equal(longSource.items[0].hold_reason,'missing_url');
+  const boundary='https://'+host+'/'+'a'.repeat(2048-('https://'+host+'/').length);assert.equal(f.safeURL(boundary,[host]).length,2048);
+});
+test('long normalized next is recorded once as a format failure without advancing the batch',async()=>{
+  const [,h,xml]=await modules,fx=fixture(),finishCalls=[];let feedCalls=0;
+  const fetcher=async(endpoint,init)=>{
+    if(endpoint.startsWith('https://'+host)){feedCalls++;return new Response(rss(entry(),'/'+ '한'.repeat(250)));}
+    if(endpoint.endsWith('life_rss_finish'))finishCalls.push(JSON.parse(init.body));
+    if(endpoint.endsWith('life_rss_claim')&&fx.state.connections[0].last_error)return json(null);
+    return fx.fetcher(endpoint,init);
+  };
+  const handler=h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]});
+  const result=await handler(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+  assert.equal(result.status,200);assert.equal((await result.json()).execution.error,'invalid_feed');
+  assert.equal(finishCalls.length,1);assert.deepEqual(finishCalls[0].p_items,[]);assert.deepEqual(finishCalls[0].p_pages,[]);assert.equal(finishCalls[0].p_complete,false);
+  const second=await handler(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));assert.equal((await second.json()).execution.status,'not_due');assert.equal(feedCalls,1);
+});
+test('missing, empty or whitespace next href is a format stop, never an /undefined or trimmed request',async()=>{
+  const [,h,xml]=await modules,parse=await parser();
+  for(const attr of ['', ' href=""', ' href="   "', ' href=" /page2 "', ' href="pa\tge2"']){
+    const body=rss(entry()).replace('</channel>','<atom:link rel="next"'+attr+'/></channel>');
+    await assert.rejects(parse(body,url),{code:'invalid_feed'});
+    const fx=fixture();let feedCalls=0;
+    const fetcher=async(endpoint,init)=>endpoint.startsWith('https://'+host)?(feedCalls++,new Response(body)):fx.fetcher(endpoint,init);
+    const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+    assert.equal(result.status,200);assert.equal((await result.json()).execution.error,'invalid_feed');assert.equal(feedCalls,1);
+    assert.equal(fx.state.connections[0].last_error,'invalid_feed');
+  }
+  assert.equal((await parse(rss(entry(),'../page%202'),url)).next,'https://'+host+'/page%202');
+});
+test('deterministic finish validation rollback gets one error-only finish preserving the original cursor',async()=>{
+  const [,h,xml]=await modules;
+  for(const code of ['rss_invalid_result','rss_invalid_pages','rss_invalid_item','rss_invalid_hash','rss_invalid_date','rss_text_limit']){
+    const fx=fixture(),finishCalls=[],originalCursor='https://'+host+'/page3';
+    const fetcher=async(endpoint,init)=>{
+      if(endpoint.endsWith('life_rss_claim')){const result=await(await fx.fetcher(endpoint,init)).json();result.cursor=originalCursor;return json(result);}
+      if(endpoint.endsWith('life_rss_finish')){
+        finishCalls.push(JSON.parse(init.body));
+        if(finishCalls.length===1)return new Response(JSON.stringify({code:'22023',message:code}),{status:400});
+      }
+      return fx.fetcher(endpoint,init);
+    };
+    const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+    assert.equal(result.status,200);assert.equal((await result.json()).execution.error,code);assert.equal(finishCalls.length,2);
+    const [rejected,recorded]=finishCalls;assert.equal(rejected.p_items.length,1);assert.equal(rejected.p_next_cursor,null);
+    assert.deepEqual(recorded,{p_connection_id:ids.connection,p_lease_token:ids.lease,p_revision:1,p_items:[],p_pages:[],p_next_cursor:originalCursor,p_complete:false,p_error:code});
+    assert.equal(fx.state.connections[0].last_error,code);assert.deepEqual(fx.state.items,[]);
+  }
+});
+test('finish ambiguity, permissions and receipt mismatches never retry with a different payload',async()=>{
+  const [,h,xml]=await modules;
+  const errors=[
+    ()=>{throw Error('connection lost after potential commit');},
+    ()=>new Response(JSON.stringify({message:'rss_invalid_item'}),{status:500}),
+    ()=>new Response(JSON.stringify({message:'rss_invalid_item'}),{status:403}),
+    ()=>new Response('broken committed response',{status:200}),
+    ()=>new Response(JSON.stringify({message:'rss_receipt_mismatch'}),{status:409}),
+    ()=>new Response(JSON.stringify({message:'private SQL diagnostic'}),{status:400})
+  ];
+  for(const rejection of errors){
+    const fx=fixture();let finishCalls=0;
+    const fetcher=async(endpoint,init)=>endpoint.endsWith('life_rss_finish')?(finishCalls++,rejection()):fx.fetcher(endpoint,init);
+    const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+    assert.ok(result.status>=400);assert.equal(finishCalls,1);assert.doesNotMatch(await result.text(),/private SQL diagnostic|potential commit|broken committed/);
+  }
+});
+test('a rejected error-only finish is not recursively retried',async()=>{
+  const [,h,xml]=await modules,fx=fixture();let finishCalls=0;
+  const fetcher=async(endpoint,init)=>endpoint.endsWith('life_rss_finish')?(finishCalls++,new Response(JSON.stringify({message:'rss_invalid_item'}),{status:400})):fx.fetcher(endpoint,init);
+  const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+  assert.ok(result.status>=400);assert.equal(finishCalls,2);
+});

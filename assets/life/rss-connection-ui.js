@@ -5,6 +5,11 @@
   const REASONS = { identity_conflict: '식별자가 겹쳐 확인 필요', date_unknown: '발행일 확인 필요', old_observed: '이전에 발행된 글', future_date: '발행일 확인 필요', content_too_large: '본문이 자료 보관 한도를 넘음',
     missing_url: '원문 주소 확인 필요', missing_content: '본문을 받지 못함', invalid_date: '발행일 형식 확인 필요', missing_identity: '항목 식별자 확인 필요',
     unsupported_content: '지원하지 않는 본문 형식', ambiguous_links: '원문 주소가 여러 개여서 확인 필요' };
+  function connectionLabel(conn) {
+    if (conn.auto_retry === true) return '자동 재시도 대기';
+    if (conn.last_error && ['pending', 'active'].includes(conn.status)) return conn.status === 'pending' ? '기준 목록 확인 중지됨' : '새 글 확인 중지됨';
+    return STATES[conn.status];
+  }
   function node(tag, text, className) {
     const value = root.document.createElement(tag);
     if (text !== undefined) value.textContent = text;
@@ -75,20 +80,25 @@
       for (const conn of page.otherConnections || []) {
         const elsewhere = node('section'); elsewhere.dataset.rssOtherConnection = conn.id;
         const address = node('p', conn.feed_url, 'life-meta'); address.style.overflowWrap = 'anywhere';
-        elsewhere.append(node('p', '다른 자료공간의 RSS 연결 · ' + STATES[conn.status]), address,
+        elsewhere.append(node('p', '다른 자료공간의 RSS 연결 · ' + connectionLabel(conn)), address,
           node('p', '기존 연결의 자료공간에서 수집 상태를 변경할 수 있습니다.', 'life-help'));
         rows.append(elsewhere);
       }
       for (const conn of page.connections) {
         const line = node('section'); line.dataset.rssConnection = conn.id;
         const address = node('p', conn.feed_url, 'life-meta'); address.style.overflowWrap = 'anywhere';
-        line.append(address, node('p', conn.last_error && ['pending', 'active'].includes(conn.status) ?
-          conn.status === 'pending' ? '기준 목록 확인 중지됨' : '새 글 확인 중지됨' : STATES[conn.status]));
+        const automaticRetry = conn.auto_retry === true;
+        line.append(address, node('p', connectionLabel(conn)));
         if (conn.baseline_at) line.append(node('p', '기준 목록 ' + conn.baseline_count + '개 · 과거 글은 가져오지 않음', 'life-help'));
-        if (conn.next_check_at && conn.status === 'active' && !conn.last_error && Number.isFinite(Date.parse(conn.next_check_at))) {
-          line.append(node('p', '다음 확인 가능: ' + new Date(conn.next_check_at).toLocaleString('ko-KR'), 'life-help'));
+        if (conn.next_check_at && (automaticRetry || conn.status === 'active' && !conn.last_error) && Number.isFinite(Date.parse(conn.next_check_at))) {
+          line.append(node('p', (automaticRetry ? '자동 재시도 예정: ' : '다음 확인 가능: ') + new Date(conn.next_check_at).toLocaleString('ko-KR'), 'life-help'));
         }
-        if (conn.last_error) line.append(node('p', root.HaedoLife.RssConnection.messages[conn.last_error] || '마지막 확인을 마치지 못했습니다. 다시 시도해 주세요.', 'life-error'));
+        if (conn.last_error) {
+          line.append(node('p', root.HaedoLife.RssConnection.messageFor(conn.last_error), 'life-error'));
+          if (automaticRetry) line.append(node('p', '일시 오류는 60분 간격으로 자동 재시도합니다. 연속 3회 실패하면 자동 확인을 멈춥니다.', 'life-help'));
+          else if (conn.failure_count === 3 && ['network_error', 'rate_limited'].includes(conn.last_error) && ['pending', 'active'].includes(conn.status))
+            line.append(node('p', '연속 3회 실패하여 자동 확인을 멈췄습니다. 연결을 확인한 뒤 다시 시도해 주세요.', 'life-help'));
+        }
         const actions = conn.status === 'pending' ? conn.last_error ? [] : [['preview', '기준 목록 미리보기']] : conn.status === 'preview' ? [['activate', '새 글만 수집 시작']] :
           conn.status === 'active' ? [...(conn.last_error ? [] : [['poll', '새 글 확인']]), ['pause', '수집 중지']] : conn.status === 'paused' ? [['resume', '수집 재개']] : [];
         if (conn.last_error && ['pending', 'active'].includes(conn.status) && !['baseline_page_limit', 'catchup_page_limit'].includes(conn.last_error)) actions.push(['retry', '다시 시도']);

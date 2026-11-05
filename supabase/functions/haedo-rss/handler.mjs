@@ -7,10 +7,15 @@ const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Meth
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS });
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const need = (ok, code = 'invalid_request') => { if (!ok) throw failure(code); };
+// These exact SQL validation exceptions are transactional rollbacks. Neither
+// transport failures nor receipt conflicts prove the original write failed.
+const FINISH_VALIDATION_ERRORS = new Set(['rss_invalid_result','rss_invalid_pages','rss_invalid_item',
+  'rss_invalid_hash','rss_invalid_date','rss_text_limit']);
 const ERRORS = new Set(['invalid_request','unauthorized','setup_required','server_error','blocked_url','invalid_feed',
   'feed_too_large','item_limit','network_error','rate_limited','revision_conflict','connection_not_found','baseline_required','not_due',
   'baseline_page_limit','baseline_stalled','catchup_page_limit',
-  'rss_conflict','rss_setup_required','rss_connection_exists','rss_baseline_required','rss_not_active','rss_not_paused','rss_retry_unavailable','rss_retry_limit','rss_invalid_feed','rss_not_found','rss_auth_required']);
+  'rss_conflict','rss_setup_required','rss_connection_exists','rss_baseline_required','rss_not_active','rss_not_paused','rss_retry_unavailable','rss_retry_limit','rss_invalid_feed','rss_not_found','rss_auth_required',
+  'rss_receipt_mismatch', ...FINISH_VALIDATION_ERRORS]);
 function same(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string' || !right.length || left.length !== right.length) return false;
   let mismatch = 0; for (let i = 0; i < right.length; i++) mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i); return !mismatch;
@@ -59,8 +64,12 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         if (!res.ok) {
           let code = 'server_error';
           if ([401,403].includes(res.status)) code = 'unauthorized';
-          try { const error = JSON.parse(await readBounded(res, 4096)); if (ERRORS.has(error.message)) code = error.message; } catch (_) { /* never expose upstream text */ }
-          await res.body?.cancel(); throw failure(code);
+          try {
+            const error = JSON.parse(await readBounded(res, 4096));
+            if (res.status < 500 && ERRORS.has(error.message) &&
+              (!FINISH_VALIDATION_ERRORS.has(error.message) || res.status === 400)) code = error.message;
+          } catch (_) { /* never expose upstream text */ }
+          await res.body?.cancel(); throw Object.assign(failure(code), { httpStatus: res.status });
         }
         let result; try { result = JSON.parse(await readBounded(res, max)); } catch (_) { throw failure('server_error'); }
         return result;
@@ -81,8 +90,19 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
             parse: createParser({ XMLParser, XMLValidator }), fetcher, allowedHosts, signal: request.signal });
           error = collected.error || null;
         } catch (caught) { error = ERRORS.has(caught.code) ? caught.code : 'network_error'; }
-        const result = await serviceRPC('life_rss_finish', { p_connection_id: id, p_lease_token: claim.lease_token, p_revision: claim.revision,
-          p_items: collected.items, p_next_cursor: collected.cursor, p_complete: collected.complete, p_error: error, p_pages: collected.pages });
+        const lease = { p_connection_id: id, p_lease_token: claim.lease_token, p_revision: claim.revision };
+        let result;
+        try {
+          result = await serviceRPC('life_rss_finish', { ...lease, p_items: collected.items, p_next_cursor: collected.cursor,
+            p_complete: collected.complete, p_error: error, p_pages: collected.pages });
+        } catch (rejected) {
+          if (rejected.httpStatus !== 400 || !FINISH_VALIDATION_ERRORS.has(rejected.code)) throw rejected;
+          error = rejected.code;
+          // Exactly one error-only write with the original lease and cursor.
+          // Do not advance any observation from the rejected transaction.
+          result = await serviceRPC('life_rss_finish', { ...lease, p_items: [], p_pages: [],
+            p_next_cursor: claim.cursor, p_complete: false, p_error: error });
+        }
         need(object(result) && ['stored','stale','already_finished','error','partial'].includes(result.status), 'server_error');
         return { status: result.status, inserted: result.inserted || 0, held: result.held || 0,
           error: result.error ? ERRORS.has(result.error) ? result.error : 'server_error' : error };

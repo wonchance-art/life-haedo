@@ -81,7 +81,7 @@ class RssCloud extends FakeCloud {
   connection(workspaceId, owner = accounts.a.id, status = 'pending') {
     const row = { id: 'cccccccc-cccc-4ccc-8ccc-000000000001', workspace_id: workspaceId, feed_url: FEED,
       status, revision: 1, baseline_at: null, baseline_count: 0, activated_at: null, cursor: null,
-      last_error: null, last_checked_at: null, next_check_at: null };
+      last_error: null, failure_count: 0, last_checked_at: null, next_check_at: null };
     this.connections.set(owner, row); return row;
   }
   item(conn, overrides = {}) {
@@ -90,11 +90,19 @@ class RssCloud extends FakeCloud {
       content_hash: hash(RAW), published_at: '2026-11-05T05:01:00.000Z', fetched_at: '2026-11-05T06:01:00.000Z',
       disposition: 'stored', reason: null, ...overrides };
   }
+  finishFailure(conn, code) {
+    conn.last_error = code; conn.failure_count = Math.min(3, conn.failure_count + 1);
+    conn.last_checked_at = '2026-11-05T06:01:00.000Z'; conn.next_check_at = '2026-11-05T07:01:00.000Z';
+  }
+  viewConnection(conn) {
+    return { ...clone(conn), auto_retry: ['pending', 'active'].includes(conn.status) &&
+      ['network_error', 'rate_limited'].includes(conn.last_error) && conn.failure_count < 3 };
+  }
   snapshot(owner, workspaceId) {
     const conn = this.connections.get(owner);
-    return { configured: this.configured, ready: this.configured, connections: conn && conn.workspace_id === workspaceId ? [clone(conn)] : [],
+    return { configured: this.configured, ready: this.configured, connections: conn && conn.workspace_id === workspaceId ? [this.viewConnection(conn)] : [],
       items: conn && conn.workspace_id === workspaceId ? clone(this.items.filter(item => item.owner_id === owner && item.connection_id === conn.id)) : [],
-      other_connections: conn && conn.workspace_id !== workspaceId ? [clone(conn)] : [], has_more: false, next_cursor: null };
+      other_connections: conn && conn.workspace_id !== workspaceId ? [this.viewConnection(conn)] : [], has_more: false, next_cursor: null };
   }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url());
@@ -106,12 +114,16 @@ class RssCloud extends FakeCloud {
     assert.ok(Object.values(accounts).some(value => value.id === owner), 'Synthetic authenticated owner only');
     this.calls.push({ owner, device, body: clone(body) });
     const { action, workspaceId } = body;
-    if (this.failure === action) { const row = this.connections.get(owner); if (row) row.last_error = 'fetch_failed'; return send({ error: this.failureCode || 'rss_network_error' }, this.failureStatus); }
+    if (this.failure === action) {
+      const row = this.connections.get(owner), code = this.failureCode || 'network_error';
+      if (row && ['poll', 'preview'].includes(action) && ['network_error', 'rate_limited', 'rss_invalid_item', 'invalid_feed'].includes(code)) this.finishFailure(row, code);
+      return send({ error: code }, this.failureStatus);
+    }
     if (action !== 'list' && !this.configured) return send({ error: 'setup_required' });
     if (action === 'poll' && this.executionOutcome) return send({ ...this.snapshot(owner, workspaceId), execution: { status: this.executionOutcome } });
     if (action === 'preview' && this.baselineOutcome) {
       const pending = this.connections.get(owner); assert.ok(pending && pending.workspace_id === workspaceId && pending.status === 'pending');
-      pending.last_error = this.baselineOutcome; return send({ ...this.snapshot(owner, workspaceId), execution: { status: 'error', error: this.baselineOutcome } });
+      this.finishFailure(pending, this.baselineOutcome); return send({ ...this.snapshot(owner, workspaceId), execution: { status: 'error', error: this.baselineOutcome } });
     }
     let conn = this.connections.get(owner);
     if (action === 'register') {
@@ -125,12 +137,12 @@ class RssCloud extends FakeCloud {
       } else if (action === 'poll') {
         assert.equal(conn.status, 'active');
         this.items.push(...this.nextItems.filter(item => !this.items.some(old => old.id === item.id))); this.nextItems = [];
-        conn.last_checked_at = '2026-11-05T06:01:00.000Z'; conn.next_check_at = '2026-11-05T07:01:00.000Z';
+        conn.last_checked_at = '2026-11-05T06:01:00.000Z'; conn.next_check_at = '2026-11-05T07:01:00.000Z'; conn.last_error = null; conn.failure_count = 0;
       } else if (action === 'activate' || action === 'resume' || action === 'retry') {
         if (action === 'activate') { assert.equal(conn.status, 'preview'); conn.activated_at = conn.baseline_at; }
-        if (action === 'retry' && conn.status === 'pending') { conn.status = 'preview'; conn.baseline_count = 2; conn.baseline_at = '2026-11-05T05:00:00.000Z'; }
+        if (action === 'retry' && conn.status === 'pending') { conn.cursor = null; conn.status = 'preview'; conn.baseline_count = 2; conn.baseline_at = '2026-11-05T05:00:00.000Z'; }
         else conn.status = 'active';
-        conn.revision++; if (action === 'retry') conn.last_error = null;
+        conn.revision++; if (action === 'retry') { conn.last_error = null; conn.failure_count = 0; }
       } else if (action === 'pause') { conn.status = 'paused'; conn.revision++; }
       else if (action === 'disconnect') { conn.status = 'disconnected'; conn.revision++; }
       else throw Error('Unexpected RSS fixture action ' + action);
@@ -181,6 +193,7 @@ async function main() {
       const mutations = {
         'skip-hash': ['need(await step(context, () => hash(row.content_text)) === row.content_hash);', '/* Mutation: incoming content hash verification removed. */'],
         'only-active': ["if (row.disposition !== 'stored')", "if (row.disposition !== 'stored' || page.connections.find(conn => conn.id === row.connection_id)?.status !== 'active')"],
+        'disable-auto-retry-clock': ['const automaticRetry = conn.auto_retry === true;', 'const automaticRetry = false;', 'rss-connection-ui.js'],
         'no-disconnect-confirm': ["if (action === 'disconnect' && !root.confirm('받은 자료는 그대로 유지됩니다. 다시 연결하면 기준 목록부터 새로 만듭니다. 연결을 해제할까요?')) return;", '/* Mutation: disconnect confirmation removed. */', 'rss-connection-ui.js']
       };
       const [needle, replacement, moduleName = 'rss-connection.js'] = mutations[process.env.RSS_BROWSER_MUTATION] || [];
@@ -226,11 +239,11 @@ async function main() {
       await page.locator('#rssError:not([hidden])').waitFor(); assert.deepEqual(await sources(page), before, 'failed intake preserves exact originals');
       server.failure = null;
       await page.locator('#rssRefresh').click(); await idle(page);
-      assert.doesNotMatch(await page.locator('[data-rss-connection]').innerText(), /다음 확인 가능/, 'an errored connection has no actionable next-check clock');
+      assert.match(await page.locator('[data-rss-connection]').innerText(), /다음 확인 가능|다음 자동|자동 재시도 예정/, 'first transient failure retains an automatic retry clock');
       await action(page, 'pause'); await idle(page); assert.equal(conn.status, 'paused');
       assert.equal(await page.locator('[data-rss-action="retry"]').count(), 0, 'paused error does not offer a retry that SQL rejects');
       assert.equal(await page.locator('[data-rss-action="resume"]').isEnabled(), true);
-      await action(page, 'resume'); await idle(page); assert.equal(conn.last_error, 'fetch_failed', 'resume retains the error until explicit retry');
+      await action(page, 'resume'); await idle(page); assert.equal(conn.last_error, 'network_error', 'resume retains the error until explicit retry');
       assert.equal(await page.locator('[data-rss-action="retry"]').isEnabled(), true);
       await action(page, 'retry'); await idle(page);
       await disconnect(page); assert.equal(conn.status, 'disconnected');
@@ -262,7 +275,7 @@ async function main() {
       { code: 'rss_not_found', action: 'poll', status: 'active', pattern: /연결/, httpStatus: 403 }
     ]) await check('dedicated service error keeps input and originals: ' + scenario.code, async ({ page, server }) => {
       const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
-      if (scenario.status) { const conn = server.connection(ws, accounts.a.id, scenario.status); if (scenario.action === 'retry') conn.last_error = 'fetch_failed'; }
+      if (scenario.status) { const conn = server.connection(ws, accounts.a.id, scenario.status); if (scenario.action === 'retry') { conn.last_error = 'network_error'; conn.failure_count = 3; } }
       await open(page); await idle(page); await page.locator('#rssFeedUrl').fill(FEED);
       server.failure = scenario.action; server.failureCode = scenario.code; server.failureStatus = scenario.httpStatus || 200;
       page.expectedRssHttpStatus = scenario.httpStatus;
@@ -276,12 +289,15 @@ async function main() {
     });
     for (const code of ['baseline_stalled', 'baseline_page_limit']) await check('bounded baseline failure preserves its stop and recovery policy: ' + code, async ({ page, server }) => {
       const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
-      const conn = server.connection(ws, accounts.a.id, 'pending'); server.baselineOutcome = code;
+      const conn = server.connection(ws, accounts.a.id, 'pending');
+      if (code === 'baseline_stalled') { conn.baseline_count = 2; conn.cursor = FEED + '?page=3'; }
+      server.baselineOutcome = code;
       await open(page); await idle(page); await action(page, 'preview'); await idle(page);
       assert.equal(conn.status, 'pending'); assert.equal(conn.last_error, code);
       assert.match(await page.locator('[data-rss-connection]').innerText(), /기준 목록 확인 중지됨/);
       const shown = await page.locator('#rssError').innerText();
-      assert.match(shown, /기준 목록/); assert.doesNotMatch(shown, /연결을 완료하지 못했습니다/, 'bounded failure has its own recovery explanation');
+      assert.match(shown, /기준 목록/);
+      if (code === 'baseline_stalled') { assert.match(shown, /첫 쪽부터/); assert.match(shown, /이미 받은 기준 목록과 자료는 유지/); } assert.doesNotMatch(shown, /연결을 완료하지 못했습니다/, 'bounded failure has its own recovery explanation');
       assert.doesNotMatch(await page.locator('#rssStatus').innerText(), /확인했습니다|나머지.*확인합니다/, 'terminal baseline failure cannot imply continuing work');
       await checkSource(page, 0);
       if (code === 'baseline_page_limit') {
@@ -294,6 +310,8 @@ async function main() {
       // entries remain excluded rather than being installed as newly posted text.
       server.baselineOutcome = null; await action(page, 'retry'); await idle(page);
       assert.equal(conn.status, 'preview'); assert.equal(conn.last_error, null);
+      assert.equal(conn.baseline_count, 2, 'baseline restart keeps the previously observed baseline entries');
+      assert.equal(conn.cursor, null, 'baseline retry restarts from the feed head');
       assert.equal(await page.locator('[data-rss-action="activate"]').isEnabled(), true);
       await checkSource(page, 0);
     });
@@ -310,6 +328,48 @@ async function main() {
       await page.locator('[data-rss-item="dddddddd-dddd-4ddd-8ddd-000000000001"]').click();
       assert.equal(await page.locator('#rssItemBody').textContent(), RAW);
       await disconnect(page); assert.deepEqual(await sources(page), before, 'disconnect preserves the partial catch-up archive');
+    });
+    for (const code of ['network_error', 'rate_limited']) await check('transient failures show automatic retry until the third failure: ' + code, async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'active'); await open(page); await idle(page);
+      const before = await sources(page), row = page.locator('[data-rss-connection]');
+      // These synthetic finishes represent independent worker/Cron attempts;
+      // the browser reads their state and must not launch additional retries.
+      for (let failure = 1; failure <= 3; failure++) {
+        server.finishFailure(conn, code); await page.locator('#rssRefresh').click(); await idle(page);
+        assert.equal(conn.failure_count, failure); const text = await row.innerText();
+        if (failure < 3) {
+          assert.match(text, /자동 재시도 대기/); assert.match(text, /자동 재시도 예정:/);
+          assert.match(text, /60분 간격/); assert.doesNotMatch(text, /확인 중지됨/);
+          if (failure === 1) {
+            await action(page, 'pause'); await idle(page);
+            assert.doesNotMatch(await row.innerText(), /자동 재시도 예정:|다음 확인 가능:/, 'paused transient error has no automatic clock');
+            assert.equal(await page.locator('[data-rss-action="retry"]').count(), 0);
+            assert.equal(await page.locator('[data-rss-action="resume"]').isEnabled(), true);
+            await action(page, 'resume'); await idle(page); assert.equal(conn.failure_count, 1);
+            assert.match(await row.innerText(), /자동 재시도 예정:/);
+          }
+        } else {
+          assert.match(text, /새 글 확인 중지됨/); assert.match(text, /연속 3회 실패하여 자동 확인을 멈췄습니다/);
+          assert.doesNotMatch(text, /자동 재시도 예정:|다음 확인 가능:/);
+          assert.equal(await page.locator('[data-rss-action="retry"]').isEnabled(), true);
+        }
+        assert.deepEqual(await sources(page), before, 'failure state changes cannot alter stored originals');
+      }
+      assert.equal(server.calls.filter(call => ['poll', 'retry'].includes(call.body.action)).length, 0, 'viewing automatic retry state does not issue manual attempts');
+      await action(page, 'retry'); await idle(page);
+      assert.equal(conn.failure_count, 0); assert.equal(conn.last_error, null);
+      assert.doesNotMatch(await row.innerText(), /자동 재시도 대기|확인 중지됨/);
+    });
+    await check('invalid collected data stops immediately without an automatic retry clock', async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'active'); server.finishFailure(conn, 'rss_invalid_item');
+      await open(page); await idle(page); assert.equal(conn.failure_count, 1);
+      const text = await page.locator('[data-rss-connection]').innerText();
+      assert.match(text, /새 글 확인 중지됨/); assert.doesNotMatch(text, /자동 재시도 예정:|다음 확인 가능:|자동 재시도 대기/);
+      assert.equal(await page.locator('[data-rss-action="poll"]').count(), 0);
+      assert.equal(await page.locator('[data-rss-action="retry"]').isEnabled(), true, 'hard data error waits for explicit operator recovery');
+      await checkSource(page, 0);
     });
     await check('not_due and stale do not claim that collection ran', async ({ page, server }) => {
       const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
