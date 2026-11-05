@@ -47,3 +47,51 @@ test('save and publish surface the known format failure once while retaining the
     assert.deepEqual(calls[1].params.p_data, before);
   } finally { remote.dispose(); }
 });
+
+test('temporary Auth service failures keep retry guidance without asking the user to log in', async () => {
+  for (const status of [429, 500, 502, 503, 504]) {
+    const error = Remote.clean({ status, message: 'private Auth response', details: 'private account' });
+    assert.equal(error.code, 'network_error');
+    assert.match(error.message, /서버 연결.*다시 시도/);
+    assert.doesNotMatch(error.message, /로그인|private|Auth/);
+    assert.equal(Object.hasOwn(error, 'details'), false);
+  }
+  assert.equal(Remote.clean({ status: 401 }).code, 'auth_required', 'an actually invalid session still needs account confirmation');
+
+  const owner = randomUUID(), postId = randomUUID(), operationId = randomUUID(), calls = [];
+  let failure;
+  const auth = { ready: true, epoch: 1, user: { id: owner }, session: { user: { id: owner } },
+    verify: async () => ({ id: owner }), client: { rpc: async () => { throw Error('unexpected legacy RPC'); },
+      functions: { invoke: async (name, options) => {
+        calls.push({ name, body: structuredClone(options.body) }); return { data: null, error: failure };
+      } } } };
+  const remote = Remote.create({ auth, blog: Blog });
+  const selection = { documentFormat: 'life-post-md-v1', photoIds: [], author: { name: '작성자', intro: '' }, expectedPublicRevision: 2 };
+  const before = structuredClone(selection);
+  try {
+    for (const [status, payload, code] of [
+      [502, { code: 'network_error', message: 'private Auth 503 response' }, 'network_error'],
+      [429, { message: 'private rate limit response' }, 'network_error'],
+      [503, null, 'network_error'],
+      [401, { code: 'auth_required' }, 'auth_required'],
+    ]) {
+      failure = { name: 'FunctionsHttpError', context: { status, json: async () => payload } };
+      const count = calls.length;
+      await assert.rejects(remote.publish(postId, 3, operationId, selection), error => {
+        assert.equal(error.code, code);
+        assert.equal(error.message, Remote.fault(code).message);
+        assert.doesNotMatch(error.message, /private|503|Auth/);
+        if (code === 'network_error') {
+          assert.match(error.message, /글은 이 기기에 남아 있고.*다시 시도/);
+          assert.doesNotMatch(error.message, /로그인/);
+        }
+        return true;
+      });
+      assert.equal(calls.length, count + 1, 'the adapter does not silently retry a failed publication');
+      assert.equal(calls.at(-1).name, 'haedo-blog-publish');
+      assert.equal(calls.at(-1).body.p_operation_id, operationId);
+      assert.deepEqual(selection, before, 'retryable errors retain the publication selection');
+    }
+    assert.ok(calls.every(call => JSON.stringify(call.body) === JSON.stringify(calls[0].body)), 'retry attempts retain the exact operation and CAS intent');
+  } finally { remote.dispose(); }
+});

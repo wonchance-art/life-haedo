@@ -41,7 +41,8 @@ async function fixture(options = {}) {
     const ops = projectMarkdownOps(source, selection); options.afterProject?.(); return ops;
   };
   const environment = name => (options.environment || ENV)[name];
-  const handler = createHandler({ fetcher, environment, project, ...(options.now ? { now: options.now } : {}) });
+  const handler = createHandler({ fetcher, environment, project, ...(options.now ? { now: options.now } : {}),
+    ...(options.origins ? { origins: options.origins } : {}) });
   const request = (value = input, extra = {}) => new Request(PROJECT + '/functions/v1/haedo-blog-publish', {
     method: 'POST', headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json', Origin: 'https://wonchance-art.github.io' },
     body: JSON.stringify(value), ...extra,
@@ -114,6 +115,46 @@ test('API keys, anonymous/invalid users and Auth rejection never reach the datab
     const f = await fixture(options), response = await f.handler(f.request());
     assert.equal(response.status, 401); assert.deepEqual(await response.json(), { code: 'auth_required' });
     assert.equal(f.calls.length, 1); assert.equal(f.projected.length, 0);
+  }
+});
+
+test('without gateway JWT verification the handler rejects missing, forged and expired tokens itself', async () => {
+  const f = await fixture();
+  const absent = await f.handler(f.request(f.input, { headers: { 'Content-Type': 'application/json' } }));
+  assert.equal(absent.status, 401); assert.deepEqual(await absent.json(), { code: 'auth_required' }); assert.equal(f.calls.length, 0);
+  const encoded = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  for (const [claims, authMessage] of [
+    [{ sub: OWNER, role: 'authenticated', exp: 9999999999 }, 'invalid JWT signature'],
+    [{ sub: OWNER, role: 'authenticated', exp: 1 }, 'JWT expired'],
+  ]) {
+    const supplied = encoded({ alg: 'HS256', typ: 'JWT' }) + '.' + encoded(claims) + '.tampered-signature';
+    const bad = await fixture({ fetcher: call => {
+      assert.equal(call.url, PROJECT + '/auth/v1/user');
+      assert.equal(call.headers.Authorization, 'Bearer ' + supplied);
+      return Response.json({ code: 'bad_jwt', message: authMessage + ': ' + supplied }, { status: 401 });
+    } });
+    const response = await bad.handler(bad.request(bad.input, { headers: { Authorization: 'Bearer ' + supplied, 'Content-Type': 'application/json' } }));
+    assert.equal(response.status, 401); assert.deepEqual(await response.json(), { code: 'auth_required' });
+    assert.equal(bad.calls.length, 1); assert.equal(bad.projected.length, 0);
+  }
+});
+
+test('Auth 429 and 5xx at either authentication point stay retryable and never dispatch service commit', async () => {
+  for (const status of [429, 500, 502, 503]) for (const failingAuth of [1, 2]) {
+    let authCalls = 0;
+    const f = await fixture({ fetcher: (call, state) => {
+      if (call.url.endsWith('/user')) {
+        if (++authCalls === failingAuth) return Response.json({ message: 'upstream diagnostic ' + TOKEN + ' ' + SECRET }, { status });
+        return Response.json({ id: OWNER, role: 'authenticated', is_anonymous: false });
+      }
+      assert(call.url.endsWith('_prepare'), 'service commit must not run after temporary Auth failure');
+      return Response.json(state.prepared);
+    } });
+    const response = await f.handler(f.request());
+    assert.equal(response.status, 502); assert.deepEqual(await response.json(), { code: 'network_error' });
+    assert.equal(authCalls, failingAuth); assert.equal(f.projected.length, failingAuth - 1);
+    assert.equal(f.calls.some(call => call.url.endsWith('_commit')), false);
+    assert(f.calls.every(call => call.headers.apikey === PUBLIC_KEY));
   }
 });
 
@@ -210,6 +251,23 @@ test('origin, method, declared/streamed request bounds and upstream bounds fail 
     const response = await bad.handler(bad.request());
     assert.deepEqual(await response.json(), { code: 'invalid_remote_data' });
   }
+});
+
+test('isolated harness origins are injectable without expanding or mutating the deployed product allowlist', async () => {
+  const { ALLOWED_ORIGINS } = await endpoint;
+  const original = ['https://wonchance-art.github.io', 'http://127.0.0.1:4173', 'http://localhost:4173'];
+  assert.deepEqual(ALLOWED_ORIGINS, original);
+  const ciOrigin = 'http://127.0.0.1:4184', headers = { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json', Origin: ciOrigin };
+  const product = await fixture(), blocked = await product.handler(product.request(product.input, { headers }));
+  assert.equal(blocked.status, 403); assert.equal(blocked.headers.has('access-control-allow-origin'), false); assert.equal(product.calls.length, 0);
+  const origins = [ciOrigin], isolated = await fixture({ origins });
+  origins.push('https://untrusted.invalid');
+  const accepted = await isolated.handler(isolated.request(isolated.input, { headers }));
+  assert.equal(accepted.status, 200); assert.equal(accepted.headers.get('access-control-allow-origin'), ciOrigin);
+  assert.equal(isolated.calls.filter(call => call.url.endsWith('/user')).length, 2, 'injected origin never bypasses authentication');
+  const excluded = await isolated.handler(isolated.request(isolated.input, { headers: { ...headers, Origin: 'https://untrusted.invalid' } }));
+  assert.equal(excluded.status, 403); assert.equal(excluded.headers.has('access-control-allow-origin'), false);
+  assert.deepEqual(ALLOWED_ORIGINS, original, 'test injection leaves product defaults unchanged');
 });
 
 test('abort or expired deadline after projection never dispatches commit', async () => {

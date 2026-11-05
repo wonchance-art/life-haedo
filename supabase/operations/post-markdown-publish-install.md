@@ -5,7 +5,7 @@
 1. B3 적용 전에 총괄이 현재 함수 정의·권한과 [B1 설치 전 크기 확인](post-markdown-install.md)의 행 수·바이트 합계를 기록한다. 본문·계정 ID·키는 조회 결과에 내보내지 않는다.
 2. B1 `20261105051632_life_post_markdown.sql`의 최종 정의/권한/트리거가 맞는지 다시 대조한 뒤 `20261105081055_life_post_markdown_publish.sql`을 적용한다. 새 migration 전체는 단일 DO 문장이고, 그 안에서 변경 전후 행 수·해시를 비교한다. 문장별 커밋 도구에서도 정의 변경과 보호가 한 트랜잭션이다. B1의 `ON COMMIT DROP` 임시 표 방식은 SQL Editor에서 문장 사이에 표가 사라졌으므로 되풀이하지 않는다. B3 뒤에 과거 B1 정의를 다시 설치하지 않으며, 기존 글·사진·공개 사본·영수증은 변경하지 않는다.
 3. `supabase/functions/haedo-blog-publish/index.ts`를 진입점으로 배포한다. 실제 `assets/life/post-markdown.js`와 vendor 파일을 직접 import하므로 프로젝트 루트 밖으로 파일을 따로 복사하지 않는다. 함수 디렉터리만 복사한 배포는 의존성을 잃는다. [Supabase 외부 경로 import 지원](https://supabase.com/changelog/33613-deploy-edge-functions-from-cli-without-needing-docker-import-files-outside-of-supabase-directory)과 [의존성 안내](https://supabase.com/docs/guides/functions/dependencies)를 따른다. 배포 도구의 현행 도움말·원격 대상·업로드 파일을 총괄이 확인한다.
-4. 플랫폼 JWT 검사는 사용자 JWT 호출에 맞춰 유지한다. 플랫폼 검사만 믿지 않고 함수에서도 시작 시점과 commit 직전 두 번 Auth 사용자를 확인하고, DB는 현재 세션을 다시 검증한다. 기존 공통 키 선택기를 쓰며 서비스 비밀값을 클라이언트 설정이나 Pages 산출물에 넣지 않는다.
+4. 서명 키 회전에 대비한 [총괄 배포 결정](../../docs/life-tools-design/weekly-tech-review.md#총괄-판정-2026-11-04)에 맞춰 `verify_jwt=false`로 배포한다. 함수가 시작 시점과 commit 직전 두 번 Auth 사용자를 확인하고, DB는 현재 세션을 다시 검증한다. 토큰이 없거나 위조·만료로 Auth가 거부하면 게시하지 않는다. Auth의 429·5xx는 재로그인 요구 대신 일시 오류로 처리한다. 기존 공통 키 선택기를 쓰며 서비스 비밀값을 클라이언트 설정이나 Pages 산출물에 넣지 않는다.
 5. 적용 후 기존 함수·ACL·행 수/해시 보존, 익명/일반 사용자의 commit 호출 거부, 기존 v2 공개·철회, md 직접 RPC 거부와 Edge 경유 공개를 확인한다. 새 공개는 명시 선택한 사진의 등록된 사본만 사용하며 기본은 0장이다. 운영 합성 쓰기가 필요하면 총괄의 허용 범위에서 수행하고 개인 글을 시험 데이터로 사용하지 않는다.
 
 기존 account-sync/AI 설치 묶음은 B1 publish 정의를 보존한다. B3는 해당 함수를 다시 정의하지 않고 별도 prepare/commit을 추가한다. 격리 검사에서는 B3 후 설치 묶음 재실행과 SQL 전체 재생의 최종 정의가 그대로인지 확인한다.
@@ -24,12 +24,12 @@ SQL_REPLAY_REQUIRED=1 npm run test:sql-replay
 node tests/integrated-release-installation.cjs
 ```
 
-브라우저 검사는 별도 터미널의 `npm run dev`와 아래 고정 PostgreSQL 컨테이너를 쓴다. `pg_isready`가 준비 완료를 반환한 뒤 검사를 실행한다. `--prepare-database`는 이름이 같은 DB가 이미 있으면 중단하며 기존 DB를 초기화하지 않는다.
+브라우저 검사는 별도 터미널의 `npm run dev -- --port 4184`와 아래 고정 PostgreSQL 컨테이너를 쓴다. 검사 harness만 `BASE_URL`의 출처를 handler 생성자에 주입하며 제품 허용 목록은 바꾸지 않는다. `pg_isready`가 준비 완료를 반환한 뒤 검사를 실행한다. `--prepare-database`는 이름이 같은 DB가 이미 있으면 중단하며 기존 DB를 초기화하지 않는다.
 
 ```sh
 docker --host=unix:///var/run/docker.sock run -d --name haedo-blog-postgres-61735 --network none -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
 docker --host=unix:///var/run/docker.sock exec haedo-blog-postgres-61735 pg_isready -U postgres
-BASE_URL=http://127.0.0.1:4173 BLOG_POSTGRES_CONTAINER=haedo-blog-postgres-61735 BLOG_POSTGRES_DATABASE=haedo_blog_qa_b3_final node tests/post-markdown-publish-browser.cjs --prepare-database
+BASE_URL=http://127.0.0.1:4184 BLOG_POSTGRES_CONTAINER=haedo-blog-postgres-61735 BLOG_POSTGRES_DATABASE=haedo_blog_qa_b3_final node tests/post-markdown-publish-browser.cjs --prepare-database
 docker --host=unix:///var/run/docker.sock rm -f haedo-blog-postgres-61735
 ```
 

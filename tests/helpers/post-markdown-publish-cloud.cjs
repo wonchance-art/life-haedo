@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { LocalSQLBlogCloud } = require('../blog-completion-browser.cjs');
-const { accounts, cloud, publicKey, session } = require('../life-sync-browser.cjs');
+const { accounts, cloud, publicKey, session, base } = require('../life-sync-browser.cjs');
 const SECRET = 'sb_secret_isolated_browser_fixture';
 const SESSION_IDS = { [accounts.a.id]: '11111111-aaaa-4111-8111-111111111111', [accounts.b.id]: '22222222-bbbb-4222-8222-222222222222' };
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
@@ -31,7 +31,9 @@ class MarkdownPublishCloud extends LocalSQLBlogCloud {
     const fetcher = this.edgeFetch.bind(this);
     const publish = await import(pathToFileURL(path.resolve(__dirname, '../../supabase/functions/haedo-blog-publish/handler.mjs')));
     const media = await import(pathToFileURL(path.resolve(__dirname, '../../supabase/functions/haedo-blog-media/index.ts')));
-    this.publishHandler = publish.createHandler({ fetcher, environment });
+    // CI serves this same app on its assigned loopback port. Inject only that
+    // fixture origin; the product handler's default allowlist stays unchanged.
+    this.publishHandler = publish.createHandler({ fetcher, environment, origins: [new URL(base).origin] });
     this.mediaHandler = media.createHandler({ fetcher, environment });
   }
   sql(query, { owner = null, role = 'postgres' } = {}) {

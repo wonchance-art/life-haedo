@@ -87,14 +87,17 @@ function databaseError(value, status) {
 
 /** No SDK/session cache: credentials, identity and source stay request-scoped.
  * `project` is the same maintained browser codec/projection, injectable for tests.
- * @param {{fetcher?: typeof fetch, environment?: (name: string) => string | undefined, project?: typeof projectMarkdownOps, now?: () => number}} [options]
+ * `origins` lets the isolated browser harness use its own server port; the
+ * deployed entrypoint always uses the fixed product allowlist above.
+ * @param {{fetcher?: typeof fetch, environment?: (name: string) => string | undefined, project?: typeof projectMarkdownOps, now?: () => number, origins?: ReadonlyArray<string>}} [options]
  */
-export function createHandler({ fetcher = fetch, environment = name => globalThis.Deno?.env.get(name), project = projectMarkdownOps, now = Date.now } = {}) {
+export function createHandler({ fetcher = fetch, environment = name => globalThis.Deno?.env.get(name), project = projectMarkdownOps, now = Date.now, origins = ALLOWED_ORIGINS } = {}) {
+  const allowedOrigins = new Set(origins);
   return async request => {
     const originHeader = request.headers.get('origin'), headers = { ...BASE_HEADERS };
-    if (ALLOWED_ORIGINS.includes(originHeader)) headers['Access-Control-Allow-Origin'] = originHeader;
+    if (allowedOrigins.has(originHeader)) headers['Access-Control-Allow-Origin'] = originHeader;
     const respond = (value, status = 200) => new Response(JSON.stringify(value), { status, headers });
-    if (originHeader !== null && !ALLOWED_ORIGINS.includes(originHeader)) return respond({ code: 'permission_denied' }, 403);
+    if (originHeader !== null && !allowedOrigins.has(originHeader)) return respond({ code: 'permission_denied' }, 403);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     if (request.method !== 'POST') return respond({ code: 'invalid_request' }, 405);
     const deadline = now() + LIMITS.deadline;
@@ -102,8 +105,8 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
     const signal = ms => { active(); return AbortSignal.any([request.signal, AbortSignal.timeout(Math.max(1, Math.min(ms, deadline - now())))]); };
     try {
       active();
-      // Gateway verify_jwt is defense in depth, not user identity: migration
-      // compatibility may admit API keys. Auth verifies this JWT on every call.
+      // Deployment uses verify_jwt=false for signing-key rotation. The shape
+      // check is not authentication: Auth verifies this JWT on every call.
       const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
       need(token && token.length <= 8192, 'auth_required');
       need(request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() === 'application/json');
@@ -117,7 +120,11 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         const authSignal = signal(5000);
         const authenticated = await fetcher(origin + '/auth/v1/user', { method: 'GET', credentials: 'omit', redirect: 'error', signal: authSignal,
           headers: { apikey: publicKey, Authorization: 'Bearer ' + token } });
-        if (!authenticated.ok) { void authenticated.body?.cancel().catch(() => {}); throw fail('auth_required'); }
+        if (!authenticated.ok) {
+          void authenticated.body?.cancel().catch(() => {});
+          const temporary = authenticated.status === 429 || authenticated.status >= 500;
+          throw fail(temporary ? 'network_error' : 'auth_required');
+        }
         const user = await boundedJSON(authenticated, LIMITS.auth, authSignal, 'invalid_remote_data');
         need(object(user) && uuid(user.id) && user.role === 'authenticated' && user.is_anonymous !== true, 'auth_required');
         return user;

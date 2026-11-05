@@ -85,8 +85,11 @@ declare who uuid:=p_owner_id; h bytea; prior haedo_blog_private.receipts%rowtype
  mapping jsonb:='{}'; photos jsonb:='[]'; ops jsonb:='[]'; media jsonb:='{}'; selected_photos jsonb; validation_ops jsonb; projected jsonb; end_index integer;
  item jsonb; src jsonb; op jsonb; a haedo_blog_private.assets%rowtype; public_id text; snapshot jsonb; r jsonb; rev bigint; tok uuid; created timestamptz;
 begin
- -- SET ROLE is a PostgreSQL privilege boundary, not a custom GUC or JWT value.
- -- SECURITY DEFINER changes current_user but preserves this original role.
+ -- PostgREST selects the role after verifying the request's credentials;
+ -- SECURITY DEFINER changes current_user but preserves that selected role.
+ -- Its authenticator can SET ROLE service_role if given arbitrary SQL. This
+ -- boundary therefore also requires that no exposed RPC executes caller SQL
+ -- or accepts caller-controlled role configuration; JWT/custom GUCs do not count.
  if current_setting('role',true) is distinct from 'service_role' then raise exception using errcode='42501',message='life_auth_required'; end if;
  if not haedo_blog_private.markdown_session_live(who,p_session_id) then raise exception using errcode='42501',message='life_auth_required'; end if;
  h:=haedo_blog_private.markdown_publish_hash(p_post_id,p_expected_revision,p_operation_id,p_photo_ids,p_author,p_expected_publication_revision,p_copies);
@@ -166,8 +169,11 @@ end $$;
 -- The old authenticated publishers still reject Markdown. Even a historical
 -- definition accidentally replayed outside its guarded installer cannot write
 -- an active Markdown publication. Only the service-role commit above crosses
--- this boundary. Clients cannot SET ROLE (or set_config role) to service_role;
--- SECURITY DEFINER functions cannot change role, and JWT/custom GUCs do not count.
+-- this boundary. PostgREST's authenticator is a member of service_role, so native
+-- role alone is not a defense against arbitrary SQL execution. Clients have no
+-- such SQL/configuration RPC: exposed entry points use fixed calls and parameters.
+-- The service-only EXECUTE grants and verified request role work together;
+-- SECURITY DEFINER preserves that role and cannot itself change it.
 create or replace function haedo_blog_private.markdown_publication_requires_parser()
 returns trigger language plpgsql set search_path=pg_catalog as $$
 begin
@@ -205,5 +211,6 @@ $markdown_ddl$;
    raise exception 'Markdown publish install changed %; rolled back',relation;
   end if;
  end loop;
+ perform pg_notify('pgrst','reload schema');
 end
 $haedo_markdown_publish$;

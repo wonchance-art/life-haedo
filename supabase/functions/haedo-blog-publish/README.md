@@ -11,7 +11,9 @@ POST JSON은 `p_post_id`, `p_expected_revision`, `p_expected_publication_revisio
 3. `projection.mjs`가 유지 중인 브라우저 codec과 공개 투영을 그대로 사용한다. SQL에는 AI 표시가 빠진 선택 본문 ops와 원래 사진 ID만 보낸다.
 4. Auth `/auth/v1/user`로 같은 사용자를 다시 확인한 직후 서비스 전용 `life_blog_markdown_publish_commit`을 호출한다. DB가 세션·원문 해시·원문/공개 revision·사진 사본을 다시 확인하고 snapshot/media/영수증을 원자 저장한다.
 
-배포 시 `verify_jwt`는 켜 둔다. 다만 최신 플랫폼 문서에 따르면 이 관문은 이행 호환을 위해 API 키도 허용할 수 있으므로, 관문 통과를 사용자 인증으로 간주하지 않는다. handler의 두 번의 Auth 확인과 SQL 세션 검사를 생략하지 않는다.
+배포 시 `verify_jwt=false`로 설정한다. [2026-11-04 주간 점검 결정](../../../docs/life-tools-design/weekly-tech-review.md)에 따라 서명 키 회전에 대비해 기존 Edge 함수와 통일한다. JWT 모양 검사는 인증이 아니며, handler가 토큰 없음·위조·만료 요청을 직접 거부한다. 두 번의 Auth 확인과 SQL 세션 검사를 생략하지 않는다.
+
+제품 허용 Origin은 운영 GitHub Pages와 기존 `:4173` 개발 주소 그대로다. 격리 브라우저 검사만 `createHandler({origins: [new URL(BASE_URL).origin]})`로 검사 서버 출처를 주입한다. 배포 entrypoint는 이 옵션을 넘기지 않으며 요청 헤더·본문·환경 변수에서 허용 출처를 받지 않는다.
 
 환경 변수는 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SECRET_KEYS`이며 키 객체의 `default` 항목을 쓴다. 기존 `SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 공용 키 helper의 호환 경로다. 새 API 키는 `apikey`에만 보내며, 사용자 JWT와 서비스 자격은 다른 호출에서 쓴다. 별도 소유자 ID 비밀값이나 사용자 메타데이터 허용 목록은 추가하지 않는다.
 
@@ -19,7 +21,7 @@ POST JSON은 `p_post_id`, `p_expected_revision`, `p_expected_publication_revisio
 
 전체 요청 예산은 30초다. 입력 스트림 32 KiB, Auth 응답 16 KiB, 비공개 prepare 응답 3 MiB, 영수증/오류 응답 16 KiB로 제한한다. 각 네트워크 호출은 요청 취소와 남은 전체 예산을 함께 따른다. 공개 본문의 기존 글자·연산·바이트 제한은 공용 codec/model과 SQL이 검사한다.
 
-성공은 기존 `{status, token, blogToken, revision}` 영수증이며 오류는 기존 BlogRemote 허용 코드 하나인 `{code}`다. 원문·업스트림 오류·키·JWT를 응답하거나 로그에 남기지 않는다. commit 응답 유실은 미확정 상태다. 클라이언트가 같은 operation ID와 같은 게시 의도를 다시 보내 DB의 기존 영수증을 받는다. 미확정 요청을 새 operation ID로 바꾸지 않는다.
+성공은 기존 `{status, token, blogToken, revision}` 영수증이며 오류는 기존 BlogRemote 허용 코드 하나인 `{code}`다. Auth의 429·5xx는 로그인 만료가 아닌 일시 오류 `network_error`(HTTP 502)로 전달해 재시도 경로를 유지한다. 어느 Auth 확인에서 실패해도 service commit은 보내지 않는다. 원문·업스트림 오류·키·JWT를 응답하거나 로그에 남기지 않는다. commit 응답 유실은 미확정 상태다. 클라이언트가 같은 operation ID와 같은 게시 의도를 다시 보내 DB의 기존 영수증을 받는다. 미확정 요청을 새 operation ID로 바꾸지 않는다.
 
 ## 배포 묶음과 검증
 

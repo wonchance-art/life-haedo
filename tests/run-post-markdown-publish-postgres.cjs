@@ -11,7 +11,7 @@ const ROOT = path.resolve(__dirname, '..');
 const FILE = 'supabase/migrations/20261105081055_life_post_markdown_publish.sql';
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const mutation=process.argv[2]?.replace(/^--mutation=/,'');
-if(process.argv.length>3 || mutation && !['source-hash','copy-flag','session-recheck','commit-acl'].includes(mutation)) throw Error('Only named local guard mutations are accepted.');
+if(process.argv.length>3 || mutation && !['source-hash','copy-flag','session-recheck','commit-acl','commit-owner'].includes(mutation)) throw Error('Only named local guard mutations are accepted.');
 function installation() {
  let sql=read(FILE);
  if(mutation==='source-hash')sql=sql.replace('if p_source_hash is distinct from encode','if false and p_source_hash is distinct from encode');
@@ -19,6 +19,8 @@ function installation() {
  if(mutation==='session-recheck')sql=sql.replace("perform pg_advisory_xact_lock(hashtextextended('blog:'||who::text||':'||p_post_id::text,0));\n if not haedo_blog_private.markdown_session_live(who,p_session_id)","perform pg_advisory_xact_lock(hashtextextended('blog:'||who::text||':'||p_post_id::text,0));\n if false and not haedo_blog_private.markdown_session_live(who,p_session_id)");
  if(mutation==='commit-acl')sql=sql.replace('public.life_blog_markdown_publish_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb) to service_role;',
   'public.life_blog_markdown_publish_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb) to service_role,authenticated;');
+ if(mutation==='commit-owner')sql=sql.replace('select * into p from haedo_blog_private.posts where owner_id=who and id=p_post_id for update;',
+  'select * into p from haedo_blog_private.posts where id=p_post_id for update;');
  if(mutation)assert.notEqual(sql,read(FILE),'named mutation must change target guard');
  return sql;
 }
@@ -50,7 +52,8 @@ async function main() {
   await db.query(`create table auth.users(id uuid primary key,is_anonymous boolean not null default false);
    create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade,not_after timestamptz);
    create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}')$$;
-   create role markdown_client login inherit; grant authenticated to markdown_client;`);
+   create role markdown_client login inherit; grant authenticated to markdown_client;
+   create role markdown_authenticator login noinherit; grant anon,authenticated,service_role to markdown_authenticator;`);
   const owner = randomUUID(), other = randomUUID(), sid = randomUUID(), otherSid = randomUUID(), workspace = randomUUID();
   await db.query('insert into auth.users(id) values($1),($2)', [owner,other]);
   await db.query('insert into auth.sessions(id,user_id) values($1,$2),($3,$4)', [sid,owner,otherSid,other]);
@@ -104,17 +107,37 @@ async function main() {
   await assert.rejects(async()=>{for(const part of statements(changedRows)) await db.query(part);},e=>/Markdown publish install changed/.test(e.message));
   check(await catalog(),beforeCatalog,'same-count row hash failure rolls back all DDL');
   check(await state(),before,'same-count row hash failure restores exact source rows');
+  const notifications=[];db.on('notification',message=>notifications.push(message.payload));await db.query('listen pgrst');
   for(const part of parts) await db.query(part);
   check(await state(),before,'populated installation preserves every original/publication/receipt row');
+  check(notifications,['reload schema'],'successful atomic installation requests PostgREST schema reload');
   check((await acl()).filter(p=>beforeAcl.some(old=>old.signature===p.signature)),beforeAcl,'all existing routine ACL/security settings unchanged');
   check((await db.query("select oid::regprocedure::text signature,pg_get_functiondef(oid) definition from pg_proc where pronamespace='haedo_blog_private'::regnamespace and proname in ('publish','publish_copies','valid_document','valid_delta_document') order by 1")).rows,legacyDefs,'all four B1 legacy function definitions byte-exact');
   check((await rpc('life_blog_public_read',[legacyReply.token],'anon',null,null)).snapshot.ops,[{insert:'legacy\n'}],'legacy public bytes remain readable');
   await db.query(migration); check(await state(),before,'idempotent installation preserves all rows');
 
+  // This fixture installs all public blog entry points and their private
+  // implementations. Conservatively forbid any dynamic EXECUTE or set_config
+  // call in those deployed function bodies, not just a known attack string.
+  // Installer DO statements are not callable RPCs and are outside this scan.
+  const bodies=(await db.query("select oid::regprocedure::text signature,prosrc from pg_proc where pronamespace in ('public'::regnamespace,'haedo_blog_private'::regnamespace)")).rows;
+  assert(bodies.some(row=>row.signature.startsWith('life_blog_markdown_publish_commit(')));
+  check(bodies.filter(row=>/\b(?:execute\b|set_config\s*\()/i.test(row.prosrc.replace(/--[^\n]*/g,''))).map(row=>row.signature),[],
+   'public blog RPCs and private implementations expose no dynamic SQL or configuration setter');
+
   const doc=document(); await save(doc); const intent=args(doc), prepared=await prepare(intent);
   check({...prepared,sourceHash:null},{status:'prepared',ownerId:owner,sessionId:sid,revision:1,document:doc,sourceHash:null},'prepare uses stored document and database-derived identity');
   check(/^[a-f0-9]{64}$/.test(prepared.sourceHash),true,'prepare returns bounded SHA256 of whole stored document');
   check(await prepare(intent,'authenticated',other,otherSid),{status:'missing'},'other owner cannot read prepared document');
+  const otherDoc=document({title:'다른 계정 글'}),otherIntent=args(otherDoc);
+  await rpc('life_blog_save',[workspace,otherDoc.id,0,randomUUID(),otherDoc],'authenticated',other,otherSid);
+  const otherPrepared=await prepare(otherIntent,'authenticated',other,otherSid),beforeWrongOwner=await state();
+  let wrongOwnerResult;
+  await assert.doesNotReject(async()=>{wrongOwnerResult=await commit(otherIntent,{...otherPrepared,ownerId:owner,sessionId:sid});},
+   'cross-owner service commit must return missing before touching another owner post');
+  check(wrongOwnerResult,{status:'missing'},
+   'service commit with A owner/session and B post returns missing');
+  check(await state(),beforeWrongOwner,'cross-owner service commit changes no original/profile/publication/receipt rows');
   await denied(()=>prepare(intent,'anon',null,null),'permission denied for function life_blog_markdown_publish_prepare','anonymous prepare denied','42501');
   await denied(()=>prepare(intent,'authenticated',owner,null),'life_auth_required','missing user session denied','42501');
   await denied(()=>prepare(intent,'authenticated',owner,otherSid),'life_auth_required','cross-owner session denied','42501');
@@ -174,8 +197,20 @@ async function main() {
   check(await commit(late,latePrepared,[{insert:'새 원문\n'}]),{status:'conflict',revision:2},'late response cannot republish after withdrawal');
   check(await prepare(intent),publicResult,'withdrawn publication still returns exact completed receipt');
 
-  // Native role tests use a genuinely unprivileged SQL login; testing SET ROLE
-  // from a postgres session would be invalid because session_user is superuser.
+  // Supabase/PostgREST's authenticator is a member of service_role. It can
+  // switch roles with arbitrary SQL, but a verified user request is dispatched
+  // as authenticated and has no arbitrary-SQL RPC. Model both facts explicitly.
+  const gateway=new Client({host:pg.host,port:pg.port,user:'markdown_authenticator',database:'postgres'});await gateway.connect();
+  try {
+   await denied(()=>rpc('life_blog_markdown_publish_commit',[...intent,owner,sid,prepared.sourceHash,'[]'],'authenticated',owner,sid,gateway),
+    'permission denied for function life_blog_markdown_publish_commit','authenticator dispatched as authenticated cannot commit','42501');
+   await gateway.query('begin');await gateway.query('set local role authenticated');
+   check((await gateway.query("select set_config('role','service_role',true) value")).rows[0].value,'service_role',
+    'authenticator can promote role with arbitrary SQL; no such client RPC exists');
+   await gateway.query('rollback');
+  } finally {await gateway.end();}
+  // A direct SQL login with only authenticated membership is a separate,
+  // narrower model; these checks do not stand in for the authenticator above.
   const login = new Client({host:pg.host,port:pg.port,user:'markdown_client',database:'postgres'}); await login.connect();
   try {
    await assert.rejects(()=>login.query('set role service_role'),e=>e.code==='42501'); passed++; console.log('PASS authenticated membership cannot SET ROLE service_role');
