@@ -211,7 +211,7 @@
     "Register new personal-discovery browser and PostgreSQL commands in CI",
     "Final review and current-head CI",
     "Integrate and bump SW CACHE",
-    "Redeploy haedo-discovery-private and haedo-naver-blog",
+    "Initial integration only: redeploy haedo-discovery-private with verify_jwt=true; Naver redeploy is unnecessary",
     "Verify actual Auth/publisher/old deployment upgrade; do not reinstall unchanged SQL",
     "Send reader changes to design session"
   ],
@@ -712,5 +712,14 @@
     },
     "otherOriginalJobs": "check, blog, browser groups2/3/4/5 passed; aggregate browser failed because group1 failed; build/deploy skipped",
     "updatedHeadCI": "pending"
+  },
+  "operatingDecisionCorrection": {
+    "source": "https://github.com/wonchance-art/life-haedo/pull/214#issuecomment-6650834839",
+    "privateReaderVerifyJWT": true,
+    "naverRedeployRequired": false,
+    "naverDifferentialEvidence": "Coordinator reports 24,000 robot comparisons with zero differences; not rerun by this worker",
+    "sqlReapply": false,
+    "followupRequiresEdgeDeployment": false,
+    "operatingCompletionVerifiedByWorker": false
   }
 }

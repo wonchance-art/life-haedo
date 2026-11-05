@@ -30,6 +30,7 @@ const media = import('data:text/javascript;base64,' + Buffer.from(stripTypeScrip
   path.join(__dirname, '../supabase/functions/haedo-blog-media/index.ts'), 'utf8'))).toString('base64'));
 const ai = import('../supabase/functions/haedo-ai/handler.mjs');
 const naver = import('../supabase/functions/haedo-naver-blog/handler.mjs');
+const discovery = import('../supabase/functions/haedo-discovery-private/handler.mjs');
 
 test('shared key rules: new keys first, legacy fallback, never a public key as the server key', async () => {
   const { supabaseKeys, serverHeaders } = await shared;
@@ -102,6 +103,42 @@ test('haedo-ai verifies the user with the publishable key and reserves with the 
       headers: { Authorization: 'Bearer ' + presented, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId: '22222222-2222-4222-8222-222222222222', task: 'polish', selection: '합성 문장' }) }));
     assert.equal((await result.json()).error, 'unauthorized');
+  }
+});
+
+test('haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment', async () => {
+  const { createHandler } = await discovery;
+  const input = { sourceId: 'frontiers-psychology', url: 'https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2026.1234567/full' };
+  const lease = '22222222-2222-4222-8222-222222222222';
+  const authorization = 'Bearer eyJ1c2Vy.session-fixture.signature';
+  const content = { coverage: 'full_text', summary: 'Synthetic abstract', bodyText: 'Synthetic private body',
+    rights: { mode: 'private_reading', label: 'Synthetic author', url: input.url },
+    acquisition: { scope: 'private_account', method: 'publisher_xml', sourceUrl: input.url.replace('/full', '/xml'),
+      fetchedAt: '2026-11-05T00:00:00.000Z', license: { label: 'Publisher terms', url: null } } };
+  for (const [name, env] of Object.entries(ENVIRONMENTS)) {
+    const calls = [], collected = [];
+    const fetcher = async (url, options) => {
+      calls.push({ url, headers: options.headers, body: options.body && JSON.parse(options.body) });
+      if (url === PROJECT + '/auth/v1/user') return Response.json({ id: OWNER });
+      if (url === PROJECT + '/rest/v1/rpc/life_discovery_article_claim') return Response.json({ status: 'claimed', leaseToken: lease });
+      if (url === PROJECT + '/rest/v1/rpc/life_discovery_article_finish') return Response.json({ status: 'ready', ...input,
+        content: JSON.parse(options.body).p_content, contentHash: 'a'.repeat(64), cached: false, stale: false });
+      throw new Error('unexpected fetch ' + url);
+    };
+    const handler = createHandler({ fetcher, collect: async value => { collected.push(value); return content; },
+      environment: key => ({ SUPABASE_URL: PROJECT, ...env })[key] });
+    const result = await handler(new Request(PROJECT + '/functions/v1/haedo-discovery-private', { method: 'POST',
+      headers: { Authorization: authorization, apikey: EXPECTED[name].publicKey, 'Content-Type': 'application/json' }, body: JSON.stringify(input) }));
+    assert.equal(result.status, 200, name);
+    assert.equal((await result.json()).status, 'ready', name);
+    assert.deepEqual(collected, [input], name);
+    assert.deepEqual(calls.map(c => c.url), [PROJECT + '/auth/v1/user', PROJECT + '/rest/v1/rpc/life_discovery_article_claim',
+      PROJECT + '/rest/v1/rpc/life_discovery_article_finish'], name);
+    for (const call of calls.slice(0, 2)) assert.deepEqual(credentials(call.headers), {
+      apikey: EXPECTED[name].publicKey, Authorization: authorization }, name + ': Auth and claim retain the user session');
+    assert.deepEqual(credentials(calls[2].headers), EXPECTED[name].server, name + ': server key is only used for finish');
+    assert.equal(calls[2].body.p_owner_id, OWNER, name);
+    assert.equal(calls[2].body.p_lease_token, lease, name);
   }
 });
 

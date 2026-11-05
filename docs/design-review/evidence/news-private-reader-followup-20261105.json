@@ -1,0 +1,453 @@
+{
+  "date": "2026-11-05 KST",
+  "baseMain": "321e00b6d05ea9fcf806cc00fa4005d9395bfeeb",
+  "branch": "codex/news-private-reader-followup",
+  "status": "local_checks_and_independent_review_passed",
+  "instruction": "https://github.com/wonchance-art/life-haedo/pull/214#issuecomment-6650834839",
+  "branchDecision": "https://github.com/wonchance-art/life-haedo/pull/214#issuecomment-6650844258",
+  "scope": "MINOR-2/3/4 and N1/N2 only. Tests and documentation after PR214 merge; no runtime, SQL, operating setting, real account write, or deployment changes.",
+  "checks": [
+    {
+      "command": "npm test",
+      "passed": 2077,
+      "failed": 0,
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "htmlPages": 22,
+      "jsBlocksOrFiles": 194,
+      "localResourceReferences": 779,
+      "pageModules": 534,
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/check-markdown-links.cjs",
+      "markdownFiles": 283,
+      "allowlistedMissingLinks": 3,
+      "unexpectedMissingLinks": 0,
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "node --test --test-reporter=tap tests/supabase-keys.test.cjs tests/discovery-private-handler.test.cjs",
+      "passed": 29,
+      "failed": 0,
+      "sharedMatrixTests": 12,
+      "privateHandlerTests": 17,
+      "exitCode": 0
+    }
+  ],
+  "environmentRepair": {
+    "initialCommand": "npm test",
+    "passed": 2022,
+    "failed": 3,
+    "cause": "New worktree lacked the locked cheerio/slim extractor fixture dependency; discovery-private-intake, naver-extractor-worker and naver-live-readiness failed at module loading.",
+    "resolution": "npm ci --prefix tests/fixtures/naver-extractor; npm test",
+    "productOrTestChange": false,
+    "lockfileChanged": false,
+    "initialLogSHA256": "1d663f808bcaefbc4f003ac45cb9f054f7582134e5ed93485dbf1880c3e9e5c0"
+  },
+  "browser": {
+    "baseline": {
+      "passed": 13,
+      "exitCode": 0
+    },
+    "final": {
+      "passed": 14,
+      "exitCode": 0,
+      "privatePOSTs": 23,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "unexpectedExternal": 0,
+      "closedContexts": 17
+    },
+    "sameSelectionRetry": {
+      "sameMetadataObject": true,
+      "sameWorkspace": true,
+      "firstAborted": true,
+      "retryAborted": false,
+      "transport": "injected deferred privateReader; abort deliberately ignored",
+      "completionOrder": [
+        "retry B",
+        "older A"
+      ],
+      "importedBodySHA256": "fda813ba12c8781861ab414e7454e062bdc7db4563fd4348491636acd647254c",
+      "importedContentHash": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "runnerSHA256": "c64f101318db456ec3f375b1fcee8ad9845bcb05f04cd372711c57a3ee51863b",
+    "helperSHA256": "4b433ded6e4de2359f2fca7bcf7094e904f3d083fdcf2d5611f00b563ab55ea6",
+    "preparedArtifact": {
+      "files": {
+        "assets/life/discovery-private-remote.js": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "assets/life/discovery-reader-ui.js": "ce975e875bdcf8fbd013270b6fcd35875bbff4b1ec74b9b16d07312c4afb1d7d",
+        "assets/life/discovery-ui.js": "00e10b3354a649880cedf1ea477ca21b3d5f7c8525d525acbc82169e15d82611",
+        "assets/life/discovery.css": "0e821041d49ed0560fdb10a78e05a89c8d22021e5793ca742565ae4a0d7cb248",
+        "assets/life/ui.js": "0a15f323fcdf4183c78d2e7aaa10f342e1fa65546b48e67b6e8af90cc0859224"
+      },
+      "html": [
+        {
+          "file": "index.html",
+          "sha256": "9d94e10a9322775a6c14de1463de7b4754912c9d2a644ce29badcc0e8c7d2ae2"
+        },
+        {
+          "file": "life.html",
+          "sha256": "237ce0fa882056f464cf1e8c82a1fe8d6e0745729ea7c758f766c29c6914c28a"
+        }
+      ],
+      "syntheticPlatformConfiguration": true,
+      "workerSHA256": "1625012b08489a54e5eb92db6cc9db1b2b0b7446f849938a7eecbfba9b4ec18c",
+      "cache": "haedo-v197"
+    },
+    "visualReview": {
+      "viewports": [
+        390,
+        1440
+      ],
+      "files": [
+        "independent-full/private-body-390.png",
+        "independent-full/private-body-1440.png"
+      ],
+      "observed": "Text and figure stay within the reading column; no horizontal overflow, clipping, or controls obscuring the viewed body."
+    },
+    "cleanup": {
+      "allRunnerProcessesCompleted": true,
+      "contexts": [
+        {
+          "run": "main-baseline",
+          "closedContexts": 16
+        },
+        {
+          "run": "independent-full",
+          "closedContexts": 17
+        },
+        {
+          "run": "independent-live-mutation",
+          "closedContexts": 1
+        },
+        {
+          "run": "independent-abort-mutation",
+          "closedContexts": 1
+        },
+        {
+          "run": "independent-fence-mutation",
+          "closedContexts": 1
+        }
+      ],
+      "fullRunServerPortClosed": 40631
+    },
+    "commands": [
+      {
+        "run": "main-baseline",
+        "command": "PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome PERSONAL_DISCOVERY_OUTPUT=.local/private-news-followup-qa/main-baseline node tests/life-personal-discovery-browser.cjs > .local/private-news-followup-qa/main-baseline.log 2>&1"
+      },
+      {
+        "run": "independent-full",
+        "command": "PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome PERSONAL_DISCOVERY_OUTPUT=.local/private-news-followup-qa/independent-full node tests/life-personal-discovery-browser.cjs > .local/private-news-followup-qa/independent-full.log 2>&1"
+      },
+      {
+        "run": "independent-live-mutation",
+        "command": "PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome PERSONAL_DISCOVERY_MATCH='same selected article retry' PERSONAL_DISCOVERY_UI_OVERRIDE=.local/private-news-followup-qa/mutations/live-always-true.js PERSONAL_DISCOVERY_OUTPUT=.local/private-news-followup-qa/independent-live-mutation node tests/life-personal-discovery-browser.cjs > .local/private-news-followup-qa/independent-live-mutation.log 2>&1"
+      },
+      {
+        "run": "independent-abort-mutation",
+        "command": "PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome PERSONAL_DISCOVERY_MATCH='same selected article retry' PERSONAL_DISCOVERY_UI_OVERRIDE=.local/private-news-followup-qa/mutations/cancel-without-abort.js PERSONAL_DISCOVERY_OUTPUT=.local/private-news-followup-qa/independent-abort-mutation node tests/life-personal-discovery-browser.cjs > .local/private-news-followup-qa/independent-abort-mutation.log 2>&1"
+      },
+      {
+        "run": "independent-fence-mutation",
+        "command": "PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome PERSONAL_DISCOVERY_MATCH='same selected article retry' PERSONAL_DISCOVERY_UI_OVERRIDE=.local/private-news-followup-qa/mutations/request-fence-removed.js PERSONAL_DISCOVERY_OUTPUT=.local/private-news-followup-qa/independent-fence-mutation node tests/life-personal-discovery-browser.cjs > .local/private-news-followup-qa/independent-fence-mutation.log 2>&1"
+      }
+    ],
+    "logSHA256": {
+      ".local/private-news-followup-qa/main-baseline.log": "8a433204935c6bd03c443c3e956cacad9d2bce0af038bec2e3d342584beee277",
+      ".local/private-news-followup-qa/independent-full.log": "8dd85124500d28055d7338445fea7668278c14fc9dbcc696280dc033da179f44",
+      ".local/private-news-followup-qa/independent-live-mutation.log": "8e228cff89ed9a715b49047d8a1b3c6775469b2d7b1261bbc6b53e1515c140bc",
+      ".local/private-news-followup-qa/independent-abort-mutation.log": "f7e906429e8167f93abb25761d98bcd13c3d849f78fbf19b543fdee8d1155429",
+      ".local/private-news-followup-qa/independent-fence-mutation.log": "68eb0100482b84ac14e5b9a547190b747cf438ddb32254f4b5e03b0b5aed8865"
+    }
+  },
+  "uiMutationChecks": {
+    "uniqueMutations": 3,
+    "independentlyRepeated": true,
+    "originalSourceSHA256": "00e10b3354a649880cedf1ea477ca21b3d5f7c8525d525acbc82169e15d82611",
+    "mutations": [
+      {
+        "name": "live-always",
+        "file": ".local/private-news-followup-ui/live-always.js",
+        "sha256": "2a4f2ded14a0b683d0a115f460536ca2e9be1bc39f4eb46d4a986bec57a5e31a",
+        "old": "const live = () => valid(token) && !suspended && !controller.signal.aborted && epoch === privateEpoch && current.selected === selected;",
+        "new": "const live = () => true;",
+        "independentFailure": "AssertionError [ERR_ASSERTION]: The import must keep the newer retry body after the older completion",
+        "meaning": "Disabling the whole UI live predicate accepts stale A into the import snapshot after retry B. DOM B alone masks the corruption."
+      },
+      {
+        "name": "request-fence-removed",
+        "file": ".local/private-news-followup-ui/request-fence-removed.js",
+        "sha256": "52a0d6478713ccca82051ff89b0036ccc4584fb80e45bbe3548c2e8b8416c492",
+        "old": " && !controller.signal.aborted && epoch === privateEpoch",
+        "new": "",
+        "independentFailure": "AssertionError [ERR_ASSERTION]: The import must keep the newer retry body after the older completion",
+        "meaning": "Removing only aborted-signal and request-epoch clauses accepts stale A while lifecycle/scope/selection clauses remain intact."
+      },
+      {
+        "name": "abort-removed",
+        "file": ".local/private-news-followup-ui/abort-removed.js",
+        "sha256": "5d4d9a7085274bf6f4ad40ed4b72a1c213405702bdf5277a1e750ba26912f01a",
+        "old": "privateAborter?.abort(); privateAborter = null;",
+        "new": "privateAborter = null;",
+        "independentFailure": "AssertionError [ERR_ASSERTION]: UI forwards cancellation to the older request",
+        "meaning": "Deleting abort delivery fails the public signal.aborted contract. It is not independent evidence that epoch protection failed."
+      }
+    ]
+  },
+  "keyMatrix": {
+    "environments": [
+      "new",
+      "legacy",
+      "both"
+    ],
+    "runtimeSHA256": "c5c7c5b1fe64f28b8f9c59e9e88f1de5ccde2638bcc43dd054e13d9dab6e15b9",
+    "beforeTestSHA256": "af1e54f80e7f30f5883edba3675abe40a3cb9df8931ebda6e6ccc9a888e96748",
+    "afterTestSHA256": "34db571f886f5e8fa8fca22fdaa3548a6208d6917f7c2d13d4a55e27ecf715d4",
+    "mutationCommand": "node --test --test-reporter=tap tests/supabase-keys.test.cjs in isolated source copies; run once with base test and once with new test",
+    "mutations": [
+      {
+        "name": "legacy-only",
+        "replaceOnce": {
+          "old": "supabaseKeys(environment)",
+          "new": "({ publicKey: environment('SUPABASE_ANON_KEY'), server: environment('SUPABASE_SERVICE_ROLE_KEY') })"
+        },
+        "mutatedSHA256": "4175081a9c01d7dd60f16a4d462fc4aa80a1b048d22db0d9dd787dbaa34fbb26",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "73ffebdcc3650959b7e69e1109d5ef7ec804ed9da2004605149fa0c4edad4d5f"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "89f91e0c8928ceb56d8687d89b38b5b55bd46561c633cbb41fcb69d1cf931eca"
+        }
+      },
+      {
+        "name": "legacy-wins-both",
+        "replaceOnce": {
+          "old": "supabaseKeys(environment)",
+          "new": "({ publicKey: environment('SUPABASE_ANON_KEY') || supabaseKeys(environment).publicKey, server: environment('SUPABASE_SERVICE_ROLE_KEY') || supabaseKeys(environment).server })"
+        },
+        "mutatedSHA256": "ec37bb9868a120c22b46bc43315126719b3d2faa31789b9c51d14278b8fdb08b",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "ff9ee867166e1ceff23a5fc93645e8b0372011862885f349c15d1000e58f6aea"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "965ee7d31f43df1328cf33e2b174c0be64680f4273c3b260459e877bcb67456d"
+        }
+      },
+      {
+        "name": "auth-with-server",
+        "replaceOnce": {
+          "old": "headers: { apikey: publicKey, Authorization: 'Bearer ' + token }",
+          "new": "headers: serverHeaders(serviceKey)"
+        },
+        "mutatedSHA256": "ad076524741e30b16e53959f757f7aea65b9d1495948c8e68a853c0641e8ada6",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "3fe2fc05f9c3d9e97c42f32c6a08d671e14f764df713be42c824c0ef8c5113ef"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "5b1bf6b0adf3fd01596f8f786daed11036e5e608263a0af498180189776183aa"
+        }
+      },
+      {
+        "name": "claim-with-server",
+        "replaceOnce": {
+          "old": "rpc('life_discovery_article_claim', { p_source_id: input.sourceId, p_url: input.url })",
+          "new": "rpc('life_discovery_article_claim', { p_source_id: input.sourceId, p_url: input.url }, true)"
+        },
+        "mutatedSHA256": "6f9a027e2d7b41e1812bc81609a9ab571c48935b8c1adb9f7595ebb83e627cdc",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "480232c52d0aff03accd50b6737821a1d16cbc5002ee1589b7bbf89e41f548a3"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "4362ac18715ad223b000ec72b526e4e2e50aff3af2ad4938feca2df11ff1b087"
+        }
+      },
+      {
+        "name": "finish-with-user",
+        "replaceOnce": {
+          "old": "p_content: content, p_error: error }, true)",
+          "new": "p_content: content, p_error: error }, false)"
+        },
+        "mutatedSHA256": "deeb120cc41437a76eba04ecfbd7e354b16440bc4e8d07be82a3bea2e496d39a",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "6bdb6bcb76c6e64ab1f67ea0e9dc4d0f42312fb4665cdd8daf097c5545ef8a2f"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "853d9f5ba51392e082d247befb903fbeddc1a1d65b29d03ab8f08be775e8944a"
+        }
+      },
+      {
+        "name": "secret-in-bearer",
+        "replaceOnce": {
+          "old": "service ? serverHeaders(serviceKey) :",
+          "new": "service ? { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } :"
+        },
+        "mutatedSHA256": "03eaf4003d551a779922088c2d94aaf6ce482ebc34c9d9a43975e8aabefc0bf3",
+        "previousMatrix": {
+          "passed": 11,
+          "failed": 0,
+          "exitCode": 0,
+          "logSHA256": "493a39204fc8ebe5e91bb387540387e9dc382a1fe040105c705f8942ace6255a"
+        },
+        "newMatrix": {
+          "passed": 11,
+          "failed": 1,
+          "exitCode": 1,
+          "failedTest": "not ok 4 - haedo-discovery-private authenticates and claims as the user; only finish uses server credentials in each key environment",
+          "logSHA256": "86063c91ff810f0fc411e754aeaa6f44bb321f902209c9f1142423dfba24a13d"
+        }
+      }
+    ],
+    "workingRuntimeUnchanged": true
+  },
+  "n2VersionContract": {
+    "choice": "Document existing exact-import-plus-acquisition-appendix version semantics; do not deduplicate by body alone.",
+    "sourceConfirmationRequired": "Same URL first reports overlap; exact_duplicate/new_revision below follows explicit same-source confirmation.",
+    "coreCases": [
+      {
+        "name": "same imported snapshot",
+        "review": "overlap",
+        "afterSameSourceChoice": "exact_duplicate",
+        "newSourceVersions": 0,
+        "totalVersions": 1,
+        "exactBodyPrefix": true,
+        "sourceHash": "483873826d5663ca5303b864d03576cef7a280d2c063a1cfa5b8d9669d090f28",
+        "sameSourceHash": true
+      },
+      {
+        "name": "cached stale flag only",
+        "review": "overlap",
+        "afterSameSourceChoice": "exact_duplicate",
+        "newSourceVersions": 0,
+        "totalVersions": 1,
+        "exactBodyPrefix": true,
+        "sourceHash": "483873826d5663ca5303b864d03576cef7a280d2c063a1cfa5b8d9669d090f28",
+        "sameSourceHash": true
+      },
+      {
+        "name": "server receipt hash only",
+        "review": "overlap",
+        "afterSameSourceChoice": "exact_duplicate",
+        "newSourceVersions": 0,
+        "totalVersions": 1,
+        "exactBodyPrefix": true,
+        "sourceHash": "483873826d5663ca5303b864d03576cef7a280d2c063a1cfa5b8d9669d090f28",
+        "sameSourceHash": true
+      },
+      {
+        "name": "same body and new acquisition time",
+        "review": "overlap",
+        "afterSameSourceChoice": "new_revision",
+        "newSourceVersions": 1,
+        "totalVersions": 2,
+        "exactBodyPrefix": true,
+        "sourceHash": "50e49682a6c13be90ae10c3632e94297ff8ccc58a1cd0c85c016f2e4e7f12bb6",
+        "sameSourceHash": false
+      },
+      {
+        "name": "same receipt and changed publication metadata",
+        "review": "overlap",
+        "afterSameSourceChoice": "new_revision",
+        "newSourceVersions": 1,
+        "totalVersions": 2,
+        "exactBodyPrefix": true,
+        "sourceHash": "483873826d5663ca5303b864d03576cef7a280d2c063a1cfa5b8d9669d090f28",
+        "sameSourceHash": true
+      }
+    ],
+    "explicitSeparate": {
+      "match": "new",
+      "sources": 2
+    },
+    "inputContainsPrivateReceipt": false,
+    "sourceSHA256": {
+      "assets/life/discovery-private-remote.js": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+      "assets/life/core.js": "516817a0c8b71dd574bb98776e8a0f5422c8f47037f12b41091ab62c3832b924",
+      "assets/life/ui.js": "0a15f323fcdf4183c78d2e7aaa10f342e1fa65546b48e67b6e8af90cc0859224"
+    },
+    "limits": "These six synthetic core observations explain the existing contract, not six added automated test cases. No server or account writes."
+  },
+  "operatingDecision": {
+    "verifyJWT": true,
+    "initialIntegrationRedeploy": [
+      "haedo-discovery-private"
+    ],
+    "naverRedeployRequired": false,
+    "naverEvidence": "Claude reports default-UA differential 24000 comparisons / 0 differences; not rerun by this worker.",
+    "sqlReapply": false,
+    "migrationMapping": "20261029084926 operating receipt ↔ 20261029084145 repository file",
+    "followupRequiresEdgeRedeploy": false,
+    "completionVerifiedByWorker": false,
+    "futureVerifyJWTFalseGate": "Reject API-key/non-JWT-shaped Bearer before body parsing, add regression tests, retain Auth identity/anonymous rejection and live-session RPC checks. Shape validation does not authenticate."
+  },
+  "limits": [
+    "Auth and private owner cache are synthetic HTTP fixtures; deployed provider acquisition and production SQL/RLS are unverified.",
+    "Viewport checks use headless Chromium 153, not physical phones or Apple WebKit.",
+    "Mixed-worker test uses pinned old shell bytes and a local explicit registration.update() to install the current source CACHE; actual deployed updates remain unverified.",
+    "Same-selection retry isolates the actual UI with an explicitly injected deferred privateReader; it does not test transport cancellation or deployed Edge behavior.",
+    "No real account, production write, provider network, or recommendation-usefulness evaluation.",
+    "SQL not replayed in this tests/docs-only follow-up; prior PR214 SQL results remain historical.",
+    "No CI or production completion claim before the new PR is checked."
+  ],
+  "localEvidenceSHA256": {
+    ".local/private-news-followup-final/npm-test.log": "34c56e8da87a733cfc94ad63856959582e39d0e2bc75aacc3356c0930f522a25",
+    ".local/private-news-followup-final/npm-check.log": "89280045c0c830c7078bf98956e1a18be7cba2b5604c3bf34a5d85db6ce5efd7",
+    ".local/private-news-followup-final/markdown-links.log": "14283a8aaa8c9f9f5ccc637581bd6c1a2a91e54e931a31d64f5db2370fb8c2f0",
+    ".local/private-news-followup-key-matrix/unit.log": "7596e463e24cc2a215cab054e75f53b48da11a4b465ea8370a2b443c71e7f3bd",
+    ".local/private-news-followup-qa/independent-summary.json": "7855273065050db9dbce715ad6eb60af64b413bbaeff51df770244d56f04ce7a",
+    ".local/private-news-followup-ui/validation-summary.json": "7dd2336fc07c0cd8dd034a85343614e6ae218d5ea34a470f90d78bf5a3e1721a",
+    ".local/private-news-followup-key-matrix/mutations-report.json": "3fef912801574333b887bf9886b148797ef1787d4b708034adc406d5af72bb82",
+    ".local/private-news-n2-analysis/report.json": "45985feebfb9249ac9dc365219056d6916697f5b34699729ef9a2e12a58691ac"
+  },
+  "independentReview": {
+    "reviewer": "reader_current_main_audit",
+    "blockers": 0,
+    "majors": 0,
+    "scopeViolations": 0,
+    "evidenceCrossChecked": true,
+    "checks": "Final five-file change, original assertions, source and log hashes, all nine mutation replacements, six N2 observations, operating and deployment boundaries."
+  }
+}
