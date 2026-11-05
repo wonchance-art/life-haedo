@@ -153,7 +153,7 @@ async function main() {
       const r = await first.evaluate(async () => {
         const f = await fixture(), row = await readyWriting(f); const applied = await applyLocal(f); await sourceReady(f.id);
         // Simulate the other device's applied response while this device still has its dirty draft.
-        const db = await idb.openDB('life-tools-v1', 1), local = { ...f.stage, revision: applied.revision, text: '보관 이후에도 남긴 새 생각' };
+        const db = await idb.openDB('life-tools-v1'), local = { ...f.stage, revision: applied.revision, text: '보관 이후에도 남긴 새 생각' };
         await db.put('staging', local); db.close();
         row.revision++; row.source_revision = 2; row.data = applied; await S.setWritingConflict(f.id, f.stage.stageId, binding(f.id), row);
         const before = await S.read(f.id), wrong = await code(() => S.resolveWritingSync(f.id, f.stage.stageId, binding(f.id), { choice: 'local', expectedLocalRevision: local.revision, remoteRow: row }));
@@ -248,7 +248,7 @@ async function main() {
       const r = await first.evaluate(async () => {
         const f = await fixture(); await readyWriting(f);
         const replacement = { stageId: f.stage.stageId, workspaceId: f.id, revision: f.stage.revision, state: 'draft', input: { text: '가져오기 덮어쓰기' }, excerpts: [] };
-        const wrongKind = await code(() => S.saveStage(replacement)), before = await S.getStage(f.stage.stageId), db = await idb.openDB('life-tools-v1', 1);
+        const wrongKind = await code(() => S.saveStage(replacement)), before = await S.getStage(f.stage.stageId), db = await idb.openDB('life-tools-v1');
         const entry = await db.get('meta', `writingSync:${f.id}:${f.stage.stageId}`); entry.value.syncedLocalRevision = before.revision + 10; await db.put('meta', entry); db.close();
         const read = await code(() => S.getWritingSyncState(f.id, f.stage.stageId)), save = await code(() => edit(f.stage.stageId, '메타 오류 후 입력'));
         return { wrongKind, before, read, save, after: await S.getStage(f.stage.stageId) };

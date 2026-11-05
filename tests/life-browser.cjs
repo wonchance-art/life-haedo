@@ -409,7 +409,7 @@ async function applicationChecks(browser, observe) {
         assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage),null);
         // Inspect the anonymous test DB without mounting a private product view.
         const after = await page.evaluate(async id => {
-          const db=await idb.openDB('life-tools-v1',1);
+          const db=await idb.openDB('life-tools-v1');
           try{return await db.get('bundles',id);}finally{db.close();}
         },before.workspaceId);
         assert.deepEqual(after,before);
@@ -580,8 +580,10 @@ async function applicationChecks(browser, observe) {
       await page.evaluate(async () => {
         const f = await fixture(), s = HaedoLife.Storage;
         const events = []; const unsubscribe = s.subscribe(f.bundle.workspaceId,event => events.push(event));
+        const current = await idb.openDB('life-tools-v1');
+        const nextVersion = current.version + 1; current.close();
         const upgraded = await new Promise((resolve,reject) => {
-          const request = indexedDB.open('life-tools-v1',2);
+          const request = indexedDB.open('life-tools-v1',nextVersion);
           request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error);
           request.onblocked = () => reject(new Error('old application connection blocked upgrade'));

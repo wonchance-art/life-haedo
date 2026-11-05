@@ -238,7 +238,7 @@ async function main() {
     await check('corrupted revision metadata fails closed without replacing local composition', async () => {
       const result = await first.evaluate(async () => {
         const f = await fixture(); await compositionReady(f.id); const before = await S.readWorkbench(f.id);
-        const db = await idb.openDB('life-tools-v1', 1), metadata = await db.get('meta', `compositionSync:${f.id}`);
+        const db = await idb.openDB('life-tools-v1'), metadata = await db.get('meta', `compositionSync:${f.id}`);
         metadata.value.syncedLocalRevision = before.revision + 20; await db.put('meta', metadata); db.close();
         return { rejected: await code(() => S.getCompositionState(f.id)), before, after: await S.readWorkbench(f.id), save: await code(() => edit(f.id, '실패해야 하는 쓰기')) };
       });
