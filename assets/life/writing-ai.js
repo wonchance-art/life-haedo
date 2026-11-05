@@ -1,6 +1,7 @@
 /* AI suggestions for a selection inside the owner's editor (writing-ai-review
  * §6 묶음 B 단계 1·2, approved 2026-11-04). Device-side half of the haedo-ai
- * Edge function; no screen is connected yet (docs/design-review/writing-ai-suggestions.md).
+ * Edge function; writing-ai-ui.js connects explicit request review and the
+ * editor/material adapters (docs/design-review/writing-ai-ui.md).
  *
  * - Nothing is sent unless the caller calls send(). prepare() only builds the
  *   exact request text; its preview is parsed from that same text, so what the

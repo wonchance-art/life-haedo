@@ -205,6 +205,8 @@ const PINNED = {
     "Workbench",
     "WorkbenchUI",
     "Writing",
+    "WritingAI",
+    "WritingAIUI",
     "WritingRemote",
     "WritingSync",
     "WritingSyncUI",

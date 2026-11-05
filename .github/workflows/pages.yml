@@ -429,6 +429,15 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-browser.cjs
+      - name: Verify material AI questions cite exact excerpts and discard stale sources before and after sending
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-ai-browser.cjs
+      - name: Verify the AI and link tools keep one row, 44px targets and an open review across widths
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-toolbar-browser.cjs
       - name: Verify schedule quarter counts sit below titles with mobile navigation preserved
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-quarter-layout-browser.cjs
@@ -650,6 +659,9 @@ jobs:
             .local/account-materials/
             .local/account-library/
             .local/startup-performance-browser/
+            .local/writing-ai/
+            .local/material-writing-ai/
+            .local/writing-ai-toolbar/
             .local/naver-blog/
             .local/naver-capture/
             .local/naver-photo-status/
