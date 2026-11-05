@@ -148,6 +148,7 @@ async function main(){try{
  const xmlFeed=(entries,next)=>`<feed xmlns="http://www.w3.org/2005/Atom">${next?`<link rel="next" href="${next}"/>`:''}${entries.map(e=>atomEntry(e.id,e.date)).join('')}</feed>`;
  const oldRows=Array.from({length:100},(_,i)=>({id:'known-old-'+i,date:'2000-01-01T00:00:00Z'}));
  const installOld=()=>{restart();const job=claim();finish(job,oldRows.map(e=>entry(e.id,{identity:'atom:'+e.id,published_at:e.date})));control('activate');};
+ const knownTail=xmlFeed([oldRows[0]],null).replace('https://fixture.example.test/known-old-0','https://fixture.example.test/posts/known-old-0');
  const freshRows=(prefix,n)=>Array.from({length:n},(_,i)=>({id:prefix+i,date:new Date().toISOString()}));
  for(const size of [10,60,100]){
   installOld();let rows=[...freshRows('burst-'+size+'-',size===10?25:size*3),...oldRows],expected=new Set(rows.filter(e=>!e.id.startsWith('known-old')).map(e=>'atom:'+e.id)),runs=0,appended=false,overflow=false;
@@ -194,6 +195,36 @@ async function main(){try{
   while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(fake);assert(++runs<=3);}
   test('unidentified '+shape+'-page sweep reaches hourly idle without endless fresh-head scheduling',()=>{assert.equal(state().last_error,null);assert.equal(state().cursor,null);assert.equal(state().sweep_new_count,0);assert(new Date(state().next_check_at).getTime()>Date.now()+3500000);});control('disconnect');
  }
+ // An unstable real GUID/URL must not turn the one fresh-head recheck into
+ // an unbounded loop, including old articles that are quarantined each time.
+ for(const identityKind of ['guid','url'])for(const old of [false,true]){
+  installOld();let changes=0,fetches=0,runs=0;const published=old?'2000-01-01T00:00:00Z':new Date().toISOString();
+  const unstable=async url=>{fetches++;const page=Number(new URL(url).searchParams.get('page')||1);
+   if(page===3)return new Response(knownTail);
+   if(page===2)return new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="${pageURL(3)}"/><entry><title>unknown</title><content>고정 본문</content></entry></feed>`);
+   changes++;const link='https://fixture.example.test/unstable'+(identityKind==='url'?'?v='+changes:'');
+   return new Response(`<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><atom:link rel="next" href="${pageURL(2)}"/><item>${identityKind==='guid'?'<guid>unstable-'+changes+'</guid>':''}<title>같은 본문</title><link>${link}</link><pubDate>${published}</pubDate><description>변하지 않는 정확한 원문</description></item></channel></rss>`);
+  };
+  while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(unstable);assert(++runs<=4,'only one consecutive immediate recheck is allowed');}
+  test('unstable '+identityKind+' '+(old?'old':'fresh')+' three-page feed reaches finite hourly idle',()=>{const rows=allItems().filter(i=>i.connection_id===c.id);assert.equal(runs,4);assert.equal(fetches,6);assert.equal(changes,2);assert.equal(rows.length,3);assert.equal(rows.filter(i=>i.disposition==='stored').length,old?0:2);assert.equal(state().sweep_is_recheck,false);assert.equal(state().last_error,null);assert(new Date(state().next_check_at).getTime()>Date.now()+3500000);});control('disconnect');
+ }
+ installOld();lease=claim();finish(lease,[entry('recheck-first')],{next:pageURL(3),complete:false});lease=claim();finish(lease,[entry('recheck-tail')]);
+ assert.equal(state().sweep_is_recheck,true);lease=claim();finish(lease,[entry('recheck-new')],{next:pageURL(3),complete:false});lease=claim();finish(lease,[],{next:pageURL(3),complete:false,error:'network_error'});control('pause');control('resume');
+ test('immediate recheck marker survives partial progress, transient failure and pause',()=>assert.equal(state().sweep_is_recheck,true));
+ due();lease=claim();finish(lease,[entry('recheck-more')]);
+ test('recovered immediate recheck completes at the hourly interval despite new IDs',()=>{assert.equal(state().sweep_is_recheck,false);assert.equal(state().failure_count,0);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});control('disconnect');
+ // The one-recheck bound delays a later head insertion until the next
+ // scheduled cycle, but preserves it once that hourly deadline is reached.
+ installOld();let delayedHead=false;const firstDate=new Date().toISOString();
+ const delayed=async url=>{const page=Number(new URL(url).searchParams.get('page')||1);
+  if(page===1)return new Response(xmlFeed([{id:'bounded-first',date:firstDate},...(delayedHead?[{id:'bounded-delayed',date:firstDate}]:[])],pageURL(2)));
+  if(page===2)return new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="${pageURL(3)}"/><entry><title>unknown delayed</title><content>원문</content></entry></feed>`);
+  return new Response(knownTail);
+ };
+ await tick(delayed);await tick(delayed);assert.equal(state().sweep_is_recheck,true);await tick(delayed);delayedHead=true;await tick(delayed);
+ assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));assert(!allItems().some(i=>i.connection_id===c.id&&i.identity==='atom:bounded-delayed'));
+ due();let delayedRuns=0;while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(delayed);assert(++delayedRuns<=3);}
+ test('new head arrival during the capped recheck tail is preserved on the next hourly cycle',()=>{assert.equal(allItems().filter(i=>i.connection_id===c.id&&i.identity==='atom:bounded-delayed'&&i.disposition==='stored').length,1);assert.equal(state().last_error,null);assert.equal(state().cursor,null);assert.equal(state().sweep_is_recheck,false);});control('disconnect');
  installOld();lease=claim();finish(lease,[],{complete:false,error:'network_error'});due();lease=claim();finish(lease,[entry('success-resets-failures')]);
  test('successful finish resets an automatic transient failure series',()=>assert.equal(state().failure_count,0));
  for(let attempt=1;attempt<=3;attempt++){due();lease=claim();assert(lease);finish(lease,[],{complete:false,error:attempt===2?'rate_limited':'network_error'});assert.equal(state().failure_count,attempt);assert.equal(list().connections.find(row=>row.id===c.id).auto_retry,attempt<3);assert.equal(claim(),null);}
@@ -244,13 +275,48 @@ async function main(){try{
    assert.equal(sql(`select count(*) from haedo_rss_private.receipts where connection_id='${c.id}' and lease_token='${failedLease}';`),'1');
   });control('disconnect');
  }
+ // Unacknowledged finish failures do not get an unsafe error-only replay.
+ // Real handler requests leave the lease; SQL bounds those abandoned attempts.
+ const expireLease=()=>sql(`update haedo_rss_private.connections set lease_until=clock_timestamp()-interval '1 second' where id='${c.id}';`);
+ for(const failure of ['unknown400','413','500','lost-timeout']){
+  installOld();let finishCalls=0,feedCalls=0;
+  const bridge=async(url,options={})=>{
+   if(url.startsWith('https://project.fixture.invalid/rest/v1/rpc/')){
+    const name=url.split('/').at(-1),args=JSON.parse(options.body);assert(/^life_rss_(due|claim|known|finish)$/.test(name));
+    if(name==='life_rss_finish'){finishCalls++;if(failure==='lost-timeout')throw new TypeError('fixture interrupted before finish');return new Response(JSON.stringify({message:'unexpected_rejection'}),{status:failure==='unknown400'?400:Number(failure)});}
+    const parts=Object.entries(args).map(([key,value])=>key+'=>'+(value===null?'null':typeof value==='object'?jl(value):typeof value==='string'?lit(value):String(value)));
+    return new Response(JSON.stringify(worker('select public.'+name+'('+parts.join(',')+');')));
+   }
+   assert.equal(url,feed);feedCalls++;return new Response(xmlFeed([{id:'unfinished-'+failure,date:new Date().toISOString()}],null));
+  };
+  const environment=name=>({SUPABASE_URL:'https://project.fixture.invalid',SUPABASE_SECRET_KEYS:JSON.stringify({default:'sb_secret_fixture_server'}),SUPABASE_PUBLISHABLE_KEYS:JSON.stringify({default:'sb_publishable_fixture'})}[name]);
+  const handler=createHandler({environment,fetcher:bridge,...XML,allowedHosts:['fixture.example.test']});
+  const run=()=>handler(new Request('https://edge.fixture.invalid',{method:'POST',headers:{apikey:'sb_secret_fixture_server'},body:JSON.stringify({action:'run'})}));
+  let late;
+  for(let attempt=0;attempt<3;attempt++){const response=await run();assert(response.status>=400);assert.equal(state().unfinished_count,attempt);assert.equal(state().last_error,null);assert(state().lease_token);assert.equal(claim(),null);late={...state(),connection_id:c.id};expireLease();}
+  assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id),'termination claim remains scheduled');
+  const stopped=await run();assert.equal(stopped.status,200);const reply=await stopped.json();
+  const frozen=state();for(let repeat=0;repeat<3;repeat++){const response=await run();assert.equal(response.status,200);assert.equal((await response.json()).checked,0);assert.deepEqual(state(),frozen);}
+  test('actual handler '+failure+' stops after three abandoned leases with one durable error',()=>{assert.equal(reply.failed,1);assert.equal(reply.checked,1);assert.equal(feedCalls,3);assert.equal(finishCalls,3);assert.equal(frozen.unfinished_count,3);assert.equal(frozen.last_error,'server_error');assert.equal(frozen.lease_token,null);assert.equal(frozen.failure_count,0);assert.equal(list().connections.find(row=>row.id===c.id).auto_retry,false);assert.equal(sql(`select count(*) from haedo_rss_private.receipts where connection_id='${c.id}';`),'1');assert.equal(finish(late,[entry('too-late')]).status,'stale');assert.deepEqual(state(),frozen);});control('disconnect');
+ }
+ installOld();lease=claim();expireLease();lease=claim();assert.equal(state().unfinished_count,1);
+ const completedLease=lease,completedError=finish(lease,[],{complete:false,error:'network_error'});assert.equal(state().unfinished_count,0);
+ due();lease=claim();expireLease();lease=claim();assert.equal(state().unfinished_count,1);
+ test('only a newly committed finish resets unfinished count, not receipt replay or stale work',()=>{assert.deepEqual(finish(completedLease,[],{complete:false,error:'network_error'}),completedError);assert.equal(state().unfinished_count,1);control('pause');control('resume');assert.equal(state().unfinished_count,1);assert.equal(finish(lease,[entry('paused-late')]).status,'stale');assert.equal(state().unfinished_count,1);lease=claim();finish(lease,[entry('unfinished-recovered')]);assert.equal(state().unfinished_count,0);});control('disconnect');
+ installOld();
+ for(let series=0;series<3;series++){
+  for(let attempt=0;attempt<3;attempt++){assert(claim().lease_token);expireLease();}
+  const stop=claim();assert.equal(stop.error,'server_error');assert.equal(state().unfinished_count,3);assert.equal(claim(),null);
+  if(series<2){control('retry');assert.equal(state().unfinished_count,0);assert.equal(state().last_error,null);}
+ }
+ test('CPU-style claim without finish stops and manual recovery remains bounded twice hourly',()=>{error(()=>control('retry'),'rss_retry_limit');assert.equal(state().retry_count,2);assert.equal(state().unfinished_count,3);assert.equal(state().last_error,'server_error');assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});control('disconnect');
  // Independent executable mutations: remove whole guards and demand the same assertions fail.
  c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();finish(lease,[]);control('activate');due();lease=claim();control('pause');
  mutation('revision/status lease fencing',"if not found or not(c.feed_url=any((select allowed_feed_urls from haedo_rss_private.runtime where singleton)::text[])) or c.revision<>p_revision or c.lease_token is distinct from p_lease_token or c.lease_until<=stamp or c.status not in('pending','active') then",'if false then',()=>assert.equal(finish(lease,[entry('mutation-late')]).status,'stale'));
  control('resume');due();lease=claim();
  mutation('date quarantine',"if published is null then reason:='date_unknown';","if false then reason:='date_unknown';",()=>{finish(lease,[entry('mutation-unknown',{published_at:null})]);assert.equal(allItems().find(i=>i.identity==='guid:mutation-unknown').disposition,'held');});
  control('disconnect');c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();
- mutation('pending partial continuation stays immediately due',"next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null and sweep_new_count+new_identities>0)) then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ mutation('pending partial continuation stays immediately due',"next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null and sweep_new_count+new_identities>0 and not sweep_is_recheck)) then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  due();
  mutation('scheduler includes pending baseline',"c.status in('pending','active')","c.status='active'",()=>assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)),'haedo_rss_private.due(integer)');
  control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
@@ -263,6 +329,12 @@ async function main(){try{
  mutation('completed unidentified sweep returns to hourly cadence',"cursor is not null and sweep_new_count+new_identities>0","cursor is not null",()=>{finish(lease,[entry('unknown-two',{identity:'unidentified:two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
  mutation('new unidentified identities do not trigger another immediate sweep',"if c.status='active' and not observed_before and item->>'identity' ~ '^(guid:|atom:|url:)' then","if c.status='active' and not observed_before then",()=>{finish(lease,[entry('new-unknown-one',{identity:'unidentified:new-one',hold_reason:'missing_identity'})],{next:pageURL(3),complete:false});const tail=claim();finish(tail,[entry('new-unknown-two',{identity:'unidentified:new-two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ control('disconnect');installOld();lease=claim();finish(lease,[entry('limited-head')],{next:pageURL(3),complete:false});lease=claim();finish(lease,[entry('limited-tail')]);lease=claim();finish(lease,[entry('limited-recheck-head')],{next:pageURL(3),complete:false});lease=claim();
+ mutation('one consecutive immediate fresh sweep limit',"and not sweep_is_recheck)) then stamp",")) then stamp",()=>{finish(lease,[entry('limited-recheck-tail')]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ control('disconnect');installOld();for(let attempt=0;attempt<3;attempt++){claim();expireLease();}
+ mutation('three unfinished lease stop',"if c.lease_until is not null and c.unfinished_count>=2 then","if false then",()=>{assert.equal(claim().error,'server_error');},'haedo_rss_private.claim(uuid,uuid)');
+ control('disconnect');installOld();claim();expireLease();lease=claim();
+ mutation('committed finish resets unfinished lease series',"lease_until=null,unfinished_count=0,last_checked_at=stamp","lease_until=null,last_checked_at=stamp",()=>{finish(lease,[entry('reset-mutation')]);assert.equal(state().unfinished_count,0);});
  console.log(JSON.stringify({checks,mutations,pass:true,image,migration,liveDatabase:false,realFeed:false}));
  }finally{if(started){const v=docker(['inspect',container,'--format',`{{ index .Config.Labels "${label}" }}`]).trim();assert.equal(v,owner);docker(['rm','-f',container]);}}}
 main().catch(e=>{console.error(e.stderr?.toString()||e.stack||e);process.exitCode=1;});

@@ -79,8 +79,14 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         need(allowedHosts.length && typeof XMLParser === 'function', 'setup_required');
         const claim = await serviceRPC('life_rss_claim', { p_connection_id: id, p_owner_id: owner });
         if (claim === null) return { status: 'not_due' };
-        need(object(claim) && claim.connection_id === id && claim.owner_id === owner && claim.workspace_id === workspace &&
-          ['pending','active'].includes(claim.status) && UUID.test(claim.lease_token || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0, 'server_error');
+        need(object(claim) && claim.connection_id === id && claim.owner_id === owner && claim.workspace_id === workspace, 'server_error');
+        if (claim.status === 'error') {
+          // claim can stop a repeatedly abandoned lease without issuing a new
+          // one. Validate its scope first; do not fetch or write another finish.
+          need(claim.error === 'server_error', 'server_error');
+          return { status: 'error', inserted: 0, held: 0, error: 'server_error' };
+        }
+        need(['pending','active'].includes(claim.status) && UUID.test(claim.lease_token || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0, 'server_error');
         let collected = { items: [], pages: [], cursor: claim.cursor, complete: false }, error = null;
         try {
           safeURL(claim.feed_url, allowedHosts);

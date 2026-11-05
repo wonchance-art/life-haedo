@@ -197,3 +197,20 @@ test('finish validation failures display safe stopped-collection guidance withou
     assert.doesNotMatch(JSON.stringify(result.execution), /private upstream/);
   }
 });
+test('unfinished server work is a stopped collection distinct from automatic transient retries', async () => {
+  const f = fixture(); Object.assign(f.conn, { last_error: 'server_error', failure_count: 0, auto_retry: false });
+  f.page.execution = { status: 'error', error: 'server_error', detail: 'private backend payload' };
+  const result = await f.service.list();
+  assert.equal(result.connections[0].auto_retry, false); assert.equal(result.connections[0].failure_count, 0);
+  assert.equal(result.execution.error, 'server_error');
+  assert.match(Rss.messageFor('server_error'), /서버에서 수집 처리를 마치지 못했습니다/);
+  assert.doesNotMatch(JSON.stringify(result.execution), /private backend/);
+  await f.service.action('retry', f.conn);
+  assert.equal(f.env.requests.at(-1).action, 'retry');
+  f.conn.auto_retry = true;
+  await assert.rejects(f.service.list(), { code: 'rss_invalid_data' });
+});
+test('an invalid inbox cursor describes list lookup without claiming a feed or collection failure', () => {
+  assert.match(Rss.messageFor('rss_invalid_cursor'), /받은 함의 목록 조회 위치/);
+  assert.doesNotMatch(Rss.messageFor('rss_invalid_cursor'), /피드|자동 확인을 멈/);
+});

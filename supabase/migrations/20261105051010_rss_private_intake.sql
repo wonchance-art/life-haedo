@@ -13,10 +13,11 @@ create table haedo_rss_private.connections(
  revision bigint not null default 1 check(revision between 1 and 9007199254740991),
  baseline_generation bigint not null default 1 check(baseline_generation>0),
  baseline_pages integer not null default 0 check(baseline_pages between 0 and 50),
- sweep_new_count integer not null default 0 check(sweep_new_count>=0),
+ sweep_new_count integer not null default 0 check(sweep_new_count>=0),sweep_is_recheck boolean not null default false,
  sweep_started_at timestamptz,sweep_pages integer not null default 0 check(sweep_pages between 0 and 50),
  baseline_started_at timestamptz,baseline_at timestamptz,activated_at timestamptz,baseline_count integer not null default 0,
  cursor text,last_error text,failure_count integer not null default 0 check(failure_count between 0 and 3),retry_window_at timestamptz,retry_count integer not null default 0,last_checked_at timestamptz,next_check_at timestamptz not null default clock_timestamp(),
+ unfinished_count integer not null default 0 check(unfinished_count between 0 and 3),
  lease_token uuid,lease_until timestamptz,unique(owner_id,id),check((lease_token is null)=(lease_until is null))
 );
 create unique index rss_one_connected_source on haedo_rss_private.connections(owner_id) where status<>'disconnected';
@@ -119,6 +120,7 @@ begin
  baseline_pages=case when p_action='retry' and last_error='baseline_stalled' then 0 else baseline_pages end,
  baseline_generation=case when p_action='retry' and last_error='baseline_stalled' then baseline_generation+1 else baseline_generation end,
  failure_count=case when p_action='retry' then 0 else failure_count end,
+ unfinished_count=case when p_action='retry' then 0 else unfinished_count end,
  next_check_at=case when p_action in('activate','retry') then clock_timestamp() else next_check_at end,
  retry_count=case when p_action='retry' then case when retry_window_at>clock_timestamp()-interval '60 minutes' then retry_count+1 else 1 end else retry_count end,
  retry_window_at=case when p_action='retry' and (retry_window_at is null or retry_window_at<=clock_timestamp()-interval '60 minutes') then clock_timestamp() else retry_window_at end,
@@ -134,7 +136,13 @@ begin
  select * into c from haedo_rss_private.connections where id=p_connection_id and owner_id=p_owner_id
  and feed_url=any((select allowed_feed_urls from haedo_rss_private.runtime where singleton)::text[]) and status in('pending','active') and (last_error is null or last_error in('network_error','rate_limited') and failure_count<3) and next_check_at<=clock_timestamp() and (lease_until is null or lease_until<=clock_timestamp()) for update skip locked;
  if not found then return null;end if;
- update haedo_rss_private.connections set baseline_started_at=coalesce(baseline_started_at,clock_timestamp()),sweep_started_at=case when status='active' then coalesce(sweep_started_at,clock_timestamp()) else sweep_started_at end,lease_token=gen_random_uuid(),lease_until=clock_timestamp()+interval '2 minutes' where id=c.id returning * into c;
+ -- Count only a previous lease that actually expired without a committed
+ -- finish. The third expiration records one durable stop, without new work.
+ if c.lease_until is not null and c.unfinished_count>=2 then
+  update haedo_rss_private.connections set unfinished_count=3,last_error='server_error',last_checked_at=clock_timestamp(),lease_token=null,lease_until=null where id=c.id;
+  return jsonb_build_object('status','error','error','server_error','connection_id',c.id,'owner_id',c.owner_id,'workspace_id',c.workspace_id);
+ end if;
+ update haedo_rss_private.connections set unfinished_count=case when lease_until is not null then unfinished_count+1 else unfinished_count end,baseline_started_at=coalesce(baseline_started_at,clock_timestamp()),sweep_started_at=case when status='active' then coalesce(sweep_started_at,clock_timestamp()) else sweep_started_at end,lease_token=gen_random_uuid(),lease_until=clock_timestamp()+interval '2 minutes' where id=c.id returning * into c;
  return to_jsonb(c)||jsonb_build_object('connection_id',c.id);
 end$$;
 create function haedo_rss_private.finish(p_connection_id uuid,p_lease_token uuid,p_revision bigint,p_items jsonb,p_next_cursor text,p_complete boolean,p_error text,p_pages jsonb) returns jsonb
@@ -175,7 +183,6 @@ begin
  -- distinguish two different versions of the same ID split across pages.
  if page_cap+jsonb_array_length(p_pages)>50 then raise exception using errcode='22023',message='rss_invalid_pages';end if;
  for page in select value from jsonb_array_elements(p_pages) loop
-  if page_cap+accepted_pages>=50 then p_error:=case when c.status='pending' then 'baseline_page_limit' else 'catchup_page_limit' end;p_complete:=false;p_next_cursor:=page->>'url';exit;end if;
   select coalesce(array_agg(distinct v#>>'{}'),'{}') into page_ids from jsonb_array_elements(page->'identities') v;
   if c.status='pending' then
    select count(*) into new_ids from unnest(page_ids) ident where not(ident=any(accepted_ids)) and not exists(select 1 from haedo_rss_private.observations prior where prior.connection_id=c.id and prior.identity=ident and prior.baseline_generation=c.baseline_generation);
@@ -224,8 +231,11 @@ begin
    values(c.owner_id,c.id,item->>'identity',item->>'title',item->>'url',item->>'content_text',item->>'content_hash',published,stamp,case when reason is null then 'stored' else 'held' end,reason,itemhash) on conflict do nothing;
   get diagnostics n=row_count;if reason is null then inserted:=inserted+n;else held:=held+n;end if;
  end loop;
- update haedo_rss_private.connections set lease_token=null,lease_until=null,last_checked_at=stamp,last_error=p_error,
+ update haedo_rss_private.connections set lease_token=null,lease_until=null,unfinished_count=0,last_checked_at=stamp,last_error=p_error,
  failure_count=case when p_error in('network_error','rate_limited') then least(3,failure_count+1) else 0 end,
+ -- One immediate fresh sweep is allowed per hourly cycle, even if the feed
+ -- changes every identifier on every request. Partial/error runs keep the flag.
+ sweep_is_recheck=case when status='active' and p_complete then cursor is not null and sweep_new_count+new_identities>0 and not sweep_is_recheck else sweep_is_recheck end,
  sweep_new_count=case when status='active' then case when p_complete then 0 else sweep_new_count+new_identities end else sweep_new_count end,
  cursor=case when p_complete then null when p_next_cursor is not null then p_next_cursor else cursor end,
  baseline_pages=case when status='pending' then least(50,baseline_pages+accepted_pages) else baseline_pages end,
@@ -234,7 +244,7 @@ begin
  baseline_count=(select count(*) from haedo_rss_private.observations where connection_id=c.id and baseline),
  baseline_at=case when baseline_at is null and p_complete then stamp else baseline_at end,
  status=case when baseline_at is null and p_complete then 'preview' else status end,
- next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null and sweep_new_count+new_identities>0)) then stamp else stamp+interval '60 minutes' end
+ next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null and sweep_new_count+new_identities>0 and not sweep_is_recheck)) then stamp else stamp+interval '60 minutes' end
  where id=c.id returning * into c;
  result:=jsonb_build_object('status',case when p_error is not null then 'error' when p_complete then 'stored' else 'partial' end,'inserted',inserted,'held',held,'baseline_count',c.baseline_count,'cursor',c.cursor,'error',p_error,'baseline_pages',c.baseline_pages,'sweep_pages',c.sweep_pages);
  insert into haedo_rss_private.receipts values(c.id,p_lease_token,request_hash,result);

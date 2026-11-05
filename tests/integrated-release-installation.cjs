@@ -47,7 +47,7 @@ const blogPublicCopiesMigration = 'supabase/migrations/20261102120000_life_blog_
 // and run-sql-replay-postgres.
 const aiUsageMigration = 'supabase/migrations/20261104090000_life_ai_usage.sql';
 // D: fixture-verified private RSS intake, disabled until the reviewed URL is configured.
-const rssIntakeMigration = ['supabase/migrations/20261105051010_rss_private_intake.sql', '0d9daeae451f3ef8903ea14a74542adeadf6cb7abf4b57483e99c51ad7d80d3a'];
+const rssIntakeMigration = ['supabase/migrations/20261105051010_rss_private_intake.sql', 'd4914f97717f81e55cc05cefa642bff5e4137753bdaa3becdc8cc8914866187c'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];

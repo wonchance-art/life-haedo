@@ -69,7 +69,9 @@
     function paint() {
       rows.replaceChildren(); items.replaceChildren(); reader.replaceChildren(); reader.hidden = true;
       status.textContent = page.configured ? '연결 상태를 확인했습니다.' : 'RSS 연결을 준비 중입니다. 피드 주소가 확정되면 연결할 수 있습니다.';
-      if (page.execution?.status === 'not_due') status.textContent = root.HaedoLife.RssConnection.messages.rss_not_due;
+      if (page.execution?.status === 'not_due') status.textContent = page.connections.some(conn =>
+        ['pending', 'active'].includes(conn.status) && conn.last_error && conn.auto_retry !== true) ?
+        '자동 확인을 멈췄습니다. 연결 상태를 확인해 주세요.' : root.HaedoLife.RssConnection.messages.rss_not_due;
       else if (page.execution?.status === 'stale') status.textContent = root.HaedoLife.RssConnection.messages.rss_stale;
       else if (page.execution?.status === 'busy') status.textContent = root.HaedoLife.RssConnection.messages.rss_busy;
       else if (page.execution?.status === 'error') status.textContent = '이번 확인을 마치지 못했습니다. 기존 자료는 유지됩니다.';
@@ -98,6 +100,8 @@
           if (automaticRetry) line.append(node('p', '일시 오류는 60분 간격으로 자동 재시도합니다. 연속 3회 실패하면 자동 확인을 멈춥니다.', 'life-help'));
           else if (conn.failure_count === 3 && ['network_error', 'rate_limited'].includes(conn.last_error) && ['pending', 'active'].includes(conn.status))
             line.append(node('p', '연속 3회 실패하여 자동 확인을 멈췄습니다. 연결을 확인한 뒤 다시 시도해 주세요.', 'life-help'));
+          if (conn.last_error === 'server_error' && ['pending', 'active'].includes(conn.status))
+            line.append(node('p', '서버 처리 결과를 확인하지 못해 자동 확인을 멈췄습니다. 상태를 확인한 뒤 다시 시도해 주세요.', 'life-help'));
         }
         const actions = conn.status === 'pending' ? conn.last_error ? [] : [['preview', '기준 목록 미리보기']] : conn.status === 'preview' ? [['activate', '새 글만 수집 시작']] :
           conn.status === 'active' ? [...(conn.last_error ? [] : [['poll', '새 글 확인']]), ['pause', '수집 중지']] : conn.status === 'paused' ? [['resume', '수집 재개']] : [];

@@ -378,6 +378,7 @@ test('finish ambiguity, permissions and receipt mismatches never retry with a di
   const [,h,xml]=await modules;
   const errors=[
     ()=>{throw Error('connection lost after potential commit');},
+    ()=>new Response('Request Entity Too Large',{status:413}),
     ()=>new Response(JSON.stringify({message:'rss_invalid_item'}),{status:500}),
     ()=>new Response(JSON.stringify({message:'rss_invalid_item'}),{status:403}),
     ()=>new Response('broken committed response',{status:200}),
@@ -396,4 +397,38 @@ test('a rejected error-only finish is not recursively retried',async()=>{
   const fetcher=async(endpoint,init)=>endpoint.endsWith('life_rss_finish')?(finishCalls++,new Response(JSON.stringify({message:'rss_invalid_item'}),{status:400})):fx.fetcher(endpoint,init);
   const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
   assert.ok(result.status>=400);assert.equal(finishCalls,2);
+});
+test('claim stopping an abandoned lease returns the newly recorded stop state without another feed request',async()=>{
+  const [,h,xml]=await modules,fx=fixture();let claims=0,lists=0;
+  const fetcher=async(endpoint,init)=>{
+    if(endpoint.endsWith('life_rss_list'))lists++;
+    if(endpoint.endsWith('life_rss_claim')){
+      claims++;fx.state.connections[0].last_error='server_error';fx.state.connections[0].auto_retry=false;
+      return json({status:'error',error:'server_error',connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace});
+    }
+    return fx.fetcher(endpoint,init);
+  };
+  const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+  assert.equal(result.status,200);const data=await result.json();
+  assert.equal(claims,1);assert.equal(lists,2);assert.equal(data.execution.status,'error');assert.equal(data.execution.error,'server_error');
+  assert.equal(data.connections[0].last_error,'server_error');assert.equal(data.connections[0].auto_retry,false);
+  assert.equal(fx.calls.filter(x=>x.endpoint.startsWith('https://'+host)).length,0);
+  assert.equal(fx.calls.filter(x=>x.endpoint.endsWith('life_rss_finish')).length,0);
+});
+test('terminal claims are counted as scheduler failures and rejected if their scope or safe code differs',async()=>{
+  const [,h,xml]=await modules;
+  const terminal={status:'error',error:'server_error',connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace};
+  for(const change of [{},{connection_id:ids.lease},{owner_id:ids.lease},{workspace_id:ids.lease},{error:'private diagnostic'}]){
+    const fx=fixture();let feedCalls=0,finishCalls=0;
+    const fetcher=async(endpoint,init)=>{
+      if(endpoint.endsWith('life_rss_claim'))return json({...terminal,...change});
+      if(endpoint.startsWith('https://'+host))feedCalls++;
+      if(endpoint.endsWith('life_rss_finish'))finishCalls++;
+      return fx.fetcher(endpoint,init);
+    };
+    const result=await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(request({action:'run'},{apikey:'sb_secret_fixture_server'}));
+    if(Object.keys(change).length){assert.equal(result.status,502);assert.equal((await result.json()).error,'server_error');}
+    else {assert.equal(result.status,200);assert.deepEqual(await result.json(),{checked:1,stored:0,failed:1,stale:0});}
+    assert.equal(feedCalls,0);assert.equal(finishCalls,0);
+  }
 });
