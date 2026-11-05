@@ -165,6 +165,7 @@ const PINNED = {
     "PhotoPostAttachments",
     "PhotoPostUI",
     "PlatformRemote",
+    "PostMarkdown",
     "Preservation",
     "PreservationPackage",
     "PreservationReferences",

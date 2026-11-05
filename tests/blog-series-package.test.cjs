@@ -42,6 +42,26 @@ test('self-contained series preserves order, exact saved snapshots, v1/v2 format
   assert.deepEqual(await restored.posts[0].doc.photos[0].blob.arrayBuffer(), await before.posts[0].doc.photos[0].blob.arrayBuffer());
   assert.match(Photo.plainText(restored.posts[0].doc), /인용한 구절/); assert.equal(restored.posts[0].doc.ops[1].attributes.link, 'https://example.org/source?edition=old');
 });
+test('mixed Markdown and legacy series keeps exact body, AI marks and photo bytes; outer/nested body mismatch fails', async () => {
+  const Markdown = require('../assets/life/post-markdown.js');
+  const snapshot = await fixture();
+  const upgraded = Photo.upgrade(snapshot.posts[0].doc);
+  upgraded.ops.unshift({ insert: 'AI 문장', attributes: { author: 'ai' } }, { insert: '\n' });
+  snapshot.posts[0].doc = Markdown.fromV2(upgraded).document;
+  const before = structuredClone(snapshot);
+  const blob = await P.pack(snapshot), files = await filesOf(blob);
+  const restored = await P.read(blob);
+  assert.deepEqual(restored, before);
+  assert.equal(restored.posts[0].doc.format, 'life-post-md-v1');
+  assert.equal(restored.posts[1].doc.format, 'life-photo-post-v2');
+  assert.equal(Object.hasOwn(restored.posts[0].doc, 'ops'), false);
+  assert.deepEqual(await restored.posts[0].doc.photos[0].blob.arrayBuffer(), await before.posts[0].doc.photos[0].blob.arrayBuffer());
+  const changed = editManifest(files, value => { value.posts[0].doc.markdown = '바뀐 본문\n'; });
+  await assert.rejects(P.read(archive(changed)), /사진|본문/);
+  const changedText = editManifest(files, value => { value.posts[0].doc.markdown = value.posts[0].doc.markdown.replace('AI 문장', '다른 문장'); });
+  await assert.rejects(P.read(archive(changedText)), /본문/);
+  assert.deepEqual(snapshot, before);
+});
 test('empty collections, drafts, archived posts, extra account/evidence fields and inconsistent entry mapping fail', async () => {
   const original = await fixture();
   for (const change of [value => { value.series.items = []; value.posts = []; }, value => { value.account = 'private'; }, value => { value.posts[0].evidence = { refs: [] }; }, value => { value.posts[0].doc.status = 'draft'; }, value => { value.posts[1].doc.archived = true; }, value => { value.posts.reverse(); }, value => { value.series.items[0].postRevision++; }]) {

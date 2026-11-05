@@ -1,12 +1,12 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v196';
+const CACHE='haedo-v197';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
   './assets/life/records-list.js','./assets/life/records.css',
   './assets/life/annual-plan.js','./assets/life/annual-plan-ui.js','./assets/life/annual-plan.css','./assets/life/schedule-data.js','./assets/life/schedule-ui.js','./assets/life/schedule.css',
   './assets/life/source-edit.js','./assets/life/source-edit-ui.js','./assets/life/source-markdown.js','./assets/life/source-markdown.css',
-  './vendor/markdown-it/markdown-it.umd.min.js','./vendor/dompurify/purify.min.js',
+  './vendor/markdown-it/markdown-it.umd.min.js','./assets/life/post-markdown.js','./vendor/dompurify/purify.min.js',
   './vendor/js-yaml/js-yaml.umd.min.js',
   './assets/life/naver-blog.js','./assets/life/naver-capture.js','./assets/life/naver-media.js','./assets/life/naver-media-receipt.js','./assets/life/naver-capture-sync.js','./assets/life/naver-capture-ui.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',

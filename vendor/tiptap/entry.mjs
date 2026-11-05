@@ -1,0 +1,13 @@
+export { Editor, Node, Mark, Extension, mergeAttributes, wrappingInputRule } from '@tiptap/core';
+export { Document } from '@tiptap/extension-document';
+export { Paragraph } from '@tiptap/extension-paragraph';
+export { Text } from '@tiptap/extension-text';
+export { Heading } from '@tiptap/extension-heading';
+export { Bold } from '@tiptap/extension-bold';
+export { Italic } from '@tiptap/extension-italic';
+export { Blockquote } from '@tiptap/extension-blockquote';
+export { BulletList } from '@tiptap/extension-bullet-list';
+export { OrderedList } from '@tiptap/extension-ordered-list';
+export { ListItem } from '@tiptap/extension-list-item';
+export { UndoRedo } from '@tiptap/extensions';
+export { Plugin } from '@tiptap/pm/state';
