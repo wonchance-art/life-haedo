@@ -15,8 +15,24 @@
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
+  // Only an acknowledgement for this saved revision may claim account storage.
+  function savedPresentation(state, revision, { account, workspaceId, error = null } = {}) {
+    if (!account) return { key: 'local', label: '저장됨' };
+    const binding = state?.binding;
+    const matching = state?.workspaceId === workspaceId && binding?.remoteId === workspaceId &&
+      binding?.userId === account.userId && binding?.projectUrl === account.projectUrl;
+    if (error || state?.error || state?.conflict || state?.status === 'error' || state?.status === 'account_mismatch' || binding && !matching) {
+      return { key: 'error', label: '저장됨 · 계정에 올리지 못함 · 다시 시도' };
+    }
+    if (matching && state.enabled && state.status === 'synced' && !state.outbox &&
+        state.remoteRevision > 0 && Number.isSafeInteger(revision) && revision >= 0 && state.syncedLocalRevision === revision) {
+      return { key: 'synced', label: '저장됨 · 계정에 올림' };
+    }
+    return { key: 'pending', label: '저장됨 · 계정에 올리기 대기' };
+  }
+
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, onMaterialUnavailable = () => {}, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, onMaterialUnavailable = () => {}, blogSync = null, compositionSync = null, libraryMetaSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -26,7 +42,7 @@
     const sessions = new Map();
     const urls = new Set();
     let disposed = false, generation = 0, visible = false, current = null, mode = null;
-    let surface = null, statusNode = null, errorNode = null, bodyNode = null, saveControl = null;
+    let surface = null, statusNode = null, syncRetry = null, errorNode = null, bodyNode = null, saveControl = null;
     let preview = false, restoreCandidate = null, restoreName = '', restoreSequence = 0, installing = false;
     let incoming = null;
     let shareRemote = null;
@@ -87,6 +103,22 @@
     function announceSafe(message, session = current) {
       if (session && workspaceIs(session)) announce(message);
     }
+    async function refreshSavedStatus(session) {
+      if (!compositionSync || !workspaceIs(session)) return;
+      const sequence = session.syncSequence = (session.syncSequence || 0) + 1;
+      try {
+        const value = await compositionSync.getState(session.workspaceId);
+        if (!workspaceIs(session) || sequence !== session.syncSequence) return;
+        session.syncState = value; session.syncError = null;
+      } catch (error) {
+        if (!workspaceIs(session) || sequence !== session.syncSequence) return;
+        session.syncState = null; session.syncError = error;
+      }
+      updateStatus(session);
+    }
+    const unsubscribeComposition = compositionSync?.subscribe(event => {
+      for (const session of sessions.values()) if (!event.workspaceId || event.workspaceId === session.workspaceId) refreshSavedStatus(session);
+    });
     function updateStatus(session) {
       if (!visible || current !== session || !workspaceIs(session) || !statusNode) return;
       const hasUnappliedAttachment = !!session.composer?.hasUnappliedAttachment?.();
@@ -94,12 +126,23 @@
       const composerDirty = !!session.composer?.dirty?.();
       const nineDirty = !!session.nine?.dirty();
       const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
+      const saved = savedPresentation(session.syncState, session.baseRevision, { account: storage.account, workspaceId: session.workspaceId, error: session.syncError });
+      statusNode.dataset.syncState = saved.key;
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? (managed ? '변경 반영 중…' : '이 기기에 저장 중…') : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : managed ? '변경 반영됨' : '이 기기에 저장됨';
-      statusNode.hidden = managed && !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : saved.label;
+      statusNode.hidden = managed && !storage.account && !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
+      if (syncRetry) { syncRetry.hidden = saved.key !== 'error' || !compositionSync; syncRetry.disabled = !!session.syncRetrying; }
       statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (managed && !session.blogContext && !['public-pages', 'workbench-backup'].includes(mode)) surface.querySelector('.wb-storage-line').hidden = statusNode.hidden;
       else if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
+      // These editors have their own storage domains and status lines. A page composition
+      // receipt must not stand in for their post, preparation, series or 9칸 upload.
+      if (mode === 'page' && session.blogContext) surface.querySelector('.wb-storage-line').hidden = true;
+      else if (mode === 'page' && (session.nineOpen || session.materialOpen || session.seriesOpen)) {
+        // Keep a competing composition's reload/recovery controls reachable, including
+        // while a nested editor holds an unrelated, unsaved attachment or IME input.
+        surface.querySelector('.wb-storage-line').hidden = !session.error && session.remoteRevision <= session.baseRevision;
+      } else if (mode === 'page' && !managed) surface.querySelector('.wb-storage-line').hidden = false;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
     function report(error, session = current) {
@@ -257,6 +300,7 @@
           session.state.revision = result.revision;
           session.stored = tick; session.error = null;
           // Existing controls close over this draft. Keep its object identity after saving.
+          refreshSavedStatus(session);
         } catch (error) { session.error = error; report(error, session); throw error; }
         finally { session.saving = null; updateStatus(session); }
       })();
@@ -297,7 +341,9 @@
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
         loading: null, saving: null, timer: null, error: null, composing: new Set(), unsubscribe: null };
       if (storage.subscribe) session.unsubscribe = storage.subscribe(id, event => {
-        if (!alive() || event.type !== 'workbench_changed') return;
+        if (!alive()) return;
+        if (['workbench_changed', 'composition_sync_changed'].includes(event.type)) refreshSavedStatus(session);
+        if (event.type !== 'workbench_changed') return;
         session.remoteRevision = Math.max(session.remoteRevision, event.revision || 0);
         if (!session.state || session.saving || session.remoteRevision <= session.baseRevision) return;
         if (session.edit !== session.stored) {
@@ -318,6 +364,8 @@
               await session.nine?.flush();
               await session.seriesEditor?.flush();
               await session.photoPosts?.flush();
+              await session.materialUI?.flush();
+              await session.materialTool?.flush();
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
               cleanupView(); session.state = null;
@@ -1120,7 +1168,8 @@
       let continuityUI = null;
       const outputHeading = el('h3', '완성 글 활용'), outputActions = el('div', null, 'life-actions');
       const toolHost = el('section'); toolHost.id = 'mwOutputTool'; toolHost.hidden = true;
-      let manager = null, sync = null, preservation = null, toolSequence = 0;
+      let manager = null, sync = null, preservation = null, toolSequence = 0, outputSequence = 0;
+      let refreshOutput = () => {};
       const closeTool = () => { toolSequence++; manager?.dispose(); sync?.dispose(); preservation?.dispose(); manager = sync = preservation = null; toolHost.replaceChildren(); toolHost.hidden = true; prepareHost.hidden = false; continuityHost.hidden = false; outputActions.hidden = false; output.classList.remove('is-open'); outputHeading.textContent = '완성 글 활용'; };
       const tool = { flush: async () => { await manager?.flush(); preservation?.flush(); await continuityUI?.flush(); }, dirty: () => !!manager?.dirty() || !!preservation?.dirty() || !!continuityUI?.dirty() };
       session.materialTool = tool;
@@ -1165,7 +1214,7 @@
         onDirty: () => updateStatus(session), onOpenSource: context => session.materialCallbacks.source(context),
         onOpenPost: context => session.materialCallbacks.openPost(context),
         onCreatePost: context => session.materialContinuity.handoff(session.workspaceId, context.planId, context.expectedRevision),
-        onPlanChange: ({ planId }) => { if (active()) { session.materialPlanId = planId; if (session.materialSeed?.requestId === planId) session.materialSeed = null; continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); } },
+        onPlanChange: ({ planId }) => { if (active()) { session.materialPlanId = planId; if (session.materialSeed?.requestId === planId) session.materialSeed = null; refreshOutput(); continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); } },
         onClose: async () => {
           if (!session.materialOpen || !workspaceIs(session)) return;
           // Opened from a reader: the host returns to that exact version. The
@@ -1213,7 +1262,9 @@
         const state = await storage.readMaterialWriting(session.workspaceId); if (!requested()) return;
         const plan = state.plans.find(value => value.id === planId);
         if (!plan?.output) throw fault('material_output_missing', '먼저 미리보기를 확인해 글 초안을 만들어 주세요.');
-        const doc = await storage.readPhotoPost(session.workspaceId, plan.output.postId); if (!requested()) return;
+        const linked = await readOutput(planId); if (!requested()) return;
+        if (linked.status !== 'available') { await refreshOutput(); throw fault('material_output_missing', outputMessage(linked.status)); }
+        const doc = await storage.readPhotoPost(session.workspaceId, linked.postId); if (!requested()) return;
         if (kind === 'file' && doc.status !== 'saved') throw fault('material_output_draft', '작성기에서 글을 저장한 뒤 근거 파일로 보관해 주세요.');
         session.materialPlanId = planId; closeTool(); toolHost.hidden = false; prepareHost.hidden = true; continuityHost.hidden = true; outputActions.hidden = true; output.classList.add('is-open'); outputHeading.textContent = doc.title || '제목 없는 글';
         const mountedSequence = toolSequence;
@@ -1242,8 +1293,35 @@
       }
       const manage = action('이 글 공개·보관 관리', () => openOutput('public')); manage.id = 'mwManageOutput';
       const preserve = action('이 글 근거 파일 보관·복원', () => openOutput('file')); preserve.id = 'mwPreserveOutput';
-      outputActions.append(manage, preserve); output.append(outputActions, toolHost); bodyNode.append(prepareHost, continuityHost, output);
-      viewCleanups.push(() => { continuityUI.dispose(); session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
+      const outputStatus = el('p', '', 'life-help'); outputStatus.id = 'mwOutputStatus'; outputStatus.setAttribute('role', 'status');
+      const outputMessage = status => status === 'deleted' ? '완성 글을 지웠습니다. 작성 준비와 근거는 남아 있습니다. 위의 새 준비 사본 만들기로 다시 작성할 수 있습니다.' :
+        status === 'missing' ? '연결된 글을 아직 이 기기에서 확인하지 못했습니다. 계정 동기화 후 다시 확인해 주세요. 작성 준비와 연결 정보는 유지했습니다.' :
+        '미리보기를 확인해 글 초안을 만든 뒤 활용할 수 있습니다.';
+      async function readOutput(planId) {
+        if (!planId) return { status: 'none' };
+        if (storage.readMaterialWritingOutput) return storage.readMaterialWritingOutput(session.workspaceId, planId);
+        // Mixed cached versions can detect absence, but cannot prove deletion.
+        const value = await storage.readMaterialWriting(session.workspaceId), plan = value.plans.find(value => value.id === planId);
+        if (!plan?.output) return { status: 'none' };
+        try { const doc = await storage.readPhotoPost(session.workspaceId, plan.output.postId); return { status: 'available', postId: doc.id, revision: doc.revision }; }
+        catch (error) { if (error.code === 'photo_post_missing') return { status: 'missing', postId: plan.output.postId }; throw error; }
+      }
+      refreshOutput = async () => {
+        const request = ++outputSequence, planId = session.materialUI.getView().planId;
+        const requested = () => active() && request === outputSequence && session.materialUI.getView().planId === planId;
+        if (!requested()) return;
+        outputActions.hidden = true;
+        try {
+          const linked = await readOutput(planId); if (!requested()) return;
+          output.dataset.state = linked.status;
+          outputActions.hidden = linked.status !== 'available' || !toolHost.hidden;
+          outputStatus.hidden = linked.status === 'available'; outputStatus.textContent = outputMessage(linked.status);
+        } catch (_) { if (requested()) { output.dataset.state = 'error'; outputActions.hidden = true; outputStatus.hidden = false; outputStatus.textContent = '완성 글 상태를 확인하지 못했습니다. 작성 준비는 유지했습니다. 다시 열어 확인해 주세요.'; } }
+      };
+      outputActions.append(manage, preserve); output.append(outputStatus, outputActions, toolHost); bodyNode.append(prepareHost, continuityHost, output);
+      const stopOutput = storage.subscribe?.(session.workspaceId, event => { if (['material_writing_changed', 'photo_posts_changed'].includes(event.type)) refreshOutput(); });
+      mount.then(refreshOutput).catch(() => {});
+      viewCleanups.push(() => { outputSequence++; stopOutput?.(); continuityUI.dispose(); session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
     }
     function renderPage() {
       const session = current, page = session.state.page;
@@ -1316,7 +1394,7 @@
         });
         bodyNode.append(back);
         const nineHost = el('section'); bodyNode.append(nineHost);
-        session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId, getBundle,
+        session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId, getBundle, libraryMetaSync,
           onComposeArea: async request => {
             const token = generation;
             const valid = () => showing(token, session) && session.nineOpen && request.isCurrent() && request.workspaceId === session.workspaceId;
@@ -3250,7 +3328,15 @@
       scope.append(notice('구성은 먼저 이 기기에 저장하고 같은 계정으로 로그인한 기기와 자동으로 동기화합니다. 글쓰기·가져오기 초안은 구성에 포함하지 않습니다. 자료·구성 JSON 백업으로 새 사본을 복원할 수도 있습니다. 공개 사본은 따로 게시·갱신·철회하며, 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
-      const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
+      syncRetry = action('계정에 올리기 다시 시도', async () => {
+        if (!compositionSync || session.syncRetrying) return;
+        session.syncRetrying = true; updateStatus(session);
+        try { await compositionSync.syncNow(session.workspaceId); }
+        catch (error) { if (workspaceIs(session)) session.syncError = error; }
+        finally { session.syncRetrying = false; await refreshSavedStatus(session); }
+      });
+      syncRetry.id = 'wbSyncRetry'; syncRetry.hidden = true;
+      const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, syncRetry, scope);
       storageLine.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode);
       if (['books', 'reflection', 'page'].includes(mode)) surface.append(heading, errorNode, bodyNode, storageLine);
       else surface.append(heading, storageLine, errorNode, bodyNode);
@@ -3260,6 +3346,7 @@
         if (!session.state || session.edit === session.stored && (options.searchTarget || session.remoteRevision > session.baseRevision)) await load(session);
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
+        refreshSavedStatus(session);
         if (mode === 'books' && options.bookList === true) session.bookView = null;
         if (mode === 'books' && options.chapterImport !== undefined && options.bookList !== true) {
           const target = options.chapterImport;
@@ -3320,11 +3407,11 @@
     }
     function dispose() {
       disposed = true; leave();
-      shareRemote?.dispose();
+      shareRemote?.dispose(); unsubscribeComposition?.();
       sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.materialUI?.dispose(); session.materialContinuity?.dispose(); session.seriesEditor?.dispose(); session.seriesReader?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
     return Object.freeze({ render, flush, checkpoint, dirty, leave, dispose });
   }
-  life.WorkbenchUI = Object.freeze({ create });
+  life.WorkbenchUI = Object.freeze({ create, savedPresentation });
 })(globalThis);

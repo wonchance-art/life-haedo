@@ -40,6 +40,9 @@
         if (!mounted() || !state || !(event.revision > state.revision)) return;
         if (!dirty() && !navigating && !failure) { reload({ planId: selected }).catch(() => { incoming = true; message(); }); return; }
         incoming = true; message();
+        // Refresh only the output controls while preserving unsaved field DOM,
+        // selection and IME state. A confirmed deletion must retire resume now.
+        renderOutput();
       }, 0);
     }
     async function loadIncoming() {
@@ -174,10 +177,41 @@
         return await callback(context);
       } finally { navigating = false; acting = previousAction; }
     }
-    function renderOutput() {
+    async function renderOutput() {
       output.replaceChildren(); const owner = plan(); if (!owner?.output) return;
-      output.append(el('p', '이 준비에서 만든 글이 있습니다. 준비의 변경은 그 글을 덮지 않습니다. 같은 글을 열거나 새 준비 사본으로 시작할 수 있습니다.', 'life-help'),
-        button('이어서 쓰기', () => openPost(false), { id: 'mwContinue', primary: true }));
+      const target = output, token = epoch, postId = owner.output.postId;
+      const pending = el('p', '연결한 글을 확인하는 중…', 'life-help'); target.append(pending);
+      // Each render owns its placeholder. A late lookup must not revive a link
+      // after selecting another preparation, detaching, or rendering again.
+      const current = () => mounted(token) && output === target && plan() === owner && owner.output?.postId === postId && pending.parentNode === target;
+      try {
+        let result;
+        if (typeof storage.readMaterialWritingOutput === 'function') result = await storage.readMaterialWritingOutput(workspaceId, owner.id);
+        else {
+          // A cached older store can establish availability, but absence alone
+          // must never be presented as a confirmed deletion.
+          try { const post = await storage.readPhotoPost(workspaceId, postId); result = { status: 'available', postId: post.id }; }
+          catch (cause) { if (cause?.code !== 'photo_post_missing') throw cause; result = { status: 'missing', postId }; }
+        }
+        if (!current()) return;
+        if (result.postId !== postId) throw new Error('연결한 글이 바뀌었습니다. 작성 준비를 다시 불러와 주세요.');
+        if (result.status === 'deleted') {
+          pending.textContent = '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.';
+          const start = el('button', '새 준비 사본 만들기', 'life-button'); start.type = 'button'; start.id = 'mwDeletedCopy';
+          // Reuse the existing copy action, including its input/IME/size guards.
+          start.addEventListener('click', () => { if (current()) surface.querySelector('#mwCopy')?.click(); }); target.append(start);
+        } else if (result.status === 'missing') {
+          pending.textContent = '연결한 글을 아직 찾지 못했습니다. 동기화가 끝난 뒤 다시 확인해 주세요. 준비와 자료는 그대로 유지합니다.';
+          target.append(button('연결한 글 다시 확인', renderOutput, { id: 'mwOutputRetry' }));
+        } else if (result.status === 'available') {
+          pending.textContent = '이 준비에서 만든 글이 있습니다. 준비의 변경은 그 글을 덮지 않습니다. 같은 글을 열거나 새 준비 사본으로 시작할 수 있습니다.';
+          target.append(button('이어서 쓰기', () => openPost(false), { id: 'mwContinue', primary: true })); message();
+        } else throw new Error('연결한 글의 상태를 확인하지 못했습니다. 다시 확인해 주세요.');
+      } catch (cause) {
+        if (!current()) return;
+        pending.textContent = cause?.message || '연결한 글을 확인하지 못했습니다. 준비와 자료는 그대로 유지합니다.';
+        target.append(button('연결한 글 다시 확인', renderOutput, { id: 'mwOutputRetry' }));
+      }
     }
     async function openPost(createNew) {
       guard(); const owner = plan(); if (!owner) return;

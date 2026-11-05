@@ -129,5 +129,24 @@
     if (!result.hasContent) fail('글에 담을 내용이 없습니다. 개요에 문단이나 인용을 먼저 추가해 주세요.');
     return { doc: result.doc, refs: result.refs };
   }
-  return Object.freeze({ FORMAT, LIMITS, empty, create, validate, material, resolveMaterial, project });
+  // A missing local document alone is not evidence of deletion. Only the receipt
+  // written by the post deletion transaction retires its live output link.
+  function resolveOutput(output, post = null, deletion = null) {
+    if (output === null) return { status: 'none' };
+    fields(output, ['postId']); id(output.postId);
+    // A server-side delete can lose to a newer edit. BlogSync then restores the
+    // current document under this ID; that verified document wins over history.
+    if (post !== null) {
+      dependency('PhotoPost').validate(post);
+      if (post.id !== output.postId) fail('완성 글과 준비의 연결이 다릅니다.');
+      return { status: 'available', postId: post.id, revision: post.revision };
+    }
+    if (deletion !== null) {
+      fields(deletion, ['postId']); id(deletion.postId);
+      if (deletion.postId !== output.postId) fail('삭제한 글과 준비의 연결이 다릅니다.');
+      return { status: 'deleted', postId: output.postId };
+    }
+    return { status: 'missing', postId: output.postId };
+  }
+  return Object.freeze({ FORMAT, LIMITS, empty, create, validate, material, resolveMaterial, project, resolveOutput });
 });

@@ -1774,6 +1774,7 @@
     }
     const materialWriting = () => root.HaedoLife?.MaterialWriting || (typeof require === 'function' && require('./material-writing.js'));
     const materialOutputKey = (workspaceId, planId) => `material-writing-output:${workspaceId}:${planId}`;
+    const materialOutputDeletedKey = (workspaceId, postId) => `material-writing-output-deleted:${workspaceId}:${postId}`;
     async function materialReceipt(meta, workspaceId, planId) {
       const row = await meta.get(materialOutputKey(workspaceId, planId));
       if (row === undefined) return null;
@@ -1799,6 +1800,39 @@
         const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         return clone(await materialWritingValue(meta, workspaceId));
       });
+    }
+    async function materialOutputState(meta, workspaceId, plan) {
+      if (!plan.output) return { status: 'none' };
+      const postId = plan.output.postId;
+      const resolve = materialWriting().resolveOutput;
+      if (!resolve) throw fault('app_version_mismatch', '앱의 일부 파일이 이전 버전입니다. 새로고침한 뒤 연결한 글을 다시 확인해 주세요. 준비와 글은 그대로 유지합니다.');
+      return resolve(plan.output, (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value || null,
+        (await meta.get(materialOutputDeletedKey(workspaceId, postId)))?.value || null);
+    }
+    async function readMaterialWritingOutput(workspaceId, planId) {
+      collectionScope(workspaceId); requireId(planId, '글 준비');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const plan = (await materialWritingValue(meta, workspaceId)).plans.find(value => value.id === planId);
+        if (!plan) throw fault('material_writing_missing', '선택한 글 준비를 찾지 못했습니다.');
+        return materialOutputState(meta, workspaceId, plan);
+      });
+    }
+    // Keep the immutable handoff receipt for idempotency, but retire its active
+    // target with durable local evidence. Unlike a blog upload tombstone, this
+    // marker survives the server's deletion acknowledgement. The same helper is
+    // used for local deletion and a confirmed deletion received from the server.
+    async function retireMaterialWritingOutput(meta, workspaceId, postId) {
+      // Blog sync can confirm a deletion before the related preparation arrives.
+      // Keep that evidence independently of the current preparation list.
+      await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
+      if (!(await meta.get(`material-writing:${workspaceId}`))) return null;
+      const state = clone(await materialWritingValue(meta, workspaceId));
+      const affected = state.plans.some(plan => plan.output?.postId === postId);
+      if (!affected) return null;
+      state.revision++;
+      await meta.put({ key: `material-writing:${workspaceId}`, value: state });
+      return state.revision;
     }
     async function saveMaterialWriting(workspaceId, input, baseRevision) {
       collectionScope(workspaceId); requireRevision(baseRevision); const state = clone(input); materialWriting().validate(state);
@@ -1830,6 +1864,8 @@
       materialWritingChanged(workspaceId, saved.revision); return saved;
     }
     async function materialOutput(meta, workspaceId, plan, planRevision) {
+      const output = await materialOutputState(meta, workspaceId, plan);
+      if (output.status === 'deleted') throw fault('material_writing_output_deleted', '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작해 주세요.');
       const post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
       if (!post || post.id !== plan.output.postId) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 준비와 기존 자료는 유지하며 새 글을 자동 생성하지 않습니다.');
       photoPost().validate(post); return { postId: post.id, revision: post.revision, planRevision, created: false };
@@ -2117,6 +2153,8 @@
       const state = await materialContinuityState(meta, workspaceId, planId), data = materialSnapshotData(bundle, plan, state, override);
       let post = null, refs = [], editingDrafts = [];
       if (plan.output) {
+        if ((await materialOutputState(meta, workspaceId, plan)).status === 'deleted')
+          throw fault('material_writing_output_deleted', '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작해 주세요.');
         post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
         if (!post) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 새 글을 자동 생성하지 않습니다.');
         photoPost().validate(post);
@@ -2861,6 +2899,8 @@
         let saved = null;
         if (remove) {
           if (!current || !prior) throw fault('photo_post_missing', '삭제할 글을 확인하지 못했습니다.');
+          const materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId);
+          if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(key); await meta.delete(bindingKey); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
           const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
           await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
@@ -2883,6 +2923,7 @@
     }
     async function deletePhotoPost(workspaceId, postId, baseRevision) {
       collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      let materialRevision = null;
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const key = `photo-post:${workspaceId}:${postId}`, current = (await meta.get(key))?.value;
@@ -2891,6 +2932,7 @@
         if (current.revision !== baseRevision) throw fault('photo_post_conflict', '다른 탭이나 기기에서 글이 바뀌었습니다. 삭제하지 않았습니다.');
         const bindingKey = `blog-sync:${workspaceId}:${postId}`, binding = (await meta.get(bindingKey))?.value;
         if (binding?.publication?.active) throw fault('blog_post_published', '공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.');
+        materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId);
         await meta.delete(key); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
         if (binding) {
           await meta.delete(bindingKey);
@@ -2902,6 +2944,7 @@
         return { postId, remoteId: binding?.remoteId || null };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      if (materialRevision !== null) materialWritingChanged(workspaceId, materialRevision);
       return result;
     }
     async function clearBlogTombstone(workspaceId, remoteId) {
@@ -5437,7 +5480,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,

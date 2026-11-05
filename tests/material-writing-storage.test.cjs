@@ -194,3 +194,103 @@ test('declared source hashes cannot certify changed raw text and empty outlines 
   const blank = copy(f.state); blank.plans[0].blocks = []; const saved = await f.a.saveMaterialWriting(f.ws, blank, blank.revision), changed = copy(f.rows);
   await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, saved.revision), { code: 'invalid_material_writing' }); assert.deepEqual(f.rows, changed);
 });
+
+test('explicit deletion retires output durably while preserving the preparation, receipt and exact sources', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+  const post = await f.a.readPhotoPost(f.ws, created.postId), before = await f.a.readMaterialWriting(f.ws), bundle = await f.a.read(f.ws);
+  const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`), receipt = copy(f.rows.get('meta').get(receiptKey));
+  assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+  const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  const after = await f.a.readMaterialWriting(f.ws);
+  assert.equal(after.revision, before.revision + 1); assert.deepEqual(after.plans, before.plans);
+  assert.deepEqual(f.rows.get('meta').get(receiptKey), receipt); assert.deepEqual(await f.a.read(f.ws), bundle);
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+  assert(events.some(event => event.type === 'material_writing_changed' && event.revision === after.revision));
+  await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, after.revision), { code: 'material_writing_output_deleted' });
+  await assert.rejects(f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), { code: 'material_writing_output_deleted' });
+  assert.equal((await f.a.listPhotoPosts(f.ws)).length, 0);
+  // Server acknowledgement clears only the upload tombstone, never the local output history.
+  await f.a.clearBlogTombstone(f.ws, post.id);
+  assert.equal((await f.b.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
+  const freshPlan = copy(f.plan); freshPlan.id = Core.id();
+  for (const material of freshPlan.materials) { const old = material.id; material.id = Core.id(); for (const block of freshPlan.blocks) if (block.materialId === old) block.materialId = material.id; }
+  for (const block of freshPlan.blocks) block.id = Core.id();
+  const copied = await f.a.saveMaterialWriting(f.ws, { ...after, plans: [...after.plans, freshPlan] }, after.revision);
+  const next = await f.a.createMaterialWritingPost(f.ws, freshPlan.id, copied.revision);
+  assert.notEqual(next.postId, post.id); assert.equal((await f.a.readMaterialWritingOutput(f.ws, freshPlan.id)).status, 'available');
+});
+
+test('missing documents, stale revisions and published-post refusals never forge deletion evidence', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const before = copy(f.rows);
+  await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision + 1), { code: 'photo_post_conflict' }); assert.deepEqual(f.rows, before);
+  await f.a.writeBlogSyncState(f.ws, post.id, { publication: { active: true } });
+  const published = copy(f.rows);
+  await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision), { code: 'blog_post_published' }); assert.deepEqual(f.rows, published);
+  f.rows.get('meta').delete(key(`photo-post:${f.ws}:${post.id}`));
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'missing', postId: post.id });
+  await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, created.planRevision), { code: 'material_writing_output_missing' });
+  await assert.rejects(f.foreign.readMaterialWritingOutput(f.ws, f.plan.id));
+});
+
+test('output retirement and post deletion roll back together on marker, preparation or index write failure', async () => {
+  for (const point of ['marker', 'preparation', 'index', 'completion']) {
+    const f = await fixture();
+    try {
+      const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId), before = copy(f.rows);
+      const target = point === 'marker' ? `material-writing-output-deleted:${f.ws}:${post.id}` : point === 'preparation' ? `material-writing:${f.ws}` : `photo-posts:${f.ws}`;
+      if (point === 'completion') f.control.failCompletion = true;
+      else f.control.fail = ({ id }) => id === target;
+      await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision));
+      assert.deepEqual(f.rows, before, point); assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+    } finally { f.close(); }
+  }
+});
+
+test('confirmed remote deletion retires the same local output without changing its handoff receipt', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+  const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`), receipt = copy(f.rows.get('meta').get(receiptKey));
+  const before = await f.a.readMaterialWriting(f.ws), events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+  await f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision });
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+  const after = await f.a.readMaterialWriting(f.ws); assert.equal(after.revision, before.revision + 1); assert.deepEqual(after.plans, before.plans);
+  assert(events.some(event => event.type === 'material_writing_changed' && event.revision === after.revision));
+  assert.equal((await f.a.listPhotoPosts(f.ws)).length, 0);
+  assert.deepEqual(f.rows.get('meta').get(receiptKey), receipt);
+});
+
+test('deletion evidence survives when the related preparation is not present yet', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const stateKey = key(`material-writing:${f.ws}`), pendingPreparation = copy(f.rows.get('meta').get(stateKey));
+  f.rows.get('meta').delete(stateKey);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  // A later exact preparation installation must not turn a confirmed deletion
+  // into a transient missing document merely because the streams arrived apart.
+  f.rows.get('meta').set(stateKey, pendingPreparation);
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+});
+
+test('a newer server post restored after a refused deletion takes precedence over deletion history', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+  let post = await f.a.readPhotoPost(f.ws, created.postId); post.status = 'saved'; post = await f.a.savePhotoPost(f.ws, post, post.revision);
+  const remoteId = Core.id(), binding = { remoteId, enabled: true, remoteRevision: 1, localRevision: post.revision };
+  await f.a.writeBlogSyncState(f.ws, post.id, binding);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
+  // BlogSync discards the pending deletion after conflict/published refusal and
+  // installs the server's newer post through its ordinary receive transaction.
+  await f.a.clearBlogTombstone(f.ws, remoteId);
+  const next = { ...post, revision: 0, title: '다른 기기의 더 최신 글' };
+  await f.a.commitBlogSync(f.ws, { postId: post.id, post: next, baseRevision: 0, bindingRevision: 0, binding: { ...binding, remoteRevision: 2 } });
+  const live = await f.a.readMaterialWritingOutput(f.ws, f.plan.id);
+  assert.equal(live.status, 'available'); assert.equal(live.postId, post.id);
+  assert.equal((await f.a.createMaterialWritingPost(f.ws, f.plan.id, (await f.a.readMaterialWriting(f.ws)).revision)).postId, post.id);
+  assert.equal((await f.a.readPhotoPost(f.ws, post.id)).title, '다른 기기의 더 최신 글');
+});

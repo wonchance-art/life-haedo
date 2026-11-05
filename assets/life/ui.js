@@ -6,6 +6,11 @@
   const MAX_TEXT_BYTES = 1024 * 1024;
   const SEARCH_PAGE_SIZE = 40;
 
+  function readableError(cause) {
+    if (cause?.code === 'invalid_hash') return '자료의 원문 확인 정보가 손상되어 내용을 열지 못했습니다. 원본 파일을 다시 가져오거나 백업을 새 자료공간에 복원해 주세요. 기존 자료는 삭제하지 않았습니다.';
+    return cause && cause.message ? cause.message : String(cause || '처리하지 못했습니다.');
+  }
+
   function node(tag, text, className) {
     const el = document.createElement(tag);
     if (text !== undefined && text !== null) el.textContent = String(text);
@@ -119,19 +124,21 @@
     let externalImportContext = null;
     let writingOpenOptions = null, sourceEditOpenOptions = null, sourceEditOrigin = null;
     let navigationGeneration = 0;
+    let headingGeneration = 0;
     let renderGeneration = 0;
     let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
     const sectionPositions = new Map();
     // 일정's list (tab, search, scroll) while its plan view replaced it.
     let scheduleListState = null;
     let homeRenderPromise = Promise.resolve();
-    let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null, materialWritingTask = false;
+    let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogKind = null, blogCommitted = null, materialWritingTask = false;
     // Browser history (2026-11-02): one entry per screen change. `blogRoute`
     // names the blog task in the address. `historyIndex`/`historyKey` describe
     // the entry of the shown screen; idx grows by one per push in this document.
     let blogRoute = null, materialHistorySeed = null, materialReaderOrigin = null;
     // A post begun with 글쓰기 (until another post opens); the nav marks 글쓰기 current while it is edited.
     let blogComposing = false, composingRead = 0, composeClearPending = false;
+    let sourceSaveNotice = null;
     let historyIndex = 0, historyKey = null, historyWait = null, historyPending = null, lastRouteBase = null;
     const historyDoc = core.id();
     // Full entries (focus labels, search text) stay in memory only.
@@ -286,7 +293,7 @@
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle, blogSync, managed: managedLibrary,
+      storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, managed: managedLibrary,
       onManagePost: (postId, options) => openPostAction('blog', postId, options),
       onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
       onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),
@@ -316,6 +323,7 @@
       },
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
+        blogKind = context.kind;
         restorePostReturn(context);
         updateBlogRoute(context);
         if (materialWritingTask) {
@@ -501,14 +509,39 @@
 
     function announce(message, { quiet = false } = {}) {
       if (disposed) return;
+      sourceSaveNotice = null;
+      delete status.dataset.saveState;
       state.status = message;
       status.textContent = message;
       status.classList.toggle('life-sr-only', quiet);
     }
 
+    function updateSourceSaveNotice() {
+      const saved = sourceSaveNotice;
+      if (!saved || disposed || saved.workspaceId !== state.bundle?.workspaceId) return;
+      const presentation = global.HaedoLife.WorkbenchUI?.savedPresentation?.(
+        state.syncWorkspaceId === saved.workspaceId ? state.syncState : null, saved.revision,
+        { account: storage.account, workspaceId: saved.workspaceId, error: state.syncReadError }
+      ) || { key: storage.account ? 'pending' : 'local', label: storage.account ? '저장됨 · 계정에 올리기 대기' : '저장됨' };
+      state.status = saved.prefix + ' · ' + presentation.label;
+      status.textContent = state.status;
+      status.dataset.saveState = presentation.key;
+      if (presentation.key === 'error' && sync) status.append(button('다시 시도', guarded(async () => {
+        await sync.syncNow(saved.workspaceId);
+        if (sourceSaveNotice === saved) await refreshSync();
+      })));
+    }
+
+    function announceSourceSaved(prefix) {
+      announce(prefix);
+      sourceSaveNotice = { prefix, workspaceId: state.bundle.workspaceId, revision: state.bundle.revision };
+      updateSourceSaveNotice();
+      refreshSync().catch(failure);
+    }
+
     function failure(cause) {
       if (disposed) return;
-      const message = cause && cause.message ? cause.message : String(cause || '처리하지 못했습니다.');
+      const message = readableError(cause);
       state.error = message;
       error.textContent = message + ' 입력한 내용은 유지됩니다.';
       error.hidden = false;
@@ -1185,6 +1218,7 @@
 
     function updateSyncPanels() {
       if (disposed) return;
+      updateSourceSaveNotice();
       updateLibraryStatus();
       const scope = main.querySelector('.life-scope');
       if (scope) updateScope(scope);
@@ -2146,6 +2180,7 @@
 
     function renderHeader() {
       if (disposed) return;
+      const headingToken = ++headingGeneration;
       updateLibraryStatus();
       const section = sectionFor(state.mode);
       syncWritingFocus();
@@ -2174,7 +2209,12 @@
             return canLeave;
           }, onError: failure }));
       }
+      // PhotoPost owns one close/actions row in both reading and editing. Keep
+      // its controls and focus in place instead of adding another title row.
+      const postHeading = state.mode === 'page' && blogKind === 'photo' && ['read', 'edit'].includes(blogMode);
       toolbar.hidden = ['source', 'source-edit'].includes(state.mode) && !state.remoteChanged;
+      if (postHeading && !state.remoteChanged) toolbar.dataset.postHeading = 'true';
+      else delete toolbar.dataset.postHeading;
       const focused = ['blog', 'write', 'source-edit', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -2212,7 +2252,7 @@
       }
       if (scheduleParts?.up) headingGroup.append(scheduleParts.up);
       headingGroup.append(heading);
-      if (state.mode !== 'source') toolbar.append(headingGroup);
+      if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
       const actions = node('div', null, 'haedo-heading-actions');
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (scheduleParts) { toolbar.dataset.schedule = state.mode; actions.append(scheduleParts.views, scheduleParts.today, scheduleParts.step); }
@@ -2253,7 +2293,18 @@
         // 일정's blog menu follows the title; the right toolbar stays the same across its units.
         (state.mode === 'home' && scheduleParts ? headingGroup : actions).append(menu);
       }
-      if (actions.childElementCount) toolbar.append(actions);
+      if (actions.childElementCount && !postHeading) toolbar.append(actions);
+      if (postHeading && blogMode === 'read') {
+        // PhotoPost reports its mode before it builds the read row. Move the
+        // existing app return into that row once it is ready; never duplicate a
+        // return already supplied by a material/9-cell reading context.
+        const back = headingGroup.querySelector('#lifeSubviewReturn');
+        global.requestAnimationFrame(() => {
+          if (disposed || headingToken !== headingGeneration || state.mode !== 'page' || blogKind !== 'photo' || blogMode !== 'read') return;
+          const row = main.querySelector('.photo-posts[data-mode="read"] > .photo-read-actions');
+          if (back && row && !row.querySelector(':scope > button[aria-label*="돌아가기"], :scope > button[aria-label="사진 글 목록"]')) row.prepend(back);
+        });
+      }
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
@@ -4437,7 +4488,7 @@
         await commit(changes);
         state.sourceDrafts.delete(version.id);
         render();
-      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 기기에 저장됨');
+      announceSourceSaved('모음에 반영됨');
       }), 'life-primary');
       saveExcerpt.id = 'lifeSourceExcerptSave';
       saveExcerpt.disabled = true;
@@ -5106,7 +5157,7 @@
         else if (currentExternalImport(externalContext)) await openExternalImportResult(externalContext);
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
-        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 기기에 저장됨'));
+        announceSourceSaved(excerpts.length ? '모음에 반영됨' : '자료 반영됨');
       };
       const storeOnly = button('자료만 보관', guarded(() => apply([])));
       if (!state.stage.excerpts.length) storeOnly.classList.add('life-primary');
@@ -5941,7 +5992,11 @@
       global.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
     if (active) {
-      state.bundle = await storage.read(active);
+      try { state.bundle = await storage.read(active); }
+      catch (cause) {
+        if (cause?.code === 'invalid_hash') cause.message = readableError(cause);
+        throw cause;
+      }
       if (!managedLibrary) await registerAccountMaterials(active);
       if (disposed || signal?.aborted) return { dispose };
       // A reload of the blog editor or reader reopens that exact task. The old
