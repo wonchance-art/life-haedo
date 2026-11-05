@@ -236,9 +236,9 @@
     }
     const result = fromDelta(ops);
     // A legacy op can apply one inline mark across thousands of line breaks.
-    // The Markdown projection may need more ops than the old single insert.
-    // Reject before returning a candidate; callers must retain the original
-    // rather than migrate a document that cannot pass the unchanged model cap.
+    // Decoding packs semantically compatible runs when necessary. If the
+    // projection still exceeds the unchanged cap, reject before returning a
+    // candidate; callers must retain the original document.
     const projected = parse(result.markdown).ops;
     const textLength = projected.reduce((total, op) => total + (typeof op.insert === 'string' ? op.insert.length : 0), 0);
     if (projected.length > 5000 || textLength > 50000) throw fail('본문이나 서식이 많아 이 글을 새 편집기로 바꿀 수 없습니다. 원래 글은 바뀌지 않았습니다.', 'post_markdown_conversion_limit');
@@ -295,6 +295,41 @@
     if (typeof last?.insert === 'string' && typeof op.insert === 'string' &&
       keys.length === Object.keys(next).length && keys.every(key => Object.hasOwn(next, key) && before[key] === next[key])) last.insert += op.insert;
     else ops.push(op);
+  }
+  // Inline marks have meaning on characters, and block marks on line endings.
+  // A valid legacy insert may carry both across thousands of lines. Markdown
+  // decoding splits those two kinds of marks, sometimes exceeding 5,000 ops.
+  // Pack compatible constraints back together without changing a character or
+  // any meaningful mark. Absence is a constraint too: unmarked text must never
+  // inherit AI/bold/link from its neighbour. Photos always end the current run.
+  // Keep ordinary projections byte-for-byte stable; packing is needed only
+  // when the otherwise equivalent decoded representation exceeds the model cap.
+  function packCapacity(ops) {
+    if (ops.length <= 5000) return ops;
+    const inlineKeys = ['bold', 'italic', 'author', 'link'], blockKeys = ['header', 'list', 'blockquote'];
+    const result = []; let pending = null;
+    const finish = () => {
+      if (!pending) return;
+      const attributes = {};
+      for (const key of [...inlineKeys, ...blockKeys]) {
+        const value = pending.inline?.[key] ?? pending.block?.[key];
+        if (value !== undefined) attributes[key] = value;
+      }
+      result.push({ insert: pending.text, ...(Object.keys(attributes).length ? { attributes } : {}) });
+      pending = null;
+    };
+    for (const op of ops) {
+      if (typeof op.insert !== 'string') { finish(); result.push(op); continue; }
+      for (const part of op.insert.match(/[^\n]+|\n+/g) || []) {
+        const kind = part[0] === '\n' ? 'block' : 'inline', keys = kind === 'block' ? blockKeys : inlineKeys;
+        const attributes = Object.fromEntries(keys.map(key => [key, op.attributes?.[key]]));
+        if (pending?.[kind] && keys.some(key => pending[kind][key] !== attributes[key])) finish();
+        if (!pending) pending = { text: '', inline: null, block: null };
+        pending[kind] = attributes; pending.text += part;
+      }
+    }
+    finish();
+    return result;
   }
   function readInline(children) {
     const ops = [], photos = [], depth = { bold: 0, italic: 0, author: 0 }, pairs = htmlPairs(children);
@@ -368,7 +403,7 @@
     }
     if (new Set(photos).size !== photos.length) throw fail('사진 참조가 중복됐습니다.');
     if (!ops.length) ops.push({ insert: '\n' });
-    return { ops, photos, markdown: fromDelta(ops).markdown };
+    return { ops: packCapacity(ops), photos, markdown: fromDelta(ops).markdown };
   }
   const toDelta = markdown => parse(markdown).ops;
   const canonicalize = markdown => parse(markdown).markdown;
