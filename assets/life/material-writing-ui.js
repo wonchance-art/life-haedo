@@ -6,7 +6,7 @@
   function create({ storage, workspaceId, getBundle = () => storage.read(workspaceId), isCurrent = () => true, onDirty = () => {}, onOpenSource, onOpenPost, onClose, onPlanChange = () => {}, onCreatePost }) {
     const M = life.MaterialWriting, fresh = () => life.Core.id(), clone = value => structuredClone(value);
     let state = null, selected = null, host = null, surface = null, status = null, error = null, selector = null, blocks = null, copies = null, output = null;
-    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
+    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null, aiPanel = null, aiEpoch = 0, aiSources = null, aiQuestion = null, sourceChanges = 0;
     let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
     // An account-scoped store is synced to the account by MaterialContinuitySync; its own panel
@@ -27,7 +27,7 @@
     function updateControls() {
       if (!mounted() || !status) return;
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
-      for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
+      for (const id of ['mwContinue', 'mwCreate', 'mwPreview', 'mwAI']) {
         const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;
       }
       const recovery = surface.querySelector('.mw-recovery');
@@ -38,10 +38,18 @@
     // Another device (account sync) or tab changed the stored preparations. Reload at once when
     // nothing is unsaved here; otherwise keep the input and offer the change explicitly.
     function remoteChanged(event) {
+      // Workspace notifications carry no source IDs. Recheck the displayed
+      // excerpt sources without discarding an unrelated change's open review.
+      if (!disposed && event?.workspaceId === workspaceId && event.type === 'changed') {
+        sourceChanges++;
+        // validateAISources reports failures here even after the panel closes.
+        if (aiSources) validateAISources(aiSources).catch(() => {});
+      }
       if (disposed || event?.type !== 'material_writing_changed' || event.workspaceId !== workspaceId) return;
       // Own saves announce their revision before this screen records it; check after they settle.
       setTimeout(() => {
         if (!mounted() || !state || !(event.revision > state.revision)) return;
+        closeAI();
         if (!dirty() && !navigating && !failure) { reload({ planId: selected }).catch(() => { incoming = true; message(); }); return; }
         incoming = true; message();
         // Refresh only the output controls while preserving unsaved field DOM,
@@ -74,6 +82,82 @@
     function settleSourcePending() { if (failure?.code === 'material_source_pending' && !sourceLoading && !sources?.pending()) clear(); else message(); }
     function clear() { failure = null; if (error) { error.hidden = true; error.textContent = ''; } message(); }
     function clearReview() { review = null; surface?.querySelector('.mw-preview')?.remove(); }
+    function closeAI({ keepQuestion = false } = {}) {
+      aiEpoch++; aiSources = null;
+      if (!keepQuestion) aiQuestion = null;
+      const panel = aiPanel; aiPanel = null; panel?.dispose();
+    }
+    function sourceSignature(bundle, references) {
+      return JSON.stringify([...new Set(references.map(ref => ref.sourceId))].map(sourceId => ({
+        sourceId, revision: bundle.sources.find(source => source.id === sourceId)?.revision,
+        state: life.Core.sourceState(bundle, sourceId),
+        versions: bundle.sourceVersions.filter(version => version.sourceId === sourceId)
+          .map(version => [version.id, version.revision, version.contentHash]),
+      })));
+    }
+    function validateAISources(target) {
+      if (target.checking) return target.checking;
+      let sourceInvalid = false;
+      target.checking = (async () => {
+        for (;;) {
+          const change = sourceChanges, bundle = await getBundle();
+          if (aiSources !== target) throw fault('material_input_pending', 'AI 제안을 다시 열어 주세요.');
+          for (const reference of target.references) {
+            if (!life.Core.isSourceActive(bundle, reference.sourceId)) {
+              sourceInvalid = true;
+              throw fault('material_input_pending', '휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.');
+            }
+            try { await life.SourceReference.resolve(bundle, reference); }
+            catch (cause) { sourceInvalid = true; throw cause; }
+            if (aiSources !== target) throw fault('material_input_pending', 'AI 제안을 다시 열어 주세요.');
+          }
+          const signature = sourceSignature(bundle, target.references);
+          // The opening may deliberately cite an old immutable version. Keep
+          // it exact, but invalidate if that source changes after this opening.
+          if (target.signature !== null && target.signature !== signature) {
+            sourceInvalid = true;
+            throw fault('material_input_pending', '발췌의 자료가 바뀌었습니다. AI 제안을 다시 열어 주세요.');
+          }
+          if (change !== sourceChanges) continue;
+          target.signature = signature;
+          return;
+        }
+      })().catch(cause => {
+        if (aiSources === target) {
+          // Keep only the question interrupted by a changed excerpt source, in
+          // this mounted preparation's memory. Scope changes never capture it.
+          const current = mounted() && plan()?.id === target.planId;
+          if (current && sourceInvalid && aiPanel)
+            aiQuestion = { planId: target.planId, text: aiPanel.getInstruction() };
+          closeAI({ keepQuestion: current && sourceInvalid });
+          if (current) report(fault('material_input_pending', cause.message));
+        }
+        throw cause;
+      }).finally(() => { target.checking = null; });
+      return target.checking;
+    }
+    async function openAI() {
+      guard(); await flushInternal(); guard();
+      if (!mounted()) return;
+      closeAI({ keepQuestion: true });
+      const owner = plan(), token = epoch, version = tick, revision = state.revision, aiToken = aiEpoch;
+      const active = () => mounted(token) && aiToken === aiEpoch && plan() === owner && tick === version && state.revision === revision && !composing.size && !pendingFields.size;
+      const quotes = owner?.blocks.filter(block => block.kind === 'quote').map(block => clone(block.reference)) || [];
+      if (!quotes.length) throw fault('material_input_pending', '자료에서 질문할 구절을 선택해 개요에 담은 뒤 AI 제안을 열어 주세요.');
+      if (!life.WritingAIUI?.open) throw fault('material_input_pending', 'AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.');
+      const sourceGuard = { references: quotes, signature: null, checking: null, planId: owner.id };
+      aiSources = sourceGuard;
+      await validateAISources(sourceGuard); if (!active()) return;
+      // The panel chooses excerpts explicitly; private questions/notes and whole
+      // source bodies never enter this candidate list. Results stay read-only.
+      let panel;
+      panel = life.WritingAIUI.open({ selectionText: '', tasks: ['ask', 'outline'],
+        initialInstruction: aiQuestion?.planId === owner.id ? aiQuestion.text : '',
+        sources: quotes.map(reference => ({ text: reference.quote, label: reference.title || '채택한 인용' })),
+        isCurrent: active, validateCurrent: () => validateAISources(sourceGuard),
+        onClose: () => { if (aiPanel === panel) { aiPanel = null; aiSources = null; aiQuestion = null; aiEpoch++; } } });
+      aiPanel = panel; aiQuestion = null;
+    }
     function guardLocal() {
       if (!valid()) throw fault('material_scope_changed', '계정이나 작업공간이 바뀌었습니다. 현재 공간에서 다시 열어 주세요.');
       if (composing.size) throw fault('material_input_in_progress', '한글 입력을 마친 뒤 다시 시도해 주세요.');
@@ -86,7 +170,7 @@
       if (transient(failure)) clear();
     }
     function mark() {
-      tick++; clearReview(); clearTimeout(timer); message();
+      tick++; closeAI(); clearReview(); clearTimeout(timer); message();
       schedule();
     }
     function schedule() { clearTimeout(timer); if (!conflict() && tick !== stored) timer = setTimeout(() => { if (mounted() && !acting && !sourceLoading && !composing.size && !pendingFields.size && !sources?.pending()) flushInternal().catch(report); }, 450); }
@@ -123,7 +207,7 @@
         try { M.validate(state); pendingFields.delete(input); stamp(activePlan); mark(); if (key === 'title') updateSelector(); if (failure?.code === 'invalid_material_writing' && !pendingFields.size) clear(); }
         catch (cause) { owner[key] = previous; pendingFields.add(input); clearReview(); report(cause); }
       }
-      input.addEventListener('compositionstart', () => { composing.add(input); clearReview(); clearTimeout(timer); message(); });
+      input.addEventListener('compositionstart', () => { composing.add(input); closeAI(); clearReview(); clearTimeout(timer); message(); });
       input.addEventListener('compositionend', () => { composing.delete(input); apply(); message(); }); input.addEventListener('input', apply); return wrapper;
     }
     function updateSelector() {
@@ -326,6 +410,7 @@
     }
     async function render() {
       if (!mounted()) return;
+      closeAI();
       clearReview(); if (sources) { sourceView = sourcePlanId === selected ? sources.getView?.() || sourceView : null; sources.dispose(); sources = null; }
       surface.replaceChildren(); composing.clear(); pendingFields.clear();
       onPlanChange({ planId: selected });
@@ -358,7 +443,7 @@
       output = el('section', null, 'mw-output'); surface.append(output); renderOutput();
       const target = el('section', null, 'mw-sources'); target.id = 'mwSources'; surface.append(target); copies = el('div', null, 'life-actions mw-note-copies'); surface.append(copies); renderCopies();
       surface.append(el('h3', '글에 담을 내용')); blocks = el('ol', null, 'mw-blocks'); blocks.id = 'mwBlocks'; blocks.setAttribute('aria-label', '글 개요'); surface.append(blocks); renderBlocks();
-      const actions = el('div', null, 'life-actions mw-actions'); actions.append(button('소제목 추가', () => appendBlock({ id: fresh(), kind: 'heading', text: '' }), { id: 'mwAddHeading' }), button('문단 추가', () => appendBlock({ id: fresh(), kind: 'paragraph', text: '' }), { id: 'mwAddParagraph' }), button('글 미리보기', prepare, { id: 'mwPreview', primary: true })); surface.append(actions);
+      const actions = el('div', null, 'life-actions mw-actions'); actions.append(button('소제목 추가', () => appendBlock({ id: fresh(), kind: 'heading', text: '' }), { id: 'mwAddHeading' }), button('문단 추가', () => appendBlock({ id: fresh(), kind: 'paragraph', text: '' }), { id: 'mwAddParagraph' }), button('AI 제안', openAI, { id: 'mwAI' }), button('글 미리보기', prepare, { id: 'mwPreview', primary: true })); surface.append(actions);
       surface.append(button('새 준비 사본 만들기', async () => {
         await flushInternal(); guard(); const copy = copyPlan(plan()); state.plans.push(copy);
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
@@ -433,7 +518,7 @@
       clear(); await render(); if (mounted(token)) restoreView();
     }
     function detach() {
-      rememberView(); epoch++; clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
+      rememberView(); epoch++; closeAI(); clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
       host = surface = status = error = selector = blocks = copies = output = null; composing.clear(); pendingFields.clear();
     }
     function dispose() { detach(); disposed = true; unsubscribe?.(); state = null; sourceView = view = null; }
