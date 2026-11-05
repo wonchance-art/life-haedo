@@ -258,9 +258,15 @@ async function sourceStatus(page, width) {
   await page.locator('#lifeSourceText').waitFor();
   assert.equal(await page.locator('.life-app > .life-toolbar').getAttribute('hidden'),'');
   assert.equal(await page.locator('#lifeSourceText').textContent(),raw);
-  if(width===390) assert.equal(await page.locator('[data-haedo-compose]').isVisible(),false,'source reader preserves its existing compose visibility');
+  // 2026-11-05: Claude F follow-up restores the shared pencil in the source reader.
+  if(width===390) {
+    const compose=page.locator('[data-haedo-compose]');
+    assert.equal(await compose.isVisible(),true,'source reader keeps the shared compose control');
+    const box=await compose.boundingBox();
+    assert.deepEqual({x:box.x,y:box.y,width:box.width,height:box.height},{x:338,y:8,width:44,height:44},'source reader retains the common 390px compose position');
+  }
   assert.equal(await page.locator('#lifeSourceInfoToggle').isVisible(),true);
-  report.checks.push(width+': source save pending/exact ACK/stale ACK/failure/retry/late response preserves content and UI, source reader unchanged');
+  report.checks.push(width+': source save pending/exact ACK/stale ACK/failure/retry/late response preserves content and UI, source content preserved with shared compose control');
 }
 async function main() {
   await fs.mkdir(out, { recursive: true });

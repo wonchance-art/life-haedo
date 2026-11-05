@@ -8,7 +8,6 @@
   const LIMITS = Object.freeze({ bytes: 2 * 1024 * 1024, name: 500, intro: 2000 });
   const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   const model = () => root.HaedoLife?.PhotoPost || require("./photo-post.js");
-  const markdown = () => root.HaedoLife?.PostMarkdown || require("./post-markdown.js");
   const fault = (code = "invalid_blog_document") => Object.assign(new Error("글의 형식과 사진 원본을 확인해 주세요."), { code });
   const check = (value, code) => { if (!value) throw fault(code); };
   const plain = (value) => value && typeof value === "object" && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -30,7 +29,7 @@
     Object.defineProperty(blob, "size", { value: photo.size });
     return blob;
   }
-  function validateManifest(value) {
+  function manifestDocument(value) {
     const md = value?.format === "life-post-md-v1", v2 = md || value?.format === "life-photo-post-v2";
     fields(value, ["format", "id", "revision", "title", "status", "replaces", "createdAt", "updatedAt", md ? "markdown" : "ops", "photos", ...(v2 ? ["attachments", "archived"] : [])]);
     check(Array.isArray(value.photos));
@@ -39,8 +38,11 @@
       if (needsView(photo)) fields(photo.view, viewKeys);
     }
     bytes(value);
-    model().validate({ ...value, photos: value.photos.map((photo) => ({ ...photo,
-      ...(photo.view ? { view: { ...photo.view, blob: placeholder(photo.view) } } : {}), blob: placeholder(photo) })) });
+    return { ...value, photos: value.photos.map((photo) => ({ ...photo,
+      ...(photo.view ? { view: { ...photo.view, blob: placeholder(photo.view) } } : {}), blob: placeholder(photo) })) };
+  }
+  function validateManifest(value) {
+    model().validate(manifestDocument(value));
     return value;
   }
   function pack(doc) {
@@ -162,14 +164,18 @@
   // Without `copies` the projection keeps the original's (or HEIC view's)
   // metadata for private reading only; publication always supplies them.
   function publicSnapshot(doc, options = {}) { return project(doc, options, false); }
+  // Server projection shares the exact manifest/media structure checks and
+  // public model validation without repeating full document validation.
+  // Placeholder media verifies metadata only; publication must still verify
+  // stored originals and sanitized copies at its transactional boundary.
+  function publicSnapshotFromManifest(value, options = {}) { return publicSnapshot(manifestDocument(value), options); }
   // Owner-only reading (private series view): the same projection, AI marks kept.
   function privateReadingSnapshot(doc, options = {}) { return project(doc, options, true); }
   function project(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}, reading) {
-    model().validate(doc);
+    const ops = model().validatedBody(doc);
     // Markdown remains the private stored source. Public/reading copies keep
     // their established, validated Delta shape, so anonymous readers do not
     // need a new format or a Markdown parser. This is a projection, not a save.
-    const ops = doc.format === "life-post-md-v1" ? markdown().toDelta(doc.markdown) : doc.ops;
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
     check(Array.isArray(photoIds) && photoIds.every((id) => typeof id === "string") && new Set(photoIds).size === photoIds.length, "invalid_blog_selection");
     const selected = new Set(photoIds), available = new Set(doc.photos.map((p) => p.id));
@@ -207,5 +213,5 @@
     checkSnapshot(snapshot, reading);
     return snapshot;
   }
-  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, validateSnapshot, privateReadingSnapshot, validateReadingSnapshot });
+  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, publicSnapshotFromManifest, validateSnapshot, privateReadingSnapshot, validateReadingSnapshot });
 });
