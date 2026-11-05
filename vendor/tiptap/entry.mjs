@@ -10,4 +10,5 @@ export { BulletList } from '@tiptap/extension-bullet-list';
 export { OrderedList } from '@tiptap/extension-ordered-list';
 export { ListItem } from '@tiptap/extension-list-item';
 export { UndoRedo } from '@tiptap/extensions';
-export { Plugin } from '@tiptap/pm/state';
+export { Plugin, TextSelection, EditorState } from '@tiptap/pm/state';
+export { closeHistory, isHistoryTransaction } from '@tiptap/pm/history';
