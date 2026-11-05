@@ -126,16 +126,16 @@
         if (connection.inventory?.baseline_method === 'observed_set' || connection.inventory?.status === 'partial') article.append(el('p', inventoryStatus(connection.inventory).text, 'life-help'));
         {
           const show = button('공개 글 목록 보기', () => advanced(async token => {
-            if (selectedSubscription !== connection.id) { selectedPosts.clear(); publicPages = 1; publicShown = 20; }
-            selectedSubscription = connection.id; publicRows = []; await loadPublic(token); await loadCaptures(token); paintConnections();
+            await showConnection(connection.id, token);
           })); show.dataset.action = 'public-list'; show.setAttribute('aria-pressed', String(selectedSubscription === connection.id)); article.append(show);
           const inventory = button(connection.baselineComplete ? '공개 목록 다시 확인' : '과거 공개 글 목록 확인', () => advanced(async token => {
-            selectedSubscription = connection.id;
-            if (!['pending', 'running'].includes(connection.inventory?.status)) await service.startInventory(workspaceId, connection.id, connection.revision);
-            if (!current(token)) return;
-            const result = await service.checkCapture(workspaceId, connection.id, { inventory: true });
-            if (!current(token)) return;
-            await loadConnections(); await loadPublic(token); await loadCaptures(token);
+            let result;
+            await showConnection(connection.id, token, async () => {
+              if (!['pending', 'running'].includes(connection.inventory?.status)) await service.startInventory(workspaceId, connection.id, connection.revision);
+              if (!current(token)) return;
+              result = await service.checkCapture(workspaceId, connection.id, { inventory: true });
+              if (current(token)) await loadConnections();
+            });
             if (!current(token)) return;
             if (result?.status !== 'checked') {
               captureStatus.textContent = '서버에서 공개 목록을 확인하고 있습니다. 잠시 뒤 수집 상태를 다시 확인해 주세요.';
@@ -156,6 +156,36 @@
           } else if (!connection.baselineComplete) article.append(el('p', '기준 목록을 확인한 뒤 이후 새로 발견한 글의 자동 수집을 켤 수 있습니다. 과거 글은 직접 선택합니다.', 'life-help'));
         }
         connectionsList.append(article);
+      }
+    }
+    async function showConnection(id, token, beforeLoad = null) {
+      // A selection belongs to one connection. Keep its complete view until a failed switch can be restored.
+      const previous = selectedSubscription !== id ? { subscription: selectedSubscription, selected: [...selectedPosts],
+        publicRows, publicPage, publicPages, publicShown, captures, jobs, capturePage,
+        statusText: captureStatus.textContent, statusState: captureStatus.dataset.state } : null;
+      if (previous) {
+        selectedSubscription = id; selectedPosts.clear(); publicPages = 1; publicShown = 20;
+        publicRows = []; publicPage = null; captures = []; jobs = []; capturePage = null;
+      }
+      try {
+        if (beforeLoad) await beforeLoad();
+        if (!current(token)) return;
+        await loadPublic(token);
+        if (!current(token)) return;
+        await loadCaptures(token);
+        if (current(token)) {
+          paintCaptures(); capturePanel.querySelector('#naverCaptureMore').hidden = !capturePage?.hasMore; paintConnections();
+        }
+      } catch (cause) {
+        if (previous && current(token)) {
+          selectedSubscription = previous.subscription; selectedPosts.clear(); previous.selected.forEach(value => selectedPosts.add(value));
+          ({ publicRows, publicPage, publicPages, publicShown, captures, jobs, capturePage } = previous);
+          paintPublic(); paintCaptures(); paintConnections();
+          capturePanel.querySelector('#naverCaptureMore').hidden = !capturePage?.hasMore;
+          captureStatus.textContent = previous.statusText;
+          if (previous.statusState == null) delete captureStatus.dataset.state; else captureStatus.dataset.state = previous.statusState;
+        }
+        throw cause;
       }
     }
     function paintPublic() {
@@ -412,8 +442,7 @@
         if (captureEnabled) {
           const known = connections.find(row => row.blogId === value.blogId);
           if (known) {
-            if (selectedSubscription !== known.id) { selectedPosts.clear(); publicPages = 1; publicShown = 20; }
-            selectedSubscription = known.id; await loadPublic(token); await loadCaptures(token); paintConnections();
+            await showConnection(known.id, token);
             if (current(token)) message('이 계정에 등록된 연결을 찾았습니다. 선택한 자료를 현재 공간에 받을 수 있습니다.', 'ready');
             return;
           }

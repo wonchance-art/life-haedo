@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-05",
+  "baseline": "2eebd27cbde54f697c9de3a09382f2e21b39a743",
+  "scope": "Real app/SDK/IDB and independent browser contexts; synthetic HTTP plus explicit fake scheduled completion, no live Naver/production/cron/physical device proof.",
+  "node": "24.19.0",
+  "browser": "151.0.7922.173",
+  "productHashes": {
+    "assets/life/naver-blog-ui.js": "d5e880367dd4c55c595a5fd562bb458e46a3019593fd89ed1df3a0550624aa0a",
+    "assets/life/naver-capture-sync.js": "bf5e6858d786ae26f3d759569ced268ba87a05e57917004ca8076b1b7a0eaf90",
+    "assets/life/naver-capture-ui.js": "044cf7a4c8becb3d84a8f8302cc69b681f91f3be5ee60fe6608efb64c711d720",
+    "assets/life/naver-media-receipt.js": "b509ac9e7937a85ce8dac379801bb04addbb08c3949b8ab67ca080652102946a",
+    "assets/life/ui.js": "245dae6e1ab27cc19f182a34f470797f460fcce96f1c5f574fd0034b230189c4",
+    "assets/life/storage.js": "23bb1fb350703e9aa5c63824680e39a0a87a66bd181d41917601e93c0c9c11f3"
+  },
+  "testHash": "5ff87d3778109250ee21d6378290756d1c951220de2f3adf3ac139909c27eacc",
+  "newBrowserChecks": [
+    {
+      "name": "Switching inventory connection clears the previous selection; failed connection reads restore its exact scope",
+      "pass": true
+    },
+    {
+      "name": "Connection, observed inventory, synthetic scheduled capture and exact two-context restoration preserve originals and input",
+      "pass": true
+    }
+  ],
+  "newBrowserPass": true,
+  "existingBrowserChecks": [
+    {
+      "name": "ID and URL preview register a disabled server connection honestly while collection is not configured",
+      "pass": true
+    },
+    {
+      "name": "Old mobile and PostView originals survive projection, explicit new receipt, re-entry and opt-in automatic receipt without duplication",
+      "pass": true
+    },
+    {
+      "name": "Pause and failed checks retain input, forged content cannot install, and delayed old workspace or account replies are ignored",
+      "pass": true
+    },
+    {
+      "name": "RSS pause remains usable while collection is not ready; failed save keeps exact input, focus and private originals",
+      "pass": true
+    },
+    {
+      "name": "An enabled account connection in another workspace can pause without a baseline, while re-enable retains both readiness gates",
+      "pass": true
+    }
+  ],
+  "existingBrowserPass": true,
+  "focusedUnitTests": {
+    "file": "tests/naver-blog-ui.test.cjs",
+    "passed": 11
+  },
+  "unexpectedConsoleErrors": 0,
+  "pageErrors": 0,
+  "externalRequests": 0,
+  "injectedHttp503": 4,
+  "resourcesClosed": true,
+  "syntheticScheduled": {
+    "appClosed": true,
+    "newRows": 1,
+    "captureJobs": 1,
+    "captures": 1,
+    "realCron": false
+  },
+  "restoration": {
+    "bodyHash": "026e5066a80a9006fd27cae4c73821c89a9786e16628443556523ef90da3fb90",
+    "captureHash": "68362af76dedce3b89c564a44cbd493f3976e3f981a6dd8d028fe56d5da62500",
+    "photos": [
+      "370bb5467a45af232c72b29070221b5f613ec5c4242ed8f7503e845e024ea7ed",
+      "93a3fcc76d70a970b25c0ca035062de3e7e5a73453fd11c72e06f8e4a19ed837"
+    ],
+    "nativePixels": [
+      {
+        "width": 4032,
+        "height": 3024,
+        "pixels": "731f1bc96003bbbd4ea34f7c98e53046bdc44443e97ca532773423e9a50563b3"
+      },
+      {
+        "width": 1200,
+        "height": 1800,
+        "pixels": "681d30492dbe1f5901397e9a0d23958540bf1c5cbd7bc580ad31bc77c06bd390"
+      }
+    ],
+    "oldQuotesPreserved": true,
+    "inputPreserved": true,
+    "duplicateVersions": 0
+  },
+  "screenshots": [
+    {
+      "name": "connection-scope-1440.png",
+      "sha256": "3f521a12908b105bd4649c49860f051a3d34463dbe135796771fd565f2aa30d0"
+    },
+    {
+      "name": "connection-scope-390.png",
+      "sha256": "236b891ac6a0324b297fe763c1d95ab1aa6220ca09c42064a2df193a307825e1"
+    },
+    {
+      "name": "observed-inventory-1440.png",
+      "sha256": "4927d0a5ed7786d4a7ad6a4bd6a07122891d47bcf199dbe0bba4b10f043dc353"
+    },
+    {
+      "name": "observed-inventory-390.png",
+      "sha256": "35c725747af87ebffaa1cbd572ef84685984c5a951cf1d632761abc37d7dad93"
+    },
+    {
+      "name": "received-exact-reader-1440.png",
+      "sha256": "66fb53ba8a3b8a136f120028ef8cd51ae5674306218842e0a84add96bb382d0a"
+    },
+    {
+      "name": "received-exact-reader-390.png",
+      "sha256": "211662cd830c99c061f64acd626072d7a026935791e1246dcb4c6bf4ca127c15"
+    },
+    {
+      "name": "second-context-exact-reader-1440.png",
+      "sha256": "2bbccff3909fb2832dee9b559b9617be5047fec1a7c055b69f2b627bcb6c9651"
+    },
+    {
+      "name": "second-context-exact-reader-390.png",
+      "sha256": "3bf0e0d635a19be3ae03b9817f997ae093f298f0d99606b1061390bad12e5a17"
+    }
+  ],
+  "screenshotsCommitted": false,
+  "mutations": [
+    {
+      "name": "original-ui",
+      "pass": false,
+      "mutation": {
+        "runtime": "assets/life/naver-blog-ui.js",
+        "sha256": "a5da719b843360e8e52330e33754a71de54d1c39acd878b3ea2978a08e90703b",
+        "isolatedBrowserRoute": true
+      },
+      "failedChecks": [
+        {
+          "name": "Switching inventory connection clears the previous selection; failed connection reads restore its exact scope",
+          "error": "AssertionError [ERR_ASSERTION]: Changing connections must clear A selection before B can queue\n\nfalse !== true"
+        }
+      ],
+      "testHash": "5ff87d3778109250ee21d6378290756d1c951220de2f3adf3ac139909c27eacc"
+    },
+    {
+      "name": "status-restore-removed",
+      "pass": false,
+      "mutation": {
+        "runtime": "assets/life/naver-blog-ui.js",
+        "sha256": "67ab31abd55e99bc8c905862579d5209117d550addda10a67046c6bc547147de",
+        "isolatedBrowserRoute": true
+      },
+      "failedChecks": [
+        {
+          "name": "Switching inventory connection clears the previous selection; failed connection reads restore its exact scope",
+          "error": "AssertionError [ERR_ASSERTION]: Known connection failure must restore the previous inventory status, not claim the new baseline completed\n+ actual - expected\n\n  {\n+   state: 'ready',\n+   text: '확인한 공개 목록입니다. 공개 여부나 이후 변경은 원문에서 다시 확인할 수 있습니다.'\n-   state: 'partial',\n-   text: '일부 공개 목록만 확인했습니다. 목록 밖의 글이 없다는 뜻은 아닙니다.'\n  }"
+        }
+      ],
+      "testHash": "5ff87d3778109250ee21d6378290756d1c951220de2f3adf3ac139909c27eacc"
+    }
+  ],
+  "independentReview": {
+    "majorFound": 1,
+    "majorResolved": 1,
+    "remainingBlocker": 0,
+    "remainingMajor": 0
+  },
+  "unverified": [
+    "real Naver new publication detection",
+    "production cron or SQL execution",
+    "Google provider authentication",
+    "physical Apple devices",
+    "original upload byte identity",
+    "current public deployment"
+  ]
+}
