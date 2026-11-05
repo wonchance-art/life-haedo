@@ -82,8 +82,12 @@ async function workspace(page, width) {
     } finally { db.close(); }
   }, seeded);
   await page.reload(); await shellReady(page);
-  await page.locator('#lifeStartup[role=alert]').waitFor();
-  const startup = await page.locator('#lifeStartup').textContent();
+  // Auth may start another foreground check after a failed opening. Capture the
+  // completed retry state atomically rather than reading a later loading frame.
+  const startup = await (await page.waitForFunction(() => {
+    const error=document.querySelector('#lifeStartup[role=alert]');
+    return error?.querySelector('button')?.textContent==='다시 확인' ? error.textContent : false;
+  })).jsonValue();
   assert.match(startup, /다시 가져|백업.*복원/, 'startup damage also offers recovery');
   assert.match(startup, /삭제하지 않았|유지|보존/);
   assert.doesNotMatch(startup, /원문 해시가 올바르지 않습니다/);
@@ -183,7 +187,9 @@ async function header(page, width) {
   await page.locator('#lifeFind[aria-busy="false"]').waitFor();
   await page.locator('#lifeFindQuery').fill('다시 읽고 이어 쓰는 합성 기록');
   const result=page.locator('[data-focus-key="find:photo-post:'+exact.id+'"]');
-  await result.click(); await page.locator('.photo-read-heading').waitFor();
+  await result.focus();
+  assert.equal(await result.evaluate(el=>el===document.activeElement),true,'exact saved-post result receives keyboard focus');
+  await page.keyboard.press('Enter'); await page.locator('.photo-read-heading').waitFor();
   assert.equal(await page.locator('.photo-read-heading').textContent(),'다시 읽고 이어 쓰는 합성 기록');
   assert.match(await page.locator('.photo-article').textContent(),/읽기와 편집을 오가도 그대로 남을 합성 본문/);
   const returned=await page.evaluate(async id=>{const s=HaedoLife.Shell.storage;return s.readPhotoPost(await s.getActive(),id);},exact.id);

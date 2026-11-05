@@ -2199,6 +2199,7 @@
       const menuFocus = activeMenu && toolbar.contains(activeMenu) && main.dataset.mode === state.mode ?
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
       toolbar.replaceChildren();
+      root.querySelector('#lifePhotoScreenHeading')?.remove();
       planningNavigation.replaceChildren();
       planningNavigation.hidden = state.mode !== 'annual-plan';
       if (!planningNavigation.hidden) {
@@ -2218,6 +2219,8 @@
       // PhotoPost owns one close/actions row in both reading and editing. Keep
       // its controls and focus in place instead of adding another title row.
       const postHeading = state.mode === 'page' && blogKind === 'photo' && ['read', 'edit'].includes(blogMode);
+      const compositionHeading = main.querySelector('.wb-heading h2');
+      if (compositionHeading) compositionHeading.hidden = postHeading;
       toolbar.hidden = ['source', 'source-edit'].includes(state.mode) && !state.remoteChanged;
       if (postHeading && !state.remoteChanged) toolbar.dataset.postHeading = 'true';
       else delete toolbar.dataset.postHeading;
@@ -2257,7 +2260,14 @@
         headingGroup.append(back);
       }
       if (scheduleParts?.up) headingGroup.append(scheduleParts.up);
-      headingGroup.append(heading);
+      if (postHeading) {
+        // The photo toolbar is display:none; keep its screen title outside it
+        // so heading navigation works without adding a visible title row.
+        heading.id = 'lifePhotoScreenHeading';
+        heading.textContent = blogMode === 'edit' ? '글쓰기' : '글 읽기';
+        heading.classList.add('life-sr-only');
+        toolbar.before(heading);
+      } else headingGroup.append(heading);
       if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
       const actions = node('div', null, 'haedo-heading-actions');
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');

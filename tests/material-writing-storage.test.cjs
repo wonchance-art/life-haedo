@@ -10,7 +10,7 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 // and publish no writes until done. Native IndexedDB is checked independently in
 // the browser journey; this adapter does not claim to emulate its event loop.
 function adapter() {
-  const rows = new Map(), paths = new Map(), control = { fail: null, failCompletion: false, writes: [] }; let tail = Promise.resolve();
+  const rows = new Map(), paths = new Map(), control = { fail: null, readFault: null, failCompletion: false, writes: [] }; let tail = Promise.resolve();
   const idb = { async openDB(_name, _version, callbacks) {
     let closed = false;
     const db = {
@@ -35,7 +35,13 @@ function adapter() {
         async function run(name, method, value) {
           await ready; if (ended) throw new DOMException('inactive', 'AbortError');
           const store = working.get(name);
-          if (method === 'get') return copy(store.get(key(value)));
+          if (method === 'get') {
+            // A read-wrapper exception must reach the application transaction
+            // boundary; do not abort here or a catch-all mutation goes unnoticed.
+            const error = control.readFault?.({ name, id: value });
+            if (error) { control.readFault = null; throw error; }
+            return copy(store.get(key(value)));
+          }
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(value => JSON.parse(value));
           if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
@@ -249,6 +255,39 @@ test('output retirement and post deletion roll back together on marker, preparat
     } finally { f.close(); }
   }
 });
+
+for (const remote of [false, true]) for (const point of ['preparation', 'receipt']) {
+  test(`${remote ? 'remote' : 'local'} deletion rolls back when material-writing ${point} read throws ${point === 'receipt' ? 'without an error code' : 'a storage error'}`, async t => {
+    const f = await fixture(); t.after(f.close);
+    const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+    const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+    const before = copy(f.rows), marker = `material-writing-output-deleted:${f.ws}:${post.id}`;
+    const target = point === 'preparation' ? `material-writing:${f.ws}` : `material-writing-output:${f.ws}:${f.plan.id}`;
+    const error = new Error('synthetic material-writing read failure');
+    if (point === 'preparation') error.code = 'storage_read_failure';
+    let reads = 0, injected = false;
+    f.control.readFault = ({ name, id }) => {
+      if (name !== 'meta' || id !== target) return;
+      // The first preparation read selects affected plans outside the catch;
+      // fail its second read inside materialWritingValue, or its receipt read.
+      if (++reads !== (point === 'preparation' ? 2 : 1)) return;
+      injected = true; return error;
+    };
+    f.control.writes.length = 0;
+    const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+    const deleting = remote
+      ? f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision })
+      : f.a.deletePhotoPost(f.ws, post.id, post.revision);
+    await assert.rejects(deleting, { code: point === 'preparation' ? 'storage_read_failure' : 'storage_error' });
+    assert(injected, 'error originates inside materialWritingValue');
+    assert(f.control.writes.some(write => write.name === 'meta' && write.method === 'put' && write.id === marker), 'marker write was attempted before the read failed');
+    assert.deepEqual(f.rows, before, 'entire transaction rolls back, including binding, evidence and index');
+    assert.equal(f.rows.get('meta').has(key(marker)), false, 'no deletion marker is committed');
+    assert.deepEqual(await f.a.readPhotoPost(f.ws, post.id), post, 'the original post remains readable');
+    assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+    assert.deepEqual(events, [], 'an aborted deletion emits no change event');
+  });
+}
 
 test('confirmed remote deletion retires the same local output without changing its handoff receipt', async t => {
   const f = await fixture(); t.after(f.close);

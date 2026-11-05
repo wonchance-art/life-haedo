@@ -18,6 +18,7 @@ async function back(page, target) {
   if (await page.locator('.photo-editor').isVisible() && !await contextualReturn.count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
   else await contextualReturn.click();
   await mode(page, target);
+  if (target !== 'page') assert.equal(await page.locator('#lifePhotoScreenHeading').count(), 0, 'Leaving a photo screen removes its screen heading');
 }
 async function openLibrary(page) {
   const library = page.locator('.home-library');
@@ -59,20 +60,26 @@ async function durablePhoto(page, title, status) {
 // the preparation's source cards, or the post's rendered article.
 async function materialReady(page) { await page.locator('#mwTitle').waitFor(); await page.locator('.mw-material').first().waitFor(); }
 async function postReady(page) { await page.locator('.photo-article').waitFor(); }
-// The writing and reading surfaces own their controls; the generic page heading
-// is deliberately absent. Verify the active surface and its actual document.
+// Photo controls keep their compact layout while a screen-reader heading
+// identifies the current surface outside the hidden generic toolbar.
 async function photoEditorReady(page) {
   await page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
   assert.equal(await page.locator('.photo-editor .ql-editor[contenteditable="true"]').isVisible(), true);
   assert.equal(await page.getByRole('button', { name: '글 저장', exact: true }).isVisible(), true);
-  assert.equal(await heading(page).count(), 0);
+  const screenHeading = page.locator('#lifeApp').getByRole('heading', { level: 1 });
+  assert.equal(await screenHeading.count(), 1);
+  assert.equal(await screenHeading.textContent(), '글쓰기');
+  assert.equal(await page.getByRole('heading', { name: '선택 자료 페이지', exact: true }).count(), 0);
 }
 async function photoReaderReady(page, title) {
   await page.locator('.photo-posts[data-mode="read"] .photo-article').waitFor();
   assert.equal(await page.locator('.photo-read-heading').textContent(), title);
   assert.equal(await page.locator('.photo-read-actions').count(), 1);
   assert.equal(await page.locator('.photo-editor').count(), 0);
-  assert.equal(await heading(page).count(), 0);
+  const screenHeading = page.locator('#lifeApp').getByRole('heading', { level: 1 });
+  assert.equal(await screenHeading.count(), 1);
+  assert.equal(await screenHeading.textContent(), '글 읽기');
+  assert.equal(await page.getByRole('heading', { name: '선택 자료 페이지', exact: true }).count(), 0);
 }
 // Holds one real storage read (next post, or the preparation's source bundle)
 // until the test releases it; every other call uses real IndexedDB unchanged.
@@ -363,6 +370,11 @@ async function main() {
       assert.match(await page.locator('#lifeMain').innerText(), /새로고침 뒤에도 이어 쓸 글/);
       assert.deepEqual((await photoPosts(page)).map(post => [post.id, post.status]), [[saved.id, 'saved']]);
       await back(page, 'home');
+      await nav(page, 'records'); await mode(page, 'sources'); await openRecordsMenu(page);
+      await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
+      assert.equal(await page.locator('#lifeApp').getByRole('heading', { level: 1, name: '선택 자료 페이지', exact: true }).count(), 1);
+      assert.equal(await page.locator('.wb-heading').getByRole('heading', { level: 2, name: '선택 자료 페이지', exact: true }).count(), 1, 'The ordinary composition heading returns after leaving the photo reader');
+      assert.equal(await page.locator('#lifePhotoScreenHeading').count(), 0);
     }, width);
     for (const width of [1440, 390]) await check('history: browser back returns to the previous app screen ' + width, async ({ page }) => {
       await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
