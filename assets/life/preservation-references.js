@@ -132,7 +132,7 @@
       const doc = clone(row.doc), oldId = doc.id, photos = new Map();
       doc.id = nextId(); postIds.set(oldId, doc.id); doc.revision = 1; doc.replaces = null;
       doc.photos = doc.photos.map(photo => { const id = nextId(); photos.set(photo.id, id); return { ...photo, id }; });
-      doc.ops = doc.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: photos.get(op.insert.photo.id) } } });
+      Object.assign(doc, P().remapBody(doc, photos));
       return { doc, evidence: { revision: 1, refs: row.evidence.refs.map(remap) } };
     });
     const boards = N().copies(owned.nineBoard.boards, nextId);

@@ -1,5 +1,22 @@
 # D2 준비 — Markdown 정본 형식 `life-post-md-v1`과 v2 → Markdown 변환 (2026-11-04)
 
+## B1 기반 구현 — 2026-11-05
+
+총괄 [집중 구현 지시서](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650230384), [접점 승인](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650334085), [공개 계약 결정](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650375672)에 따른다. 아래의 ‘미결’과 검사 전용 설명은 최초 변환기 당시 기록이다.
+
+- **본문:** `PostMarkdown.parse/toDelta/canonicalize/remapPhotos`로 허용 문법과 정확 사진 참조를 검증한다. 저장은 정본 Markdown 하나이며 `ops`를 함께 저장하지 않는다. 비정본 입력은 조용히 고치지 않고 거부한다. v1/v2 읽기·저장은 유지하며 md-v1에서 구형 형식으로 낮춰 쓰는 것을 거부한다. 교체 대상 판도 검증해 미래 형식의 원본을 지우지 않는다.
+- **편집기 실험:** Tiptap 3.32.2 독립 어댑터와 재현 가능한 vendor 번들을 준비했다. `getMarkdown/setMarkdown`, 사진·AI 표시, 실행 취소, 조합 중 교체 금지, 편집기별 선택 정보 검증을 제공한다. 미지원 목록은 적용 전에 안내하고 기존 입력을 유지한다. 연구·라이선스·번들 크기는 [오픈소스 비교](../life-tools-design/open-source-review.md)에 있다.
+- **보관:** `life-post-md-backup-v1` ZIP은 본문·첨부·원본 사진·HEIC 보기용 바이트를 보존한다. 전체 백업·연재·보존 파일은 기존 형식과 함께 읽고 새 사본의 사진 ID만 재매핑한다. 전체 백업의 외부 목록과 내부 ZIP 형식 불일치를 거부한다. 비공개 계정 transport는 Markdown 그대로 보관하고 읽기 투영만 기존 ops를 사용한다.
+- **서버:** 새 migration은 비공개 문서의 허용 키·문자열/바이트 한도·사진/HEIC/첨부 메타데이터를 검증한다. PostgreSQL은 Markdown을 실행하거나 해석하지 않으므로 정본 문법·해석 후 글자 수·본문 사진 참조의 의미 검증은 클라이언트 codec의 책임이다. SQL을 완전한 CommonMark 검증기로 표시하지 않는다. 기존 v2 validator는 보존하며 md→v1/v2 덮어쓰기는 같은 revision이어도 거부한다.
+- **공개:** 클라이언트 읽기/공개 미리보기는 기존 ops 사본 형식으로 투영하고 공개 AI 표시를 제거한다. 그러나 서버의 md 공개는 `life_blog_markdown_publication_unavailable`로 명확히 거부하며 기존 공개 사본·영수증을 바꾸지 않는다. 기존 v2 공개·철회는 유지한다.
+- **미활성:** `photo-post-ui.js` 본체를 바꾸지 않았다. 독립 Tiptap 어댑터는 제품 페이지에 등록하지 않았고 자동 변환도 없다. 운영 DB·배포·CACHE 판올림은 하지 않는다. 이미 배포된 구형 앱은 모르는 md 형식을 읽거나 덮어쓰지 못하지만, 그 구형 앱의 기존 오류 문구까지 새로고침 안내로 소급 변경할 수는 없다.
+
+검수에서 발견한 기존 링크의 공백/역슬래시 보존 실패, 2부터 시작하는 목록 입력의 저장 실패, 다른 편집기의 선택 정보 재사용, 미지원 미래 판 교체, 보존 파일 사진 재매핑 누락과 전체 백업 형식 불일치를 재현하고 고쳤다. 최초 실패와 변이 결과는 작업공간 `.local/` 및 `/tmp/d2-*`에 보관한다. 실제 Apple 한글 입력기·키보드·운영 두 기기 검증은 자동 브라우저 조합 이벤트 검사와 구분한다.
+
+실행: `npm run check`, `npm test`, `node tests/post-markdown-editor-browser.cjs`, `node tests/run-post-markdown-sql-postgres.cjs`. SQL 검사는 격리 PostgreSQL에만 설치하고 기존 행·권한·v2 공개 회귀와 새 거부 경로를 확인한다. 브라우저 검사는 독립 어댑터를 390·1440px에서 열며 제품 작성기 연결의 증거가 아니다. CI 등록과 운영 적용은 총괄 담당이다.
+
+다음 순서는 **B3 서버 공개 연결 → B2 작성기 연결**이다. B3는 서버 Edge가 동일 `post-markdown.js`를 재사용해 저장된 Markdown을 기존 공개 ops로 투영하고 클라이언트와 바이트 일치를 검증하는 것이 완료 기준이다. B2는 A 병합과 B3 운영 반영 뒤 처음 수정할 때의 변환·원래 판 복구 사본·자동 저장·사진·계정 이어쓰기를 연결한다. B3 운영 전에는 B2를 병합하지 않는다.
+
 총괄 작업 지시서(11-04) 작업 2다. 화면과 편집기는 바꾸지 않았다. 편집기 연결과 실제 이행은 D1이 끝난 뒤 따로 맡긴다.
 
 ## 소유자 결정(2026-11-02) 중 이 모듈이 지키는 것

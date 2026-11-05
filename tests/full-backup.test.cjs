@@ -151,6 +151,60 @@ async function snapshotAll(storage) {
 }
 const RESTORABLE = new Set(['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals']);
 
+test('Markdown 글: 전체 ZIP과 단독 ZIP에서 새 사본으로 복원하고 사진 바이트·AI 표시·숨김 상태를 보존한다', async () => {
+  const Markdown = require('../assets/life/post-markdown.js');
+  const { storage, first, saved } = await seed();
+  const source = await storage.readPhotoPost(first, saved.id);
+  source.ops.unshift({ insert: 'AI 문장', attributes: { author: 'ai', bold: true } }, { insert: '\n' });
+  const converted = Markdown.fromV2(source).document;
+  converted.archived = true;
+  const result = await storage.savePhotoPost(first, converted, source.revision);
+  assert.equal(result.status, 'saved');
+  const original = await storage.readPhotoPost(first, source.id);
+  const before = await snapshotAll(storage);
+  const { built, failed } = await fullBundle(storage);
+  assert.deepEqual(failed, []);
+  const entry = built.manifest.files.find(file => file.postId === source.id);
+  assert.equal(entry.format, 'life-post-md-backup-v1');
+  assert.equal(entry.formatVersion, 1);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
+  const standalone = await Full.open(new Blob([files[entry.path]], { type: 'application/zip' }));
+  assert.equal(standalone.entries[0].kind, 'photoPosts');
+  assert.equal(standalone.entries[0].format, 'life-post-md-backup-v1');
+  const opened = await Full.open(built.blob);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const report = await Full.restore(opened, { storage: target, kinds: new Set(['photoPosts']), verifyPhoto: null });
+  assert.deepEqual(report.items.filter(item => item.status !== 'restored'), []);
+  const restored = [];
+  for (const ws of await target.listWorkspaces()) for (const row of await target.listPhotoPosts(ws.workspaceId)) {
+    const doc = await target.readPhotoPost(ws.workspaceId, row.id);
+    if (doc.format === 'life-post-md-v1') restored.push(doc);
+  }
+  assert.equal(restored.length, 1);
+  const copy = restored[0];
+  assert.equal(copy.status, 'saved'); assert.equal(copy.archived, true);
+  assert.notEqual(copy.id, original.id); assert.equal(Object.hasOwn(copy, 'ops'), false);
+  const ids = new Map(copy.photos.map((photo, index) => [photo.id, original.photos[index].id]));
+  assert.equal(Markdown.remapPhotos(copy.markdown, ids), original.markdown);
+  assert.match(copy.markdown, /data-author="ai"/);
+  for (let i = 0; i < copy.photos.length; i++) {
+    assert.notEqual(copy.photos[i].id, original.photos[i].id);
+    assert.equal(await hex(copy.photos[i].blob), await hex(original.photos[i].blob));
+    if (copy.photos[i].view) assert.equal(await hex(copy.photos[i].view.blob), await hex(original.photos[i].view.blob));
+  }
+  assert.equal(await snapshotAll(storage), before, '원래 계정의 글·사진·판은 변하지 않는다');
+  const mislabeled = structuredClone(built.manifest);
+  mislabeled.files.find(file => file.postId === source.id).format = 'life-photo-post-backup-v2';
+  mislabeled.files.find(file => file.postId === source.id).formatVersion = 2;
+  files['manifest.json'] = Z.strToU8(JSON.stringify(mislabeled));
+  const tampered = await Full.open(new Blob([Z.zipSync(files, { level: 0 })]));
+  const rejectedTarget = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const rejected = await Full.restore(tampered, { storage: rejectedTarget, kinds: new Set(['photoPosts']), verifyPhoto: null });
+  assert.ok(rejected.items.some(item => item.kind === 'photoPosts' && item.status === 'failed' && /文書|문서 형식/.test(item.message)));
+  for (const ws of await rejectedTarget.listWorkspaces()) for (const row of await rejectedTarget.listPhotoPosts(ws.workspaceId))
+    assert.notEqual(row.title, original.title, '형식이 어긋난 글은 저장하지 않는다');
+});
+
 test('모두 받기: every account workspace and kind in one ZIP, existing formats, lists written last with hashes and what is not included', async t => {
   const restore = NaverFixture.installDecoder(); t.after(restore);
   const seeded = await seed({ naver: true });

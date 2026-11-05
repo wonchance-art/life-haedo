@@ -88,6 +88,8 @@ const check = (ops, label) => {
   const result = M.fromDelta(ops);
   assert.deepEqual(readBack(result.markdown), expected(ops), (label || '') + '\n' + result.markdown);
   assert.equal(M.fromDelta(ops).markdown, result.markdown, 'deterministic');
+  assert.equal(M.canonicalize(result.markdown), result.markdown, 'canonical fixed point');
+  assert.deepEqual(expected(M.toDelta(result.markdown)), expected(ops), 'production parser roundtrip: ' + (label || '') + '\n' + result.markdown);
   return result;
 };
 

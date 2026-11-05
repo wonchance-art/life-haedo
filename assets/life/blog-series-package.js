@@ -6,7 +6,7 @@
   'use strict';
   const FORMAT = 'life-blog-series-package-v1';
   const LIMITS = Object.freeze({ bytes: 256 * 1024 * 1024, json: 16 * 1024 * 1024, posts: 20, photos: 200 });
-  const dependency = name => root.HaedoLife?.[name] || require({ PhotoPost: './photo-post.js', Blog: './blog.js', BlogSeries: './blog-series.js' }[name]);
+  const dependency = name => root.HaedoLife?.[name] || require({ PhotoPost: './photo-post.js', Blog: './blog.js', BlogSeries: './blog-series.js', PostMarkdown: './post-markdown.js' }[name]);
   const zip = () => root.fflate || require('../../vendor/fflate/fflate.js');
   const fail = message => { throw Object.assign(new Error(message), { code: 'invalid_blog_series_package' }); };
   const plain = value => value && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -27,7 +27,7 @@
       fields(row, ['itemId', 'doc']); dependency('Blog').validateManifest(row.doc);
       const item = value.series.items[index];
       if (!/^[A-Za-z0-9_-]{1,128}$/.test(row.itemId) || itemIds.has(row.itemId) || row.itemId !== item.id || row.doc.id !== item.postId || row.doc.revision !== item.postRevision || row.doc.title !== item.title || row.doc.status !== 'saved' || row.doc.archived) fail('모음의 글·순서·저장 버전이 일치하지 않습니다.');
-      const used = new Set(row.doc.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
+      const used = new Set(dependency('PhotoPost').contentOps(row.doc).filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
       if (row.doc.photos.some(photo => !used.has(photo.id))) fail('본문에서 사용한 사진만 모음에 보관해 주세요.');
       itemIds.add(row.itemId); photos += row.doc.photos.length;
       row.doc.photos.forEach(photo => { bytes += photo.size + (photo.view ? photo.view.size : 0); });
@@ -77,21 +77,24 @@
     return rows;
   }
   function contents(doc) {
-    return { title: doc.title, ops: doc.ops, attachments: doc.attachments || [], photos: doc.photos.map(photo => dependency('PhotoPost').metadata(photo)) };
+    return { title: doc.title, ...(doc.format === 'life-post-md-v1' ? { markdown: doc.markdown } : { ops: doc.ops }), attachments: doc.attachments || [], photos: doc.photos.map(photo => dependency('PhotoPost').metadata(photo)) };
   }
   async function readPost(row, bytes) {
     const nested = stored(bytes, true);
     let format;
     try { format = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(nested.get('manifest.json'))).format; }
     catch (_) { fail('모음 안의 글 ZIP 목록을 읽지 못했습니다.'); }
-    if (format !== (row.doc.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2')) fail('모음 목록과 글 ZIP의 문서 형식이 다릅니다.');
+    if (format !== (row.doc.format === 'life-post-md-v1' ? 'life-post-md-backup-v1' : row.doc.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2')) fail('모음 목록과 글 ZIP의 문서 형식이 다릅니다.');
     let sequence = 0;
     const restored = await dependency('PhotoPost').readBackup(new Blob([bytes], { type: 'application/zip' }), () => 'series_read_' + ++sequence);
     if (restored.photos.length !== row.doc.photos.length) fail('모음 목록과 글 ZIP의 사진 개수가 다릅니다.');
     const ids = new Map(), photos = restored.photos.map((photo, index) => {
       ids.set(photo.id, row.doc.photos[index].id); return { ...photo, id: row.doc.photos[index].id };
     });
-    const actual = { ...restored, photos, ops: restored.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) } } }) };
+    const body = restored.format === 'life-post-md-v1'
+      ? { markdown: dependency('PostMarkdown').remapPhotos(restored.markdown, ids) }
+      : { ops: restored.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) } } }) };
+    const actual = { ...restored, photos, ...body };
     if (!equal(contents(actual), contents(row.doc))) fail('모음 목록과 글 ZIP의 본문·사진·첨부가 일치하지 않습니다.');
     // Keep the original snapshot format/IDs/timestamps here. The explicit storage
     // copy operation creates fresh IDs in the current account after all reads.
