@@ -935,6 +935,9 @@ jobs:
       - name: Verify explicit preparation continuity across screen sizes and protected input
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_continuity_visual" node tests/material-continuity-visual-browser.cjs --prepare-database
+      - name: Verify deleted finished posts sync their preparation state across devices without vetoing confirmed deletions
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_deleted_marker" node tests/material-deleted-marker-sync-browser.cjs --prepare-database
       - name: Verify selected public cover publication, current targets and exact reading return
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/public-cover-browser.cjs --prepare-database
@@ -1002,6 +1005,7 @@ jobs:
             .local/material-writing/
             .local/material-continuity/
             .local/material-continuity-visual/
+            .local/material-deleted-marker-sync/
             .local/blog-manager/
             .local/blog-public/
             .local/preservation/
