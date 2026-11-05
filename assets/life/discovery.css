@@ -340,7 +340,23 @@
 .discovery-news .discovery-reader-notes:empty { display: none; }
 .discovery-news .discovery-reader-notes > :is(.life-error,.discovery-recovery) { margin: 0 0 8px; }
 .discovery-news .discovery-reader-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--news-line); overflow: hidden; background: #fff; }
+.discovery-news .discovery-reader-status { flex: none; padding: 16px 20px; }
+.discovery-news .discovery-reader-status > p { margin: 0; font-size: 15px; line-height: 1.6; }
+.discovery-news .discovery-reader-status > button { min-height: 44px; margin-top: 8px; }
+.discovery-news .discovery-reader-page[data-frame=loading] { min-height: 180px; }
+.discovery-news .discovery-reader-page[data-frame=blocked] .discovery-reader-status { padding: 0; }
+.discovery-news .discovery-reader-content { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scrollbar-color: #a5c4b8 #f4f7f5; }
+.discovery-news .discovery-reader-content:focus-visible { outline: 2px solid #145b50; outline-offset: -3px; }
+.discovery-news .discovery-reader-text { max-width: 72ch; margin-inline: auto; color: #182522; font-size: 18px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
+.discovery-news .discovery-reader-text::selection { background: #d5eee5; color: #143f35; }
+.discovery-news .discovery-reader-figure { margin: 24px 0; white-space: normal; }
+.discovery-news .discovery-reader-image { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+.discovery-news .discovery-reader-figure figcaption { margin-top: 8px; color: var(--news-muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.discovery-news .discovery-reader-figure figcaption p { margin: 4px 0 0; }
+.discovery-news .discovery-reader-credit a { color: #145b50; text-underline-offset: 3px; }
+.discovery-news .discovery-reader-stale { margin: 24px 0 0; color: var(--news-muted); font-size: 13px; line-height: 1.6; }
 .discovery-news .discovery-reader-host-bar { display: flex; flex: none; align-items: center; gap: 6px; height: 32px; margin: 0; padding: 0 16px; background: #f4f7f5; color: var(--news-muted); font-size: 13px; }
+.discovery-news .discovery-reader-host-bar > #discoveryReaderCoverage { margin-right: auto; color: #145b50; font-weight: 650; }
 .discovery-news .discovery-reader-frame { display: block; flex: 1; width: 100%; height: calc(100vh - 280px); min-height: 480px; border: 0; background: #fff; }
 .discovery-news .discovery-reader-page[data-frame=blocked] { align-items: flex-start; gap: 12px; padding: 24px; }
 .discovery-news .discovery-reader-blocked { margin: 0; color: var(--news-muted); font-size: 15px; line-height: 1.6; }
@@ -383,6 +399,8 @@
   .discovery-news[data-reading=true] .discovery-reader-title { display: block; margin: 0; overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
   .discovery-news[data-reading=true] .discovery-reader-notes { grid-column: 1 / -1; grid-row: 2; padding: 8px 16px 0; }
   .discovery-news[data-reading=true] .discovery-reader-page { grid-column: 1 / -1; grid-row: 3; border-radius: 0; box-shadow: inset 0 1px 0 var(--news-line); }
+  .discovery-news[data-reading=true] .discovery-reader-content { padding: 20px 16px 28px; }
+  .discovery-news[data-reading=true] .discovery-reader-text { font-size: 17px; line-height: 1.85; }
   .discovery-news[data-reading=true] .discovery-reader-frame { height: 100%; min-height: 0; }
   .discovery-news[data-reading=true] .discovery-reader-tools {
     margin: 0; grid-column: 1 / -1; grid-row: 4; display: flex; flex-wrap: nowrap; justify-content: space-around; padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));

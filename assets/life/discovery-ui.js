@@ -1,5 +1,5 @@
-/* Public article discovery. Private interests and feedback stay in this browser;
- * only the prepared same-origin public catalog is requested. No source writes. */
+/* Public candidate discovery and account-scoped reading. Interests and reactions
+ * use the existing account documents; private article bodies never enter those records. */
 (function (root) {
   'use strict';
   const node = (tag, text, cls) => { const value = root.document.createElement(tag); if (text != null) value.textContent = text; if (cls) value.className = cls; return value; };
@@ -12,7 +12,7 @@
   // index.html/life.html also limit frames with CSP frame-src.
   const FRAME_SANDBOX = 'allow-scripts allow-popups';
   const icon = (name, size) => root.HaedoLife.Icons.create(name, size ? { size } : undefined);
-  function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderHistory }) {
+  function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderHistory, privateReader = null }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
     const downloadUrls = new Set();
@@ -24,6 +24,7 @@
     const languageModel = () => root.HaedoLife.DiscoveryLanguageSettings;
     const readingHost = node('div', null, 'discovery-reading-host');
     let readingUI = null;
+    let privateAborter = null, privateEpoch = 0;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => scope() && token === generation;
     const model = () => root.HaedoLife.DiscoveryProfile;
@@ -660,11 +661,14 @@
         if (!suspended && root.document.getElementById('lifeApp')?.hidden === false) syncTransientControls();
       } else scheduleAuto();
     }
-    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); }
+    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); cancelPrivateRead(); }
     function pageReady() {
       // The shell emits this only after revalidating the account and revealing it.
       suspended = false;
       if (!scope() || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      // Suspend cancels the request while the app is hidden. Reflect that state
+      // only after the shell has verified the returning account.
+      if (current.selected && current.reader?.pageState !== current.selected.privateState) refreshPrivateRead();
       syncTransientControls();
       if (!current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));
       else scheduleAuto();
@@ -867,8 +871,8 @@
       if (currentFeedOnly && !selected) throw Error('현재 공개 목록에서 이 글을 확인하지 못했습니다. 제외 선택은 유지했습니다.');
       await action?.(selected, current.memory ? { focusKey: current.memory.focusKey, scrollY: current.memory.scrollY } : undefined);
     }
-    function importButton(article, { focusKey = 'import:' + article.id, currentFeedOnly = false } = {}) {
-      const review = button(article.coverage === 'link_only' ? '링크를 자료에 보관' : '자료에 보관', null, () => navigate(onImport, article, focusKey, currentFeedOnly), 'discovery-review-button');
+    function importButton(article, { focusKey = 'import:' + article.id, currentFeedOnly = false, getArticle = () => article } = {}) {
+      const review = button(article.coverage === 'link_only' ? '링크를 자료에 보관' : '자료에 보관', null, () => navigate(onImport, getArticle(), focusKey, currentFeedOnly), 'discovery-review-button');
       review.dataset.discoveryImport = ''; review.dataset.focusKey = focusKey; review.disabled = !!current.pending || !!pendingWrite; return review;
     }
     function sourceDetails(feed, result) {
@@ -926,10 +930,12 @@
     const readerReplacesList = () => !!root.matchMedia?.('(max-width: 1100px)').matches;
     function readerHistoryClosed() { if (current?.readerPushed) { current.readerPushed = false; onReaderHistory?.(null); } }
     function select(article, { history = true } = {}) {
+      cancelPrivateRead();
       capture(article.id, 'open:' + article.id);
       if (history && onReaderHistory && readerReplacesList()) { current.readerPushed = true; onReaderHistory(article.id); }
-      current.selected = { canonicalUrl: article.canonicalUrl, article: clone(article), returnFocus: 'open:' + article.id };
+      current.selected = { canonicalUrl: article.canonicalUrl, article: clone(article), returnFocus: 'open:' + article.id, privateState: canReadPrivate(article) ? 'loading' : 'fallback', privateArticle: null, privateError: '' };
       current.toast = null; draw();
+      if (canReadPrivate(article)) loadPrivateRead(current.selected);
       root.requestAnimationFrame(() => {
         if (!scope() || !current.reader?.element.isConnected) return;
         const narrow = root.matchMedia?.('(max-width: 1100px)').matches;
@@ -938,6 +944,7 @@
       });
     }
     function closeReader({ history = true } = {}) {
+      cancelPrivateRead();
       const key = current.selected?.returnFocus; current.selected = null;
       if (history) readerHistoryClosed(); else current.readerPushed = false;
       draw();
@@ -956,8 +963,60 @@
     }
     function selectedArticle() {
       const selected = current.selected; if (!selected) return null;
-      const live = current.catalog?.feed?.articles.find(value => value.canonicalUrl === selected.canonicalUrl);
-      return live || selected.article;
+      // The selected metadata and received body are one reading snapshot. A feed
+      // refresh may replace the list, but must never silently replace this title or body.
+      return selected.article;
+    }
+    function canReadPrivate(article) {
+      return !!privateReader?.loadPrivateArticle && !!root.HaedoLife.DiscoveryReaderUI?.create &&
+        ['frontiers-psychology', 'mit-linguistics', 'llt-journal'].includes(article?.sourceId);
+    }
+    function cancelPrivateRead() {
+      privateEpoch++;
+      if (privateAborter && current?.selected?.privateState === 'loading') { current.selected.privateState = 'error'; current.selected.privateError = '읽기가 중단됐습니다. 다시 불러와 주세요.'; }
+      privateAborter?.abort(); privateAborter = null;
+    }
+    async function loadPrivateRead(selected) {
+      if (!scope() || suspended || current.selected !== selected || !canReadPrivate(selected.article)) return;
+      const retryHadFocus = root.document.activeElement === current.reader?.page.querySelector('#discoveryReaderRetry');
+      cancelPrivateRead(); const epoch = privateEpoch, token = generation, controller = new AbortController(); privateAborter = controller;
+      selected.privateState = 'loading'; selected.privateError = ''; selected.privateArticle = null; draw();
+      const loadingFocus = retryHadFocus ? current.reader?.page.querySelector('#discoveryReaderStatus') : null;
+      if (loadingFocus) { loadingFocus.tabIndex = -1; loadingFocus.focus({ preventScroll: true }); }
+      const live = () => valid(token) && !suspended && !controller.signal.aborted && epoch === privateEpoch && current.selected === selected;
+      try {
+        const received = await privateReader.loadPrivateArticle(selected.article, { workspaceId, signal: controller.signal });
+        if (!live()) return;
+        const text = received?.coverage === 'full_text' ? received.bodyText : received?.coverage === 'summary' ? received.summary : '';
+        if (received?.privateReader && typeof text === 'string' && text.trim()) {
+          selected.privateArticle = clone(received); selected.privateState = 'ready';
+        } else selected.privateState = 'unavailable';
+      } catch (error) {
+        if (!live()) return;
+        selected.privateState = 'error';
+        selected.privateError = error?.code === 'discovery_private_rate_limited' ? '요청이 많습니다. 잠시 뒤 다시 불러와 주세요.' : '본문을 불러오지 못했습니다. 다시 시도해 주세요.';
+      } finally {
+        if (live()) { privateAborter = null; refreshPrivateRead(); }
+      }
+    }
+    function disposeReaderView() { current?.reader?.privateBody?.dispose(); if (current) current.reader = null; }
+    function refreshPrivateRead() {
+      const view = current?.reader, selected = current?.selected;
+      if (!scope() || !view?.element.isConnected || view.selection !== selected) return;
+      const focusedStatus = view.page.querySelector('#discoveryReaderStatus');
+      const restoreRetryFocus = focusedStatus && root.document.activeElement === focusedStatus;
+      drawReaderPage(view, selected.article);
+      // Keep the toolbar and its pressed/focused controls attached while a
+      // background response arrives. Only the import result and source details change.
+      const received = selected.privateArticle, article = selected.article;
+      view.review.textContent = (received || article).coverage === 'link_only' ? '링크를 자료에 보관' : '자료에 보관';
+      view.review.disabled = selected.privateState === 'loading' || !!current.pending || !!pendingWrite;
+      const updated = articleInformation(article, received);
+      while (view.information.children.length > 1) view.information.lastElementChild.remove();
+      view.information.append(...[...updated.children].slice(1));
+      // A retry replaces its own button. Keep keyboard users in the reading
+      // pane, but never take focus back after they move to another control.
+      if (restoreRetryFocus && !focusedStatus.isConnected) (view.privateBody?.element || view.page.querySelector('#discoveryReaderRetry'))?.focus({ preventScroll: true });
     }
     // Full-screen reading on a phone: everything behind the reader is inert until it closes.
     let inerted = [];
@@ -977,56 +1036,86 @@
       if (on) body.dataset.haedoImmersive = 'news'; else if (body.dataset.haedoImmersive === 'news') delete body.dataset.haedoImmersive;
       syncInert();
     }
-    // Reader: meta, title, actions, then the publisher page in a frame for checked sources only.
-    // Nothing from the page is read, copied or stored; only the title and link metadata stay.
+    // Only the article body changes; the current news shell owns history, focus and controls.
+    function drawReaderPage(view, article) {
+      const selected = current.selected, state = selected.privateState || 'fallback';
+      if (view.pageState === state) return;
+      view.privateBody?.dispose(); view.privateBody = null; view.pageState = state;
+      const page = view.page; page.replaceChildren(); page.setAttribute('aria-busy', String(state === 'loading'));
+      view.element.dataset.readerState = state;
+      const host = (() => { try { return new URL(url(article.url) || '').hostname; } catch (_) { return ''; } })();
+      if (state === 'ready' && selected.privateArticle) {
+        const received = selected.privateArticle;
+        page.dataset.frame = 'private'; page.setAttribute('aria-label', '확보한 원문');
+        const bar = node('div', null, 'discovery-reader-host-bar'), coverage = node('span', received.coverage === 'summary' ? '초록' : '본문');
+        coverage.id = 'discoveryReaderCoverage'; coverage.dataset.coverage = received.coverage;
+        bar.append(coverage, node('span', host));
+        view.privateBody = root.HaedoLife.DiscoveryReaderUI.create({ article: received });
+        page.append(bar, view.privateBody.element); return;
+      }
+      page.setAttribute('aria-label', '원문 페이지' + (host ? ' (' + host + ')' : ''));
+      if (state === 'loading' || state === 'error' || state === 'unavailable') {
+        const status = node('div', null, 'discovery-reader-status');
+        const message = node('p', state === 'loading' ? '본문을 불러오는 중입니다.' : state === 'unavailable' ? '본문을 받지 못했습니다. 원문에서 읽을 수 있습니다.' : selected.privateError,
+          state === 'error' ? 'life-error' : 'life-meta');
+        message.id = 'discoveryReaderStatus'; message.setAttribute('role', state === 'error' ? 'alert' : 'status'); status.append(message);
+        if (state !== 'loading') status.append(button('본문 다시 불러오기', 'discoveryReaderRetry', () => loadPrivateRead(selected), 'discovery-quiet'));
+        page.append(status);
+        if (state === 'loading') { page.dataset.frame = 'loading'; return; }
+      }
+      const address = frameAddress(article);
+      if (address) {
+        const bar = node('span', null, 'discovery-reader-host-bar'); bar.append(node('span', host));
+        const frame = node('iframe', null, 'discovery-reader-frame'); frame.id = 'discoveryReaderFrame';
+        frame.src = address; frame.referrerPolicy = 'no-referrer'; frame.setAttribute('referrerpolicy', 'no-referrer'); frame.setAttribute('sandbox', FRAME_SANDBOX);
+        frame.title = '원문 페이지: ' + article.title; frame.loading = 'eager';
+        page.dataset.frame = 'allowed'; page.append(bar, frame);
+      } else {
+        page.dataset.frame = 'blocked';
+        if (state === 'fallback') page.append(node('p', '이 출처는 앱 안에서 열 수 없습니다. 새 탭에서 원문을 엽니다.', 'discovery-reader-blocked'));
+        const fallback = originalLink(article, { text: '새 탭에서 열기', focusKey: 'reader-open-fallback:' + article.canonicalUrl });
+        fallback.className = 'life-button discovery-reader-fallback'; fallback.removeAttribute('data-discovery-open'); page.append(fallback);
+      }
+    }
     function drawReader() {
       const article = !current.settingsScreen && selectedArticle();
       surface.dataset.reading = String(!!article); setImmersive(!!article);
       if (!article) {
-        current.reader = null;
+        cancelPrivateRead(); disposeReaderView();
         const empty = node('div', null, 'discovery-reader-empty'); empty.append(node('p', '목록에서 글을 고르면 여기에서 원문을 봅니다.', 'life-meta'));
         current.readerHost.replaceChildren(empty); return;
       }
       let view = current.reader;
-      if (!view || view.url !== article.canonicalUrl || !view.element.isConnected) {
+      if (!view || view.selection !== current.selected || !view.element.isConnected) {
+        disposeReaderView();
         const element = node('article', null, 'discovery-reader'); element.id = 'discoveryReader'; element.dataset.readerUrl = article.canonicalUrl; element.setAttribute('aria-label', '원문 보기');
         const back = button(null, 'discoveryReaderBack', closeReader, 'discovery-reader-back'); back.setAttribute('aria-label', '뉴스로 돌아가기'); back.append(icon('back'), node('span', '뉴스'));
         const head = node('div', null, 'discovery-reader-head'), tools = node('div', null, 'discovery-reader-tools');
         tools.setAttribute('role', 'toolbar'); tools.setAttribute('aria-label', '글 동작');
-        const address = frameAddress(article), page = node('section', null, 'discovery-reader-page');
-        const host = (() => { try { return new URL(url(article.url) || '').hostname; } catch (_) { return ''; } })();
-        page.setAttribute('aria-label', '원문 페이지' + (host ? ' (' + host + ')' : ''));
-        if (address) {
-          const bar = node('span', null, 'discovery-reader-host-bar'); bar.append(node('span', host));
-          const frame = node('iframe', null, 'discovery-reader-frame'); frame.id = 'discoveryReaderFrame';
-          frame.src = address; frame.referrerPolicy = 'no-referrer'; frame.setAttribute('referrerpolicy', 'no-referrer'); frame.setAttribute('sandbox', FRAME_SANDBOX);
-          frame.title = '원문 페이지: ' + article.title; frame.loading = 'eager';
-          page.dataset.frame = 'allowed'; page.append(bar, frame);
-        } else {
-          page.dataset.frame = 'blocked';
-          page.append(node('p', '이 출처는 앱 안에서 열 수 없습니다. 새 탭에서 원문을 엽니다.', 'discovery-reader-blocked'),
-            originalLink(article, { text: '새 탭에서 열기', focusKey: 'reader-open-fallback:' + article.canonicalUrl }));
-          page.querySelector('[data-discovery-open]').className = 'life-button discovery-reader-fallback';
-          page.querySelector('[data-discovery-open]').removeAttribute('data-discovery-open');
-        }
-        const notes = node('div', null, 'discovery-reader-notes');
-        element.append(back, head, tools, notes, page);
-        view = current.reader = { url: article.canonicalUrl, element, back, head, tools, notes, page, title: null };
+        const page = node('section', null, 'discovery-reader-page'), notes = node('div', null, 'discovery-reader-notes');
+        const title = node('h2', article.title, 'discovery-reader-title'); title.id = 'discoveryReaderTitle'; title.tabIndex = -1;
+        head.append(articleMeta(article), title); element.append(back, head, tools, notes, page);
+        view = current.reader = { url: article.canonicalUrl, selection: current.selected, element, back, head, tools, notes, page, title, pageState: null, privateBody: null };
         current.readerHost.replaceChildren(element);
       }
-      const title = node('h2', article.title, 'discovery-reader-title'); title.id = 'discoveryReaderTitle'; title.tabIndex = -1;
-      view.head.replaceChildren(articleMeta(article), title); view.title = title;
+      drawReaderPage(view, article);
+      const received = current.selected.privateArticle;
       const actions = [], translated = translationLink(article, { focusKey: 'reader-translate:' + article.canonicalUrl });
       if (translated) { translated.append(node('span', languageModel().TRANSLATION_TARGET_LABELS[confirmedTranslationTarget()], 'discovery-tool-label')); actions.push(translated); }
+      // Reactions and feedback retain the original public metadata, never the private body/receipt.
       actions.push(reactionButton(article, 'bookmarked', 'reader-reaction:bookmarked:' + article.canonicalUrl), reactionButton(article, 'liked', 'reader-reaction:liked:' + article.canonicalUrl));
       const more = articleDetails(article, '글 옵션', 'discovery-more', 'more'), moreBody = node('div', null, 'discovery-more-body');
       more.querySelector('summary').title = '글 옵션'; more.querySelector('summary').replaceChildren(icon('more'));
-      const review = importButton(article, { focusKey: 'reader-import:' + article.canonicalUrl });
+      const selected = current.selected;
+      const review = importButton(received || article, { focusKey: 'reader-import:' + article.canonicalUrl, getArticle: () => selected.privateArticle || article });
+      review.disabled ||= current.selected.privateState === 'loading';
       const read = button('읽음', null, () => feedback(article, 'already_read'), 'discovery-quiet'); read.dataset.discoveryFeedback = 'already_read'; read.dataset.focusKey = 'feedback:' + article.id + ':already_read';
       const irrelevant = button('관련 없음', null, () => feedback(article, 'not_relevant'), 'discovery-quiet'); irrelevant.dataset.discoveryFeedback = 'not_relevant'; irrelevant.dataset.focusKey = 'feedback:' + article.id + ':not_relevant';
       const excluded = current.feedback?.feedback?.some(entry => entry.canonicalUrl === article.canonicalUrl);
       read.disabled = irrelevant.disabled = !!current.pending || busy() || !!excluded || !currentFeedArticle(article);
-      moreBody.append(review, read, irrelevant); reactionMore(article, moreBody); moreBody.append(articleInformation(article));
+      const information = articleInformation(article, received);
+      moreBody.append(review, read, irrelevant); reactionMore(article, moreBody); moreBody.append(information);
+      view.review = review; view.information = information;
       more.append(moreBody); actions.push(more);
       const external = originalLink(article, { text: '새 탭에서 열기', focusKey: 'reader-open:' + article.canonicalUrl });
       external.className = 'discovery-reader-external'; external.title = '새 탭에서 열기'; external.setAttribute('aria-label', '새 탭에서 원문 열기 · ' + article.title); external.replaceChildren(icon('external'), node('span', '새 탭', 'discovery-tool-label'));
@@ -1034,7 +1123,7 @@
       view.tools.replaceChildren(...actions);
       syncInert();
     }
-    function articleInformation(article) {
+    function articleInformation(article, received = null) {
       const information = articleDetails(article, '기사 정보', 'discovery-article-info', 'info');
       if (!date(article.publishedAt)) information.append(node('p', '발행일 미확인', 'life-meta'));
       else information.append(node('p', '발행 ' + date(article.publishedAt, true), 'life-meta'));
@@ -1055,12 +1144,17 @@
         why.append(node('p', '보관한 제목·태그와 공개 후보의 표현 유사도입니다. 태그 한 개는 한 표현으로 세며 서로 다른 표현 2개 이상이 겹쳐야 반영합니다. 본문 이해·동의·품질 확률을 뜻하지 않습니다.', 'life-meta')); information.append(why);
       }
       if (current.collection !== 'discover' && !current.catalog?.feed?.articles.some(value => value.canonicalUrl === article.canonicalUrl)) information.append(node('p', '현재 목록에 없음 · 보관한 제목·출처', 'discovery-notice'));
-      if (current.collection !== 'discover') information.append(node('p', '보관한 제목·출처 정보 · 원문 본문은 보관하지 않았습니다.', 'discovery-coverage'));
+      if (current.collection !== 'discover') information.append(node('p', received ? '반응 기록에는 제목·출처만 보관합니다.' : '보관한 제목·출처 정보 · 원문 본문은 보관하지 않았습니다.', 'discovery-coverage'));
       const savedEntry = entryFor(article);
       if (current.collection === 'liked' && savedEntry && !savedEntry.liked || current.collection === 'bookmarked' && savedEntry && !savedEntry.bookmarked) information.append(node('p', '반응 해제됨', 'discovery-notice'));
-      const coverage = article.coverage === 'full_text' ? '허용된 본문 확보' : article.coverage === 'summary' ? '공개 요약만 확보 · 원문 전체 미확보' : '링크와 제목만 확보 · 본문 미확보';
-      information.append(node('p', coverage, 'discovery-coverage'), node('p', frameAddress(article) ? '앱 안 보기는 출판사 서버에서 직접 받습니다. 원문 내용은 보관하지 않습니다.' : '이 출처는 앱 안 보기를 허용하지 않아 새 탭으로 엽니다.', 'life-meta'));
-      if (article.rights?.label) information.append(node('p', article.rights.label, 'life-meta'));
+      const source = received || article;
+      const coverage = received ? received.coverage === 'full_text' ? '본문 확보' : '초록만 확보 · 원문 전체 미확보' : article.coverage === 'full_text' ? '허용된 본문 확보' : article.coverage === 'summary' ? '공개 요약만 확보 · 원문 전체 미확보' : '링크와 제목만 확보 · 본문 미확보';
+      information.append(node('p', coverage, 'discovery-coverage'));
+      if (received) {
+        if (date(received.acquisition?.fetchedAt)) information.append(node('p', '수집 ' + date(received.acquisition.fetchedAt, true), 'life-meta'));
+        information.append(node('p', '자료에 보관하면 읽고 있는 본문과 출처를 저장합니다. 이미지는 포함하지 않습니다.', 'life-meta'));
+      } else information.append(node('p', frameAddress(article) ? '앱 안 보기는 출판사 서버에서 직접 받습니다. 원문 내용은 보관하지 않습니다.' : '원문은 새 탭에서 열 수 있습니다.', 'life-meta'));
+      if (source.rights?.label) information.append(node('p', source.rights.label, 'life-meta'));
       return information;
     }
     function draw() {
@@ -1268,7 +1362,7 @@
       await readingUI?.flush();
     }
     function leave() {
-      readingUI?.leave();
+      readingUI?.leave(); cancelPrivateRead(); disposeReaderView();
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
       setImmersive(false); for (const element of inerted) element.inert = false; inerted = [];
       generation++; active = false; if (current) { current.languageReadEpoch++; stopTranslation(); } stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
