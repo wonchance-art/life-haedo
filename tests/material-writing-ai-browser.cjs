@@ -5,11 +5,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
 const { AIHTTP } = require('./writing-ai-browser.cjs');
 const output = path.resolve(__dirname, '../.local/material-writing-ai', new Date().toISOString().replace(/[:.]/g, '-'));
-const report = { scope: 'Linux Chromium, synthetic Auth/AI HTTP and composition events; no real provider or Apple hardware.', checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [] };
+const report = { scope: 'Linux Chromium, synthetic Auth/AI HTTP and composition events; no real provider or Apple hardware.', checks: [], mutations: [], visual: [], consoleErrors: [], pageErrors: [], external: [] };
 const ANSWER = '산책이 생각 정리를 도울 수 있습니다.';
 const QUESTION = '이 발췌의 관찰을 설명해 주세요.';
 const panel = page => page.locator('.writing-ai-panel');
@@ -171,10 +172,14 @@ async function flow(browser, label, viewport) {
         if (stored.status !== 'stored') throw Error('synthetic source version failed');
       }, fixture);
       await panel(page).waitFor({ state: 'hidden' }); hold.release();
+      await page.locator('.mw-error').getByText('발췌의 자료가 바뀌었습니다. AI 제안을 다시 열어 주세요.', { exact: true }).waitFor();
       assert.equal(await page.getByText(ANSWER, { exact: true }).count(), 0);
       const reference = (await snapshot(page, fixture)).preparation.plans.find(plan => plan.id === fixture.planId).blocks.find(block => block.kind === 'quote').reference;
       assert.equal(reference.sourceVersionId, fixture.entries[0].versionId); assert.equal(reference.quote, fixture.entries[0].quote);
-      await open(page); await action(page, '보내기').click(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
+      await page.locator('#mwAI').click(); await panel(page).waitFor();
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), QUESTION, 'source invalidation retains the unsent question for this preparation');
+      await panel(page).locator('[data-ai-source]').first().check(); await action(page, '보낼 내용 확인').click();
+      await action(page, '보내기').click(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
       assert.deepEqual(ai.requests.at(-1).body.sources, [fixture.entries[0].quote], 'reopening keeps the explicitly chosen old version');
       await action(page, '닫기').click();
     });
@@ -200,6 +205,9 @@ async function flow(browser, label, viewport) {
       await page.waitForFunction(() => document.querySelector('#mwQuestion')?.value === '다른 기기에서 바꾼 비공개 질문');
       assert.equal(await page.getByText(ANSWER, { exact: true }).count(), 0);
       assert.equal((await snapshot(page, fixture)).preparation.plans.find(plan => plan.id === fixture.planId).question, '다른 기기에서 바꾼 비공개 질문');
+      await page.locator('#mwAI').click(); await panel(page).waitFor();
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), '', 'a changed preparation does not inherit a prior request draft');
+      await action(page, '닫기').click();
     });
     await check('source trash cancels pending excerpts and blocks another request until restored', async () => {
       await open(page); const hold = ai.hold(); await action(page, '보내기').click(); await hold.entered;
@@ -209,6 +217,7 @@ async function flow(browser, label, viewport) {
         if (result.status !== 'stored') throw Error('synthetic source mutation failed');
       }, fixture);
       await panel(page).waitFor({ state: 'hidden' }); hold.release();
+      await page.locator('.mw-error').getByText('휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.', { exact: true }).waitFor();
       assert.equal(await page.getByText(ANSWER, { exact: true }).count(), 0);
       const ref = (await snapshot(page, fixture)).preparation.plans.find(plan => plan.id === fixture.planId).blocks.find(block => block.kind === 'quote').reference;
       assert.equal(ref.sourceVersionId, fixture.entries[0].versionId); assert.equal(ref.quote, fixture.entries[0].quote);
@@ -220,6 +229,12 @@ async function flow(browser, label, viewport) {
         const result = await s.commitLocal({ workspaceId: f.workspaceId, baseRevision: bundle.revision, operationId: C.id(), changes: C.buildSourceStateChanges(bundle, f.entries[0].sourceId, 'active') });
         if (result.status !== 'stored') throw Error('synthetic source restoration failed');
       }, fixture);
+      await page.locator('#mwAI').click(); await panel(page).waitFor();
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), QUESTION, 'a blocked reopen while trashed did not discard the recovery question');
+      await action(page, '닫기').click();
+      await page.locator('#mwAI').click(); await panel(page).waitFor();
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), '', 'ordinary close does not preserve a request question');
+      await action(page, '닫기').click();
     });
     await check('account switch removes private excerpt choices and drops the late response', async () => {
       await open(page); const hold = ai.hold(); await action(page, '보내기').click(); await hold.entered;
@@ -233,16 +248,169 @@ async function flow(browser, label, viewport) {
       assert.equal(await page.evaluate(async workspaceId => {
         try { await HaedoLife.Shell.storage.readMaterialWriting(workspaceId); return true; } catch (_) { return false; }
       }, fixture.workspaceId), false, 'new account cannot read old preparation');
+      await page.evaluate(value => HaedoAuth.client.auth.setSession(value), session(accounts.a));
+      await page.waitForFunction(() => !HaedoAuth.user && !HaedoLife.Shell.storage);
+      await page.evaluate(() => HaedoLife.Shell.start()); await ready(page); await settle(page);
+      await enter(page); await page.locator('#mwAI').click(); await panel(page).waitFor();
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), '', 'account changes also discard any request draft when returning to the prior account');
+      await action(page, '닫기').click();
     });
   } finally { await context.close(); }
+}
+// These races intentionally bypass the storage notification API: a second raw
+// IndexedDB connection commits a real bundle while the mounted adapter has not
+// observed a `changed` event. Fresh reads, not simulated event delivery, must
+// protect each network boundary. No application function is replaced here.
+async function silentSourceChange(page, fixture, kind) {
+  return page.evaluate(async ({ fixture: f, kind }) => {
+    const s = HaedoLife.Shell.storage, C = HaedoLife.Core, original = await s.read(f.workspaceId);
+    let changes;
+    if (kind === 'trash') changes = C.buildSourceStateChanges(original, f.entries[0].sourceId, 'trash');
+    else {
+      const imported = await C.prepareImport({ origin: 'obsidian', existingSourceId: f.entries[0].sourceId,
+        author: '익명 작성자', authorRelation: 'other', title: '첫 관찰', text: f.entries[0].raw + '\n알림 없이 저장한 새 판.', fileName: '첫 관찰.md' }, original);
+      if (imported.source.id !== f.entries[0].sourceId || imported.version.id === f.entries[0].versionId) throw Error('new version fixture mismatch');
+      changes = C.buildImportChanges(original, imported);
+    }
+    const next = C.applyChanges(original, changes), observed = [];
+    const stop = s.subscribe(f.workspaceId, event => observed.push(event.type));
+    try {
+      await new Promise((resolve, reject) => {
+        const opening = indexedDB.open('life-tools-v1'); opening.onerror = () => reject(opening.error);
+        opening.onsuccess = () => {
+          const db = opening.result, tx = db.transaction('bundles', 'readwrite');
+          tx.objectStore('bundles').put(next);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || Error('raw bundle commit failed')); };
+        };
+      });
+      const stored = await s.read(f.workspaceId);
+      if (kind === 'trash' && C.isSourceActive(stored, f.entries[0].sourceId)) throw Error('raw trash write not observable through storage');
+      if (kind === 'new-version' && stored.sourceVersions.filter(version => version.sourceId === f.entries[0].sourceId).length !== original.sourceVersions.filter(version => version.sourceId === f.entries[0].sourceId).length + 1) throw Error('raw version write not observable through storage');
+      if (observed.includes('changed')) throw Error('silent fixture unexpectedly announced a source change');
+      return { beforeRevision: original.revision, storedRevision: stored.revision, notifiedChanges: observed.filter(type => type === 'changed').length };
+    } finally { stop(); }
+  }, { fixture, kind });
+}
+// Observe the actual auth API rather than adding a production test branch.
+// The optional gate returns the real SDK getSession result only after release;
+// all verification, tokens and source validation remain the app's normal code.
+async function installAuthProbe(page, holdSession) {
+  await page.evaluate(hold => {
+    const original = HaedoAuth, wrapped = Object.create(original), realClient = original.getClient();
+    const probe = window.__aiBoundaryProbe = { verifyCalls: 0, sessionCalls: 0, sessionEntered: false };
+    let release;
+    const pending = new Promise(resolve => { release = resolve; }); probe.releaseSession = release;
+    const client = Object.create(realClient), auth = Object.create(realClient.auth);
+    Object.defineProperty(auth, 'getSession', { value: async () => {
+      probe.sessionCalls++;
+      const result = await realClient.auth.getSession();
+      if (hold) { probe.sessionEntered = true; await pending; }
+      return result;
+    } });
+    Object.defineProperty(client, 'auth', { value: auth });
+    Object.defineProperty(wrapped, 'getClient', { value: () => client });
+    Object.defineProperty(wrapped, 'verify', { value: (...args) => { probe.verifyCalls++; return original.verify(...args); } });
+    window.HaedoAuth = wrapped;
+  }, holdSession);
+}
+const GUARD_MUTATIONS = {
+  'before-send': ['        await verifyCurrent();\n        value = await ai.send', '        /* mutation: omit pre-send source recheck */\n        value = await ai.send'],
+  'token-return': ['        await verifyCurrent();\n        return session.data.session.access_token;', '        /* mutation: omit token-return source recheck */\n        return session.data.session.access_token;'],
+  'after-response': ['        await verifyCurrent();\n      }\n      catch', '        /* mutation: omit post-response source recheck */\n      }\n      catch'],
+};
+async function sourceGuardCase(browser, stage, kind, mutation = false) {
+  const label = stage + '-' + kind + (mutation ? '-mutation' : ''), server = new FakeCloud(), ai = new AIHTTP();
+  const context = await makeContext(browser, server, 'source-guard-' + label, accounts.a, { viewport: { width: 1440, height: 1000 } });
+  await ai.attach(context);
+  let mutationEvidence = null;
+  if (mutation) await context.route(base + '/assets/life/writing-ai-ui.js', async route => {
+    const response = await route.fetch(), source = await response.text(), [before, after] = GUARD_MUTATIONS[stage];
+    assert.equal(source.split(before).length - 1, 1, 'mutation must match exactly one source boundary');
+    const changed = source.replace(before, after);
+    mutationEvidence = { stage, kind, sourceSha256: createHash('sha256').update(source).digest('hex'), servedSha256: createHash('sha256').update(changed).digest('hex'), changedAwaitCalls: 1 };
+    await route.fulfill({ response, body: changed });
+  });
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if ([new URL(base).origin, cloud].includes(url.origin) || ['blob:', 'data:'].includes(url.protocol)) return route.fallback();
+    report.external.push(url.origin); return route.abort();
+  });
+  const page = await context.newPage(); page.setDefaultTimeout(15000);
+  page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ label, text: message.text(), url: message.location().url }); });
+  page.on('pageerror', error => report.pageErrors.push({ label, message: error.message }));
+  const marker = {
+    'before-send': 'pre-send validation must reject stale sources before starting authentication',
+    'token-return': 'token-return validation must reject stale sources before sending AI HTTP',
+    'after-response': 'post-response validation must remove the panel before showing stale-source output',
+  }[stage];
+  let evidence;
+  console.log('START source guard: ' + label);
+  try {
+    await page.goto(base + '/index.html'); await ready(page); await settle(page);
+    const fixture = await seed(page); await enter(page);
+    await installAuthProbe(page, stage === 'token-return');
+    await open(page);
+    await page.waitForFunction(() => document.querySelector('.writing-ai-usage')?.textContent.includes('$7.50'));
+    assert.equal(await page.evaluate(() => __aiBoundaryProbe.verifyCalls), 0, 'panel preparation did not start the observed AI authentication');
+    if (stage === 'before-send') {
+      evidence = await silentSourceChange(page, fixture, kind);
+      assert.equal(await panel(page).isVisible(), true, 'no notification has already closed the panel');
+      await action(page, '보내기').click(); await panel(page).waitFor({ state: 'hidden' });
+      assert.equal(ai.requests.length, 0, 'stale sources send no AI request');
+      assert.equal(await page.evaluate(() => __aiBoundaryProbe.verifyCalls), 0, marker);
+    } else if (stage === 'token-return') {
+      await action(page, '보내기').click();
+      await page.waitForFunction(() => __aiBoundaryProbe.sessionEntered);
+      assert.equal(await page.evaluate(() => __aiBoundaryProbe.verifyCalls), 1);
+      evidence = await silentSourceChange(page, fixture, kind);
+      assert.equal(await panel(page).isVisible(), true, 'session gate holds the request without a change event');
+      await page.evaluate(() => __aiBoundaryProbe.releaseSession());
+      await panel(page).waitFor({ state: 'hidden' });
+      assert.equal(ai.requests.length, 0, marker);
+    } else {
+      const held = ai.hold(); await action(page, '보내기').click(); await held.entered;
+      assert.equal(ai.requests.length, 1, 'the request passed both earlier validations');
+      evidence = await silentSourceChange(page, fixture, kind);
+      assert.equal(await panel(page).isVisible(), true, 'silent write does not trigger the subscription path');
+      held.release(); await held.completed;
+      await page.waitForFunction(() => !document.querySelector('.writing-ai-panel') || !document.querySelector('.writing-ai-result')?.hidden);
+      assert.equal(await panel(page).count(), 0, marker);
+    }
+    assert.equal(await page.getByText(ANSWER, { exact: true }).count(), 0, 'invalidated answer stays absent');
+    const expected = kind === 'trash' ? '휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.' : '발췌의 자료가 바뀌었습니다. AI 제안을 다시 열어 주세요.';
+    await page.locator('.mw-error').getByText(expected, { exact: true }).waitFor();
+    if (mutation) assert.fail('MUTATION_SURVIVED: ' + label);
+    report.checks.push({ label: 'source-guards', name: stage + ' / ' + kind, pass: true, evidence });
+    console.log('PASS source guard: ' + label);
+  } catch (error) {
+    if (mutation && error instanceof assert.AssertionError && error.message.includes(marker)) {
+      assert(mutationEvidence, 'the mutated browser script was actually served');
+      report.mutations.push({ ...mutationEvidence, detected: true, failedAssertion: marker, actual: error.actual, expected: error.expected, evidence });
+      console.log('DETECTED source guard mutation: ' + label + ' / ' + marker);
+    } else {
+      report.checks.push({ label: 'source-guards', name: label, pass: false, error: error.message });
+      await page.screenshot({ path: path.join(output, label + '-failure.png') }).catch(() => {}); throw error;
+    }
+  } finally { await context.close(); }
+}
+async function sourceGuardChecks(browser, mutations = false) {
+  for (const stage of ['before-send', 'token-return', 'after-response']) for (const kind of ['trash', 'new-version']) {
+    await sourceGuardCase(browser, stage, kind);
+    if (mutations) await sourceGuardCase(browser, stage, kind, true);
+  }
 }
 async function main() {
   await fs.mkdir(output, { recursive: true }); console.log('Evidence: ' + output);
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version();
   try {
-    await flow(browser, 'desktop', { width: 1440, height: 1000 });
-    await flow(browser, 'mobile', { width: 390, height: 844 });
+    if (process.argv.includes('--source-guards')) await sourceGuardChecks(browser, true);
+    else {
+      await flow(browser, 'desktop', { width: 1440, height: 1000 });
+      await flow(browser, 'mobile', { width: 390, height: 844 });
+      await sourceGuardChecks(browser);
+    }
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } finally { await browser.close(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); }
 }

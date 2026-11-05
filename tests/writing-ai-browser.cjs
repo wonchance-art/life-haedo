@@ -255,6 +255,18 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
     });
     await typeFixture(page);
     await check('changed original and IME composition cannot be overwritten by an old suggestion', async () => {
+      const requestCount = ai.requests.length;
+      await page.evaluate(() => document.querySelector('.ql-editor').dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })));
+      // Quill may replace the selected range when composition starts; the AI
+      // entry must preserve the actual state immediately before its click.
+      const entryOriginal = await editorState(page);
+      await page.locator('#photoAI').evaluate(button => button.click());
+      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent === '입력을 마친 뒤 다시 눌러 주세요.', null, { timeout: 5000, label: 'entry explains unfinished input without claiming an application' });
+      assert.equal(await panel(page).count(), 0, 'unfinished editor composition cannot open a request');
+      assert.equal(ai.requests.length, requestCount, 'unfinished editor composition sends nothing');
+      assert.deepEqual(await editorState(page), entryOriginal, 'entry guard preserves the complete input');
+      await page.evaluate(() => document.querySelector('.ql-editor').dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' })));
+      await typeFixture(page);
       await openSuggestions(page); await ask(page);
       await panel(page).locator('[data-ai-range]').first().check();
       const before = await editorState(page);

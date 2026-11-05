@@ -1854,10 +1854,10 @@
       // The editor adapter lives at the tool registration boundary so a future
       // editor can replace it without changing the suggestion panel.
       const suggest = iconControl(button("AI 제안", () => {
+        if (imeActive()) throw new Error("입력을 마친 뒤 다시 눌러 주세요.");
         guard();
         if (!life.WritingAI || !life.WritingAIUI?.open)
           throw new Error("AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.");
-        if (imeActive()) throw new Error(life.WritingAI.MESSAGES.ai_composing);
         settleAuthorship();
         const range = editor.getSelection() || editor.selection?.savedRange;
         if (!range?.length) throw new Error(life.WritingAI.MESSAGES.ai_selection_required);

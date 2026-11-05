@@ -4,6 +4,7 @@
  * 2026-11-02 soft redesign (decision 15): one stroke width 1.8, 20px for controls and 16px inside text,
  * one picture per concept: 자료 = book-open, 인용 = text-quote, 글쓰기 = pencil, 편집 = square-pen,
  * 웹 주소 = link, 일정 = calendar, 연표 = chart-gantt, 연간 계획 = chart-spline, AI 글 표시 = sparkle,
+ * AI 제안은 당분간 편집 그림(square-pen)을 같이 쓴다(2026-11-05 총괄 디자인 결정).
  * 비공개 = lock, 새 탭에서 열기 = external-link, 사진 = image, 되돌리기 = undo-2, 서식 = type. No icon runtime, font or remote request.
  */
 (function (root) {

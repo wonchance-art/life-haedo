@@ -11,7 +11,7 @@
     return node;
   };
   function open({ selectionText = '', sources = [], tasks = ['polish', 'shorten', 'continue', 'custom'],
-    isCurrent, validateCurrent, onApply, onClose = () => {} } = {}) {
+    initialInstruction = '', isCurrent, validateCurrent, onApply, onClose = () => {} } = {}) {
     const AI = life.WritingAI, auth = root.HaedoAuth;
     if (!AI || typeof isCurrent !== 'function') throw new Error('AI 제안을 준비하지 못했어요. 새로고침해 주세요.');
     const target = auth?.getAccount(), authEpoch = auth?.epoch, token = {};
@@ -41,6 +41,9 @@
       form.append(selection);
     }
     const instruction = el('textarea'); instruction.id = 'writingAIInstruction'; instruction.rows = 3; instruction.maxLength = AI.LIMITS.instruction;
+    // A source adapter may restore a question interrupted by a source update.
+    // This only restores the input; a new explicit preview/send is still needed.
+    instruction.value = typeof initialInstruction === 'string' ? initialInstruction : '';
     const instructionField = field('요청 문장', instruction);
     form.append(instructionField);
     const sourceFields = el('fieldset', null, 'writing-ai-sources');
@@ -115,6 +118,7 @@
       unsubscribe?.(); root.removeEventListener('pagehide', dispose);
       if (dialog.open) dialog.close(); dialog.remove();
       prepared = response = null; selectedSources = [];
+      instruction.value = '';
       onClose();
       if (isCurrent() && opener?.isConnected) opener.focus({ preventScroll: true });
     }
@@ -303,7 +307,7 @@
     if (!target || !auth?.config) { showError({ code: 'ai_not_configured' }); previewButton.disabled = true; usage.textContent = '이번 달 남은 금액: 확인할 수 없어요.'; }
     else loadUsage();
     task.focus({ preventScroll: true });
-    return Object.freeze({ dispose });
+    return Object.freeze({ dispose, getInstruction: () => closed ? '' : instruction.value });
   }
   life.WritingAIUI = Object.freeze({ open });
 })(globalThis);
