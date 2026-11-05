@@ -236,9 +236,27 @@ async function main(){
         assert.ok(await page.locator('#lifeApp').isHidden());assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage),null);
         assert.deepEqual(await page.evaluate(()=>__productDbOpens),[],'unverified cold load opened private IDB');
         assert.doesNotMatch(await page.locator('body').innerText(),/계정 A 원문 구절|오프라인에서도 저장할 익명 내용/);
+        const offlineNotice=await page.locator('#lifeStartup[role="alert"]').innerText();
+        const retry=page.locator('#lifeStartup').getByRole('button',{name:'다시 확인',exact:true});
+        assert.ok(await retry.isVisible());assert.ok(await retry.isEnabled());
+        const retryRequest=page.waitForRequest(request=>request.url()===cloud+'/auth/v1/user'&&request.method()==='GET');
+        await retry.click();await retryRequest;
+        await page.locator('#lifeStartup[role="alert"]').getByRole('button',{name:'다시 확인',exact:true}).waitFor();
+        assert.equal(await page.locator('#lifeStartup').innerText(),offlineNotice);
+        assert.ok(await retry.isVisible());assert.ok(await retry.isEnabled());
+        assert.ok(await page.locator('#lifeApp').isHidden());assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage),null);
+        assert.equal(await page.evaluate(()=>HaedoAuth.user),null);
+        assert.deepEqual(await page.evaluate(()=>__productDbOpens),[],'offline retry opened unverified private IDB');
+        assert.doesNotMatch(await page.locator('body').innerText(),/계정 A 원문 구절|오프라인에서도 저장할 익명 내용/);
       }finally{server.offline.delete('platform');await ctx.setOffline(false);page.expectedTransport=false;}
-      await click(page,'다시 확인');await ready(page);
+      await ready(page);
+      assert.equal(await page.evaluate(()=>HaedoAuth.user?.id),accounts.a.id);
+      const verifiedOpens=await page.evaluate(()=>__productDbOpens);
+      assert.ok(verifiedOpens.length>0,'online recovery must open the account storage');
+      assert.ok(verifiedOpens.every(entry=>entry.verified),'online recovery opened private IDB before verification');
       assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
+      const recovered=await stored(page),offlineSource=recovered.sources.find(source=>source.title==='오프라인 보존');
+      assert.ok(recovered.sourceVersions.some(version=>version.sourceId===offlineSource.id&&version.contentText==='오프라인에서도 저장할 익명 내용'));
       assert.ok(await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return(await s.readCollection(await s.getActive())).items.some(i=>i.note==='온라인 재확인 뒤에도 남을 비공개 메모');}));
       const cached=await page.evaluate(async name=>{
         const cache=await caches.open(name);return(await cache.keys()).map(request=>request.url);

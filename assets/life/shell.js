@@ -17,6 +17,38 @@
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, accountDocsSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   let retained = false, resumePoint = null, suspension = 0;
+  // Recovery belongs to one consecutive failure streak, not to each build's
+  // generation. Only real recovery, an owner change or a manual retry resets it.
+  let failure = null, retryOwner = null, automaticRetries = 0;
+  const AUTO_RETRY_LIMIT = 3;
+  const retryableFailures = new Set(['network_error', 'storage_unavailable', 'request_cancelled', 'storage_aborted']);
+  const accountKey = account => account ? account.projectUrl + '|' + account.userId : null;
+  function resetRecovery() { failure = null; retryOwner = null; automaticRetries = 0; }
+  function recoveryOwner(key) {
+    if (retryOwner && retryOwner !== key) resetRecovery();
+    retryOwner = key;
+  }
+  function recordFailure(error, key, message) {
+    if (key) recoveryOwner(key);
+    const code = typeof error?.code === 'string' ? error.code : null;
+    const name = error?.name || 'unknown_error';
+    // Raw IndexedDB exceptions can carry numeric DOM codes. Match only the
+    // known transient names; a string error code always controls classification.
+    const retryable = retryableFailures.has(code) || code === null && ['AbortError', 'InvalidStateError'].includes(name) || error?.code == null && name === 'Error';
+    failure = { key, code: code || name, retryable, message };
+    retryNotice(message);
+  }
+  function retryAutomatically() {
+    if (!failure?.retryable || automaticRetries >= AUTO_RETRY_LIMIT || starting || showing || suspended || retained || leaving || isReadOnly()) return false;
+    if (root.document.visibilityState === 'hidden' || root.navigator.onLine === false) return false;
+    const key = accountKey(auth?.getAccount());
+    // An initial Auth network failure has no verified owner yet. A real logout
+    // clears its failure record through the null-account notification instead.
+    if (failure.key && failure.key !== key) return false;
+    automaticRetries += 1;
+    start();
+    return true;
+  }
   let workerScheduled = false;
   function scheduleWorker() {
     if (workerScheduled || !('serviceWorker' in root.navigator)) return;
@@ -74,6 +106,7 @@
   function reveal(account) {
     if (suspended || !mounted || activeKey !== account.projectUrl + '|' + account.userId) return;
     const point = retained ? resumePoint : null, instance = mounted;
+    resetRecovery();
     retained = false; resumePoint = null;
     root.document.getElementById('lifeApp').hidden = false;
     const accountLabel = root.document.getElementById('lifeAccountLabel');
@@ -112,7 +145,7 @@
     sync?.dispose?.(); sync = null;
     life.Storage?.clearAccount?.(); scopedStorage = null;
     container.replaceChildren();
-    activeKey = null;
+    activeKey = null; failure = null;
   }
   function showWelcome() {
     hide();
@@ -129,7 +162,7 @@
     const status = notice(message, true);
     const retry = root.document.createElement('button');
     retry.type = 'button'; retry.className = 'life-button'; retry.textContent = '다시 확인';
-    retry.addEventListener('click', () => { starting = null; start(); });
+    retry.addEventListener('click', () => { resetRecovery(); starting = null; start(); });
     const login = root.document.createElement('a');
     login.href = loginPath(); login.className = 'life-button'; login.textContent = '로그인 화면';
     status.append(retry, login);
@@ -137,6 +170,7 @@
   function show(account) {
     if (suspended || isReadOnly()) return Promise.resolve(null);
     const key = account.projectUrl + '|' + account.userId;
+    recoveryOwner(key);
     if (activeKey === key && (mounted || showing)) {
       if (mounted && retained && !leaving) reveal(account);
       return Promise.resolve(mounted || showing);
@@ -149,7 +183,9 @@
   async function build(account) {
     const key = account.projectUrl + '|' + account.userId;
     if (activeKey === key && mounted) return mounted;
-    hide();
+    // Keep the recovery streak while its attempt is in flight, including a
+    // pagehide before the mount completes. Completion replaces or clears it.
+    const openingFailure = failure; hide(); failure = openingFailure;
     activeKey = key;
     const token = generation;
     controller = new AbortController();
@@ -176,7 +212,7 @@
         if (!bootstrap?.cached && !bootstrap?.workspaceId && !bootstrap?.legacy) {
           // Keep the retry frame alive. Never create an independent empty library
           // while the account's canonical workspace is still unknown.
-          throw new Error(bootstrap?.error?.message || '계정 자료를 열지 못했습니다. 연결을 확인하고 다시 시도해 주세요.');
+          throw Object.assign(new Error(bootstrap?.error?.message || '계정 자료를 열지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), { code: bootstrap?.error?.code });
         }
       }
       const instance = await life.UI.mount(container, { storage, core: life.Core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal });
@@ -209,7 +245,7 @@
     } catch (error) {
       if (signal.aborted || token !== generation) return null;
       hide();
-      retryNotice(error?.message || '자료 화면을 열지 못했습니다. 저장된 자료는 보존돼 있습니다.');
+      recordFailure(error, key, error?.message || '자료 화면을 열지 못했습니다. 저장된 자료는 보존돼 있습니다.');
       return null;
     }
   }
@@ -231,11 +267,11 @@
         const account = auth.getAccount();
         if (!user || !account) { if (publicHome) showWelcome(); return null; }
         return await show(account);
-      } catch (_) {
+      } catch (error) {
         if (suspended || auth.epoch !== authEpoch) return null;
         if (cached && cached === mounted && transition === suspension && auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId === activeKey) conceal();
         else hide();
-        retryNotice('개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
+        recordFailure(error, accountKey(auth.getAccount()), '개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
         return null;
       } finally { opening?.end(); }
     })();
@@ -244,9 +280,11 @@
     return pending;
   }
   auth?.onAccountChange(account => {
-    if (!account) { if (publicHome) showWelcome(); else { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); } }
+    if (!account) { resetRecovery(); if (publicHome) showWelcome(); else { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); } }
     else if (!isReadOnly()) {
       const key = account.projectUrl + '|' + account.userId;
+      recoveryOwner(key);
+      if (failure && (!failure.key || failure.key === key)) { if (failure.retryable) retryAutomatically(); return; }
       // A retained view is revealed only by its own completed resume verify.
       // A different owner always destroys it through the existing hard boundary.
       if (retained && key === activeKey) return;
@@ -254,14 +292,15 @@
       show(account);
     }
   });
-  root.document.addEventListener('haedo:signed-out', () => { if (publicHome) showWelcome(); else { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); } });
-  root.document.addEventListener('haedo:auth-unavailable', () => {
+  root.document.addEventListener('haedo:signed-out', () => { resetRecovery(); if (publicHome) showWelcome(); else { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); } });
+  root.document.addEventListener('haedo:auth-unavailable', event => {
     const account = auth?.getAccount();
     if (retained && account && activeKey === account.projectUrl + '|' + account.userId) conceal();
     else hide();
-    retryNotice('로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.');
+    recordFailure({ code: event.code || 'auth_error' }, accountKey(account), '로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.');
   });
   root.document.addEventListener('visibilitychange', () => {
+    if (!root.document.hidden) retryAutomatically();
     if (!mounted || retained) return;
     resumePoint = root.document.hidden ? rememberPosition() : null;
   });
@@ -274,7 +313,7 @@
   // Window pagehide listener options alone cannot establish this ownership.
   root.document.addEventListener('haedo:page-suspend', () => {
     suspended = true; suspension += 1; starting = null;
-    if (!mounted) { hide(); return; }
+    if (!mounted) { const failed = failure; hide(); failure = failed; return; }
     const point = rememberPosition();
     // A native leave dialog can change scroll while keeping the same focused
     // field. Prefer its earlier, still-owned position over that later layout.
@@ -289,8 +328,18 @@
   root.document.addEventListener('haedo:page-resume', event => {
     event.preventDefault();
     suspended = false;
-    start();
+    if (mounted && retained || !failure) start();
+    else if (!retryAutomatically() && !starting && !showing) {
+      const status = root.document.getElementById('lifeStartup');
+      // An aborted attempt can leave only a loading message. Restore its last
+      // error, but retain a complete error frame and its already focused button.
+      if (status.hidden || status.getAttribute('role') !== 'alert' || status.querySelector('p')?.textContent !== failure.message || !status.querySelector('button:not(:disabled)')) retryNotice(failure.message);
+    }
   });
+  root.addEventListener('online', retryAutomatically);
+  // Persisted pageshow is owned by Auth's page-resume event above. Do not race
+  // its verification or bypass the failure budget with a second start.
+  root.addEventListener('pageshow', event => { if (!event.persisted) retryAutomatically(); });
   root.document.querySelectorAll('.life-global-nav .life-icon-button').forEach(control => {
     control.addEventListener('keydown', event => {
       if (event.key === 'Escape') control.dataset.tooltipDismissed = 'true';
