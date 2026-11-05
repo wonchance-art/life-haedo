@@ -179,10 +179,13 @@
     async function outputPost(c, row) {
       try { return await readOutputPost(c, row); }
       catch (error) {
-        // Temporary/partial reads retry on the next pass. BlogRemote reports
-        // incomplete or unverifiable responses as invalid_remote_data. A real
-        // revision mismatch keeps the ordinary 30-minute adoption delay.
-        if (['network_error', 'auth_required', 'request_cancelled', 'invalid_remote_data'].includes(error?.code)) deferredOutputReads.add(error);
+        // Only transport/auth/cancel failures retry on the next pass. A truncated
+        // response already surfaces as network_error. invalid_remote_data is a
+        // verification failure of one consistent server read (an unsupported or
+        // damaged row) and, like a revision mismatch, keeps the ordinary
+        // 30-minute adoption delay until the preparation or a deletion marker
+        // changes; re-reading it every pass would refetch up to 16 MiB each time.
+        if (['network_error', 'auth_required', 'request_cancelled'].includes(error?.code)) deferredOutputReads.add(error);
         throw error;
       }
     }

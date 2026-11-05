@@ -171,12 +171,9 @@ function automaticReadFixture(t, options) {
   return { ...f, loop, emitMarker() { notify?.({ type: 'account_doc_applied', key: 'materialOutputDeleted:synthetic-account:synthetic-plan' }); } };
 }
 
-for (const failure of ['network_error', 'auth_required', 'request_cancelled', 'invalid_remote_data', 'partial', 'partial-body', 'partial-assets']) test(`a deferred ${failure} output read retries on the next sync pass without a marker event or time jump`, async t => {
+for (const failure of ['network_error', 'auth_required', 'request_cancelled']) test(`a deferred ${failure} output read retries on the next sync pass without a marker event or time jump`, async t => {
   const f = automaticReadFixture(t), { loop } = f;
-  if (failure === 'partial') f.controls.blog = undefined;
-  else if (failure === 'partial-body') f.controls.blog = { revision: 1 };
-  else if (failure === 'partial-assets') { f.livePost(); delete f.controls.blog.assets; }
-  else f.controls.blogError = fault(failure);
+  f.controls.blogError = fault(failure);
   loop.start(); await loop.refresh();
   assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
   f.controls.blogError = null; f.controls.blog = null;
@@ -185,14 +182,34 @@ for (const failure of ['network_error', 'auth_required', 'request_cancelled', 'i
   assert.equal(f.stats.adopts[0].options.deletedOutput.output.postId, f.post.id);
 });
 
-for (const partial of ['body', 'assets']) test(`a ${partial}-partial response rejected by the real BlogRemote adapter retries on the next ordinary pass`, async t => {
+// One consistent server read that fails verification cannot become valid by
+// re-reading it: ordinary passes keep the 30-minute delay (no 16 MiB refetch
+// loop) until the preparation revision changes.
+const persistentlyInvalid = async (t, f) => {
+  const { loop } = f;
+  assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
+  f.controls.blogError = null; f.controls.blog = null;
+  await loop.refresh(); await loop.refresh();
+  assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
+  f.row.revision++; await loop.refresh();
+  assert.equal(f.stats.blogReads, 2); assert.equal(f.stats.adopts.length, 1);
+  assert.equal(f.stats.adopts[0].options.deletedOutput.output.postId, f.post.id);
+};
+for (const failure of ['invalid_remote_data', 'partial', 'partial-body', 'partial-assets']) test(`a ${failure} output read keeps the 30-minute delay on ordinary passes until the preparation changes`, async t => {
+  const f = automaticReadFixture(t), { loop } = f;
+  if (failure === 'partial') f.controls.blog = undefined;
+  else if (failure === 'partial-body') f.controls.blog = { revision: 1 };
+  else if (failure === 'partial-assets') { f.livePost(); delete f.controls.blog.assets; }
+  else f.controls.blogError = fault(failure);
+  loop.start(); await loop.refresh();
+  await persistentlyInvalid(t, f);
+});
+
+for (const partial of ['body', 'assets']) test(`a ${partial}-incomplete row rejected by the real BlogRemote adapter keeps the 30-minute delay until the preparation changes`, async t => {
   const f = automaticReadFixture(t, { useBlogRemote: true });
   f.livePost(); delete f.controls.blog[partial === 'body' ? 'data' : 'assets'];
   f.loop.start(); await drain();
-  assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
-  f.controls.blog = null; await f.loop.refresh();
-  assert.equal(f.stats.blogReads, 2); assert.equal(f.stats.adopts.length, 1);
-  assert.equal(f.stats.adopts[0].options.deletedOutput.output.postId, f.post.id);
+  await persistentlyInvalid(t, f);
 });
 
 test('persistent output revision mismatch skips body reads on poll, focus and visibility until 30 minutes or a changed preparation revision', async t => {
