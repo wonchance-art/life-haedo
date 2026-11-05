@@ -1846,11 +1846,16 @@
       }, effects);
       return materialRemoteDeletion(meta, row);
     }
-    async function putMaterialOutputDeletion(meta, value, effects) {
+    async function putMaterialOutputDeletion(meta, value, effects, options = {}) {
       if (!account || !value) return;
       validateMaterialOutputDeletion(value, value.planId);
       const prior = await materialOutputDeletionValue(meta, value.planId);
-      if (prior && stablePayload(prior) !== stablePayload(value)) throw fault('invalid_material_output_deletion', '삭제 기록의 다른 준비 연결을 덮어쓰지 않았습니다.');
+      if (prior && stablePayload(prior) !== stablePayload(value)) {
+        // Confirmed post deletion keeps its local evidence even when an older
+        // canonical marker names another output. Receiving proof stays strict.
+        if (options.preservePrior) return;
+        throw fault('invalid_material_output_deletion', '삭제 기록의 다른 준비 연결을 덮어쓰지 않았습니다.');
+      }
       if (!prior) {
         const key = materialOutputAccountKey(value.planId);
         await meta.put({ key, value });
@@ -1952,7 +1957,7 @@
           const state = (await meta.get(materialContinuityKey(workspaceId, planId)))?.value || null;
           target = await materialLocalDeletionTarget(meta, workspaceId, planId, postId, state);
         } catch (error) { if (!/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) throw error; }
-        await putMaterialOutputDeletion(meta, target, effects);
+        await putMaterialOutputDeletion(meta, target, effects, { preservePrior: true });
       }
       if (!Array.isArray(row?.value?.plans) || !row.value.plans.some(plan => plan?.output?.postId === postId)) return null;
       let state;

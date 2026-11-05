@@ -222,6 +222,53 @@ test('deleting unrelated posts creates no local or account material tombstone', 
   assert.deepEqual(await f.a.readPhotoPost(f.ws, related.id), related);
 });
 
+for (const operation of ['deletePhotoPost', 'commitBlogSync']) {
+  test(`${operation} preserves a different prior output marker without vetoing confirmed deletion`, async t => {
+    const f = await fixture(); t.after(f.close);
+    const post = await handoff(f), other = await f.a.savePhotoPost(f.ws, P.create(Core.id), 0);
+    const value = { version: 1, workspaceId: f.ws, planId: f.plan.id, postId: other.id }, docKey = markerKey(f.plan.id);
+    assert.equal((await f.a.applyAccountDoc(docKey, { value, expectedHash: (await f.a.readAccountDocRecord(docKey)).hash })).status, 'applied');
+    // A prior canonical marker may arrive before this device's continuity state.
+    assert.equal(await f.a.readMaterialContinuityState(f.ws, f.plan.id), null);
+    const binding = operation === 'commitBlogSync' ? await f.a.writeBlogSyncState(f.ws, post.id,
+      { enabled: true, remoteId: post.id, remoteRevision: 1, localRevision: post.revision }) : null;
+    const remove = () => operation === 'deletePhotoPost' ? f.a.deletePhotoPost(f.ws, post.id, post.revision) :
+      f.a.commitBlogSync(f.ws, { postId: post.id, baseRevision: post.revision, bindingRevision: binding.revision, remove: true });
+    const before = copy(f.rows), source = await f.a.read(f.ws), preparation = await f.a.readMaterialWriting(f.ws);
+    const markerBytes = JSON.stringify(f.rows.get('meta').get(key(docKey)));
+    const evidenceKey = key(`post-evidence:${f.ws}:${post.id}`);
+    assert(f.rows.get('meta').has(evidenceKey), 'the handed-off post has evidence to remove');
+    let hit = false;
+    f.control.readFault = ({ id }) => {
+      if (id === docKey) { hit = true; return new DOMException('synthetic marker read failure', 'UnknownError'); }
+    };
+    await assert.rejects(remove(), { code: 'storage_error' });
+    assert(hit, 'a real marker read error still reaches the transaction boundary');
+    assert.deepEqual(f.rows, before, 'failed marker reads roll back the local marker and post deletion together');
+    await remove();
+    await assert.rejects(f.a.readPhotoPost(f.ws, post.id), { code: 'photo_post_missing' });
+    assert.equal(await f.a.readBlogSyncState(f.ws, post.id), null);
+    assert.equal(f.rows.get('meta').has(evidenceKey), false);
+    assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+    assert.deepEqual(f.rows.get('meta').get(key(`material-writing-output-deleted:${f.ws}:${post.id}`))?.value, { postId: post.id });
+    assert.equal(JSON.stringify(f.rows.get('meta').get(key(docKey))), markerBytes, 'the different canonical marker stays byte-for-byte unchanged');
+    assert.deepEqual((await f.a.readAccountDocRecord(docKey)).value, value);
+    assert.deepEqual(await f.a.readPhotoPost(f.ws, other.id), other, 'the post named by the prior marker is untouched');
+    assert.deepEqual(await f.a.read(f.ws), source);
+    assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, preparation.plans);
+    assert.deepEqual((await f.a.listPhotoPosts(f.ws)).map(item => item.id), [other.id]);
+  });
+}
+
+test('received deletion proof still rejects a different prior canonical output marker atomically', async t => {
+  const origin = await fixture(), fresh = blank(); t.after(origin.close); t.after(fresh.close);
+  const { row } = savedRow(origin), prior = { ...markerValue(row), postId: Core.id() };
+  assert.equal((await applyMarker(fresh.a, row, prior)).status, 'applied');
+  const before = copy(fresh.rows);
+  await assert.rejects(fresh.a.installMaterialContinuity(row, { deletedOutput: deletionProof(row) }), { code: 'invalid_material_output_deletion' });
+  assert.deepEqual(fresh.rows, before, 'the retire-only exception must not let received proof overwrite or ignore mismatched evidence');
+});
+
 test('a surviving handoff receipt preserves deletion evidence when the preparation body arrives later', async t => {
   const f = await fixture(); t.after(f.close);
   const post = await handoff(f), stateKey = key(`material-writing:${f.ws}`), state = copy(f.rows.get('meta').get(stateKey));

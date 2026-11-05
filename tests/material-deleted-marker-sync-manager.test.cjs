@@ -3,12 +3,13 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const Core = require('../assets/life/core.js'), Writing = require('../assets/life/material-writing.js');
 const Model = require('../assets/life/material-continuity.js'), Blog = require('../assets/life/blog.js');
 const Photo = require('../assets/life/photo-post.js');
+const BlogRemote = require('../assets/life/blog-remote.js');
 const Service = require(process.env.MATERIAL_CONTINUITY_SYNC_MODULE || '../assets/life/material-continuity-sync.js');
 const clone = value => structuredClone(value);
 const fault = code => Object.assign(new Error(code), { code });
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
-function fixture() {
+function fixture({ useBlogRemote = false } = {}) {
   const bundle = Core.createWorkspace(), plan = Writing.create(Core.id);
   plan.title = '삭제한 글의 준비';
   plan.blocks.push({ id: Core.id(), kind: 'paragraph', text: '원문과 별개인 합성 작성문\n' });
@@ -19,7 +20,7 @@ function fixture() {
   const owner = { userId: Core.id(), projectUrl: 'https://synthetic.example.org' };
   let account = owner;
   const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => account };
-  const stats = { blogReads: 0, markerReads: 0, installs: [], adopts: [] };
+  const stats = { materialReads: 0, blogReads: 0, markerReads: 0, installs: [], adopts: [] };
   const controls = { marker: false, blog: null, blogError: null, blogGate: null, markerGate: null, remoteTransform: null };
   const storage = {
     account: owner,
@@ -33,14 +34,22 @@ function fixture() {
     async installMaterialContinuity(input, options) { stats.installs.push({ row: clone(input), options: clone(options) }); return { workspaceId: bundle.workspaceId, planId: plan.id }; },
     async adoptMaterialContinuity(input, options) { stats.adopts.push({ row: clone(input), options: clone(options) }); return { workspaceId: bundle.workspaceId, planId: plan.id }; }
   };
-  const remote = { async read() { const result = clone(row); controls.remoteTransform?.(result); return result; } };
-  const blogRemote = { async read(id) {
+  const remote = { async read() { stats.materialReads++; const result = clone(row); controls.remoteTransform?.(result); return result; } };
+  let blogRemote = { async read(id) {
     stats.blogReads++; assert.equal(id, post.id);
+    const response = clone(controls.blog), error = controls.blogError;
     if (controls.blogGate) { controls.blogGate.started.resolve(); await controls.blogGate.release.promise; }
-    if (controls.blogError) throw controls.blogError; return clone(controls.blog);
+    if (error) throw error; return response;
   } };
+  if (useBlogRemote) {
+    const read = blogRemote.read;
+    Object.assign(auth, { ready: true, verify: async () => auth.user, client: { async rpc(name, params) {
+      assert.equal(name, 'life_blog_read'); return { data: await read(params.p_post_id), error: null };
+    } } });
+    blogRemote = BlogRemote.create({ auth, blog: Blog });
+  }
   const manager = Service.create({ storage, auth, model: Model, remote, blogRemote, blog: Blog, photoPost: Photo });
-  return { manager, row, post, bundle, plan, controls, stats, storage,
+  return { manager, row, post, bundle, plan, controls, stats, storage, blogRemote,
     receive: () => manager.receive(row.id, row.revision),
     livePost(revision = 1) { controls.blog = { id: post.id, workspace_id: bundle.workspaceId, revision, data: Blog.pack(post), assets: {}, updated_at: post.updatedAt }; },
     switchAccount() { account = { ...owner, userId: Core.id() }; auth.user = { id: account.userId }; auth.epoch++; } };
@@ -149,16 +158,24 @@ test('an account switch during deletion-evidence lookup discards the old receive
 });
 
 const drain = () => new Promise(resolve => setImmediate(resolve));
-for (const failure of ['network_error', 'auth_required', 'partial']) test(`a deferred ${failure} output read retries on the next sync pass without a marker event or time jump`, async t => {
-  const f = fixture(); t.after(() => f.manager.dispose());
+function automaticReadFixture(t, options) {
+  const f = fixture(options); t.after(() => { f.manager.dispose(); f.blogRemote.dispose?.(); });
+  let notify = null;
   f.storage.listAccountLibraries = async () => [{ workspaceId: f.bundle.workspaceId, eligible: true }];
   f.storage.listMaterialContinuityOrphans = async () => [];
-  f.storage.subscribeAll = () => () => {};
+  f.storage.subscribeAll = listener => { notify = listener; return () => { notify = null; }; };
   const manager = { list: async () => ({ items: [{ id: f.row.id, revision: f.row.revision }], next: null }),
     adopt: item => f.manager.adopt(item) };
-  const loop = Service.automatic({ storage: f.storage, auth: {}, manager, every: 3600000 });
+  const loop = Service.automatic({ storage: f.storage, auth: {}, manager });
   t.after(() => loop.dispose());
+  return { ...f, loop, emitMarker() { notify?.({ type: 'account_doc_applied', key: 'materialOutputDeleted:synthetic-account:synthetic-plan' }); } };
+}
+
+for (const failure of ['network_error', 'auth_required', 'request_cancelled', 'invalid_remote_data', 'partial', 'partial-body', 'partial-assets']) test(`a deferred ${failure} output read retries on the next sync pass without a marker event or time jump`, async t => {
+  const f = automaticReadFixture(t), { loop } = f;
   if (failure === 'partial') f.controls.blog = undefined;
+  else if (failure === 'partial-body') f.controls.blog = { revision: 1 };
+  else if (failure === 'partial-assets') { f.livePost(); delete f.controls.blog.assets; }
   else f.controls.blogError = fault(failure);
   loop.start(); await loop.refresh();
   assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
@@ -166,6 +183,60 @@ for (const failure of ['network_error', 'auth_required', 'partial']) test(`a def
   await loop.refresh();
   assert.equal(f.stats.blogReads, 2); assert.equal(f.stats.adopts.length, 1);
   assert.equal(f.stats.adopts[0].options.deletedOutput.output.postId, f.post.id);
+});
+
+for (const partial of ['body', 'assets']) test(`a ${partial}-partial response rejected by the real BlogRemote adapter retries on the next ordinary pass`, async t => {
+  const f = automaticReadFixture(t, { useBlogRemote: true });
+  f.livePost(); delete f.controls.blog[partial === 'body' ? 'data' : 'assets'];
+  f.loop.start(); await drain();
+  assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
+  f.controls.blog = null; await f.loop.refresh();
+  assert.equal(f.stats.blogReads, 2); assert.equal(f.stats.adopts.length, 1);
+  assert.equal(f.stats.adopts[0].options.deletedOutput.output.postId, f.post.id);
+});
+
+test('persistent output revision mismatch skips body reads on poll, focus and visibility until 30 minutes or a changed preparation revision', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setInterval', 'setTimeout'], now: 1800000000000 });
+  const windowEvents = new EventTarget(), documentEvents = new EventTarget();
+  const previous = new Map(['addEventListener', 'removeEventListener', 'document'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  Object.assign(documentEvents, { visibilityState: 'visible' });
+  Object.assign(globalThis, { addEventListener: windowEvents.addEventListener.bind(windowEvents),
+    removeEventListener: windowEvents.removeEventListener.bind(windowEvents), document: documentEvents });
+  t.after(() => { for (const [key, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } });
+  const f = automaticReadFixture(t); f.livePost(2);
+  f.loop.start(); await drain();
+  assert.equal(f.stats.materialReads, 1); assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
+  t.mock.timers.tick(60000); await drain();
+  windowEvents.dispatchEvent(new Event('focus')); await drain();
+  documentEvents.dispatchEvent(new Event('visibilitychange')); await drain();
+  await f.loop.refresh();
+  assert.equal(f.stats.materialReads, 1); assert.equal(f.stats.blogReads, 1);
+  t.mock.timers.tick(29 * 60000 - 1); await drain();
+  assert.equal(f.stats.materialReads, 1); assert.equal(f.stats.blogReads, 1);
+  t.mock.timers.tick(1); await drain();
+  assert.equal(f.stats.materialReads, 2); assert.equal(f.stats.blogReads, 2);
+  f.row.revision++; await f.loop.refresh();
+  assert.equal(f.stats.materialReads, 3); assert.equal(f.stats.blogReads, 3); assert.equal(f.stats.adopts.length, 0);
+  f.controls.blog = null; f.controls.marker = true; f.emitMarker();
+  t.mock.timers.tick(2000); await drain();
+  assert.equal(f.stats.materialReads, 4); assert.equal(f.stats.blogReads, 4); assert.equal(f.stats.adopts.length, 1);
+  assert.deepEqual(f.stats.adopts[0].options, {});
+});
+
+test('a permission-denied original read keeps the ordinary adoption retry delay', async t => {
+  const f = automaticReadFixture(t); f.controls.blogError = fault('permission_denied');
+  f.loop.start(); await drain(); await f.loop.refresh();
+  assert.equal(f.stats.materialReads, 1); assert.equal(f.stats.blogReads, 1); assert.equal(f.stats.adopts.length, 0);
+});
+
+test('a marker arriving during a real mismatched output read prevents its late failure from restoring the retry delay', async t => {
+  const f = automaticReadFixture(t); f.livePost(2);
+  const gate = { started: deferred(), release: deferred() }; f.controls.blogGate = gate;
+  f.loop.start(); await gate.started.promise;
+  f.controls.blog = null; f.controls.marker = true; f.emitMarker(); gate.release.resolve();
+  await drain();
+  assert.equal(f.stats.materialReads, 2); assert.equal(f.stats.blogReads, 2); assert.equal(f.stats.adopts.length, 1);
+  assert.deepEqual(f.stats.adopts[0].options, {});
 });
 
 function automaticFixture() {

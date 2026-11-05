@@ -179,9 +179,10 @@
     async function outputPost(c, row) {
       try { return await readOutputPost(c, row); }
       catch (error) {
-        // A failed/partial original read is a deferred determination, not an
-        // unsupported preparation. Retry it on the next ordinary sync pass.
-        if (error && typeof error === 'object') deferredOutputReads.add(error);
+        // Temporary/partial reads retry on the next pass. BlogRemote reports
+        // incomplete or unverifiable responses as invalid_remote_data. A real
+        // revision mismatch keeps the ordinary 30-minute adoption delay.
+        if (['network_error', 'auth_required', 'request_cancelled', 'invalid_remote_data'].includes(error?.code)) deferredOutputReads.add(error);
         throw error;
       }
     }
@@ -202,7 +203,13 @@
         return { deletedOutput: { binding: clone(owner), remoteId: row.id, revision: row.revision,
           workspaceId: row.data.bundle.workspaceId, planId: row.data.plan.id, output: clone(output) } };
       }
-      if (!postRow || postRow.revision !== output.revision) throw fault('material_output_changed');
+      if (!postRow || !Number.isInteger(postRow.revision) || postRow.revision < 1 ||
+          typeof postRow.id !== 'string' || typeof postRow.workspace_id !== 'string' ||
+          !Array.isArray(postRow.data?.photos) || !postRow.assets || typeof postRow.assets !== 'object' || Array.isArray(postRow.assets)) {
+        // A partial response cannot establish either deletion or a changed revision.
+        throw fault('invalid_remote_data');
+      }
+      if (postRow.revision !== output.revision) throw fault('material_output_changed');
       const blobs = new Map();
       for (const photo of postRow.data.photos) { blobs.set(photo.id, await blogRemote.downloadAsset(postRow.assets[photo.id])); guard(c); }
       const doc = await blog.hydrate(postRow.data, blobs); guard(c);
