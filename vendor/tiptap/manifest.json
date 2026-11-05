@@ -1,8 +1,8 @@
 {
   "version": "3.32.2",
-  "bytes": 348538,
-  "gzipBytes": 107490,
-  "sha256": "377704d46eceba690541f1f60594b3a7c5018bd34dd71076e7d47676b53ea6cd",
+  "bytes": 348667,
+  "gzipBytes": 107559,
+  "sha256": "d13bf6b8b13cd97800a56c356de7f7afda5b3a7eb8881b219593f0cf8f35f90d",
   "dependencies": [
     {
       "name": "@tiptap/core",

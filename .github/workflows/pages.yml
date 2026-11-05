@@ -905,6 +905,12 @@ jobs:
       - name: Verify legacy Markdown publication requests recover with the same operation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_pending" node tests/blog-publish-pending-browser.cjs --prepare-database
+      - name: Verify Markdown capacity packing keeps the canonical text and the rendered post against the fixed baseline codec
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-packing-browser.cjs
+      - name: Verify post transition mutants are detected by the transition regressions
+        if: ${{ !cancelled() }}
+        run: node tests/photo-post-transition-mutations.cjs
       - name: Verify series publication receipts, independent wrappers and current revocation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-series-backend.cjs
@@ -986,6 +992,7 @@ jobs:
             .local/blog-backend/
             .local/blog-completion/
             .local/blog-publish-pending/
+            .local/b2-independent/
             .local/account-blog-continuity/
             .local/account-wide-home/
             .local/blog-series-backend/
