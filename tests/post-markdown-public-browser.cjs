@@ -43,8 +43,17 @@ async function fixtures() {
   Photo.validate(old); Photo.validate(converted);
   const options = { photoIds: [photo.id], author: { name: '검수 작성자', intro: '' } };
   const boundaryOld = { ...doc, ops: [{ insert: '사진 앞' }, doc.ops[0], { insert: '사진 뒤\n' }] };
-  const boundaryMd = Markdown.fromV2(boundaryOld).document;
-  return { empty, photoEnded, boundaryOld: Blog.publicSnapshot(boundaryOld), boundaryMd: Blog.publicSnapshot(boundaryMd), old: Blog.publicSnapshot(old, options), md: Blog.publicSnapshot(converted, options),
+  const beforeBoundary = structuredClone(boundaryOld);
+  Photo.validate(boundaryOld);
+  assert.throws(() => Markdown.fromV2(boundaryOld), { code: 'post_markdown_conversion_boundary' },
+    'conversion must reject a paragraph boundary that changes when the photo is omitted');
+  assert.deepEqual(boundaryOld, beforeBoundary, 'failed conversion preserves every original field and photo blob');
+  Photo.validate(boundaryOld);
+  const boundaryExplicit = structuredClone(boundaryOld);
+  boundaryExplicit.ops[0].insert += '\n';
+  const boundaryMd = Markdown.fromV2(boundaryExplicit).document;
+  return { empty, photoEnded, boundaryOld: Blog.publicSnapshot(boundaryOld), boundaryExplicit: Blog.publicSnapshot(boundaryExplicit), boundaryMd: Blog.publicSnapshot(boundaryMd), old: Blog.publicSnapshot(old, options), md: Blog.publicSnapshot(converted, options),
+    omittedOld: Blog.publicSnapshot(old), omittedMd: Blog.publicSnapshot(converted),
     privateOld: Blog.privateReadingSnapshot(old, options), privateMd: Blog.privateReadingSnapshot(converted, options) };
 }
 async function main() {
@@ -94,12 +103,24 @@ async function main() {
           report.checks.push({ name: width + ': ' + (privateView ? 'private' : 'public') + ' v2/Markdown rendered DOM equality', pass: true });
         }
         await page.screenshot({ path: path.join(output, 'render-' + width + '.png'), fullPage: true });
-        const oldBoundary = await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.boundaryOld);
+        const omittedOld = await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.omittedOld);
+        const omittedMd = await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.omittedMd);
+        assert.equal(omittedMd, omittedOld, 'equivalent explicit paragraphs, marks and lists retain the v2 server display when photos are omitted');
+        assert.equal(await page.locator('figure,img').count(), 0);
+        assert.equal(await page.locator('article').innerText().then(text => text.includes('사진 설명')), false);
+        report.checks.push({ name: width + ': equivalent rich Markdown and v2 server projection display match with photos omitted', pass: true });
+        await page.screenshot({ path: path.join(output, 'rich-omitted-photo-' + width + '.png'), fullPage: true });
+        await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.boundaryOld);
+        assert.deepEqual(await page.locator('.blog-line').allTextContents(), ['사진 앞사진 뒤'], 'unchanged v2 server rules omit the photo without inventing a newline');
+        assert.equal(await page.locator('figure,img').count(), 0);
+        report.checks.push({ name: width + ': refused implicit-boundary conversion leaves the original one-paragraph public display', pass: true });
+        await page.screenshot({ path: path.join(output, 'legacy-implicit-omitted-photo-' + width + '.png'), fullPage: true });
+        const oldBoundary = await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.boundaryExplicit);
         const mdBoundary = await page.evaluate(snapshot => renderSnapshot(snapshot), snapshots.boundaryMd);
         assert.equal(mdBoundary, oldBoundary, 'omitting a photo must preserve the source paragraph boundary in both formats');
         assert.deepEqual(await page.locator('.blog-line').allTextContents(), ['사진 앞', '사진 뒤']);
         assert.equal(await page.locator('figure,img').count(), 0);
-        report.checks.push({ name: width + ': omitted photo preserves both surrounding paragraphs', pass: true });
+        report.checks.push({ name: width + ': accepted explicit-boundary conversion preserves both paragraphs with the photo omitted', pass: true });
         await page.screenshot({ path: path.join(output, 'omitted-photo-' + width + '.png'), fullPage: true });
         await page.evaluate(() => URL.revokeObjectURL(photoURL));
       } finally { await context.close(); }
@@ -107,7 +128,7 @@ async function main() {
     assert.deepEqual(report.pageErrors, []);
     assert.deepEqual(report.consoleErrors, []);
     assert.deepEqual(report.externalRequests, []);
-    report.pass = report.checks.length === 10;
+    report.pass = report.checks.length === 14;
     for (const check of report.checks) console.log('PASS ' + check.name);
   } finally { await browser.close(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n'); }
 }

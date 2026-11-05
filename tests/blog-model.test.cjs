@@ -51,12 +51,7 @@ test("public snapshots default to no photos and contain only selected remapped m
   assert.equal(selected.photos.length, 1); assert.notEqual(selected.photos[0].id, doc.photos[0].id);
   assert.equal(selected.ops.find((op) => typeof op.insert !== "string").insert.photo.id, selected.photos[0].id);
   assert.equal(selected.photos[0].digest, doc.photos[0].digest); assert.equal(selected.photos[0].width, 4032);
-  assert.deepEqual(selected.attachments, doc.attachments);
-  // Canonical public runs separate inline marks from paragraph terminators;
-  // BOM, carriage return, newline and bold text remain exactly represented.
-  assert.deepEqual(selected.ops.slice(0, 2), [{ insert: "\ufeff첫 문단\r", attributes: { bold: true } }, { insert: "\n" }]);
-  assert.equal(selected.ops.filter(op => typeof op.insert === "string").map(op => op.insert).join(""),
-    doc.ops.filter(op => typeof op.insert === "string").map(op => op.insert).join(""));
+  assert.deepEqual(selected.attachments, doc.attachments); assert.equal(selected.ops[0].insert, doc.ops[0].insert);
   for (const value of [doc.id, doc.photos[0].id, doc.photos[1].id, "개인 파일명", "비공개 사진 설명", "createdAt", "replaces", "blob"])
     assert(!JSON.stringify(selected).includes(value), value + " remains private");
   selected.ops[0].insert = "caller edit"; assert.deepEqual(doc, before);

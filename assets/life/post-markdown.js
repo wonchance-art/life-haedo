@@ -218,7 +218,23 @@
   // the photo list keeps only photos the body still shows, in body order first.
   function fromV2(doc) {
     if (!doc || doc.format !== 'life-photo-post-v2') throw new TypeError('a life-photo-post-v2 document is required');
-    const { ops, ...rest } = doc, result = fromDelta(ops);
+    const { ops, ...rest } = doc;
+    // A photo implicitly ends preceding text in the private v2 renderer, but
+    // the v2 server drops an unselected photo without inserting that line end.
+    // Markdown makes the paragraph explicit and cannot retain this distinction.
+    // Refuse migration instead of changing a later publication's visible text.
+    let pendingText = false;
+    for (const op of ops) {
+      if (typeof op.insert === 'string') {
+        const newline = op.insert.lastIndexOf('\n');
+        if (newline >= 0) pendingText = newline < op.insert.length - 1;
+        else if (op.insert.length) pendingText = true;
+      } else {
+        if (pendingText) throw fail('사진 앞 문단의 공개 모양을 그대로 옮길 수 없어 변환하지 않았습니다. 원래 글은 바뀌지 않았습니다.', 'post_markdown_conversion_boundary');
+        pendingText = false;
+      }
+    }
+    const result = fromDelta(ops);
     // A legacy op can apply one inline mark across thousands of line breaks.
     // The Markdown projection may need more ops than the old single insert.
     // Reject before returning a candidate; callers must retain the original
@@ -279,36 +295,6 @@
     if (typeof last?.insert === 'string' && typeof op.insert === 'string' &&
       keys.length === Object.keys(next).length && keys.every(key => Object.hasOwn(next, key) && before[key] === next[key])) last.insert += op.insert;
     else ops.push(op);
-  }
-  // Canonical representation of an already-validated Delta's visible content.
-  // This is a projection helper, never a rewrite of legacy stored operations.
-  // Inline attributes apply to text, block attributes to line endings. Keeping
-  // them separate and sorting attribute keys makes public projection bytes
-  // independent of editor operation boundaries and object insertion order.
-  // Callers retain their original projection if this expansion exceeds its
-  // existing wire limits; this function does not relax any document limits.
-  function normalizeDelta(values) {
-    if (!Array.isArray(values)) throw new TypeError('ops must be an array');
-    const out = []; let pending = false;
-    const sorted = (attrs, keys) => Object.fromEntries(Object.keys(attrs || {}).filter(key => keys.includes(key)).sort().map(key => [key, attrs[key]]));
-    const add = (insert, attrs) => appendOp(out, { insert, ...(Object.keys(attrs).length ? { attributes: attrs } : {}) });
-    for (const op of values) {
-      if (typeof op.insert !== 'string') {
-        if (pending) { add('\n', {}); pending = false; }
-        const p = op.insert.photo;
-        add({ photo: { id: p.id, caption: p.caption, alt: p.alt } }, sorted(op.attributes, Object.keys(op.attributes || {})));
-        continue;
-      }
-      const inline = sorted(op.attributes, ['bold', 'italic', 'underline', 'link', 'author']);
-      const block = sorted(op.attributes, ['header', 'list', 'blockquote', 'align']);
-      const parts = op.insert.split('\n');
-      parts.forEach((part, index) => {
-        if (part) { add(part, inline); pending = true; }
-        if (index < parts.length - 1) { add('\n', block); pending = false; }
-      });
-    }
-    if (pending) add('\n', {});
-    return out;
   }
   function readInline(children) {
     const ops = [], photos = [], depth = { bold: 0, italic: 0, author: 0 }, pairs = htmlPairs(children);
@@ -403,5 +389,5 @@
     return result;
   }
   return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, LIMITS, fromDelta, fromV2, escapeInline,
-    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink, normalizeDelta });
+    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink });
 });

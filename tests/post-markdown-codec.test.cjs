@@ -112,27 +112,6 @@ test('conversion that exceeds existing operation capacity fails before returning
   assert.doesNotThrow(() => PhotoPost.validate(legacy));
 });
 
-test('Delta projection normalization preserves semantic marks, block formats and photo attributes without mutating input', () => {
-  const raw = [
-    { insert: '가', attributes: { link: 'https://example.org', underline: true, bold: true, align: 'center' } },
-    { insert: '나\n', attributes: { bold: true, align: 'center', underline: true, link: 'https://example.org' } },
-    { insert: '다\n라\n' },
-    { insert: '사진 앞' },
-    { insert: { photo: { alt: '대체', id: 'p', caption: '설명' } }, attributes: { align: 'right' } },
-    { insert: '\n', attributes: { header: 2, align: 'center' } }
-  ];
-  const before = structuredClone(raw), normalized = M.normalizeDelta(raw);
-  assert.deepEqual(normalized, [
-    { insert: '가나', attributes: { bold: true, link: 'https://example.org', underline: true } },
-    { insert: '\n', attributes: { align: 'center' } },
-    { insert: '다\n라\n사진 앞\n' },
-    { insert: { photo: { id: 'p', caption: '설명', alt: '대체' } }, attributes: { align: 'right' } },
-    { insert: '\n', attributes: { align: 'center', header: 2 } }
-  ]);
-  assert.equal(JSON.stringify(M.normalizeDelta(normalized)), JSON.stringify(normalized));
-  assert.deepEqual(raw, before);
-  assert.deepEqual(M.normalizeDelta([]), []);
-});
 
 for (const [name, attributes] of [['heading', { header: 1 }], ['quote', { blockquote: true }], ['list', { list: 'bullet' }]]) {
   test('oversized ' + name + ' conversion preserves the valid legacy body without returning an invalid candidate', () => {
@@ -146,7 +125,7 @@ for (const [name, attributes] of [['heading', { header: 1 }], ['quote', { blockq
   });
 }
 
-test('implicit paragraph before a photo cannot return a Markdown candidate over the unchanged text cap', () => {
+test('near-limit implicit photo paragraph is refused before returning or changing a valid legacy document', () => {
   const PhotoPost = require('../assets/life/photo-post.js');
   const legacy = PhotoPost.create(() => 'long-photo');
   const blob = new Blob([new Uint8Array([1])], { type: 'image/png' });
@@ -154,6 +133,46 @@ test('implicit paragraph before a photo cannot return a Markdown candidate over 
   legacy.ops = [{ insert: 'a'.repeat(49999) }, { insert: { photo: { id: 'photo', caption: '', alt: '' } } }, { insert: '\n' }];
   const before = structuredClone(legacy);
   assert.doesNotThrow(() => PhotoPost.validate(legacy));
-  assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+  assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_boundary' });
   assert.deepEqual(legacy, before);
+});
+
+test('ambiguous implicit photo paragraph boundaries fail closed while explicit newlines convert', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const doc = PhotoPost.create(() => 'boundary');
+  const blob = new Blob([new Uint8Array([1])], { type: 'image/png' });
+  doc.photos = [{ id: 'photo', name: 'p.png', type: blob.type, size: blob.size, width: 1, height: 1, digest: 'a'.repeat(64), blob }];
+  const photo = { insert: { photo: { id: 'photo', caption: '설명', alt: '대체' } } };
+  const explicit = { ...doc, ops: [{ insert: '사진 앞\n' }, photo, { insert: '사진 뒤\n' }] };
+  PhotoPost.validate(explicit);
+  const explicitBefore = structuredClone(explicit), converted = M.fromV2(explicit).document;
+  assert.doesNotThrow(() => PhotoPost.validate(converted));
+  assert.deepEqual(explicit, explicitBefore);
+  for (const prefix of [
+    [{ insert: '사진 앞' }],
+    [{ insert: '사진 ' }, { insert: '앞', attributes: { bold: true } }],
+    [{ insert: '첫 문단\n사진 앞' }],
+    [{ insert: '사진 앞' }, { insert: '' }]
+  ]) {
+    const implicit = { ...doc, ops: [...prefix, photo, { insert: '사진 뒤\n' }] };
+    PhotoPost.validate(implicit);
+    const before = structuredClone(implicit);
+    if (prefix.length === 1 && prefix[0].insert === '사진 앞')
+      assert.equal(M.fromDelta(implicit.ops).markdown, M.fromDelta(explicit.ops).markdown,
+        'the same Markdown cannot encode the two different legacy publication boundaries');
+    assert.throws(() => M.fromV2(implicit), { code: 'post_markdown_conversion_boundary' });
+    assert.deepEqual(implicit, before);
+    assert.doesNotThrow(() => PhotoPost.validate(implicit));
+  }
+  const endedInSeparateOp = { ...doc, ops: [{ insert: '사진 앞' }, { insert: '\n', attributes: { header: 1 } }, photo, { insert: '\n' }] };
+  assert.doesNotThrow(() => PhotoPost.validate(M.fromV2(endedInSeparateOp).document));
+});
+
+test('defensive conversion text guard rejects an over-capacity candidate even when the supplied Delta has no terminal newline', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const incomplete = { ...PhotoPost.create(() => 'incomplete'), ops: [{ insert: 'a'.repeat(50000) }] };
+  const before = structuredClone(incomplete);
+  assert.throws(() => PhotoPost.validate(incomplete), 'this is not a valid legacy document');
+  assert.throws(() => M.fromV2(incomplete), { code: 'post_markdown_conversion_limit' });
+  assert.deepEqual(incomplete, before);
 });

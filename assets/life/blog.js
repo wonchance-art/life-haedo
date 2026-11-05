@@ -187,11 +187,8 @@
           typeof c.digest === "string" && /^[a-f0-9]{64}$/.test(c.digest), "invalid_blog_selection");
       }
     }
-    // Metadata array order is not visible content; canonical public photos and
-    // fresh ID assignment follow their first occurrence in the body.
-    const byId = new Map(doc.photos.map((p) => [p.id, p]));
-    const selectedPhotos = (reading ? doc.photos : ops.filter((op) => typeof op.insert !== "string").map((op) => byId.get(op.insert.photo.id)))
-      .filter((p) => selected.has(p.id));
+    // Preview image URLs and server publishing both follow this metadata order.
+    const selectedPhotos = doc.photos.filter((p) => selected.has(p.id));
     const mapping = new Map(selectedPhotos.map((p) => [p.id, crypto.randomUUID()]));
     const projectOps = (values) => values.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
       { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } });
@@ -204,26 +201,9 @@
         const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
-    // Equivalent Delta and Markdown bodies must produce the same public bytes:
-    // remove meaningless run boundaries/attribute ordering after private marks
-    // and unselected photos are gone. Stored and private-reading ops stay exact.
-    // The B3 Edge publisher must use this same normalization; old SQL v2 copies
-    // remain valid and keep their existing rendering.
-    if (!reading) {
-      // A photo ends any pending paragraph even when that photo is not selected.
-      // Preserve that source boundary before filtering, then merge runs whose
-      // only difference was private authorship or a removed photo.
-      const normalized = markdown().normalizeDelta(projectOps(markdown().normalizeDelta(ops)));
-      const validationCount = validationBodyOps(normalized).length;
-      // A compact legacy op can span thousands of styled lines. Splitting its
-      // semantic runs may exceed today's text/op/byte envelope; keep that already
-      // supported legacy projection instead of making an old post unreadable.
-      // Such a body cannot currently convert to a supported Markdown document.
-      const fits = validationCount <= model().LIMITS.ops &&
-        normalized.reduce((length, op) => length + (typeof op.insert === "string" ? op.insert.length : 0), 0) <= model().LIMITS.text &&
-        new TextEncoder().encode(JSON.stringify({ ...snapshot, ops: normalized })).length <= LIMITS.bytes;
-      if (doc.format === "life-post-md-v1" || fits) snapshot.ops = normalized;
-    }
+    // Preserve the existing server projection for v1/v2 byte for byte. Markdown
+    // enters through toDelta above, then uses the same selection/AI-removal rules.
+    // Operation boundaries may differ; never reorder photos or invent paragraphs.
     checkSnapshot(snapshot, reading);
     return snapshot;
   }

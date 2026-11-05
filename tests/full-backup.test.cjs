@@ -179,6 +179,27 @@ test('v1 글의 전체 백업과 단독 ZIP은 원본을 보존하며 v2 새 사
   assert.equal(await snapshotAll(storage), before);
 });
 
+test('비Markdown ZIP에 Markdown 라벨을 붙인 전체 백업은 글을 저장하지 않는다', async () => {
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+  const ws = (await storage.createWorkspace('기존 형식 기록')).workspaceId;
+  const legacy = postDoc({ title: '바뀌지 않을 기존 글', status: 'saved', photos: [await jpegPhoto()] });
+  await storage.savePhotoPost(ws, legacy, 0);
+  const before = await snapshotAll(storage), { built, failed } = await fullBundle(storage);
+  assert.deepEqual(failed, []);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
+  const manifest = structuredClone(built.manifest), entry = manifest.files.find(file => file.postId === legacy.id);
+  assert.equal(entry.format, 'life-photo-post-backup-v2');
+  entry.format = 'life-post-md-backup-v1'; entry.formatVersion = 1;
+  files['manifest.json'] = Z.strToU8(JSON.stringify(manifest));
+  const opened = await Full.open(new Blob([Z.zipSync(files, { level: 0 })]));
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const report = await Full.restore(opened, { storage: target, kinds: new Set(['photoPosts']), verifyPhoto: null });
+  assert.equal(report.items.length, 1);
+  assert.equal(report.items[0].status, 'failed'); assert.match(report.items[0].message, /문서 형식/);
+  for (const space of await target.listWorkspaces()) assert.deepEqual(await target.listPhotoPosts(space.workspaceId), []);
+  assert.equal(await snapshotAll(storage), before);
+});
+
 test('Markdown 글: 전체 ZIP과 단독 ZIP에서 새 사본으로 복원하고 사진 바이트·AI 표시·숨김 상태를 보존한다', async () => {
   const Markdown = require('../assets/life/post-markdown.js');
   const { storage, first, saved } = await seed();
