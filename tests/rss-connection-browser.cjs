@@ -10,10 +10,21 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { FakeCloud, accounts, session, base, cloud } = require('./life-sync-browser.cjs');
-const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
-const output = path.resolve('.local/rss-connection-browser');
-const report = { scope: 'Chromium, real app/SDK/IndexedDB, synthetic owner API only; no live feed/DB/Cron, PWA or Apple-device verification', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [] };
+const output = path.resolve(process.env.RSS_BROWSER_OUTPUT || '.local/rss-connection-browser');
+const report = { scope: 'Chromium, real app/SDK/IndexedDB, synthetic owner API only; no live feed/DB/Cron, PWA or Apple-device verification', checks: [], visual: [], consoleErrors: [], expectedConsoleErrors: [], pageErrors: [], externalRequests: [] };
+function observe(page, report, name) {
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    const expected = page.expectedRssHttpStatus;
+    if (expected && message.location().url.startsWith(cloud + '/functions/v1/haedo-rss') && message.text().includes('status of ' + expected)) {
+      report.expectedConsoleErrors.push({ check: name, message: message.text() }); return;
+    }
+    report.consoleErrors.push({ check: name, message: message.text() });
+  });
+  page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
+}
 const FEED = 'https://feed.example.invalid/atom.xml';
 const RAW = '\ufeff새 글의 정확한 합성 본문 🌱\r\n공백  둘과 한글 <script>본문일 뿐</script>';
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -65,7 +76,7 @@ async function capture(page, scene, width) {
 class RssCloud extends FakeCloud {
   constructor() {
     super(); this.connections = new Map(); this.items = []; this.calls = []; this.configured = true;
-    this.nextItems = []; this.failure = null; this.hold = null;
+    this.nextItems = []; this.failure = null; this.failureCode = null; this.failureStatus = 200; this.hold = null; this.executionOutcome = null;
   }
   connection(workspaceId, owner = accounts.a.id, status = 'pending') {
     const row = { id: 'cccccccc-cccc-4ccc-8ccc-000000000001', workspace_id: workspaceId, feed_url: FEED,
@@ -83,20 +94,21 @@ class RssCloud extends FakeCloud {
     const conn = this.connections.get(owner);
     return { configured: this.configured, ready: this.configured, connections: conn && conn.workspace_id === workspaceId ? [clone(conn)] : [],
       items: conn && conn.workspace_id === workspaceId ? clone(this.items.filter(item => item.owner_id === owner && item.connection_id === conn.id)) : [],
-      has_more: false, next_cursor: null };
+      other_connections: conn && conn.workspace_id !== workspaceId ? [clone(conn)] : [], has_more: false, next_cursor: null };
   }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url());
     if (url.pathname !== '/functions/v1/haedo-rss') return super.handle(route, device);
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store' };
-    const send = body => route.fulfill({ status: 200, headers, body: JSON.stringify(body) }).catch(error => { if (!/closed|handled|disposed|Target page/i.test(error.message)) throw error; });
+    const send = (body, status = 200) => route.fulfill({ status, headers, body: JSON.stringify(body) }).catch(error => { if (!/closed|handled|disposed|Target page/i.test(error.message)) throw error; });
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers, body: '' });
     assert.equal(request.method(), 'POST'); const owner = this.owner(request), body = request.postDataJSON();
     assert.ok(Object.values(accounts).some(value => value.id === owner), 'Synthetic authenticated owner only');
     this.calls.push({ owner, device, body: clone(body) });
     const { action, workspaceId } = body;
-    if (this.failure === action) { const row = this.connections.get(owner); if (row) row.last_error = 'fetch_failed'; return send({ error: 'rss_network_error' }); }
+    if (this.failure === action) { const row = this.connections.get(owner); if (row) row.last_error = 'fetch_failed'; return send({ error: this.failureCode || 'rss_network_error' }, this.failureStatus); }
     if (action !== 'list' && !this.configured) return send({ error: 'setup_required' });
+    if (action === 'poll' && this.executionOutcome) return send({ ...this.snapshot(owner, workspaceId), execution: { status: this.executionOutcome } });
     let conn = this.connections.get(owner);
     if (action === 'register') {
       assert.equal(body.url, FEED, 'fixture allows exactly one synthetic feed');
@@ -125,6 +137,16 @@ class RssCloud extends FakeCloud {
 }
 async function idle(page) { await page.waitForFunction(() => document.querySelector('#rssConnectionPanel')?.getAttribute('aria-busy') !== 'true'); }
 const action = (page, name) => page.locator('[data-rss-action="' + name + '"]').click();
+async function disconnect(page, accept = true) {
+  let seen = false;
+  page.once('dialog', async dialog => {
+    seen = true; assert.equal(dialog.type(), 'confirm');
+    assert.match(dialog.message(), /받은 자료는 그대로/); assert.match(dialog.message(), /다시 연결하면 기준 목록부터 새로/);
+    if (accept) await dialog.accept(); else await dialog.dismiss();
+  });
+  await action(page, 'disconnect'); await idle(page); assert.ok(seen, 'disconnect requires explicit confirmation');
+}
+
 async function checkSource(page, expected = 1) {
   const bundle = await until(page, async expected => {
     const s = HaedoLife.Shell.storage, b = await s.read(await s.getActive());
@@ -152,13 +174,14 @@ async function main() {
     if (process.env.RSS_BROWSER_MUTATION) {
       const mutations = {
         'skip-hash': ['need(await step(context, () => hash(row.content_text)) === row.content_hash);', '/* Mutation: incoming content hash verification removed. */'],
-        'only-active': ["if (row.disposition !== 'stored')", "if (row.disposition !== 'stored' || page.connections.find(conn => conn.id === row.connection_id)?.status !== 'active')"]
+        'only-active': ["if (row.disposition !== 'stored')", "if (row.disposition !== 'stored' || page.connections.find(conn => conn.id === row.connection_id)?.status !== 'active')"],
+        'no-disconnect-confirm': ["if (action === 'disconnect' && !root.confirm('받은 자료는 그대로 유지됩니다. 다시 연결하면 기준 목록부터 새로 만듭니다. 연결을 해제할까요?')) return;", '/* Mutation: disconnect confirmation removed. */', 'rss-connection-ui.js']
       };
-      const [needle, replacement] = mutations[process.env.RSS_BROWSER_MUTATION] || [];
+      const [needle, replacement, moduleName = 'rss-connection.js'] = mutations[process.env.RSS_BROWSER_MUTATION] || [];
       assert.ok(needle, 'known browser mutation');
-      const original = await fs.readFile(path.resolve('assets/life/rss-connection.js'), 'utf8');
+      const original = await fs.readFile(path.resolve('assets/life', moduleName), 'utf8');
       assert.equal(original.split(needle).length, 2, 'mutation targets one exact safety check');
-      await context.route('**/assets/life/rss-connection.js', route => route.fulfill({ contentType: 'application/javascript', body: original.replace(needle, replacement) }));
+      await context.route('**/assets/life/' + moduleName, route => route.fulfill({ contentType: 'application/javascript', body: original.replace(needle, replacement) }));
     }
     const page = await context.newPage(); observe(page, report, name); page.setDefaultTimeout(12000);
     try {
@@ -183,6 +206,7 @@ async function main() {
       const conn = server.connections.get(accounts.a.id);
       server.nextItems = [server.item(conn), server.item(conn, { id: 'dddddddd-dddd-4ddd-8ddd-000000000002', identity: 'atom:urn:haedo:rss:2', title: '날짜를 확인할 글', disposition: 'held', reason: 'date_unknown', published_at: null, content_text: '', content_hash: null })];
       await action(page, 'poll'); await idle(page); await checkSource(page);
+      if (width === 390) assert.match(await page.locator('#lifeCurrentWorkspace').innerText(), /자료 1개/, 'narrow settings material count updates after RSS projection');
       await page.locator('[data-rss-item="dddddddd-dddd-4ddd-8ddd-000000000001"]').click();
       assert.equal(await page.locator('#rssItemBody').textContent(), RAW, 'text rendering retains source bytes, never HTML');
       assert.equal(await page.locator('#rssItemBody script').count(), 0);
@@ -196,7 +220,7 @@ async function main() {
       await page.locator('#rssError:not([hidden])').waitFor(); assert.deepEqual(await sources(page), before, 'failed intake preserves exact originals');
       server.failure = null;
       await page.locator('#rssRefresh').click(); await idle(page); await action(page, 'retry'); await idle(page);
-      await action(page, 'disconnect'); await idle(page); assert.equal(conn.status, 'disconnected');
+      await disconnect(page); assert.equal(conn.status, 'disconnected');
       assert.deepEqual(await sources(page), before, 'disconnect keeps already stored originals');
       await nav(page, 'schedule'); await open(page); await idle(page);
       assert.deepEqual(await sources(page), before, 'reopening never duplicates stored materials');
@@ -217,6 +241,66 @@ async function main() {
       assert.deepEqual(await sources(page), before, 'a mismatched wire hash cannot become a new material');
       await page.locator('#rssError:not([hidden])').waitFor();
       assert.equal(await page.locator('[data-rss-item]').count(), 0, 'unverified private body is not exposed as a valid item');
+    });
+    for (const scenario of [
+      { code: 'rss_retry_limit', action: 'retry', status: 'active', pattern: /1시간에 2회/ },
+      { code: 'rss_invalid_feed', action: 'preview', status: 'pending', pattern: /피드/ },
+      { code: 'rss_connection_exists', action: 'register', pattern: /이미|다른 자료공간/ },
+      { code: 'rss_not_found', action: 'poll', status: 'active', pattern: /연결/, httpStatus: 403 }
+    ]) await check('dedicated service error keeps input and originals: ' + scenario.code, async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      if (scenario.status) { const conn = server.connection(ws, accounts.a.id, scenario.status); if (scenario.action === 'retry') conn.last_error = 'fetch_failed'; }
+      await open(page); await idle(page); await page.locator('#rssFeedUrl').fill(FEED);
+      server.failure = scenario.action; server.failureCode = scenario.code; server.failureStatus = scenario.httpStatus || 200;
+      page.expectedRssHttpStatus = scenario.httpStatus;
+      const before = await sources(page), expectedBefore = report.expectedConsoleErrors.length;
+      if (scenario.action === 'register') await page.locator('#rssRegister').click(); else await action(page, scenario.action);
+      await idle(page); const shown = await page.locator('#rssError').innerText();
+      assert.match(shown, scenario.pattern, 'specific error explains recovery');
+      assert.doesNotMatch(shown, /로그인을 확인|입력과 기존 자료는 유지됩니다/, 'specific server error is not replaced by auth or generic transport prose');
+      assert.equal(await page.locator('#rssFeedUrl').inputValue(), FEED); assert.deepEqual(await sources(page), before);
+      if (scenario.httpStatus) assert.equal(report.expectedConsoleErrors.length - expectedBefore, 1, 'exactly one expected synthetic HTTP diagnostic');
+    });
+    await check('not_due and stale do not claim that collection ran', async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'active'); await open(page); await idle(page);
+      server.nextItems = [server.item(conn)]; const before = await sources(page);
+      for (const outcome of ['not_due', 'stale']) {
+        server.executionOutcome = outcome; await action(page, 'poll'); await idle(page);
+        const status = await page.locator('#rssStatus').innerText();
+        assert.doesNotMatch(status, /확인했습니다|수집했습니다|완료했습니다/, 'unexecuted result cannot claim success');
+        assert.match(status, outcome === 'not_due' ? /다음 확인 시간/ : /이번 확인 결과를 반영하지 않았습니다/, 'execution-specific state is visible');
+        assert.deepEqual(await sources(page), before, 'unexecuted check cannot invent collected material');
+      }
+    });
+    await check('disconnect confirmation cancel and accept preserve the archive', async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'active'); server.items = [server.item(conn)];
+      await open(page); await idle(page); const before = await checkSource(page);
+      const callsBefore = server.calls.length; await disconnect(page, false);
+      assert.equal(conn.status, 'active'); assert.equal(server.calls.length, callsBefore, 'cancel sends no disconnect request');
+      assert.deepEqual(await sources(page), before);
+      await disconnect(page, true); assert.equal(conn.status, 'disconnected');
+      assert.equal(server.calls.filter(call => call.body.action === 'disconnect').length, 1);
+      assert.deepEqual(await sources(page), before, 'confirmed disconnect preserves exact stored data');
+      assert.equal(await page.locator('#rssRegister').isEnabled(), true, 'reconnection starts from an explicit registration');
+    });
+    await check('other workspace connection is shown without copying its private inbox', async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection('eeeeeeee-eeee-4eee-8eee-000000000001', accounts.a.id, 'paused');
+      server.items = [server.item(conn)]; assert.notEqual(conn.workspace_id, ws);
+      const before = await sources(page); await open(page); await idle(page);
+      assert.match(await page.locator('#rssConnectionPanel').innerText(), /다른 자료공간/);
+      assert.match(await page.locator('#rssConnectionPanel').innerText(), /수집 중지됨/);
+      assert.equal(await page.locator('[data-rss-item]').count(), 0);
+      assert.equal(await page.locator('[data-rss-action]').count(), 0, 'another workspace connection has no controls here');
+      assert.deepEqual(await sources(page), before);
+      await page.locator('#rssFeedUrl').fill(FEED);
+      if (await page.locator('#rssRegister').isEnabled()) {
+        server.failure = 'register'; server.failureCode = 'rss_connection_exists';
+        await page.locator('#rssRegister').click(); await idle(page); assert.match(await page.locator('#rssError').innerText(), /다른 자료공간|이미/);
+      } else assert.match(await page.locator('#rssConnectionPanel').innerText(), /먼저|기존|연결/);
+      assert.deepEqual(await sources(page), before);
     });
     await check('same item revision preserves the exact older source version', async ({ page, server }) => {
       const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
@@ -253,7 +337,7 @@ async function main() {
         const state = await HaedoLife.Shell.accountLibrary.getState(id);
         return state.mode === 'account' && state.status === 'synced' && ['sources', 'composition', 'metadata'].every(key => state.domains[key]?.status === 'synced');
       }, 'automatic account acknowledgement of paused archive', conn.workspace_id);
-      await action(page, 'disconnect'); await idle(page); assert.equal(conn.status, 'disconnected');
+      await disconnect(page); assert.equal(conn.status, 'disconnected');
       assert.deepEqual(await sources(page), first, 'disconnect does not discard the paused archive');
       const secondContext = await makeContext(browser, server, 'rss-fresh-second-device', accounts.a,
         { viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -296,7 +380,7 @@ async function main() {
   } finally {
     await browser.close(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   }
-  const result = { passed: report.checks.filter(check => check.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length, realFeeds: report.externalRequests.length };
+  const result = { passed: report.checks.filter(check => check.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, expectedHttp: report.expectedConsoleErrors.length, page: report.pageErrors.length, realFeeds: report.externalRequests.length };
   console.log(JSON.stringify(result));
   if (report.checks.some(check => !check.pass) || report.consoleErrors.length || report.pageErrors.length || report.externalRequests.length) process.exitCode = 1;
 }

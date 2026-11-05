@@ -18,6 +18,11 @@
     rss_host_not_allowed: '아직 연결할 수 없는 피드입니다. 확정된 피드 주소를 확인해 주세요.',
     rss_busy: '현재 수집 중입니다. 잠시 뒤 상태를 확인해 주세요.',
     rss_not_due: '다음 확인 시간이 되면 새 글을 확인할 수 있습니다.',
+    rss_stale: '연결 상태가 바뀌어 이번 확인 결과를 반영하지 않았습니다. 상태를 새로고침해 주세요.',
+    rss_retry_limit: '다시 시도는 1시간에 2회까지 할 수 있습니다. 다음 확인 시간을 기다려 주세요.',
+    rss_invalid_feed: 'RSS/Atom 피드를 읽지 못했습니다. 피드 주소와 형식을 확인해 주세요.',
+    rss_connection_exists: '이미 연결된 RSS 피드가 있습니다. 기존 연결의 자료공간에서 상태를 확인해 주세요.',
+    rss_not_found: '이 자료공간에서 해당 RSS 연결을 찾지 못했습니다. 연결된 자료공간을 확인해 주세요.',
     rss_receive_conflict: '자료 보관을 마치지 못했습니다. 기존 자료는 유지되며 다시 시도할 수 있습니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.rss_network_error), { code });
@@ -28,7 +33,7 @@
     if (code === 'setup_required' || code === 'not_configured') code = 'rss_setup_required';
     if (code === 'unauthorized') code = 'rss_auth_required';
     code = ({ blocked_url: 'rss_host_not_allowed', revision_conflict: 'rss_conflict', not_due: 'rss_not_due',
-      rate_limited: 'rss_busy', invalid_feed: 'rss_invalid_data', feed_too_large: 'rss_invalid_data' })[code] || code;
+      rate_limited: 'rss_busy', invalid_feed: 'rss_invalid_feed', feed_too_large: 'rss_invalid_data' })[code] || code;
     return fault(Object.hasOwn(messages, code) ? code : 'rss_network_error');
   }
   function url(value) {
@@ -60,15 +65,23 @@
     const token = () => ({ generation, epoch: auth.epoch });
     async function step(context, action) { guard(context); const result = await action(); guard(context); return result; }
     async function verify(context) { need((await step(context, () => auth.verify()))?.id === owner.userId, 'rss_auth_required'); }
-    function connection(value) {
-      need(value && UUID.test(value.id || '') && value.workspace_id === workspaceId && STATES.includes(value.status) &&
+    function connection(value, elsewhere = false) {
+      need(value && UUID.test(value.id || '') && UUID.test(value.workspace_id || '') && (elsewhere ? value.workspace_id !== workspaceId : value.workspace_id === workspaceId) && STATES.includes(value.status) &&
         Number.isSafeInteger(value.revision) && value.revision > 0 && Number.isSafeInteger(value.baseline_count) && value.baseline_count >= 0);
       url(value.feed_url); return { ...value };
     }
     async function snapshot(context, value) {
       need(value && typeof value.configured === 'boolean' && Array.isArray(value.connections) && value.connections.length <= 1000 &&
         Array.isArray(value.items) && value.items.length <= 100);
-      const connections = value.connections.map(connection);
+      const connections = value.connections.map(conn => connection(conn));
+      need(value.other_connections === undefined || Array.isArray(value.other_connections) && value.other_connections.length <= 1);
+      const otherConnections = (value.other_connections || []).map(conn => connection(conn, true));
+      let execution = null;
+      if (value.execution !== undefined && value.execution !== null) {
+        const executionStatus = value.execution.status;
+        need(['stored', 'partial', 'error', 'stale', 'not_due', 'already_finished', 'busy'].includes(executionStatus));
+        execution = { status: executionStatus, ...(value.execution.error ? { error: clean({ error: value.execution.error }).code } : {}) };
+      }
       const ids = new Set();
       const items = [];
       for (const row of value.items) {
@@ -85,7 +98,7 @@
         items.push({ ...row });
       }
       if (value.has_more === true) need(value.next_cursor && timestamp(value.next_cursor.fetched_at) && UUID.test(value.next_cursor.id || ''));
-      return { configured: value.configured, connections, items, hasMore: value.has_more === true,
+      return { configured: value.configured, connections, otherConnections, execution, items, hasMore: value.has_more === true,
         nextCursor: value.has_more === true ? { fetched_at: value.next_cursor.fetched_at, id: value.next_cursor.id } : null };
     }
     async function request(context, action, input = {}) {

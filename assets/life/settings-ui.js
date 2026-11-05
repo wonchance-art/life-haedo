@@ -277,6 +277,21 @@
       if (!content.length) continue;
       section(item, content);
     }
+    // An RSS receipt writes through the existing scoped storage. Refresh only
+    // this row's count; keep the active panel, current input and focus intact.
+    if (options.storage?.subscribe && options.workspaceId) {
+      let countSequence = 0;
+      const unlistenCounts = options.storage.subscribe(options.workspaceId, event => {
+        if (event.type !== 'changed' || disposed || !isCurrent()) return;
+        const sequence = ++countSequence;
+        Promise.resolve().then(() => options.storage.read(options.workspaceId)).then(bundle => {
+          if (disposed || !isCurrent() || sequence !== countSequence || !element.isConnected || bundle.workspaceId !== options.workspaceId) return;
+          const count = element.querySelector('#lifeCurrentWorkspace .settings-row-sub');
+          if (count) count.textContent = (count.textContent.startsWith('이 브라우저') ? '이 브라우저 · 자료 ' : '자료 ') + bundle.sources.length + '개 · 발췌 ' + bundle.records.length + '개';
+        }).catch(() => {});
+      });
+      cleanups.push(() => { countSequence++; unlistenCounts?.(); });
+    }
     syncSchedule();
 
     // ---------- 하위 항목: 해시와 현재 항목 ----------

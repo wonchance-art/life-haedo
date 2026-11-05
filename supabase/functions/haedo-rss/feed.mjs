@@ -96,10 +96,11 @@ export function createParser({ XMLParser, XMLValidator }) {
     const items = [];
     for (const entry of entries) {
       need(object(entry));
-      let rawURL;
+      let rawURL, itemHold = null;
       if (atom) {
         const links = list(entry.link).filter(x => object(x) && (!x['@_rel'] || x['@_rel'] === 'alternate'));
-        need(links.length <= 1); rawURL = links[0]?.['@_href'];
+        if (links.length > 1) itemHold = 'ambiguous_links';
+        else rawURL = links[0]?.['@_href'];
       } else rawURL = text(single(entry, 'link'));
       const url = sourceURL(rawURL, baseURL);
       const rawID = text(single(entry, atom ? 'id' : 'guid'));
@@ -108,15 +109,20 @@ export function createParser({ XMLParser, XMLValidator }) {
       const title = text(single(entry, 'title')) || '제목 없음';
       need(title.length <= 400, 'item_limit');
       const body = atom ? single(entry, 'content') ?? single(entry, 'summary') : single(entry, 'content:encoded') ?? single(entry, 'description');
-      // xhtml requires a separate fidelity contract. Do not silently reduce it.
-      need(!atom || !body?.['@_src'] && (!body?.['@_type'] || ['text','html'].includes(body['@_type'])));
-      const content = body === undefined ? null : text(body);
-      need(body === undefined || content !== null);
-      const rawDate = text(single(entry, atom ? 'published' : 'pubDate'));
+      // Unsupported item representations stay held; unrelated feed entries
+      // continue. Do not manufacture exact text from an XHTML object tree.
+      const unsupported = atom && (body?.['@_src'] || body?.['@_type'] && !['text','html'].includes(body['@_type']));
+      const content = body === undefined || unsupported ? null : text(body);
+      if (unsupported || body !== undefined && content === null) itemHold ||= 'unsupported_content';
+      const publishedField = single(entry, atom ? 'published' : 'pubDate');
+      // 2026-11-05 orchestrator decision: only absence (not invalidity) of
+      // Atom published permits updated fallback. See README source conditions.
+      const dateField = atom && publishedField === undefined ? single(entry, 'updated') : publishedField;
+      const rawDate = text(dateField);
       const published = date(rawDate, atom);
       const identity = id ? (atom ? 'atom:' : 'guid:') + id : url ? 'url:' + url : 'unidentified:' + await sha256(JSON.stringify(entry));
       need(identity.length <= 2048, 'item_limit');
-      let held = !id && !url ? 'missing_identity' : !url ? 'missing_url' : !content ? 'missing_content' : rawDate && !published ? 'invalid_date' : null;
+      let held = itemHold || (!id && !url ? 'missing_identity' : !url ? 'missing_url' : !content ? 'missing_content' : dateField !== undefined && !published ? 'invalid_date' : null);
       if (content !== null && enc.encode(content).length > LIMITS.itemBytes) held = 'content_too_large';
       items.push({ identity, title, url, content_text: content, content_hash: content === null ? null : await sha256(content), published_at: published,
         ...(held ? { hold_reason: held } : {}) });
@@ -150,8 +156,8 @@ export async function readBounded(response, limit) {
     try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (_) { throw failure('invalid_feed'); }
   } finally { try { await reader.cancel(); } catch (_) { /* consumed */ } reader.releaseLock(); }
 }
-export async function collect({ url, cursor = null, parse, fetcher = fetch, allowedHosts = ALLOWED_HOSTS, signal }) {
-  const initial = safeURL(url, allowedHosts); let next = cursor || initial, bytes = 0; const items = [], visited = new Set();
+export async function collect({ url, cursor = null, active = false, known, parse, fetcher = fetch, allowedHosts = ALLOWED_HOSTS, signal }) {
+  const initial = safeURL(url, allowedHosts); let next = active ? initial : cursor || initial, bytes = 0; const items = [], visited = new Set();
   for (let page = 0; page < LIMITS.pages && next; page++) {
     const attempted = next;
     try {
@@ -167,6 +173,12 @@ export async function collect({ url, cursor = null, parse, fetcher = fetch, allo
     const parsed = await parse(xml, current);
     need(items.length + parsed.items.length <= LIMITS.items, 'item_limit');
     items.push(...parsed.items); next = parsed.next;
+    if (active && parsed.items.length && typeof known === 'function') {
+      const identities = [...new Set(parsed.items.map(item => item.identity))];
+      const observed = await known(identities);
+      need(Array.isArray(observed) && observed.length <= identities.length && observed.every(id => identities.includes(id)), 'server_error');
+      if (identities.every(id => !id.startsWith('unidentified:') && observed.includes(id))) next = null;
+    }
     if (next) { safeURL(next, allowedHosts); need(new URL(next).origin === new URL(initial).origin && !visited.has(next), 'blocked_url'); }
     } catch (error) {
       if (!items.length) throw error;

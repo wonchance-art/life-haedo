@@ -62,7 +62,7 @@ begin
 end$$;
 create function haedo_rss_private.list(p_workspace_id uuid,p_before jsonb default null) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $$
-declare who uuid:=auth.uid();cs jsonb;its jsonb;ready boolean;has_more boolean;cursor_time timestamptz;cursor_id uuid;last_row jsonb;row_data jsonb;q record;page_bytes bigint:=0;
+declare who uuid:=auth.uid();cs jsonb;others jsonb;its jsonb;ready boolean;has_more boolean;cursor_time timestamptz;cursor_id uuid;last_row jsonb;row_data jsonb;q record;page_bytes bigint:=0;
 begin
  if who is null then raise exception using errcode='42501',message='rss_auth_required';end if;
  if p_workspace_id is null then raise exception using errcode='22023',message='rss_invalid_workspace';end if;
@@ -73,6 +73,7 @@ begin
   if cursor_time is null or cursor_id is null or not isfinite(cursor_time) then raise exception using errcode='22023',message='rss_invalid_cursor';end if;
  end if;
  select coalesce(jsonb_agg(haedo_rss_private.view_connection(c) order by c.id),'[]') into cs from haedo_rss_private.connections c where owner_id=who and workspace_id=p_workspace_id;
+ select coalesce(jsonb_agg(haedo_rss_private.view_connection(c) order by c.id),'[]') into others from haedo_rss_private.connections c where owner_id=who and workspace_id<>p_workspace_id and status<>'disconnected';
  its:='[]';has_more:=false;
  for q in select i.* from haedo_rss_private.items i join haedo_rss_private.connections c on c.id=i.connection_id
  where c.owner_id=who and c.workspace_id=p_workspace_id and (p_before is null or (i.fetched_at,i.id)>(cursor_time,cursor_id)) order by i.fetched_at,i.id limit 101 loop
@@ -85,7 +86,7 @@ begin
  end loop;
  if has_more then last_row:=its->(jsonb_array_length(its)-1);end if;
  select r.ready into ready from haedo_rss_private.runtime r where singleton;
- return jsonb_build_object('connections',cs,'items',its,'ready',coalesce(ready,false),'has_more',has_more,'next_cursor',case when has_more then jsonb_build_object('fetched_at',last_row->'fetched_at','id',last_row->'id') else null end);
+ return jsonb_build_object('connections',cs,'other_connections',others,'items',its,'ready',coalesce(ready,false),'has_more',has_more,'next_cursor',case when has_more then jsonb_build_object('fetched_at',last_row->'fetched_at','id',last_row->'id') else null end);
 end$$;
 create function haedo_rss_private.control(p_connection_id uuid,p_expected_revision bigint,p_action text) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $$
@@ -126,7 +127,7 @@ begin
  and feed_url=any((select allowed_feed_urls from haedo_rss_private.runtime where singleton)::text[]) and status in('pending','active') and next_check_at<=clock_timestamp() and (lease_until is null or lease_until<=clock_timestamp()) for update skip locked;
  if not found then return null;end if;
  update haedo_rss_private.connections set baseline_started_at=coalesce(baseline_started_at,clock_timestamp()),lease_token=gen_random_uuid(),lease_until=clock_timestamp()+interval '2 minutes' where id=c.id returning * into c;
- return to_jsonb(c)||jsonb_build_object('connection_id',c.id);
+ return to_jsonb(c)||jsonb_build_object('connection_id',c.id,'cursor',case when c.status='active' then null else c.cursor end);
 end$$;
 create function haedo_rss_private.finish(p_connection_id uuid,p_lease_token uuid,p_revision bigint,p_items jsonb,p_next_cursor text,p_complete boolean,p_error text) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $$
@@ -152,7 +153,7 @@ begin
    or jsonb_typeof(item->'identity')<>'string' or char_length(item->>'identity') not between 1 and 2048
    or jsonb_typeof(item->'title')<>'string' or char_length(item->>'title') not between 1 and 400 or btrim(item->>'title')=''
    or (item->'url'<>'null'::jsonb and (jsonb_typeof(item->'url')<>'string' or octet_length(item->>'url')>2048 or item->>'url' !~ '^https?://[^/@?#[:space:]]+'))
-   or (item->>'hold_reason' is not null and item->>'hold_reason' not in('missing_identity','identity_conflict','invalid_date','content_too_large','missing_url','missing_content')) then raise exception using errcode='22023',message='rss_invalid_item';end if;
+   or (item->>'hold_reason' is not null and item->>'hold_reason' not in('missing_identity','identity_conflict','invalid_date','content_too_large','missing_url','missing_content','unsupported_content','ambiguous_links')) then raise exception using errcode='22023',message='rss_invalid_item';end if;
   if item->'content_text'='null'::jsonb then
    if item->'content_hash'<>'null'::jsonb then raise exception using errcode='22023',message='rss_invalid_hash';end if;
   elsif jsonb_typeof(item->'content_text')<>'string' or octet_length(item->>'content_text')>2097152 or item->>'content_hash' is distinct from encode(sha256(convert_to(item->>'content_text','UTF8')),'hex') then raise exception using errcode='22023',message='rss_invalid_hash';end if;
@@ -184,11 +185,11 @@ begin
   get diagnostics n=row_count;if reason is null then inserted:=inserted+n;else held:=held+n;end if;
  end loop;
  update haedo_rss_private.connections set lease_token=null,lease_until=null,last_checked_at=stamp,last_error=p_error,
- cursor=case when p_complete then null when p_next_cursor is not null then p_next_cursor else cursor end,
+ cursor=case when status='active' or p_complete then null when p_next_cursor is not null then p_next_cursor else cursor end,
  baseline_count=(select count(*) from haedo_rss_private.observations where connection_id=c.id and baseline),
  baseline_at=case when baseline_at is null and p_complete then stamp else baseline_at end,
  status=case when baseline_at is null and p_complete then 'preview' else status end,
- next_check_at=stamp+interval '60 minutes'
+ next_check_at=case when status='pending' and not p_complete and p_error is null then stamp else stamp+interval '60 minutes' end
  where id=c.id returning * into c;
  result:=jsonb_build_object('status',case when p_error is not null then 'error' when p_complete then 'stored' else 'partial' end,'inserted',inserted,'held',held,'baseline_count',c.baseline_count,'cursor',c.cursor);
  insert into haedo_rss_private.receipts values(c.id,p_lease_token,request_hash,result);
@@ -201,8 +202,20 @@ begin
  if p_limit is null or p_limit not between 1 and 2 then raise exception using errcode='22023',message='rss_invalid_limit';end if;
  return (select coalesce(jsonb_agg(jsonb_build_object('connection_id',id,'owner_id',owner_id,'workspace_id',workspace_id)),'[]') from (
  select c.* from haedo_rss_private.connections c join haedo_rss_private.runtime r on r.singleton and r.ready
- where c.status='active' and c.feed_url=any(r.allowed_feed_urls) and c.next_check_at<=clock_timestamp() and (c.lease_until is null or c.lease_until<=clock_timestamp()) order by c.next_check_at,c.id limit p_limit) q);
+ where c.status in('pending','active') and c.feed_url=any(r.allowed_feed_urls) and c.next_check_at<=clock_timestamp() and (c.lease_until is null or c.lease_until<=clock_timestamp()) order by c.next_check_at,c.id limit p_limit) q);
 end$$;
+-- Bounded observation lookup for the current page: never transmit the entire
+-- lifetime identity set. Worker commit still requires its independent lease.
+create function haedo_rss_private.known(p_connection_id uuid,p_owner_id uuid,p_identities jsonb) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $$
+begin
+ if p_connection_id is null or p_owner_id is null or p_identities is null or jsonb_typeof(p_identities)<>'array' or jsonb_array_length(p_identities)>100
+ or exists(select 1 from jsonb_array_elements(p_identities) v where jsonb_typeof(v)<>'string' or char_length(v#>>'{}') not between 1 and 2048) then raise exception using errcode='22023',message='rss_invalid_identities';end if;
+ if not exists(select 1 from haedo_rss_private.connections c join haedo_rss_private.runtime r on r.singleton and r.ready
+ where c.id=p_connection_id and c.owner_id=p_owner_id and c.status='active' and c.feed_url=any(r.allowed_feed_urls)) then return '[]'::jsonb;end if;
+ return (select coalesce(jsonb_agg(identity order by identity),'[]') from haedo_rss_private.observations where connection_id=p_connection_id and identity in(select v#>>'{}' from jsonb_array_elements(p_identities) v));
+end$$;
+create function public.life_rss_known(p_connection_id uuid,p_owner_id uuid,p_identities jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_rss_private.known(p_connection_id,p_owner_id,p_identities)$$;
 create function public.life_rss_due(p_limit integer default 2) returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_rss_private.due(p_limit)$$;
 create function public.life_rss_save(p_workspace_id uuid,p_feed_url text) returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_rss_private.save(p_workspace_id,p_feed_url)$$;
 create function public.life_rss_list(p_workspace_id uuid,p_before jsonb default null) returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_rss_private.list(p_workspace_id,p_before)$$;
@@ -215,5 +228,7 @@ grant execute on function haedo_rss_private.save(uuid,text),haedo_rss_private.li
 grant execute on function haedo_rss_private.claim(uuid,uuid),haedo_rss_private.finish(uuid,uuid,bigint,jsonb,text,boolean,text),public.life_rss_claim(uuid,uuid),public.life_rss_finish(uuid,uuid,bigint,jsonb,text,boolean,text) to service_role;
 revoke all on function public.life_rss_due(integer) from public,anon,authenticated,service_role;
 grant execute on function haedo_rss_private.due(integer),public.life_rss_due(integer) to service_role;
+revoke all on function public.life_rss_known(uuid,uuid,jsonb) from public,anon,authenticated,service_role;
+grant execute on function haedo_rss_private.known(uuid,uuid,jsonb),public.life_rss_known(uuid,uuid,jsonb) to service_role;
 notify pgrst,'reload schema';
 commit;

@@ -21,13 +21,14 @@ function fixture(options={}) {
     if(endpoint.endsWith('/auth/v1/user'))return options.authFailure?new Response('',{status:401}):json({id:ids.owner});
     if(endpoint.startsWith('https://'+host))return options.feedFailure?new Response('',{status:500}):new Response(rss());
     const name=endpoint.split('/').at(-1),args=JSON.parse(init.body||'{}');
-    if(options.rpcError===name)return new Response(JSON.stringify({message:'rss_conflict'}),{status:409});
+    if(options.rpcError===name)return new Response(JSON.stringify({message:options.rpcErrorCode||'rss_conflict'}),{status:options.rpcStatus||409});
     if(name==='life_rss_list')return json(state);
     if(name==='life_rss_save')return json(connection);
     if(name==='life_rss_control'){connection.status=args.p_action==='pause'?'paused':args.p_action==='disconnect'?'disconnected':'active';connection.revision++;return json(connection);}
     if(name==='life_rss_due')return json([{connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace}]);
-    if(name==='life_rss_claim')return json(options.claimNull?null:{connection_id:ids.connection,owner_id:options.wrongOwner?'55555555-5555-4555-8555-555555555555':ids.owner,workspace_id:ids.workspace,feed_url:options.claimURL||url,revision:1,lease_token:ids.lease,cursor:null});
-    if(name==='life_rss_finish'){state.items=args.p_items;connection.last_error=args.p_error;return json({status:args.p_error?'error':args.p_complete?'stored':'partial',inserted:args.p_items.length,held:0});}
+    if(name==='life_rss_known')return json([]);
+    if(name==='life_rss_claim')return json(options.claimNull?null:{connection_id:ids.connection,owner_id:options.wrongOwner?'55555555-5555-4555-8555-555555555555':ids.owner,workspace_id:ids.workspace,status:connection.status,feed_url:options.claimURL||url,revision:1,lease_token:ids.lease,cursor:null});
+    if(name==='life_rss_finish'){state.items=args.p_items;connection.last_error=args.p_error;return json({status:options.finishStatus||(args.p_error?'error':args.p_complete?'stored':'partial'),inserted:args.p_items.length,held:0});}
     throw Error('Unexpected fake endpoint '+endpoint);
   };
   return {calls,environment,fetcher,state};
@@ -45,11 +46,12 @@ test('RSS preserves opaque guid, exact decoded body/hash and URL parameters; nev
   assert.equal(item.content_hash,crypto.createHash('sha256').update(item.content_text).digest('hex'));
   assert.equal(item.url,'https://'+host+'/post/001?exact=1&x=2');assert.equal(result.next,null);
 });
-test('Atom published is distinct from updated and XHTML is not silently reduced',async()=>{
+test('Atom absent published uses updated; invalid published never falls back and XHTML is held',async()=>{
   const parse=await parser();
   const atom='<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>urn:tag:0001</id><title>한글</title><link href="/one"/><content type="html">&lt;p&gt;본문&lt;/p&gt;</content><updated>2026-11-05T01:00:00Z</updated></entry><link rel="next" href="/page2"/></feed>';
-  const result=await parse(atom,url);assert.equal(result.items[0].identity,'atom:urn:tag:0001');assert.equal(result.items[0].published_at,null);assert.equal(result.items[0].content_text,'<p>본문</p>');assert.equal(result.next,'https://'+host+'/page2');
-  await assert.rejects(parse(atom.replace('type="html"','type="xhtml"'),url),{code:'invalid_feed'});
+  const result=await parse(atom,url);assert.equal(result.items[0].identity,'atom:urn:tag:0001');assert.equal(result.items[0].published_at,'2026-11-05T01:00:00.000Z');assert.equal(result.items[0].content_text,'<p>본문</p>');assert.equal(result.next,'https://'+host+'/page2');
+  const invalid=await parse(atom.replace('<updated>','<published>invalid</published><updated>'),url);assert.equal(invalid.items[0].published_at,null);assert.equal(invalid.items[0].hold_reason,'invalid_date');
+  const held=await parse(atom.replace('type="html"','type="xhtml"'),url);assert.equal(held.items[0].hold_reason,'unsupported_content');assert.equal(held.items[0].content_text,null);
   await assert.rejects(parse(atom.replace('<entry>','<entry xml:base="https://feed.fixture.invalid/articles/">'),url),{code:'invalid_feed'});
   await assert.rejects(parse(atom.replace('<feed xmlns=','<feed xml:base="https://feed.fixture.invalid/articles/" xmlns='),url),{code:'invalid_feed'});
 });
@@ -68,7 +70,9 @@ test('duplicate IDs with different content or link are all held; unchanged ID is
 });
 test('DTD/entity expansion, malformed XML, excessive depth and unsupported encoding fail closed',async()=>{
   const parse=await parser();
-  for(const xml of ['<!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]>'+rss(),rss().replace('</channel>',''),'<a>'.repeat(40)+'</a>'.repeat(40),'<?xml version="1.0" encoding="iso-8859-1"?>'+rss(),rss('<item><guid>&evil;</guid></item>'),rss('<item><guid>&#0;</guid></item>'),rss('<item><guid>&#xD800;</guid></item>')])await assert.rejects(parse(xml,url),{code:'invalid_feed'});
+  for(const xml of ['<!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]>'+rss(),'<!DOCTYPE rss>'+rss(),rss().replace('</channel>',''),'<a>'.repeat(40)+'</a>'.repeat(40),rss('<metadata>'+'<a>'.repeat(40)+'value'+'</a>'.repeat(40)+'</metadata>'),'<?xml version="1.0" encoding="iso-8859-1"?>'+rss(),rss('<item><guid>&evil;</guid></item>'),rss('<item><guid>&#0;</guid></item>'),rss('<item><guid>&#xD800;</guid></item>')])await assert.rejects(parse(xml,url),{code:'invalid_feed'});
+  const entities=['<!ENTITY lol "lol">',...Array.from({length:9},(_,i)=>`<!ENTITY lol${i+1} "${('&lol'+(i||'')+';').repeat(10)}">`)];
+  await assert.rejects(parse('<!DOCTYPE rss ['+entities.join('')+']>'+rss('<item><guid>x</guid><description>&lol9;</description></item>'),url),{code:'invalid_feed'});
 });
 test('per-feed 2MiB and 100 item budgets fail without truncation; >1MiB content held',async()=>{
   const parse=await parser();await assert.rejects(parse('x'.repeat(2*1024*1024+1),url),{code:'feed_too_large'});
@@ -132,8 +136,81 @@ test('pagination passes exact bounded cursor; paused and not-due polls never fet
   const [,h,xml]=await modules,fx=fixture({claimNull:true}),handler=h.createHandler({...fx,...xml,allowedHosts:[host]});
   const before={fetched_at:'2026-11-05T01:00:00Z',id:ids.lease};
   await handler(request({action:'list',workspaceId:ids.workspace,before}));assert.deepEqual(JSON.parse(fx.calls.at(-1).init.body).p_before,before);
-  assert.equal((await handler(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}))).status,200);assert.ok(!fx.calls.some(x=>x.endpoint.startsWith('https://'+host)));
+  const notDue=await handler(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));assert.equal(notDue.status,200);assert.equal((await notDue.json()).execution.status,'not_due');assert.ok(!fx.calls.some(x=>x.endpoint.startsWith('https://'+host)));
   const paused=fixture({status:'paused'});assert.equal((await h.createHandler({...paused,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}))).status,400);
+});
+test('unsupported Atom content and ambiguous alternate links hold only those entries',async()=>{
+  const parse=await parser();
+  const good='<entry><id>good</id><link href="/good"/><content type="text">본문</content><published>2026-11-05T01:00:00Z</published></entry>';
+  const bad=good.replace('<id>good</id>','<id>xhtml</id>').replace('<content type="text">본문</content>','<content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>본문</p></div></content>');
+  const ambiguous=good.replace('<id>good</id>','<id>ambiguous</id>').replace('<link href="/good"/>','<link href="/one"/><link href="/two"/>');
+  const {items}=await parse('<feed xmlns="http://www.w3.org/2005/Atom">'+bad+good+ambiguous+'</feed>',url);
+  assert.equal(items.length,3);assert.equal(items[0].hold_reason,'unsupported_content');assert.equal(items[1].hold_reason,undefined);assert.equal(items[2].hold_reason,'ambiguous_links');assert.equal(items[2].url,null);
+});
+test('next cannot cross to a second allowed host, and active checks always begin at head',async()=>{
+  const [f]=await modules,parse=await parser();const calls=[];
+  const result=await f.collect({url,cursor:'https://'+host+'/page19',active:true,known:async()=>[],parse,allowedHosts:[host,'second.fixture.invalid'],fetcher:async(u)=>{calls.push(u);return new Response(rss(entry(),'https://second.fixture.invalid/next'));}});
+  assert.deepEqual(calls,[url]);assert.equal(result.error,'blocked_url');assert.equal(result.complete,false);
+});
+test('active known-ID boundary stops pagination but still captures changed content; unidentified rows do not stop',async()=>{
+  const [f]=await modules,parse=await parser(),calls=[];
+  const result=await f.collect({url,active:true,cursor:'https://'+host+'/page19',known:async(ids)=>ids,parse,allowedHosts:[host],fetcher:async(u)=>{calls.push(u);return new Response(rss(entry().replace('정확한','수정한'),'/page2'));}});
+  assert.equal(calls.length,1);assert.equal(result.complete,true);assert.equal(result.cursor,null);assert.match(result.items[0].content_text,/수정한/);
+  let unidentifiedCalls=0;
+  await f.collect({url,active:true,known:async(ids)=>ids,parse,allowedHosts:[host],fetcher:async()=>new Response(rss('<item><title>미상</title><description>본문</description></item>',++unidentifiedCalls===1?'/page2':''))});
+  assert.equal(unidentifiedCalls,2);
+});
+test('all supported SQL errors preserve their meaning, including rss_not_found with HTTP403',async()=>{
+  const [,h,xml]=await modules;
+  for(const code of ['rss_retry_limit','rss_invalid_feed','rss_connection_exists','rss_not_found']){
+    const fx=fixture({rpcError:'life_rss_control',rpcErrorCode:code,rpcStatus:code==='rss_not_found'?403:409});
+    const res=await h.createHandler({...fx,...xml,allowedHosts:[host]})(request({action:'pause',workspaceId:ids.workspace,connectionId:ids.connection,expectedRevision:1}));
+    assert.equal((await res.json()).error,code);
+  }
+  const fx=fixture({finishStatus:'stale'}),res=await h.createHandler({...fx,...xml,allowedHosts:[host]})(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));assert.equal((await res.json()).execution.status,'stale');
+});
+test('caller cancellation stops collection but finish still uses an independent bounded signal',async()=>{
+  const [,h,xml]=await modules,fx=fixture(),controller=new AbortController();let recorded=false;
+  const fetcher=async(endpoint,init)=>{
+    if(endpoint.startsWith('https://'+host)){controller.abort();assert.equal(init.signal.aborted,true);throw Error('caller disconnected');}
+    if(endpoint.endsWith('life_rss_finish')){assert.equal(init.signal.aborted,false);assert.notEqual(init.signal,controller.signal);recorded=true;}
+    return fx.fetcher(endpoint,init);
+  };
+  const req=new Request('https://edge.fixture.invalid/haedo-rss',{method:'POST',headers:{Authorization:'Bearer user-jwt','Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection})});
+  await h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]})(req);assert.equal(recorded,true);
+});
+test('other-workspace connection status survives the actual Edge snapshot boundary',async()=>{
+  const [,h,xml]=await modules,fx=fixture();
+  const other={...fx.state.connections[0],workspace_id:'55555555-5555-4555-8555-555555555555'};
+  fx.state.connections=[];fx.state.other_connections=[other];
+  const result=await h.createHandler({...fx,...xml,allowedHosts:[host]})(request({action:'list',workspaceId:ids.workspace}));
+  assert.equal(result.status,200);const data=await result.json();assert.deepEqual(data.other_connections,[other]);assert.deepEqual(data.connections,[]);
+});
+test('20-page baseline completes via scheduler alone and the next active run captures a new head item',async()=>{
+  const [,h,xml]=await modules,fx=fixture(),seen=new Set(),calls=[];let status='pending',cursor=null,newHead=false,stored=[];
+  const fetcher=async(endpoint,init)=>{
+    if(endpoint.startsWith('https://'+host)){
+      calls.push(endpoint);const page=endpoint===url?1:Number(new URL(endpoint).pathname.slice(5));
+      return new Response(rss((newHead&&page===1?entry('fresh'): '')+entry('old'+page),page<20?'/page'+(page+1):''));
+    }
+    const name=endpoint.split('/').at(-1),args=JSON.parse(init.body||'{}');
+    if(name==='life_rss_due')return json(status==='preview'?[]:[{connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace}]);
+    if(name==='life_rss_claim')return json({connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace,feed_url:url,status,cursor,revision:1,lease_token:ids.lease});
+    if(name==='life_rss_known')return json(args.p_identities.filter(id=>seen.has(id)));
+    if(name==='life_rss_finish'){
+      if(status==='active')stored.push(...args.p_items.filter(item=>!seen.has(item.identity)));
+      for(const item of args.p_items)seen.add(item.identity);
+      cursor=args.p_next_cursor;if(status==='pending'&&args.p_complete)status='preview';
+      return json({status:args.p_complete?'stored':'partial',inserted:0,held:0});
+    }
+    return fx.fetcher(endpoint,init);
+  };
+  const handler=h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]});
+  for(let n=0;n<10;n++){const res=await handler(request({action:'run'},{apikey:'sb_secret_fixture_server'}));assert.equal(res.status,200);}
+  assert.equal(status,'preview');assert.equal(seen.size,20);assert.equal(calls.length,20);
+  status='active';cursor='https://'+host+'/page19';newHead=true;calls.length=0;
+  assert.equal((await handler(request({action:'run'},{apikey:'sb_secret_fixture_server'}))).status,200);
+  assert.equal(calls[0],url);assert.equal(calls.length,2);assert.deepEqual(stored.map(x=>x.identity),['guid:fresh']);assert.equal(cursor,null);
 });
 test('retry actually collects after revision-checked control instead of only rescheduling',async()=>{
   const [,h,xml]=await modules,fx=fixture(),handler=h.createHandler({...fx,...xml,allowedHosts:[host]});

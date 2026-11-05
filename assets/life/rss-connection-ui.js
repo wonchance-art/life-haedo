@@ -2,7 +2,9 @@
 (function (root) {
   'use strict';
   const STATES = { pending: '기준 목록 확인 전', preview: '새 글 수집 시작 전', active: '새 글 수집 설정됨', paused: '수집 중지됨', disconnected: '연결 해제됨' };
-  const REASONS = { identity_conflict: '식별자가 겹쳐 확인 필요', date_unknown: '발행일 확인 필요', old_observed: '이전에 발행된 글', future_date: '발행일 확인 필요', content_too_large: '본문이 자료 보관 한도를 넘음' };
+  const REASONS = { identity_conflict: '식별자가 겹쳐 확인 필요', date_unknown: '발행일 확인 필요', old_observed: '이전에 발행된 글', future_date: '발행일 확인 필요', content_too_large: '본문이 자료 보관 한도를 넘음',
+    missing_url: '원문 주소 확인 필요', missing_content: '본문을 받지 못함', invalid_date: '발행일 형식 확인 필요', missing_identity: '항목 식별자 확인 필요',
+    unsupported_content: '지원하지 않는 본문 형식', ambiguous_links: '원문 주소가 여러 개여서 확인 필요' };
   function node(tag, text, className) {
     const value = root.document.createElement(tag);
     if (text !== undefined) value.textContent = text;
@@ -62,7 +64,21 @@
     function paint() {
       rows.replaceChildren(); items.replaceChildren(); reader.replaceChildren(); reader.hidden = true;
       status.textContent = page.configured ? '연결 상태를 확인했습니다.' : 'RSS 연결을 준비 중입니다. 피드 주소가 확정되면 연결할 수 있습니다.';
+      if (page.execution?.status === 'not_due') status.textContent = root.HaedoLife.RssConnection.messages.rss_not_due;
+      else if (page.execution?.status === 'stale') status.textContent = root.HaedoLife.RssConnection.messages.rss_stale;
+      else if (page.execution?.status === 'busy') status.textContent = root.HaedoLife.RssConnection.messages.rss_busy;
+      else if (page.execution?.status === 'error') status.textContent = '이번 확인을 마치지 못했습니다. 기존 자료는 유지됩니다.';
+      else if (page.execution?.status === 'partial') status.textContent = page.connections.some(conn => conn.status === 'pending') ?
+        '기준 목록 일부를 확인했습니다. 나머지 목록을 이어서 확인합니다.' : '이번 확인에서 일부만 받았습니다. 다음 확인 때 새 글부터 다시 살핍니다.';
+      if (page.execution?.error) { error.textContent = root.HaedoLife.RssConnection.messages[page.execution.error] || root.HaedoLife.RssConnection.messages.rss_network_error; error.hidden = false; }
       if (page.receiveError) { error.textContent = page.receiveError; error.hidden = false; }
+      for (const conn of page.otherConnections || []) {
+        const elsewhere = node('section'); elsewhere.dataset.rssOtherConnection = conn.id;
+        const address = node('p', conn.feed_url, 'life-meta'); address.style.overflowWrap = 'anywhere';
+        elsewhere.append(node('p', '다른 자료공간의 RSS 연결 · ' + STATES[conn.status]), address,
+          node('p', '기존 연결의 자료공간에서 수집 상태를 변경할 수 있습니다.', 'life-help'));
+        rows.append(elsewhere);
+      }
       for (const conn of page.connections) {
         const line = node('section'); line.dataset.rssConnection = conn.id;
         const address = node('p', conn.feed_url, 'life-meta'); address.style.overflowWrap = 'anywhere';
@@ -77,7 +93,11 @@
         if (conn.last_error && conn.status !== 'disconnected') actions.push(['retry', '다시 시도']);
         if (conn.status !== 'disconnected') actions.push(['disconnect', '연결 해제']);
         for (const [action, text] of actions) {
-          const control = button(text, () => run(progress => service.action(action, conn, progress))); control.dataset.rssAction = action;
+          const control = button(text, () => {
+            if (busy || !current()) return;
+            if (action === 'disconnect' && !root.confirm('받은 자료는 그대로 유지됩니다. 다시 연결하면 기준 목록부터 새로 만듭니다. 연결을 해제할까요?')) return;
+            run(progress => service.action(action, conn, progress));
+          }); control.dataset.rssAction = action;
           line.append(control);
         }
         if (conn.status === 'disconnected') line.append(node('p', '수집은 멈췄습니다. 이미 보관한 자료는 유지됩니다.', 'life-help'));

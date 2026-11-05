@@ -135,3 +135,27 @@ test('known setup failures show safe text and never expose arbitrary backend err
   f.auth.client.functions.invoke = async () => ({ error: { message: 'private token:secret' } });
   await assert.rejects(f.service.list(), error => error.message === Rss.messages.rss_network_error);
 });
+test('dedicated feed errors survive HTTP errors without treating a missing connection as login failure', async () => {
+  for (const code of ['rss_retry_limit', 'rss_invalid_feed', 'rss_connection_exists', 'rss_not_found']) {
+    const f = fixture();
+    f.auth.client.functions.invoke = async () => ({ error: { status: 403, context: { async json() { return { error: code }; } } } });
+    await assert.rejects(f.service.list(), error => error.code === code && error.message === Rss.messages[code]);
+  }
+  assert.match(Rss.messages.rss_retry_limit, /1시간에 2회/);
+  assert.doesNotMatch(Rss.messages.rss_not_found, /로그인/);
+});
+test('unexecuted collection status is preserved through pagination and does not become success', async () => {
+  for (const status of ['not_due', 'stale']) {
+    const f = fixture(); f.page.execution = { status, credential: 'must-not-leak' };
+    const result = await f.service.action('poll', f.conn);
+    assert.deepEqual(result.execution, { status }); assert.equal(f.commits, 0);
+  }
+});
+test('other workspace connections are read-only metadata and cannot justify wrong-workspace item projection', async () => {
+  const f = fixture(), other = { ...f.conn, id: Core.id(), workspace_id: Core.id() };
+  f.page.connections = []; f.page.other_connections = [other];
+  const snapshot = await f.service.list();
+  assert.equal(snapshot.otherConnections[0].status, 'active'); assert.equal(f.commits, 0);
+  f.page.items = [f.item({ connection_id: other.id })];
+  await assert.rejects(f.service.list(), { code: 'rss_invalid_data' }); assert.equal(f.commits, 0);
+});

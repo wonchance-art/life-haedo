@@ -9,7 +9,7 @@ const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const need = (ok, code = 'invalid_request') => { if (!ok) throw failure(code); };
 const ERRORS = new Set(['invalid_request','unauthorized','setup_required','server_error','blocked_url','invalid_feed',
   'feed_too_large','item_limit','network_error','rate_limited','revision_conflict','connection_not_found','baseline_required','not_due',
-  'rss_conflict','rss_setup_required','rss_connection_exists','rss_baseline_required','rss_not_active','rss_not_paused','rss_retry_unavailable','rss_not_found','rss_auth_required']);
+  'rss_conflict','rss_setup_required','rss_connection_exists','rss_baseline_required','rss_not_active','rss_not_paused','rss_retry_unavailable','rss_retry_limit','rss_invalid_feed','rss_not_found','rss_auth_required']);
 function same(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string' || !right.length || left.length !== right.length) return false;
   let mismatch = 0; for (let i = 0; i < right.length; i++) mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i); return !mismatch;
@@ -49,32 +49,34 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       const { server, publicKey } = supabaseKeys(environment); need(server && publicKey, 'setup_required');
       const token = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
       const origin = project.origin;
-      const call = async (path, headers, body, max = 8 * 1024 * 1024) => {
+      const call = async (path, headers, body, max = 8 * 1024 * 1024, detached = false) => {
         const url = origin + path;
         let res; try { res = await fetcher(url, { method: body === undefined ? 'GET' : 'POST', redirect: 'error',
-          signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]), headers: { ...headers, 'Content-Type': 'application/json' },
+          signal: detached ? AbortSignal.timeout(10000) : AbortSignal.any([request.signal, AbortSignal.timeout(10000)]), headers: { ...headers, 'Content-Type': 'application/json' },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); } catch (_) { throw failure('server_error'); }
         if (res.redirected || res.url && res.url !== url) { await res.body?.cancel(); throw failure('server_error'); }
         if (!res.ok) {
           let code = 'server_error';
           if ([401,403].includes(res.status)) code = 'unauthorized';
-          else try { const error = JSON.parse(await readBounded(res, 4096)); if (ERRORS.has(error.message)) code = error.message; } catch (_) { /* never expose upstream text */ }
+          try { const error = JSON.parse(await readBounded(res, 4096)); if (ERRORS.has(error.message)) code = error.message; } catch (_) { /* never expose upstream text */ }
           await res.body?.cancel(); throw failure(code);
         }
         let result; try { result = JSON.parse(await readBounded(res, max)); } catch (_) { throw failure('server_error'); }
         return result;
       };
-      const serviceRPC = (name, args) => call('/rest/v1/rpc/' + name, serverHeaders(server), args);
+      const serviceRPC = (name, args) => call('/rest/v1/rpc/' + name, serverHeaders(server), args, 8 * 1024 * 1024, name === 'life_rss_finish');
       const runConnection = async (id, owner, workspace) => {
         need(allowedHosts.length && typeof XMLParser === 'function', 'setup_required');
         const claim = await serviceRPC('life_rss_claim', { p_connection_id: id, p_owner_id: owner });
         if (claim === null) return { status: 'not_due' };
         need(object(claim) && claim.connection_id === id && claim.owner_id === owner && claim.workspace_id === workspace &&
-          UUID.test(claim.lease_token || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0, 'server_error');
-        let collected = { items: [], cursor: claim.cursor, complete: false }, error = null;
+          ['pending','active'].includes(claim.status) && UUID.test(claim.lease_token || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0, 'server_error');
+        let collected = { items: [], cursor: claim.status === 'active' ? null : claim.cursor, complete: false }, error = null;
         try {
           safeURL(claim.feed_url, allowedHosts);
-          collected = await collect({ url: claim.feed_url, cursor: claim.cursor, parse: createParser({ XMLParser, XMLValidator }), fetcher, allowedHosts, signal: request.signal });
+          collected = await collect({ url: claim.feed_url, cursor: claim.cursor, active: claim.status === 'active',
+            known: identities => serviceRPC('life_rss_known', { p_connection_id: id, p_owner_id: owner, p_identities: identities }),
+            parse: createParser({ XMLParser, XMLValidator }), fetcher, allowedHosts, signal: request.signal });
           error = collected.error || null;
         } catch (caught) { error = ERRORS.has(caught.code) ? caught.code : 'network_error'; }
         const result = await serviceRPC('life_rss_finish', { p_connection_id: id, p_lease_token: claim.lease_token, p_revision: claim.revision,
@@ -103,10 +105,14 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       const snapshot = async before => {
         const data = await userRPC('life_rss_list', { p_workspace_id: input.workspaceId, ...(before ? { p_before: before } : {}) });
         need(object(data) && Array.isArray(data.connections) && Array.isArray(data.items) && typeof data.ready === 'boolean', 'server_error');
+        const others = data.other_connections || [];
+        need(Array.isArray(others) && others.length <= 1 && others.every(c => object(c) && UUID.test(c.id || '') &&
+          UUID.test(c.workspace_id || '') && c.workspace_id !== input.workspaceId), 'server_error');
         return { configured: data.ready && allowedHosts.length > 0, connections: data.connections, items: data.items,
-          has_more: !!data.has_more, next_cursor: data.next_cursor || null };
+          other_connections: others, has_more: !!data.has_more, next_cursor: data.next_cursor || null };
       };
       if (input.action === 'list') return json(await snapshot(input.before));
+      let execution;
       if (input.action === 'register') {
         safeURL(input.url, allowedHosts);
         await userRPC('life_rss_save', { p_workspace_id: input.workspaceId, p_feed_url: input.url });
@@ -117,13 +123,13 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         need(connection, 'connection_not_found');
         if (['preview','poll'].includes(input.action)) {
           need(input.action === 'preview' ? ['preview','draft','pending'].includes(connection.status) : connection.status === 'active', 'invalid_request');
-          await runConnection(input.connectionId, user.id, input.workspaceId);
+          execution = await runConnection(input.connectionId, user.id, input.workspaceId);
         } else {
           await userRPC('life_rss_control', { p_connection_id: input.connectionId, p_expected_revision: input.expectedRevision, p_action: input.action });
-          if (input.action === 'retry') await runConnection(input.connectionId, user.id, input.workspaceId);
+          if (input.action === 'retry') execution = await runConnection(input.connectionId, user.id, input.workspaceId);
         }
       }
-      return json(await snapshot());
+      return json({ ...await snapshot(), ...(execution ? { execution } : {}) });
     } catch (error) {
       const code = ERRORS.has(error?.code) ? error.code : 'server_error';
       return json({ error: code }, code === 'unauthorized' ? 401 : code === 'setup_required' ? 503 : ['invalid_request','blocked_url'].includes(code) ? 400 : code === 'server_error' ? 502 : 409);
