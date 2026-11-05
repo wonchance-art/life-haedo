@@ -1,10 +1,12 @@
 -- 해도 2026-11-02 AI 글 표시 서버 검증 설치 (Supabase SQL Editor에서 한 번에 실행)
--- 생성: node scripts/build-blog-ai-authorship-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
+-- 생성: node scripts/build-blog-ai-authorship-install.mjs — 원본 이력은 유지하고 생성기로 다시 만든다.
 -- 포함 마이그레이션(순서, 원본 sha256):
 --   20261102110000_life_blog_ai_authorship.sql  961c4197103a66dc67a06d745b7be0ccd00ebdcd08a4966b4ba0a58d9572de49
 --
 -- 선행 조건: 20261101-account-sync-install.sql이 적용되어 있어야 한다. 그 설치를 다시 실행하면
--- 같은 두 함수가 이전 정의로 돌아가므로 이 설치도 다시 실행한다.
+-- D2 이전의 같은 두 함수가 이전 정의로 돌아가므로 이 설치도 다시 실행한다.
+-- 후속 Markdown 보존 기준: 20261105051632_life_post_markdown.sql  f4860de28a2010fb90257c3ce587a526c334ef4306d841110705708150edfb62
+-- 검증된 D2 정의가 이미 있으면 이 설치의 이전 함수 재정의는 건너뛴다.
 -- 클라이언트(AI 글 표시를 쓰는 앱 버전)를 배포하기 전에 적용한다.
 --
 -- 안전 장치:
@@ -22,17 +24,45 @@ declare
   n bigint;
   h text;
   before jsonb := '{}'::jsonb;
+  markdown_definitions jsonb := '{}'::jsonb;
 begin
   if to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)') is null
      or to_regprocedure('haedo_blog_private.photo_media(jsonb)') is null then
     raise exception 'apply 20261101-account-sync-install.sql first';
   end if;
+  if to_regprocedure('haedo_blog_private.valid_delta_document(jsonb,uuid)') is not null
+    or to_regprocedure('haedo_blog_private.markdown_no_downgrade()') is not null
+    or to_regprocedure('haedo_blog_private.markdown_publication_requires_parser()') is not null
+    or (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) = '88dd7c33d2a5ad4d0eed2bd708cfd77d'
+    or (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) = 'd872bf11fc983b14e4d61ff36be6932d'
+  then
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_delta_document(jsonb,uuid)')) is distinct from 'da3cbe336718c99fe3601ff518422555' then
+      raise exception 'haedo_blog_private.valid_delta_document differs from the repository definition; nothing was changed';
+    end if;
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) is distinct from '88dd7c33d2a5ad4d0eed2bd708cfd77d' then
+      raise exception 'haedo_blog_private.valid_document differs from the repository definition; nothing was changed';
+    end if;
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) is distinct from 'd872bf11fc983b14e4d61ff36be6932d' then
+      raise exception 'haedo_blog_private.publish differs from the repository definition; nothing was changed';
+    end if;
+    markdown_definitions := markdown_definitions || jsonb_build_object('valid_document', pg_get_functiondef(to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')));
+    markdown_definitions := markdown_definitions || jsonb_build_object('publish', pg_get_functiondef(to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')));
+  else
+    -- A genuinely pre-D2 database still has to match a reviewed predecessor.
+    -- An unknown operator edit is not permission to reinstall an older body.
+    if not coalesce((select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) in ('8cce35f9914421fa48e6f11d2d792156', '012fb393a74efdd11b01ae1d7dd67141', 'da3cbe336718c99fe3601ff518422555'), false) then
+      raise exception 'haedo_blog_private.valid_document differs from the repository definition; nothing was changed';
+    end if;
+    if not coalesce((select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) in ('a16a40d5de9446ba841a76a4300980d0', 'ea61d16bf42dac05db310019e965523a', '17bb2aa6befed545e6cf33158c7c2b06'), false) then
+      raise exception 'haedo_blog_private.publish differs from the repository definition; nothing was changed';
+    end if;
+  end if;
   select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)');
-  if h is null or h not in ('012fb393a74efdd11b01ae1d7dd67141', 'da3cbe336718c99fe3601ff518422555') then
+  if not (markdown_definitions ? 'valid_document') and (h is null or h not in ('012fb393a74efdd11b01ae1d7dd67141', 'da3cbe336718c99fe3601ff518422555')) then
     raise exception 'haedo_blog_private.valid_document differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
   end if;
   select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)');
-  if h is null or h not in ('ea61d16bf42dac05db310019e965523a', '17bb2aa6befed545e6cf33158c7c2b06') then
+  if not (markdown_definitions ? 'publish') and (h is null or h not in ('ea61d16bf42dac05db310019e965523a', '17bb2aa6befed545e6cf33158c7c2b06')) then
     raise exception 'haedo_blog_private.publish differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
   end if;
   for r in
@@ -44,6 +74,7 @@ begin
     before := before || jsonb_build_object(r.relation, n);
   end loop;
 
+  if markdown_definitions = '{}'::jsonb then
   -- ===== 20261102110000_life_blog_ai_authorship.sql =====
   execute $haedo_m1$
 -- Private AI authorship marks in blog documents (2026-11-02, writing-ai-review 묶음 A).
@@ -206,7 +237,7 @@ end $$;
 
 notify pgrst,'reload schema';
 $haedo_m1$;
-
+  end if;
   for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
     execute format('select count(*) from %s', r.relation) into n;
     if n <> r.rows then

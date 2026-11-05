@@ -219,6 +219,13 @@
   function fromV2(doc) {
     if (!doc || doc.format !== 'life-photo-post-v2') throw new TypeError('a life-photo-post-v2 document is required');
     const { ops, ...rest } = doc, result = fromDelta(ops);
+    // A legacy op can apply one inline mark across thousands of line breaks.
+    // The Markdown projection may need more ops than the old single insert.
+    // Reject before returning a candidate; callers must retain the original
+    // rather than migrate a document that cannot pass the unchanged model cap.
+    const projected = parse(result.markdown).ops;
+    const textLength = projected.reduce((total, op) => total + (typeof op.insert === 'string' ? op.insert.length : 0), 0);
+    if (projected.length > 5000 || textLength > 50000) throw fail('본문이나 서식이 많아 이 글을 새 편집기로 바꿀 수 없습니다. 원래 글은 바뀌지 않았습니다.', 'post_markdown_conversion_limit');
     const byId = new Map((doc.photos || []).map(photo => [photo.id, photo]));
     const photos = result.photos.map(id => byId.get(id)).filter(Boolean);
     return { document: { ...structuredClone(rest), format: FORMAT, markdown: result.markdown, photos: structuredClone(photos) },
@@ -226,8 +233,12 @@
   }
   // The same maintained parser as source reading, but only the D2 body grammar.
   // No parser-generated HTML is ever returned or inserted into a document.
-  const LIMITS = Object.freeze({ markdown: 1024 * 1024, tokens: 50000, depth: 20 });
-  const fail = message => Object.assign(new Error(message), { code: 'invalid_post_markdown' });
+  // A valid v2 op may contain all 50,000 characters as empty list lines.
+  // markdown-it needs 6 tokens per such line plus the list wrapper; allow
+  // another 10 tokens per original operation for inline mark boundaries.
+  // Byte/depth limits remain separate; PhotoPost still checks 50k text/5k ops.
+  const LIMITS = Object.freeze({ markdown: 1024 * 1024, tokens: 6 * 50000 + 10 * 5000 + 2, depth: 20 });
+  const fail = (message, code = 'invalid_post_markdown') => Object.assign(new Error(message), { code });
   function parser() {
     const markdownIt = root.markdownit || (typeof require === 'function' && require('../../vendor/markdown-it/markdown-it.umd.min.js'));
     if (typeof markdownIt !== 'function') throw fail('Markdown 읽기 모듈을 불러오지 못했습니다. 새로고침해 주세요.');
@@ -259,6 +270,46 @@
     });
     return pairs;
   }
+  // Delta stores adjacent equal-format strings as one operation, including
+  // ordinary paragraph terminators. Keeping one op per parsed token/line would
+  // exceed the existing 5,000-op limit for a valid multi-line legacy insert.
+  function appendOp(ops, op) {
+    const last = ops.at(-1), before = last?.attributes || {}, next = op.attributes || {};
+    const keys = Object.keys(before);
+    if (typeof last?.insert === 'string' && typeof op.insert === 'string' &&
+      keys.length === Object.keys(next).length && keys.every(key => Object.hasOwn(next, key) && before[key] === next[key])) last.insert += op.insert;
+    else ops.push(op);
+  }
+  // Canonical representation of an already-validated Delta's visible content.
+  // This is a projection helper, never a rewrite of legacy stored operations.
+  // Inline attributes apply to text, block attributes to line endings. Keeping
+  // them separate and sorting attribute keys makes public projection bytes
+  // independent of editor operation boundaries and object insertion order.
+  // Callers retain their original projection if this expansion exceeds its
+  // existing wire limits; this function does not relax any document limits.
+  function normalizeDelta(values) {
+    if (!Array.isArray(values)) throw new TypeError('ops must be an array');
+    const out = []; let pending = false;
+    const sorted = (attrs, keys) => Object.fromEntries(Object.keys(attrs || {}).filter(key => keys.includes(key)).sort().map(key => [key, attrs[key]]));
+    const add = (insert, attrs) => appendOp(out, { insert, ...(Object.keys(attrs).length ? { attributes: attrs } : {}) });
+    for (const op of values) {
+      if (typeof op.insert !== 'string') {
+        if (pending) { add('\n', {}); pending = false; }
+        const p = op.insert.photo;
+        add({ photo: { id: p.id, caption: p.caption, alt: p.alt } }, sorted(op.attributes, Object.keys(op.attributes || {})));
+        continue;
+      }
+      const inline = sorted(op.attributes, ['bold', 'italic', 'underline', 'link', 'author']);
+      const block = sorted(op.attributes, ['header', 'list', 'blockquote', 'align']);
+      const parts = op.insert.split('\n');
+      parts.forEach((part, index) => {
+        if (part) { add(part, inline); pending = true; }
+        if (index < parts.length - 1) { add('\n', block); pending = false; }
+      });
+    }
+    if (pending) add('\n', {});
+    return out;
+  }
   function readInline(children) {
     const ops = [], photos = [], depth = { bold: 0, italic: 0, author: 0 }, pairs = htmlPairs(children);
     let href = null;
@@ -266,9 +317,8 @@
       ...(depth.author ? { author: 'ai' } : {}), ...(href !== null ? { link: href } : {}) });
     const text = value => {
       if (!value) return;
-      const attrs = attributes(), last = ops.at(-1);
-      if (typeof last?.insert === 'string' && JSON.stringify(last.attributes || {}) === JSON.stringify(attrs)) last.insert += value;
-      else ops.push({ insert: value, ...(Object.keys(attrs).length ? { attributes: attrs } : {}) });
+      const attrs = attributes();
+      appendOp(ops, { insert: value, ...(Object.keys(attrs).length ? { attributes: attrs } : {}) });
     };
     children.forEach((token, index) => {
       if (token.level > LIMITS.depth) throw fail('본문 서식이 너무 깊습니다.');
@@ -310,8 +360,9 @@
         if (count > LIMITS.tokens || !block) throw fail('본문 서식을 확인해 주세요.');
         const line = readInline(token.children || []);
         if (line.photos.length && Object.keys(block).length) throw fail('사진은 독립 사진 블록이어야 합니다.');
-        ops.push(...line.ops); photos.push(...line.photos);
-        if (!line.photos.length) ops.push({ insert: '\n', ...(Object.keys(block).length ? { attributes: { ...block } } : {}) });
+        for (const op of line.ops) appendOp(ops, op);
+        photos.push(...line.photos);
+        if (!line.photos.length) appendOp(ops, { insert: '\n', ...(Object.keys(block).length ? { attributes: { ...block } } : {}) });
       } else if (['bullet_list_open', 'ordered_list_open', 'blockquote_open'].includes(token.type)) {
         if (stack.length) throw fail('중첩 목록·인용은 지원하지 않습니다.');
         if (token.type === 'ordered_list_open' && token.attrGet('start') !== null && Number(token.attrGet('start')) !== 1) throw fail('번호 목록은 1부터 시작해 주세요.');
@@ -352,5 +403,5 @@
     return result;
   }
   return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, LIMITS, fromDelta, fromV2, escapeInline,
-    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink });
+    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink, normalizeDelta });
 });

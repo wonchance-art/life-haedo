@@ -9,7 +9,7 @@ npm ci --ignore-scripts
 npm run build
 ```
 
-`entry.mjs` selects the supported vanilla extensions, `package-lock.json` fixes all dependencies, and `build.mjs` generates the minified bundle, runtime licenses and size/SHA manifest. `LICENSES.txt` includes every dependency actually bundled. `tiptap.umd.min.js.LEGAL.txt` preserves esbuild's extracted notices. Do not ship `node_modules`.
+`entry.mjs` selects the supported vanilla extensions, `package-lock.json` fixes all dependencies, and `build.mjs` generates the minified bundle, runtime licenses and size/SHA manifest. `LICENSES.txt` includes every dependency actually bundled. Do not ship `node_modules`.
 
 Only document/paragraph/text, heading 1–2, bold/italic, flat lists, paragraph blockquotes, and undo/redo are used. The adapter adds local photo references, validated HTTP(S) links and AI spans. No React, CollaborationCaret, Markdown/marked, analytics or external runtime requests are included. Markdown parsing/serialization belongs to the existing restricted `PostMarkdown` codec, rather than a second Markdown grammar.
 

@@ -39,21 +39,24 @@ test('validation accepts author "ai" on text in v1 and v2, and rejects every oth
   photo.ops[1].attributes = { align: 'center' }; Photo.validate(photo);
 });
 
-test('a public snapshot drops only the mark, removes an emptied attribute map, and rejects any mark it is given', async () => {
+test('a public snapshot drops only the mark, compacts equivalent runs, and rejects any mark it is given', async () => {
   const value = await withPhoto();
   Photo.validate(value);
   const before = copy({ ...value, photos: value.photos.map(Photo.metadata) });
   const snapshot = Blog.publicSnapshot(value, { photoIds: [value.photos[0].id] });
   assert.equal(hasMark(snapshot.ops), false);
+  // D2 public projections normalize equal runs so equivalent v2/Markdown bodies
+  // have identical wire bytes. Only grouping changes; the literal text and every
+  // remaining style below are still checked, and private copies remain exact.
   assert.deepEqual(snapshot.ops.filter(op => typeof op.insert === 'string'), [
-    { insert: '내가 쓴 앞 문장. ' }, { insert: 'AI가 제안한 문장.' }, { insert: ' 굵은 AI 문장', attributes: { bold: true } }, { insert: '\n' },
-    { insert: '사진 뒤 문장' }, { insert: '\n' }]);
+    { insert: '내가 쓴 앞 문장. AI가 제안한 문장.' }, { insert: ' 굵은 AI 문장', attributes: { bold: true } }, { insert: '\n' },
+    { insert: '사진 뒤 문장\n' }]);
   assert.equal(snapshot.ops.map(op => typeof op.insert === 'string' ? op.insert : '').join(''), value.ops.map(op => typeof op.insert === 'string' ? op.insert : '').join(''));
   assert.deepEqual({ ...value, photos: value.photos.map(Photo.metadata) }, before, 'the private document is unchanged');
   assert.equal(hasMark(value.ops), true);
   const tampered = copy(snapshot); tampered.ops[1].attributes = { author: 'ai' };
   assert.throws(() => Blog.validateSnapshot(tampered), e => e.code === 'invalid_blog_snapshot');
-  // Posts without marks project exactly as before (same keys and order).
+  // Already canonical public runs keep the same keys and order.
   const plain = doc([{ insert: '굵은 글', attributes: { bold: true } }, { insert: '\n', attributes: { header: 2 } }]);
   assert.equal(JSON.stringify(Blog.publicSnapshot(plain).ops), JSON.stringify(plain.ops));
 });

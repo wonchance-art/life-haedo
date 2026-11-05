@@ -43,6 +43,8 @@ const blogPublicCopiesMigration = 'supabase/migrations/20261102120000_life_blog_
 // settle, release, cap, RLS and concurrency cases run in supabase/tests/life-ai-usage.sql
 // and run-sql-replay-postgres.
 const aiUsageMigration = 'supabase/migrations/20261104090000_life_ai_usage.sql';
+// B1 schema/publication guards are exercised by run-post-markdown-sql-postgres.
+const postMarkdownMigration = ['supabase/migrations/20261105051632_life_post_markdown.sql', 'f4860de28a2010fb90257c3ce587a526c334ef4306d841110705708150edfb62'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -78,8 +80,9 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration].sort(),
-      'Exactly the ten legacy and twenty-two reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration, postMarkdownMigration[0]].sort(),
+      'Exactly the ten legacy and twenty-three reviewed additive migrations are required; missing or unknown files are rejected.');
+    assert.equal(hash(await fs.readFile(path.join(root, postMarkdownMigration[0]))), postMarkdownMigration[1], 'Reviewed Markdown migration changed.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);

@@ -142,7 +142,7 @@
         try {
           const doc = await storage.readPhotoPost(post.workspaceId || context.workspaceId, post.id);
           if (!showing(context) || !frame.isConnected) return;
-          const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
+          const embedded = life.PhotoPost.contentOps(doc).find(op => op.insert?.photo)?.insert.photo;
           const photo = doc.photos.find(item => item.id === embedded?.id) || doc.photos[0];
           const blob = photo?.view?.blob ?? photo?.blob;
           if (!blob) return;

@@ -9,8 +9,7 @@ test('supported Markdown parses into explicit blocks, marks and canonical text',
   const parsed = M.parse(raw);
   assert.deepEqual(parsed.ops, [
     { insert: '제목' }, { insert: '\n', attributes: { header: 1 } },
-    { insert: '굵게', attributes: { bold: true } }, { insert: '와 ' }, { insert: '기울임', attributes: { italic: true } }, { insert: '\n' },
-    { insert: '인용' }, { insert: '\n', attributes: { blockquote: true } }, { insert: '둘' }, { insert: '\n', attributes: { blockquote: true } },
+    { insert: '굵게', attributes: { bold: true } }, { insert: '와 ' }, { insert: '기울임', attributes: { italic: true } }, { insert: '\n인용' }, { insert: '\n', attributes: { blockquote: true } }, { insert: '둘' }, { insert: '\n', attributes: { blockquote: true } },
     { insert: '하나' }, { insert: '\n', attributes: { list: 'bullet' } }, { insert: '둘' }, { insert: '\n', attributes: { list: 'bullet' } }
   ]);
   assert.equal(M.canonicalize(parsed.markdown), parsed.markdown);
@@ -58,9 +57,9 @@ test('photo remapping changes references only, retaining caption, alt, AI and im
   const raw = M.fromDelta(ops).markdown;
   const changed = M.remapPhotos(raw, new Map([['a', 'b']]));
   assert.deepEqual(M.parse(changed).photos, ['b']);
-  assert.equal(M.toDelta(changed)[0].insert, '![가짜](haedo-photo:a)');
-  assert.deepEqual(M.toDelta(changed)[2].insert.photo, { id: 'b', alt: '대체\n글', caption: '설명\n& "인용"' });
-  assert.equal(M.toDelta(changed)[3].attributes.author, 'ai');
+  assert.equal(M.toDelta(changed)[0].insert, '![가짜](haedo-photo:a)\n');
+  assert.deepEqual(M.toDelta(changed)[1].insert.photo, { id: 'b', alt: '대체\n글', caption: '설명\n& "인용"' });
+  assert.equal(M.toDelta(changed)[2].attributes.author, 'ai');
   assert.throws(() => M.remapPhotos(raw, {}), { code: 'invalid_post_markdown' });
   assert.throws(() => M.remapPhotos('![](haedo-photo:a)\n\n![](haedo-photo:b)\n', { a: 'c', b: 'c' }), { code: 'invalid_post_markdown' });
   assert.deepEqual(M.toDelta('![](haedo-photo:a)\n'), [{ insert: { photo: { id: 'a', caption: '', alt: '' } } }]);
@@ -74,4 +73,87 @@ test('compatibility projection clones metadata without rewriting the stored Mark
   assert.deepEqual(projected.ops, [{ insert: '글', attributes: { bold: true } }, { insert: '\n' }]);
   projected.attachments[0].title = '수정';
   assert.deepEqual(original, before);
+});
+
+// A single legacy Delta insert can contain thousands of lines. Parsing each
+// paragraph into two operations must not turn a valid old post into >5000 ops.
+for (const lines of [2600, 25000]) test('legacy ' + lines + '-line body stays within the original text/operation limits after conversion', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const legacy = PhotoPost.create(() => 'long-post');
+  legacy.ops = [{ insert: '가\n'.repeat(lines) }];
+  assert.doesNotThrow(() => PhotoPost.validate(legacy));
+  const converted = M.fromV2(legacy).document;
+  const parsed = M.parse(converted.markdown);
+  assert.equal(parsed.ops.length, legacy.ops.length);
+  assert.deepEqual(parsed.ops, legacy.ops);
+  assert.equal(parsed.markdown, converted.markdown);
+  assert.doesNotThrow(() => PhotoPost.validate(converted));
+  assert.equal(PhotoPost.plainText(converted), PhotoPost.plainText(legacy));
+});
+
+test('50,000 empty list lines keep the same single block-format operation and original capacity', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const legacy = PhotoPost.create(() => 'long-list');
+  legacy.ops = [{ insert: '\n'.repeat(50000), attributes: { list: 'bullet' } }];
+  assert.doesNotThrow(() => PhotoPost.validate(legacy));
+  const converted = M.fromV2(legacy).document;
+  assert.deepEqual(M.toDelta(converted.markdown), legacy.ops);
+  assert.doesNotThrow(() => PhotoPost.validate(converted));
+});
+
+test('conversion that exceeds existing operation capacity fails before returning or changing the legacy document', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const legacy = PhotoPost.create(() => 'styled-long');
+  legacy.ops = [{ insert: 'a\n'.repeat(3000), attributes: { bold: true } }];
+  const before = structuredClone(legacy);
+  assert.doesNotThrow(() => PhotoPost.validate(legacy));
+  assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+  assert.deepEqual(legacy, before);
+  assert.doesNotThrow(() => PhotoPost.validate(legacy));
+});
+
+test('Delta projection normalization preserves semantic marks, block formats and photo attributes without mutating input', () => {
+  const raw = [
+    { insert: '가', attributes: { link: 'https://example.org', underline: true, bold: true, align: 'center' } },
+    { insert: '나\n', attributes: { bold: true, align: 'center', underline: true, link: 'https://example.org' } },
+    { insert: '다\n라\n' },
+    { insert: '사진 앞' },
+    { insert: { photo: { alt: '대체', id: 'p', caption: '설명' } }, attributes: { align: 'right' } },
+    { insert: '\n', attributes: { header: 2, align: 'center' } }
+  ];
+  const before = structuredClone(raw), normalized = M.normalizeDelta(raw);
+  assert.deepEqual(normalized, [
+    { insert: '가나', attributes: { bold: true, link: 'https://example.org', underline: true } },
+    { insert: '\n', attributes: { align: 'center' } },
+    { insert: '다\n라\n사진 앞\n' },
+    { insert: { photo: { id: 'p', caption: '설명', alt: '대체' } }, attributes: { align: 'right' } },
+    { insert: '\n', attributes: { align: 'center', header: 2 } }
+  ]);
+  assert.equal(JSON.stringify(M.normalizeDelta(normalized)), JSON.stringify(normalized));
+  assert.deepEqual(raw, before);
+  assert.deepEqual(M.normalizeDelta([]), []);
+});
+
+for (const [name, attributes] of [['heading', { header: 1 }], ['quote', { blockquote: true }], ['list', { list: 'bullet' }]]) {
+  test('oversized ' + name + ' conversion preserves the valid legacy body without returning an invalid candidate', () => {
+    const PhotoPost = require('../assets/life/photo-post.js');
+    const legacy = PhotoPost.create(() => 'long-formatted');
+    legacy.ops = [{ insert: '가\n'.repeat(2600), attributes }];
+    const before = structuredClone(legacy);
+    assert.doesNotThrow(() => PhotoPost.validate(legacy));
+    assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+    assert.deepEqual(legacy, before);
+  });
+}
+
+test('implicit paragraph before a photo cannot return a Markdown candidate over the unchanged text cap', () => {
+  const PhotoPost = require('../assets/life/photo-post.js');
+  const legacy = PhotoPost.create(() => 'long-photo');
+  const blob = new Blob([new Uint8Array([1])], { type: 'image/png' });
+  legacy.photos = [{ id: 'photo', name: 'p.png', type: blob.type, size: blob.size, width: 1, height: 1, digest: 'a'.repeat(64), blob }];
+  legacy.ops = [{ insert: 'a'.repeat(49999) }, { insert: { photo: { id: 'photo', caption: '', alt: '' } } }, { insert: '\n' }];
+  const before = structuredClone(legacy);
+  assert.doesNotThrow(() => PhotoPost.validate(legacy));
+  assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+  assert.deepEqual(legacy, before);
 });

@@ -855,8 +855,10 @@
           step(KINDS.photoPosts.label); guard();
           try {
             const P = dep('PhotoPost'), candidate = await P.readBackup(entry.blob, makeId);
-            const format = candidate.format === 'life-post-md-v1' ? 'life-post-md-backup-v1' : candidate.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2';
-            if (entry.format !== format) throw fault('invalid_backup', '백업 목록과 글 ZIP의 문서 형식이 다릅니다.');
+            // The legacy ZIP reader intentionally upgrades v1 to a v2 draft.
+            // Compare the Markdown boundary, not that restored legacy version.
+            if ((entry.format === 'life-post-md-backup-v1') !== (candidate.format === 'life-post-md-v1'))
+              throw fault('invalid_backup', '백업 목록과 글 ZIP의 문서 형식이 다릅니다.');
             if (verifyPhoto) await verifyPhoto(candidate);
             // The bundle's manifest keeps each post's state; the ZIP alone restores a draft as before.
             if (entry.status === 'saved') candidate.status = 'saved';

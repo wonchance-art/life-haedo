@@ -181,15 +181,22 @@ async function main() {
       assert.equal(await page.evaluate(() => adapter.getMarkdown()), typed.markdown);
       await page.evaluate(() => openEditor('보존할 문장\n'));
       await page.locator('.ProseMirror').click();
-      await page.evaluate(() => {
-        const data = new DataTransfer();
-        data.setData('text/html', '<ol start="2"><li>붙인 항목</li><li>다음 항목</li></ol>');
-        data.setData('text/plain', '2. 붙인 항목\n3. 다음 항목');
-        document.querySelector('.ProseMirror').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-      });
+      for (const html of [
+        '<ol start="2"><li>붙인 항목</li><li>다음 항목</li></ol>',
+        '<ol start="5"><li>다섯째</li></ol>',
+        '<ol type="a"><li>알파벳 번호</li></ol>',
+        '<ol reversed><li>거꾸로 번호</li></ol>',
+        '<ol><li type="a">항목의 문자 번호</li></ol>',
+      ]) {
+        await page.evaluate(html => {
+          const data = new DataTransfer();
+          data.setData('text/html', html); data.setData('text/plain', '지원하지 않는 번호 항목');
+          document.querySelector('.ProseMirror').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+        }, html);
+        assert.equal(await page.evaluate(() => adapter.editor.getText()), '보존할 문장', 'unsupported pasted numbering must not replace the existing content: ' + html);
+        assert.ok((await page.getByRole('alert').innerText()).trim(), 'rejected paste must be explained');
+      }
       const pasted = await page.evaluate(() => ({ markdown: adapter.getMarkdown(), text: adapter.editor.getText() }));
-      assert.equal(pasted.text, '보존할 문장', 'unsupported pasted numbering must not replace the existing content');
-      assert.ok((await page.getByRole('alert').innerText()).trim(), 'rejected paste must be explained');
       assert.equal(await page.evaluate(() => adapter.getCommittedMarkdown()), pasted.markdown);
       await page.evaluate(saved => openEditor(saved), pasted.markdown);
       assert.equal(await page.evaluate(() => adapter.getMarkdown()), pasted.markdown);

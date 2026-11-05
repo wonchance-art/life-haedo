@@ -105,7 +105,7 @@
     return manifest;
   }
   // AI authorship marks stay private (owner decision 2026-11-02). A public copy
-  // drops only that attribute; text and every other format are unchanged. The
+  // drops only that attribute; text and every other visible format are unchanged. The
   // server publish RPC applies the same rule to the stored document.
   function withoutAuthorship(op) {
     if (!op.attributes || !Object.hasOwn(op.attributes, "author")) return copy(op);
@@ -119,6 +119,14 @@
   const READING_FORMAT = "life-blog-private-reading-v1";
   function validateSnapshot(value) { return checkSnapshot(value, false); }
   function validateReadingSnapshot(value) { return checkSnapshot(value, true); }
+  function validationBodyOps(ops) {
+    if (ops.length && typeof ops.at(-1)?.insert === "string") return ops;
+    // Per-op types, aggregate text size and photo references do not depend on
+    // order. Reuse an existing complete line in this validation-only surrogate
+    // so a photo-ending body at 5,000 ops/50,000 chars needs no extra allowance.
+    const end = ops.findIndex((op) => typeof op.insert === "string" && op.insert.endsWith("\n"));
+    return end >= 0 ? [...ops.slice(0, end), ...ops.slice(end + 1), ops[end]] : [...ops, { insert: "\n" }];
+  }
   function checkSnapshot(value, reading) {
     const code = "invalid_blog_snapshot";
     fields(value, ["format", "title", "ops", "attachments", "photos", "author"], code);
@@ -138,8 +146,7 @@
       // terminal paragraph; never add that paragraph to the visible snapshot.
       // Text-ending ops still obey the existing complete-line contract.
       check(Array.isArray(value.ops), code);
-      const validationOps = !value.ops.length || typeof value.ops.at(-1)?.insert !== "string"
-        ? [...value.ops, { insert: "\n" }] : value.ops;
+      const validationOps = validationBodyOps(value.ops);
       const doc = { ...model().create(() => "public", "2000-01-01T00:00:00.000Z"), title: value.title,
         ops: validationOps, photos, attachments: value.attachments, status: "saved" };
       const used = model().validate(doc);
@@ -180,17 +187,43 @@
           typeof c.digest === "string" && /^[a-f0-9]{64}$/.test(c.digest), "invalid_blog_selection");
       }
     }
-    const mapping = new Map(doc.photos.filter((p) => selected.has(p.id)).map((p) => [p.id, crypto.randomUUID()]));
+    // Metadata array order is not visible content; canonical public photos and
+    // fresh ID assignment follow their first occurrence in the body.
+    const byId = new Map(doc.photos.map((p) => [p.id, p]));
+    const selectedPhotos = (reading ? doc.photos : ops.filter((op) => typeof op.insert !== "string").map((op) => byId.get(op.insert.photo.id)))
+      .filter((p) => selected.has(p.id));
+    const mapping = new Map(selectedPhotos.map((p) => [p.id, crypto.randomUUID()]));
+    const projectOps = (values) => values.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
+      { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } });
     const snapshot = { format: reading ? READING_FORMAT : "life-blog-public-v1", title: doc.title,
-      ops: ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
-        { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
+      ops: projectOps(ops),
       // An original is never projected publicly when copies are given; the
       // public photo for that position is its copy. A HEIC original is never
       // projected even privately: its JPEG view stands in for it.
-      attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map((p) => {
+      attachments: copy(doc.attachments || []), photos: selectedPhotos.map((p) => {
         const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
+    // Equivalent Delta and Markdown bodies must produce the same public bytes:
+    // remove meaningless run boundaries/attribute ordering after private marks
+    // and unselected photos are gone. Stored and private-reading ops stay exact.
+    // The B3 Edge publisher must use this same normalization; old SQL v2 copies
+    // remain valid and keep their existing rendering.
+    if (!reading) {
+      // A photo ends any pending paragraph even when that photo is not selected.
+      // Preserve that source boundary before filtering, then merge runs whose
+      // only difference was private authorship or a removed photo.
+      const normalized = markdown().normalizeDelta(projectOps(markdown().normalizeDelta(ops)));
+      const validationCount = validationBodyOps(normalized).length;
+      // A compact legacy op can span thousands of styled lines. Splitting its
+      // semantic runs may exceed today's text/op/byte envelope; keep that already
+      // supported legacy projection instead of making an old post unreadable.
+      // Such a body cannot currently convert to a supported Markdown document.
+      const fits = validationCount <= model().LIMITS.ops &&
+        normalized.reduce((length, op) => length + (typeof op.insert === "string" ? op.insert.length : 0), 0) <= model().LIMITS.text &&
+        new TextEncoder().encode(JSON.stringify({ ...snapshot, ops: normalized })).length <= LIMITS.bytes;
+      if (doc.format === "life-post-md-v1" || fits) snapshot.ops = normalized;
+    }
     checkSnapshot(snapshot, reading);
     return snapshot;
   }

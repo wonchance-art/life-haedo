@@ -151,6 +151,34 @@ async function snapshotAll(storage) {
 }
 const RESTORABLE = new Set(['library', 'collection', 'photoPosts', 'nineBoards', 'blogSeries', 'materialWriting', 'naverCaptures', 'accountDocuments', 'originals']);
 
+test('v1 글의 전체 백업과 단독 ZIP은 원본을 보존하며 v2 새 사본으로 복원된다', async () => {
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+  const ws = (await storage.createWorkspace('v1 기록')).workspaceId;
+  const photo = await jpegPhoto(), legacy = postDoc({ title: '옛 형식 글', status: 'saved', photos: [photo] });
+  legacy.format = 'life-photo-post-v1'; delete legacy.attachments; delete legacy.archived;
+  await storage.savePhotoPost(ws, legacy, 0);
+  const original = await storage.readPhotoPost(ws, legacy.id), before = await snapshotAll(storage);
+  const { built, failed } = await fullBundle(storage);
+  assert.deepEqual(failed, []);
+  const entry = built.manifest.files.find(file => file.postId === legacy.id);
+  assert.equal(entry.format, 'life-photo-post-backup-v1');
+  for (const [blob, status] of [[built.blob, 'saved'], [await Photo.backup(original), 'draft']]) {
+    const opened = await Full.open(blob);
+    const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+    const report = await Full.restore(opened, { storage: target, kinds: new Set(['photoPosts']), verifyPhoto: null });
+    assert.equal(report.items.length, 1); assert.equal(report.items[0].status, 'restored');
+    const spaces = await target.listWorkspaces(), rows = await target.listPhotoPosts(spaces[0].workspaceId);
+    assert.equal(rows.length, 1);
+    const restored = await target.readPhotoPost(spaces[0].workspaceId, rows[0].id);
+    assert.equal(restored.format, 'life-photo-post-v2'); assert.equal(restored.status, status);
+    assert.notEqual(restored.id, original.id);
+    const remapped = Photo.remapBody(restored, new Map([[restored.photos[0].id, original.photos[0].id]]));
+    assert.deepEqual(remapped.ops, original.ops);
+    assert.equal(await hex(restored.photos[0].blob), await hex(original.photos[0].blob));
+  }
+  assert.equal(await snapshotAll(storage), before);
+});
+
 test('Markdown 글: 전체 ZIP과 단독 ZIP에서 새 사본으로 복원하고 사진 바이트·AI 표시·숨김 상태를 보존한다', async () => {
   const Markdown = require('../assets/life/post-markdown.js');
   const { storage, first, saved } = await seed();
