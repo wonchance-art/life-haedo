@@ -3,7 +3,13 @@
   'use strict';
 
   const DB_NAME = 'life-tools-v1';
-  const DB_VERSION = 1;
+  // Version 1 clients can replace an unreadable Markdown post with an old v2
+  // draft. A native version upgrade closes their connections before open()
+  // resolves; their later version-1 opens fail instead of touching md rows.
+  // Keep every store and row: this is a connection barrier, not a data rewrite.
+  // Never lower this number, even when reverting: a lower version cannot open
+  // a database already upgraded on a device. A rollback keeps 2 or raises it.
+  const DB_VERSION = 2;
   const SYNC_MAX_BYTES = 16 * 1024 * 1024;
   const COLLECTIONS = ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'];
   const clone = value => structuredClone(value);

@@ -306,7 +306,7 @@ async function main(){
       else {await p.waitForURL('**/login.html?next=*');await login(p,'upgrade',accounts.a);}
       const visible=await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
-      const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
+      const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1');try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,{bundle:fixture.bundle,stage:fixture.stage});
       if(fixture.nine)assert.deepEqual(await p.evaluate(id=>HaedoLife.Shell.storage.readNineBoard(id),fixture.bundle.workspaceId),fixture.nine,'Existing nine board data must survive the shell upgrade exactly.');
       assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');

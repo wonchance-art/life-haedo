@@ -19,7 +19,8 @@
     blog_conflict: '다른 기기에서 먼저 바뀐 글입니다. 최신 내용을 다시 확인해 주세요.', local_changed: '글이 변경됐습니다. 현재 글을 다시 확인해 주세요.',
     storage_quota: '보관 공간이 부족합니다. 글을 파일로 보관한 뒤 다시 시도해 주세요.',
     blog_publication_unavailable: '이 글의 공개 기능이 아직 준비되지 않았습니다. 저장한 글은 유지됩니다.',
-    blog_update_required: '새 형식의 글입니다. 새로고침한 뒤 다시 시도해 주세요. 저장한 글은 유지됩니다.'
+    blog_update_required: '새 형식의 글입니다. 새로고침한 뒤 다시 시도해 주세요. 저장한 글은 유지됩니다.',
+    blog_public_copies_required: '공개할 사진 사본을 먼저 준비해야 합니다. 저장한 글과 공개 요청은 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   const id = value => typeof value === 'string' && UUID.test(value);
@@ -88,13 +89,28 @@
     function identity(value) { if (!id(value)) throw fault('invalid_request'); }
     async function rpc(name, params, { commit = false } = {}) {
       const context = capture(), controller = new AbortController(); controllers.add(controller);
+      let responseError = null, responseStatus = null;
       try {
         if (commit) await verify(context); else guard(context);
         let request = client.rpc(name, params);
         if (typeof request?.abortSignal === 'function') request = request.abortSignal(controller.signal);
-        const response = await request; guard(context); if (response.error) throw response.error;
+        const response = await request; guard(context);
+        if (response.error) {
+          responseError = response.error; responseStatus = response.status;
+          throw responseError;
+        }
         return clone(response.data);
-      } catch (error) { guard(context); throw clean(error); }
+      } catch (error) {
+        guard(context); const failure = clean(error);
+        if (error === responseError && responseStatus === 400 && ['life_blog_publish', 'life_blog_publish_copies'].includes(name) &&
+          error?.code === '22023' && error.message === 'life_blog_markdown_publication_unavailable') {
+          // Receipt replay precedes this SQL exception. Only this actual RPC
+          // response proves rollback; Auth/transport throws and copied flags do
+          // not. The caller must inspect it before further normalization.
+          Object.defineProperty(failure, 'publicationRolledBack', { value: true });
+        }
+        throw failure;
+      }
       finally { controllers.delete(controller); }
     }
     // The server reads the stored Markdown itself. Only the approved selection,
