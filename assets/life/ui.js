@@ -95,9 +95,27 @@
     return display;
   }
 
-  async function mount(container, { storage, core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal }) {
+  async function mount(container, options) {
+    let cleanupOnFailure = null;
+    try { return await mountView(container, options, cleanup => { cleanupOnFailure = cleanup; }); }
+    catch (cause) {
+      // A failed mount has no returned owner for the shell to dispose. Keep the
+      // original error/code for retry classification, even if cleanup fails.
+      try { cleanupOnFailure?.(); } catch (_) { /* Preserve the mount failure. */ }
+      throw cause;
+    }
+  }
+
+  async function mountView(container, { storage, core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal }, onFailure) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
+    // A constructor may throw before the later resources/listeners exist.
+    // Initialize every reference used by failure cleanup before creating any.
+    let blogSync = null, readingPosition = null, root = null, main = null;
+    let interestUI = null, annualPlanUI = null, privateDiscovery = null, externalDiscoveryUI = null;
+    let collection = null, unifiedSearch = null, workbench = null, home = null, schedule = null, writer = null, sourceEditor = null;
+    let editingInput = null, keepFocusVisible = null, unbindScheduleKeys = null, popstate = null;
+    let beforeUnload = null, visibility = null, pagehideReading = null;
     let unsubscribe = null;
     let unsubscribeSync = null;
     let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, unlinkedAdoption = null;
@@ -161,9 +179,6 @@
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map(), naverBlogViews = new Map();
-    // An older page without sync-common.js (mixed during an update) runs without blog sync, as when
-    // the module is absent, instead of failing the whole mount.
-    const blogSync = (() => { try { return global.HaedoLife.BlogSync?.create({ storage, auth, autoSync: true }); } catch (error) { if (error?.code !== 'sync_common_missing') throw error; return undefined; } })();
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage', 'backup', 'quarter', 'month', 'week', 'day']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
@@ -192,13 +207,17 @@
       sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null, importResult: null
     };
-    const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
+    onFailure(() => dispose(true));
+    // An older page without sync-common.js (mixed during an update) runs without blog sync, as when
+    // the module is absent, instead of failing the whole mount.
+    blogSync = (() => { try { return global.HaedoLife.BlogSync?.create({ storage, auth, autoSync: true }); } catch (error) { if (error?.code !== 'sync_common_missing') throw error; return undefined; } })();
+    readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
     // A mixed update (an older offline cache that lacks records-list.js) keeps the earlier one-column
     // list: no kind tabs, plain facts, no reading pane or highlights, and no exception.
     const RecordsList = global.HaedoLife.RecordsList || Object.freeze({ missing: true, validKind: () => 'all', kindAllows: () => true,
       when: () => document.createDocumentFragment(), badges: (_document, values) => node('p', values.filter(Boolean).join(' · ')),
       tabs: () => document.createDocumentFragment(), matches: () => [], paint: () => () => {} });
-    const root = node('div', null, 'life-app');
+    root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
     status.id = 'lifeSaveStatus';
     status.setAttribute('role', 'status');
@@ -211,7 +230,7 @@
     const toolbar = node('div', null, 'life-toolbar');
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
-    const main = node('main', null, 'life-main');
+    main = node('main', null, 'life-main');
     main.id = 'lifeMain';
     const skip = node('a', '본문으로 이동', 'life-skip');
     skip.href = '#lifeMain';
@@ -222,7 +241,7 @@
     libraryStatus.append(libraryStatusText, libraryRetry, libraryReview);
     root.append(skip, header, toolbar, planningNavigation, libraryStatus, status, error, main);
     container.replaceChildren(root);
-    const interestUI = global.HaedoLife.InterestUI?.create({ container: main, storage,
+    interestUI = global.HaedoLife.InterestUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'interests',
       onOpenEvidence: async (entry, focusKey) => {
         const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
@@ -239,13 +258,13 @@
           locator: { start: entry.start, end: entry.end } });
       }
     });
-    const editingInput = () => { naverMediaReturn = null; inputGeneration += 1; global.HaedoMotion?.cancel(main); };
-    const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
+    editingInput = () => { naverMediaReturn = null; inputGeneration += 1; global.HaedoMotion?.cancel(main); };
+    annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
-    const privateDiscovery = storage.isAccountScoped && global.HaedoLife.DiscoveryPrivateRemote?.create
+    privateDiscovery = storage.isAccountScoped && global.HaedoLife.DiscoveryPrivateRemote?.create
       ? global.HaedoLife.DiscoveryPrivateRemote.create({ auth, storage,
         isCurrent: workspaceId => !disposed && state.mode === 'external-discovery' && state.bundle?.workspaceId === workspaceId }) : null;
-    const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
+    externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
       privateReader: privateDiscovery,
       onOpenInterests: () => navigate('interests'),
@@ -261,10 +280,10 @@
     main.addEventListener('pointerdown', editingInput);
     main.addEventListener('keydown', editingInput);
     main.addEventListener('wheel', editingInput, { passive: true });
-    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError,
+    collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError,
       // A post that attaches the item opens in the same blog reader as search results do.
       openPost: postId => navigate('page', { blogContext: true, searchTarget: { photoPostId: postId }, pagePreview: false }) });
-    const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
+    unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
         if (row.kind === 'source') {
@@ -296,7 +315,7 @@
         return navigate('collection', { collectionItemId: row.itemId });
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
-    const workbench = global.HaedoLife.WorkbenchUI?.create({
+    workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, managed: managedLibrary,
       onManagePost: (postId, options) => openPostAction('blog', postId, options),
       onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
@@ -409,7 +428,7 @@
       }
     });
 
-    const home = global.HaedoLife.HomeUI?.create({
+    home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate: (mode, options = {}) => navigate(mode, mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget) ? { ...options, blogContext: true } : options),
       renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
@@ -422,7 +441,7 @@
     });
 
     // 일정's 연·분기·월·주·일 views: read-only projections of the same posts, excerpts and plan.
-    const schedule = global.HaedoLife.ScheduleUI?.create({
+    schedule = global.HaedoLife.ScheduleUI?.create({
       storage, core, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, announce,
       go: (mode, date) => guarded(() => openScheduleView(mode, date))(),
       open: item => {
@@ -439,7 +458,7 @@
       }
     });
 
-    const writer = global.HaedoLife.WritingUI?.create({
+    writer = global.HaedoLife.WritingUI?.create({
       storage, core, writingSync, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, parentNavigation: true,
       onClose: returnFromSubview,
@@ -458,7 +477,7 @@
     });
 
 
-    const sourceEditor = global.HaedoLife.SourceEditUI?.create({
+    sourceEditor = global.HaedoLife.SourceEditUI?.create({
       host: main, storage, core, getBundle: () => state.bundle, getAccountKey: () => state.syncAccountKey,
       isDisposed: () => disposed, announce,
       onClose: closeSourceEditor,
@@ -491,7 +510,7 @@
 
     // Native focus scrolling does not account for the fixed phone navigation
     // or the focus outline outside a control's rectangle.
-    const keepFocusVisible = event => {
+    keepFocusVisible = event => {
       if (focusFrame !== null) global.cancelAnimationFrame(focusFrame);
       const target = event.target;
       focusFrame = global.requestAnimationFrame(() => {
@@ -1977,7 +1996,7 @@
       }
       return nav;
     }
-    const unbindScheduleKeys = global.HaedoLife.ScheduleUI?.bindShortcuts({
+    unbindScheduleKeys = global.HaedoLife.ScheduleUI?.bindShortcuts({
       active: () => !disposed && !!state.bundle && !state.busy && global.HaedoLife.ScheduleUI.scheduleMode(state.mode) && !document.querySelector('dialog[open]'),
       onKey: key => {
         if (key === 'today') return guarded(() => scheduleToday())();
@@ -2088,7 +2107,7 @@
       if (record?.v !== 1 || !Number.isSafeInteger(record.idx) || !goal.key || record.key === goal.key || record.doc !== historyDoc) return;
       historyAim(goal.idx, goal.key);
     }
-    const popstate = () => {
+    popstate = () => {
       if (disposed) return;
       if (historyWait) {
         // The browser reached the entry it was sent to; this is not a navigation.
@@ -5963,10 +5982,10 @@
       main.append(scope);
     }
 
-    const beforeUnload = event => {
+    beforeUnload = event => {
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
-    const visibility = () => {
+    visibility = () => {
       if (!document.hidden) return;
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
@@ -5975,7 +5994,7 @@
       if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       flushReadingPosition();
     };
-    const pagehideReading = () => { flushReadingPosition(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
+    pagehideReading = () => { flushReadingPosition(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
@@ -6123,86 +6142,91 @@
       }
     }
 
-    function dispose() {
+    function dispose(failedMount = false) {
       if (disposed) return;
-      delete document.body.dataset.writingFocus;
+      const cleanup = action => {
+        if (failedMount !== true) return action();
+        try { action(); } catch (_) { /* One failed cleanup must not retain the other mount resources. */ }
+      };
+      if (failedMount === true) disposed = true;
+      cleanup(() => { delete document.body.dataset.writingFocus; });
       disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
-      libraryRefresh++; unsubscribeLibrary?.(); metadataCleanup?.(); metadataCleanup = null;
-      sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
-      sourceFoldersUI?.dispose(); sourceFoldersUI = null; sourceFoldersWorkspace = null;
+      libraryRefresh++; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
+      cleanup(() => sourceFoldersMount?.dispose()); sourceFoldersMount = null; sourceFoldersUpdate = null;
+      cleanup(() => sourceFoldersUI?.dispose()); sourceFoldersUI = null; sourceFoldersWorkspace = null;
       accountMaterialsSequence += 1;
-      accountMaterials?.dispose(); accountMaterials = null;
-      interestUI?.dispose();
-      annualPlanUI?.dispose();
-      externalDiscoveryUI?.dispose();
-      privateDiscovery?.dispose();
-      originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
-      compositionPanel?.dispose(); compositionPanel = null;
-      if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());
-      accountBlogUI?.dispose(); accountBlogUI = null; accountBlogWorkspace = null;
-      if (naverBlogUI && naverBlogWorkspace) naverBlogViews.set(naverBlogWorkspace, naverBlogUI.getView?.());
-      naverBlogUI?.destroy(); naverBlogUI = null; naverBlogWorkspace = null;
-      naverBlogService?.dispose(); naverBlogService = null;
-      naverCaptureUI?.destroy(); naverCaptureUI = null;
-      naverCaptureService?.dispose(); naverCaptureService = null;
-      naverReaderService?.dispose(); naverReaderService = null;
-      naverPhotoView?.dispose(); naverPhotoView = null;
-      if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
-      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
-      preservationUI?.dispose(); preservationUI = null;
-      fullBackupUI?.dispose(); fullBackupUI = null; backupOriginals?.dispose(); backupOriginals = null;
-      settingsUI?.dispose(); settingsUI = null;
-      publicCoverUI?.dispose(); publicCoverUI = null;
-      obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
-      compositionSync?.dispose();
-      writingSync?.dispose();
-      blogSync?.dispose();
-      naverBlogService?.dispose(); naverBlogService = null;
-      naverCaptureUI?.destroy(); naverCaptureUI = null;
-      naverCaptureService?.dispose(); naverCaptureService = null;
-      naverReaderService?.dispose(); naverReaderService = null;
-      naverPhotoView?.dispose(); naverPhotoView = null; naverBlogViews.clear(); naverCaptureTarget = null;
-      home?.dispose();
-      schedule?.dispose(); unbindScheduleKeys();
-      workbench?.dispose();
-      writer?.dispose();
-      sourceEditor?.dispose();
-      collection?.dispose();
-      unifiedSearch?.dispose();
-      unbindNavigation?.();
-      global.removeEventListener('popstate', popstate);
-      document.removeEventListener('pointerdown', closeFeatureMenusOutside);
-      root.removeEventListener('focusin', keepFocusVisible);
-      main.removeEventListener('input', editingInput);
-      main.removeEventListener('compositionstart', editingInput);
-      main.removeEventListener('pointerdown', editingInput);
-      main.removeEventListener('keydown', editingInput);
-      main.removeEventListener('wheel', editingInput);
-      if (focusFrame !== null) { global.cancelAnimationFrame(focusFrame); focusFrame = null; }
-      if (readerCleanup) { readerCleanup(); readerCleanup = null; }
-      readingResumeCleanup?.(); readingResumeCleanup = null;
-      readingPosition?.dispose();
-      invalidateBatchContext();
+      cleanup(() => accountMaterials?.dispose()); accountMaterials = null;
+      cleanup(() => interestUI?.dispose());
+      cleanup(() => annualPlanUI?.dispose());
+      cleanup(() => externalDiscoveryUI?.dispose());
+      cleanup(() => privateDiscovery?.dispose());
+      cleanup(() => originalAttachmentsUI?.dispose()); originalAttachmentsUI = null;
+      cleanup(() => compositionPanel?.dispose()); compositionPanel = null;
+      cleanup(() => { if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.()); });
+      cleanup(() => accountBlogUI?.dispose()); accountBlogUI = null; accountBlogWorkspace = null;
+      cleanup(() => { if (naverBlogUI && naverBlogWorkspace) naverBlogViews.set(naverBlogWorkspace, naverBlogUI.getView?.()); });
+      cleanup(() => naverBlogUI?.destroy()); naverBlogUI = null; naverBlogWorkspace = null;
+      cleanup(() => naverBlogService?.dispose()); naverBlogService = null;
+      cleanup(() => naverCaptureUI?.destroy()); naverCaptureUI = null;
+      cleanup(() => naverCaptureService?.dispose()); naverCaptureService = null;
+      cleanup(() => naverReaderService?.dispose()); naverReaderService = null;
+      cleanup(() => naverPhotoView?.dispose()); naverPhotoView = null;
+      cleanup(() => { if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.()); });
+      cleanup(() => blogManager?.dispose()); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
+      cleanup(() => preservationUI?.dispose()); preservationUI = null;
+      cleanup(() => fullBackupUI?.dispose()); fullBackupUI = null; cleanup(() => backupOriginals?.dispose()); backupOriginals = null;
+      cleanup(() => settingsUI?.dispose()); settingsUI = null;
+      cleanup(() => publicCoverUI?.dispose()); publicCoverUI = null;
+      cleanup(() => obsidianUpdateUI?.dispose()); obsidianUpdateUI = null;
+      cleanup(() => compositionSync?.dispose());
+      cleanup(() => writingSync?.dispose());
+      cleanup(() => blogSync?.dispose());
+      cleanup(() => naverBlogService?.dispose()); naverBlogService = null;
+      cleanup(() => naverCaptureUI?.destroy()); naverCaptureUI = null;
+      cleanup(() => naverCaptureService?.dispose()); naverCaptureService = null;
+      cleanup(() => naverReaderService?.dispose()); naverReaderService = null;
+      cleanup(() => naverPhotoView?.dispose()); naverPhotoView = null; naverBlogViews.clear(); naverCaptureTarget = null;
+      cleanup(() => home?.dispose());
+      cleanup(() => schedule?.dispose()); cleanup(() => unbindScheduleKeys?.());
+      cleanup(() => workbench?.dispose());
+      cleanup(() => writer?.dispose());
+      cleanup(() => sourceEditor?.dispose());
+      cleanup(() => collection?.dispose());
+      cleanup(() => unifiedSearch?.dispose());
+      cleanup(() => unbindNavigation?.());
+      cleanup(() => global.removeEventListener('popstate', popstate));
+      cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
+      cleanup(() => root?.removeEventListener('focusin', keepFocusVisible));
+      cleanup(() => main?.removeEventListener('input', editingInput));
+      cleanup(() => main?.removeEventListener('compositionstart', editingInput));
+      cleanup(() => main?.removeEventListener('pointerdown', editingInput));
+      cleanup(() => main?.removeEventListener('keydown', editingInput));
+      cleanup(() => main?.removeEventListener('wheel', editingInput));
+      if (focusFrame !== null) { cleanup(() => global.cancelAnimationFrame(focusFrame)); focusFrame = null; }
+      if (readerCleanup) { cleanup(readerCleanup); readerCleanup = null; }
+      cleanup(() => readingResumeCleanup?.()); readingResumeCleanup = null;
+      cleanup(() => readingPosition?.dispose());
+      cleanup(invalidateBatchContext);
       state.batches.clear();
       state.allStages = [];
-      root.replaceChildren();
-      root.remove();
+      cleanup(() => root?.replaceChildren());
+      cleanup(() => root?.remove());
       state.sourceDrafts.clear();
       state.readerPositions.clear(); state.readerModes.clear();
-      resetSearchContext();
+      cleanup(resetSearchContext);
       state.bundle = state.stage = state.prepared = state.conflictView = state.remoteRows = null;
       state.restoreReturn = null;
-      if (stageTimer) clearTimeout(stageTimer);
-      if (unsubscribe) unsubscribe();
-      if (unsubscribeSync) unsubscribeSync();
-      if (sync && typeof sync.dispose === 'function') sync.dispose();
-      global.removeEventListener('beforeunload', beforeUnload);
-      document.removeEventListener('visibilitychange', visibility);
-      global.removeEventListener('pagehide', pagehideReading);
-      downloadUrls.forEach(url => URL.revokeObjectURL(url));
+      if (stageTimer) cleanup(() => clearTimeout(stageTimer));
+      if (unsubscribe) cleanup(unsubscribe);
+      if (unsubscribeSync) cleanup(unsubscribeSync);
+      if (sync && typeof sync.dispose === 'function') cleanup(() => sync.dispose());
+      cleanup(() => global.removeEventListener('beforeunload', beforeUnload));
+      cleanup(() => document.removeEventListener('visibilitychange', visibility));
+      cleanup(() => global.removeEventListener('pagehide', pagehideReading));
+      downloadUrls.forEach(url => cleanup(() => URL.revokeObjectURL(url)));
       downloadUrls.clear();
-      signal?.removeEventListener('abort', dispose);
+      cleanup(() => signal?.removeEventListener('abort', dispose));
     }
   }
 
