@@ -509,6 +509,13 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
   body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { padding-right: max(104px, calc(env(safe-area-inset-right, 0px) + 96px)); }
 }
 
+/* The source reader keeps the shared pencil without exposing its hidden page toolbar. */
+@media (max-width: 760px) {
+  body.haedo-shell:has(#lifeMain[data-mode=source]) > .haedo-nav > .haedo-nav-compose { display: flex; }
+  /* Keep an 8px gap between the reader actions and the shared 44px pencil. */
+  #lifeMain[data-mode=source] .life-reader-tools { padding-inline-end: max(52px, calc(env(safe-area-inset-right, 0px) + 44px)); }
+}
+
 
 /* Material editing and lifecycle actions remain outside the reading body. */
 .life-source-content,.life-source-edit,.life-source-edit-preview { min-width:0; }

@@ -1,0 +1,6 @@
+{
+  "name": "haedo-rss-fixture-dependencies",
+  "private": true,
+  "description": "Pinned XML grammar used by the RSS Edge fixture tests; no feed network access.",
+  "dependencies": { "fast-xml-parser": "5.12.0" }
+}

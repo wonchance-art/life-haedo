@@ -57,6 +57,8 @@ jobs:
         run: node tests/run-post-markdown-sql-postgres.cjs
       - name: Verify Markdown post guards survive replay of earlier installation bundles
         run: node tests/run-post-markdown-install-replay.cjs
+      - name: Verify RSS intake ownership, bounded sweeps, leases, retries and receipts
+        run: node tests/run-rss-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -429,6 +431,12 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify the source reader keeps the shared compose control without covering reader tools
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reader-compose-browser.cjs
+      - name: Verify RSS connection rows, preview, stop, retry and disconnect without real feed requests
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/rss-connection-browser.cjs
       - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-ai-browser.cjs
