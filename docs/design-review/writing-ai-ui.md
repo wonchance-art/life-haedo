@@ -44,6 +44,14 @@ Linux Chromium에서 익명 Auth·AI·사용량 HTTP만 사용하는 검증이�
 
 독립 코드 검수에서 실패 후 남은 금액이 이전 값으로 남는 P2를 찾았다. 요청 시작 때 이전 잔액·진행 조회를 무효화하고 모든 오류에서 새 사용량을 조회하도록 고친 뒤 재검수했다. 추가 블로커·메이저는 발견되지 않았다. 결과·오류는 패널 내부만 스크롤해 배경 글 위치를 보존한다.
 
+## 기존 CI 오류 주입 경합 보완
+
+원본 head `cd9dcce`의 CI job `127069599949`는 `purpose-writing-browser.cjs:176`에서 실패했다. 전역 one-shot `IDBObjectStore.get` 중단을 동일 키의 다른 읽기가 먼저 소비하면 `failures=1`, `rejected=false`가 된다. 원본 검사에 경쟁 `listPhotoPosts`를 한 번 먼저 호출하는 강제 조건으로 재현했으며, 별도 main `321e00b` 서버에서도 동일하게 실패했다. 당시 CI 경쟁 호출자는 stack이 없어 특정하지 않았다. #219의 중복 동기화 시작에 따른 계정 초기화와는 원인이 다르다.
+
+[총괄 승인](https://github.com/wonchance-art/life-haedo/pull/212#issuecomment-6653119867)에 따라 이 검사만 manager 전용 storage facade로 바꿨다. 첫 mount와 일반 읽기는 실제 저장소를 사용하고, 목표 fresh read 한 번만 `AbortError`로 거부한다. 이제 native IDB 자체의 오류 전달 통합 검사가 아니라 manager의 저장소 읽기 실패 처리 검사임을 이름과 범위에 명시했다. 오류를 준비한 뒤 원본 저장소의 경쟁 읽기가 성공하고 오류 횟수는 0임을 추가 단언한다. 기존 거부·error 상태·행 0·오류문구 및 제한시간은 유지한다.
+
+전체 purpose 흐름 7/7과 표적 검사가 통과했다. 브라우저가 받는 `blog-manager.js`에서 fresh 결과 대신 보관 행을 쓰게 바꾼 변이는 기존 `rejected===true` 단언에서 실패했다. 디스크 제품 파일은 변경하지 않았다. 원본 실패·main 재현·수정 후 통과·변이 실패는 `.local/purpose-ci-diagnosis/`와 `/tmp/haedo-purpose-ci-*.log`에 보존했다. 독립 검수도 이 근거를 확인했고 블로커·메이저는 없었다.
+
 ## 남은 조건과 후속
 
 1. **총괄 출시·첫 사용:** CI 등록·캐시 판올림·최종 검수와 비밀값 준비가 선행이다. 운영에서 소유자 요청·다른 계정 거부·실제 비용·한국어 제안 품질을 확인해야 첫 사용 완료다. 비밀값 상태는 이 작업자가 새로 조회하지 않았다.
