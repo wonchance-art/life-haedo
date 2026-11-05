@@ -1,7 +1,7 @@
 'use strict';
 // Actual owner UI/SDK/IndexedDB and downloaded bytes; synthetic Auth only.
 process.env.BASE_URL ||= 'http://127.0.0.1:4212';
-const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
+const { isBackgroundSyncWrite, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -12,7 +12,7 @@ const { inspect } = require('../scripts/check-site-design.cjs');
 const Z = require('../vendor/fflate/fflate.js');
 const output = path.resolve(__dirname, '../.local/blog-series');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [], backgroundSync: [],
+const report = { rss: [], checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: [], backgroundSync: [],
   scope: 'Actual local owner UI/SDK/IndexedDB, original PNG decoding and downloaded ZIP bytes. Synthetic Auth, Chromium viewports; no production, Google OAuth, Apple hardware, publication or deployment claims.' };
 
 async function main() {
@@ -20,10 +20,21 @@ async function main() {
   await fs.mkdir(output, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version(); report.node = process.version;
-  let active = null, lastPage = null, archive, exportedSnapshot, photoEvidence;
+  let active = null, activeRss = null, lastPage = null, archive, exportedSnapshot, photoEvidence;
   async function fixture() {
     const server = new FakeCloud(), context = await makeContext(browser, server, 'series-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } });
     active = context;
+    const rss = { starts: [], reads: [] }, rssWorkspaces = new Map();
+    await context.exposeBinding('__recordRssStart', (_source, value) => { rss.starts.push(value); rssWorkspaces.set(value.owner, value.workspaceId); });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = crypto.randomUUID(); window.__rssStartReports = [];
+      // Successful owner reveals are counted independently of HTTP requests.
+      document.addEventListener('haedo:page-ready', () => { const storage = HaedoLife.Shell.storage;
+        __rssStartReports.push(storage.getActive().then(workspaceId => window.__recordRssStart({ documentId, owner: storage.account.userId, workspaceId })));
+      });
+    });
+    activeRss = rss;
     // Hold a real completed account-scoped read, rather than replacing storage.
     await context.route(base + '/assets/life/storage.js', async route => {
       const response = await route.fetch(), source = await response.text();
@@ -32,6 +43,7 @@ async function main() {
     });
     context.on('request', request => {
       const u = new URL(request.url());
+      if (isRssInboxRead(request, { cloud, server, workspaceId: rssWorkspaces.get(server.libraryOwner(request)) })) { rss.reads.push({ owner: server.libraryOwner(request), path: u.pathname }); return; }
       // Owner-scoped private account sync (2026-11-01) is audited separately; publication never is.
       if (isBackgroundSyncWrite(u.href)) { report.backgroundSync.push(u.pathname); return; }
       if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
@@ -147,7 +159,13 @@ async function main() {
   async function check(name, run) {
     if (process.env.BLOG_SERIES_MATCH && !new RegExp(process.env.BLOG_SERIES_MATCH).test(name)) return;
     console.log('START ' + name);
-    try { await run(); report.checks.push(name); console.log('PASS ' + name); }
+    try { await run();
+      for (const page of active.pages()) await page.evaluate(() => Promise.all(window.__rssStartReports || []));
+      assert(activeRss.reads.length > 0);
+      for (const owner of new Set(activeRss.reads.map(row => row.owner))) {
+        assert(activeRss.reads.filter(row => row.owner === owner).length <= activeRss.starts.filter(row => row.owner === owner).length, 'RSS list reads must not exceed actual app starts for their owner');
+      }
+      report.rss.push({ name, ...activeRss }); report.checks.push(name); console.log('PASS ' + name); }
     catch (error) {
       await lastPage?.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {});
       const dom = await lastPage?.evaluate(() => ({ title: document.title, text: document.body.innerText, seriesStatus: document.querySelector('.bs-status')?.outerHTML })).catch(() => null);

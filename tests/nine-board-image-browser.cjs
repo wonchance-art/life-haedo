@@ -1,16 +1,26 @@
 'use strict';
 const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{createHash}=require('node:crypto'),Z=require('../vendor/fflate/fflate.js');
 const {playwright,ready,makeContext}=require('./unified-home-browser.cjs');
 const {FakeCloud,accounts,base,cloud}=require('./life-sync-browser.cjs');
-const out=path.resolve('.local/nine-board-image'),report={libraryCapabilityReads:[],checks:[],screenshots:[],errors:[],consoleErrors:[],external:[],scope:'Anonymous mocked Auth, real Mac Chrome canvas and IndexedDB; viewport simulations, no Apple touch hardware or live account.'};
+const out=path.resolve('.local/nine-board-image'),report={rssReads:[],starts:[],libraryCapabilityReads:[],checks:[],screenshots:[],errors:[],consoleErrors:[],external:[],scope:'Anonymous mocked Auth, real Mac Chrome canvas and IndexedDB; viewport simulations, no Apple touch hardware or live account.'};
 async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});report.browser=browser.version();
- const server=new FakeCloud(),publicWrites=[];
+ const server=new FakeCloud(),publicWrites=[],rssWorkspaces=new Map();
  const context=await makeContext(browser,server,'nine-board-image',accounts.a,{viewport:{width:1440,height:1000}});
- context.on('request',request=>{const u=new URL(request.url());if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if(isLegacyLibraryCapabilityRead(request,{cloud,server}))report.libraryCapabilityReads.push({owner:server.libraryOwner(request),method:request.method(),path:u.pathname,parameterCount:0});else if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
+ // Count actual owner UI reveals independently of network requests.
+ await context.exposeBinding('__recordRssStart', (_source, value) => { report.starts.push(value); rssWorkspaces.set(value.owner,value.workspaceId); });
+ await context.addInitScript(() => {
+  if (window !== top) return;
+  const documentId = crypto.randomUUID();
+  window.__rssStartReports=[];
+  document.addEventListener('haedo:page-ready', () => { const storage=HaedoLife.Shell.storage;
+   __rssStartReports.push(storage.getActive().then(workspaceId=>window.__recordRssStart({documentId,owner:storage.account.userId,workspaceId})));
+  });
+ });
+ context.on('request',request=>{const u=new URL(request.url());if(isRssInboxRead(request,{cloud,server,ownerId:accounts.a.id,workspaceId:rssWorkspaces.get(accounts.a.id)}))report.rssReads.push({owner:server.libraryOwner(request),path:u.pathname});else if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if(isLegacyLibraryCapabilityRead(request,{cloud,server}))report.libraryCapabilityReads.push({owner:server.libraryOwner(request),method:request.method(),path:u.pathname,parameterCount:0});else if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.getByRole('button',{name:'9칸 구성',exact:true}).click();await page.locator('.nb-status').waitFor();};
@@ -62,6 +72,8 @@ async function main(){
   assert.equal(await page.locator('.nb-status').textContent(),'저장됨');await page.locator('.nb-files > summary').click();
   assert.match(await page.locator('.nb-files > p.life-help').first().textContent(),/^원래 구성은 이 브라우저에 보관됩니다\. 선택 영역 공개는 별도로 검토하며/);
   await context.unroute(base+'/assets/life/nine-board-ui.js');report.checks.push('A store without an account keeps the browser-only status and file note; account stores never show them');
+  await page.evaluate(()=>Promise.all(window.__rssStartReports));
+  assert(report.rssReads.length > 0);assert(report.rssReads.length <= report.starts.length,'RSS list reads must not exceed actual app starts');
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);
  }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true});throw error;}
  finally{await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}

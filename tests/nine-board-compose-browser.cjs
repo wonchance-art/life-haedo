@@ -1,6 +1,6 @@
 'use strict';
 // Real owner UI/SDK/IndexedDB and PNG bytes. Authentication is synthetic only.
-const { isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs');
+const { isBackgroundSyncWrite, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 const { blogSyncSettled } = require('./helpers/blog-sync-settle.cjs');
 const until = async (read, label, timeout = 40000) => { const end = Date.now() + timeout; while (!(await read())) { if (Date.now() > end) throw new Error('Timed out: ' + label); await new Promise(done => setTimeout(done, 150)); } };
 const assert = require('node:assert/strict');
@@ -22,14 +22,28 @@ async function main() {
   const browser = await playwright().chromium.launch({ headless: true,
     executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version(); report.node = process.version;
-  let active = null;
+  let active = null, activeRss = null;
+  report.rss = [];
 
   async function fixture() {
     const server = new FakeCloud(), device = 'nine-compose-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 1440, height: 1000 } });
     active = context; const remoteWrites = [], backgroundWrites = [], deletes = [];
+    const rssWorkspaces = new Map();
+    const rss = { starts: [], reads: [] }; activeRss = rss;
+    // Observe successful shell reveals, including reloads and account restarts.
+    await context.exposeBinding('__recordRssStart', (_source, value) => { rss.starts.push(value); rssWorkspaces.set(value.owner, value.workspaceId); });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = crypto.randomUUID();
+      window.__rssStartReports = [];
+      document.addEventListener('haedo:page-ready', () => { const storage = HaedoLife.Shell.storage;
+        __rssStartReports.push(storage.getActive().then(workspaceId => window.__recordRssStart({ documentId, owner: storage.account.userId, workspaceId })));
+      });
+    });
     context.on('request', request => {
       const u = new URL(request.url());
+      if (isRssInboxRead(request, { cloud, server, workspaceId: rssWorkspaces.get(server.libraryOwner(request)) })) { rss.reads.push({ owner: server.libraryOwner(request), path: u.pathname }); return; }
       // Owner-scoped private account sync (2026-11-01) is audited separately.
       // Deletions are never exempt: each one is recorded and asserted explicitly.
       if (u.pathname === '/rest/v1/rpc/life_blog_delete' && request.method() === 'POST') { deletes.push(request.postDataJSON().p_post_id); return; }
@@ -172,7 +186,13 @@ async function main() {
   }
   const check = async (name, run) => {
     if (process.env.NINE_COMPOSE_MATCH && !new RegExp(process.env.NINE_COMPOSE_MATCH).test(name)) return;
-    console.log('START ' + name); await run(); report.checks.push(name); console.log('PASS ' + name);
+    console.log('START ' + name); await run();
+    for (const page of active.pages()) await page.evaluate(() => Promise.all(window.__rssStartReports || []));
+    assert(activeRss.reads.length > 0);
+    for (const owner of new Set(activeRss.reads.map(row => row.owner))) {
+      assert(activeRss.reads.filter(row => row.owner === owner).length <= activeRss.starts.filter(row => row.owner === owner).length, 'RSS list reads must not exceed actual app starts for their owner');
+    }
+    report.rss.push({ name, ...activeRss }); report.checks.push(name); console.log('PASS ' + name);
     await active?.close(); active = null;
   };
   try {

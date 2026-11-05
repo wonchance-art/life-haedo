@@ -11,7 +11,7 @@ const { createHash } = require('node:crypto');
 const sourceRoot = path.resolve(process.env.PURPOSE_SOURCE_ROOT || path.join(__dirname, '..'));
 const { CompositionCloud } = require(path.join(sourceRoot, 'tests/composition-sync-browser.cjs'));
 const { accounts, cloud, base } = require(path.join(sourceRoot, 'tests/life-sync-browser.cjs'));
-const { isBackgroundSync } = require(path.join(sourceRoot, 'tests/helpers/account-sync-rpcs.cjs'));
+const { isBackgroundSync, isRssInboxRead } = require(path.join(sourceRoot, 'tests/helpers/account-sync-rpcs.cjs'));
 const { playwright, makeContext, ready, settle, nav } = require(path.join(sourceRoot, 'tests/unified-home-browser.cjs'));
 const { inspectHome } = require(path.join(sourceRoot, 'tests/home-entry-browser.cjs'));
 const { openRecordsMenu } = require(path.join(sourceRoot, 'tests/helpers/feature-menus.cjs'));
@@ -30,7 +30,7 @@ const copy = value => structuredClone(value);
 const id = '30000000-0000-4000-8000-000000000001';
 const sourceFiles = ['index.html', 'life.html', 'sw.js', 'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/platform-auth.js', 'assets/platform-ui.js', 'assets/life/shell.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/home.js', 'assets/life/home.css', 'assets/life/blog-manager.js', 'assets/life/photo-post-ui.js', 'assets/life/account-library.js', 'assets/life/storage.js', 'assets/life/source-folders-ui.js', 'assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/interest-ui.js', 'assets/life/preservation-ui.js', 'assets/life/obsidian-link-candidates.js', 'assets/life/obsidian-link-candidates-ui.js', 'assets/life/obsidian-link-commit.js', 'assets/life/collection-ui.js', 'assets/life/workbench-ui.js', 'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/library-meta.js', 'assets/life/source-folders.js', 'assets/life/photo-post.js', 'goals.html', 'habits.html', 'workspace.html'];
 const fixtureFiles = ['tests/composition-sync-browser.cjs', 'tests/life-sync-browser.cjs', 'tests/unified-home-browser.cjs', 'tests/home-entry-browser.cjs', 'tests/helpers/feature-menus.cjs', 'tests/helpers/library-cloud.cjs', 'tests/helpers/blog-cloud.cjs'];
-const report = { createdAt: new Date().toISOString(), scope: 'Exact app bytes, bundled SDK and IndexedDB; anonymous capability-1 HTTP. Viewports and simulated input only; no real login, device or production account writes.', baseline, base, sourceRoot, checks: [], visual: [], observations: [], pageErrors: [], consoleErrors: [], expectedConsoleErrors: [], external: [], staticErrors: [], staticResponses: [], privateRequests: [], forbiddenPrivateRequests: [], contexts: [], browserClosed: false };
+const report = { createdAt: new Date().toISOString(), scope: 'Exact app bytes, bundled SDK and IndexedDB; anonymous capability-1 HTTP. Viewports and simulated input only; no real login, device or production account writes.', baseline, base, sourceRoot, checks: [], visual: [], observations: [], pageErrors: [], consoleErrors: [], expectedConsoleErrors: [], external: [], staticErrors: [], staticResponses: [], privateRequests: [], forbiddenPrivateRequests: [], rssReads: [], appStarts: [], contexts: [], browserClosed: false };
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 async function hashes(files) { return Object.fromEntries(await Promise.all(files.map(async file => [file, sha(await fs.readFile(path.join(sourceRoot, file)))]))); }
 async function wait(read, predicate, label) { const end = Date.now() + 20000; let value; do { value = await read(); if (predicate(value)) return value; await new Promise(resolve => setTimeout(resolve, 25)); } while (Date.now() < end); throw Error(label + ': ' + JSON.stringify(value)); }
@@ -104,6 +104,20 @@ async function main() {
     if (match && !match.test(name)) return;
     const server = cloudFixture(data), device = 'purpose-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: size, hasTouch: true, reducedMotion: 'reduce' }), pending = new Set(), staticRequests = new Map();
     const receipt = { device, closed: false, capability: server.libraryCapabilities }; report.contexts.push(receipt);
+    // Count actual verified app reveals independently of RSS traffic. Ordinary
+    // view changes never emit this event; reload/account remounts do.
+    await context.exposeBinding('__purposeAppStarted', ({ page, frame }, start) => {
+      if (frame === page.mainFrame()) report.appStarts.push({ device, ...start });
+    });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = crypto.randomUUID(); let sequence = 0;
+      window.__purposeStartReports = [];
+      document.addEventListener('haedo:page-ready', () => {
+        __purposeStartReports.push(window.__purposeAppStarted({ documentId, sequence: ++sequence,
+          path: location.pathname, ownerId: window.HaedoAuth?.user?.id || null }));
+      });
+    });
     const staticURL = raw => { const u = new URL(raw); return u.origin === new URL(base).origin && (/\.(html|js|css|woff2?|json|svg)$/.test(u.pathname) || u.pathname.endsWith('/')) ? u : null; };
     const beginStatic = request => { const url = staticURL(request.url()); if (url) staticRequests.set(request, { ...deferred(), url }); };
     const finishStatic = request => { const entry = staticRequests.get(request); if (entry) { staticRequests.delete(request); entry.resolve(); } };
@@ -112,6 +126,9 @@ async function main() {
     context.on('request', request => {
       const url = new URL(request.url()), method = request.method(); if (url.origin !== cloud || method === 'OPTIONS') return;
       const row = { device, method, path: url.pathname }; report.privateRequests.push(row);
+      if (isRssInboxRead(request, { cloud, server, ownerId: accounts.a.id, workspaceId: id })) {
+        report.rssReads.push({ ...row, action: 'list', workspaceId: request.postDataJSON().workspaceId }); return;
+      }
       const reads = method === 'GET' && ['/auth/v1/user', '/auth/v1/settings', '/rest/v1/life_workspaces', '/rest/v1/life_account_materials', '/rest/v1/haedo_documents', '/rest/v1/haedo_items', '/rest/v1/charts'].includes(url.pathname);
       const auth = method === 'POST' && ['/auth/v1/token', '/auth/v1/logout'].includes(url.pathname);
       const rpc = method === 'POST' && ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_composition_get', 'life_composition_put', 'life_sync_put', 'life_blog_list', 'life_blog_read'].some(name => url.pathname === '/rest/v1/rpc/' + name)
@@ -151,6 +168,12 @@ async function main() {
       try {
         await drainStatic(); receipt.staticAtClose = { requests: staticRequests.size, verifications: pending.size };
         assert.deepEqual(receipt.staticAtClose, { requests: 0, verifications: 0 });
+        // Binding promises resolve only after the Node ledger accepted each
+        // reveal, so an asynchronous report cannot undercount this document.
+        await page.evaluate(() => Promise.all(window.__purposeStartReports || []));
+        receipt.starts = report.appStarts.filter(row => row.device === device).length;
+        receipt.rssReads = report.rssReads.filter(row => row.device === device).length;
+        assert.ok(receipt.rssReads <= receipt.starts, 'RSS reads exceed actual app starts: ' + JSON.stringify({ device, rssReads: receipt.rssReads, starts: receipt.starts }));
         // End observation synchronously at the drained boundary, before close
         // can emit teardown events and start another response.body() operation.
         context.off('response', verifyStatic); context.off('request', beginStatic); context.off('requestfinished', finishStatic); context.off('requestfailed', failStatic);
@@ -261,6 +284,7 @@ async function main() {
   assert(report.sourcesUnchanged && report.fixturesUnchanged && report.runnerUnchanged, 'Source and runner pins must stay unchanged during execution');
   for (const key of ['pageErrors', 'consoleErrors', 'external', 'staticErrors', 'forbiddenPrivateRequests']) assert.deepEqual(report[key], [], key);
   assert(report.checks.length > 0 && report.checks.every(row => row.pass), 'All selected checks must pass');
+  assert.ok(report.rssReads.length <= report.appStarts.length, 'RSS reads must not exceed verified app starts');
   console.log('Purpose workflow: ' + report.checks.length + ' checks, ' + report.visual.length + ' captures; all contexts and browser closed.');
 }
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
