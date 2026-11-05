@@ -439,6 +439,9 @@ jobs:
       - name: Verify RSS connection rows, preview, stop, retry and disconnect without real feed requests
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/rss-connection-browser.cjs
+      - name: Verify same-account verification keeps permanent errors, retries transient failures within a cap and restores the retry button
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/shell-same-account-reverify-browser.cjs
       - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-ai-browser.cjs
