@@ -191,6 +191,20 @@
         },
         "diff": "--- current UI\n+++ toolbar mutation\n@@ -996,7 +996,7 @@\n         selected.privateState = 'error';\n         selected.privateError = error?.code === 'discovery_private_rate_limited' ? '요청이 많습니다. 잠시 뒤 다시 불러와 주세요.' : '본문을 불러오지 못했습니다. 다시 시도해 주세요.';\n       } finally {\n-        if (live()) { privateAborter = null; refreshPrivateRead(); }\n+        if (live()) { privateAborter = null; draw(); }\n       }\n     }\n     function disposeReaderView() { current?.reader?.privateBody?.dispose(); if (current) current.reader = null; }\n"
       }
+    ],
+    "moduleRegistration": [
+      {
+        "omittedScript": "assets/life/discovery-private-remote.js",
+        "expectedMissingName": "DiscoveryPrivateRemote",
+        "exitCode": 1,
+        "kind": "Dedicated localhost server substitutes only this response with an inert script; archive and source files unchanged."
+      },
+      {
+        "omittedScript": "assets/life/discovery-reader-ui.js",
+        "expectedMissingName": "DiscoveryReaderUI",
+        "exitCode": 1,
+        "kind": "Dedicated localhost server substitutes only this response with an inert script; archive and source files unchanged."
+      }
     ]
   },
   "orchestratorTasks": [
@@ -357,7 +371,7 @@
       }
     ]
   },
-  "mutationCount": 17,
+  "mutationCount": 19,
   "regressionEnvironment": {
     "BASE_URL": "http://127.0.0.1:4175",
     "PW_MODULE_PATH": "$PWD/tests/browser-ci/node_modules/playwright",
@@ -452,9 +466,19 @@
       "expectedErrors": 0,
       "runnerSHA256": "b70c55b0dcce5667e4e3cd785f6ac65427cb8b94192e35c787b135b2ab6effb6",
       "reportSHA256": "9deffa57fba847a0353c68c846b933979ff1acc1971fd1940f94248674110a78"
+    },
+    {
+      "command": "node tests/structure-baseline-browser.cjs",
+      "passed": 6,
+      "failed": 0,
+      "scenes": 3,
+      "registeredNames": 138,
+      "topLevelGlobals": 17,
+      "runnerSHA256": "d0b36560ae9c2e64967286268ba968b27a088f00f42adee92c46d79555221603",
+      "reportSHA256": "b20d53287f9c005b2e50d6b949b29356645accb22dd777f5d32f533e95611299"
     }
   ],
-  "browserTotalPassed": 109,
+  "browserTotalPassed": 115,
   "failureCorrections": [
     {
       "finding": "News-specific robots UA was ignored by current shared collector",
@@ -490,6 +514,11 @@
       "finding": "An intermediate document referenced evidence before it was created",
       "before": "Unit2021/2022, missing evidence link",
       "after": "Write evidence file then rerun full2022/2022; no check weakening"
+    },
+    {
+      "finding": "CI global-module pin omitted the two intentionally loaded private reader modules",
+      "before": "Base2eebd27 passes6; original head2ad2347 fails with exactly2 additional names; original CI reproduced",
+      "after": "Coordinator-approved two-name addition;6 passes and omission of either module fails; original strict globals/page checks unchanged"
     }
   ],
   "independentReview": {
@@ -549,6 +578,139 @@
     "tests/life-external-discovery-pwa-browser.cjs": "b70c55b0dcce5667e4e3cd785f6ac65427cb8b94192e35c787b135b2ab6effb6",
     "tests/life-news-browser.cjs": "2508e819d7a4be2b011a0e22acdf532f8aaaedb1dd4ac5f1dba37ef39aa89cf2",
     "tests/life-personal-discovery-browser.cjs": "1412c2be021555c0a5eaf178b554a09fadc3e98366a79c218809d1e7533b12fe",
-    "tests/run-discovery-private-postgres.cjs": "25268136b83a16bbb5a0c706ea6c805f5cc918e6293ca97afe7a877b8ece46b0"
+    "tests/run-discovery-private-postgres.cjs": "25268136b83a16bbb5a0c706ea6c805f5cc918e6293ca97afe7a877b8ece46b0",
+    "tests/structure-baseline-browser.cjs": "d0b36560ae9c2e64967286268ba968b27a088f00f42adee92c46d79555221603"
+  },
+  "ciFollowup": {
+    "instruction": "https://github.com/wonchance-art/life-haedo/pull/214#issuecomment-6650711429",
+    "approval": "https://github.com/wonchance-art/life-haedo/pull/212#issuecomment-6650747441",
+    "originalRun": 41974011580,
+    "originalJob": 127068548527,
+    "failedStep": "structure-baseline-browser: fixed HaedoLife module list omitted DiscoveryPrivateRemote and DiscoveryReaderUI",
+    "base": {
+      "exitCode": 0,
+      "passedAssertions": 6,
+      "haedoLifeNames": 136,
+      "topLevelGlobals": 17
+    },
+    "originalHead": {
+      "exitCode": 1,
+      "error": "index.html signed out: HaedoLife.* names",
+      "haedoLifeNames": 138,
+      "topLevelGlobals": 17
+    },
+    "approvedPins": {
+      "testSHA256": "d0b36560ae9c2e64967286268ba968b27a088f00f42adee92c46d79555221603",
+      "onlyChange": "Added the two names in sorted PINNED.haedoLife positions; every other source byte preserved.",
+      "exitCode": 0,
+      "passedAssertions": 6,
+      "haedoLifeNames": 138,
+      "topLevelGlobals": 17
+    },
+    "sceneDiffs": {
+      "index.html signed out": {
+        "haedoLife": {
+          "added": [
+            "DiscoveryPrivateRemote",
+            "DiscoveryReaderUI"
+          ],
+          "removed": []
+        },
+        "globals": {
+          "added": [],
+          "removed": []
+        }
+      },
+      "index.html signed in": {
+        "haedoLife": {
+          "added": [
+            "DiscoveryPrivateRemote",
+            "DiscoveryReaderUI"
+          ],
+          "removed": []
+        },
+        "globals": {
+          "added": [],
+          "removed": []
+        }
+      },
+      "life.html signed in": {
+        "haedoLife": {
+          "added": [
+            "DiscoveryPrivateRemote",
+            "DiscoveryReaderUI"
+          ],
+          "removed": []
+        },
+        "globals": {
+          "added": [],
+          "removed": []
+        }
+      }
+    },
+    "logSHA256": {
+      ".local/structure-baseline-qa/base-original.log": "6dc52d6080696feaf880a5c24313fc3280ff8017e9741e71b66e6ba9b58396f9",
+      ".local/structure-baseline-qa/head-original.log": "ca698cd8d312dd9499396c273ce96ca9fdd0613a9e0938ba51104122e85f5523",
+      ".local/structure-baseline-qa/base-registered.json": "1ae7800fb2b779e7abd5d38baf96ef2eea6acc84e7fb8f68b6442b35521c8943",
+      ".local/structure-baseline-qa/head-registered.json": "9e175b7ea450de21ce86709ed51c380f445fb252ac31d6d12a09eff44d7d1777",
+      ".local/private-news-integration/ci-group1-original.log": "3c6003579776477f6fa592b0a0af68ffc7a7af21ab7431eb4c4f1b6ff6e4da61",
+      ".local/structure-baseline-qa/head-approved-pins.log": "a3e7a87ef84c10bc371ce742e893bef416d17048cc4eb2153bf50c4f4bf3faf9",
+      ".local/structure-baseline-qa/mutation-omit-private.log": "49db01109279062a0c4456ea1786ca8435b35bd4f6834f59042ee7e3e1aa9e53",
+      ".local/structure-baseline-qa/mutation-omit-reader.log": "8947775c20adb45598d569dcf5d56bcc96c572c28b8687d74f536ef1afc3321c"
+    },
+    "commands": [
+      {
+        "label": "base-original",
+        "cwd": "/workspace/haedo-private-news-integration/.local/structure-baseline-qa/base-2eebd27",
+        "command": "BASE_URL=http://127.0.0.1:4187 PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/structure-baseline-browser.cjs > /workspace/haedo-private-news-integration/.local/structure-baseline-qa/base-original.log 2>&1"
+      },
+      {
+        "label": "head-original",
+        "cwd": "/workspace/haedo-private-news-integration/.local/structure-baseline-qa/head-2ad2347",
+        "command": "BASE_URL=http://127.0.0.1:4188 PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/structure-baseline-browser.cjs > /workspace/haedo-private-news-integration/.local/structure-baseline-qa/head-original.log 2>&1"
+      },
+      {
+        "label": "head-approved-pins",
+        "cwd": "/workspace/haedo-private-news-integration",
+        "command": "BASE_URL=http://127.0.0.1:4188 PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/structure-baseline-browser.cjs > /workspace/haedo-private-news-integration/.local/structure-baseline-qa/head-approved-pins.log 2>&1"
+      },
+      {
+        "label": "mutation-omit-private",
+        "cwd": "/workspace/haedo-private-news-integration",
+        "command": "BASE_URL=http://127.0.0.1:4189 PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/structure-baseline-browser.cjs > /workspace/haedo-private-news-integration/.local/structure-baseline-qa/mutation-omit-private.log 2>&1"
+      },
+      {
+        "label": "mutation-omit-reader",
+        "cwd": "/workspace/haedo-private-news-integration",
+        "command": "BASE_URL=http://127.0.0.1:4190 PW_MODULE_PATH=/workspace/haedo-private-news-integration/tests/browser-ci/node_modules/playwright CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/structure-baseline-browser.cjs > /workspace/haedo-private-news-integration/.local/structure-baseline-qa/mutation-omit-reader.log 2>&1"
+      }
+    ],
+    "productSHA256": {
+      "index.html": "539957d88341bcf536ac9d341389a9025cb6c884a5db59f83e10f19e74154de2",
+      "life.html": "b2d138fa2a0db6767f72fd7d10e68f4985098b8d4480334aae14b20b23d3c6b5",
+      "assets/life/discovery-private-remote.js": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+      "assets/life/discovery-reader-ui.js": "ce975e875bdcf8fbd013270b6fcd35875bbff4b1ec74b9b16d07312c4afb1d7d"
+    },
+    "archives": {
+      "base": {
+        "commit": "2eebd27cbde54f697c9de3a09382f2e21b39a743",
+        "testSHA256": "60ef24ce0d0ff5aa8b2fc335c6b6df45349931d59fd0208310b8de3509b2554b",
+        "archiveSHA256": "d61ba757e4633f6feaf1a760e802218f54ec532340b7fa1fa673fb8a9ab4f9ed"
+      },
+      "head": {
+        "commit": "2ad23471ba01df67160f9db902fec0e622df9ddf",
+        "testSHA256": "60ef24ce0d0ff5aa8b2fc335c6b6df45349931d59fd0208310b8de3509b2554b",
+        "archiveSHA256": "1fd923898e312890b3a3123d72d211f8df43d888d139c199f8971b711146f8ba"
+      }
+    },
+    "sourceBytesExceptTwoAddedNamesUnchanged": true,
+    "ownedServersStopped": 4,
+    "independentReview": {
+      "blockers": 0,
+      "majors": 0,
+      "evidenceCrossCheck": "passed"
+    },
+    "otherOriginalJobs": "check, blog, browser groups2/3/4/5 passed; aggregate browser failed because group1 failed; build/deploy skipped",
+    "updatedHeadCI": "pending"
   }
 }
