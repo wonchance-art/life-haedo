@@ -1629,6 +1629,77 @@
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
       return result;
     }
+    // Explicit first-edit confirmation/save only: never call from autosave.
+    // The recovery comes from the exact stored source, not an editor snapshot.
+    async function savePostTransition(workspaceId, input, baseRevision, request) {
+      collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
+      onlyFields(request, ['sourceId', 'sourceRevision', 'recoveryId'], 'invalid_photo_post');
+      const { sourceId, sourceRevision, recoveryId } = request;
+      requireId(sourceId, '원래 글'); requireId(recoveryId, '복구 사본'); requireRevision(sourceRevision);
+      const value = photoPost().compact(input), sameId = value.id === sourceId;
+      if (value.format !== 'life-post-md-v1' || recoveryId === sourceId || recoveryId === value.id ||
+          (sameId ? baseRevision !== sourceRevision : value.status !== 'saved' || value.replaces?.id !== sourceId || value.replaces?.revision !== sourceRevision))
+        throw fault('invalid_photo_post', '전환할 원래 글과 복구 사본을 확인해 주세요.');
+      if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      // Hash outside IDB. Include actual bytes, so a reused operation cannot
+      // silently accept a changed Blob with an unchanged caller-supplied digest.
+      const photos = await Promise.all(value.photos.map(async photo => ({ ...photoPost().metadata(photo),
+        bytes: await photoPost().digest(photo.blob), ...(photo.view ? { viewBytes: await photoPost().digest(photo.view.blob) } : {}) })));
+      const payload = await photoPost().digest(new Blob([stablePayload({ value: { ...value, photos }, baseRevision, sourceId, sourceRevision, recoveryId })]));
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const receiptKey = `photo-transition:${workspaceId}:${sourceId}:${sourceRevision}`, receipt = (await meta.get(receiptKey))?.value;
+        if (receipt) {
+          if (receipt.payload !== payload) throw fault('operation_mismatch', '이미 전환한 글에 다른 저장 요청이 들어왔습니다. 입력을 보존했습니다.');
+          const post = (await meta.get(`photo-post:${workspaceId}:${value.id}`))?.value;
+          const recovery = (await meta.get(`photo-post:${workspaceId}:${recoveryId}`))?.value;
+          if (!post || post.revision !== receipt.postRevision || !recovery || recovery.revision !== receipt.recoveryRevision)
+            throw fault('photo_post_conflict', '전환한 글이나 복구 사본이 바뀌었습니다. 목록을 다시 확인해 주세요.');
+          photoPost().validate(post); photoPost().validate(recovery);
+          return { post: clone(post), recoveryId, replayed: true };
+        }
+        const source = (await meta.get(`photo-post:${workspaceId}:${sourceId}`))?.value;
+        if (!source || source.revision !== sourceRevision || !sameId && source.status !== 'saved')
+          throw fault('photo_post_conflict', '원래 글이 바뀌었습니다. 입력과 원래 글을 보존했습니다.');
+        photoPost().validate(source);
+        if (sameId && (value.status !== source.status || stablePayload(value.replaces) !== stablePayload(source.replaces)))
+          throw fault('invalid_photo_post', '초안 전환은 원래 저장 상태와 수정 대상을 유지해야 합니다.');
+        if (!['life-photo-post-v1', 'life-photo-post-v2'].includes(source.format))
+          throw fault('photo_post_conflict', '이미 전환한 글입니다. 목록을 다시 확인해 주세요.');
+        for (const prefix of ['photo-post', 'post-evidence', 'blog-sync']) if (await meta.get(`${prefix}:${workspaceId}:${recoveryId}`))
+          throw fault('photo_post_conflict', '복구 사본 식별자가 이미 쓰이고 있습니다.');
+        const originalEvidence = await postEvidenceRow(meta, workspaceId, `post-evidence:${workspaceId}:${sourceId}`);
+        const refs = originalEvidence ? checkedEvidence(originalEvidence.refs, workspaceId) : [];
+        checkEvidenceTargets(refs, bundle);
+        // Match BlogSync's existing recovery naming, including whole-character
+        // title truncation. Keep the exact original title in the local receipt.
+        let title = source.title || '', suffix = '';
+        if (!title.startsWith('복구 사본 · ')) title = '복구 사본 · ' + title;
+        else if (!/ \(\d\d-\d\d \d\d:\d\d UTC\)$/.test(title)) {
+          const at = new Date(source.updatedAt), two = number => String(number).padStart(2, '0');
+          suffix = ` (${two(at.getUTCMonth() + 1)}-${two(at.getUTCDate())} ${two(at.getUTCHours())}:${two(at.getUTCMinutes())} UTC)`;
+        }
+        let head = '';
+        for (const char of title) { if (head.length + char.length + suffix.length > 500) break; head += char; }
+        const recovery = { ...clone(source), id: recoveryId, title: head + suffix, revision: 0, status: 'draft', replaces: null };
+        if (recovery.format !== 'life-photo-post-v1') recovery.archived = false;
+        // Final first permits a replacement at the 200-post limit. Both writes,
+        // refs, identity/receipt transfers and material output moves share tx.
+        const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
+        const kept = await writePhotoPost(tx, workspaceId, recovery, 0,
+          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);
+        await meta.put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } });
+        effects.evidence = !!originalEvidence;
+        return { post, recoveryId, replayed: false };
+      });
+      if (!result.replayed) {
+        const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+        if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+        if (effects.evidence) accountDocChanged(`post-evidence:${workspaceId}:${recoveryId}`, `post-evidence:${workspaceId}:${value.id}`);
+      }
+      return result;
+    }
     async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
         // The bundle's content is read (and the whole bundle validated) only by
         // the source checks below; a plain post write checks the workspace only.
@@ -5493,7 +5564,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
