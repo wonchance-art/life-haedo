@@ -894,6 +894,9 @@ jobs:
       - name: Verify saved Markdown publishes through the server projection and anonymous reading
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_md_publish" node tests/post-markdown-publish-browser.cjs --prepare-database
+      - name: Verify legacy Markdown publication requests recover with the same operation
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_pending" node tests/blog-publish-pending-browser.cjs --prepare-database
       - name: Verify series publication receipts, independent wrappers and current revocation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-series-backend.cjs
@@ -974,6 +977,7 @@ jobs:
             .local/integrated-release/
             .local/blog-backend/
             .local/blog-completion/
+            .local/blog-publish-pending/
             .local/account-blog-continuity/
             .local/account-wide-home/
             .local/blog-series-backend/
