@@ -282,11 +282,13 @@ async function main() {
     await check('Reopening after 돌아가기 never restores focus to that button, and a field or control chosen during the source load keeps focus', async () => {
       const d = await fixture('material-reopen-focus'); page = d.page; const planId = await seedPlan(page, d.fixture, '다시 연 준비');
       await page.goto(base + '/index.html?section=records&view=page'); await ready(page);
-      const hold = () => page.evaluate(() => { const original = window.__mwOriginalSources ||= HaedoLife.MaterialWritingSources; window.__mwSourcesHeld = false; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
-        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      const hold = () => page.evaluate(() => { const original = window.__mwOriginalSources ||= HaedoLife.MaterialWritingSources; window.__mwSourcesHeld = window.__mwSourcesLoaded = false; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; const result = await value.mount(...args); window.__mwSourcesLoaded = true; return result; }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
       const leave = async () => { await page.locator('#mwClose').focus(); await page.keyboard.press('Enter'); await page.locator('#mwTitle').waitFor({ state: 'detached' }); };
       const reopen = async () => { await hold(); await page.locator('#wbPageMaterialWriting').click(); await page.waitForFunction(() => window.__mwSourcesHeld === true && !!document.querySelector('#mwQuestion')); };
-      const release = async () => { await page.evaluate(() => window.__mwReleaseSources()); await page.locator('.mw-source-search').waitFor(); };
+      // The search box is attached before the sources' bundle read ends; focus is decided only after that read.
+      // Wait for the load itself to finish so every assertion below sees the settled focus, not the gap before it.
+      const release = async () => { await page.evaluate(() => window.__mwReleaseSources()); await page.waitForFunction(() => window.__mwSourcesLoaded === true); await page.locator('.mw-source-search').waitFor(); };
       await page.locator('#wbPageMaterialWriting').click(); await page.locator('.mw-source-search').waitFor();
       assert.equal(await page.locator('#mwPlanSelect').inputValue(), planId);
       // 1. Nothing chosen during the load: the button that left the screen is not restored; the default field is.
@@ -306,11 +308,11 @@ async function main() {
     });
     await check('A control reached with Tab while a new preparation\'s sources load keeps focus instead of being pulled to the title', async () => {
       const d = await fixture('material-new-control-focus'); page = d.page; await enter(page);
-      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourcesHeld = false; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
-        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourcesHeld = window.__mwSourcesLoaded = false; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; const result = await value.mount(...args); window.__mwSourcesLoaded = true; return result; }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
       await page.locator('#mwNew').click(); await page.waitForFunction(() => window.__mwSourcesHeld === true && !!document.querySelector('#mwAddHeading'));
       await page.locator('#mwAddHeading').focus();
-      await page.evaluate(() => window.__mwReleaseSources()); await page.locator('.mw-source-search').waitFor();
+      await page.evaluate(() => window.__mwReleaseSources()); await page.waitForFunction(() => window.__mwSourcesLoaded === true); await page.locator('.mw-source-search').waitFor();
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'mwAddHeading', 'a control chosen during the load keeps focus');
     });
     await check('A real SDK account change during exact-source hashing cancels the old account handoff and leaves both accounts free of partial posts', async () => {
