@@ -69,7 +69,7 @@
       else if (page.execution?.status === 'busy') status.textContent = root.HaedoLife.RssConnection.messages.rss_busy;
       else if (page.execution?.status === 'error') status.textContent = '이번 확인을 마치지 못했습니다. 기존 자료는 유지됩니다.';
       else if (page.execution?.status === 'partial') status.textContent = page.connections.some(conn => conn.status === 'pending') ?
-        '기준 목록 일부를 확인했습니다. 나머지 목록을 이어서 확인합니다.' : '이번 확인에서 일부만 받았습니다. 다음 확인 때 새 글부터 다시 살핍니다.';
+        '기준 목록 일부를 확인했습니다. 나머지 목록을 이어서 확인합니다.' : '새 글 일부를 보관했습니다. 남은 새 글을 이어서 확인합니다.';
       if (page.execution?.error) { error.textContent = root.HaedoLife.RssConnection.messages[page.execution.error] || root.HaedoLife.RssConnection.messages.rss_network_error; error.hidden = false; }
       if (page.receiveError) { error.textContent = page.receiveError; error.hidden = false; }
       for (const conn of page.otherConnections || []) {
@@ -82,15 +82,16 @@
       for (const conn of page.connections) {
         const line = node('section'); line.dataset.rssConnection = conn.id;
         const address = node('p', conn.feed_url, 'life-meta'); address.style.overflowWrap = 'anywhere';
-        line.append(address, node('p', STATES[conn.status]));
+        line.append(address, node('p', conn.last_error && ['pending', 'active'].includes(conn.status) ?
+          conn.status === 'pending' ? '기준 목록 확인 중지됨' : '새 글 확인 중지됨' : STATES[conn.status]));
         if (conn.baseline_at) line.append(node('p', '기준 목록 ' + conn.baseline_count + '개 · 과거 글은 가져오지 않음', 'life-help'));
-        if (conn.next_check_at && conn.status === 'active' && Number.isFinite(Date.parse(conn.next_check_at))) {
+        if (conn.next_check_at && conn.status === 'active' && !conn.last_error && Number.isFinite(Date.parse(conn.next_check_at))) {
           line.append(node('p', '다음 확인 가능: ' + new Date(conn.next_check_at).toLocaleString('ko-KR'), 'life-help'));
         }
-        if (conn.last_error) line.append(node('p', '마지막 확인을 마치지 못했습니다. 다시 시도해 주세요.', 'life-error'));
-        const actions = conn.status === 'pending' ? [['preview', '기준 목록 미리보기']] : conn.status === 'preview' ? [['activate', '새 글만 수집 시작']] :
-          conn.status === 'active' ? [['poll', '새 글 확인'], ['pause', '수집 중지']] : conn.status === 'paused' ? [['resume', '수집 재개']] : [];
-        if (conn.last_error && conn.status !== 'disconnected') actions.push(['retry', '다시 시도']);
+        if (conn.last_error) line.append(node('p', root.HaedoLife.RssConnection.messages[conn.last_error] || '마지막 확인을 마치지 못했습니다. 다시 시도해 주세요.', 'life-error'));
+        const actions = conn.status === 'pending' ? conn.last_error ? [] : [['preview', '기준 목록 미리보기']] : conn.status === 'preview' ? [['activate', '새 글만 수집 시작']] :
+          conn.status === 'active' ? [...(conn.last_error ? [] : [['poll', '새 글 확인']]), ['pause', '수집 중지']] : conn.status === 'paused' ? [['resume', '수집 재개']] : [];
+        if (conn.last_error && ['pending', 'active'].includes(conn.status) && !['baseline_page_limit', 'catchup_page_limit'].includes(conn.last_error)) actions.push(['retry', '다시 시도']);
         if (conn.status !== 'disconnected') actions.push(['disconnect', '연결 해제']);
         for (const [action, text] of actions) {
           const control = button(text, () => {

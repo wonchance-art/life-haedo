@@ -159,3 +159,13 @@ test('other workspace connections are read-only metadata and cannot justify wron
   f.page.items = [f.item({ connection_id: other.id })];
   await assert.rejects(f.service.list(), { code: 'rss_invalid_data' }); assert.equal(f.commits, 0);
 });
+test('bounded baseline failures retain their specific reason and stopped connection state', async () => {
+  for (const code of ['baseline_page_limit', 'baseline_stalled', 'catchup_page_limit']) {
+    const f = fixture(); f.conn.status = code === 'catchup_page_limit' ? 'active' : 'pending'; f.conn.last_error = code;
+    f.page.execution = { status: 'error', error: code };
+    const result = await f.service.action(code === 'catchup_page_limit' ? 'poll' : 'preview', f.conn);
+    assert.equal(result.execution.error, code); assert.equal(result.connections[0].last_error, code);
+    assert.match(Rss.messages[code], /멈췄습니다/);
+    assert.equal(f.commits, 0);
+  }
+});

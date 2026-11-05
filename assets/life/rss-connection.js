@@ -20,9 +20,13 @@
     rss_not_due: '다음 확인 시간이 되면 새 글을 확인할 수 있습니다.',
     rss_stale: '연결 상태가 바뀌어 이번 확인 결과를 반영하지 않았습니다. 상태를 새로고침해 주세요.',
     rss_retry_limit: '다시 시도는 1시간에 2회까지 할 수 있습니다. 다음 확인 시간을 기다려 주세요.',
+    rss_retry_unavailable: '현재 상태에서는 다시 시도할 수 없습니다. 연결 상태와 피드 범위를 확인해 주세요. 받은 자료는 유지됩니다.',
     rss_invalid_feed: 'RSS/Atom 피드를 읽지 못했습니다. 피드 주소와 형식을 확인해 주세요.',
     rss_connection_exists: '이미 연결된 RSS 피드가 있습니다. 기존 연결의 자료공간에서 상태를 확인해 주세요.',
     rss_not_found: '이 자료공간에서 해당 RSS 연결을 찾지 못했습니다. 연결된 자료공간을 확인해 주세요.',
+    baseline_page_limit: '기준 목록이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 피드 범위를 확인해 주세요.',
+    catchup_page_limit: '남은 새 글 확인이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다. 피드 범위를 확인해 주세요.',
+    baseline_stalled: '새 항목이 없는 빈 쪽이나 반복되는 쪽을 만나 기준 목록 확인을 멈췄습니다. 피드 구성을 확인해 주세요.',
     rss_receive_conflict: '자료 보관을 마치지 못했습니다. 기존 자료는 유지되며 다시 시도할 수 있습니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.rss_network_error), { code });

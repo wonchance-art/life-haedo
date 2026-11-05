@@ -76,7 +76,7 @@ async function capture(page, scene, width) {
 class RssCloud extends FakeCloud {
   constructor() {
     super(); this.connections = new Map(); this.items = []; this.calls = []; this.configured = true;
-    this.nextItems = []; this.failure = null; this.failureCode = null; this.failureStatus = 200; this.hold = null; this.executionOutcome = null;
+    this.nextItems = []; this.failure = null; this.failureCode = null; this.failureStatus = 200; this.hold = null; this.executionOutcome = null; this.baselineOutcome = null;
   }
   connection(workspaceId, owner = accounts.a.id, status = 'pending') {
     const row = { id: 'cccccccc-cccc-4ccc-8ccc-000000000001', workspace_id: workspaceId, feed_url: FEED,
@@ -109,6 +109,10 @@ class RssCloud extends FakeCloud {
     if (this.failure === action) { const row = this.connections.get(owner); if (row) row.last_error = 'fetch_failed'; return send({ error: this.failureCode || 'rss_network_error' }, this.failureStatus); }
     if (action !== 'list' && !this.configured) return send({ error: 'setup_required' });
     if (action === 'poll' && this.executionOutcome) return send({ ...this.snapshot(owner, workspaceId), execution: { status: this.executionOutcome } });
+    if (action === 'preview' && this.baselineOutcome) {
+      const pending = this.connections.get(owner); assert.ok(pending && pending.workspace_id === workspaceId && pending.status === 'pending');
+      pending.last_error = this.baselineOutcome; return send({ ...this.snapshot(owner, workspaceId), execution: { status: 'error', error: this.baselineOutcome } });
+    }
     let conn = this.connections.get(owner);
     if (action === 'register') {
       assert.equal(body.url, FEED, 'fixture allows exactly one synthetic feed');
@@ -124,7 +128,9 @@ class RssCloud extends FakeCloud {
         conn.last_checked_at = '2026-11-05T06:01:00.000Z'; conn.next_check_at = '2026-11-05T07:01:00.000Z';
       } else if (action === 'activate' || action === 'resume' || action === 'retry') {
         if (action === 'activate') { assert.equal(conn.status, 'preview'); conn.activated_at = conn.baseline_at; }
-        conn.status = 'active'; conn.revision++; conn.last_error = null;
+        if (action === 'retry' && conn.status === 'pending') { conn.status = 'preview'; conn.baseline_count = 2; conn.baseline_at = '2026-11-05T05:00:00.000Z'; }
+        else conn.status = 'active';
+        conn.revision++; if (action === 'retry') conn.last_error = null;
       } else if (action === 'pause') { conn.status = 'paused'; conn.revision++; }
       else if (action === 'disconnect') { conn.status = 'disconnected'; conn.revision++; }
       else throw Error('Unexpected RSS fixture action ' + action);
@@ -219,7 +225,14 @@ async function main() {
       server.failure = 'poll'; await action(page, 'poll'); await idle(page);
       await page.locator('#rssError:not([hidden])').waitFor(); assert.deepEqual(await sources(page), before, 'failed intake preserves exact originals');
       server.failure = null;
-      await page.locator('#rssRefresh').click(); await idle(page); await action(page, 'retry'); await idle(page);
+      await page.locator('#rssRefresh').click(); await idle(page);
+      assert.doesNotMatch(await page.locator('[data-rss-connection]').innerText(), /다음 확인 가능/, 'an errored connection has no actionable next-check clock');
+      await action(page, 'pause'); await idle(page); assert.equal(conn.status, 'paused');
+      assert.equal(await page.locator('[data-rss-action="retry"]').count(), 0, 'paused error does not offer a retry that SQL rejects');
+      assert.equal(await page.locator('[data-rss-action="resume"]').isEnabled(), true);
+      await action(page, 'resume'); await idle(page); assert.equal(conn.last_error, 'fetch_failed', 'resume retains the error until explicit retry');
+      assert.equal(await page.locator('[data-rss-action="retry"]').isEnabled(), true);
+      await action(page, 'retry'); await idle(page);
       await disconnect(page); assert.equal(conn.status, 'disconnected');
       assert.deepEqual(await sources(page), before, 'disconnect keeps already stored originals');
       await nav(page, 'schedule'); await open(page); await idle(page);
@@ -260,6 +273,43 @@ async function main() {
       assert.doesNotMatch(shown, /로그인을 확인|입력과 기존 자료는 유지됩니다/, 'specific server error is not replaced by auth or generic transport prose');
       assert.equal(await page.locator('#rssFeedUrl').inputValue(), FEED); assert.deepEqual(await sources(page), before);
       if (scenario.httpStatus) assert.equal(report.expectedConsoleErrors.length - expectedBefore, 1, 'exactly one expected synthetic HTTP diagnostic');
+    });
+    for (const code of ['baseline_stalled', 'baseline_page_limit']) await check('bounded baseline failure preserves its stop and recovery policy: ' + code, async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'pending'); server.baselineOutcome = code;
+      await open(page); await idle(page); await action(page, 'preview'); await idle(page);
+      assert.equal(conn.status, 'pending'); assert.equal(conn.last_error, code);
+      assert.match(await page.locator('[data-rss-connection]').innerText(), /기준 목록 확인 중지됨/);
+      const shown = await page.locator('#rssError').innerText();
+      assert.match(shown, /기준 목록/); assert.doesNotMatch(shown, /연결을 완료하지 못했습니다/, 'bounded failure has its own recovery explanation');
+      assert.doesNotMatch(await page.locator('#rssStatus').innerText(), /확인했습니다|나머지.*확인합니다/, 'terminal baseline failure cannot imply continuing work');
+      await checkSource(page, 0);
+      if (code === 'baseline_page_limit') {
+        assert.match(shown, /50쪽 한도/);
+        for (const forbidden of ['retry', 'preview', 'poll']) assert.equal(await page.locator('[data-rss-action="' + forbidden + '"]').count(), 0, 'a fixed page cap cannot be bypassed by ' + forbidden);
+        assert.equal(await page.locator('[data-rss-action="disconnect"]').isEnabled(), true); return;
+      }
+      assert.equal(await page.locator('[data-rss-action="retry"]').isEnabled(), true, 'recoverable stalled feed still permits explicit retry');
+      // A fixed synthetic feed can be retried explicitly; existing baseline
+      // entries remain excluded rather than being installed as newly posted text.
+      server.baselineOutcome = null; await action(page, 'retry'); await idle(page);
+      assert.equal(conn.status, 'preview'); assert.equal(conn.last_error, null);
+      assert.equal(await page.locator('[data-rss-action="activate"]').isEnabled(), true);
+      await checkSource(page, 0);
+    });
+    await check('catch-up page cap stops collection controls while retaining exact archived text', async ({ page, server }) => {
+      const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+      const conn = server.connection(ws, accounts.a.id, 'active'); conn.last_error = 'catchup_page_limit';
+      server.items = [server.item(conn)]; await open(page); await idle(page); const before = await checkSource(page);
+      const row = page.locator('[data-rss-connection]');
+      assert.match(await row.innerText(), /새 글 확인 중지됨/); assert.match(await row.innerText(), /50쪽 한도/);
+      assert.match(await row.innerText(), /받은 자료는 유지/);
+      for (const forbidden of ['retry', 'preview', 'poll']) assert.equal(await page.locator('[data-rss-action="' + forbidden + '"]').count(), 0, 'a capped catch-up cannot be restarted by ' + forbidden);
+      assert.equal(await page.locator('[data-rss-action="pause"]').isEnabled(), true);
+      assert.equal(await page.locator('[data-rss-action="disconnect"]').isEnabled(), true);
+      await page.locator('[data-rss-item="dddddddd-dddd-4ddd-8ddd-000000000001"]').click();
+      assert.equal(await page.locator('#rssItemBody').textContent(), RAW);
+      await disconnect(page); assert.deepEqual(await sources(page), before, 'disconnect preserves the partial catch-up archive');
     });
     await check('not_due and stale do not claim that collection ran', async ({ page, server }) => {
       const ws = await page.evaluate(() => HaedoLife.Shell.storage.getActive());

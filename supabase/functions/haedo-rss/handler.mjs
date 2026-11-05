@@ -9,6 +9,7 @@ const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const need = (ok, code = 'invalid_request') => { if (!ok) throw failure(code); };
 const ERRORS = new Set(['invalid_request','unauthorized','setup_required','server_error','blocked_url','invalid_feed',
   'feed_too_large','item_limit','network_error','rate_limited','revision_conflict','connection_not_found','baseline_required','not_due',
+  'baseline_page_limit','baseline_stalled','catchup_page_limit',
   'rss_conflict','rss_setup_required','rss_connection_exists','rss_baseline_required','rss_not_active','rss_not_paused','rss_retry_unavailable','rss_retry_limit','rss_invalid_feed','rss_not_found','rss_auth_required']);
 function same(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string' || !right.length || left.length !== right.length) return false;
@@ -71,18 +72,20 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         if (claim === null) return { status: 'not_due' };
         need(object(claim) && claim.connection_id === id && claim.owner_id === owner && claim.workspace_id === workspace &&
           ['pending','active'].includes(claim.status) && UUID.test(claim.lease_token || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0, 'server_error');
-        let collected = { items: [], cursor: claim.status === 'active' ? null : claim.cursor, complete: false }, error = null;
+        let collected = { items: [], pages: [], cursor: claim.cursor, complete: false }, error = null;
         try {
           safeURL(claim.feed_url, allowedHosts);
           collected = await collect({ url: claim.feed_url, cursor: claim.cursor, active: claim.status === 'active',
+            scanPages: claim.status === 'active' ? claim.sweep_pages ?? 0 : claim.baseline_pages ?? 0,
             known: identities => serviceRPC('life_rss_known', { p_connection_id: id, p_owner_id: owner, p_identities: identities }),
             parse: createParser({ XMLParser, XMLValidator }), fetcher, allowedHosts, signal: request.signal });
           error = collected.error || null;
         } catch (caught) { error = ERRORS.has(caught.code) ? caught.code : 'network_error'; }
         const result = await serviceRPC('life_rss_finish', { p_connection_id: id, p_lease_token: claim.lease_token, p_revision: claim.revision,
-          p_items: collected.items, p_next_cursor: collected.cursor, p_complete: collected.complete, p_error: error });
+          p_items: collected.items, p_next_cursor: collected.cursor, p_complete: collected.complete, p_error: error, p_pages: collected.pages });
         need(object(result) && ['stored','stale','already_finished','error','partial'].includes(result.status), 'server_error');
-        return { status: result.status, inserted: result.inserted || 0, held: result.held || 0, error };
+        return { status: result.status, inserted: result.inserted || 0, held: result.held || 0,
+          error: result.error ? ERRORS.has(result.error) ? result.error : 'server_error' : error };
       };
       if (input.action === 'run') {
         // No user JWT can request a batch. New secret keys are never Bearer JWTs.

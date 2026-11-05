@@ -35,6 +35,9 @@
     return el;
   }
   const glyph = name => life().Icons.create(name);
+  function formatWorkspaceCount(bundle, { local = false } = {}) {
+    return (local ? '이 브라우저 · 자료 ' : '자료 ') + bundle.sources.length + '개 · 발췌 ' + bundle.records.length + '개';
+  }
   // Load the private connection controls only after the owner opens this row.
   let rssLoading = null;
   function loadRss() {
@@ -287,7 +290,7 @@
         Promise.resolve().then(() => options.storage.read(options.workspaceId)).then(bundle => {
           if (disposed || !isCurrent() || sequence !== countSequence || !element.isConnected || bundle.workspaceId !== options.workspaceId) return;
           const count = element.querySelector('#lifeCurrentWorkspace .settings-row-sub');
-          if (count) count.textContent = (count.textContent.startsWith('이 브라우저') ? '이 브라우저 · 자료 ' : '자료 ') + bundle.sources.length + '개 · 발췌 ' + bundle.records.length + '개';
+          if (count) count.textContent = formatWorkspaceCount(bundle, { local: count.textContent.startsWith('이 브라우저') });
         }).catch(() => {});
       });
       cleanups.push(() => { countSequence++; unlistenCounts?.(); });
@@ -389,5 +392,5 @@
     return Object.freeze({ element, mount, select, dispose, sections: () => [...sections.keys()] });
   }
 
-  (root.HaedoLife ||= {}).SettingsUI = Object.freeze({ create, row, ITEMS, readCurve, readAge, HASH });
+  (root.HaedoLife ||= {}).SettingsUI = Object.freeze({ create, row, ITEMS, readCurve, readAge, HASH, formatWorkspaceCount });
 })(globalThis);

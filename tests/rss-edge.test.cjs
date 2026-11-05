@@ -27,7 +27,7 @@ function fixture(options={}) {
     if(name==='life_rss_control'){connection.status=args.p_action==='pause'?'paused':args.p_action==='disconnect'?'disconnected':'active';connection.revision++;return json(connection);}
     if(name==='life_rss_due')return json([{connection_id:ids.connection,owner_id:ids.owner,workspace_id:ids.workspace}]);
     if(name==='life_rss_known')return json([]);
-    if(name==='life_rss_claim')return json(options.claimNull?null:{connection_id:ids.connection,owner_id:options.wrongOwner?'55555555-5555-4555-8555-555555555555':ids.owner,workspace_id:ids.workspace,status:connection.status,feed_url:options.claimURL||url,revision:1,lease_token:ids.lease,cursor:null});
+    if(name==='life_rss_claim')return json(options.claimNull?null:{connection_id:ids.connection,owner_id:options.wrongOwner?'55555555-5555-4555-8555-555555555555':ids.owner,workspace_id:ids.workspace,status:connection.status,feed_url:options.claimURL||url,revision:1,lease_token:ids.lease,cursor:null,baseline_pages:options.scanPages||0,sweep_pages:options.scanPages||0});
     if(name==='life_rss_finish'){state.items=args.p_items;connection.last_error=args.p_error;return json({status:options.finishStatus||(args.p_error?'error':args.p_complete?'stored':'partial'),inserted:args.p_items.length,held:0});}
     throw Error('Unexpected fake endpoint '+endpoint);
   };
@@ -99,7 +99,7 @@ test('redirect responses, cross-origin pagination and unbounded streams do not s
   const [f]=await modules,parse=await parser();
   const redirected=new Response(rss());Object.defineProperty(redirected,'redirected',{value:true});
   await assert.rejects(f.collect({url,parse,allowedHosts:[host],fetcher:async()=>redirected}),{code:'blocked_url'});
-  const cross=await f.collect({url,parse,allowedHosts:[host],fetcher:async()=>new Response(rss(entry(),'https://private.invalid/next'))});assert.equal(cross.complete,false);assert.equal(cross.error,'blocked_url');
+  await assert.rejects(f.collect({url,parse,allowedHosts:[host],fetcher:async()=>new Response(rss(entry(),'https://private.invalid/next'))}),{code:'blocked_url'});
   await assert.rejects(f.readBounded(new Response(new ReadableStream({start(c){c.enqueue(new Uint8Array(5));c.close();}})),4),{code:'feed_too_large'});
 });
 test('user poll validates Auth, then ownership, and server apikey is never sent as Bearer or to feed',async()=>{
@@ -107,6 +107,7 @@ test('user poll validates Auth, then ownership, and server apikey is never sent 
   const res=await handler(request({action:'poll',workspaceId:ids.workspace,connectionId:ids.connection}));assert.equal(res.status,200);assert.equal((await res.json()).items.length,1);
   assert.ok(fx.calls[0].endpoint.endsWith('/auth/v1/user'));
   const service=fx.calls.filter(x=>/life_rss_(claim|finish)$/.test(x.endpoint));assert.equal(service.length,2);assert.ok(service.every(x=>x.init.headers.apikey==='sb_secret_fixture_server'&&!x.init.headers.Authorization));
+  const finish=JSON.parse(service.find(x=>x.endpoint.endsWith('life_rss_finish')).init.body);assert.deepEqual(finish.p_pages,[{url,identities:['guid:001'],next:null}]);
   assert.equal(fx.calls.filter(x=>x.endpoint.startsWith('https://'+host)).length,1);
 });
 test('unauthenticated user and wrong owner claim cannot fetch feed or finish',async()=>{
@@ -147,10 +148,10 @@ test('unsupported Atom content and ambiguous alternate links hold only those ent
   const {items}=await parse('<feed xmlns="http://www.w3.org/2005/Atom">'+bad+good+ambiguous+'</feed>',url);
   assert.equal(items.length,3);assert.equal(items[0].hold_reason,'unsupported_content');assert.equal(items[1].hold_reason,undefined);assert.equal(items[2].hold_reason,'ambiguous_links');assert.equal(items[2].url,null);
 });
-test('next cannot cross to a second allowed host, and active checks always begin at head',async()=>{
+test('next cannot cross to a second allowed host',async()=>{
   const [f]=await modules,parse=await parser();const calls=[];
-  const result=await f.collect({url,cursor:'https://'+host+'/page19',active:true,known:async()=>[],parse,allowedHosts:[host,'second.fixture.invalid'],fetcher:async(u)=>{calls.push(u);return new Response(rss(entry(),'https://second.fixture.invalid/next'));}});
-  assert.deepEqual(calls,[url]);assert.equal(result.error,'blocked_url');assert.equal(result.complete,false);
+  await assert.rejects(f.collect({url,active:true,known:async()=>[],parse,allowedHosts:[host,'second.fixture.invalid'],fetcher:async(u)=>{calls.push(u);return new Response(rss(entry(),'https://second.fixture.invalid/next'));}}),{code:'blocked_url'});
+  assert.deepEqual(calls,[url]);
 });
 test('active known-ID boundary stops pagination but still captures changed content; unidentified rows do not stop',async()=>{
   const [f]=await modules,parse=await parser(),calls=[];
@@ -208,7 +209,7 @@ test('20-page baseline completes via scheduler alone and the next active run cap
   const handler=h.createHandler({...fx,fetcher,...xml,allowedHosts:[host]});
   for(let n=0;n<10;n++){const res=await handler(request({action:'run'},{apikey:'sb_secret_fixture_server'}));assert.equal(res.status,200);}
   assert.equal(status,'preview');assert.equal(seen.size,20);assert.equal(calls.length,20);
-  status='active';cursor='https://'+host+'/page19';newHead=true;calls.length=0;
+  status='active';cursor=null;newHead=true;calls.length=0;
   assert.equal((await handler(request({action:'run'},{apikey:'sb_secret_fixture_server'}))).status,200);
   assert.equal(calls[0],url);assert.equal(calls.length,2);assert.deepEqual(stored.map(x=>x.identity),['guid:fresh']);assert.equal(cursor,null);
 });
@@ -218,4 +219,96 @@ test('retry actually collects after revision-checked control instead of only res
   assert.equal(res.status,200);assert.equal((await res.json()).items.length,1);
   const names=fx.calls.map(x=>x.endpoint.split('/').at(-1));assert.ok(names.indexOf('life_rss_control')<names.indexOf('life_rss_claim'));
   assert.equal(fx.calls.filter(x=>x.endpoint.startsWith('https://'+host)).length,1);
+});
+
+// Independent in-memory model of durable observations, sweep cutoff and
+// scheduler continuation. The PostgreSQL suite checks the actual RPC contract.
+async function sweepScenario({pageSize,insertCount,insertPage=5}) {
+  const [f]=await modules,parse=await parser(),old=Array.from({length:pageSize*3},(_,i)=>'old_'+i);
+  let feed=[...Array.from({length:pageSize*3+5},(_,i)=>'new_'+i),...old];
+  const expected=new Set(feed.filter(id=>id.startsWith('new_'))),stored=new Set(),observed=new Map(old.map(id=>['guid:'+id,0]));
+  let cursor=null,cutoff=null,clock=1,pages=0,inserted=false,finished=false,maxCalls=0,maxItems=0,tailRuns=0;
+  for(let run=0;run<180;run++) {
+    if(!inserted&&cursor&&Number(new URL(cursor).pathname.slice(5))>=insertPage){
+      const added=Array.from({length:insertCount},(_,i)=>'burst_'+i);feed=[...added,...feed];added.forEach(id=>expected.add(id));inserted=true;
+    }
+    if(cutoff===null){cutoff=clock++;pages=0;}
+    const startedWithTail=!!cursor;let calls=0;
+    const result=await f.collect({url,cursor,active:true,scanPages:pages,parse,allowedHosts:[host],
+      known:async ids=>ids.filter(id=>observed.has(id)&&observed.get(id)<cutoff),
+      fetcher:async target=>{calls++;const number=target===url?1:Number(new URL(target).pathname.slice(5));const start=(number-1)*pageSize;return new Response(rss(feed.slice(start,start+pageSize).map(id=>entry(id)).join(''),start+pageSize<feed.length?'/page'+(number+1):''));}});
+    assert.equal(result.error,null,'finite newest-first sweep must not error');
+    assert.ok(calls<=2);assert.ok(result.items.length<=100);assert.ok(result.pages.length<=2);
+    maxCalls=Math.max(maxCalls,calls);maxItems=Math.max(maxItems,result.items.length);
+    for(const item of result.items){if(!observed.has(item.identity))observed.set(item.identity,clock);const id=item.identity.slice(5);if(expected.has(id))stored.add(id);}
+    clock++;pages+=result.pages.length;assert.ok(pages<=50);cursor=result.cursor;
+    if(result.complete){cutoff=null;pages=0;if(!startedWithTail){finished=true;break;}}
+    if(startedWithTail)tailRuns++;
+  }
+  assert.equal(inserted,true,'scenario must insert a burst while a tail exists');
+  assert.equal(finished,true,'finite insertions must converge to idle');
+  assert.deepEqual([...stored].sort(),[...expected].sort(),'no head, middle or tail identifiers are lost');
+  assert.ok(tailRuns>0);return {maxCalls,maxItems,count:stored.size};
+}
+test('finite insertion matrix drains every gap despite 60+60/100+100 budgets and new head bursts',async()=>{
+  for(const pageSize of [10,60,100])for(const insertCount of [25,250]){
+    const result=await sweepScenario({pageSize,insertCount});assert.equal(result.count,pageSize*3+5+insertCount);
+  }
+});
+test('cumulative 100-item budget preserves the entire unconsumed page without error',async()=>{
+  const [f]=await modules,parse=await parser();
+  for(const pageSize of [50,60,100]){
+    const calls=[];const fetcher=async target=>{calls.push(target);const n=target===url?1:Number(new URL(target).pathname.slice(5));return new Response(rss(Array.from({length:pageSize},(_,i)=>entry('p'+n+'_'+i)).join(''),'/page'+(n+1)));};
+    const first=await f.collect({url,parse,active:true,known:async()=>[],allowedHosts:[host],fetcher});
+    assert.equal(first.error,null);assert.equal(first.complete,false);assert.equal(first.items.length,pageSize===50?100:pageSize);
+    assert.equal(first.pages.length,pageSize===50?2:1);assert.equal(first.cursor,'https://'+host+'/page'+(pageSize===50?3:2));
+    assert.equal(calls.length,pageSize===100?1:2);
+    const second=await f.collect({url,cursor:first.cursor,scanPages:first.pages.length,parse,active:true,known:async()=>[],allowedHosts:[host],fetcher});
+    assert.equal(second.error,null);assert.equal(second.items[0].identity,'guid:p'+(pageSize===50?3:2)+'_0');
+  }
+});
+test('cumulative text budget is normal partial; single oversized page remains an explicit error',async()=>{
+  const [f]=await modules,parse=await parser();const payload='a'.repeat(1200*1024),calls=[];
+  const fetcher=async target=>{calls.push(target);const n=target===url?1:2;return new Response(rss('<item><guid>p'+n+'</guid><link>https://example.invalid/'+n+'</link><description>'+payload+'</description></item>',n===1?'/page2':''));};
+  const first=await f.collect({url,parse,active:true,known:async()=>[],allowedHosts:[host],fetcher});
+  assert.equal(first.error,null);assert.equal(first.pages.length,1);assert.equal(first.cursor,'https://'+host+'/page2');assert.equal(first.items[0].identity,'guid:p1');assert.equal(calls.length,2);
+  const second=await f.collect({url,cursor:first.cursor,scanPages:1,parse,active:true,known:async()=>[],allowedHosts:[host],fetcher});assert.equal(second.complete,true);assert.equal(second.items[0].identity,'guid:p2');
+  await assert.rejects(f.collect({url,parse,allowedHosts:[host],fetcher:async()=>new Response('a'.repeat(2*1024*1024+1))}),{code:'feed_too_large'});
+});
+test('pending cycles across executions and endless empty pages stop without losing accepted progress',async()=>{
+  const [f]=await modules,parse=await parser(),seen=new Set();let cursor=null,pages=0,totalCalls=0,terminal;
+  for(let run=0;run<4;run++){
+    const result=await f.collect({url,cursor,scanPages:pages,parse,known:async ids=>ids.filter(id=>seen.has(id)),allowedHosts:[host],fetcher:async target=>{
+      totalCalls++;const n=target===url?0:Number(new URL(target).pathname.slice(5));return new Response(rss(entry('cycle'+n),n===2?'/rss':'/page'+(n+1)));}});
+    result.items.forEach(item=>seen.add(item.identity));pages+=result.pages.length;cursor=result.cursor;
+    if(result.error){terminal=result;break;}
+  }
+  assert.equal(terminal?.error,'baseline_stalled');assert.ok(totalCalls<=4);assert.equal(seen.size,3);assert.equal(pages,3);
+  let emptyCalls=0;const empty=await f.collect({url,parse,known:async()=>[],allowedHosts:[host],fetcher:async()=>{emptyCalls++;return new Response(rss('','/next'));}});
+  assert.equal(empty.error,'baseline_stalled');assert.equal(empty.pages.length,0);assert.equal(emptyCalls,1);
+});
+test('50 accepted pages bound baseline and active sweeps; exactly page50 EOF is allowed',async()=>{
+  const [f]=await modules,parse=await parser();
+  for(const active of [false,true]){
+    let cursor=null,pages=0,calls=0,terminal;const seen=new Set();
+    for(let run=0;run<26;run++){
+      const result=await f.collect({url,cursor,active,scanPages:pages,parse,known:async ids=>active?[]:ids.filter(id=>seen.has(id)),allowedHosts:[host],fetcher:async target=>{
+        calls++;const n=target===url?1:Number(new URL(target).pathname.slice(5));return new Response(rss(entry('limit'+n),'/page'+(n+1)));}});
+      result.items.forEach(item=>seen.add(item.identity));pages+=result.pages.length;cursor=result.cursor;
+      if(result.error){terminal=result;break;}
+    }
+    assert.equal(terminal?.error,active?'catchup_page_limit':'baseline_page_limit');assert.equal(pages,50);assert.equal(calls,50);
+    let capCalls=0;const capped=await f.collect({url,cursor,active,scanPages:50,parse,allowedHosts:[host],fetcher:async()=>{capCalls++;throw Error('must not fetch');}});assert.equal(capCalls,0);assert.equal(capped.error,terminal.error);
+    const exact=await f.collect({url,cursor:'https://'+host+'/page50',active,scanPages:49,known:async()=>[],parse,allowedHosts:[host],fetcher:async()=>new Response(rss(entry('last')))});assert.equal(exact.error,null);assert.equal(exact.complete,true);assert.equal(exact.pages.length,1);
+  }
+});
+test('handler honors durable page cap before feed requests and records its stop reason',async()=>{
+  const [,h,xml]=await modules;
+  for(const status of ['pending','active']){
+    const fx=fixture({status,scanPages:50}),handler=h.createHandler({...fx,...xml,allowedHosts:[host]});
+    const result=await handler(request({action:status==='pending'?'preview':'poll',workspaceId:ids.workspace,connectionId:ids.connection}));
+    assert.equal(result.status,200);assert.equal((await result.json()).execution.error,status==='pending'?'baseline_page_limit':'catchup_page_limit');
+    assert.equal(fx.calls.filter(x=>x.endpoint.startsWith('https://'+host)).length,0);
+    const finish=JSON.parse(fx.calls.find(x=>x.endpoint.endsWith('life_rss_finish')).init.body);assert.deepEqual(finish.p_pages,[]);assert.equal(finish.p_complete,false);
+  }
 });

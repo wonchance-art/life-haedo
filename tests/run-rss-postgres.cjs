@@ -25,8 +25,14 @@ const state=()=>json(sql(`select to_jsonb(c) from haedo_rss_private.connections 
 const control=a=>{c=actor(A,`select public.life_rss_control('${c.id}',${state().revision},${lit(a)});`);return c;};
 const due=()=>sql(`update haedo_rss_private.connections set next_check_at=clock_timestamp()-interval '1 second' where id='${c.id}';`);
 const claim=()=>worker(`select public.life_rss_claim('${c.id}','${A}');`);
-const finish=(l,items=[],{next=null,complete=true,error=null}={})=>worker(`select public.life_rss_finish('${l.connection_id}','${l.lease_token}',${l.revision},${jl(items)},${lit(next)},${complete},${lit(error)});`);
-const definition=(signature='haedo_rss_private.finish(uuid,uuid,bigint,jsonb,text,boolean,text)')=>sql('select pg_get_functiondef('+lit(signature)+'::regprocedure);');
+// Legacy lifecycle cases use a nonempty synthetic terminal baseline. Explicit
+// collector pages always pass through unchanged, including empty-page failures.
+const finish=(l,items=[],{next=null,complete=true,error=null,pages}={})=>{
+ if(l.status==='pending'&&!items.length&&complete&&!error&&pages===undefined)items=[entry('fixture-baseline-'+randomUUID(),{published_at:'2000-01-01T00:00:00Z'})];
+ const witness=pages===undefined?(items.length?[{url:l.cursor||l.feed_url,identities:[...new Set(items.map(i=>i.identity))],next}]:[]):pages;
+ return worker(`select public.life_rss_finish('${l.connection_id}','${l.lease_token}',${l.revision},${jl(items)},${lit(next)},${complete},${lit(error)},${jl(witness)});`);
+};
+const definition=(signature='haedo_rss_private.finish(uuid,uuid,bigint,jsonb,text,boolean,text,jsonb)')=>sql('select pg_get_functiondef('+lit(signature)+'::regprocedure);');
 const mutation=(name,from,to,check,signature)=>{const original=definition(signature);assert(original.includes(from),'mutation target exists');try{sql(original.replace(from,to));assert.throws(check,assert.AssertionError);mutations++;console.log('MUTATION DETECTED '+name);}finally{sql(original);}};
 async function main(){try{
  docker(['image','inspect',image]);docker(['run','--detach','--pull=never','--network=none','--name',container,'--label',label+'='+owner,'-e','POSTGRES_HOST_AUTH_METHOD=trust',image]);started=true;
@@ -43,7 +49,7 @@ async function main(){try{
   assert.equal(sql('select body from public.existing_material;'),'unchanged 원문');
   assert.equal(list().ready,false);error(()=>actor(A,`select public.life_rss_save('${W}',${lit(feed)});`),'rss_setup_required');
   assert.equal(sql("select bool_and(relrowsecurity) from pg_class where relnamespace='haedo_rss_private'::regnamespace and relkind='r';"),'t');
-  assert.equal(sql("select has_function_privilege('authenticated','public.life_rss_finish(uuid,uuid,bigint,jsonb,text,boolean,text)','execute') or has_function_privilege('anon','public.life_rss_list(uuid,jsonb)','execute');"),'f');
+  assert.equal(sql("select has_function_privilege('authenticated','public.life_rss_finish(uuid,uuid,bigint,jsonb,text,boolean,text,jsonb)','execute') or has_function_privilege('anon','public.life_rss_list(uuid,jsonb)','execute');"),'f');
   error(()=>sql('set role authenticated;select * from haedo_rss_private.items;'),'permission denied');
  });
  sql(`update haedo_rss_private.runtime set ready=true,allowed_feed_urls=array[${lit(feed)}];`);
@@ -98,6 +104,8 @@ async function main(){try{
  control('retry');lease=claim();finish(lease,[],{complete:false,error:'network_error'});
  control('retry');lease=claim();finish(lease,[],{complete:false,error:'network_error'});
  test('failure retry limited to two per sixty minutes',()=>error(()=>control('retry'),'rss_retry_limit'));
+ test('failed collection is not automatically claimable',()=>{due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ sql(`update haedo_rss_private.connections set retry_window_at=clock_timestamp()-interval '2 hours' where id='${c.id}';`);control('retry');
  due();test('scheduler is bounded and service-only',()=>{assert(worker('select public.life_rss_due(2);').some(i=>i.connection_id===c.id));error(()=>worker('select public.life_rss_due(3);'),'rss_invalid_limit');error(()=>actor(A,'select public.life_rss_due(2);'),'permission denied');});
  lease=claim();finish(lease,Array.from({length:100},(_,i)=>entry('page'+i)));
  test('keyset pages retain every immutable item exactly once',()=>{let all=[],page=list();while(true){all.push(...page.items);if(!page.has_more)break;assert(page.items.length>0 && page.items.length<=100);page=list(A,page.next_cursor);}assert.equal(all.length,new Set(all.map(i=>i.id)).size);assert.equal(all.filter(i=>i.identity.startsWith('guid:page')).length,100);});
@@ -115,28 +123,79 @@ async function main(){try{
  const known=ids=>worker(`select public.life_rss_known('${c.id}','${A}',${jl(ids)});`);
  for(let run=0;run<10;run++){
   assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id),'pending baseline is scheduled automatically');
-  lease=claim();assert(lease);const scanned=await collect({url:feed,cursor:lease.cursor,parse,fetcher:fixtureFetch,allowedHosts:['fixture.example.test']});
-  assert.equal(scanned.items.length,2);assert.equal(scanned.error,null);finish(lease,scanned.items,{next:scanned.cursor,complete:scanned.complete});
+  lease=claim();assert(lease);const scanned=await collect({url:feed,cursor:lease.cursor,scanPages:lease.baseline_pages,known,parse,fetcher:fixtureFetch,allowedHosts:['fixture.example.test']});
+  assert.equal(scanned.items.length,2);assert.equal(scanned.error,null);finish(lease,scanned.items,{next:scanned.cursor,complete:scanned.complete,pages:scanned.pages});
  }
  test('twenty-page baseline completes through cron without manual continuation',()=>{assert.equal(requested.length,20);assert.deepEqual(requested,Array.from({length:20},(_,i)=>pageURL(i+1)));assert.equal(state().status,'preview');assert.equal(state().baseline_count,20);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
- control('activate');sql(`update haedo_rss_private.connections set cursor=${lit(pageURL(19))} where id='${c.id}';`);lease=claim();
- test('active claim clears historical deep cursor and known lookup is bounded and owner scoped',()=>{assert.equal(lease.cursor,null);assert.deepEqual(known(['atom:baseline-page-1','unknown']),['atom:baseline-page-1']);assert.deepEqual(worker(`select public.life_rss_known('${c.id}','${B}',${jl(['atom:baseline-page-1'])});`),[]);error(()=>known(Array(101).fill('a')),'rss_invalid_identities');error(()=>actor(A,`select public.life_rss_known('${c.id}','${A}','[]');`),'permission denied');});
+ control('activate');lease=claim();
+ test('new active sweep starts at head and known lookup is bounded and owner scoped',()=>{assert.equal(lease.cursor,null);assert.deepEqual(known(['atom:baseline-page-1','unknown']),['atom:baseline-page-1']);assert.deepEqual(worker(`select public.life_rss_known('${c.id}','${B}',${jl(['atom:baseline-page-1'])});`),[]);error(()=>known(Array(101).fill('a')),'rss_invalid_identities');error(()=>actor(A,`select public.life_rss_known('${c.id}','${A}','[]');`),'permission denied');});
  newHead=true;requested=[];
- const scan=await collect({url:feed,cursor:pageURL(19),active:true,known,parse,fetcher:fixtureFetch,allowedHosts:['fixture.example.test']});
- const headResult=finish(lease,scan.items,{next:scan.cursor,complete:scan.complete,error:scan.error});
+ const scan=await collect({url:feed,cursor:lease.cursor,active:true,known,parse,fetcher:fixtureFetch,allowedHosts:['fixture.example.test']});
+ const headResult=finish(lease,scan.items,{next:scan.cursor,complete:scan.complete,error:scan.error,pages:scan.pages});
  test('next active run stores new first-page item then stops at known second page',()=>{assert.equal(headResult.inserted,1);assert.deepEqual(requested,[feed,pageURL(2)]);assert.equal(state().cursor,null);assert(allItems().some(i=>i.identity==='atom:new-head'&&i.disposition==='stored'));});
  const elsewhere=actor(A,`select public.life_rss_list('${randomUUID()}');`);
  test('other workspace sees only its owner connection metadata and no source body',()=>{assert.deepEqual(elsewhere.items,[]);assert.deepEqual(elsewhere.connections,[]);assert.equal(elsewhere.other_connections.length,1);assert.equal(elsewhere.other_connections[0].id,c.id);assert.equal(elsewhere.other_connections[0].workspace_id,W);assert(!('owner_id' in elsewhere.other_connections[0]));assert(!('lease_token' in elsewhere.other_connections[0]));assert.deepEqual(list(B).other_connections,[]);});
  control('disconnect');
+ // Exercise the durable multi-run scheduler with real parsed feeds. No
+ // clock advancement or manual "check" is used between catch-up invocations.
+ const restart=()=>{c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);};
+ const rssKnown=ids=>worker(`select public.life_rss_known('${c.id}','${A}',${jl(ids)});`);
+ const tick=async fetcher=>{
+  assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));const job=claim();assert(job);
+  const scan=await collect({url:feed,cursor:job.cursor,active:job.status==='active',scanPages:job.status==='active'?job.sweep_pages:job.baseline_pages,known:rssKnown,parse,fetcher,allowedHosts:['fixture.example.test']});
+  return {job,scan,result:finish(job,scan.items,{next:scan.cursor,complete:scan.complete,error:scan.error,pages:scan.pages})};
+ };
+ const xmlFeed=(entries,next)=>`<feed xmlns="http://www.w3.org/2005/Atom">${next?`<link rel="next" href="${next}"/>`:''}${entries.map(e=>atomEntry(e.id,e.date)).join('')}</feed>`;
+ const oldRows=Array.from({length:100},(_,i)=>({id:'known-old-'+i,date:'2000-01-01T00:00:00Z'}));
+ const installOld=()=>{restart();const job=claim();finish(job,oldRows.map(e=>entry(e.id,{identity:'atom:'+e.id,published_at:e.date})));control('activate');};
+ const freshRows=(prefix,n)=>Array.from({length:n},(_,i)=>({id:prefix+i,date:new Date().toISOString()}));
+ for(const size of [10,60,100]){
+  installOld();let rows=[...freshRows('burst-'+size+'-',size===10?25:size*3),...oldRows],expected=new Set(rows.filter(e=>!e.id.startsWith('known-old')).map(e=>'atom:'+e.id)),runs=0,appended=false,overflow=false;
+  const fake=async url=>{const page=Number(new URL(url).searchParams.get('page')||1),start=(page-1)*size;return new Response(xmlFeed(rows.slice(start,start+size),start+size<rows.length?pageURL(page+1):null));};
+  while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){
+   const step=await tick(fake);runs++;assert(runs<30,'finite backlog must reach idle');assert.equal(step.scan.error,null);assert.equal(step.result.error,null);
+   if(size===60&&step.scan.pages.length===1&&!step.scan.complete)overflow=true;
+   // Insert another 25-row prefix once the checkpoint is deep, exercising
+   // shifted duplicates and fresh-head recheck rather than a head-only probe.
+   if(size===10&&!appended&&runs===2){const extra=freshRows('during-tail-',25);rows=[...extra,...rows];extra.forEach(e=>expected.add('atom:'+e.id));appended=true;}
+  }
+  const captured=new Set(allItems().filter(i=>i.connection_id===c.id&&i.disposition==='stored').map(i=>i.identity));
+  test('durable '+size+'-item pages collect every finite burst including tail-time head arrivals',()=>{assert.deepEqual([...captured].sort(),[...expected].sort());assert.equal(state().cursor,null);assert.equal(state().last_error,null);if(size===10)assert(appended);if(size===60)assert(overflow);});control('disconnect');
+ }
+ for(const kind of ['cycle','empty','fifty','fifty-one']){
+  restart();let fetches=0,runs=0;
+  const fake=async url=>{fetches++;const page=Number(new URL(url).searchParams.get('page')||1);const next=kind==='cycle'?pageURL(page===3?1:page+1):kind==='fifty'&&page===50?null:pageURL(page+1);return new Response(xmlFeed(kind==='empty'?[]:[{id:'baseline-'+kind+'-'+page,date:'2000-01-01T00:00:00Z'}],next));};
+  while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(fake);runs++;assert(runs<=25,'baseline scheduler must stop within fifty accepted pages');}
+  const row=state();
+  test('bounded pending '+kind+' feed terminates without repeated automatic polling',()=>{if(kind==='fifty'){assert.equal(row.status,'preview');assert.equal(row.baseline_pages,50);assert.equal(row.last_error,null);}else{assert.equal(row.status,'pending');assert.equal(row.last_error,kind==='fifty-one'?'baseline_page_limit':'baseline_stalled');due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(i=>i.connection_id===c.id));assert(fetches<=(kind==='empty'?1:kind==='cycle'?4:50));if(kind==='fifty-one')error(()=>control('retry'),'rss_retry_unavailable');}});control('disconnect');
+ }
+ installOld();let activeFetches=0;
+ const many=async url=>{activeFetches++;const page=Number(new URL(url).searchParams.get('page')||1);return new Response(xmlFeed([{id:'active-limit-'+page,date:new Date().toISOString()}],pageURL(page+1)));};
+ for(let run=0;run<25;run++)await tick(many);
+ test('active page limit preserves collected data and refuses silent retry reset',()=>{assert.equal(state().last_error,'catchup_page_limit');assert.equal(state().sweep_pages,50);assert.equal(activeFetches,50);due();assert.equal(claim(),null);assert(!worker('select public.life_rss_due(2);').some(i=>i.connection_id===c.id));error(()=>control('retry'),'rss_retry_unavailable');assert.equal(allItems().filter(i=>i.connection_id===c.id&&i.disposition==='stored').length,50);control('pause');control('resume');assert.equal(state().last_error,'catchup_page_limit');assert.equal(claim(),null);});control('disconnect');
+ installOld();lease=claim();
+ const wirePrefix='<rss version="2.0"><channel><item><guid>wire-boundary</guid><description>',wireSuffix='</description></item></channel></rss>';
+ const escapedBody='\\'.repeat(2097152-Buffer.byteLength(wirePrefix+wireSuffix));
+ const wire=await parse(wirePrefix+escapedBody+wireSuffix,feed);
+ assert(Buffer.byteLength(JSON.stringify(wire.items))>4194304,'valid feed expands past the old JSON wire guard');
+ finish(lease,wire.items);
+ test('exact two-MiB feed survives JSON escaping and preserves the held original',()=>{const stored=json(sql(`select jsonb_build_object('bytes',octet_length(content_text),'hash',content_hash,'reason',reason) from haedo_rss_private.items where connection_id='${c.id}' and identity='guid:wire-boundary';`));assert.equal(stored.bytes,escapedBody.length);assert.equal(stored.hash,hash(escapedBody));assert.equal(stored.reason,'content_too_large');assert.equal(state().last_error,null);});
+ due();lease=claim();const escapedScalar='\u0001'.repeat(2097152),oversizedScalar=escapedScalar+'x';
+ test('JSON sixfold escaping preserves the raw two-MiB SQL boundary',()=>{error(()=>finish(lease,[entry('raw-too-large',{content_text:oversizedScalar,content_hash:hash(oversizedScalar)})]),'rss_text_limit');const result=finish(lease,[entry('raw-boundary',{content_text:escapedScalar,content_hash:hash(escapedScalar)})]);assert.equal(result.held,1);const saved=json(sql(`select jsonb_build_object('bytes',octet_length(content_text),'hash',content_hash) from haedo_rss_private.items where connection_id='${c.id}' and identity='guid:raw-boundary';`));assert.equal(saved.bytes,2097152);assert.equal(saved.hash,hash(escapedScalar));});control('disconnect');
  // Independent executable mutations: remove whole guards and demand the same assertions fail.
  c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();finish(lease,[]);control('activate');due();lease=claim();control('pause');
  mutation('revision/status lease fencing',"if not found or not(c.feed_url=any((select allowed_feed_urls from haedo_rss_private.runtime where singleton)::text[])) or c.revision<>p_revision or c.lease_token is distinct from p_lease_token or c.lease_until<=stamp or c.status not in('pending','active') then",'if false then',()=>assert.equal(finish(lease,[entry('mutation-late')]).status,'stale'));
  control('resume');due();lease=claim();
  mutation('date quarantine',"if published is null then reason:='date_unknown';","if false then reason:='date_unknown';",()=>{finish(lease,[entry('mutation-unknown',{published_at:null})]);assert.equal(allItems().find(i=>i.identity==='guid:mutation-unknown').disposition,'held');});
  control('disconnect');c=actor(A,`select public.life_rss_save('${W}',${lit(feed)});`);lease=claim();
- mutation('pending partial continuation stays immediately due',"next_check_at=case when status='pending' and not p_complete and p_error is null then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ mutation('pending partial continuation stays immediately due',"next_check_at=case when p_error is null and (not p_complete or (status='active' and cursor is not null)) then stamp else stamp+interval '60 minutes' end","next_check_at=stamp+interval '60 minutes'",()=>{finish(lease,[base],{next:pageURL(3),complete:false});assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  due();
  mutation('scheduler includes pending baseline',"c.status in('pending','active')","c.status='active'",()=>assert(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)),'haedo_rss_private.due(integer)');
+ control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
+ mutation('active partial checkpoint is durable',"cursor=case when p_complete then null when p_next_cursor is not null then p_next_cursor else cursor end","cursor=null",()=>{finish(lease,[entry('checkpoint-mutation')],{next:pageURL(3),complete:false});assert.equal(state().cursor,pageURL(3));});
+ mutation('known lookup excludes IDs first observed during this sweep',"(c.status='pending' or o.first_observed_at<c.sweep_started_at)",'true',()=>assert.deepEqual(rssKnown(['guid:checkpoint-mutation']),[]),'haedo_rss_private.known(uuid,uuid,jsonb)');
+ control('disconnect');restart();sql(`update haedo_rss_private.connections set baseline_pages=49 where id='${c.id}';`);lease=claim();
+ mutation('fifty-page baseline partial halts automatically',"if page_cap+accepted_pages>=50 and not p_complete and p_error is null then","if false then",()=>{finish(lease,[entry('cap-mutation')],{next:pageURL(51),complete:false});assert.equal(state().last_error,'baseline_page_limit');});
  console.log(JSON.stringify({checks,mutations,pass:true,image,migration,liveDatabase:false,realFeed:false}));
  }finally{if(started){const v=docker(['inspect',container,'--format',`{{ index .Config.Labels "${label}" }}`]).trim();assert.equal(v,owner);docker(['rm','-f',container]);}}}
 main().catch(e=>{console.error(e.stderr?.toString()||e.stack||e);process.exitCode=1;});

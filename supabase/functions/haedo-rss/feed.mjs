@@ -156,37 +156,70 @@ export async function readBounded(response, limit) {
     try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (_) { throw failure('invalid_feed'); }
   } finally { try { await reader.cancel(); } catch (_) { /* consumed */ } reader.releaseLock(); }
 }
-export async function collect({ url, cursor = null, active = false, known, parse, fetcher = fetch, allowedHosts = ALLOWED_HOSTS, signal }) {
-  const initial = safeURL(url, allowedHosts); let next = active ? initial : cursor || initial, bytes = 0; const items = [], visited = new Set();
-  for (let page = 0; page < LIMITS.pages && next; page++) {
+export async function collect({ url, cursor = null, active = false, scanPages = 0, known, parse, fetcher = fetch, allowedHosts = ALLOWED_HOSTS, signal }) {
+  const initial = safeURL(url, allowedHosts);
+  need(Number.isSafeInteger(scanPages) && scanPages >= 0 && scanPages <= 50, 'server_error');
+  let next = cursor || initial, bytes = 0;
+  const items = [], pages = [], visited = new Set(), observedThisRun = new Set();
+  const result = (error = null) => {
+    markConflicts(items);
+    return { items, pages, cursor: next, complete: !next && !error, bytes, error };
+  };
+  // A partial active sweep resumes its oldest unconsumed page. Once that tail
+  // completes, SQL schedules an immediate fresh-head sweep. No head probe is
+  // marked observed while a tail gap remains. This avoids budget starvation
+  // and newly observed head IDs hiding an unconsumed middle section.
+  for (let requestCount = 0; requestCount < LIMITS.pages && next; requestCount++) {
+    if (scanPages + pages.length >= 50) return result(active ? 'catchup_page_limit' : 'baseline_page_limit');
+    if (items.length >= LIMITS.items || bytes >= LIMITS.bytes) return result();
     const attempted = next;
     try {
-    const current = safeURL(next, allowedHosts);
-    need(new URL(current).origin === new URL(initial).origin && !visited.has(current), 'blocked_url'); visited.add(current);
-    let res;
-    try { res = await fetcher(current, { redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(LIMITS.timeout)]) : AbortSignal.timeout(LIMITS.timeout),
-      headers: { Accept: 'application/atom+xml, application/rss+xml, application/xml, text/xml', 'Accept-Encoding': 'identity', 'User-Agent': 'HaedoRSS/1.0' } }); }
-    catch (_) { throw failure('network_error'); }
-    if (res.redirected || res.url && res.url !== current) { await res.body?.cancel(); throw failure('blocked_url'); }
-    if (!res.ok) { await res.body?.cancel(); throw failure(res.status === 429 ? 'rate_limited' : res.status === 401 || res.status === 403 ? 'blocked_url' : 'network_error'); }
-    const xml = await readBounded(res, LIMITS.bytes - bytes); bytes += enc.encode(xml).length;
-    const parsed = await parse(xml, current);
-    need(items.length + parsed.items.length <= LIMITS.items, 'item_limit');
-    items.push(...parsed.items); next = parsed.next;
-    if (active && parsed.items.length && typeof known === 'function') {
+      const current = safeURL(next, allowedHosts);
+      need(new URL(current).origin === new URL(initial).origin && !visited.has(current), 'blocked_url');
+      visited.add(current);
+      let res;
+      try { res = await fetcher(current, { redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(LIMITS.timeout)]) : AbortSignal.timeout(LIMITS.timeout),
+        headers: { Accept: 'application/atom+xml, application/rss+xml, application/xml, text/xml', 'Accept-Encoding': 'identity', 'User-Agent': 'HaedoRSS/1.0' } }); }
+      catch (_) { throw failure('network_error'); }
+      if (res.redirected || res.url && res.url !== current) { await res.body?.cancel(); throw failure('blocked_url'); }
+      if (!res.ok) { await res.body?.cancel(); throw failure(res.status === 429 ? 'rate_limited' : res.status === 401 || res.status === 403 ? 'blocked_url' : 'network_error'); }
+      let xml;
+      try { xml = await readBounded(res, LIMITS.bytes - bytes); }
+      catch (error) {
+        // The remaining run budget may be too small for an otherwise valid
+        // page. Retry that whole page with a fresh budget, never truncate it.
+        if (pages.length && error.code === 'feed_too_large') return result();
+        throw error;
+      }
+      bytes += enc.encode(xml).length;
+      const parsed = await parse(xml, current);
+      if (items.length + parsed.items.length > LIMITS.items) return result();
       const identities = [...new Set(parsed.items.map(item => item.identity))];
-      const observed = await known(identities);
-      need(Array.isArray(observed) && observed.length <= identities.length && observed.every(id => identities.includes(id)), 'server_error');
-      if (identities.every(id => !id.startsWith('unidentified:') && observed.includes(id))) next = null;
-    }
-    if (next) { safeURL(next, allowedHosts); need(new URL(next).origin === new URL(initial).origin && !visited.has(next), 'blocked_url'); }
+      let observed = [];
+      if (typeof known === 'function') {
+        observed = await known(identities);
+        need(Array.isArray(observed) && observed.length <= identities.length && observed.every(id => identities.includes(id)), 'server_error');
+      }
+      if (!active && (!identities.length || identities.every(id => observed.includes(id) || observedThisRun.has(id)))) {
+        return result('baseline_stalled');
+      }
+      const nextURL = parsed.next;
+      if (nextURL) {
+        safeURL(nextURL, allowedHosts);
+        need(new URL(nextURL).origin === new URL(initial).origin && !visited.has(nextURL), 'blocked_url');
+      }
+      items.push(...parsed.items);
+      pages.push({ url: current, identities, next: nextURL });
+      identities.forEach(id => observedThisRun.add(id));
+      next = nextURL;
+      // known() is a cycle-start snapshot for active sweeps. Rows discovered
+      // during this sweep must not prematurely terminate a shifted page tail.
+      if (active && identities.length && typeof known === 'function' && identities.every(id => !id.startsWith('unidentified:') && observed.includes(id))) next = null;
     } catch (error) {
-      if (!items.length) throw error;
-      // Parsed preceding pages and failed-page position persist together.
-      markConflicts(items);
-      return { items, cursor: attempted, complete: false, bytes, error: error?.code || 'network_error' };
+      next = attempted;
+      if (!pages.length) throw error;
+      return result(error?.code || 'network_error');
     }
   }
-  markConflicts(items);
-  return { items, cursor: next, complete: !next, bytes, error: null };
+  return result(next && scanPages + pages.length >= 50 ? active ? 'catchup_page_limit' : 'baseline_page_limit' : null);
 }
