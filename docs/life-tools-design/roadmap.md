@@ -1,5 +1,57 @@
 # 구현 로드맵과 에이전트 작업 배치
 
+## 11-05 오후 통합·마무리 — 총괄, 라이브 `haedo-v206`(→ #228 `haedo-v207` 대기), 실기기 확인 전 (2026-11-05 KST)
+
+Codex 토큰 마무리 지시(#212 6659238530)에 따라 작업자는 현재 단위를 병합 가능 상태로 끝내거나 인계하고 종료했다. 검수·통합·병합·운영은 총괄이 맡는다.
+
+- **병합·배포 (모두 독립 검수 → 총괄 병합 준비 → CI 녹색 → main 무변동 확인 → 병합)**
+
+  | PR | 내용 | 병합 | 캐시 |
+  | --- | --- | --- | --- |
+  | #218 | E 삭제 글 연결·저장 상태·읽기 화면 결함 5개 | `08335a1` | v199 |
+  | #217 | A 검토한 AI 제안을 글쓰기·선택 자료에 연결 | `8f0b6e7` | v200 |
+  | #223 | F 원문 읽기에서도 같은 자리의 글쓰기 | `a32eb40` | v201 |
+  | #213 | D RSS/Atom 비공개 수신(운영 비활성) | `74edd95` | v202 |
+  | #221 | B3 저장 Markdown의 서버 공개 투영(운영 미설치) | `641f1d2` | v203 |
+  | #220 | C 개인 뉴스 재시도·키 계약 회귀 검사(검사·문서만) | `5a98c34` | — |
+  | #222 | C2 자료 화면 오류·복귀·자동 재시도 | `5fcaa3f` | v204 |
+  | #226 | F 과거 Markdown 공개 대기를 같은 operationId로 복구 | `6fc4208` | v205 |
+  | #224 | A Markdown 쓰기 전 구형 탭 차단(IDB 1→2) | `ba5d931` | v206 |
+  | #228 | B2 준비: codec 압축·`savePostTransition`·vendor export | CI 대기 | v207 |
+
+  - 병합 준비는 앞 PR의 준비 커밋 위에 쌓아, 병합 커밋 트리가 CI가 검사한 트리와 같게 했다(#226·#224에서 트리 해시 일치 확인).
+  - #224 통합 때 검수 NIT 반영: `DB_VERSION`을 낮추지 말라는 주석, 업그레이드가 막히면 30초 안에 실패하는 제한(`DB_VERSION=1` 변이에서 멈춤 대신 FAIL).
+- **CI 실패 원인 판정**
+  - `verify-prepared-site`의 `platform-life-browser`가 `route.fulfill: Route is already handled!`로 실패(실행 42040775688). 원인은 #219에서 넣은 느린 계정 경로를 지연 중에 `unroute`한 것이다. Playwright가 진행 중 요청을 스스로 계속 보내고 이후 `fallback`이 같은 요청을 다시 넘긴다. 최소 재현으로 확인했고 `behavior:'wait'`도 같은 실패였다. 경로를 유지한 채 지연만 끄도록 고쳤다(`1efabad`). #219 회귀를 되살리면 여전히 실패한다.
+- **보류 (병합하지 않음)**
+  - #227 E RSS 수신함 자동 반영: 독립 검수 BLOCKER 2·MAJOR 2·MINOR 4. 인계 [rss-inbox-reflection-handoff](https://github.com/wonchance-art/life-haedo/blob/027a42d/docs/design-review/rss-inbox-reflection-handoff.md)(#227 브랜치 `027a42d`).
+    - BLOCKER: 시작 때 `haedo-rss list`를 기존 픽스처 11개 파일이 금지 요청으로 센다(5개는 엄격 분류·별도 기록·시작 횟수 상한으로 갱신, 나머지 미완). RSS 반영의 `auth.verify()` 성공 알림이 셸 자동 복구를 끌어와 C2 회귀를 낸다. 제안: RSS 자동 반영만 공용 알림 없는 검증.
+    - MAJOR: `fetched_at`(finish 시작 시각)과 커밋 순서가 달라 항목을 영구히 건너뛸 수 있다(기기 쪽 겹침 재조회로 고칠 수 있어 운영 SQL 변경은 불필요할 것으로 본다). ACK 확인이 매분 전체 본문을 다시 해시한다.
+  - #229 C3 삭제 글 준비 동기화: 핵심 경로(서버 확인 saved + 정상 null + 4 ID 대조 + 한 트랜잭션 설치) 정상, MAJOR 2건 수정 요청. 표지 불일치가 확정된 글 삭제를 막는다(`putMaterialOutputDeletion` throw). 지속 오류도 보류 읽기에 넣어 30분 건너뛰기가 매분 재수신으로 바뀐다.
+  - #225 D RSS 운영 활성화 SQL: URL 검증 검사가 다른 연결의 일시정지 때문에 실제로 검증하지 못한다(MAJOR). cron `* * * * *` → `*/15` 검토, `run-rss-operations-postgres` CI 등록 필요.
+- **후속 (작은 결함·제약)**
+  - #226: 사진 사본이 없는 과거 md 대기 거절 안내에 실제 해결 동작이 없다. 과거 경로의 conflict는 대기를 남겨 같은 conflict를 반복한다. 기존: 실패·불확실 대기가 남은 뒤 글을 고치면 그 기기에서 공개가 계속 `local_changed`다.
+  - #224: `account-library`가 `storage_*` 코드를 `network_error` 문구로 보인다(새로고침 안내 필요). WebKit(iOS Safari·PWA)의 versionchange·blocked는 미검증.
+  - #228: 글 200개에서 제자리 전환은 복구 사본 때문에 `photo_post_limit`로 되돌아간다(UI 연결 때 안내). 전환 영수증은 기기 안에만 있다. codec 압축의 운영 완료는 B3 Edge 재배포 뒤다.
+  - B2 편집기 연결 인계: `codex/post-markdown-b2-ui-handoff` `4ccb711`, `docs/design-review/post-markdown-b2-handoff.md`.
+- **운영 대기 (소유자 "운영 적용" 뒤 총괄)**
+  - 마이그레이션: B1 이력 1행, D RSS `20261105051010_rss_private_intake`, B3 `20261105081055_life_post_markdown_publish`
+  - Edge: `haedo-blog-publish`(B3·#228 codec), `haedo-rss`(D 마이그레이션과 함께, verify_jwt=false), `haedo-discovery-private` 재배포
+  - 적용 방식: SQL Editor는 임시 표 보호가 걸리지 않으므로 `apply_migration`이나 한 세션 실행. 승인 질문이 표시되지 않던 문제는 미해결.
+- **미검증:** 실제 Apple 기기·한글 입력기, 운영 Edge·Cron, 실제 RSS 피드
+
+### 다음 큰 작업 묶음 (우선순위 순)
+
+1. **Markdown 글쓰기 완주 (B3 운영 → B2 편집기 연결):** 운영 마이그레이션·Edge 반영 → B2 인계대로 편집기 연결 → 처음 고칠 때 변환·복구 사본 → 저장·두 기기 동기화 → 선택 공개 → 백업 복원.
+   - 선행: 소유자 "운영 적용", #229 MAJOR 2건 수정과 재검수(같은 저장 경로)
+   - 완료 기준: 위 후속 중 #226·#228 안내 항목 해결, 공개 사본과 v2 렌더 일치, 독립 검수 통과
+2. **RSS 수신 완주:** #227 BLOCKER·MAJOR 수정(공용 알림 없는 검증, 겹침 재조회, ACK 비용) → #225 검사 보강 → 운영 적용 → 실제 피드 1개로 비공개 보관·읽기·검색 확인
+   - 선행: 소유자의 피드 주소
+   - 완료 기준: CI 녹색(픽스처 11개 갱신), C2 회귀 0, 운영 전후 행 수 기록, 중지·재개·연결 해제 확인
+3. **AI 제안 실제 출시:** 비밀값 설정 → 실제 제안 1회 → 적용 글의 AI 표시·공개 제거 확인
+   - 선행: `HAEDO_AI_OWNER_ID`·`ANTHROPIC_API_KEY`
+   - 완료 기준: 실제 응답 1회, 늦은 응답·한글 조합 회귀 녹색, 월 예산 표시 확인
+
 ## A AI 제안 화면 연결 — 작업자 구현·로컬 검수, 총괄 출시 전 (2026-11-05 KST)
 
 [구현·검수·편집기 인계](../design-review/writing-ai-ui.md). 최초 기준 main `2eebd27` → 최신 `5811afd` merge, [총괄 범위 확정](https://github.com/wonchance-art/life-haedo/pull/212#issuecomment-6650355874).
