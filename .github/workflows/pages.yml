@@ -164,7 +164,7 @@ jobs:
       - name: Verify schedule list, year to day views, old addresses, offline dated reloads and keyboard guards
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-browser.cjs
-      - name: Verify schedule habit checks, goal progress, read-only happiness and item recovery
+      - name: Verify schedule habit checks, goal progress, day happiness input and item recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-entries-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
@@ -575,6 +575,9 @@ jobs:
       - name: Verify deleting a post from its read view asks first, deletes only that post and returns to the schedule
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/photo-post-delete-browser.cjs
+      - name: Verify 행복도 single writer (일정 D input, editor view-only, migration and mixed versions)
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/happiness-days-browser.cjs
       - name: Verify workbench storage boundaries in the browser
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/workbench-storage-browser.cjs

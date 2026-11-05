@@ -177,7 +177,11 @@ async function main() {
       // Fake page clock: the 45 s request limit is reached by fast-forwarding, not by waiting.
       await d.clock.install();
       let release; const gate = new Promise(resolve => { release = resolve; }); let held = 0;
-      const hold = async route => { held++; await gate; return route.fallback().catch(() => {}); };
+      // Count only the requested version's capture read. The reader first opens the
+      // latest version and its own capture read may also arrive here before the
+      // version switch disposes it; that request's request-limit timer is not the
+      // one this check fast-forwards past.
+      const hold = async route => { if (route.request().postDataJSON()?.p_capture_id === first.id) held++; await gate; return route.fallback().catch(() => {}); };
       await d.context().route(cloud + '/rest/v1/rpc/life_naver_capture_read', hold);
       try {
         await reader(d, ws, one.sourceId, one.sourceVersionId); await d.locator('#lifeNaverSourceMedia[data-state=loading]').waitFor();
