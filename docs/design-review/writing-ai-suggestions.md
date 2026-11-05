@@ -207,7 +207,7 @@ const next = ai.apply(quill.getContents().ops, {
   - AI 글 안의 줄바꿈은 표시 없는 새 문단이 된다. 바꾼 구간 안의 줄 서식(제목·목록)은 이어지지 않는다.
   - 선택 밖의 사진 embed·서식은 그대로 둔다.
 - `verifyCitations(sources, citations)`는 정확히 일치하는 인용만 `{status:'quoted', quote, start, end}`(발췌 안 UTF-16 구간)로 돌려준다. 그 밖에는 `{status:'unverified', label:'출처 미확인'}`이고 `quote`가 없다. 2글자 미만 인용도 확인하지 않은 것으로 본다.
-- 앱은 아직 이 모듈을 불러오지 않는다. 그래서 `sw.js` 셸 목록·캐시 이름과 `prepare-site.mjs` 배포 목록에 넣지 않았다(`npm run check` 규칙은 페이지가 불러오는 파일만 요구한다). 화면 연결 때 세 곳에 함께 넣는다.
+- 앱은 `index.html`·`life.html`에서 이 모듈과 `writing-ai-ui.js`를 불러온다. 두 모듈·화면 CSS는 `sw.js` 셸과 `prepare-site.mjs` 배포 목록에도 등록했다. CACHE 판올림은 총괄 병합 단계에서 한다.
 
 ## 검사
 

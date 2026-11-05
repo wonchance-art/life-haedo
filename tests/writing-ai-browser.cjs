@@ -26,9 +26,10 @@ const setSelection = (page, index, length) => page.evaluate(([i, n]) => {
 const aiText = state => state.ops.filter(op => op.attributes?.author === 'ai').map(op => op.insert).join('');
 const gate = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 class AIHTTP {
-  constructor() { this.requests = []; this.usageRequests = 0; this.next = null; this.expectedStatuses = []; this.remainingMicroUsd = 7500000; }
+  constructor() { this.requests = []; this.usageRequests = 0; this.next = null; this.expectedStatuses = []; this.expectedNetworkFailures = 0; this.remainingMicroUsd = 7500000; }
   hold() { const entered = gate(), release = gate(), completed = gate(); this.next = { entered, release, completed }; return { entered: entered.promise, completed: completed.promise, release: () => release.resolve() }; }
   fail(code, status = 400) { this.next = { error: code, status }; this.expectedStatuses.push(status); }
+  failNetwork() { this.next = { network: true }; this.expectedNetworkFailures++; }
   async attach(context) {
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json' };
     await context.route(cloud + '/rest/v1/rpc/life_ai_usage', async route => {
@@ -44,6 +45,7 @@ class AIHTTP {
       this.requests.push({ raw, body });
       const response = this.next; this.next = null;
       if (response?.release) { response.entered.resolve(); await response.release.promise; }
+      if (response?.network) return route.abort('failed');
       const sourced = ['ask', 'outline'].includes(body.task);
       const payload = response?.error ? { error: response.error } : { status: 'ok', requestId: body.requestId, task: body.task, suggestion: sourced ? '산책이 생각 정리를 도울 수 있습니다.' : SUGGESTED, reason: REASON, ...(sourced ? { citations: [{ sourceIndex: 0, quote: body.sources[0] }, { sourceIndex: 0, quote: '가짜 인용을 만들어 넣었습니다.' }] } : {}), usage: { remainingMicroUsd: 7499000 } };
       // A cancellation may already have closed the connection by the time the held
@@ -97,7 +99,7 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const entry = { label, message: message.text(), url: message.location().url };
-    if (entry.url === cloud + '/functions/v1/haedo-ai' && ai.expectedStatuses.some(status => entry.message.includes('status of ' + status))) report.expectedConsoleErrors.push(entry);
+    if (entry.url === cloud + '/functions/v1/haedo-ai' && (ai.expectedStatuses.some(status => entry.message.includes('status of ' + status)) || ai.expectedNetworkFailures > 0 && entry.message.includes('net::ERR_FAILED'))) report.expectedConsoleErrors.push(entry);
     else report.consoleErrors.push(entry);
   });
   page.on('pageerror', error => report.pageErrors.push({ label, message: error.message }));
@@ -167,6 +169,8 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       assert(text.includes(SELECTED), 'exact selected text is visible');
       assert(!text.includes(PREFIX) && !text.includes(SUFFIX), 'unselected private text stays outside the preview');
       assert.match(text, /Anthropic/); assert.match(text, /30일/); assert.match(text, /학습/);
+      assert.match(await panel(page).locator('.writing-ai-notice').textContent(), /^고른 글을 Anthropic/);
+      assert.doesNotMatch(await panel(page).locator('.writing-ai-notice').textContent(), /요청 문장|자료 발췌|AI 지침/, 'polish notice lists only the selected text actually sent');
       await awaitCondition(page, () => document.querySelector('.writing-ai-panel').textContent.includes('$7.50'), null, { label: 'remaining budget is loaded', timeout: 5000 });
       assert.deepEqual(await editorState(page), original, 'preview did not edit the document');
       await assertNoOverflow(page); await shot('preview');
@@ -229,10 +233,12 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
         await page.locator('#' + id).evaluate(node => node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })));
         await action(page, '보낼 내용 확인').evaluate(button => button.click());
         assert.equal(await panel(page).locator('.writing-ai-preview').isVisible(), false, 'unfinished composition is not captured');
+        assert.equal(await panel(page).locator('.writing-ai-error').textContent(), '입력을 마친 뒤 다시 눌러 주세요.');
         assert.equal(ai.requests.length, count);
         await page.locator('#' + id).evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' })));
       }
       await action(page, '보낼 내용 확인').click();
+      assert.match(await panel(page).locator('.writing-ai-notice').textContent(), /^고른 글·요청 문장·AI 지침을 Anthropic/);
       await action(page, '보내기').click(); await panel(page).getByText(REASON, { exact: true }).waitFor();
       assert.deepEqual(Object.keys(ai.requests.at(-1).body).sort(), ['guidance', 'instruction', 'requestId', 'selection', 'task']);
       assert.equal(ai.requests.at(-1).body.instruction, instruction); assert.equal(ai.requests.at(-1).body.guidance, guidance);
@@ -240,6 +246,8 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       await page.locator('#writingAIGuidanceEnabled').uncheck();
       await action(page, '보낼 내용 확인').click();
       assert.equal((await panel(page).locator('.writing-ai-preview').textContent()).includes(guidance), false);
+      assert.match(await panel(page).locator('.writing-ai-notice').textContent(), /^고른 글·요청 문장을 Anthropic/);
+      assert.doesNotMatch(await panel(page).locator('.writing-ai-notice').textContent(), /AI 지침/);
       await action(page, '보내기').click(); await panel(page).getByText(REASON, { exact: true }).waitFor();
       assert.deepEqual(Object.keys(ai.requests.at(-1).body).sort(), ['instruction', 'requestId', 'selection', 'task']);
       assert.equal((await editorState(page)).text, PREFIX + SELECTED + SUFFIX + '\n');
@@ -294,6 +302,40 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       assert.notEqual(ai.requests.at(-1).body.requestId, first, 'new explicit attempt uses a new id');
       assert.deepEqual(await editorState(page), before);
       const count = ai.requests.length; await page.waitForTimeout(200); assert.equal(ai.requests.length, count, 'no automatic retry');
+      await action(page, '닫기').click();
+    });
+    await typeFixture(page);
+    await check('busy, access-denied and network failures preserve input and only retry after explicit review', async () => {
+      const original = await editorState(page);
+      await openSuggestions(page);
+      for (const [kind, message, retryVisible] of [
+        ['busy', 'AI 요청이 몰려 있어요. 잠시 뒤 다시 시도해 주세요.', true],
+        ['denied', '이 계정에서는 AI 제안을 쓸 수 없어요.', false],
+        ['network', '연결을 확인한 뒤 다시 시도해 주세요.', true],
+      ]) {
+        await prepare(page);
+        const count = ai.requests.length;
+        if (kind === 'busy') ai.fail('ai_busy', 503);
+        else if (kind === 'denied') ai.fail('ai_not_allowed', 403);
+        else ai.failNetwork();
+        await action(page, '보내기').click();
+        await panel(page).getByText(message, { exact: true }).waitFor();
+        assert.equal(ai.requests.length, count + 1, 'failed attempt makes one HTTP request');
+        assert.deepEqual(await editorState(page), original, kind + ' keeps every text run and format');
+        assert.equal(await panel(page).locator('.writing-ai-result').isVisible(), false);
+        assert.equal(await action(page, '다시 시도').isVisible(), retryVisible);
+        const requestId = ai.requests.at(-1).body.requestId;
+        await page.waitForTimeout(200);
+        assert.equal(ai.requests.length, count + 1, kind + ' has no automatic retry');
+        if (!retryVisible) continue;
+        await action(page, '다시 시도').click();
+        assert.equal(ai.requests.length, count + 1, 'retry prepares a new review without sending');
+        await action(page, '보내기').click();
+        await panel(page).getByText(REASON, { exact: true }).waitFor();
+        assert.equal(ai.requests.length, count + 2);
+        assert.notEqual(ai.requests.at(-1).body.requestId, requestId, 'explicit retry has a fresh request id');
+        assert.deepEqual(await editorState(page), original, 'successful retry still waits for range acceptance');
+      }
       await action(page, '닫기').click();
     });
     await typeFixture(page);

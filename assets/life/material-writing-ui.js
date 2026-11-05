@@ -6,7 +6,7 @@
   function create({ storage, workspaceId, getBundle = () => storage.read(workspaceId), isCurrent = () => true, onDirty = () => {}, onOpenSource, onOpenPost, onClose, onPlanChange = () => {}, onCreatePost }) {
     const M = life.MaterialWriting, fresh = () => life.Core.id(), clone = value => structuredClone(value);
     let state = null, selected = null, host = null, surface = null, status = null, error = null, selector = null, blocks = null, copies = null, output = null;
-    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null, aiPanel = null, aiEpoch = 0;
+    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null, aiPanel = null, aiEpoch = 0, aiSources = null, sourceChanges = 0;
     let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
     // An account-scoped store is synced to the account by MaterialContinuitySync; its own panel
@@ -34,8 +34,12 @@
     // Another device (account sync) or tab changed the stored preparations. Reload at once when
     // nothing is unsaved here; otherwise keep the input and offer the change explicitly.
     function remoteChanged(event) {
-      // A changed/deleted source must not remain available in an open AI request.
-      if (!disposed && event?.workspaceId === workspaceId && event.type === 'changed') closeAI();
+      // Workspace notifications carry no source IDs. Recheck the displayed
+      // excerpt sources without discarding an unrelated change's open review.
+      if (!disposed && event?.workspaceId === workspaceId && event.type === 'changed') {
+        sourceChanges++;
+        if (aiSources) validateAISources(aiSources).catch(() => {});
+      }
       if (disposed || event?.type !== 'material_writing_changed' || event.workspaceId !== workspaceId) return;
       // Own saves announce their revision before this screen records it; check after they settle.
       setTimeout(() => {
@@ -70,7 +74,39 @@
     function settleSourcePending() { if (failure?.code === 'material_source_pending' && !sourceLoading && !sources?.pending()) clear(); else message(); }
     function clear() { failure = null; if (error) { error.hidden = true; error.textContent = ''; } message(); }
     function clearReview() { review = null; surface?.querySelector('.mw-preview')?.remove(); }
-    function closeAI() { aiEpoch++; const panel = aiPanel; aiPanel = null; panel?.dispose(); }
+    function closeAI() { aiEpoch++; aiSources = null; const panel = aiPanel; aiPanel = null; panel?.dispose(); }
+    function sourceSignature(bundle, references) {
+      return JSON.stringify([...new Set(references.map(ref => ref.sourceId))].map(sourceId => ({
+        sourceId, revision: bundle.sources.find(source => source.id === sourceId)?.revision,
+        state: life.Core.sourceState(bundle, sourceId),
+        versions: bundle.sourceVersions.filter(version => version.sourceId === sourceId)
+          .map(version => [version.id, version.revision, version.contentHash]),
+      })));
+    }
+    function validateAISources(target) {
+      if (target.checking) return target.checking;
+      target.checking = (async () => {
+        for (;;) {
+          const change = sourceChanges, bundle = await getBundle();
+          if (aiSources !== target) throw fault('material_input_pending', 'AI 제안을 다시 열어 주세요.');
+          for (const reference of target.references) {
+            if (!life.Core.isSourceActive(bundle, reference.sourceId))
+              throw fault('material_input_pending', '휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.');
+            await life.SourceReference.resolve(bundle, reference);
+            if (aiSources !== target) throw fault('material_input_pending', 'AI 제안을 다시 열어 주세요.');
+          }
+          const signature = sourceSignature(bundle, target.references);
+          // The opening may deliberately cite an old immutable version. Keep
+          // it exact, but invalidate if that source changes after this opening.
+          if (target.signature !== null && target.signature !== signature)
+            throw fault('material_input_pending', '발췌의 자료가 바뀌었습니다. AI 제안을 다시 열어 주세요.');
+          if (change !== sourceChanges) continue;
+          target.signature = signature;
+          return;
+        }
+      })().catch(cause => { if (aiSources === target) closeAI(); throw cause; }).finally(() => { target.checking = null; });
+      return target.checking;
+    }
     async function openAI() {
       guard(); await flushInternal(); guard();
       if (!mounted()) return;
@@ -80,18 +116,16 @@
       const quotes = owner?.blocks.filter(block => block.kind === 'quote').map(block => clone(block.reference)) || [];
       if (!quotes.length) throw fault('material_input_pending', '자료에서 질문할 구절을 선택해 개요에 담은 뒤 AI 제안을 열어 주세요.');
       if (!life.WritingAIUI?.open) throw fault('material_input_pending', 'AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.');
-      const bundle = await getBundle(); if (!active()) return;
-      for (const reference of quotes) {
-        if (!life.Core.isSourceActive(bundle, reference.sourceId)) throw fault('material_input_pending', '휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.');
-        await life.SourceReference.resolve(bundle, reference);
-        if (!active()) return;
-      }
+      const sourceGuard = { references: quotes, signature: null, checking: null };
+      aiSources = sourceGuard;
+      await validateAISources(sourceGuard); if (!active()) return;
       // The panel chooses excerpts explicitly; private questions/notes and whole
       // source bodies never enter this candidate list. Results stay read-only.
       let panel;
       panel = life.WritingAIUI.open({ selectionText: '', tasks: ['ask', 'outline'],
         sources: quotes.map(reference => ({ text: reference.quote, label: reference.title || '채택한 인용' })),
-        isCurrent: active, onClose: () => { if (aiPanel === panel) aiPanel = null; } });
+        isCurrent: active, validateCurrent: () => validateAISources(sourceGuard),
+        onClose: () => { if (aiPanel === panel) { aiPanel = null; aiSources = null; aiEpoch++; } } });
       aiPanel = panel;
     }
     function guardLocal() {

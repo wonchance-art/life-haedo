@@ -11,7 +11,7 @@
     return node;
   };
   function open({ selectionText = '', sources = [], tasks = ['polish', 'shorten', 'continue', 'custom'],
-    isCurrent, onApply, onClose = () => {} } = {}) {
+    isCurrent, validateCurrent, onApply, onClose = () => {} } = {}) {
     const AI = life.WritingAI, auth = root.HaedoAuth;
     if (!AI || typeof isCurrent !== 'function') throw new Error('AI 제안을 준비하지 못했어요. 새로고침해 주세요.');
     const target = auth?.getAccount(), authEpoch = auth?.epoch, token = {};
@@ -86,6 +86,16 @@
     function ensureCurrent() {
       if (!current()) throw Object.assign(new Error(AI.MESSAGES.ai_not_current), { code: 'ai_not_current' });
     }
+    async function verifyCurrent() {
+      ensureCurrent();
+      // Source adapters may need a fresh stored snapshot after a change event.
+      // Recheck after that await; unrelated writes must not invalidate a panel.
+      if (validateCurrent) {
+        try { await validateCurrent(); }
+        catch (cause) { dispose(); throw cause; }
+      }
+      ensureCurrent();
+    }
     function showError(value) {
       if (closed) return;
       error.textContent = AI.MESSAGES[value?.code] || (value?.message && !value?.code ? value.message : AI.MESSAGES.server_error);
@@ -141,6 +151,7 @@
         if (verified?.id !== target.userId) throw Object.assign(new Error(), { code: 'unauthorized' });
         const session = await auth.getClient().auth.getSession(); ensureCurrent();
         if (session.error || session.data?.session?.user?.id !== target.userId) throw Object.assign(new Error(), { code: 'unauthorized' });
+        await verifyCurrent();
         return session.data.session.access_token;
       } }) : async () => ({ error: 'ai_not_configured' });
     const ai = AI.create({ request, isCurrent: value => value === token && current() });
@@ -148,7 +159,7 @@
     function prepareReview() {
       if (busy) return;
       ensureCurrent(); resetReview();
-      if (composing.size) throw Object.assign(new Error(), { code: 'ai_composing' });
+      if (composing.size) throw new Error('입력을 마친 뒤 다시 눌러 주세요.');
       const spec = AI.TASKS[task.value];
       selectedSources = spec.sources === 'forbidden' ? [] : choices.filter((_, index) => sourceChecks[index].checked);
       prepared = ai.prepare({ task: task.value, selectionText,
@@ -161,9 +172,13 @@
       (prepared.preview.sources || []).forEach((text, index) => {
         preview.append(el('h4', '자료 발췌 ' + (index + 1) + ' · ' + selectedSources[index].label), el('pre', text, 'writing-ai-text'));
       });
-      const subject = selectedSources.length ? '고른 글과 자료 발췌(최대 6개), 요청 문장을' : '고른 글과 요청 문장을';
+      const sentItems = [];
+      if (prepared.preview.selection !== undefined) sentItems.push('고른 글');
+      if (prepared.preview.sources?.length) sentItems.push('자료 발췌');
+      if (prepared.preview.instruction !== undefined) sentItems.push('요청 문장');
+      if (prepared.preview.guidance !== undefined) sentItems.push('AI 지침');
+      const subject = sentItems.join('·') + (sentItems.at(-1) === '자료 발췌' ? '를' : '을');
       preview.append(el('p', subject + ' Anthropic에 보내 제안을 받습니다. 입력은 30일 안에 삭제됩니다(정책 위반 표시 시 더 길게 보관). 학습에는 쓰지 않습니다.', 'writing-ai-notice'));
-      if (prepared.preview.guidance) preview.append(el('p', '켜 둔 AI 지침도 함께 보냅니다.', 'life-help'));
       preview.append(sendButton); sendButton.disabled = false; preview.hidden = false;
       sendButton.focus({ preventScroll: true });
       reveal(preview);
@@ -171,7 +186,7 @@
     async function send() {
       if (busy || !prepared) return;
       ensureCurrent();
-      if (composing.size) throw Object.assign(new Error(), { code: 'ai_composing' });
+      if (composing.size) throw new Error('입력을 마친 뒤 다시 눌러 주세요.');
       clearError(); setBusy(true); retryButton.hidden = true;
       // Starting a paid request invalidates the prior balance, even when the
       // eventual response is a refusal, timeout or unreadable result.
@@ -183,7 +198,11 @@
       requestTimer = setTimeout(() => requestController?.abort(), 75000);
       status.textContent = '제안을 기다리는 중… 닫아도 이미 보낸 요청의 비용이 발생할 수 있어요.';
       let value;
-      try { value = await ai.send(pending, { token, signal: requestController.signal }); }
+      try {
+        await verifyCurrent();
+        value = await ai.send(pending, { token, signal: requestController.signal });
+        await verifyCurrent();
+      }
       catch (_) { value = { status: 'error', code: 'ai_invalid_response' }; }
       finally { clearTimeout(requestTimer); requestTimer = null; }
       if (!current()) { dispose(); return; }

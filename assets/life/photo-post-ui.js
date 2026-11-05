@@ -227,7 +227,7 @@
       }
     }
     function cleanup() {
-      host?.querySelector('.photo-editor')?.aiSuggestions?.dispose();
+      host?.querySelector('.photo-editor')?.disposeAITool?.();
       if (status) root.HaedoMotion?.cancel(status);
       dismissControls?.();
       dismissControls = null;
@@ -1894,17 +1894,31 @@
           },
           onClose() { if (isTarget()) suggest.focus(); },
         });
-      }), "sparkle", "AI 제안");
+      }), "edit", "AI 제안");
       suggest.id = "photoAI";
       suggest.addEventListener("pointerdown", event => event.preventDefault());
-      // Keep every tool reachable and the 44px targets on one row on phones.
-      // Link formatting remains in the existing additional-format menu.
-      formatPanel.append(primaryFormats.querySelector(".ql-link"));
+      // Preserve the wide toolbar; only the narrow phone row moves its link
+      // into additional formats. Move the existing control, never recreate it.
+      const linkControl = primaryFormats.querySelector(".ql-link");
+      const narrowTools = root.matchMedia("(max-width: 390px)");
+      const placeLink = () => {
+        const destination = narrowTools.matches ? formatPanel : primaryFormats;
+        if (linkControl.parentNode !== destination) {
+          const focused = document.activeElement === linkControl;
+          destination.append(linkControl);
+          if (focused) (narrowTools.matches && !extraFormats.open ? formatSummary : linkControl).focus({ preventScroll: true });
+        }
+      };
+      placeLink(); narrowTools.addEventListener("change", placeLink);
+      form.disposeAITool = () => {
+        narrowTools.removeEventListener("change", placeLink);
+        form.aiSuggestions?.dispose();
+      };
       const toolItems = [
         ["photo", insertPhoto],
         ["inline", primaryFormats],
-        ["formats", extraFormats],
         ["ai", suggest],
+        ["formats", extraFormats],
         ["history", history],
         ["keyboard", hideKeyboard],
       ];

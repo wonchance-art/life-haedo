@@ -92,6 +92,14 @@
 .writing-ai-error:empty, .writing-ai-status:empty { display: none; }
 .writing-ai-result > button { margin: 16px 8px 0 0; }
 .writing-ai-actions:empty { display: none; }
+@media (pointer: coarse) and (min-width: 391px) and (max-width: 440px) {
+  .photo-posts .photo-toolbar.photo-toolbar-floating:has(#photoAI) {
+    width: calc(100% + 24px);
+    max-width: calc(100vw - 16px);
+    margin-inline: -12px;
+    justify-content: center;
+  }
+}
 @media (max-width: 760px) {
   .writing-ai-panel {
     width: 100%;

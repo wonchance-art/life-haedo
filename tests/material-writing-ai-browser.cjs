@@ -95,6 +95,9 @@ async function flow(browser, label, viewport) {
       const preview = await panel(page).locator('.writing-ai-preview').textContent();
       assert(preview.includes(fixture.entries[0].quote)); assert(!preview.includes(fixture.entries[1].quote));
       assert(!preview.includes('PRIVATE_')); assert.match(preview, /Anthropic/); assert.match(preview, /30일/);
+      const notice = await panel(page).locator('.writing-ai-notice').textContent();
+      assert.match(notice, /^자료 발췌·요청 문장을 Anthropic/);
+      assert(!notice.includes('고른 글'), 'no selected editor text is claimed for a material question');
       assert.equal(ai.requests.length, 0); assert.deepEqual(await snapshot(page, fixture), before);
       await page.waitForFunction(() => document.querySelector('.writing-ai-usage')?.textContent.includes('$7.50'));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
@@ -123,19 +126,65 @@ async function flow(browser, label, viewport) {
     });
     await check('outline uses only the newly selected excerpt and leaves the preparation unchanged', async () => {
       const before = await snapshot(page, fixture);
-      await open(page, 1, 'outline'); await action(page, '보내기').click(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
+      await open(page, 1, 'outline'); await page.locator('#writingAIInstruction').fill(''); await action(page, '보낼 내용 확인').click();
+      const notice = await panel(page).locator('.writing-ai-notice').textContent();
+      assert.match(notice, /^자료 발췌를 Anthropic/); assert(!notice.includes('요청 문장')); assert(!notice.includes('고른 글'));
+      await action(page, '보내기').click(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
       assert.equal(ai.requests.at(-1).body.task, 'outline'); assert.deepEqual(ai.requests.at(-1).body.sources, [fixture.entries[1].quote]);
+      assert.equal(Object.hasOwn(ai.requests.at(-1).body, 'instruction'), false);
       assert.deepEqual(await snapshot(page, fixture), before);
       await action(page, '닫기').click();
     });
     if (label === 'mobile') return;
+    await check('unrelated source changes preserve the reviewed excerpt and allow the pending answer', async () => {
+      await open(page);
+      const unrelated = await page.evaluate(async f => {
+        const s = HaedoLife.Shell.storage, C = HaedoLife.Core, bundle = await s.read(f.workspaceId);
+        const prepared = await C.prepareImport({ origin: 'obsidian', title: '다른 자료', text: '이번 질문과 관계없는 새 자료', fileName: 'unrelated-ai.md' }, bundle);
+        const stored = await s.commitLocal({ workspaceId: f.workspaceId, baseRevision: bundle.revision, operationId: C.id(), changes: C.buildImportChanges(bundle, prepared) });
+        if (stored.status !== 'stored') throw Error('synthetic unrelated import failed');
+        return prepared.source.id;
+      }, fixture);
+      assert.equal(await panel(page).isVisible(), true);
+      assert.equal(await panel(page).locator('[data-ai-source]').first().isChecked(), true);
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), QUESTION);
+      const hold = ai.hold(); await action(page, '보내기').click(); await hold.entered;
+      await page.evaluate(async ({ workspaceId, sourceId }) => {
+        const s = HaedoLife.Shell.storage, C = HaedoLife.Core, bundle = await s.read(workspaceId);
+        const stored = await s.commitLocal({ workspaceId, baseRevision: bundle.revision, operationId: C.id(), changes: C.buildSourceStateChanges(bundle, sourceId, 'trash') });
+        if (stored.status !== 'stored') throw Error('synthetic unrelated trash failed');
+      }, { workspaceId: fixture.workspaceId, sourceId: unrelated });
+      hold.release(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
+      assert.deepEqual(ai.requests.at(-1).body.sources, [fixture.entries[0].quote]);
+      assert.equal(await panel(page).locator('[data-ai-source]').first().isChecked(), true);
+      assert.equal(await page.locator('#writingAIInstruction').inputValue(), QUESTION);
+      await action(page, '닫기').click();
+    });
+    await check('a new version of an excerpt source invalidates its panel but preserves the exact old reference', async () => {
+      await open(page); const hold = ai.hold(); await action(page, '보내기').click(); await hold.entered;
+      await page.evaluate(async f => {
+        const s = HaedoLife.Shell.storage, C = HaedoLife.Core, bundle = await s.read(f.workspaceId);
+        const prepared = await C.prepareImport({ origin: 'obsidian', existingSourceId: f.entries[0].sourceId, author: '익명 작성자', authorRelation: 'other', title: '첫 관찰',
+          text: f.entries[0].raw + '\n원문에 나중에 더한 문장.', fileName: '첫 관찰.md' }, bundle);
+        if (prepared.source.id !== f.entries[0].sourceId || prepared.version.id === f.entries[0].versionId) throw Error('fixture did not create the same source new version');
+        const stored = await s.commitLocal({ workspaceId: f.workspaceId, baseRevision: bundle.revision, operationId: C.id(), changes: C.buildImportChanges(bundle, prepared) });
+        if (stored.status !== 'stored') throw Error('synthetic source version failed');
+      }, fixture);
+      await panel(page).waitFor({ state: 'hidden' }); hold.release();
+      assert.equal(await page.getByText(ANSWER, { exact: true }).count(), 0);
+      const reference = (await snapshot(page, fixture)).preparation.plans.find(plan => plan.id === fixture.planId).blocks.find(block => block.kind === 'quote').reference;
+      assert.equal(reference.sourceVersionId, fixture.entries[0].versionId); assert.equal(reference.quote, fixture.entries[0].quote);
+      await open(page); await action(page, '보내기').click(); await panel(page).getByText(ANSWER, { exact: true }).waitFor();
+      assert.deepEqual(ai.requests.at(-1).body.sources, [fixture.entries[0].quote], 'reopening keeps the explicitly chosen old version');
+      await action(page, '닫기').click();
+    });
     await check('request IME composition cannot create or send a stale preview', async () => {
       await page.locator('#mwAI').click(); await panel(page).waitFor(); await panel(page).locator('[data-ai-source]').first().check();
       await page.locator('#writingAIInstruction').fill(QUESTION);
       const count = ai.requests.length;
       await page.locator('#writingAIInstruction').evaluate(node => node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })));
       await action(page, '보낼 내용 확인').evaluate(button => button.click());
-      await panel(page).getByRole('alert').getByText('한글 입력이 끝난 뒤 적용해 주세요.', { exact: true }).waitFor();
+      await panel(page).getByRole('alert').getByText('입력을 마친 뒤 다시 눌러 주세요.', { exact: true }).waitFor();
       assert.equal(ai.requests.length, count); assert.equal(await action(page, '보내기').isVisible(), false);
       await page.locator('#writingAIInstruction').evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' })));
       await action(page, '닫기').click();
