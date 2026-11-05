@@ -492,6 +492,108 @@ test('a verified existing post stays available when deletion history arrives', a
   assert.equal((await fresh.a.listPhotoPosts(installed.workspaceId)).length, 1);
 });
 
+test('a delayed deletion marker cannot retire a remapped writing preparation whose live BlogSync copy arrived first', async t => {
+  const origin = await fixture(), receiver = blank(); t.after(origin.close); t.after(receiver.close);
+  const { row, post } = savedRow(origin), writing = copy(row), Blog = require('../assets/life/blog.js');
+  writing.revision = row.revision - 1;
+  writing.data.output = { state: 'writing', postId: post.id, claimId: row.data.output.claimId };
+  const installed = await receiver.a.installMaterialContinuity(writing);
+  assert.notEqual(installed.workspaceId, row.data.bundle.workspaceId);
+  assert.notEqual(installed.planId, row.data.plan.id);
+  assert.equal((await receiver.a.readMaterialWritingOutput(installed.workspaceId, installed.planId)).status, 'none');
+  // BlogSync and preparation sync are independent: the saved blog can arrive
+  // before the saved preparation and a delayed historical deletion marker.
+  const local = { ...copy(post), id: Core.id(), revision: 0 };
+  const received = await receiver.a.installReceivedBlogPost(installed.workspaceId, local, {
+    enabled: true, remoteId: post.id, remoteWorkspaceId: row.data.bundle.workspaceId,
+    remoteRevision: post.revision, localRevision: 0, remoteManifest: Blog.pack(post),
+    publication: null, pending: null, conflict: null, status: 'synced', error: null
+  });
+  assert.equal(received.received, true); assert.notEqual(received.post.id, post.id);
+  const before = await receiver.a.readMaterialWriting(installed.workspaceId), source = await receiver.a.read(installed.workspaceId);
+  const continuity = await receiver.a.readMaterialContinuityState(installed.workspaceId, installed.planId);
+  const binding = await receiver.a.readBlogSyncState(installed.workspaceId, received.post.id);
+  assert.equal(before.plans[0].output, null);
+  assert.equal(continuity.mapping.planIds[row.data.plan.id], installed.planId);
+  assert.equal(binding.remoteId, post.id); assert.equal(binding.remoteRevision, row.data.output.revision);
+  assert.deepEqual((await receiver.a.listBlogCopies(installed.workspaceId)).map(value => value.status), ['received']);
+  assert.equal((await applyMarker(receiver.a, row)).status, 'applied');
+  assert.deepEqual(await receiver.a.readMaterialWriting(installed.workspaceId), before,
+    'a live received post prevents a fabricated deleted output and preparation revision');
+  assert.deepEqual(await receiver.a.readMaterialWritingOutput(installed.workspaceId, installed.planId), { status: 'none' });
+  assert.deepEqual(await receiver.a.readPhotoPost(installed.workspaceId, received.post.id), received.post);
+  assert.deepEqual(await receiver.a.readBlogSyncState(installed.workspaceId, received.post.id), binding);
+  assert.deepEqual(await receiver.a.readMaterialContinuityState(installed.workspaceId, installed.planId), continuity);
+  assert.deepEqual(await receiver.a.read(installed.workspaceId), source);
+  assert.equal(receiver.rows.get('meta').has(key(`material-writing-output:${installed.workspaceId}:${installed.planId}`)), false);
+  assert.equal([...receiver.rows.get('meta').values()].some(value => value.key.startsWith(`material-writing-output-deleted:${installed.workspaceId}:`)), false);
+  assert.deepEqual((await receiver.a.readAccountDocRecord(markerKey(row.data.plan.id))).value, markerValue(row));
+
+  const snapshot = await receiver.a.readMaterialContinuitySnapshot(installed.workspaceId, installed.planId);
+  const linked = await receiver.a.installMaterialContinuity(row, { expectedFingerprint: snapshot.fingerprint });
+  assert.equal(linked.postId, received.post.id, 'the saved preparation must reuse the live remapped copy');
+  assert.equal((await receiver.a.readMaterialWritingOutput(installed.workspaceId, installed.planId)).status, 'available');
+  assert.deepEqual((await receiver.a.listPhotoPosts(installed.workspaceId)).map(value => value.id), [received.post.id]);
+  assert.deepEqual(await receiver.a.readPhotoPost(installed.workspaceId, received.post.id), received.post);
+  assert.deepEqual(await receiver.a.readBlogSyncState(installed.workspaceId, received.post.id), binding);
+  assert.deepEqual((await receiver.a.readMaterialWriting(installed.workspaceId)).plans,
+    before.plans.map(plan => ({ ...plan, output: { postId: received.post.id } })));
+  const { revision, updatedAt, ...afterSource } = await receiver.a.read(installed.workspaceId);
+  const { revision: priorRevision, updatedAt: priorUpdatedAt, ...beforeSource } = source;
+  assert.equal(revision, priorRevision + 1); assert(Date.parse(updatedAt) >= Date.parse(priorUpdatedAt));
+  assert.deepEqual(afterSource, beforeSource, 'saved preparation receipt advances the bundle revision without rewriting exact sources');
+  const evidence = await receiver.a.readPostEvidence(installed.workspaceId, received.post.id);
+  assert.deepEqual(evidence.refs.map(ref => [ref.quote, ref.contentHash, ref.locator]),
+    row.data.output.refs.map(ref => [ref.quote, ref.contentHash, ref.locator]));
+  for (const ref of evidence.refs) await R.resolve(source, ref);
+});
+
+test('a deletion marker stored before BlogSync receipt preserves the later live copy and reconnects the saved preparation to it', async t => {
+  const origin = await fixture(), receiver = blank(); t.after(origin.close); t.after(receiver.close);
+  const { row, post } = savedRow(origin), writing = copy(row), Blog = require('../assets/life/blog.js');
+  writing.revision = row.revision - 1;
+  writing.data.output = { state: 'writing', postId: post.id, claimId: row.data.output.claimId };
+  const installed = await receiver.a.installMaterialContinuity(writing);
+  assert.notEqual(installed.workspaceId, row.data.bundle.workspaceId); assert.notEqual(installed.planId, row.data.plan.id);
+  const source = await receiver.a.read(installed.workspaceId);
+  assert.equal((await applyMarker(receiver.a, row)).status, 'applied');
+  const marked = await receiver.a.readMaterialWriting(installed.workspaceId);
+  const deleted = await receiver.a.readMaterialWritingOutput(installed.workspaceId, installed.planId);
+  assert.equal(deleted.status, 'deleted');
+  assert.deepEqual(await receiver.a.listBlogCopies(installed.workspaceId), []);
+  assert.deepEqual(await receiver.a.listPhotoPosts(installed.workspaceId), []);
+  assert.deepEqual((await receiver.a.readAccountDocRecord(markerKey(row.data.plan.id))).value, markerValue(row));
+  // This order is deliberate: the marker is committed before BlogSync creates
+  // its independently received live copy, while the preparation is still writing.
+  const received = await receiver.a.installReceivedBlogPost(installed.workspaceId, { ...copy(post), id: Core.id(), revision: 0 }, {
+    enabled: true, remoteId: post.id, remoteWorkspaceId: row.data.bundle.workspaceId,
+    remoteRevision: post.revision, localRevision: 0, remoteManifest: Blog.pack(post),
+    publication: null, pending: null, conflict: null, status: 'synced', error: null
+  });
+  assert.equal(received.received, true); assert.notEqual(received.post.id, post.id); assert.notEqual(received.post.id, deleted.postId);
+  const binding = await receiver.a.readBlogSyncState(installed.workspaceId, received.post.id);
+  assert.equal(binding.remoteId, post.id); assert.equal(binding.remoteRevision, row.data.output.revision);
+  assert.deepEqual(await receiver.a.readMaterialWriting(installed.workspaceId), marked, 'BlogSync receipt preserves the preparation until its saved descriptor arrives');
+  assert.deepEqual(await receiver.a.read(installed.workspaceId), source);
+  const snapshot = await receiver.a.readMaterialContinuitySnapshot(installed.workspaceId, installed.planId);
+  const linked = await receiver.a.installMaterialContinuity(row, { expectedFingerprint: snapshot.fingerprint });
+  assert.equal(linked.postId, received.post.id, 'a confirmed live copy wins over the earlier marker when the saved output is connected');
+  assert.equal((await receiver.a.readMaterialWritingOutput(installed.workspaceId, installed.planId)).status, 'available');
+  assert.deepEqual((await receiver.a.listPhotoPosts(installed.workspaceId)).map(value => value.id), [received.post.id]);
+  assert.deepEqual(await receiver.a.readPhotoPost(installed.workspaceId, received.post.id), received.post);
+  assert.deepEqual(await receiver.a.readBlogSyncState(installed.workspaceId, received.post.id), binding);
+  assert.deepEqual((await receiver.a.readMaterialWriting(installed.workspaceId)).plans,
+    marked.plans.map(plan => ({ ...plan, output: { postId: received.post.id } })));
+  const { revision, updatedAt, ...afterSource } = await receiver.a.read(installed.workspaceId);
+  const { revision: priorRevision, updatedAt: priorUpdatedAt, ...beforeSource } = source;
+  assert.equal(revision, priorRevision + 1); assert(Date.parse(updatedAt) >= Date.parse(priorUpdatedAt));
+  assert.deepEqual(afterSource, beforeSource);
+  const evidence = await receiver.a.readPostEvidence(installed.workspaceId, received.post.id);
+  assert.deepEqual(evidence.refs.map(ref => [ref.quote, ref.contentHash, ref.locator]),
+    row.data.output.refs.map(ref => [ref.quote, ref.contentHash, ref.locator]));
+  for (const ref of evidence.refs) await R.resolve(source, ref);
+});
+
 test('remote receipt wakes the exact remapped preparation without rewriting its notes or originals', async t => {
   const origin = await fixture(), receiver = blank(); t.after(origin.close); t.after(receiver.close);
   const { row, post } = savedRow(origin), installed = await receiver.a.installMaterialContinuity(row, { post });
