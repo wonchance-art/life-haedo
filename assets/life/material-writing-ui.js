@@ -286,9 +286,13 @@
         if (result.status === 'deleted') {
           let localOnly = false;
           if (typeof storage.readMaterialContinuityState === 'function') {
-            const continuity = await storage.readMaterialContinuityState(workspaceId, owner.id);
+            try {
+              const continuity = await storage.readMaterialContinuityState(workspaceId, owner.id);
+              // A confirmed server head means the preparation is already linked,
+              // even when no completed output has been linked to that head yet.
+              localOnly = !continuity?.head;
+            } catch (_) { /* Optional connection details must not hide a confirmed deletion or its recovery action. */ }
             if (!current()) return;
-            localOnly = !continuity?.head?.data?.output || !continuity.output || continuity.head.data.output.postId !== continuity.output.postId;
           }
           pending.textContent = localOnly
             ? '이 기기에만 있는 준비입니다. 완성 글을 삭제했습니다. 다른 기기로 보내려면 새 준비 사본을 만들어 주세요.'
