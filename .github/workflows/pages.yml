@@ -429,6 +429,9 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify the source reader keeps the shared compose control without covering reader tools
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reader-compose-browser.cjs
       - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-ai-browser.cjs
