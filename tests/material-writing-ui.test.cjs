@@ -113,6 +113,27 @@ test('delayed handoff blocks external flush and preserves later composing input 
   await title.emit('compositionend'); await f.ui.flush(); await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
 });
 
+test('late output availability preserves the draft-stored notice while newer IME input waits', async t => {
+  const f = await fixture(t), createGate = deferred(), outputGate = deferred();
+  f.setBeforeCreate(() => createGate.promise);
+  f.storage.readMaterialWritingOutput = async () => {
+    await outputGate.promise;
+    return { status: 'available', postId: f.db().plans[0].output.postId };
+  };
+  await f.preview(); const creating = f.get('#mwCreate').emit('click'); await settle();
+  const title = f.get('#mwTitle'); await title.emit('compositionstart'); title.value = '초안 보관 중 이어 쓴 한글';
+  createGate.resolve(); await creating; await settle();
+  const notice = '글 초안은 보관했습니다. 그동안의 입력은 이 화면에 남아 있습니다. 입력을 마친 뒤 이어서 쓰기를 눌러 주세요.';
+  assert.equal(f.get('.mw-status').textContent, notice);
+  outputGate.resolve(); await settle();
+  assert.ok(f.get('#mwContinue')); assert.equal(f.get('.mw-status').textContent, notice);
+  assert.equal(f.creates(), 1); assert.equal(f.opens.length, 0);
+  assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '초안 보관 중 이어 쓴 한글');
+  await title.emit('compositionend'); await f.ui.flush();
+  assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+  await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
+});
+
 test('a CAS conflict recovers a fresh plan with new material/block IDs, retained exact refs and no output', async t => {
   const f = await fixture(t), material = f.M.material(f.bundle, f.imported.source.id, f.imported.version.id, f.C.id); await f.sources().onAdd(material); await f.sources().onQuote(material.id, f.ref); await f.ui.flush();
   const before = f.db(), latest = f.db(); latest.revision++; latest.plans[0].title = '다른 탭'; f.setDb(latest); const title = await f.input('#mwTitle', '내 준비'); await assert.rejects(f.ui.flush(), { code: 'material_writing_conflict' });

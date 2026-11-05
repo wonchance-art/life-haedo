@@ -22,6 +22,10 @@
     function message() {
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
+      updateControls();
+    }
+    function updateControls() {
+      if (!mounted() || !status) return;
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
       for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
         const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;
@@ -106,7 +110,7 @@
         if (!mounted() || !node.isConnected || acting || navigating || node.disabled) return;
         const token = epoch; acting = true; node.disabled = true;
         try { await task(); } catch (cause) { if (mounted(token)) report(cause); }
-        finally { acting = false; if (node.isConnected) node.disabled = false; message(); if (mounted(token) && tick !== stored && !failure && !saving && !sourceLoading && !sources?.pending() && !composing.size && !pendingFields.size) flushInternal().catch(report); }
+        finally { acting = false; if (node.isConnected) node.disabled = false; updateControls(); if (mounted(token) && tick !== stored && !failure && !saving && !sourceLoading && !sources?.pending() && !composing.size && !pendingFields.size) flushInternal().catch(report); }
       }); return node;
     }
     function field(label, owner, key, { id, multiline = true, max = 50000 } = {}) {
@@ -205,7 +209,7 @@
           target.append(button('연결한 글 다시 확인', renderOutput, { id: 'mwOutputRetry' }));
         } else if (result.status === 'available') {
           pending.textContent = '이 준비에서 만든 글이 있습니다. 준비의 변경은 그 글을 덮지 않습니다. 같은 글을 열거나 새 준비 사본으로 시작할 수 있습니다.';
-          target.append(button('이어서 쓰기', () => openPost(false), { id: 'mwContinue', primary: true })); message();
+          target.append(button('이어서 쓰기', () => openPost(false), { id: 'mwContinue', primary: true })); updateControls();
         } else throw new Error('연결한 글의 상태를 확인하지 못했습니다. 다시 확인해 주세요.');
       } catch (cause) {
         if (!current()) return;

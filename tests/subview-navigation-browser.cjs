@@ -59,6 +59,21 @@ async function durablePhoto(page, title, status) {
 // the preparation's source cards, or the post's rendered article.
 async function materialReady(page) { await page.locator('#mwTitle').waitFor(); await page.locator('.mw-material').first().waitFor(); }
 async function postReady(page) { await page.locator('.photo-article').waitFor(); }
+// The writing and reading surfaces own their controls; the generic page heading
+// is deliberately absent. Verify the active surface and its actual document.
+async function photoEditorReady(page) {
+  await page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
+  assert.equal(await page.locator('.photo-editor .ql-editor[contenteditable="true"]').isVisible(), true);
+  assert.equal(await page.getByRole('button', { name: '글 저장', exact: true }).isVisible(), true);
+  assert.equal(await heading(page).count(), 0);
+}
+async function photoReaderReady(page, title) {
+  await page.locator('.photo-posts[data-mode="read"] .photo-article').waitFor();
+  assert.equal(await page.locator('.photo-read-heading').textContent(), title);
+  assert.equal(await page.locator('.photo-read-actions').count(), 1);
+  assert.equal(await page.locator('.photo-editor').count(), 0);
+  assert.equal(await heading(page).count(), 0);
+}
 // Holds one real storage read (next post, or the preparation's source bundle)
 // until the test releases it; every other call uses real IndexedDB unchanged.
 async function holdStorage(context) {
@@ -123,8 +138,8 @@ async function main() {
         const start = page.locator(`[data-home-destination="${destination}"]:visible`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();
         await mode(page, targetMode);
-        if (destination === 'write') await page.locator('#photoTitle').waitFor();
-        assert.equal(await heading(page).textContent(), title);
+        if (destination === 'write') await photoEditorReady(page);
+        else assert.equal(await heading(page).textContent(), title);
         if (destination === 'write') {
           assert.equal(await page.locator('[data-subview-return]').count(), 0, 'Editor keeps one close action');
           assert.equal(await page.getByRole('button', { name: '닫기', exact: true }).count(), 1);
@@ -331,7 +346,7 @@ async function main() {
       const draft = await durablePhoto(page, '새로고침 뒤에도 이어 쓸 글');
       assert.equal(draft.status, 'draft');
       await page.reload(); await ready(page); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
-      assert.equal(await heading(page).textContent(), '글쓰기');
+      await photoEditorReady(page);
       assert.equal(new URL(page.url()).searchParams.get('section'), null, 'The blog editor stays in home');
       // A never-saved new post reopens as the 글쓰기 screen (review minor 1); the section frame stays 일정.
       assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-compose]').getAttribute('aria-current'), 'page');
@@ -340,10 +355,10 @@ async function main() {
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '한글 본문은 다시 불러와도 같은 편집기에 남습니다.');
       assert.equal((await photoPosts(page)).length, 1, 'Reload reopens the same draft instead of adding a copy');
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
-      await page.waitForFunction(() => document.querySelector('#lifeApp .haedo-page-heading h1')?.textContent === '글 읽기');
+      await photoReaderReady(page, '새로고침 뒤에도 이어 쓸 글');
       const saved = await durablePhoto(page, '새로고침 뒤에도 이어 쓸 글', 'saved');
       await page.reload(); await ready(page); await mode(page, 'page');
-      await page.waitForFunction(() => document.querySelector('#lifeApp .haedo-page-heading h1')?.textContent === '글 읽기');
+      await photoReaderReady(page, '새로고침 뒤에도 이어 쓸 글');
       assert.equal(new URL(page.url()).searchParams.get('section'), null);
       assert.match(await page.locator('#lifeMain').innerText(), /새로고침 뒤에도 이어 쓸 글/);
       assert.deepEqual((await photoPosts(page)).map(post => [post.id, post.status]), [[saved.id, 'saved']]);
@@ -517,7 +532,7 @@ async function main() {
       await page.locator('[data-home-destination="write"]:visible').click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('이력비공개제목'); await page.locator('.ql-editor').fill('이력비공개본문 문장');
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
-      await page.waitForFunction(() => document.querySelector('#lifeApp .haedo-page-heading h1')?.textContent === '글 읽기');
+      await photoReaderReady(page, '이력비공개제목');
       await back(page, 'home');
       await page.locator('[aria-controls="homeSearchPanel"]').click(); await page.locator('#homePostSearch').fill('이력비공개'); await settle(page);
       await page.locator('#lifeMain').getByText('이력비공개제목').first().click(); await mode(page, 'page'); await postReady(page);

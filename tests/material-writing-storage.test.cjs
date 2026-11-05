@@ -264,6 +264,29 @@ test('confirmed remote deletion retires the same local output without changing i
   assert.deepEqual(f.rows.get('meta').get(receiptKey), receipt);
 });
 
+for (const remote of [false, true]) for (const related of [false, true]) {
+  test(`${remote ? 'remote' : 'local'} deletion survives a damaged preparation receipt for ${related ? 'its own' : 'an unrelated'} post`, async t => {
+    const f = await fixture(); t.after(f.close);
+    const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+    const P = require('../assets/life/photo-post.js');
+    const post = related ? await f.a.readPhotoPost(f.ws, created.postId) : await f.a.savePhotoPost(f.ws, P.create(Core.id), 0);
+    const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+    const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`);
+    const damaged = { key: `material-writing-output:${f.ws}:${f.plan.id}`, value: { postId: created.postId, damaged: true } };
+    f.rows.get('meta').set(receiptKey, copy(damaged));
+    const stateKey = key(`material-writing:${f.ws}`), before = copy(f.rows.get('meta').get(stateKey));
+    const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+    if (remote) await f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision });
+    else await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+    await assert.rejects(f.a.readPhotoPost(f.ws, post.id), { code: 'photo_post_missing' });
+    assert.deepEqual(f.rows.get('meta').get(key(`material-writing-output-deleted:${f.ws}:${post.id}`))?.value, { postId: post.id });
+    assert.deepEqual(f.rows.get('meta').get(stateKey), before, 'damaged preparation is not rewritten or revised');
+    assert.deepEqual(f.rows.get('meta').get(receiptKey), damaged, 'damaged receipt stays available for recovery');
+    assert(!events.some(event => event.type === 'material_writing_changed'));
+    if (!related) assert.equal((await f.a.readPhotoPost(f.ws, created.postId)).id, created.postId, 'other post is preserved');
+  });
+}
+
 test('deletion evidence survives when the related preparation is not present yet', async t => {
   const f = await fixture(); t.after(f.close);
   const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);

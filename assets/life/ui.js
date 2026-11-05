@@ -2305,10 +2305,12 @@
         // existing app return into that row once it is ready; never duplicate a
         // return already supplied by a material/9-cell reading context.
         const back = headingGroup.querySelector('#lifeSubviewReturn');
+        const find = actions.querySelector('#lifeFindOpen');
         global.requestAnimationFrame(() => {
           if (disposed || headingToken !== headingGeneration || state.mode !== 'page' || blogKind !== 'photo' || blogMode !== 'read') return;
           const row = main.querySelector('.photo-posts[data-mode="read"] > .photo-read-actions');
           if (back && row && !row.querySelector(':scope > button[aria-label*="돌아가기"], :scope > button[aria-label="사진 글 목록"]')) row.prepend(back);
+          if (find && row && !row.querySelector('#lifeFindOpen')) row.querySelector('.photo-read-tools')?.append(find);
         });
       }
       if (state.remoteChanged && state.mode !== 'find') {

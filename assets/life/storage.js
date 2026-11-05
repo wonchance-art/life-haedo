@@ -1833,10 +1833,16 @@
       // Blog sync can confirm a deletion before the related preparation arrives.
       // Keep that evidence independently of the current preparation list.
       await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
-      if (!(await meta.get(`material-writing:${workspaceId}`))) return null;
-      const state = clone(await materialWritingValue(meta, workspaceId));
-      const affected = state.plans.some(plan => plan.output?.postId === postId);
-      if (!affected) return null;
+      const row = await meta.get(`material-writing:${workspaceId}`);
+      if (!Array.isArray(row?.value?.plans) || !row.value.plans.some(plan => plan?.output?.postId === postId)) return null;
+      let state;
+      try { state = clone(await materialWritingValue(meta, workspaceId)); }
+      catch (cause) {
+        // Broken preparation/receipt data must not veto a confirmed post
+        // deletion. Keep it untouched; actual IDB failures still abort both.
+        if (/^(invalid_|workspace_mismatch$)/.test(cause?.code || '')) return null;
+        throw cause;
+      }
       state.revision++;
       await meta.put({ key: `material-writing:${workspaceId}`, value: state });
       return state.revision;

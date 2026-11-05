@@ -94,6 +94,7 @@ async function header(page, width) {
   await page.goto(base + '/index.html?compose=1'); await ready(page);
   await page.locator('#photoTitle').waitFor();
   await page.waitForFunction(()=>document.body.dataset.writingFocus==='true');
+  assert.equal(await page.getByRole('button', { name: '통합 검색', exact: true }).isVisible(), false, 'editor keeps search out of focused writing');
   if(width===390) {
     assert.equal(await page.locator('[data-haedo-navigation]').isVisible(),false,'phone editor retains focused navigation behavior');
     assert.equal(await page.locator('[data-haedo-compose]').isVisible(),false,'phone editor keeps its existing compose visibility');
@@ -103,16 +104,31 @@ async function header(page, width) {
   await paint(page);
   const titleBox = async selector => page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return { top: r.top + scrollY, left: r.left, width: r.width, height: r.height }; });
   const edit = await titleBox('#photoTitle');
+  const editBar = await titleBox('.photo-editor-tools');
   await capture(page, 'editor-' + width);
   await page.getByRole('button', { name: '글 저장', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor(); await paint(page);
   const read = await titleBox('.photo-read-heading');
-  report.geometry.push({ width, edit, read });
+  const readBar = await titleBox('.photo-read-actions');
+  report.geometry.push({ width, edit, read, editBar, readBar });
   const commonVisible = await page.locator('.life-app > .life-toolbar').isVisible();
   assert.equal(commonVisible, false, 'PhotoPost reader uses its own single command row, with no duplicate common heading');
-  assert.ok(Math.abs(read.top - edit.top) <= 2, 'read/edit title top is aligned: ' + JSON.stringify({ read, edit }));
+  // The approved phone layout may wrap the labelled controls once. The title
+  // follows that actual row height; no extra common heading or spacer returns.
+  assert.ok(Math.abs(readBar.top - editBar.top) <= 2, 'reading and editing command rows start at the same top');
+  assert.ok(Math.abs((read.top - readBar.top - readBar.height) - (edit.top - editBar.top - editBar.height)) <= 2,
+    'title follows its command row without extra space: ' + JSON.stringify({ read, edit, readBar, editBar }));
+  assert.ok(readBar.height >= editBar.height - 2 && readBar.height <= editBar.height + (width === 390 ? 48 : 2), 'phone controls wrap at most once; desktop keeps one row');
   assert.equal(await page.getByRole('button', { name: '글 수정', exact: true }).isVisible(), true);
   assert.equal(await page.getByRole('button', { name: '사진 포함 백업', exact: true }).isVisible(), true);
+  const search = page.locator('.photo-read-actions').getByRole('button', { name: '통합 검색', exact: true });
+  assert.equal(await search.isVisible(), true, 'reader has its own named search entry');
+  const editLabel = await page.locator('.photo-read-edit > span').evaluate(el => {
+    const box=el.getBoundingClientRect(), css=getComputedStyle(el);
+    return {text:el.textContent,width:box.width,height:box.height,clipPath:css.clipPath};
+  });
+  assert.equal(editLabel.text,'수정');
+  assert.ok(editLabel.width >= 20 && editLabel.height >= 14 && editLabel.clipPath === 'none', '수정 label must be visibly readable, not an icon-only clipped name');
   await page.locator('.photo-read-actions .photo-privacy').click();
   await page.getByRole('button', { name: '글 정보 닫기', exact: true }).click();
   assert.equal(await page.locator('.photo-read-actions .photo-privacy').evaluate(el => el === document.activeElement), true);
@@ -123,6 +139,13 @@ async function header(page, width) {
     return {name:el.getAttribute('aria-label')||el.textContent,hit:el.contains(document.elementFromPoint(x,y))};
   }));
   assert.deepEqual(hittable.filter(item=>!item.hit), [], 'reading actions and global compose must remain physically clickable');
+  const overlap = await page.locator('.photo-read-actions button, .photo-read-actions summary').evaluateAll(nodes => {
+    const compose=document.querySelector('[data-haedo-compose]').getBoundingClientRect();
+    return nodes.filter(el=>el.getClientRects().length && (el.tagName==='SUMMARY' || !el.closest('details:not([open])'))).filter(el=>{
+      const r=el.getBoundingClientRect();return Math.min(r.right,compose.right)>Math.max(r.left,compose.left)+1 && Math.min(r.bottom,compose.bottom)>Math.max(r.top,compose.top)+1;
+    }).map(el=>el.getAttribute('aria-label')||el.textContent);
+  });
+  assert.deepEqual(overlap, [], 'full reading control rectangles do not overlap global compose');
   await capture(page, 'reader-' + width);
   // A failed export remains visible above the reader; only a success notice moves below it.
   await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패');};});
@@ -137,6 +160,7 @@ async function header(page, width) {
 
   await page.getByRole('button', { name: '글 수정', exact: true }).focus(); await page.keyboard.press('Enter');
   await page.locator('#photoTitle').waitFor();
+  assert.equal(await page.getByRole('button', { name: '통합 검색', exact: true }).isVisible(), false, 'search does not follow the reader into editing');
   assert.equal(await page.locator('#photoTitle').inputValue(), '다시 읽고 이어 쓰는 합성 기록');
   assert.match(await page.locator('.ql-editor').textContent(), /읽기와 편집을 오가도/);
   await page.getByRole('button', { name: '닫기', exact: true }).click();
@@ -151,11 +175,24 @@ async function header(page, width) {
   await page.locator('#lifeMain[data-mode="home"]').waitFor();
   await page.getByRole('button', { name: '다시 읽고 이어 쓰는 합성 기록', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor();
+  const exact = await page.evaluate(async () => {
+    const s=HaedoLife.Shell.storage,w=await s.getActive(),post=(await s.listPhotoPosts(w)).find(p=>p.title==='다시 읽고 이어 쓰는 합성 기록'&&p.status==='saved');
+    return {id:post.id,doc:await s.readPhotoPost(w,post.id)};
+  });
+  await page.locator('.photo-read-actions').getByRole('button',{name:'통합 검색',exact:true}).focus(); await page.keyboard.press('Enter');
+  await page.locator('#lifeFind[aria-busy="false"]').waitFor();
+  await page.locator('#lifeFindQuery').fill('다시 읽고 이어 쓰는 합성 기록');
+  const result=page.locator('[data-focus-key="find:photo-post:'+exact.id+'"]');
+  await result.click(); await page.locator('.photo-read-heading').waitFor();
+  assert.equal(await page.locator('.photo-read-heading').textContent(),'다시 읽고 이어 쓰는 합성 기록');
+  assert.match(await page.locator('.photo-article').textContent(),/읽기와 편집을 오가도 그대로 남을 합성 본문/);
+  const returned=await page.evaluate(async id=>{const s=HaedoLife.Shell.storage;return s.readPhotoPost(await s.getActive(),id);},exact.id);
+  assert.deepEqual(returned,exact.doc,'search reopens the exact saved document without mutating its revision or body');
   await page.locator('[data-haedo-compose]').click(); await page.locator('#photoTitle').waitFor();
   assert.equal(await page.locator('#photoTitle').inputValue(),'');
   const originals=await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return s.listPhotoPosts(await s.getActive());});
   assert.ok(originals.some(post=>post.title==='다시 읽고 이어 쓰는 합성 기록' && post.status==='saved'));
-  report.checks.push(width + ': single reader command row, aligned titles, visible global compose, export failure, keyboard edit/return, content preservation');
+  report.checks.push(width + ': single reader command row, visible edit label and search, exact search return, phone wrap/compose separation, export failure, keyboard edit/return, content preservation');
 }
 async function configureSourceSync(context) {
   await context.route(base + '/assets/life/ui.js', async route => {

@@ -244,11 +244,10 @@
 .photo-read-actions .photo-more-menu { max-width: calc(100vw - 40px); }
 @media (max-width: 760px) {
   /* The global compose control keeps its 44px corner target while the reader
-     retains back, privacy, edit, download and more in its own heading row. */
+     retains back, privacy, labelled edit, download, more and search. Tools may
+     wrap to a second row rather than lose their labels or touch targets. */
   .photo-read-actions { padding: calc(6px + env(safe-area-inset-top, 0px)) 44px 6px 0; gap: 4px; flex-wrap: wrap; }
   .photo-read-tools { gap: 0; }
-  .photo-read-tools > .photo-read-edit { width: 44px; min-width: 44px; padding: 12px; gap: 0; }
-  .photo-read-edit > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 }
 .photo-entry-excerpt {
   white-space: pre-wrap;
