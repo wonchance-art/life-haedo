@@ -1,0 +1,554 @@
+{
+  "date": "2026-11-05",
+  "bundle": "C",
+  "status": "local_verified_pending_orchestrator",
+  "baseMain": "2eebd27cbde54f697c9de3a09382f2e21b39a743",
+  "originalPR145": "0b7f632518782686ea5ad29bf50169126f51e101",
+  "scope": "Synthetic Auth/Edge/publisher/browser fixtures, actual application/SDK/IndexedDB/SW, isolated PostgreSQL. No operating access or real-account writes.",
+  "sql": {
+    "fileVersion": "20261029084145",
+    "operatingReceiptVersion": "20261029084926",
+    "sha256": "30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e",
+    "byteExactOriginal": true,
+    "dedicatedChecks": 12,
+    "integratedChecks": 13,
+    "cleanup": true,
+    "unknownMigrationRejected": true,
+    "dedicatedNetwork": "Docker default network, only 127.0.0.1 ephemeral host port; three synthetic pg sessions; no hosted endpoint options",
+    "integratedNetwork": "none",
+    "integratedPublishedPorts": 0,
+    "commands": [
+      "node tests/run-discovery-private-postgres.cjs",
+      "node tests/integrated-release-installation.cjs"
+    ]
+  },
+  "units": {
+    "handler": 17,
+    "intake": 13,
+    "naverCollectorRegression": 27,
+    "privateClient": 18
+  },
+  "mutations": {
+    "handler": [
+      {
+        "name": "revert-key-adaptation",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      },
+      {
+        "name": "secret-in-bearer",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      },
+      {
+        "name": "skip-auth-status",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      },
+      {
+        "name": "accept-anonymous",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      },
+      {
+        "name": "claim-with-server-role",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      },
+      {
+        "name": "client-independent-owner-lost",
+        "exitCode": 1,
+        "meaningfulFailure": true
+      }
+    ],
+    "client": [
+      {
+        "command": "node --test --test-reporter=spec tests/life-discovery-private-remote.test.cjs",
+        "exitCode": 1,
+        "passed": 17,
+        "failed": 1,
+        "failure": [
+          "✖ owner verification and session identity precede any private network request (1.02959ms)",
+          "✖ owner verification and session identity precede any private network request (1.02959ms)"
+        ],
+        "name": "verified-owner-guard",
+        "sourceSHA256": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "testSHA256": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+        "mutantSHA256": "fc2d16025b26496e7f9a57bc8ed428e0974447445ceed2ef19a6590a0fe633eb",
+        "sameMutationAsPreviousRun": true
+      },
+      {
+        "command": "node --test --test-reporter=spec tests/life-discovery-private-remote.test.cjs",
+        "exitCode": 1,
+        "passed": 17,
+        "failed": 1,
+        "failure": [
+          "✖ private content validates source and acquired version independently from public feed permissions (1.796571ms)",
+          "✖ private content validates source and acquired version independently from public feed permissions (1.796571ms)"
+        ],
+        "name": "response-source-binding",
+        "sourceSHA256": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "testSHA256": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+        "mutantSHA256": "12dbdc2c77775d0cd98f6218116ff6626f9000fc0817d1fa424ec9d238b5f154",
+        "sameMutationAsPreviousRun": true
+      },
+      {
+        "command": "node --test --test-reporter=spec tests/life-discovery-private-remote.test.cjs",
+        "exitCode": 1,
+        "passed": 16,
+        "failed": 2,
+        "failure": [
+          "✖ optional raster bytes reuse bounded validation; image identity cannot cross articles (3.150469ms)",
+          "✖ private raster validation bounds bytes, dimensions, placement and shape without widening the public feed (8.967509ms)",
+          "✖ optional raster bytes reuse bounded validation; image identity cannot cross articles (3.150469ms)",
+          "✖ private raster validation bounds bytes, dimensions, placement and shape without widening the public feed (8.967509ms)"
+        ],
+        "name": "image-dimension-bound",
+        "sourceSHA256": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "testSHA256": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+        "mutantSHA256": "c6508c9fc2627668258b8ccf8626585a6efec1c246ca86a45ba1293cdb72373e",
+        "sameMutationAsPreviousRun": true
+      },
+      {
+        "command": "node --test --test-reporter=spec tests/life-discovery-private-remote.test.cjs",
+        "exitCode": 1,
+        "passed": 17,
+        "failed": 1,
+        "failure": [
+          "✖ cancelling a response body closes the underlying stream instead of leaving a pending reader (7.806278ms)",
+          "✖ cancelling a response body closes the underlying stream instead of leaving a pending reader (7.806278ms)"
+        ],
+        "name": "cancel-stream-release",
+        "sourceSHA256": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "testSHA256": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+        "mutantSHA256": "ab2dfdbad973f0216d38a1e5e34bc86f085c066a4b231bfcd5a6dd246bc3330c",
+        "sameMutationAsPreviousRun": true
+      },
+      {
+        "command": "node --test --test-reporter=spec tests/life-discovery-private-remote.test.cjs",
+        "exitCode": 1,
+        "passed": 17,
+        "failed": 1,
+        "failure": [
+          "✖ empty content and invalid acquisition dates cannot masquerade as a received version; stale receipts preserve the original time (1.617751ms)",
+          "✖ empty content and invalid acquisition dates cannot masquerade as a received version; stale receipts preserve the original time (1.617751ms)"
+        ],
+        "name": "rss-fulltext-claim",
+        "sourceSHA256": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "testSHA256": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+        "mutantSHA256": "ed2cb6423b3fb50a53541d1f302cbc7bd21073b32d438a652538bf0f1a270ebc",
+        "sameMutationAsPreviousRun": true
+      },
+      {
+        "name": "restore-LF-only-paragraph-count",
+        "exitCode": 1,
+        "failed": 1
+      }
+    ],
+    "sql": [
+      {
+        "name": "cross-owner-cache",
+        "exitCode": 1,
+        "passedBeforeFailure": 3,
+        "error": "Expected values to be strictly equal:\n\n'ready' !== 'claimed'\n",
+        "cleanup": true
+      },
+      {
+        "name": "obsolete-lease-finishes",
+        "exitCode": 1,
+        "passedBeforeFailure": 6,
+        "error": "Expected values to be strictly equal:\n\n'ready' !== 'stale'\n",
+        "cleanup": true
+      },
+      {
+        "name": "revoked-session-cache",
+        "exitCode": 1,
+        "passedBeforeFailure": 11,
+        "error": "Missing expected rejection.",
+        "cleanup": true
+      }
+    ],
+    "browser": [
+      {
+        "name": "suspend",
+        "report": ".local/private-news-mutation-suspend-verified/report.json",
+        "failure": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#discoveryReader[data-reader-state=\"error\"]') to be visible\u001b[22m\n\n    at /workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:255:73\n    at async check (/workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:131:35)\n    at async main (/workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:249:5)",
+        "mutation": {
+          "file": ".local/private-news-mutations/suspend-old-condition.js",
+          "sha256": "4a8be4a6e15de136a3b9f0a8b9d49932fbb5457e2fb4f6d2737bbf2597c7523c",
+          "target": "assets/life/discovery-ui.js"
+        },
+        "diff": "--- current UI\n+++ suspend mutation\n@@ -668,7 +668,7 @@\n       if (!scope() || root.document.getElementById('lifeApp')?.hidden !== false) return;\n       // Suspend cancels the request while the app is hidden. Reflect that state\n       // only after the shell has verified the returning account.\n-      if (current.selected && current.reader?.pageState !== current.selected.privateState) refreshPrivateRead();\n+      if (current.selected?.privateState === 'loading') { current.selected.privateState = 'error'; current.selected.privateError = '읽기가 중단됐습니다. 다시 불러와 주세요.'; draw(); }\n       syncTransientControls();\n       if (!current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));\n       else scheduleAuto();\n"
+      },
+      {
+        "name": "toolbar",
+        "report": ".local/private-news-mutation-toolbar-verified/report.json",
+        "failure": "AssertionError [ERR_ASSERTION]: Async body completion must keep the pressed toolbar node\n\nfalse !== true\n\n    at /workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:266:14\n    at async check (/workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:131:35)\n    at async main (/workspace/haedo-private-news-integration/tests/life-personal-discovery-browser.cjs:261:5)",
+        "mutation": {
+          "file": ".local/private-news-mutations/response-redraw-toolbar.js",
+          "sha256": "86196ea591d84925064ef34a7a15f9f456ce3dcd7bda16ff4daea12d982f941a",
+          "target": "assets/life/discovery-ui.js"
+        },
+        "diff": "--- current UI\n+++ toolbar mutation\n@@ -996,7 +996,7 @@\n         selected.privateState = 'error';\n         selected.privateError = error?.code === 'discovery_private_rate_limited' ? '요청이 많습니다. 잠시 뒤 다시 불러와 주세요.' : '본문을 불러오지 못했습니다. 다시 시도해 주세요.';\n       } finally {\n-        if (live()) { privateAborter = null; refreshPrivateRead(); }\n+        if (live()) { privateAborter = null; draw(); }\n       }\n     }\n     function disposeReaderView() { current?.reader?.privateBody?.dispose(); if (current) current.reader = null; }\n"
+      }
+    ]
+  },
+  "orchestratorTasks": [
+    "Register new personal-discovery browser and PostgreSQL commands in CI",
+    "Final review and current-head CI",
+    "Integrate and bump SW CACHE",
+    "Redeploy haedo-discovery-private and haedo-naver-blog",
+    "Verify actual Auth/publisher/old deployment upgrade; do not reinstall unchanged SQL",
+    "Send reader changes to design session"
+  ],
+  "limits": [
+    "No actual Apple device or VoiceOver",
+    "No operating Auth/SQL/Edge/publisher acquisition validation",
+    "PWA uses same CACHE name and fixed old-shell fixtures; no actual deployed upgrade claim",
+    "Images are displayed but not saved into materials",
+    "contentHash format and source/cache binding are checked; browser does not reproduce PostgreSQL jsonb SHA",
+    "Recommendation usefulness not evaluated"
+  ],
+  "checks": {
+    "unit": {
+      "command": "npm test",
+      "passed": 2022,
+      "failed": 0,
+      "skipped": 0
+    },
+    "static": {
+      "command": "npm run check",
+      "html": 22,
+      "javascript": 193,
+      "localReferences": 776,
+      "shellModules": 532,
+      "pass": true
+    },
+    "links": {
+      "command": "node scripts/check-markdown-links.cjs",
+      "files": 282,
+      "newErrors": 0,
+      "existingAllowlistedErrors": 3
+    },
+    "diff": {
+      "command": "git diff --check",
+      "pass": true
+    }
+  },
+  "sqlReplay": {
+    "command": "SQL_REPLAY_REQUIRED=1 npm run test:sql-replay (inside pinned local postgres:17 container)",
+    "image": "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3",
+    "network": "none",
+    "hostPorts": 0,
+    "sourceMount": "readonly",
+    "hostCredentialsPassed": false,
+    "sourceFilesChanged": false,
+    "exitCode": 0,
+    "containerRemoved": true,
+    "durationSeconds": 4.58,
+    "passes": [
+      "PASS replayed stub + 33 migrations on PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) in 218ms (slowest: 20261021113658_life_naver_captures.sql 15ms, 20261102120000_life_blog_public_photo_copies.sql 15ms, 20261023160149_account_library_default_and_metadata.sql 12ms)",
+      "PASS account sync install + 2 later install(s) re-applied on top in 82ms: 4+10 checks true, 883 catalog entries unchanged",
+      "PASS naver status check returned 12 rows (1=false; 2=none; 3=none; 4=0/0; 5=no enabled subscription; 5.5=0; 6=none; 7=none; 8=0/0/0, -; 9=0 / 0 / 0 / 0; 10=none; 11=0)",
+      "PASS final-definition scan matches the replayed catalog (175 functions, 22 redefined)",
+      "PASS supabase/tests/blog-ai-authorship.sql: 28 assertions on a fresh replayed copy (rolled back)",
+      "PASS authorship install proceeds on a re-run and stops unchanged when a function body differs from the repository",
+      "PASS supabase/tests/life-ai-usage.sql: 66 assertions on a fresh replayed copy (rolled back)",
+      "PASS two accounts reserving the last project budget at once: one reserved, the other waited on the project lock and got limit; project total 9,999,600 <= 10,000,000 micro-USD",
+      "PASS AI usage install on a database without its migration: 5 checks true, catalog identical to the replay",
+      "PASS naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, malformed or padded credential, sb_secret_ Bearer, non-command change, row-count change and no schedules rolled back",
+      "PASS cloneDatabase() gives other SQL tests an isolated copy (94 public functions)"
+    ],
+    "passCount": 11,
+    "skipped": false
+  },
+  "deno": {
+    "version": "2.9.6",
+    "command": "deno check --frozen index.ts (working directory supabase/functions/haedo-discovery-private)",
+    "pass": true
+  },
+  "browser": {
+    "command": "PW_MODULE_PATH=\"$PWD/tests/browser-ci/node_modules/playwright\" CHROMIUM_PATH=/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome node tests/life-personal-discovery-browser.cjs",
+    "playwright": "1.63.0",
+    "chromium": "153.0.8010.12",
+    "passed": 13,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "unexpectedExternal": 0,
+    "privatePOSTs": 23,
+    "closedContexts": 16,
+    "runnerSHA256": "1412c2be021555c0a5eaf178b554a09fadc3e98366a79c218809d1e7533b12fe",
+    "helperSHA256": "4b433ded6e4de2359f2fca7bcf7094e904f3d083fdcf2d5611f00b563ab55ea6",
+    "legacyFixtureSHA256": "f6d0486514cf1b1150879fdeda741ead5e93a4800f8e2ae8b66227a2764b23af",
+    "preparedArtifact": {
+      "files": {
+        "assets/life/discovery-private-remote.js": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+        "assets/life/discovery-reader-ui.js": "ce975e875bdcf8fbd013270b6fcd35875bbff4b1ec74b9b16d07312c4afb1d7d",
+        "assets/life/discovery-ui.js": "00e10b3354a649880cedf1ea477ca21b3d5f7c8525d525acbc82169e15d82611",
+        "assets/life/discovery.css": "0e821041d49ed0560fdb10a78e05a89c8d22021e5793ca742565ae4a0d7cb248",
+        "assets/life/ui.js": "0a15f323fcdf4183c78d2e7aaa10f342e1fa65546b48e67b6e8af90cc0859224"
+      },
+      "html": [
+        {
+          "file": "index.html",
+          "sha256": "539957d88341bcf536ac9d341389a9025cb6c884a5db59f83e10f19e74154de2"
+        },
+        {
+          "file": "life.html",
+          "sha256": "b2d138fa2a0db6767f72fd7d10e68f4985098b8d4480334aae14b20b23d3c6b5"
+        }
+      ],
+      "syntheticPlatformConfiguration": true,
+      "workerSHA256": "a2371cf2b8da979699ea220a6193912eb9f181576429860a3a1f1a890d271c31",
+      "cache": "haedo-v194"
+    },
+    "checks": [
+      {
+        "name": "anonymous and metadata browsing do not prefetch private text",
+        "pass": true
+      },
+      {
+        "name": "three supported sources expose exact coverage and two safe images at 1440 and 390",
+        "pass": true
+      },
+      {
+        "name": "independent account devices share judgments but private response never leaks to another owner",
+        "pass": true
+      },
+      {
+        "name": "late closed article cannot replace the next exact snapshot or import",
+        "pass": true
+      },
+      {
+        "name": "late owner reply is discarded through account change",
+        "pass": true
+      },
+      {
+        "name": "busy unavailable and empty source retain fallback and keyboard retry recovers exact stale snapshot",
+        "pass": true
+      },
+      {
+        "name": "unsupported source preserves existing iframe and original-link paths without private request",
+        "pass": true
+      },
+      {
+        "name": "feed refresh keeps received text and exact body import is deduplicated",
+        "pass": true
+      },
+      {
+        "name": "BOM and CRLF received body survives actual material commit without text normalization",
+        "pass": true
+      },
+      {
+        "name": "pending import is disabled and leaving news protects destination and typed draft",
+        "pass": true
+      },
+      {
+        "name": "page suspend discards late reply and resume exposes an enabled retry",
+        "pass": true
+      },
+      {
+        "name": "private response preserves a pressed bookmark control and applies the gesture once",
+        "pass": true
+      },
+      {
+        "name": "actual previous worker and old HTML fall back then update without caching private response or losing judgment",
+        "pass": true
+      }
+    ]
+  },
+  "mutationCount": 17,
+  "regressionEnvironment": {
+    "BASE_URL": "http://127.0.0.1:4175",
+    "PW_MODULE_PATH": "$PWD/tests/browser-ci/node_modules/playwright",
+    "CHROMIUM_PATH": "/home/agent/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+    "playwright": "1.63.0"
+  },
+  "regressions": [
+    {
+      "command": "node tests/records-news-browser.cjs",
+      "passed": 7,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 3,
+      "expectedErrors": 0,
+      "runnerSHA256": "be3be43306f7eb605ced181c2cbcaab771e91a615d609a6f1470c202c90ff9f2",
+      "reportSHA256": "de957d57b7b6d6f308c73af3a2c9b5525df0979a20a34fe9bafedc8912feaf54"
+    },
+    {
+      "command": "node tests/news-social-browser.cjs",
+      "passed": 6,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "c44d021fdb2f68dff6a0bb6eed8e10935cbd3e356d42a521c20fe61958797f47",
+      "reportSHA256": "9ac6026a7d15d7019933788cd693bfd25056c510a0646de71ed0591ffd5fe4fa"
+    },
+    {
+      "command": "node tests/life-external-discovery-browser.cjs",
+      "passed": 19,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 3,
+      "expectedErrors": 2,
+      "runnerSHA256": "393c7cb77749f6df85c9d29002cd5acb6542f6aac802e49955618093dbb7ce3b",
+      "reportSHA256": "2920486ed6d923b6a17ecb7c891a480f4ca873b31b2f13c091017d736dbbb8ee"
+    },
+    {
+      "command": "node tests/life-discovery-languages-browser.cjs",
+      "passed": 17,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "88003fba54f613e47d4ef39074dd13d78bb65d01c96e46e91bbf704a77169c48",
+      "reportSHA256": "459b32b6035837b8800dacfe31861d157e0381e6071a649a6a2a5bc23e207db9"
+    },
+    {
+      "command": "node tests/life-discovery-reactions-browser.cjs",
+      "passed": 24,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "f16725f8e48ecdf37c045d9068ae6a149445b554d8fc0b826e33e9c254a8b98d",
+      "reportSHA256": "247819c9de3fbc1047f04104b1afb40558b3e9cbdbdb2da83ccf2ef671f434c6"
+    },
+    {
+      "command": "node tests/life-discovery-reading-browser.cjs",
+      "passed": 5,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "72bf796a85feb9bf023543c702e486c3838a55b9af3532a7296411cbf6ee7f4d",
+      "reportSHA256": "5d8818076b5f857f19b5d668e6988cae66d30a90f6441f39a2acfbe47f0baf99"
+    },
+    {
+      "command": "node tests/life-news-browser.cjs",
+      "passed": 9,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "2508e819d7a4be2b011a0e22acdf532f8aaaedb1dd4ac5f1dba37ef39aa89cf2",
+      "reportSHA256": "a5024baabb7bd57815dd6ec95b82ea5ee0610b741da439e33229386312233d4e"
+    },
+    {
+      "command": "node tests/life-external-discovery-pwa-browser.cjs",
+      "passed": 9,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "existingHarnessFrameErrors": 0,
+      "expectedErrors": 0,
+      "runnerSHA256": "b70c55b0dcce5667e4e3cd785f6ac65427cb8b94192e35c787b135b2ab6effb6",
+      "reportSHA256": "9deffa57fba847a0353c68c846b933979ff1acc1971fd1940f94248674110a78"
+    }
+  ],
+  "browserTotalPassed": 109,
+  "failureCorrections": [
+    {
+      "finding": "News-specific robots UA was ignored by current shared collector",
+      "before": "Full unit 2020/2021; own-UA intake failed",
+      "after": "Approved optional UA argument; intake13 + existing Naver27 pass"
+    },
+    {
+      "finding": "CRLF paragraph count discarded valid positioned images",
+      "before": "LF1->1 image; CRLF1->0, regression failed",
+      "after": "LF/CRLF validator matches renderer; client18 pass and revert fails"
+    },
+    {
+      "finding": "Suspended private read could remain visually loading after resume",
+      "after": "Render canceled state on shell-ready; old-condition browser mutation fails"
+    },
+    {
+      "finding": "Async body arrival could replace pressed toolbar controls",
+      "after": "Update body and import/status only; full-redraw browser mutation fails"
+    },
+    {
+      "finding": "Legacy external fixture rejected newly added private endpoint",
+      "after": "Explicit unavailable fixture; preserve all privacy/write assertions; original failed MIT journey now passes with4 private requests"
+    },
+    {
+      "finding": "New repeated-import test skipped existing overlap confirmation",
+      "after": "Use actual same-material confirmation before commit; source1/version1 preserved; product unchanged"
+    },
+    {
+      "finding": "New fixture per-row timestamps changed 5-row order at millisecond boundary",
+      "after": "Stable shared fixture time and explicit per-row offsets; product/list limit unchanged"
+    },
+    {
+      "finding": "An intermediate document referenced evidence before it was created",
+      "before": "Unit2021/2022, missing evidence link",
+      "after": "Write evidence file then rerun full2022/2022; no check weakening"
+    }
+  ],
+  "independentReview": {
+    "agent": "reader_current_main_audit",
+    "implementationAgentSeparate": true,
+    "blockers": 0,
+    "majors": 0,
+    "scope": [
+      "runtime privacy/integrity/account/history",
+      "unchanged SQL bytes and installation preservation",
+      "CRLF and retry focus fixes",
+      "browser assertion preservation and fixed legacy fixture",
+      "four legacy fixture adaptations"
+    ],
+    "evidenceCrossCheck": "passed"
+  },
+  "captures": [
+    {
+      "file": "news-private-reader-20261105-1440.png",
+      "sha256": "42c5d75503658ba01e5e7efe7773d01f9131f8ced8794aba11432dd54875cfe0",
+      "width": 1440,
+      "data": "Anonymous synthetic article and generated graph only; no personal account or publisher bytes"
+    },
+    {
+      "file": "news-private-reader-20261105-390.png",
+      "sha256": "75d04692edbe6caa9c92fef175bbf9e959f4425a9c80b13eb46acd78b33a5b60",
+      "width": 390,
+      "data": "Anonymous synthetic article and generated graph only; no personal account or publisher bytes"
+    }
+  ],
+  "sourceSHA256": {
+    "assets/life/discovery-private-remote.js": "866926498e13ab08df7a724f3f42202aa82cfd13f3a9f725c24eb120bc9cdfeb",
+    "assets/life/discovery-reader-ui.js": "ce975e875bdcf8fbd013270b6fcd35875bbff4b1ec74b9b16d07312c4afb1d7d",
+    "assets/life/discovery-ui.js": "00e10b3354a649880cedf1ea477ca21b3d5f7c8525d525acbc82169e15d82611",
+    "assets/life/discovery.css": "0e821041d49ed0560fdb10a78e05a89c8d22021e5793ca742565ae4a0d7cb248",
+    "assets/life/ui.js": "0a15f323fcdf4183c78d2e7aaa10f342e1fa65546b48e67b6e8af90cc0859224",
+    "index.html": "539957d88341bcf536ac9d341389a9025cb6c884a5db59f83e10f19e74154de2",
+    "life.html": "b2d138fa2a0db6767f72fd7d10e68f4985098b8d4480334aae14b20b23d3c6b5",
+    "scripts/prepare-site.mjs": "89313036f89e0edff6e0d08e2fdfe9b2b7f2da92b1c89fb6891b02641f8bffbd",
+    "supabase/functions/haedo-discovery-private/article-intake.mjs": "75a8db63539efd29485820e512469d0bf1318a527c4d8b4ef186f2bf0b30739a",
+    "supabase/functions/haedo-discovery-private/deno.json": "6b29ff36926b39828c67cf070556a5ce5e927b920d3e290cdb9009f4a9e5aa9a",
+    "supabase/functions/haedo-discovery-private/deno.lock": "ea1eb0b346a2991fae74b272a629006f63ad75fd62d2cb5f120d0c8367005e49",
+    "supabase/functions/haedo-discovery-private/handler.mjs": "c5c7c5b1fe64f28b8f9c59e9e88f1de5ccde2638bcc43dd054e13d9dab6e15b9",
+    "supabase/functions/haedo-discovery-private/index.ts": "8106ab82b592a69d8826239d229ed6594efdf44268a17eabe3588de49c80d4b7",
+    "supabase/functions/haedo-naver-blog/collector.mjs": "753cbfe550ec19299535f004d6cc5a62bed2ba393785fbd908e5e3ea6fb0c776",
+    "supabase/migrations/20261029084145_discovery_private_reader.sql": "30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e",
+    "supabase/tests/discovery-private-installation.sql": "da28b5463d88892f4d29e34906a9f791b8b4ff0cd68829f45f5f4ada780cd567",
+    "sw.js": "a2371cf2b8da979699ea220a6193912eb9f181576429860a3a1f1a890d271c31",
+    "tests/discovery-private-handler.test.cjs": "0d2439b6710adafc6f4c434cd67b20e42e58080176f543e8c608cebd64e69f8a",
+    "tests/discovery-private-intake.test.cjs": "a4d5459a7396423f73fb1a081dd130e675df6185735f2dfccec8d8f44c9bd49b",
+    "tests/fixtures/private-news-legacy-shell.json": "f6d0486514cf1b1150879fdeda741ead5e93a4800f8e2ae8b66227a2764b23af",
+    "tests/helpers/discovery-private-cloud.cjs": "4b433ded6e4de2359f2fca7bcf7094e904f3d083fdcf2d5611f00b563ab55ea6",
+    "tests/integrated-release-installation.cjs": "750e403192d052f221d55924052ed2ee26064ca29cb71c55f1d142f01fe1b013",
+    "tests/life-discovery-private-remote.test.cjs": "4a827e81d789ed7ce46232e1e62a1d71b7d4e7689fb0879d66d63ca92317d66d",
+    "tests/life-discovery-reading-browser.cjs": "72bf796a85feb9bf023543c702e486c3838a55b9af3532a7296411cbf6ee7f4d",
+    "tests/life-external-discovery-browser.cjs": "393c7cb77749f6df85c9d29002cd5acb6542f6aac802e49955618093dbb7ce3b",
+    "tests/life-external-discovery-pwa-browser.cjs": "b70c55b0dcce5667e4e3cd785f6ac65427cb8b94192e35c787b135b2ab6effb6",
+    "tests/life-news-browser.cjs": "2508e819d7a4be2b011a0e22acdf532f8aaaedb1dd4ac5f1dba37ef39aa89cf2",
+    "tests/life-personal-discovery-browser.cjs": "1412c2be021555c0a5eaf178b554a09fadc3e98366a79c218809d1e7533b12fe",
+    "tests/run-discovery-private-postgres.cjs": "25268136b83a16bbb5a0c706ea6c805f5cc918e6293ca97afe7a877b8ece46b0"
+  }
+}

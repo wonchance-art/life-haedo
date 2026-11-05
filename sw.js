@@ -10,7 +10,7 @@ const SHELL=[
   './vendor/js-yaml/js-yaml.umd.min.js',
   './assets/life/naver-blog.js','./assets/life/naver-capture.js','./assets/life/naver-media.js','./assets/life/naver-media-receipt.js','./assets/life/naver-capture-sync.js','./assets/life/naver-capture-ui.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
-  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
+  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-private-remote.js','./assets/life/discovery-reader-ui.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
   './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
   './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
