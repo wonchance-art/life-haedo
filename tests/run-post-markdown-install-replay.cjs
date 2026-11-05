@@ -9,6 +9,9 @@ const pgStub = require('./helpers/supabase-pg-stub.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const FILES = ['supabase/operations/20261101-account-sync-install.sql', 'supabase/operations/20261102-blog-ai-authorship-install.sql'];
 const MARKDOWN = '20261105051632_life_post_markdown.sql';
+const MARKDOWN_PUBLISH = '20261105081055_life_post_markdown_publish.sql';
+const isPreMarkdown = file => ![MARKDOWN,MARKDOWN_PUBLISH].includes(path.basename(file));
+const markdownFunctions = list => list.filter(f=>f.signature.includes('.markdown_') || f.signature.includes('.life_blog_markdown_'));
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 if (process.argv.length !== 2) throw Error('This isolated test accepts no arguments.');
 const signatures = ['valid_document(jsonb,uuid)', 'publish(uuid,bigint,uuid,text[],jsonb,bigint)'];
@@ -44,6 +47,7 @@ async function main() {
     // stay exact, not merely recover after a later install.
     const after = await functions(db);
     for (const signature of signatures) check(after.find(f => f.signature === 'haedo_blog_private.' + signature), before.find(f => f.signature === 'haedo_blog_private.' + signature), path.basename(file) + ': retains ' + signature);
+    check(markdownFunctions(after),markdownFunctions(before),path.basename(file) + ': B3 parser trigger and private/public projection helpers stay exact');
     check(await rows(db),saved,path.basename(file) + ': populated rows unchanged');
     check((await rpc('life_blog_read',[post])).data,doc,path.basename(file) + ': exact Markdown still reads');
     const update = { ...doc, revision: 2, markdown: '본문 다음\n' };
@@ -69,7 +73,7 @@ async function main() {
    const partial = await pg.connect(name);
    try {
     if (variant.startsWith('pre-d2-')) {
-     await pgStub.replayMigrations(partial,{files:pgStub.migrationFiles().filter(file=>path.basename(file)!==MARKDOWN)});
+     await pgStub.replayMigrations(partial,{files:pgStub.migrationFiles().filter(isPreMarkdown)});
      const signature=variant.endsWith('valid')?signatures[0]:signatures[1];
      await partial.query((await definition(partial,signature)).replace('\nbegin\n','\nbegin\n -- unexpected operator drift\n'));
     }
@@ -93,7 +97,7 @@ async function main() {
   try{await admin.query('create database markdown_fresh_install');}finally{await admin.end();}
   const fresh=await pg.connect('markdown_fresh_install');
   try{
-   await pgStub.replayMigrations(fresh,{files:pgStub.migrationFiles().filter(file=>path.basename(file)!==MARKDOWN)});
+   await pgStub.replayMigrations(fresh,{files:pgStub.migrationFiles().filter(isPreMarkdown)});
    const before=await functions(fresh),saved=await rows(fresh);
    for(const file of FILES)await fresh.query(read(file));
    check(await functions(fresh),before,'fresh pre-D2 installation keeps exact pre-D2 function catalog');
@@ -102,8 +106,9 @@ async function main() {
    const result=[].concat(await fresh.query(read('supabase/tests/blog-ai-authorship.sql'))).filter(x=>x.rows?.length).at(-1).rows[0].result;
    check(result.failures,0,'fresh pre-D2 legacy AI validation/public projection ('+result.passed+' assertions)');
    await fresh.query(read('supabase/migrations/'+MARKDOWN));
+   await fresh.query(read('supabase/migrations/'+MARKDOWN_PUBLISH));
    const full=await pg.connect(pg.database);
-   try{check(await functions(fresh),await functions(full),'installers then D2 migration produce exact latest function catalog');}finally{await full.end();}
+   try{check(await functions(fresh),await functions(full),'installers then B1 and B3 migrations produce exact latest function catalog');}finally{await full.end();}
   }finally{await fresh.end();}
   // First installation, not just reinstallation: start before the six account
   // migrations and compare the operations path to those immutable migrations.

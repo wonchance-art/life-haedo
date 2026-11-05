@@ -17,7 +17,9 @@
     invalid_remote_data: '서버 글과 사진을 검증하지 못했습니다. 기존 글은 유지됩니다.', network_error: '서버 연결을 확인하지 못했습니다. 글은 이 기기에 남아 있고 자동으로 다시 시도합니다.',
     operation_mismatch: '이전 전송 요청과 내용이 달라 적용하지 않았습니다.', remote_missing: '서버의 글을 찾을 수 없습니다.',
     blog_conflict: '다른 기기에서 먼저 바뀐 글입니다. 최신 내용을 다시 확인해 주세요.', local_changed: '글이 변경됐습니다. 현재 글을 다시 확인해 주세요.',
-    storage_quota: '보관 공간이 부족합니다. 글을 파일로 보관한 뒤 다시 시도해 주세요.'
+    storage_quota: '보관 공간이 부족합니다. 글을 파일로 보관한 뒤 다시 시도해 주세요.',
+    blog_publication_unavailable: '이 글의 공개 기능이 아직 준비되지 않았습니다. 저장한 글은 유지됩니다.',
+    blog_update_required: '새 형식의 글입니다. 새로고침한 뒤 다시 시도해 주세요. 저장한 글은 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   const id = value => typeof value === 'string' && UUID.test(value);
@@ -26,6 +28,11 @@
   const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
   function clean(error) {
     if (messages[error?.code]) return fault(error.code);
+    // PostgreSQL returns these specific rollout/version boundaries as 22023.
+    // Match only the exact server condition; never surface SQL details or
+    // describe an unsupported format as a network failure with automatic retry.
+    if (error?.code === '22023' && error.message === 'life_blog_markdown_publication_unavailable') return fault('blog_publication_unavailable');
+    if (error?.code === '22023' && error.message === 'life_blog_update_required') return fault('blog_update_required');
     if (['invalid_blog_document', 'invalid_blog_photo', 'invalid_blog_snapshot', 'invalid_photo_post', 'invalid_blog_selection'].includes(error?.code)) return fault('invalid_remote_data');
     if (['PGRST202', 'PGRST205', '42P01', '42883'].includes(error?.code) || error?.status === 404) return fault('schema_missing');
     if (error?.status === 401 || error?.name === 'AuthSessionMissingError' || error?.message === 'life_blog_auth_required') return fault('auth_required');
@@ -86,6 +93,30 @@
         let request = client.rpc(name, params);
         if (typeof request?.abortSignal === 'function') request = request.abortSignal(controller.signal);
         const response = await request; guard(context); if (response.error) throw response.error;
+        return clone(response.data);
+      } catch (error) { guard(context); throw clean(error); }
+      finally { controllers.delete(controller); }
+    }
+    // The server reads the stored Markdown itself. Only the approved selection,
+    // immutable public-copy metadata and durable operation/CAS travel here.
+    async function publishMarkdown(params) {
+      const context = capture(), controller = new AbortController(); controllers.add(controller);
+      try {
+        if (typeof client.functions?.invoke !== 'function') throw fault('schema_missing');
+        await verify(context);
+        const response = await client.functions.invoke('haedo-blog-publish', { body: params, signal: controller.signal });
+        guard(context);
+        if (response.error) {
+          let failure = response.error;
+          if (failure.name === 'FunctionsHttpError') {
+            const status = failure.context?.status;
+            let payload = null;
+            try { payload = await failure.context?.json(); } catch (_) { /* No server details are exposed. */ }
+            guard(context);
+            failure = typeof payload?.code === 'string' && Object.hasOwn(messages, payload.code) ? fault(payload.code) : { status };
+          }
+          throw failure;
+        }
         return clone(response.data);
       } catch (error) { guard(context); throw clean(error); }
       finally { controllers.delete(controller); }
@@ -227,16 +258,33 @@
     async function publish(postId, expectedRevision, operationId, options = {}) {
       identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1 || !Array.isArray(options.photoIds || []) || (options.photoIds || []).some(value => !PHOTO.test(value))) throw fault('invalid_request');
       if (!rev(options.expectedPublicRevision ?? 0)) throw fault('invalid_request');
-      const copies = options.copies || [];
+      if (Object.hasOwn(options, 'documentFormat') && options.documentFormat !== 'life-post-md-v1') throw fault('invalid_request');
+      const markdown = options.documentFormat === 'life-post-md-v1';
+      const selected = options.photoIds === undefined ? [] : options.photoIds;
+      const author = options.author === undefined ? { name: '', intro: '' } : options.author;
+      if (markdown) {
+        // Reject unexpected nested data before account verification or transfer.
+        // The legacy RPC contract remains unchanged for old durable requests.
+        const safeString = (value, limit) => typeof value === 'string' && value.length <= limit && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(value);
+        if (!Array.isArray(selected) || selected.length > 20 || new Set(selected).size !== selected.length || Array.from(selected).some(value => typeof value !== 'string' || !PHOTO.test(value)) ||
+          !plain(author) || ![Object.prototype, null].includes(Object.getPrototypeOf(author)) || Reflect.ownKeys(author).length !== 2 || !Object.hasOwn(author, 'name') || !Object.hasOwn(author, 'intro') ||
+          !safeString(author.name, 500) || !safeString(author.intro, 2000)) throw fault('invalid_request');
+      }
+      const copies = markdown ? (options.copies === undefined ? [] : options.copies) : options.copies || [];
       if (!Array.isArray(copies) || copies.length > 20) throw fault('invalid_request');
       const named = {};
       for (const item of copies) {
         checkCopy(item);
         if (Object.hasOwn(named, item.id) || !(options.photoIds || []).includes(item.id)) throw fault('invalid_request');
-        named[item.id] = { type: item.type, size: item.size, digest: item.digest, width: item.width, height: item.height };
+        const metadata = { type: item.type, size: item.size, digest: item.digest, width: item.width, height: item.height };
+        if (markdown) Object.defineProperty(named, item.id, { value: metadata, enumerable: true });
+        else named[item.id] = metadata;
       }
-      const params = { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(options.author || { name: '', intro: '' }) };
-      const result = copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true }) : await rpc('life_blog_publish', params, { commit: true });
+      if (markdown && selected.some(photoId => !Object.hasOwn(named, photoId))) throw fault('invalid_request');
+      const params = { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(markdown ? author : options.author || { name: '', intro: '' }) };
+      const result = markdown
+        ? await publishMarkdown({ ...params, p_copies: named })
+        : copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true }) : await rpc('life_blog_publish', params, { commit: true });
       if (result?.status !== 'published' && result?.status !== 'stored') { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       if (!id(result.token) || !id(result.blogToken) || !rev(result.revision) || result.revision < 1) throw fault('invalid_remote_data');
       return result;
