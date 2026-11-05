@@ -257,6 +257,35 @@ async function main() {
         await f.page.screenshot({ path: path.join(output, 'private-ai-mark-' + width + '.png') }); }
       await f.page.setViewportSize({ width: 1440, height: 1000 });
     });
+    await check('Markdown snapshots render through the actual private series workbench with original photos and AI marks', async () => {
+      const f = await fixture();
+      await f.page.evaluate(async ({ workspaceId, id }) => {
+        const s = HaedoLife.Shell.storage, old = await s.readPhotoPost(workspaceId, id);
+        old.ops.unshift({ insert: 'Markdown AI 문장', attributes: { author: 'ai', bold: true } }, { insert: '\n' });
+        const doc = HaedoLife.PostMarkdown.fromV2(old).document;
+        await s.savePhotoPost(workspaceId, doc, doc.revision);
+      }, { workspaceId: f.seed.workspaceId, id: f.seed.ids[1] });
+      await f.go(); await createSeries(f);
+      const before = await state(f.page);
+      assert.equal(before.snapshots[0].posts[1].doc.format, 'life-post-md-v1');
+      assert.equal(Object.hasOwn(before.snapshots[0].posts[1].doc, 'ops'), false);
+      await f.page.locator('#bsRead').click(); await f.page.locator('.blog-series-reader[data-view=contents]').waitFor();
+      await f.page.locator('.blog-series-toc button[data-entry-id]').nth(1).click();
+      await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
+      assert.equal(await f.page.locator('.blog-series-reader-body [role=alert]').count(), 0);
+      assert((await f.page.locator('.blog-series-reader-body').innerText()).includes('합성 여행 본문 2'));
+      assert.deepEqual(await f.page.locator('.blog-series-reader-body .blog-ai-text').allTextContents(), ['Markdown AI 문장']);
+      await f.page.waitForFunction(() => {
+        const img = document.querySelector('.blog-series-reader-body img');
+        return img?.complete && img.naturalWidth === 4032 && img.naturalHeight === 3024;
+      });
+      assert((await f.page.locator('.blog-series-reader-body').innerText()).includes('바다 사진 설명\n둘째 줄'));
+      assert.deepEqual(await state(f.page), before, 'private reading does not rewrite the Markdown snapshot or original');
+      await f.page.locator('#blogSeriesReaderContents').click();
+      await f.page.locator('.blog-series-toc button[data-entry-id]').nth(0).click();
+      await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
+      assert((await f.page.locator('.blog-series-reader-body').innerText()).includes('합성 여행 본문 1'), 'legacy posts remain readable in the same series');
+    });
     await check('The actual downloaded file restores complete text and full-resolution photos into a fresh workspace under new IDs', async () => {
       assert(archive, 'Run the preceding real-download journey');
       const f = await fixture(), before = await state(f.page);

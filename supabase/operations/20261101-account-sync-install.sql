@@ -1,5 +1,5 @@
 -- 해도 2026-11-01 계정 자동 연동 설치 (Supabase SQL Editor에서 한 번에 실행)
--- 생성: node scripts/build-account-sync-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
+-- 생성: node scripts/build-account-sync-install.mjs — 원본 이력은 유지하고 생성기로 다시 만든다.
 -- 포함 마이그레이션(순서, 원본 sha256):
 --   20261101090000_life_account_documents.sql  6f23c9ca735fab92920c7350b31949cb6bdc2df921ead3655802566c3e6be47c
 --   20261101091500_life_blog_account_sync.sql  97f406bc2de9c02ba20397c1805a8c39d89ac20cfe4fc9c344df75e921b4c608
@@ -7,6 +7,11 @@
 --   20261101140000_life_sync_edit_times.sql  2d282cf816bd0dfc80bdbb2c290b28f326551bf29a0e8055a5be88420499a0fe
 --   20261101150000_life_account_documents_owner_lock.sql  eab39fa5196269796dd9f164e66b33d84cba5e5a393bf39ac86d356e44f0f0d3
 --   20261101160000_life_blog_delete_guard.sql  b10dc40f9b7136b81dc7450c6e4e40c60a8e09d9e4317cb3d0d255d463da833c
+--
+-- 후속 Markdown 보존 기준: 20261105051632_life_post_markdown.sql  f4860de28a2010fb90257c3ce587a526c334ef4306d841110705708150edfb62
+-- D2가 설치되어 있으면 검증된 두 함수 정의를 같은 DO 문 안에서 보존한다.
+-- D2 미설치에서는 검증된 원본·계정·AI 정의만 원래 경로로 설치한다(새 helper 불필요).
+-- 이 세 이전 판과 다른 함수 본문은 설치 전에 거부한다.
 --
 -- 안전 장치:
 --   * 설치 전체가 DO 블록 "한 문장"이다. SQL Editor가 문장을 어떤 연결·트랜잭션으로
@@ -22,7 +27,35 @@ declare
   r record;
   n bigint;
   before jsonb := '{}'::jsonb;
+  markdown_definitions jsonb := '{}'::jsonb;
 begin
+  if to_regprocedure('haedo_blog_private.valid_delta_document(jsonb,uuid)') is not null
+    or to_regprocedure('haedo_blog_private.markdown_no_downgrade()') is not null
+    or to_regprocedure('haedo_blog_private.markdown_publication_requires_parser()') is not null
+    or (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) = '88dd7c33d2a5ad4d0eed2bd708cfd77d'
+    or (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) = 'd872bf11fc983b14e4d61ff36be6932d'
+  then
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_delta_document(jsonb,uuid)')) is distinct from 'da3cbe336718c99fe3601ff518422555' then
+      raise exception 'haedo_blog_private.valid_delta_document differs from the repository definition; nothing was changed';
+    end if;
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) is distinct from '88dd7c33d2a5ad4d0eed2bd708cfd77d' then
+      raise exception 'haedo_blog_private.valid_document differs from the repository definition; nothing was changed';
+    end if;
+    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) is distinct from 'd872bf11fc983b14e4d61ff36be6932d' then
+      raise exception 'haedo_blog_private.publish differs from the repository definition; nothing was changed';
+    end if;
+    markdown_definitions := markdown_definitions || jsonb_build_object('valid_document', pg_get_functiondef(to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')));
+    markdown_definitions := markdown_definitions || jsonb_build_object('publish', pg_get_functiondef(to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')));
+  else
+    -- A genuinely pre-D2 database still has to match a reviewed predecessor.
+    -- An unknown operator edit is not permission to reinstall an older body.
+    if not coalesce((select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)')) in ('8cce35f9914421fa48e6f11d2d792156', '012fb393a74efdd11b01ae1d7dd67141', 'da3cbe336718c99fe3601ff518422555'), false) then
+      raise exception 'haedo_blog_private.valid_document differs from the repository definition; nothing was changed';
+    end if;
+    if not coalesce((select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)')) in ('a16a40d5de9446ba841a76a4300980d0', 'ea61d16bf42dac05db310019e965523a', '17bb2aa6befed545e6cf33158c7c2b06'), false) then
+      raise exception 'haedo_blog_private.publish differs from the repository definition; nothing was changed';
+    end if;
+  end if;
   for r in
     select format('%I.%I', ns.nspname, c.relname) as relation
     from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
@@ -749,6 +782,11 @@ revoke all on function haedo_blog_private.delete_post(uuid,bigint) from public,a
 grant execute on function haedo_blog_private.delete_post(uuid,bigint) to authenticated;
 notify pgrst,'reload schema';
 $haedo_m6$;
+
+  -- Restore reviewed later definitions within this same atomic statement.
+  for r in select value from jsonb_each_text(markdown_definitions) loop
+    execute r.value;
+  end loop;
 
   for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
     execute format('select count(*) from %s', r.relation) into n;

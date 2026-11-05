@@ -8,7 +8,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { FakeCloud, accounts, session, cloud, base } = require('./life-sync-browser.cjs');
+const { accounts, session, cloud, base } = require('./life-sync-browser.cjs');
+const { DiscoveryPrivateCloud } = require('./helpers/discovery-private-cloud.cjs');
 const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const repo = path.resolve(__dirname, '..');
@@ -163,7 +164,7 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] }); report.browser = browser.version(); report.node = process.version;
   async function check(name, action) {
     if (process.env.DISCOVERY_READING_MATCH && !new RegExp(process.env.DISCOVERY_READING_MATCH).test(name)) return;
-    report.stage = name; const fake = new FakeCloud(), context = await makeContext(browser, fake, 'reading-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } });
+    report.stage = name; const fake = new DiscoveryPrivateCloud(), context = await makeContext(browser, fake, 'reading-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } });
     const control = { body: bytes, count: 0 };
     await context.route(base + feedPath, route => { control.count++; return route.fulfill({ contentType: 'application/json', body: control.body }); });
     await gate(context);
@@ -177,7 +178,7 @@ async function main() {
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ stage: name, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient'); });
     context.on('page', page => { page.setDefaultTimeout(20000); page.on('pageerror', error => report.pageErrors.push({ stage: name, message: error.message })); page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ stage: name, message: message.text() }); }); });
     const page = await context.newPage();
-    try { await action({ page, context, fake, control }); assert.equal(fake.writes().length, 0); assert.equal(fake.saves().length, 0); assert.equal(fake.blogCalls.filter(call => /publish|unpublish/.test(call.rpc)).length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await action({ page, context, fake, control }); assert.equal(fake.writes().length, 0); assert.equal(fake.saves().length, 0); assert.equal(fake.blogCalls.filter(call => /publish|unpublish/.test(call.rpc)).length, 0); assert.deepEqual(fake.privateRouteErrors, []); report.checks.push({ name, privateReaderRequests: fake.privateRequests.length, privateRouteErrors: fake.privateRouteErrors.length, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); try { await fs.writeFile(path.join(output, 'failure-' + report.checks.length + '.html'), await page.content()); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: false }); } catch (captureError) { report.captureError = captureError.message; } throw error; }
     finally { for (const p of context.pages()) if (!p.isClosed()) await p.evaluate(() => window.__readingRelease?.()).catch(() => {}); await context.close(); }
   }

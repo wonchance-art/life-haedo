@@ -78,7 +78,7 @@
     blogSeries: new RegExp('^' + WS + 'blog-series\\/' + IDP + '\\.zip$'), materialWriting: new RegExp('^' + WS + 'material-writing\\.json$'),
     naverCaptures: new RegExp('^' + WS + 'naver-captures\\/' + IDP + '\\.zip$'), accountDocuments: /^account-documents\.json$/,
     originals: new RegExp('^original-attachments\\/' + IDP + '\\.zip$'), timeline: /^timeline-goals-habits\.json$/ });
-  const PHOTO_FORMATS = ['life-photo-post-backup-v1', 'life-photo-post-backup-v2'];
+  const PHOTO_FORMATS = ['life-photo-post-backup-v1', 'life-photo-post-backup-v2', 'life-post-md-backup-v1'];
   const ZIP_FORMATS = Object.freeze({ photoPosts: PHOTO_FORMATS, blogSeries: ['life-blog-series-package-v1'], naverCaptures: ['haedo.naver.capture.v1'],
     originals: ['haedo-private-originals-part-v1'] });
 
@@ -277,7 +277,7 @@
     if (task.kind === 'materialWriting') return { value: await storage.readMaterialWriting(ws.workspaceId) };
     if (task.kind === 'photoPosts') {
       const doc = await storage.readPhotoPost(ws.workspaceId, task.postId);
-      return { blob: await dep('PhotoPost').backup(doc), format: doc.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2',
+      return { blob: await dep('PhotoPost').backup(doc), format: doc.format === 'life-post-md-v1' ? 'life-post-md-backup-v1' : doc.format === 'life-photo-post-v1' ? 'life-photo-post-backup-v1' : 'life-photo-post-backup-v2',
         counts: COUNT.photoPosts(doc), meta: { postId: task.postId, title: doc.title || '', status: doc.status, archived: doc.archived === true } };
     }
     if (task.kind === 'blogSeries') {
@@ -855,10 +855,14 @@
           step(KINDS.photoPosts.label); guard();
           try {
             const P = dep('PhotoPost'), candidate = await P.readBackup(entry.blob, makeId);
+            // The legacy ZIP reader intentionally upgrades v1 to a v2 draft.
+            // Compare the Markdown boundary, not that restored legacy version.
+            if ((entry.format === 'life-post-md-backup-v1') !== (candidate.format === 'life-post-md-v1'))
+              throw fault('invalid_backup', '백업 목록과 글 ZIP의 문서 형식이 다릅니다.');
             if (verifyPhoto) await verifyPhoto(candidate);
             // The bundle's manifest keeps each post's state; the ZIP alone restores a draft as before.
             if (entry.status === 'saved') candidate.status = 'saved';
-            if (entry.archived === true && candidate.format === 'life-photo-post-v2') candidate.archived = true;
+            if (entry.archived === true && ['life-photo-post-v2', 'life-post-md-v1'].includes(candidate.format)) candidate.archived = true;
             const evidence = entry.postId && documents.find(doc => doc.prefix === 'post-evidence' && doc.workspaceId === ws.workspaceId && doc.postId === entry.postId);
             let saved, evidenceNote = null;
             if (evidence?.value?.refs?.length && target.library) {

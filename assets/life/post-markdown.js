@@ -6,9 +6,9 @@
  * - 사진·AI 글 표시(author:"ai", `<span data-author="ai">`)·링크는 보존한다. 빈 문단은 `&nbsp;` 문단으로 남긴다.
  * - 굵게·기울임은 CommonMark가 그대로 읽을 수 있을 때만 `**`·`*`를 쓰고, 아니면 `<strong>`·`<em>`을 쓴다. */
 (function (root, factory) {
-  'use strict'; const api = factory(); (root.HaedoLife ||= {}).PostMarkdown = api;
+  'use strict'; const api = factory(root); (root.HaedoLife ||= {}).PostMarkdown = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
-})(globalThis, function () {
+})(globalThis, function (root) {
   'use strict';
   const FORMAT = 'life-post-md-v1';
   const PHOTO_SCHEME = 'haedo-photo:';
@@ -185,7 +185,7 @@
         const caption = line.photo.caption ? ' ' + quote(line.photo.caption) : '';
         text = '![' + breaks(escapeInline(line.photo.alt || '')) + '](' + PHOTO_SCHEME + line.photo.id + caption + ')';
       } else {
-        const body = inline(line.runs, true, stats);
+        const body = line.runs.map(run => run.text).join('') === '\u00a0' ? '' : inline(line.runs, true, stats);
         text = body === '' ? '&nbsp;' : body;
       }
       const kind = line.block.list ? 'list:' + line.block.list : line.block.blockquote ? 'quote' : line.block.header ? 'h' : 'p';
@@ -218,11 +218,176 @@
   // the photo list keeps only photos the body still shows, in body order first.
   function fromV2(doc) {
     if (!doc || doc.format !== 'life-photo-post-v2') throw new TypeError('a life-photo-post-v2 document is required');
-    const { ops, ...rest } = doc, result = fromDelta(ops);
+    const { ops, ...rest } = doc;
+    // A photo implicitly ends preceding text in the private v2 renderer, but
+    // the v2 server drops an unselected photo without inserting that line end.
+    // Markdown makes the paragraph explicit and cannot retain this distinction.
+    // Refuse migration instead of changing a later publication's visible text.
+    let pendingText = false;
+    for (const op of ops) {
+      if (typeof op.insert === 'string') {
+        const newline = op.insert.lastIndexOf('\n');
+        if (newline >= 0) pendingText = newline < op.insert.length - 1;
+        else if (op.insert.length) pendingText = true;
+      } else {
+        if (pendingText) throw fail('사진 앞 문단의 공개 모양을 그대로 옮길 수 없어 변환하지 않았습니다. 원래 글은 바뀌지 않았습니다.', 'post_markdown_conversion_boundary');
+        pendingText = false;
+      }
+    }
+    const result = fromDelta(ops);
+    // A legacy op can apply one inline mark across thousands of line breaks.
+    // The Markdown projection may need more ops than the old single insert.
+    // Reject before returning a candidate; callers must retain the original
+    // rather than migrate a document that cannot pass the unchanged model cap.
+    const projected = parse(result.markdown).ops;
+    const textLength = projected.reduce((total, op) => total + (typeof op.insert === 'string' ? op.insert.length : 0), 0);
+    if (projected.length > 5000 || textLength > 50000) throw fail('본문이나 서식이 많아 이 글을 새 편집기로 바꿀 수 없습니다. 원래 글은 바뀌지 않았습니다.', 'post_markdown_conversion_limit');
     const byId = new Map((doc.photos || []).map(photo => [photo.id, photo]));
     const photos = result.photos.map(id => byId.get(id)).filter(Boolean);
     return { document: { ...structuredClone(rest), format: FORMAT, markdown: result.markdown, photos: structuredClone(photos) },
       dropped: result.dropped, htmlEmphasis: result.htmlEmphasis };
   }
-  return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, fromDelta, fromV2, escapeInline });
+  // The same maintained parser as source reading, but only the D2 body grammar.
+  // No parser-generated HTML is ever returned or inserted into a document.
+  // A valid v2 op may contain all 50,000 characters as empty list lines.
+  // markdown-it needs 6 tokens per such line plus the list wrapper; allow
+  // another 10 tokens per original operation for inline mark boundaries.
+  // Byte/depth limits remain separate; PhotoPost still checks 50k text/5k ops.
+  const LIMITS = Object.freeze({ markdown: 1024 * 1024, tokens: 6 * 50000 + 10 * 5000 + 2, depth: 20 });
+  const fail = (message, code = 'invalid_post_markdown') => Object.assign(new Error(message), { code });
+  function parser() {
+    const markdownIt = root.markdownit || (typeof require === 'function' && require('../../vendor/markdown-it/markdown-it.umd.min.js'));
+    if (typeof markdownIt !== 'function') throw fail('Markdown 읽기 모듈을 불러오지 못했습니다. 새로고침해 주세요.');
+    const md = markdownIt({ html: true, linkify: false, typographer: false, maxNesting: LIMITS.depth + 1 });
+    md.disable(['html_block', 'table', 'strikethrough']);
+    md.normalizeLink = value => value;
+    return md;
+  }
+  function safeLink(value) {
+    if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/u.test(value)) return false;
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !!url.hostname && !url.username && !url.password; }
+    catch (_) { return false; }
+  }
+  const HTML_MARKS = new Map([
+    ['<strong>', ['bold', true]], ['</strong>', ['bold', false]],
+    ['<em>', ['italic', true]], ['</em>', ['italic', false]],
+    [AI_OPEN, ['author', true]], [AI_CLOSE, ['author', false]]
+  ]);
+  // Only exact, properly nested pairs acquire mark semantics. Other HTML is text.
+  function htmlPairs(children) {
+    const pairs = new Set(), stack = [];
+    children.forEach((token, index) => {
+      if (token.type !== 'html_inline') return;
+      const mark = HTML_MARKS.get(token.content);
+      if (!mark) return;
+      if (mark[1]) stack.push([mark[0], index]);
+      else if (stack.at(-1)?.[0] === mark[0]) { const open = stack.pop(); pairs.add(open[1]); pairs.add(index); }
+      else stack.length = 0;
+    });
+    return pairs;
+  }
+  // Delta stores adjacent equal-format strings as one operation, including
+  // ordinary paragraph terminators. Keeping one op per parsed token/line would
+  // exceed the existing 5,000-op limit for a valid multi-line legacy insert.
+  function appendOp(ops, op) {
+    const last = ops.at(-1), before = last?.attributes || {}, next = op.attributes || {};
+    const keys = Object.keys(before);
+    if (typeof last?.insert === 'string' && typeof op.insert === 'string' &&
+      keys.length === Object.keys(next).length && keys.every(key => Object.hasOwn(next, key) && before[key] === next[key])) last.insert += op.insert;
+    else ops.push(op);
+  }
+  function readInline(children) {
+    const ops = [], photos = [], depth = { bold: 0, italic: 0, author: 0 }, pairs = htmlPairs(children);
+    let href = null;
+    const attributes = () => ({ ...(depth.bold ? { bold: true } : {}), ...(depth.italic ? { italic: true } : {}),
+      ...(depth.author ? { author: 'ai' } : {}), ...(href !== null ? { link: href } : {}) });
+    const text = value => {
+      if (!value) return;
+      const attrs = attributes();
+      appendOp(ops, { insert: value, ...(Object.keys(attrs).length ? { attributes: attrs } : {}) });
+    };
+    children.forEach((token, index) => {
+      if (token.level > LIMITS.depth) throw fail('본문 서식이 너무 깊습니다.');
+      if (token.type === 'text') text(token.content);
+      else if (token.type === 'strong_open') depth.bold++;
+      else if (token.type === 'strong_close') depth.bold--;
+      else if (token.type === 'em_open') depth.italic++;
+      else if (token.type === 'em_close') depth.italic--;
+      else if (token.type === 'link_open') {
+        if (href !== null || token.attrGet('title') !== null || !safeLink(token.attrGet('href'))) throw fail('링크는 http 또는 https 주소로 입력해 주세요.');
+        href = token.attrGet('href');
+      } else if (token.type === 'link_close') href = null;
+      else if (token.type === 'html_inline') {
+        if (!pairs.has(index)) text(token.content);
+        else { const [key, open] = HTML_MARKS.get(token.content); depth[key] += open ? 1 : -1; }
+      } else if (token.type === 'image') {
+        const src = token.attrGet('src') || '', id = src.slice(PHOTO_SCHEME.length);
+        if (!src.startsWith(PHOTO_SCHEME) || !/^[A-Za-z0-9_-]{1,128}$/.test(id) || href !== null || Object.values(depth).some(Boolean))
+          throw fail('사진은 글에 보관된 독립 사진 블록이어야 합니다.');
+        if ((token.children || []).some(child => !['text', 'softbreak'].includes(child.type))) throw fail('사진 대체 텍스트의 서식을 확인해 주세요.');
+        const alt = (token.children || []).map(child => child.type === 'softbreak' ? '\n' : child.content).join('');
+        ops.push({ insert: { photo: { id, caption: token.attrGet('title') || '', alt } } }); photos.push(id);
+      } else throw fail('지원하지 않는 Markdown 본문 서식입니다: ' + token.type);
+    });
+    if (photos.length && (photos.length !== 1 || ops.length !== 1)) throw fail('사진은 문단과 분리해 주세요.');
+    if (!photos.length && ops.map(op => op.insert).join('') === '\u00a0') ops.length = 0;
+    return { ops, photos };
+  }
+  function parse(markdown) {
+    if (typeof markdown !== 'string' || markdown.length > LIMITS.markdown || new TextEncoder().encode(markdown).length > LIMITS.markdown ||
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(markdown)) throw fail('Markdown 본문의 문자와 길이를 확인해 주세요.');
+    const tokens = parser().parse(markdown, {}), ops = [], photos = [], stack = [];
+    let count = tokens.length, block = null, itemParagraphs = null;
+    if (count > LIMITS.tokens) throw fail('본문 서식이 너무 많습니다.');
+    for (const token of tokens) {
+      if (token.level > LIMITS.depth) throw fail('본문 서식이 너무 깊습니다.');
+      if (token.type === 'inline') {
+        count += token.children?.length || 0;
+        if (count > LIMITS.tokens || !block) throw fail('본문 서식을 확인해 주세요.');
+        const line = readInline(token.children || []);
+        if (line.photos.length && Object.keys(block).length) throw fail('사진은 독립 사진 블록이어야 합니다.');
+        for (const op of line.ops) appendOp(ops, op);
+        photos.push(...line.photos);
+        if (!line.photos.length) appendOp(ops, { insert: '\n', ...(Object.keys(block).length ? { attributes: { ...block } } : {}) });
+      } else if (['bullet_list_open', 'ordered_list_open', 'blockquote_open'].includes(token.type)) {
+        if (stack.length) throw fail('중첩 목록·인용은 지원하지 않습니다.');
+        if (token.type === 'ordered_list_open' && token.attrGet('start') !== null && Number(token.attrGet('start')) !== 1) throw fail('번호 목록은 1부터 시작해 주세요.');
+        stack.push(token.type);
+      } else if (['bullet_list_close', 'ordered_list_close', 'blockquote_close'].includes(token.type)) stack.pop();
+      else if (token.type === 'list_item_open' || token.type === 'list_item_close') {
+        if (!stack[0]?.includes('list')) throw fail('목록 서식을 확인해 주세요.');
+        itemParagraphs = token.type === 'list_item_open' ? 0 : null;
+      } else if (token.type === 'paragraph_open') {
+        if (itemParagraphs !== null && ++itemParagraphs > 1) throw fail('목록 항목에는 문단 하나만 넣어 주세요.');
+        block = stack[0] === 'blockquote_open' ? { blockquote: true } : stack[0] ? { list: stack[0] === 'ordered_list_open' ? 'ordered' : 'bullet' } : {};
+      } else if (token.type === 'heading_open') {
+        if (stack.length || !['h1', 'h2'].includes(token.tag)) throw fail('제목은 1·2단계만 지원합니다.');
+        block = { header: Number(token.tag.slice(1)) };
+      } else if (token.type === 'paragraph_close' || token.type === 'heading_close') block = null;
+      else throw fail('지원하지 않는 Markdown 본문 서식입니다: ' + token.type);
+    }
+    if (new Set(photos).size !== photos.length) throw fail('사진 참조가 중복됐습니다.');
+    if (!ops.length) ops.push({ insert: '\n' });
+    return { ops, photos, markdown: fromDelta(ops).markdown };
+  }
+  const toDelta = markdown => parse(markdown).ops;
+  const canonicalize = markdown => parse(markdown).markdown;
+  function toV2(doc) {
+    if (!doc || doc.format !== FORMAT) throw new TypeError('a life-post-md-v1 document is required');
+    const { markdown, ...rest } = structuredClone(doc);
+    return { ...rest, format: 'life-photo-post-v2', ops: toDelta(markdown) };
+  }
+  function remapPhotos(markdown, ids) {
+    const ops = toDelta(markdown);
+    for (const op of ops) if (typeof op.insert !== 'string') {
+      const id = ids instanceof Map ? ids.get(op.insert.photo.id) : Object.hasOwn(ids, op.insert.photo.id) ? ids[op.insert.photo.id] : undefined;
+      if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw fail('복원 사진 식별자를 확인해 주세요.');
+      op.insert.photo.id = id;
+    }
+    const result = fromDelta(ops).markdown;
+    parse(result); // Remapping must never alias two original photos.
+    return result;
+  }
+  return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, LIMITS, fromDelta, fromV2, escapeInline,
+    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink });
 });

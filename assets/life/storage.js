@@ -1408,6 +1408,11 @@
       return saved;
     }
     const photoPost = () => root.HaedoLife?.PhotoPost || (typeof require === 'function' && require('./photo-post.js'));
+    function assertPostFormatUpgrade(previous, value) {
+      if (previous?.format === 'life-post-md-v1' && value.format !== 'life-post-md-v1' ||
+          previous?.format === 'life-photo-post-v2' && value.format === 'life-photo-post-v1')
+        throw fault('photo_post_update_required', '새 형식의 글입니다. 새로고침한 뒤 다시 열어 주세요.');
+    }
     const localPostKinds = ['photo', 'plain', 'page-draft', 'source', 'writing-draft'];
     function localPostScope() {
       scopeGuard();
@@ -1662,11 +1667,13 @@
         const key = `photo-post:${workspaceId}:${value.id}`, previous = (await meta.get(key))?.value;
         if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
         if (previous) photoPost().validate(previous);
-        if (previous?.format === 'life-photo-post-v2' && value.format === 'life-photo-post-v1') throw fault('photo_post_update_required', '첨부와 보관 상태가 있는 새 형식입니다. 최신 작성기에서 다시 열어 주세요.');
+        assertPostFormatUpgrade(previous, value);
         let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
         if (value.status === 'saved' && value.replaces) {
           const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
           if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
+          photoPost().validate(target);
+          assertPostFormatUpgrade(target, value);
           const inheritedEvidence = (await meta.get(`post-evidence:${workspaceId}:${target.id}`))?.value;
           if (!evidence && inheritedEvidence && !(await meta.get(`post-evidence:${workspaceId}:${value.id}`))) {
             checkEvidenceTargets(checkedEvidence(inheritedEvidence.refs, workspaceId), await contentBundle());
@@ -2218,7 +2225,7 @@
     function materialLocalPost(input) {
       const doc = photoPost().compact(input), ids = new Map(); doc.id = core().id(); doc.revision = 0; doc.replaces = null;
       for (const photo of doc.photos) { const id = core().id(); ids.set(photo.id, id); photo.id = id; }
-      doc.ops = doc.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) } } });
+      Object.assign(doc, photoPost().remapBody(doc, ids));
       photoPost().validate(doc); return doc;
     }
     function materialBlogState(remoteId, workspaceId, remoteRevision, manifest, localRevision, prior = null, enabled = true) {
@@ -2551,7 +2558,7 @@
         const row = value.posts[i], item = value.series.items[i], photos = new Map(); row.itemId = item.id = fresh();
         row.doc.id = item.postId = fresh(); row.doc.revision = item.postRevision = 1; row.doc.replaces = null;
         for (const photo of row.doc.photos) { const id = fresh(); photos.set(photo.id, id); photo.id = id; }
-        row.doc.ops = row.doc.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: photos.get(op.insert.photo.id) } } });
+        Object.assign(row.doc, photoPost().remapBody(row.doc, photos));
       }
       blogSeries().validateSnapshot(value); scopeGuard();
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
@@ -2756,7 +2763,7 @@
       if (normalized.photos.length !== state.remoteManifest.photos.length) throw fault('invalid_blog_state', '받은 사진과 서버 원본이 다릅니다.');
       normalized.id = state.remoteId; normalized.revision = state.remoteManifest.revision;
       normalized.photos.forEach((photo, index) => { photoIds.set(photo.id, state.remoteManifest.photos[index].id); photo.id = state.remoteManifest.photos[index].id; });
-      normalized.ops = normalized.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: photoIds.get(op.insert.photo.id) } } });
+      Object.assign(normalized, photoPost().remapBody(normalized, photoIds));
       if (stablePayload(normalized) !== stablePayload(state.remoteManifest)) throw fault('invalid_blog_state', '받은 글과 서버 원본이 다릅니다.');
       const effects = {};
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
