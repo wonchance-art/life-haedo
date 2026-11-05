@@ -1,0 +1,104 @@
+/* Request review uses the existing white reading surface and native dialog.
+   The editor adapter owns the selection; the sheet owns only its proposal. */
+.writing-ai-panel {
+  box-sizing: border-box;
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(88dvh, 920px);
+  margin: auto;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line, #e3e9e6);
+  border-radius: 16px;
+  background: var(--paper, #fff);
+  color: var(--ink, #182522);
+  font-family: var(--haedo-font, inherit);
+  font-size: 16px;
+  line-height: 1.65;
+  caret-color: var(--color-primary, #145b50);
+}
+.writing-ai-panel::backdrop { background: rgb(24 37 34 / .32); }
+.writing-ai-panel [hidden] { display: none !important; }
+.writing-ai-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 12px;
+  background: var(--paper, #fff);
+  border-bottom: 1px solid var(--line, #e3e9e6);
+}
+.writing-ai-panel h2 { margin: 0; font-size: 20px; line-height: 1.4; }
+.writing-ai-panel h3 { margin: 24px 0 12px; font-size: 18px; }
+.writing-ai-panel h4 { margin: 20px 0 6px; font-size: 16px; }
+.writing-ai-panel p { margin-block: 10px; }
+.writing-ai-panel button, .writing-ai-panel select, .writing-ai-panel textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line, #e3e9e6);
+  border-radius: 8px;
+  background: var(--paper, #fff);
+  padding: 8px 12px;
+}
+.writing-ai-panel button { cursor: pointer; }
+.writing-ai-panel button:hover { background: var(--soft, #eaf1ed); }
+.writing-ai-panel button:disabled { opacity: .5; cursor: default; }
+.writing-ai-panel :is(.writing-ai-send, .writing-ai-apply) {
+  background: var(--color-primary, #145b50);
+  border-color: var(--color-primary, #145b50);
+  color: #fff;
+}
+.writing-ai-panel :is(.writing-ai-send, .writing-ai-apply):hover { background: #104b42; }
+.writing-ai-panel :is(button, select, textarea, input, summary):focus-visible {
+  outline: 2px solid var(--color-primary, #145b50);
+  outline-offset: 3px;
+}
+.writing-ai-panel summary { min-height: 44px; align-content: center; cursor: pointer; }
+.writing-ai-panel input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--color-primary, #145b50); }
+.writing-ai-field { display: grid; gap: 8px; margin-block: 16px; }
+.writing-ai-field :is(select, textarea) { width: 100%; min-width: 0; }
+.writing-ai-field textarea { resize: vertical; }
+.writing-ai-panel :is(pre, blockquote) {
+  margin: 8px 0 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.writing-ai-panel blockquote { padding: 0 12px; border-left: 1px solid var(--line, #e3e9e6); }
+.writing-ai-panel .life-meta, .writing-ai-panel .life-help,
+.writing-ai-usage, .writing-ai-notice, .writing-ai-reason { color: var(--ink-soft, #52645e); font-size: 14px; }
+.writing-ai-usage { font-variant-numeric: tabular-nums; }
+.writing-ai-preview, .writing-ai-result { margin-top: 20px; border-top: 1px solid var(--line, #e3e9e6); }
+.writing-ai-result:focus { outline: none; }
+.writing-ai-sources { min-width: 0; border: 0; padding: 0; margin-block: 16px; }
+.writing-ai-sources legend { font-weight: 600; }
+.writing-ai-source, .writing-ai-range { padding-block: 12px; border-bottom: 1px solid var(--line, #e3e9e6); }
+.writing-ai-source-choice, .writing-ai-guidance-toggle, .writing-ai-range > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.writing-ai-after { padding: 8px 12px; background: var(--soft, #eaf1ed); }
+.writing-ai-error, .writing-ai-unverified { color: #a52b3b; overflow-wrap: anywhere; }
+.writing-ai-error:empty, .writing-ai-status:empty { display: none; }
+.writing-ai-result > button { margin: 16px 8px 0 0; }
+.writing-ai-actions:empty { display: none; }
+@media (max-width: 760px) {
+  .writing-ai-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90dvh;
+    margin: auto 0 0;
+    padding: 0 20px max(20px, env(safe-area-inset-bottom, 0px));
+    border-radius: 16px 16px 0 0;
+  }
+}

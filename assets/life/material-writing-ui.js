@@ -6,7 +6,7 @@
   function create({ storage, workspaceId, getBundle = () => storage.read(workspaceId), isCurrent = () => true, onDirty = () => {}, onOpenSource, onOpenPost, onClose, onPlanChange = () => {}, onCreatePost }) {
     const M = life.MaterialWriting, fresh = () => life.Core.id(), clone = value => structuredClone(value);
     let state = null, selected = null, host = null, surface = null, status = null, error = null, selector = null, blocks = null, copies = null, output = null;
-    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
+    let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null, aiPanel = null, aiEpoch = 0;
     let tick = 0, stored = 0, saving = null, failure = null, timer = null, epoch = 0, disposed = false, acting = false, navigating = false, review = null, incoming = false;
     const composing = new Set(), pendingFields = new Set();
     // An account-scoped store is synced to the account by MaterialContinuitySync; its own panel
@@ -23,7 +23,7 @@
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
-      for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
+      for (const id of ['mwContinue', 'mwCreate', 'mwPreview', 'mwAI']) {
         const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;
       }
       const recovery = surface.querySelector('.mw-recovery');
@@ -34,10 +34,13 @@
     // Another device (account sync) or tab changed the stored preparations. Reload at once when
     // nothing is unsaved here; otherwise keep the input and offer the change explicitly.
     function remoteChanged(event) {
+      // A changed/deleted source must not remain available in an open AI request.
+      if (!disposed && event?.workspaceId === workspaceId && event.type === 'changed') closeAI();
       if (disposed || event?.type !== 'material_writing_changed' || event.workspaceId !== workspaceId) return;
       // Own saves announce their revision before this screen records it; check after they settle.
       setTimeout(() => {
         if (!mounted() || !state || !(event.revision > state.revision)) return;
+        closeAI();
         if (!dirty() && !navigating && !failure) { reload({ planId: selected }).catch(() => { incoming = true; message(); }); return; }
         incoming = true; message();
       }, 0);
@@ -67,6 +70,30 @@
     function settleSourcePending() { if (failure?.code === 'material_source_pending' && !sourceLoading && !sources?.pending()) clear(); else message(); }
     function clear() { failure = null; if (error) { error.hidden = true; error.textContent = ''; } message(); }
     function clearReview() { review = null; surface?.querySelector('.mw-preview')?.remove(); }
+    function closeAI() { aiEpoch++; const panel = aiPanel; aiPanel = null; panel?.dispose(); }
+    async function openAI() {
+      guard(); await flushInternal(); guard();
+      if (!mounted()) return;
+      closeAI();
+      const owner = plan(), token = epoch, version = tick, revision = state.revision, aiToken = aiEpoch;
+      const active = () => mounted(token) && aiToken === aiEpoch && plan() === owner && tick === version && state.revision === revision && !composing.size && !pendingFields.size;
+      const quotes = owner?.blocks.filter(block => block.kind === 'quote').map(block => clone(block.reference)) || [];
+      if (!quotes.length) throw fault('material_input_pending', '자료에서 질문할 구절을 선택해 개요에 담은 뒤 AI 제안을 열어 주세요.');
+      if (!life.WritingAIUI?.open) throw fault('material_input_pending', 'AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.');
+      const bundle = await getBundle(); if (!active()) return;
+      for (const reference of quotes) {
+        if (!life.Core.isSourceActive(bundle, reference.sourceId)) throw fault('material_input_pending', '휴지통에 있는 자료의 인용은 AI에 보내지 않습니다. 자료를 복원하거나 개요에서 해당 인용을 빼 주세요.');
+        await life.SourceReference.resolve(bundle, reference);
+        if (!active()) return;
+      }
+      // The panel chooses excerpts explicitly; private questions/notes and whole
+      // source bodies never enter this candidate list. Results stay read-only.
+      let panel;
+      panel = life.WritingAIUI.open({ selectionText: '', tasks: ['ask', 'outline'],
+        sources: quotes.map(reference => ({ text: reference.quote, label: reference.title || '채택한 인용' })),
+        isCurrent: active, onClose: () => { if (aiPanel === panel) aiPanel = null; } });
+      aiPanel = panel;
+    }
     function guardLocal() {
       if (!valid()) throw fault('material_scope_changed', '계정이나 작업공간이 바뀌었습니다. 현재 공간에서 다시 열어 주세요.');
       if (composing.size) throw fault('material_input_in_progress', '한글 입력을 마친 뒤 다시 시도해 주세요.');
@@ -79,7 +106,7 @@
       if (transient(failure)) clear();
     }
     function mark() {
-      tick++; clearReview(); clearTimeout(timer); message();
+      tick++; closeAI(); clearReview(); clearTimeout(timer); message();
       schedule();
     }
     function schedule() { clearTimeout(timer); if (!conflict() && tick !== stored) timer = setTimeout(() => { if (mounted() && !acting && !sourceLoading && !composing.size && !pendingFields.size && !sources?.pending()) flushInternal().catch(report); }, 450); }
@@ -116,7 +143,7 @@
         try { M.validate(state); pendingFields.delete(input); stamp(activePlan); mark(); if (key === 'title') updateSelector(); if (failure?.code === 'invalid_material_writing' && !pendingFields.size) clear(); }
         catch (cause) { owner[key] = previous; pendingFields.add(input); clearReview(); report(cause); }
       }
-      input.addEventListener('compositionstart', () => { composing.add(input); clearReview(); clearTimeout(timer); message(); });
+      input.addEventListener('compositionstart', () => { composing.add(input); closeAI(); clearReview(); clearTimeout(timer); message(); });
       input.addEventListener('compositionend', () => { composing.delete(input); apply(); message(); }); input.addEventListener('input', apply); return wrapper;
     }
     function updateSelector() {
@@ -288,6 +315,7 @@
     }
     async function render() {
       if (!mounted()) return;
+      closeAI();
       clearReview(); if (sources) { sourceView = sourcePlanId === selected ? sources.getView?.() || sourceView : null; sources.dispose(); sources = null; }
       surface.replaceChildren(); composing.clear(); pendingFields.clear();
       onPlanChange({ planId: selected });
@@ -320,7 +348,7 @@
       output = el('section', null, 'mw-output'); surface.append(output); renderOutput();
       const target = el('section', null, 'mw-sources'); target.id = 'mwSources'; surface.append(target); copies = el('div', null, 'life-actions mw-note-copies'); surface.append(copies); renderCopies();
       surface.append(el('h3', '글에 담을 내용')); blocks = el('ol', null, 'mw-blocks'); blocks.id = 'mwBlocks'; blocks.setAttribute('aria-label', '글 개요'); surface.append(blocks); renderBlocks();
-      const actions = el('div', null, 'life-actions mw-actions'); actions.append(button('소제목 추가', () => appendBlock({ id: fresh(), kind: 'heading', text: '' }), { id: 'mwAddHeading' }), button('문단 추가', () => appendBlock({ id: fresh(), kind: 'paragraph', text: '' }), { id: 'mwAddParagraph' }), button('글 미리보기', prepare, { id: 'mwPreview', primary: true })); surface.append(actions);
+      const actions = el('div', null, 'life-actions mw-actions'); actions.append(button('소제목 추가', () => appendBlock({ id: fresh(), kind: 'heading', text: '' }), { id: 'mwAddHeading' }), button('문단 추가', () => appendBlock({ id: fresh(), kind: 'paragraph', text: '' }), { id: 'mwAddParagraph' }), button('AI 제안', openAI, { id: 'mwAI' }), button('글 미리보기', prepare, { id: 'mwPreview', primary: true })); surface.append(actions);
       surface.append(button('새 준비 사본 만들기', async () => {
         await flushInternal(); guard(); const copy = copyPlan(plan()); state.plans.push(copy);
         try { M.validate(state); } catch (cause) { state.plans.pop(); throw cause; }
@@ -395,7 +423,7 @@
       clear(); await render(); if (mounted(token)) restoreView();
     }
     function detach() {
-      rememberView(); epoch++; clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
+      rememberView(); epoch++; closeAI(); clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
       host = surface = status = error = selector = blocks = copies = output = null; composing.clear(); pendingFields.clear();
     }
     function dispose() { detach(); disposed = true; unsubscribe?.(); state = null; sourceView = view = null; }

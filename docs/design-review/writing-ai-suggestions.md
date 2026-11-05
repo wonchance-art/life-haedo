@@ -1,5 +1,7 @@
 # 글쓰기 안의 AI 제안 — 서버와 기기 모듈 (묶음 B 단계 1·2, 2026-11-04)
 
+**2026-11-05 화면 연결:** A 작업자가 편집기 선택 제안과 자료 질문·개요를 연결했다. 최신 연결 지점·검증·후속 조건은 [AI 제안 화면 연결](writing-ai-ui.md)을 따른다. 아래의 화면 미연결·운영 미적용 문구는 11-04 구현 당시 기록이며, 운영 설치 상태는 [로드맵](../life-tools-design/roadmap.md)의 총괄 기록과 구분한다.
+
 근거: [글쓰기·메모 AI 적용 검토](../life-tools-design/writing-ai-review.md) §6 묶음 B와 §8(소유자 결정 자료), [AI와 자동화](../life-tools-design/ai-workflows.md) §3~§7, [AI 글 표시](ai-authorship.md)(묶음 A).
 
 이번 범위는 **서버(Edge 함수 `haedo-ai`·월 상한 마이그레이션)와 기기 모듈(`assets/life/writing-ai.js`)** 이다. 화면 연결, 운영 DB 적용, 비밀값 등록, Edge 배포, 실제 공급자 호출은 하지 않았다.
