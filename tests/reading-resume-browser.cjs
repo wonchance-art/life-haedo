@@ -154,6 +154,8 @@ async function main() {
         await nav(page, 'home'); await page.reload(); await ready(page); await settle(page); await frames(page);
         assert.equal(await page.locator('#lifeSourceText').count(), 0); assert(await page.evaluate(() => scrollY < 100), 'Home rendering must not auto-open or jump to a distant reading position');
         await openHomeLibrary(page); await page.locator('#homeReadingResumeOpen').waitFor();
+        // Reading position is an account document (11-01): the row names every device, not this browser.
+        assert.equal(await page.locator('#homeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
         await capture(page, report, 'home-position', size);
         const location = await exactResume(page, ids, position); report.observations.push({ width: size.width, savedOffset: position.position.offset, ...location });
         await capture(page, report, 'reader-resumed', size);
@@ -204,6 +206,7 @@ async function main() {
     await check('clear cancels delayed reading work and old-tab candidates cannot resurrect it', async ({ page, context }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500); await actualScroll(page);
       await savedPosition(page, { sourceVersionId: ids.oldVersion }); await home(page); await page.locator('#homeReadingResumeClear').waitFor();
+      assert.equal(await page.locator('#homeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
       const other = await context.newPage(); other.setDefaultTimeout(12000);
       await other.goto(base + '/index.html?section=records'); await ready(other); await openOld(other, ids); await other.waitForTimeout(500);
       // A reading event in a second tab proposes a debounced candidate. Clearing

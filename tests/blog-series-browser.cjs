@@ -227,6 +227,8 @@ async function main() {
       await f.go(); await createSeries(f);
       await f.page.locator('#bsRead').click(); await f.page.locator('.blog-series-reader[data-view=contents]').waitFor();
       await f.page.locator('.blog-series-toc button[data-entry-id]').nth(0).click(); await f.page.locator('.blog-series-reader-body[aria-busy=false]').waitFor();
+      // The storage line names this device, never 'this browser' (the composition also syncs to the account, 2026-11-01).
+      assert.equal((await f.page.locator('#wbStatus').textContent()).trim(), '이 기기에 저장됨');
       const marks = f.page.locator('.blog-series-reader-body .blog-ai-text');
       assert.deepEqual(await marks.allTextContents(), ['AI가 다듬은 문장', '밑줄 친 AI 문장', '링크 단 AI 문장'], 'only the marked sentences are shown as AI text');
       // The dotted line is a background image, so an underline or a link on the same text cannot cover it (review m1).

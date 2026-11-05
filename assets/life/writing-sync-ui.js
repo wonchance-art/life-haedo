@@ -1,8 +1,9 @@
 /* Compact automatic-sync status below the editor; remote events never rewrite its inputs. */
 (function (root) {
   'use strict'; const life = root.HaedoLife ||= {};
-  const labels = { not_enabled: '동기화 준비 중', pending: '다른 기기로 보내는 중', synced: '모든 기기에 동기화됨',
-    paused: '동기화 준비 중', conflict: '다른 기기 변경 확인 중', error: '동기화 확인 필요', closed: '기록으로 저장한 초안' };
+  // Two steps (2026-11-02 decision 4): the account, never "all devices".
+  const labels = { not_enabled: '계정에 올리기 대기', pending: '계정에 올리는 중', synced: '계정에 올림',
+    paused: '계정에 올리기 대기', conflict: '다른 기기 변경 확인 중', error: '계정에 올리지 못함', closed: '기록으로 저장한 초안' };
   const NOTICE = '다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다.';
   const el = (tag, text, cls) => { const value = document.createElement(tag); if (text != null) value.textContent = text; if (cls) value.className = cls; return value; };
   function create({ host, manager, storage, workspaceId: ws, draftId: id, beforeAction, onOpen, isCurrent }) {

@@ -1029,7 +1029,7 @@
       moreBody.append(review, read, irrelevant); reactionMore(article, moreBody); moreBody.append(articleInformation(article));
       more.append(moreBody); actions.push(more);
       const external = originalLink(article, { text: '새 탭에서 열기', focusKey: 'reader-open:' + article.canonicalUrl });
-      external.className = 'discovery-reader-external'; external.title = '새 탭에서 열기'; external.setAttribute('aria-label', '새 탭에서 원문 열기 · ' + article.title); external.replaceChildren(icon('arrow'), node('span', '새 탭', 'discovery-tool-label'));
+      external.className = 'discovery-reader-external'; external.title = '새 탭에서 열기'; external.setAttribute('aria-label', '새 탭에서 원문 열기 · ' + article.title); external.replaceChildren(icon('external'), node('span', '새 탭', 'discovery-tool-label'));
       actions.push(external);
       view.tools.replaceChildren(...actions);
       syncInert();

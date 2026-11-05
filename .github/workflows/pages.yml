@@ -242,6 +242,9 @@ jobs:
       - name: Verify original photo editor, exact bytes and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/photo-post-browser.cjs
+      - name: Verify D1 editor title, 글 정보 sheet, publication state and retry focus
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-d1-browser.cjs
       - name: Verify default private server saves and local failure recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-default-server-browser.cjs

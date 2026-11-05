@@ -3139,7 +3139,7 @@
         const versions = state.bundle.sourceVersions.filter(item => item.sourceId === view.position?.sourceId);
         const versionIndex = versions.findIndex(item => item.id === view.position?.sourceVersionId);
         copy.append(node('p', source ? sourceLabel(source) : '저장한 원문 버전', 'life-reading-resume-title'),
-          node('p', '이 브라우저' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
+          node('p', '읽던 위치 · 모든 기기' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
         row.append(copy);
         if (view.status === 'available') {
           const open = button('이어 읽기', () => {}, 'life-primary life-reading-resume-open');
@@ -4437,7 +4437,7 @@
         await commit(changes);
         state.sourceDrafts.delete(version.id);
         render();
-      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 브라우저에 저장됨');
+      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 기기에 저장됨');
       }), 'life-primary');
       saveExcerpt.id = 'lifeSourceExcerptSave';
       saveExcerpt.disabled = true;
@@ -5106,7 +5106,7 @@
         else if (currentExternalImport(externalContext)) await openExternalImportResult(externalContext);
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
-        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 브라우저에 저장됨'));
+        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 기기에 저장됨'));
       };
       const storeOnly = button('자료만 보관', guarded(() => apply([])));
       if (!state.stage.excerpts.length) storeOnly.classList.add('life-primary');

@@ -287,6 +287,9 @@
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
       const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary home-blog-write');
       write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
+      // Hidden until the first list read decides it (updateList): an account with
+      // no posts shows only '첫 글 쓰기', so '새 글 쓰기' must not flash first.
+      nav.hidden = true;
       nav.append(write); context.composeActions = nav;
       return nav;
     }

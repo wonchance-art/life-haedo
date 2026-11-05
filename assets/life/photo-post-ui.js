@@ -105,6 +105,34 @@
   // Fits the one-line status at 320px (108px); the full sentence is announced.
   const AI_PENDING = "AI 붙여넣기 대기";
   const AI_PENDING_DETAIL = " · 다음 붙여넣기 한 번을 AI 글로 표시합니다. AI 글 표시 버튼을 다시 누르면 취소합니다.";
+  // 2026-11-04 D1 (soft redesign): a post's date reads "11월 2일 월요일 09:12";
+  // another year adds the year. Local calendar, like the home feed.
+  function when(value) {
+    const date = new Date(value);
+    if (!value || !Number.isFinite(date.getTime())) return "";
+    const day = new Intl.DateTimeFormat("ko-KR", {
+      ...(date.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+      month: "long", day: "numeric", weekday: "long",
+    }).format(date);
+    const clock = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
+    return day + " " + clock;
+  }
+  // Two steps (2026-11-02 decision 4): this device saved, then the account.
+  // Read-only projections of BlogSync's statusOf; never "all devices".
+  const SERVER_LABELS = {
+    checking: "저장됨 · 계정 확인 중",
+    saving: "저장됨 · 계정에 올리는 중",
+    synced: "저장됨 · 계정에 올림",
+    not_enabled: "저장됨 · 계정에 올리기 대기",
+    pending: "저장됨 · 계정에 올리기 대기",
+    paused: "저장됨 · 계정에 올리기 대기",
+    conflict: "다른 기기 변경을 맞추는 중 · 진 쪽은 복구 사본으로 남김",
+    error: "저장됨 · 계정에 올리지 못함",
+    // An older page mixed with newer modules (no SyncCommon) has no blog engine until reloaded.
+    refresh: "저장됨 · 앱을 새로고침하면 계정에 올림",
+  };
+  // Only a problem reaches the privacy pill; normal states stay quiet.
+  const PILL_PROBLEMS = { error: "올리기 실패", refresh: "새로고침 필요", conflict: "맞추는 중" };
   function create({
     storage,
     workspaceId,
@@ -163,6 +191,8 @@
       authorButton = null;
     let status, statusText, statusDetail, inspector, captionInput, altInput, recoveryActions;
     let dismissControls = null;
+    // D1: the privacy pill opens 글 정보 (visibility, date, save state).
+    let pill = null, info = null, refreshInfo = null, releaseViewport = null;
     let serverStatus = null, serverActions = null, serverValue = null, serverBusy = false, serverSequence = 0;
     let unsubscribeServer = null;
     const urls = new Set(),
@@ -200,6 +230,15 @@
       if (status) root.HaedoMotion?.cancel(status);
       dismissControls?.();
       dismissControls = null;
+      if (info) {
+        const sheet = info; info = null;
+        if (sheet.open) sheet.close();
+        sheet.remove();
+      }
+      refreshInfo = null;
+      pill = null;
+      releaseViewport?.();
+      releaseViewport = null;
       attachmentUI?.dispose();
       attachmentUI = null;
       coverObserver?.disconnect();
@@ -265,6 +304,7 @@
         recoveryActions.querySelector(".photo-recovery-copy").hidden =
           recoveryActions.dataset.conflict !== "true";
       }
+      refreshInfo?.();
       onDirty();
     }
     function committedFeedback() {
@@ -316,22 +356,9 @@
       b.addEventListener("click", () => run(task));
       return b;
     }
-    function glyph(name) {
-      const paths = {
-        more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
-        image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-5-5L5 21"/>',
-        undo: '<path d="m9 5-5 5 5 5"/><path d="M4 10h10a6 6 0 0 1 6 6v3"/>',
-        redo: '<path d="m15 5 5 5-5 5"/><path d="M20 10H10a6 6 0 0 0-6 6v3"/>',
-      };
-      if (!Object.hasOwn(paths, name)) return life.Icons.create(name);
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      for (const [key, value] of Object.entries({
-        width: "20", height: "20", viewBox: "0 0 24 24", fill: "none",
-        stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round",
-        "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
-      })) svg.setAttribute(key, value);
-      svg.innerHTML = paths[name]; // Fixed local control geometry, never document content.
-      return svg;
+    // Every control picture is the shared Lucide 1.51.0 set (decision 15).
+    function glyph(name, size = 20) {
+      return life.Icons.create(name, { size });
     }
     function iconControl(node, name, label) {
       node.classList.add("photo-icon-button");
@@ -339,6 +366,181 @@
       node.title = label;
       node.replaceChildren(glyph(name), el("span", label, "life-sr-only"));
       return node;
+    }
+    // The floating tools stay above an on-screen keyboard: the visual viewport
+    // shrinks while the layout viewport keeps its height (iOS Safari).
+    function keyboardOffset(target) {
+      const view = root.visualViewport;
+      if (!view) return null;
+      let frame = 0;
+      const apply = () => {
+        frame = 0;
+        const covered = Math.max(0, Math.round(root.innerHeight - view.height - view.offsetTop));
+        target.style.setProperty("--photo-keyboard", covered > 80 ? covered + "px" : "0px");
+      };
+      const schedule = () => { if (!frame) frame = root.requestAnimationFrame(apply); };
+      view.addEventListener("resize", schedule);
+      view.addEventListener("scroll", schedule);
+      apply();
+      return () => {
+        if (frame) root.cancelAnimationFrame(frame);
+        view.removeEventListener("resize", schedule);
+        view.removeEventListener("scroll", schedule);
+      };
+    }
+    // Publication is read from BlogSync only (never changed here). In the
+    // editor it is the saved post being revised; a new draft is private.
+    // publicState: { id, published } once read; { id, checking } while the first read
+    // runs; { id, failed } when it could not be read. Until it is known the pill and
+    // 글 정보 say nothing about visibility (a public post must never look private).
+    let publicState = null;
+    const publicTarget = () =>
+      mode === "read" ? (doc?.status === "saved" ? doc.id : null) : doc?.replaces?.id || null;
+    function publication() {
+      const id = publicTarget();
+      if (!id) return "private"; // a new or unsaved draft cannot have a public copy
+      if (publicState?.id !== id || publicState.failed) return "unknown";
+      if (publicState.checking) return "checking";
+      return publicState.published ? "public" : "private";
+    }
+    const isPublished = () => publication() === "public";
+    const serverState = () =>
+      mode === "read" && doc?.status === "saved" && serverValue?.id === doc.id &&
+      serverValue.revision === doc.revision ? serverValue.status : null;
+    function updatePill() {
+      if (!pill) return;
+      const state = publication(), problem = PILL_PROBLEMS[serverState()] || "",
+        label = state === "public" ? "공개" : state === "private" ? "비공개" : "글 정보",
+        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" ? "공개 여부 확인 못 함" : label;
+      pill.dataset.state = problem ? "problem" : state;
+      // The button is the 44px target; the drawn pill is its inner face.
+      const face = el("span", null, "photo-privacy-face");
+      if (state === "public" || state === "private") face.append(glyph(state === "public" ? "globe" : "lock", 16));
+      face.append(el("span", label, "photo-privacy-label"));
+      if (problem) face.append(el("span", problem, "photo-privacy-problem"));
+      // 글 저장 replaces the original of a post being revised: say so on the top line.
+      const revising = mode === "edit" && !!doc?.replaces;
+      if (revising && !problem) face.append(el("span", "수정 중", "photo-privacy-note"));
+      face.append(glyph("forward", 16));
+      pill.replaceChildren(face);
+      pill.setAttribute("aria-label", spoken + (problem ? " · " + problem : "") + (revising ? " · 기존 글 수정 중" : "") +
+        (state === "public" || state === "private" ? " · 글 정보" : ""));
+    }
+    function privacyPill() {
+      const b = el("button", null, "photo-privacy");
+      b.type = "button";
+      b.setAttribute("aria-haspopup", "dialog");
+      b.title = "글 정보";
+      if (doc?.id) b.dataset.focusKey = "photo:info:" + doc.id;
+      b.addEventListener("click", () => {
+        if (valid() && !navigating && !info) openInfo(b);
+      });
+      pill = b;
+      updatePill();
+      return b;
+    }
+    // 글 정보: what the top line used to say (visibility, date, save state),
+    // one tap away. Editing input is never re-rendered while it is open.
+    function openInfo(origin) {
+      const token = epoch,
+        sheet = el("dialog", null, "photo-info"),
+        head = el("div", null, "photo-info-head"),
+        title = el("h2", "글 정보"),
+        rows = el("dl", null, "photo-info-rows");
+      title.id = "photoInfoTitle";
+      title.tabIndex = -1;
+      sheet.setAttribute("aria-labelledby", title.id);
+      const close = iconControl(el("button"), "close", "글 정보 닫기");
+      close.type = "button";
+      close.addEventListener("click", () => sheet.close());
+      head.append(title, close);
+      sheet.append(head, rows);
+      // The save state can take focus (tabindex -1) so a finished action can hand focus to its result.
+      const stateValue = (text) => {
+        const value = el("span", text, "photo-info-value");
+        value.dataset.infoFocus = "save-state";
+        value.tabIndex = -1;
+        return value;
+      };
+      const row = (name, ...value) => {
+        const wrap = el("div", null, "photo-info-row"),
+          detail = el("dd");
+        detail.append(...value);
+        wrap.append(el("dt", name), detail);
+        rows.append(wrap);
+        return detail;
+      };
+      refreshInfo = () => {
+        if (info !== sheet || !current(token)) return;
+        const state = publication(), published = state === "public", known = published || state === "private",
+          saved = mode === "read" && doc.status === "saved";
+        // Rebuilding the rows must not drop focus to <body>: remember which action had it.
+        const had = rows.contains(document.activeElement) ? document.activeElement.dataset.infoFocus || "save-state" : null;
+        rows.replaceChildren();
+        const shown = el("span", null, "photo-info-line");
+        if (known) shown.append(glyph(published ? "globe" : "lock", 16));
+        shown.append(el("span", published ? "공개 중" : state === "private" ? "비공개" : state === "checking" ? "확인 중" : "확인하지 못함", "photo-info-value"));
+        const visibility = row("공개", shown);
+        visibility.append(el("p", published
+          ? "공개 사본은 이 글과 따로 있습니다. 고친 내용은 공개 설정에서 갱신해야 공개 화면에 반영됩니다."
+          : !known ? "공개 여부를 아직 확인하지 못했습니다. 글 공개·보관에서 확인할 수 있습니다."
+          : saved ? "공개는 미리보기를 확인한 뒤 따로 선택합니다. 사진은 고른 것만, 촬영·위치 정보를 뺀 사본으로 공개합니다."
+            : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
+        if (saved && typeof onManageServer === "function") {
+          const manage = button(published ? "공개 설정" : known ? "공개하기" : "공개 상태 확인", () => {
+            sheet.close();
+            return openPostTask(onManageServer, origin.dataset.focusKey);
+          });
+          manage.classList.add("photo-info-action");
+          manage.dataset.infoFocus = "manage";
+          visibility.append(manage);
+        }
+        // A new draft not yet stored has no saved time to show.
+        const stamp = doc.revision > 0 ? when(doc.updatedAt) : "";
+        if (stamp) {
+          const time = el("time", stamp);
+          time.dateTime = doc.updatedAt;
+          row(mode === "edit" ? "마지막 보관" : "저장한 시각", time);
+        }
+        if (mode === "edit") {
+          const state = row("저장", stateValue(statusText?.textContent || ""));
+          state.append(el("p", "초안은 계정에 비공개로 자동 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다. 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
+          if (doc.replaces)
+            row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
+        } else if (saved) {
+          const value = serverState() || "checking";
+          const state = row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
+          state.dataset.state = value;
+          if (["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
+            const retry = button("계정에 다시 올리기", saveServer);
+            retry.classList.add("photo-info-action");
+            retry.dataset.infoFocus = "retry";
+            state.append(retry);
+          }
+        } else row("저장", el("span", doc.status === "draft" ? "초안" : "", "photo-info-value"));
+        if (doc.archived) row("목록", el("span", "숨긴 글입니다. 일반 목록과 검색에는 나오지 않습니다.", "photo-info-value"));
+        // The same action again; if it is gone (e.g. 계정에 다시 올리기 while it runs), the save state it changed.
+        if (had) (rows.querySelector('[data-info-focus="' + had + '"]') || rows.querySelector('[data-info-focus="save-state"]') || title).focus({ preventScroll: true });
+      };
+      sheet.addEventListener("click", (e) => {
+        // A click on the backdrop (outside the sheet's box) closes it.
+        if (e.target !== sheet) return;
+        const box = sheet.getBoundingClientRect();
+        if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) sheet.close();
+      });
+      sheet.addEventListener("close", () => {
+        // cleanup() detaches the sheet first; then the screen is being
+        // replaced and focus belongs to the next render.
+        const own = info === sheet;
+        if (own) { info = null; refreshInfo = null; }
+        sheet.remove();
+        if (own && current(token) && origin.isConnected) origin.focus({ preventScroll: true });
+      }, { once: true });
+      info = sheet;
+      refreshInfo();
+      document.body.append(sheet);
+      sheet.showModal();
+      close.focus();
     }
     async function run(task) {
       if (busy || navigating || !valid()) return;
@@ -943,26 +1145,16 @@
     }
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
-      const state = serverValue?.id === doc.id && serverValue.revision === doc.revision ? serverValue.status : "checking";
-      const labels = {
-        checking: "저장됨 · 계정 동기화 확인 중…",
-        saving: "저장됨 · 모든 기기에 올리는 중…",
-        synced: "모든 기기에 저장됨 (비공개)",
-        not_enabled: "저장됨 · 곧 모든 기기에 올립니다.",
-        pending: "저장됨 · 계정에 올리기 대기 중",
-        paused: "저장됨 · 곧 모든 기기에 올립니다.",
-        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 복구 사본으로 남습니다.",
-        error: "저장됨 · 계정에 올리지 못했습니다. 자동으로 다시 시도합니다.",
-        // An older page mixed with newer modules (no SyncCommon) has no blog engine until reloaded.
-        refresh: "저장됨 · 앱을 새로고침하면 계정에 올립니다.",
-      };
-      serverStatus.textContent = labels[state] || labels.error;
+      const state = serverState() || "checking";
+      serverStatus.textContent = SERVER_LABELS[state] || SERVER_LABELS.error;
       serverStatus.dataset.state = state;
       serverStatus.dataset.postId = doc.id;
       serverActions.replaceChildren();
       if (["not_enabled", "pending", "error"].includes(state)) {
-        const retry = button("서버 보관 다시 시도", saveServer);
+        // Next to "계정에 올리지 못함": the visible label is the action itself.
+        const retry = button("다시 시도", saveServer);
         retry.id = "photoServerRetry";
+        retry.title = "계정에 다시 올리기";
         serverActions.append(retry);
       } else if (state === "conflict" && onManageServer) {
         const focusKey = "photo:conflict:" + doc.id;
@@ -971,22 +1163,40 @@
         serverActions.append(manage);
       }
       serverActions.hidden = !serverActions.children.length;
+      updatePill();
+      refreshInfo?.();
+    }
+    // Publication is shown, never changed, from the state BlogSync reports.
+    function notePublication(id, state) {
+      // A result without the field (e.g. a push receipt) says nothing about it.
+      if (state && typeof state === "object" && Object.hasOwn(state, "publication"))
+        publicState = { id, published: state.publication?.active === true };
+    }
+    // A read of the publication starts: a value already read for this post stays shown.
+    function checkPublication(id) {
+      if (publicState?.id !== id || publicState.failed) publicState = { id, checking: true };
+    }
+    // The read ended without a publication value: say so instead of guessing.
+    function settlePublication(id) {
+      if (publicState?.id === id && publicState.checking) publicState = { id, failed: true };
     }
     // No blog engine because this page lacks sync-common.js while the blog module is the newer one.
     const staleApp = () => !blogSync && !!life.BlogSync && !life.SyncCommon;
     async function readServerState() {
       if (mode !== "read" || doc?.status !== "saved" || serverBusy) return;
       const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
-      serverValue = { id, revision, status: "checking" }; showServerStatus();
+      serverValue = { id, revision, status: "checking" }; checkPublication(id); showServerStatus();
       try {
         if (!blogSync?.getState) throw new Error("server_unavailable");
         const state = await blogSync.getState(workspaceId, id);
         if (!serverCurrent(token, id, revision, sequence)) return;
+        notePublication(id, state);
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
         serverValue = { id, revision, status: staleApp() ? "refresh" : "error" };
       }
+      settlePublication(id);
       showServerStatus();
     }
     async function saveServer() {
@@ -997,6 +1207,7 @@
         if (!blogSync?.saveDefault) throw new Error("server_unavailable");
         const state = await blogSync.saveDefault(workspaceId, id, { expectedLocalRevision: revision });
         if (!serverCurrent(token, id, revision, sequence)) return;
+        notePublication(id, state);
         serverValue = { id, revision, status: state.status };
       } catch (_) {
         if (!serverCurrent(token, id, revision, sequence)) return;
@@ -1444,15 +1655,51 @@
       const renderedDoc = doc, renderedEpoch = epoch;
       const acceptsInput = () => current(renderedEpoch) && doc === renderedDoc && mode === "edit";
       const form = el("section", null, "photo-editor"),
-        title = el("input");
+        // A one-line title that wraps (long Korean titles on phones) instead
+        // of scrolling sideways inside an input.
+        title = el("textarea");
       title.id = "photoTitle";
+      title.rows = 1;
+      title.setAttribute("enterkeyhint", "next");
       title.value = doc.title;
-      title.placeholder = "제목 추가 (선택)";
+      title.placeholder = "제목 (선택)";
       title.maxLength = 500;
       title.setAttribute("aria-label", "글 제목");
-      title.addEventListener("input", () => {
+      const fitTitle = () => {
+        title.style.height = "auto";
+        title.style.height = title.scrollHeight + "px";
+      };
+      // The title stays one line of text: Enter goes on to the body and
+      // pasted line breaks become spaces. IME composition is never altered.
+      title.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.isComposing || e.keyCode === 229 || !acceptsInput()) return;
+        e.preventDefault();
+        editor?.focus();
+      });
+      // Line breaks become spaces without moving the caret (same length or shorter).
+      const flattenTitle = () => {
+        if (!/[\r\n]/.test(title.value)) return;
+        const end = title.selectionEnd;
+        title.value = title.value.replace(/[\r\n]+/g, " ");
+        title.setSelectionRange(Math.min(end, title.value.length), Math.min(end, title.value.length));
+      };
+      title.addEventListener("paste", (e) => {
+        const text = e.clipboardData?.getData("text/plain");
+        if (!text || !/[\r\n]/.test(text) || !acceptsInput()) return;
+        e.preventDefault();
+        // setRangeText does not apply maxLength: insert only what still fits, so a
+        // long multi-line paste can never make the title (and every save) invalid.
+        const room = title.maxLength - (title.value.length - (title.selectionEnd - title.selectionStart));
+        let insert = text.replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
+        if (/[\uD800-\uDBFF]$/.test(insert)) insert = insert.slice(0, -1);  // never split a surrogate pair
+        title.setRangeText(insert, title.selectionStart, title.selectionEnd, "end");
+        title.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      title.addEventListener("input", (e) => {
         if (!acceptsInput()) return;
+        if (!composing && !e.isComposing) flattenTitle();
         doc.title = title.value;
+        fitTitle();
         mark();
       });
       title.addEventListener("compositionstart", () => {
@@ -1463,7 +1710,10 @@
       title.addEventListener("compositionend", () => {
         if (!acceptsInput()) return;
         composing = false;
+        // A composed line break (some IMEs commit one) is cleaned only now, after composition.
+        flattenTitle();
         doc.title = title.value;
+        fitTitle();
         mark();
       });
       const sticky = el("div", null, "photo-editor-tools"),
@@ -1471,10 +1721,7 @@
       const more = el("details", null, "photo-more life-details");
       const menu = el("div", null, "photo-more-menu");
       more.append(iconControl(el("summary"), "more", "더 보기"), menu);
-      // The draft/save scope is reference text, not a header line. It lives in
-      // this menu so the sticky command bar stays one compact row on phones.
       menu.append(
-        el("p", "초안은 계정에 자동 저장되어 모든 기기에서 이어 쓸 수 있습니다. 공개는 따로 선택합니다.", "life-help photo-server-scope"),
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
         button("사본으로 이어 쓰기", duplicate),
@@ -1482,19 +1729,33 @@
         button("초안 다시 저장", persist),
       );
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
+      // D1 (soft redesign): one quiet line — close, the privacy pill that
+      // opens 글 정보, the autosave state, then more and the one save action.
       const commandState = el("div", null, "photo-command-state"),
         save = button("글 저장", () => finish());
-      const scope = el("span", "비공개 · 저장 시 서버 보관", "photo-command-scope");
+      const scope = el("span", "비공개 · 저장하면 계정에 비공개로 보관", "life-sr-only");
       scope.id = "photoCommandScope";
-      commandState.append(scope, status);
-      if (doc.replaces)
-        commandState.prepend(el("span", "기존 글 수정 중", "photo-editing-label"));
+      commandState.append(privacyPill(), status, scope);
       save.classList.add("photo-save");
-      save.title = "저장하면 모든 기기에 비공개로 동기화됩니다";
-      // Narrow screens hide the scope line; the button still describes it.
+      save.textContent = "저장";
+      save.setAttribute("aria-label", "글 저장");
+      save.title = "글 저장 · 계정에 비공개로 보관합니다";
       save.setAttribute("aria-describedby", scope.id);
-      commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
+      commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, more, save);
       sticky.append(commands);
+      if (doc.replaces && blogSync?.getState) {
+        // Revising a saved post: the pill says whether that post has a public copy.
+        const target = doc.replaces.id;
+        checkPublication(target);
+        const settle = (state) => {
+          if (!acceptsInput() || doc.replaces?.id !== target) return;
+          notePublication(target, state);
+          settlePublication(target);
+          updatePill();
+          refreshInfo?.();
+        };
+        blogSync.getState(workspaceId, target).then(settle, () => settle(null));
+      }
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
       recoveryActions.append(
@@ -1514,7 +1775,11 @@
         formatPanel = el("span", null, "photo-format-panel");
       formatSummary.setAttribute("aria-label", "추가 서식");
       formatSummary.title = "추가 서식";
-      formatSummary.append(el("span", "서식"), glyph("chevron"));
+      // Phones show the "type" picture alone; wider screens the word 서식.
+      const formatIcon = glyph("type"), formatChevron = glyph("chevron");
+      formatIcon.classList.add("photo-format-icon");
+      formatChevron.classList.add("photo-format-chevron");
+      formatSummary.append(formatIcon, el("span", "서식", "photo-format-word"), formatChevron);
       extraFormats.append(formatSummary, formatPanel);
       const heading = el("select");
       heading.className = "ql-header";
@@ -1560,6 +1825,15 @@
         redo = button("다시 실행", () => editor.history.redo());
       const history = el("span", null, "photo-history");
       history.append(iconControl(undo, "undo", "실행 취소"), iconControl(redo, "redo", "다시 실행"));
+      // Touch screens: put the keyboard away without leaving the post.
+      const hideKeyboard = iconControl(el("button"), "keyboard", "키보드 닫기");
+      hideKeyboard.type = "button";
+      hideKeyboard.classList.add("photo-keyboard-close");
+      hideKeyboard.addEventListener("pointerdown", (e) => e.preventDefault());
+      hideKeyboard.addEventListener("click", () => {
+        const active = document.activeElement;
+        if (active && form.contains(active)) active.blur();
+      });
       const photoInput = el("input");
       photoInput.type = "file";
       photoInput.multiple = true;
@@ -1576,10 +1850,40 @@
       const insertPhoto = button("사진", () => photoInput.click());
       insertPhoto.classList.add("photo-insert-photo");
       insertPhoto.prepend(glyph("image"));
-      toolbar.append(insertPhoto, primaryFormats, extraFormats, history, photoInput);
+      // The floating bar is one ordered list of items (D1). A later control,
+      // e.g. the planned AI 제안, joins this list with its own id. Width budget:
+      // seven 44px controls fit 360px; an eighth needs another item moved into
+      // 서식 below 390px (photo-post.css, floating tools on phones).
+      const toolItems = [
+        ["photo", insertPhoto],
+        ["inline", primaryFormats],
+        ["formats", extraFormats],
+        ["history", history],
+        ["keyboard", hideKeyboard],
+      ];
+      for (const [id, node] of toolItems) {
+        node.dataset.tool = id;
+        toolbar.append(node);
+      }
+      toolbar.append(photoInput);
       const area = el("div", null, "photo-quill");
-      form.append(sticky, title, toolbar, area);
+      // The tools float at the bottom of the screen (above the keyboard on
+      // phones) instead of a row between the title and the text.
+      toolbar.classList.add("photo-toolbar-floating");
+      form.append(sticky, title, area, toolbar);
       host.append(form);
+      const releaseKeyboard = keyboardOffset(form);
+      let titleWidth = 0;
+      const titleSize = new ResizeObserver(() => {
+        if (title.clientWidth === titleWidth) return;
+        titleWidth = title.clientWidth;
+        fitTitle();
+      });
+      titleSize.observe(title);
+      releaseViewport = () => {
+        releaseKeyboard?.();
+        titleSize.disconnect();
+      };
       editor = new root.Quill(area, {
         theme: "snow",
         placeholder: "어떤 이야기를 남길까요?",
@@ -2100,6 +2404,9 @@
           });
       } else if (mode === "edit") renderEditor();
       else {
+        // D1 (soft redesign): one line above the title — the privacy pill that
+        // opens 글 정보, then edit, backup and more. Date and save state move
+        // to the end of the post.
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.classList.toggle("photo-read-standalone", standalone);
         if (readBackAction)
@@ -2109,12 +2416,18 @@
           }), "back", readBackText));
         else if (!standalone)
           actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
-        actions.append(
-          doc.archived
-            ? button("목록에 다시 보이기", () => archive(false))
-            : button("글 수정", () => open(doc.id, true)),
-          iconControl(button("사진 포함 백업", backup), "download", "사진 포함 백업"),
-        );
+        actions.append(privacyPill());
+        const tools = el("div", null, "photo-read-tools");
+        if (doc.archived) tools.append(button("목록에 다시 보이기", () => archive(false)));
+        else {
+          const edit = button("글 수정", () => open(doc.id, true));
+          edit.classList.add("photo-read-edit");
+          edit.replaceChildren(glyph("edit"), el("span", "수정"));
+          edit.setAttribute("aria-label", "글 수정");
+          edit.title = "글 수정";
+          tools.append(edit);
+        }
+        tools.append(iconControl(button("사진 포함 백업", backup), "download", "사진 포함 백업"));
         const more = el("details", null, "photo-more life-details"),
           menu = el("div", null, "photo-more-menu");
         more.append(iconControl(el("summary"), "more", "더 보기"), menu);
@@ -2138,36 +2451,45 @@
         remove.dataset.postAction = "delete";
         remove.classList.add("photo-delete");
         menu.append(remove);
-        actions.append(more);
+        tools.append(more);
+        actions.append(tools);
         host.append(actions);
+        const article = el("article", null, "photo-article"),
+          heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
+        if (!doc.title.trim()) heading.classList.add("life-sr-only");
+        heading.tabIndex = -1;
+        article.append(heading);
+        renderRead(article, doc);
+        const foot = el("footer", null, "photo-read-foot"),
+          dated = el("p", null, "life-meta photo-read-meta"),
+          stamp = when(doc.updatedAt);
+        if (stamp) {
+          const time = el("time", stamp);
+          time.dateTime = doc.updatedAt;
+          dated.append(time);
+        }
+        for (const label of [doc.archived && "숨긴 글", doc.status === "draft" && "초안"].filter(Boolean))
+          dated.append(el("span", label, "photo-read-mark"));
+        foot.append(dated);
         if (doc.status === "saved") {
           serverStatus = el("p", "", "life-help photo-server-status");
           serverStatus.id = "photoServerStatus";
           serverStatus.setAttribute("role", "status");
           serverStatus.setAttribute("aria-live", "polite");
           serverActions = el("div", null, "life-actions photo-server-actions");
-          host.append(serverStatus, serverActions);
+          const state = el("div", null, "photo-read-sync");
+          state.append(serverStatus, serverActions);
+          foot.append(state);
+        }
+        const returnAction = el("div", null, "photo-read-return");
+        returnAction.append(button("내 글로 돌아가기", list));
+        foot.append(returnAction);
+        article.append(foot);
+        host.append(article);
+        if (serverStatus) {
           showServerStatus();
           readServerState();
         }
-        const article = el("article", null, "photo-article"),
-          heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
-        if (!doc.title.trim()) heading.classList.add("life-sr-only");
-        heading.tabIndex = -1;
-        const metadata = el("p", (doc.archived ? "숨긴 글 · " : "") +
-          (doc.status === "draft" ? "초안" : "비공개 원본"), "life-meta photo-read-meta");
-        const modified = new Date(doc.updatedAt);
-        if (Number.isFinite(modified.getTime())) {
-          const time = el("time", new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(modified));
-          time.dateTime = doc.updatedAt;
-          metadata.append(document.createTextNode(" · 수정 "), time);
-        }
-        article.append(heading, metadata);
-        renderRead(article, doc);
-        const returnAction = el("div", null, "photo-read-return");
-        returnAction.append(button("내 글로 돌아가기", list));
-        article.append(returnAction);
-        host.append(article);
       }
       dismissControls = bindDisclosureControls(host);
       showStatus(error);

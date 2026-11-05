@@ -16,7 +16,7 @@
     function dirty(){return evidencePending||!!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
     function message(){
       if(!host?.isConnected||!status||!valid())return;
-      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':synced?'저장됨':'이 브라우저에 저장됨';
+      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':synced?'저장됨':'이 기기에 저장됨';
       status.dataset.state=failure?'error':dirty()?'dirty':'saved';importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}

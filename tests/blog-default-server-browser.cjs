@@ -133,7 +133,7 @@ async function main() {
       assert(saved); assert.equal(saved.photos[0].digest, sha(f.original)); assert(![...f.server.posts.values()].some(row => row.data.status === 'saved'));
       assert.equal(saved.sync?.remoteRevision || 0, f.server.posts.size ? saved.sync.remoteRevision : 0, 'the saved version did not reach the account');
       await capture(f.page, 'offline-local-retained');
-      f.server.offline.delete(f.name); await f.page.getByRole('button', { name: '서버 보관 다시 시도', exact: true }).click();
+      f.server.offline.delete(f.name); await f.page.getByRole('button', { name: '다시 시도', exact: true }).click();
       await f.page.locator('.photo-server-status[data-state="synced"]').waitFor();
       assert.equal((await state(f.page)).docs.find(doc => doc.status === 'saved').id, saved.id);
       assert.equal(f.server.posts.size, 1); assert.equal([...f.server.posts.values()][0].data.status, 'saved');

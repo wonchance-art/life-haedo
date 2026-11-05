@@ -3,7 +3,8 @@
  * upstream file and tests/icons.test.cjs keeps the geometry identical to that file.
  * 2026-11-02 soft redesign (decision 15): one stroke width 1.8, 20px for controls and 16px inside text,
  * one picture per concept: 자료 = book-open, 인용 = text-quote, 글쓰기 = pencil, 편집 = square-pen,
- * 웹 주소 = link, 일정 = calendar, 연표 = chart-gantt, 연간 계획 = chart-spline, AI 글 표시 = sparkle. No icon runtime, font or remote request.
+ * 웹 주소 = link, 일정 = calendar, 연표 = chart-gantt, 연간 계획 = chart-spline, AI 글 표시 = sparkle,
+ * 비공개 = lock, 새 탭에서 열기 = external-link, 사진 = image, 되돌리기 = undo-2, 서식 = type. No icon runtime, font or remote request.
  */
 (function (root) {
   'use strict';
@@ -47,7 +48,17 @@
     workspace: ['layout-grid', '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'],
     // 연표 (2026-11-02 review): period bars on a time axis; 연간 계획 keeps chart-spline ('timeline').
     chronology: ['chart-gantt', '<path d="M10 6h8"/><path d="M12 16h6"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 11h7"/>'],
-    calendar: ['calendar', '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>']
+    calendar: ['calendar', '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>'],
+    // 2026-11-04 D1 글쓰기·읽기: 비공개 알약, 글 정보, 떠 있는 도구 막대, 새 탭에서 열기.
+    lock: ['lock', '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'],
+    forward: ['chevron-right', '<path d="m9 18 6-6-6-6"/>'],
+    external: ['external-link', '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'],
+    keyboard: ['keyboard-off', '<path d="M 20 4 A2 2 0 0 1 22 6"/><path d="M 22 6 L 22 16.41"/><path d="M 7 16 L 16 16"/><path d="M 9.69 4 L 20 4"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="m2 2 20 20"/><path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/><path d="M6 8h.01"/><path d="M8 12h.01"/>'],
+    alert: ['circle-alert', '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>'],
+    image: ['image', '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>'],
+    undo: ['undo-2', '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>'],
+    type: ['type', '<path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/>'],
+    redo: ['redo-2', '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"/>']
   };
   const STROKE = 1.8;
   function create(name, { size = 20 } = {}) {

@@ -78,13 +78,16 @@
     )
       throw fault("사진 글 형식을 확인해 주세요.");
   }
-  function text(v, max) {
+  // `field` names the input in the refusal, so the writer knows which one to fix.
+  function text(v, max, field) {
     if (
       typeof v !== "string" ||
       v.length > max ||
       /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(v)
     )
-      throw fault("입력의 문자와 길이를 확인해 주세요.");
+      throw fault(field && typeof v === "string" && v.length > max
+        ? field + "은 " + max + "자까지 쓸 수 있습니다. 줄여 주세요."
+        : (field ? field + "의 " : "입력의 ") + "문자와 길이를 확인해 주세요.");
   }
   function id(v) {
     if (typeof v !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(v))
@@ -274,7 +277,7 @@
     }
     id(d.id);
     revision(d.revision);
-    text(d.title, 500);
+    text(d.title, 500, "제목");
     date(d.createdAt);
     date(d.updatedAt);
     if (d.updatedAt < d.createdAt)

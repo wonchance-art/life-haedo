@@ -72,8 +72,8 @@ async function main() {
       assert.equal(await page.locator('.blog-post').count(), 6);
       const draftRow = page.locator('.blog-post[data-post-id="draft-photo"]');
       assert.equal(await page.locator('.blog-manager-server').count(), 0, 'no per-device server panel remains');
-      assert.equal(await draftRow.locator('[data-sync-post="draft-photo"]').innerText(), '저장 대기', 'drafts sync to every device too');
-      assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]').innerText(), '저장 대기');
+      assert.equal(await draftRow.locator('[data-sync-post="draft-photo"]').innerText(), '계정에 올리기 대기', 'drafts sync to every device too');
+      assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]').innerText(), '계정에 올리기 대기');
       for (const label of ['이 글 서버에 보관', '서버와 변경 확인', '이 글 서버 연결 중지', '이 브라우저에서 글 찾기', '별도 사본 만들기']) assert.equal(await page.getByText(label, { exact: true }).count(), 0, label);
       assert.equal(await page.getByRole('button', { name: '보관해 둔 여행', exact: true }).count(), 0);
       assert.equal(await page.getByText('가져오기 검토 제외', { exact: true }).count(), 0);
@@ -155,13 +155,13 @@ async function main() {
       await page.evaluate(() => { testData.syncFail = true; });
       await page.getByRole('button', { name: '글 목록 다시 불러오기', exact: true }).click(); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       const status = page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]');
-      assert.match(await status.innerText(), /^오류 · 다시 시도/); assert.equal(await status.getAttribute('data-state'), 'error');
+      assert.match(await status.innerText(), /^계정에 올리지 못함/); assert.equal(await status.getAttribute('data-state'), 'error');
       await status.getByRole('button', { name: '다시 시도', exact: true }).click();
       assert.deepEqual(await page.evaluate(() => [testData.syncRuns, testData.syncOptions]), [1, { force: true }], 'retry skips backoff');
-      assert.match(await status.innerText(), /^오류 · 다시 시도/, 'a failed retry is never shown as saved');
+      assert.match(await status.innerText(), /^계정에 올리지 못함/, 'a failed retry is never shown as saved');
       await page.evaluate(() => { testData.syncFail = false; });
       await status.getByRole('button', { name: '다시 시도', exact: true }).click();
-      await page.waitForFunction(() => document.querySelector('[data-sync-post="saved-photo"]')?.textContent === '모든 기기에 저장됨');
+      await page.waitForFunction(() => document.querySelector('[data-sync-post="saved-photo"]')?.textContent === '계정에 올림');
       page.once('dialog', dialog => dialog.dismiss());
       await page.locator('.blog-post[data-post-id="draft-photo"]').getByRole('button', { name: '삭제', exact: true }).click();
       assert.equal(await page.evaluate(() => testData.docs.has('draft-photo')), true, 'a dismissed confirmation deletes nothing');

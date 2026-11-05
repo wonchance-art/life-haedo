@@ -67,7 +67,7 @@
     "tarball": "https://registry.npmjs.org/lucide-static/-/lucide-static-1.51.0.tgz",
     "integrity": "sha512-ts58ApMc5w5SHHUJBtGO+mgf9lo79FApQ1LttKQoJiMrWNZt8zxWA7R6owK6DoGA3XLjJXc/7rDJh1feonl79g==",
     "published_at": "2026-10-03T06:16:52.859Z",
-    "checked_at": "2026-11-02 Asia/Seoul",
+    "checked_at": "2026-11-04 Asia/Seoul",
     "note": "Copied unchanged from package/icons/ of the official npm tarball; each file keeps its ISC license comment.",
     "files": [
       {
@@ -173,6 +173,42 @@
       {
         "path": "icons/user.svg",
         "sha256": "2874322e33a61fc946a00d13eb88eede65e512037fc75b25e9fd4173f8633a6c"
+      },
+      {
+        "path": "icons/lock.svg",
+        "sha256": "6205f001687c2450d73d6d520775d86a8ef1405ac2c4bfe9dbcc91fed0fd20f8"
+      },
+      {
+        "path": "icons/chevron-right.svg",
+        "sha256": "0d50095f592f567bf22c35649e3aac65ce81e4581bddf09ca666e8f95193740d"
+      },
+      {
+        "path": "icons/external-link.svg",
+        "sha256": "2f45f3feb23901dec2b72671612ab9e2a644c8501ed48478360098e0fecf6d74"
+      },
+      {
+        "path": "icons/keyboard-off.svg",
+        "sha256": "174436995314668d44aad4d2b8ccda68750af3cfc127c1da89432df2b5bebbb5"
+      },
+      {
+        "path": "icons/circle-alert.svg",
+        "sha256": "333f0e833a9a9c943f91cf1a98d8de6abe658860cfb6565a4e7c18abcb6cb8a8"
+      },
+      {
+        "path": "icons/image.svg",
+        "sha256": "5b8250cbf160032112dec1deb793488f7a65b9c972c62961a28d680a0492c104"
+      },
+      {
+        "path": "icons/undo-2.svg",
+        "sha256": "fd22bdb8af43db355507a5378558d346fe616b706e9fa45c67970033ff65818e"
+      },
+      {
+        "path": "icons/redo-2.svg",
+        "sha256": "477c5bc483cc19aba08fab02a631da627c54b7650261933f11b64755f413c10b"
+      },
+      {
+        "path": "icons/type.svg",
+        "sha256": "4c6bb8c99f9eab5db6c3682ebd34d83ec201a2334cbcff3ed74c9276c231f751"
       }
     ]
   }
