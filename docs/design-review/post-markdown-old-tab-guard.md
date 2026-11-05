@@ -53,5 +53,6 @@
 ## 남은 통합 조건
 
 - 실제 iPad/iPhone PWA의 백그라운드 중단·한글 입력기는 별도 확인이 필요하다. 네이티브 blocker 검사를 실기기 검증으로 표시하지 않는다.
-- B의 Tiptap 편집기에서 AI 제안 등록·부분 수락·실행 취소·Markdown 저장/재열기·사진·늦은 응답 검사는 B의 시험 가능한 head 위에서 실행한다. 기존 Quill 검사 통과를 새 편집기 통과로 대체하지 않는다.
+- [총괄 마무리 지시](https://github.com/wonchance-art/life-haedo/pull/212#issuecomment-6659238530)에 따라 B2용 AI 회귀는 후속으로 인계하며 이번에 실행하지 않는다. 로컬 초안은 `.local/post-markdown-ai-pending/post-markdown-ai-browser.cjs`에 보존했고 PR에는 포함하지 않았다. 구문 확인만 했으며 브라우저 통과 근거가 아니다.
+- 후속 검사는 실제 B 편집기에서 `PostMarkdownEditor.find(element)`로 찾은 bridge의 `getContents/getSelection/updateContents/history`와 `PhotoPost.contentOps(doc)`를 사용한다. `[id, 요소]` 도구 등록·dispose, 실제 선택 → 전송 미리보기 → 부분 수락·AI 작성 표시 → 한 단계 undo/redo → md-v1 저장·재열기, 원본 사진 바이트, 한글 조합·선택/본문 변경·화면/계정 전환의 늦은 응답을 확인한다. Quill 전제나 가짜 편집기로 대체하지 않는다. 실제 연결 head에서 DOM·선택 접점을 맞추는 작업도 남아 있다.
 - B2 본체의 병합은 총괄이 정한 B3 운영 반영 관문을 따른다. 이 저장소 장벽은 Markdown 활성화 전에 먼저 병합할 수 있다.
