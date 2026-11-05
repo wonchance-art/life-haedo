@@ -131,8 +131,13 @@ async function main(){
       // A slow account server keeps any second sync start visible: the verified
       // account must already be present when the screen is ready.
       const slowAccount=u=>u.href.startsWith(cloud)&&u.pathname.endsWith('/auth/v1/user');
-      await page.route(slowAccount,async r=>{await new Promise(x=>setTimeout(x,900));return r.fallback();});
-      try{await login(page,'platform',accounts.a);}finally{await page.unroute(slowAccount);}
+      // Stay registered and only stop delaying: unrouting while a delayed
+      // account read is still in flight lets Playwright continue that request
+      // itself, so the later fallback reaches the fake cloud twice
+      // ("Route is already handled").
+      let slow=true;
+      await page.route(slowAccount,async r=>{if(slow)await new Promise(x=>setTimeout(x,900));return r.fallback();});
+      try{await login(page,'platform',accounts.a);}finally{slow=false;}
       const b=await stored(page);accountAId=b.workspaceId;
       assert.equal(b.sources.length,0);assert.notEqual(accountAId,unownedId);
       const spaces=await page.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());assert.ok(!spaces.some(w=>w.workspaceId===unownedId));
@@ -306,7 +311,7 @@ async function main(){
       else {await p.waitForURL('**/login.html?next=*');await login(p,'upgrade',accounts.a);}
       const visible=await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
-      const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
+      const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1');try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,{bundle:fixture.bundle,stage:fixture.stage});
       if(fixture.nine)assert.deepEqual(await p.evaluate(id=>HaedoLife.Shell.storage.readNineBoard(id),fixture.bundle.workspaceId),fixture.nine,'Existing nine board data must survive the shell upgrade exactly.');
       assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
