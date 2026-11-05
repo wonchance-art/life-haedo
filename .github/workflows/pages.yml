@@ -542,6 +542,9 @@ jobs:
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
+      - name: Verify private news body reading, late-response discard and exact material saving
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-personal-discovery-browser.cjs
       - name: Verify social news feed hierarchy, neutral reaction history and contextual actions
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/news-social-browser.cjs
