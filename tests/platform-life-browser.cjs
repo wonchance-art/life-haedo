@@ -128,7 +128,11 @@ async function main(){
       }
     });
     await check('Google-button PKCE HTTP fixture opens verified A scope without automatic upload',async()=>{
-      await login(page,'platform',accounts.a);
+      // A slow account server keeps any second sync start visible: the verified
+      // account must already be present when the screen is ready.
+      const slowAccount=u=>u.href.startsWith(cloud)&&u.pathname.endsWith('/auth/v1/user');
+      await page.route(slowAccount,async r=>{await new Promise(x=>setTimeout(x,900));return r.fallback();});
+      try{await login(page,'platform',accounts.a);}finally{await page.unroute(slowAccount);}
       const b=await stored(page);accountAId=b.workspaceId;
       assert.equal(b.sources.length,0);assert.notEqual(accountAId,unownedId);
       const spaces=await page.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());assert.ok(!spaces.some(w=>w.workspaceId===unownedId));
