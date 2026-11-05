@@ -1,0 +1,1780 @@
+diff --git a/assets/life/photo-post-ui.js b/assets/life/photo-post-ui.js
+index 2a5f327..d3e599b 100644
+--- a/assets/life/photo-post-ui.js
++++ b/assets/life/photo-post-ui.js
+@@ -8,100 +8,12 @@
+     if (cls) n.className = cls;
+     return n;
+   };
+-  const Embed = root.Quill.import("blots/block/embed");
++  // Delta is only the boundary representation for existing AI and photo tools.
++  // Editing itself uses the maintained Tiptap/Markdown adapter.
+   const Delta = root.Quill.import("delta");
+-  // Retain patches let captions participate in Quill history without replacing
+-  // the figure or the focused input. The persisted document still uses inserts.
+-  Delta.registerEmbed("photo", {
+-    compose: (base, change) => ({ ...base, ...change }),
+-    invert: (change, base) =>
+-      Object.fromEntries(Object.keys(change).map((key) => [key, base[key]])),
+-    transform: (a, b, priority) =>
+-      priority
+-        ? Object.fromEntries(
+-            Object.entries(b).filter(([key]) => !Object.hasOwn(a, key)),
+-          )
+-        : b,
+-  });
+   const photoSources = new Map();
+-  class Photo extends Embed {
+-    static blotName = "photo";
+-    static tagName = "figure";
+-    static className = "photo-block";
+-    static create(v) {
+-      const n = super.create();
+-      n.dataset.photoId = v.id;
+-      n.dataset.alt = v.alt || "";
+-      n.dataset.caption = v.caption || "";
+-      n.setAttribute("contenteditable", "false");
+-      n.setAttribute("role", "group");
+-      n.setAttribute(
+-        "aria-label",
+-        (v.caption || v.alt || "사진") + " · 사진 설명·순서 편집",
+-      );
+-      n.tabIndex = -1;
+-      const img = el("img");
+-      img.alt = v.alt || v.caption || "첨부 사진";
+-      const src = v.src || photoSources.get(v.id);
+-      if (src) img.src = src;
+-      const select = el("button", null, "photo-select");
+-      select.type = "button";
+-      select.setAttribute("aria-label", "사진 설명·순서 편집");
+-      select.append(img);
+-      const caption = el("figcaption"),
+-        add = el("button", v.caption || "사진 설명 추가", "photo-caption-text");
+-      add.type = "button";
+-      add.setAttribute("aria-label", "사진 설명 편집");
+-      caption.append(add);
+-      n.append(select, caption);
+-      return n;
+-    }
+-    updateContent(change) {
+-      const n = this.domNode,
+-        value = { ...Photo.value(n), ...change };
+-      n.dataset.caption = value.caption;
+-      n.dataset.alt = value.alt;
+-      n.querySelector("img").alt = value.alt || value.caption || "첨부 사진";
+-      n.setAttribute(
+-        "aria-label",
+-        (value.caption || value.alt || "사진") + " · 사진 설명·순서 편집",
+-      );
+-      n.querySelector(".photo-caption-text").textContent =
+-        value.caption || "사진 설명 추가";
+-      for (const [name, text] of [
+-        ["사진 설명", value.caption],
+-        ["사진 대체 텍스트", value.alt],
+-      ]) {
+-        const input = n.querySelector('[aria-label="' + name + '"]');
+-        if (input && input.value !== text) input.value = text;
+-      }
+-    }
+-    static value(n) {
+-      return {
+-        id: n.dataset.photoId,
+-        alt: n.dataset.alt || "",
+-        caption: n.dataset.caption || "",
+-      };
+-    }
+-  }
+-  root.Quill.register(Photo, true);
+-  // Private authorship mark: text the owner brought from an AI tool. Stored as
+-  // the Delta attribute `author: "ai"` on text only; public copies drop it.
+-  const Inline = root.Quill.import("blots/inline");
+-  class Author extends Inline {
+-    static blotName = "author";
+-    static tagName = "span";
+-    static className = "photo-ai-text";
+-    static create() {
+-      const n = super.create();
+-      n.dataset.author = "ai";
+-      return n;
+-    }
+-    static formats(n) {
+-      return n.dataset?.author === "ai" ? "ai" : undefined;
+-    }
+-  }
+-  root.Quill.register(Author, true);
++  const Photo = { value: node => ({ id: node.dataset.photoId,
++    caption: node.dataset.caption || "", alt: node.dataset.alt || "" }) };
+   // Fits the one-line status at 320px (108px); the full sentence is announced.
+   const AI_PENDING = "AI 붙여넣기 대기";
+   const AI_PENDING_DETAIL = " · 다음 붙여넣기 한 번을 AI 글로 표시합니다. AI 글 표시 버튼을 다시 누르면 취소합니다.";
+@@ -191,6 +103,8 @@
+       authorButton = null;
+     let status, statusText, statusDetail, inspector, captionInput, altInput, recoveryActions;
+     let dismissControls = null;
++    let conversionNotice = "";
++    const transitionIds = new Map();
+     // D1: the privacy pill opens 글 정보 (visibility, date, save state).
+     let pill = null, info = null, refreshInfo = null, releaseViewport = null;
+     let serverStatus = null, serverActions = null, serverValue = null, serverBusy = false, serverSequence = 0;
+@@ -263,6 +177,7 @@
+       aiPending = false;
+       authorNote = "";
+       authorButton = null;
++      editor?.dispose();
+       editor = null;
+       selected = null;
+       recoveryActions = null;
+@@ -627,7 +542,7 @@
+     // after it ends (Quill emits it from compositionend), never while open.
+     // Undo/redo replays (history.ignoreChange) and the marked paste below keep
+     // their recorded authorship.
+-    const imeActive = () => composing || !!editor?.composition?.isComposing;
++    const imeActive = () => composing || !!editor?.isComposing();
+     function trackAuthorship(delta, source) {
+       if (humanRanges.length)
+         humanRanges = humanRanges
+@@ -782,6 +697,7 @@
+       return entry.promise;
+     }
+     async function flush() {
++      if (mode === "edit" && editor) await editor.flush();
+       attachmentUI?.flush();
+       if (mode === "edit" && selected?.isConnected) changePhoto();
+       // Only reading: leaving is allowed. detach() advances the epoch, so the
+@@ -837,6 +753,57 @@
+       committed = false;
+       render();
+     }
++    const legacyPost = value => value && value.format !== "life-post-md-v1";
++    async function transitionId(source, token) {
++      const binding = storage.readBlogSyncState ? await storage.readBlogSyncState(workspaceId, source.id) : null;
++      if (!current(token)) return null;
++      const photos = new Map(source.photos.map(photo => [photo.id, photo]));
++      const body = M.contentOps(source).map(op => typeof op.insert === "string" ? op : {
++        ...op, insert: { photo: { ...op.insert.photo, id: photos.get(op.insert.photo.id)?.digest } } });
++      const content = { identity: binding?.remoteId || source.id, title: source.title, body,
++        createdAt: source.createdAt, updatedAt: source.updatedAt, attachments: source.attachments || [],
++        photos: source.photos.map(photo => { const value = M.metadata(photo); delete value.id; return value; }) };
++      const digest = await M.digest(new Blob([JSON.stringify(content)]));
++      if (!current(token)) return null;
++      const key = source.id + ":" + source.revision;
++      if (!transitionIds.has(key)) {
++        // A deterministic ID lets the ordinary BlogSync identity/receipt path
++        // converge when two devices preserve the same original independently.
++        const value = digest.slice(0, 12) + "5" + digest.slice(13, 16) + "8" + digest.slice(17, 32);
++        transitionIds.set(key, [value.slice(0, 8), value.slice(8, 12), value.slice(12, 16), value.slice(16, 20), value.slice(20)].join("-"));
++      }
++      return transitionIds.get(key);
++    }
++    async function prepareEditorDocument(value, token) {
++      conversionNotice = "";
++      if (!legacyPost(value)) return value;
++      let prepared;
++      try { prepared = M.prepareMarkdownEdit(value); }
++      catch (problem) {
++        if (problem.code !== "post_markdown_conversion_boundary") throw problem;
++        prepared = M.prepareMarkdownEdit(value, { allowParagraphBreaks: true });
++      }
++      const warnings = prepared.warnings, notes = [];
++      if (warnings.paragraphBreaks) notes.push("사진 앞뒤에 문단 나눔이 생깁니다.");
++      if (warnings.dropped.underline || warnings.dropped.align) notes.push("밑줄과 정렬은 제외하고 글자를 유지합니다.");
++      if (warnings.nbspParagraphs) notes.push("공백 한 글자로 된 문단은 빈 문단으로 보관합니다.");
++      if (value.revision > 0) {
++        // An existing legacy draft needs its own explicit, atomic checkpoint.
++        // Autosave only ever receives an already-converted document.
++        const message = [...notes, "이 초안을 새 편집기로 변환해 보관할까요? 원래 판과 인용 근거는 복구 사본으로 남깁니다."].join(" ");
++        if (!root.confirm(message)) throw Object.assign(new Error("변환하지 않았습니다. 원래 초안은 그대로 있습니다."), { code: "post_conversion_cancelled" });
++        const recoveryId = await transitionId(value, token);
++        if (!current(token)) return null;
++        const result = await storage.savePostTransition(workspaceId, prepared.document, value.revision,
++          { sourceId: value.id, sourceRevision: value.revision, recoveryId });
++        if (!current(token)) return null;
++        return result.post;
++      }
++      if (warnings.paragraphBreaks && !root.confirm(notes.join(" ") + " 원래 판은 글 저장 때 복구 사본으로 남깁니다. 이 방식으로 고칠까요?"))
++        throw Object.assign(new Error("변환하지 않았습니다. 원래 글은 그대로 있습니다."), { code: "post_conversion_cancelled" });
++      conversionNotice = [...notes, "글 저장을 누르면 원래 판과 인용 근거를 복구 사본으로 함께 보관합니다."].join(" ");
++      return prepared.document;
++    }
+     async function begin() {
+       try {
+         const token = epoch;
+@@ -874,7 +841,9 @@
+               empty.attachments?.length)
+           )
+             empty = null;
+-          doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
++          const candidate = empty ? await prepareEditorDocument(empty, token) : M.createMarkdownDraft(life.Core.id);
++          if (!current(token)) return;
++          doc = candidate;
+         } finally {
+           loading = false; setBusy(false);
+         }
+@@ -943,7 +912,11 @@
+           !next.archived && (editing || next.status === "draft")
+             ? "edit"
+             : "read";
+-        if (mode === "edit") doc = M.upgrade(doc);
++        if (mode === "edit") {
++          const prepared = await prepareEditorDocument(doc, token);
++          if (!current(token)) return;
++          doc = prepared;
++        }
+         error = null;
+         committed = false;
+         render();
+@@ -972,11 +945,16 @@
+       M.validate(payload);
+       setBusy(true);
+       try {
+-        const saved = await storage.savePhotoPost(
+-          workspaceId,
+-          payload,
+-          doc.revision,
+-        );
++        let saved;
++        const source = payload.replaces ? await storage.readPhotoPost(workspaceId, payload.replaces.id) : null;
++        if (!current(token)) return;
++        if (legacyPost(source)) {
++          if (source.revision !== payload.replaces.revision) throw Object.assign(new Error("원래 글이 바뀌었습니다. 현재 입력은 유지합니다."), { code: "photo_post_conflict" });
++          const recoveryId = await transitionId(source, token);
++          if (!current(token)) return;
++          saved = (await storage.savePostTransition(workspaceId, payload, doc.revision,
++            { sourceId: source.id, sourceRevision: source.revision, recoveryId })).post;
++        } else saved = await storage.savePhotoPost(workspaceId, payload, doc.revision);
+         if (!current(token)) return;
+         doc = saved;
+         dirtyTick = storedTick = 0;
+@@ -1224,7 +1202,7 @@
+       closeViewer?.();
+       const documentId = doc.id,
+         photos = new Map(doc.photos.map((photo) => [photo.id, photo]));
+-      const items = doc.ops
++      const items = M.contentOps(doc)
+         .filter((op) => op.insert?.photo)
+         .map((op) => ({
+           ...op.insert.photo,
+@@ -1548,24 +1526,19 @@
+         const next = structuredClone(doc);
+         next.photos.push(...incoming);
+         let at = position;
+-        const Delta = root.Quill.import("delta"),
+-          delta = new Delta().retain(at).insert("\n");
++        const delta = new Delta().retain(at).insert("\n");
+         incoming.forEach((p) =>
+           delta
+             .insert({ photo: { id: p.id, caption: "", alt: "" } })
+             .insert("\n"),
+         );
+-        next.ops = new Delta(doc.ops).compose(delta).ops;
+-        M.validate(next);
++        M.replaceBody(next, editor.getContents().compose(delta).ops);
+         doc.photos.push(...incoming);
++        for (const photo of incoming) imageValue(photo);
+         editor.enable(true);
+         editor.history.cutoff();
+-        editor.insertText(at++, "\n", "user");
+-        for (const p of incoming) {
+-          editor.insertEmbed(at++, "photo", imageValue(p), "user");
+-          editor.insertText(at++, "\n", "user");
+-        }
+-        editor.setSelection(at, 0, "silent");
++        editor.updateContents(delta, "user");
++        editor.setSelection(Math.min(position + incoming.length * 2 + 1, editor.getLength()), 0, "silent");
+         editor.history.cutoff();
+       } finally {
+         setBusy(false);
+@@ -1593,30 +1566,18 @@
+       if (!selected?.isConnected) return;
+       const value = Photo.value(selected),
+         p = doc.photos.find((p) => p.id === value.id);
+-      const next = {
+-        ...value,
+-        caption: captionInput.value,
+-        alt: altInput.value,
+-      };
++      const next = { ...value, caption: captionInput.value, alt: altInput.value };
+       if (next.caption === value.caption && next.alt === value.alt) return;
+-      M.validate({
+-        ...doc,
+-        ops: doc.ops.map((op) =>
+-          op.insert?.photo?.id === p.id
+-            ? { ...op, insert: { photo: next } }
+-            : op,
+-        ),
+-      });
+-      const blot = root.Quill.find(selected),
+-        patch = { caption: next.caption, alt: next.alt };
+-      blot.updateContent(patch);
+-      blot.scroll.emitEmbedUpdate(blot, patch);
++      M.replaceBody(doc, M.contentOps(doc).map(op => op.insert?.photo?.id === p.id
++        ? { ...op, insert: { photo: next } } : op));
++      editor.updatePhoto(p.id, { caption: next.caption, alt: next.alt });
+     }
++
+     function closePhoto(focus = true) {
+       if (!selected) return;
+       guard();
+       changePhoto();
+-      const at = editor.getIndex(root.Quill.find(selected));
++      const at = editor.getPhotoIndex(selected);
+       editor.history.cutoff();
+       inspector.hidden = true;
+       host.append(inspector);
+@@ -1632,22 +1593,10 @@
+     function movePhoto(direction) {
+       guard();
+       if (!selected?.isConnected) return;
+-      const blot = root.Quill.find(selected),
+-        at = editor.getIndex(blot),
+-        lines = editor.getLines(),
+-        i = lines.indexOf(blot),
+-        peer = lines[i + direction];
+-      if (!peer) return;
+-      let destination = editor.getIndex(peer);
+-      if (direction > 0) destination += peer.length() - 1;
+-      const value = Photo.value(selected),
+-        p = doc.photos.find((p) => p.id === value.id);
++      const value = Photo.value(selected), p = doc.photos.find(photo => photo.id === value.id);
+       inspector.hidden = true;
+       host.append(inspector);
+-      editor.history.cutoff();
+-      editor.deleteText(at, 1, "user");
+-      editor.insertEmbed(destination, "photo", imageValue(p, value), "user");
+-      editor.history.cutoff();
++      editor.movePhoto(p.id, direction);
+       selected = host.querySelector('[data-photo-id="' + p.id + '"]');
+       if (selected) selectPhoto(selected);
+       selected?.scrollIntoView({ block: "nearest" });
+@@ -1798,11 +1747,9 @@
+       for (const [key, name, value] of [
+         ["bold", "굵게"],
+         ["italic", "기울임"],
+-        ["underline", "밑줄"],
+         ["blockquote", "인용"],
+         ["list", "글머리 목록", "bullet"],
+         ["list", "번호 목록", "ordered"],
+-        ["align", "가운데 정렬", "center"],
+         ["link", "링크"],
+       ]) {
+         const b = el("button");
+@@ -1811,6 +1758,10 @@
+         if (value) b.value = value;
+         b.setAttribute("aria-label", name);
+         b.title = name;
++        const labels = { bold: "B", italic: "I", blockquote: "❞", list: value === "ordered" ? "1." : "•", link: "↗" };
++        b.textContent = labels[key];
++        if (key === "bold") b.style.fontWeight = "700";
++        if (key === "italic") b.style.fontStyle = "italic";
+         (key === "bold" || key === "link" ? primaryFormats : formatPanel).append(b);
+       }
+       // One control: a selection is marked or unmarked as AI text; without a
+@@ -1861,7 +1812,7 @@
+         settleAuthorship();
+         const range = editor.getSelection() || editor.selection?.savedRange;
+         if (!range?.length) throw new Error(life.WritingAI.MESSAGES.ai_selection_required);
+-        if (range.index + range.length >= editor.getLength())
++        if (range.index + range.length >= editor.getLength() && typeof editor.getContents().ops.at(-1)?.insert === "string" && editor.getContents().ops.at(-1).insert.endsWith("\n"))
+           throw new Error("마지막 빈 줄을 제외하고 AI에 보낼 글을 선택해 주세요.");
+         const selectionOps = editor.getContents(range.index, range.length).ops;
+         if (selectionOps.some(op => typeof op.insert !== "string"))
+@@ -1885,7 +1836,7 @@
+               ranges: result.ranges, accepted, composing: imeActive() });
+             // Validate before changing the editor; preserve the normal autosave,
+             // authorship and one-step undo paths after accepting a suggestion.
+-            M.validate({ ...doc, ops: next.ops });
++            M.replaceBody(doc, next.ops);
+             editor.history.cutoff();
+             aiInserting = true;
+             try { editor.updateContents(before.diff(new Delta(next.ops)), "user"); }
+@@ -1927,11 +1878,13 @@
+         toolbar.append(node);
+       }
+       toolbar.append(photoInput);
+-      const area = el("div", null, "photo-quill");
++      const area = el("div", null, "photo-body-editor");
+       // The tools float at the bottom of the screen (above the keyboard on
+       // phones) instead of a row between the title and the text.
+       toolbar.classList.add("photo-toolbar-floating");
+-      form.append(sticky, title, area, toolbar);
++      form.append(sticky);
++      if (conversionNotice) form.append(el("p", conversionNotice, "photo-conversion-note life-help"));
++      form.append(title, area, toolbar);
+       host.append(form);
+       const releaseKeyboard = keyboardOffset(form);
+       let titleWidth = 0;
+@@ -1945,51 +1898,26 @@
+         releaseKeyboard?.();
+         titleSize.disconnect();
+       };
+-      editor = new root.Quill(area, {
+-        theme: "snow",
+-        placeholder: "어떤 이야기를 남길까요?",
+-        formats: [
+-          "bold",
+-          "italic",
+-          "underline",
+-          "header",
+-          "blockquote",
+-          "list",
+-          "align",
+-          "link",
+-          "author",
+-          "photo",
+-        ],
+-        modules: { toolbar, history: { userOnly: true, delay: 700 } },
+-      });
+-      for (const n of toolbar.querySelectorAll(".ql-picker-label")) {
+-        n.setAttribute("aria-label", "문단 종류");
+-        n.setAttribute("title", "문단 종류");
+-      }
+-      for (const n of toolbar.querySelectorAll(".ql-picker-item")) {
+-        n.setAttribute(
+-          "aria-label",
+-          { 1: "큰 제목", 2: "작은 제목" }[n.dataset.value] || "본문",
+-        );
+-      }
+-      const photos = new Map(doc.photos.map((p) => [p.id, p]));
+-      editor.setContents(
+-        doc.ops.map((op) =>
+-          typeof op.insert === "string"
+-            ? op
+-            : {
+-                ...op,
+-                insert: {
+-                  photo: imageValue(
+-                    photos.get(op.insert.photo.id),
+-                    op.insert.photo,
+-                  ),
+-                },
+-              },
+-        ),
+-        "silent",
+-      );
++      for (const photo of doc.photos) imageValue(photo);
++      editor = life.PostMarkdownEditor.createBridge({ element: area, markdown: doc.markdown,
++        resolvePhoto: id => photoSources.get(id), onError: problem => showStatus(problem) });
+       editor.history.clear();
++      for (const control of toolbar.querySelectorAll("button[class*='ql-']")) {
++        const format = [...control.classList].find(name => name.startsWith("ql-")).slice(3);
++        control.addEventListener("pointerdown", event => event.preventDefault());
++        control.addEventListener("click", () => run(() => {
++          guard();
++          if (format === "link") {
++            const value = root.prompt("연결할 주소", editor.getFormat().link || "https://");
++            if (value === null) return;
++            editor.format("link", value.trim() || false, "user");
++          } else {
++            const wanted = control.value || true;
++            editor.format(format, editor.getFormat()[format] === wanted ? false : wanted, "user");
++          }
++        }));
++      }
++      heading.addEventListener("change", () => run(() => editor.format("header", heading.value ? Number(heading.value) : false, "user")));
+       editor.root.setAttribute("aria-label", "글 본문");
+       editor.root.setAttribute("role", "textbox");
+       editor.root.setAttribute("aria-multiline", "true");
+@@ -1997,7 +1925,9 @@
+       editor.on("text-change", (delta, _old, source) => {
+         if (!acceptsInput()) return;
+         trackAuthorship(delta, source);
+-        doc.ops = editor.getContents().ops;
++        const next = M.replaceBody(doc, editor.getContents().ops);
++        doc.markdown = next.markdown;
++        delete doc.ops;
+         mark();
+       });
+       editor.on("editor-change", () => {
+@@ -2171,7 +2101,7 @@
+             host.append(inspector);
+             editor.history.cutoff();
+             editor.deleteText(
+-              editor.getIndex(root.Quill.find(selected)),
++              editor.getPhotoIndex(selected),
+               1,
+               "user",
+             );
+@@ -2606,7 +2536,7 @@
+         try {
+           await open(postId, false, expectedRevision);
+           if (host?.isConnected && valid()) {
+-            const h = host.querySelector(".photo-read-heading,.ql-editor");
++            const h = host.querySelector(".photo-read-heading,.post-markdown-editor");
+             h?.focus({ preventScroll: true });
+             h?.scrollIntoView({ block: "nearest" });
+           }
+diff --git a/assets/life/photo-post.css b/assets/life/photo-post.css
+index 843a89b..1241ac7 100644
+--- a/assets/life/photo-post.css
++++ b/assets/life/photo-post.css
+@@ -381,8 +381,8 @@
+ /* Text fields show focus with the caret; a ring hugging typed text reads as
+    an error frame while writing. Buttons and menus keep their focus rings. */
+ #photoTitle:focus-visible { outline: none; box-shadow: inset 0 -1px 0 var(--haedo-focus, var(--color-primary, #145b50)); }
+-.photo-posts .ql-editor:focus,
+-.photo-posts .ql-editor:focus-visible { outline: none; }
++.photo-posts :is(.ql-editor, .post-markdown-editor):focus,
++.photo-posts :is(.ql-editor, .post-markdown-editor):focus-visible { outline: none; }
+ .photo-posts .photo-toolbar {
+   display: flex;
+   align-items: center;
+@@ -398,7 +398,7 @@
+ }
+ .photo-format-primary, .photo-history { display: inline-flex; align-items: center; flex: none; }
+ .photo-history { margin-left: auto; }
+-/* D1: the Quill tools float as one rounded bar at the bottom of the screen,
++/* D1: the editor tools float as one rounded bar at the bottom of the screen,
+    above an on-screen keyboard (--photo-keyboard from visualViewport). */
+ .photo-posts .photo-toolbar.photo-toolbar-floating {
+   position: sticky;
+@@ -416,8 +416,8 @@
+ }
+ .photo-toolbar-floating .photo-history { margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--line, #e3e9e6); }
+ .photo-toolbar-floating .ql-formats { margin: 0; }
+-.photo-posts .ql-toolbar button,
+-.photo-posts .ql-toolbar .photo-format-options > summary { border-radius: 999px; }
++.photo-posts .photo-toolbar button,
++.photo-posts .photo-toolbar .photo-format-options > summary { border-radius: 999px; }
+ .photo-toolbar-floating .photo-format-panel { top: auto; bottom: calc(100% + 8px); }
+ .photo-keyboard-close { display: none !important; }
+ @media (pointer: coarse) { .photo-keyboard-close { display: inline-flex !important; } }
+@@ -429,24 +429,26 @@
+ .photo-format-options[open] > summary, .photo-format-options > summary:hover { background: var(--soft, #f7f7f8); color: var(--ink, #18181b); }
+ .photo-format-panel { position: absolute; display: flex; flex-wrap: wrap; align-items: center; top: calc(100% + 8px); left: 0; width: 286px; max-width: calc(100vw - 40px); max-height: min(280px, calc(100svh - 240px - env(safe-area-inset-top, 0px))); overflow-y: auto; overscroll-behavior-y: contain; padding: 8px; border: 1px solid var(--line, #ececee); border-radius: 14px; background: var(--paper, #fff); z-index: 7; scrollbar-width: thin; scrollbar-color: var(--field-line, #c9c9cf) transparent; }
+ .photo-format-panel .ql-expanded .ql-picker-options { position: relative; }
+-.photo-posts .ql-toolbar button {
++.photo-posts .photo-toolbar button {
+   width: auto;
+   min-width: 44px;
+   min-height: 44px;
+   height: auto;
+   padding: 12px;
+   color: var(--ink);
++  border: 0;
++  background: transparent;
+   border-radius: 10px;
+   float: none;
+ }
+-.photo-posts .ql-toolbar button:hover { background: var(--soft, #f7f7f8); }
+-.photo-posts .ql-toolbar .photo-insert-photo { display: inline-flex; align-items: center; gap: 6px; border: 0; padding-inline: 8px; color: var(--ink, #18181b); }
+-.photo-posts .ql-toolbar .photo-icon-button { width: 44px; height: 44px; padding: 12px; }
+-.photo-posts .ql-toolbar button svg {
++.photo-posts .photo-toolbar button:hover { background: var(--soft, #f7f7f8); }
++.photo-posts .photo-toolbar .photo-insert-photo { display: inline-flex; align-items: center; gap: 6px; border: 0; padding-inline: 8px; color: var(--ink, #18181b); }
++.photo-posts .photo-toolbar .photo-icon-button { width: 44px; height: 44px; padding: 12px; }
++.photo-posts .photo-toolbar button svg {
+   width: 20px;
+   height: 20px;
+ }
+-.photo-posts .ql-toolbar .life-button {
++.photo-posts .photo-toolbar .life-button {
+   font: inherit;
+   font-size: 14px;
+   padding: 8px 12px;
+@@ -473,13 +475,13 @@
+   border-color: var(--line, #ececee);
+   box-shadow: none;
+ }
+-.photo-posts .ql-container {
++.photo-posts :is(.ql-container, .photo-body-editor) {
+   font: inherit;
+   border: 0;
+   color: var(--ink);
+   height: auto;
+ }
+-.photo-posts .ql-editor {
++.photo-posts :is(.ql-editor, .post-markdown-editor) {
+   min-height: max(320px, calc(100svh - 236px));
+   height: auto;
+   overflow-y: visible;
+@@ -489,23 +491,47 @@
+   overflow-wrap: anywhere;
+   scroll-margin-block: 96px 96px;
+ }
++/* Tiptap uses native lists and the same D1 writing surface. It does not
++   inherit Quill's generated list markers, picker markup or editor resets. */
++.photo-posts .post-markdown-editor { position: relative; white-space: pre-wrap; tab-size: 4; }
++.photo-posts .post-markdown-editor :is(ul, ol) { margin-block: 0 18px; padding-inline-start: 1.5em; }
++.photo-posts .post-markdown-editor ul { list-style: disc; }
++.photo-posts .post-markdown-editor ol { list-style: decimal; }
++.photo-posts .post-markdown-editor li > p { margin: 0; }
++.photo-posts .post-markdown-editor > p:only-child:has(> br.ProseMirror-trailingBreak:only-child)::before {
++  content: "어떤 이야기를 남길까요?";
++  color: var(--ink-soft, #5d6b65);
++  pointer-events: none;
++  position: absolute;
++}
++.photo-posts .photo-toolbar select {
++  min-height: 44px;
++  max-width: 100%;
++  padding: 8px 12px;
++  border: 1px solid var(--line, #e3e9e6);
++  border-radius: 10px;
++  color: var(--ink);
++  background: var(--paper, #fff);
++  font: inherit;
++  font-size: 16px;
++}
+ /* Keep the caret above the floating tools when the browser scrolls it into view. */
+ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
+-.photo-posts .ql-editor.ql-blank::before {
++.photo-posts :is(.ql-editor, .post-markdown-editor).ql-blank::before {
+   color: var(--ink-soft);
+   left: 0;
+   right: 0;
+   font-style: normal;
+ }
+-.photo-posts .ql-editor p,
+-.photo-posts .ql-editor blockquote {
++.photo-posts :is(.ql-editor, .post-markdown-editor) p,
++.photo-posts :is(.ql-editor, .post-markdown-editor) blockquote {
+   margin-block: 0 18px;
+ }
+-.photo-posts .ql-editor blockquote { border-left: 1px solid var(--line, #ececee); padding-left: 20px; }
+-.photo-posts .ql-editor h1 {
++.photo-posts :is(.ql-editor, .post-markdown-editor) blockquote { border-left: 1px solid var(--line, #ececee); padding-left: 20px; }
++.photo-posts :is(.ql-editor, .post-markdown-editor) h1 {
+   font-size: 1.7em;
+ }
+-.photo-posts .ql-editor h2 {
++.photo-posts :is(.ql-editor, .post-markdown-editor) h2 {
+   font-size: 1.35em;
+ }
+ .photo-posts .ql-snow .ql-stroke {
+@@ -518,13 +544,13 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
+   stroke: #3156d3;
+ }
+ .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
+-.photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
+-.photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
++.photo-posts .photo-toolbar button.ql-active { background: #edf1ff; }
++.photo-posts :is(.ql-editor, .post-markdown-editor) a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
+ /* Private AI authorship mark in the editor (D1, 2026-11-04): the same mark as the
+    owner's reading views' .blog-ai-text (blog-public.css). The dots are a background
+    along the bottom edge, so an underline or a link drawn as text decoration never
+    covers them; the soft fill only groups the run. HTML files and public copies carry no mark. */
+-.photo-posts .ql-editor .photo-ai-text {
++.photo-posts :is(.ql-editor, .post-markdown-editor) :is(.photo-ai-text, [data-author="ai"]) {
+   background-color: var(--paper-2, #f4f7f5);
+   background-image: radial-gradient(circle, var(--ink-soft, #5d6b65) 1px, transparent 1.3px);
+   background-size: 5px 3px;
+@@ -534,7 +560,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
+   box-decoration-break: clone;
+   -webkit-box-decoration-break: clone;
+ }
+-.photo-posts .ql-toolbar .photo-author-toggle[aria-pressed="true"] { background: #edf1ff; color: #3156d3; }
++.photo-posts .photo-toolbar .photo-author-toggle[aria-pressed="true"] { background: #edf1ff; color: #3156d3; }
+ .photo-block,
+ .photo-read-image {
+   margin: 28px 0;
+@@ -749,21 +775,21 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
+   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
+   .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
+   /* Keep the caret and the block being typed between the sticky bar and the floating tools. */
+-  .photo-posts .ql-editor,
+-  .photo-posts .ql-editor > * { scroll-margin-block: 72px 88px; }
++  .photo-posts :is(.ql-editor, .post-markdown-editor),
++  .photo-posts :is(.ql-editor, .post-markdown-editor) > * { scroll-margin-block: 72px 88px; }
+   html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: 72px; }
+ }
+ @media (max-width: 600px) {
+   .photo-entry > strong { font-size: 19px; }
+-  .photo-posts .ql-editor,
++  .photo-posts :is(.ql-editor, .post-markdown-editor),
+   .photo-article {
+     font-size: 17px;
+   }
+-  .photo-posts .ql-editor { padding-bottom: max(64px, env(safe-area-inset-bottom, 0px)); }
++  .photo-posts :is(.ql-editor, .post-markdown-editor) { padding-bottom: max(64px, env(safe-area-inset-bottom, 0px)); }
+   .photo-toolbar {
+     gap: 0;
+   }
+-  .photo-posts .ql-toolbar .photo-insert-photo { padding-inline: 6px; }
++  .photo-posts .photo-toolbar .photo-insert-photo { padding-inline: 6px; }
+   .photo-format-options > summary { padding-inline: 8px; }
+   .photo-viewer {
+     padding: 12px;
+@@ -871,8 +897,8 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
+   .photo-posts .photo-toolbar.photo-toolbar-floating { padding: 2px; }
+   .photo-toolbar-floating .photo-history { margin-left: 2px; padding-left: 2px; }
+   /* Icon-only photo and format buttons; their names stay "사진" and "추가 서식". */
+-  .photo-posts .ql-toolbar .photo-insert-photo { width: 44px; min-width: 44px; padding: 12px; gap: 0; font-size: 0; }
+-  .photo-posts .ql-toolbar .photo-insert-photo svg { flex: none; }
++  .photo-posts .photo-toolbar .photo-insert-photo { width: 44px; min-width: 44px; padding: 12px; gap: 0; font-size: 0; }
++  .photo-posts .photo-toolbar .photo-insert-photo svg { flex: none; }
+   .photo-toolbar-floating .photo-format-options > summary { width: 44px; min-width: 44px; padding: 12px; gap: 0; }
+   .photo-toolbar-floating .photo-format-options > summary > .photo-format-icon { display: block; width: 20px; height: 20px; }
+   .photo-toolbar-floating .photo-format-options > summary > :is(.photo-format-word, .photo-format-chevron) { display: none; }
+diff --git a/assets/life/photo-post.js b/assets/life/photo-post.js
+index 23020fd..49d3aa5 100644
+--- a/assets/life/photo-post.js
++++ b/assets/life/photo-post.js
+@@ -390,6 +390,53 @@
+       });
+     return d;
+   }
++  function createMarkdownDraft(makeId, time = new Date().toISOString()) {
++    return replaceBody({ ...create(makeId, time), format: 'life-post-md-v1' }, [{ insert: '\n' }]);
++  }
++  // Replace the complete body atomically in memory. Callers never have to
++  // construct a Markdown document with an additional persisted Delta body.
++  function replaceBody(input, bodyOps) {
++    const next = structuredClone(input);
++    if (!Array.isArray(next.photos)) throw fault('사진 정보를 확인해 주세요.');
++    // Reject unsupported keys/marks before serialization could discard them.
++    ops(bodyOps, new Set(next.photos.map(photo => photo?.id)), isMarkdown(next));
++    if (isMarkdown(next)) {
++      next.markdown = markdown().fromDelta(bodyOps).markdown;
++      delete next.ops;
++    } else next.ops = structuredClone(bodyOps);
++    validate(next);
++    return next;
++  }
++  // Preparation does not save, allocate a new identity, or retire the source.
++  // The caller must preserve the exact original in the conversion transaction.
++  function prepareMarkdownEdit(input, { allowParagraphBreaks = false } = {}) {
++    const source = upgrade(input);
++    const warnings = { paragraphBreaks: 0, nbspParagraphs: 0, dropped: { underline: 0, align: 0 } };
++    if (isMarkdown(source)) return { document: source, warnings };
++    const bodyOps = []; let text = '';
++    const finish = () => { if (text === '\u00a0') warnings.nbspParagraphs++; text = ''; };
++    for (const op of source.ops) {
++      if (typeof op.insert === 'string') {
++        const parts = op.insert.split('\n');
++        parts.forEach((part, index) => { text += part; if (index < parts.length - 1) finish(); });
++      } else {
++        if (text.length) {
++          warnings.paragraphBreaks++;
++          if (allowParagraphBreaks === true) bodyOps.push({ insert: '\n' });
++        }
++        finish();
++      }
++      bodyOps.push(op);
++    }
++    finish();
++    // Keep the strict codec path by default. Only an explicit true authorizes
++    // the announced paragraph breaks, in a detached preparation copy.
++    const result = markdown().fromV2({ ...source, ops: bodyOps });
++    const document = { ...result.document, photos: structuredClone(source.photos) };
++    warnings.dropped = result.dropped;
++    validate(document);
++    return { document, warnings };
++  }
+   function compact(d) {
+     const used = validate(d),
+       next = structuredClone(d);
+@@ -1021,7 +1068,10 @@
+   return Object.freeze({
+     LIMITS,
+     create,
++    createMarkdownDraft,
+     upgrade,
++    prepareMarkdownEdit,
++    replaceBody,
+     validate,
+     validatedBody,
+     compact,
+diff --git a/assets/life/post-markdown-editor.js b/assets/life/post-markdown-editor.js
+index 71ef7fd..f57e94c 100644
+--- a/assets/life/post-markdown-editor.js
++++ b/assets/life/post-markdown-editor.js
+@@ -6,8 +6,30 @@
+   if (typeof module === 'object' && module.exports) module.exports = api;
+ })(globalThis, function (root) {
+   'use strict';
++  const bridges = new WeakMap();
++  function find(element) {
++    for (let node = element; node; node = node.parentElement) {
++      const instance = bridges.get(node);
++      if (instance) return instance;
++    }
++    return null;
++  }
+   const codec = () => root.HaedoLife?.PostMarkdown || (typeof require === 'function' && require('./post-markdown.js'));
+   const error = (message, code = 'invalid_editor_document') => Object.assign(new Error(message), { code });
++  function validatedMarkdown(markdown) {
++    const parsed = codec().parse(markdown), limits = root.HaedoLife?.PhotoPost?.LIMITS || { ops: 5000, text: 50000, photos: 20 };
++    let length = 0;
++    const validText = (value, max) => typeof value === 'string' && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(value);
++    if (parsed.ops.length > limits.ops || parsed.photos.length > limits.photos) throw error('본문이나 사진이 너무 많습니다.');
++    for (const op of parsed.ops) {
++      if (typeof op.insert === 'string') {
++        length += op.insert.length;
++        if (!validText(op.insert, limits.text)) throw error('본문 문자와 길이를 확인해 주세요.');
++      } else if (!validText(op.insert.photo.caption, 2000) || !validText(op.insert.photo.alt, 2000)) throw error('사진 설명과 대체 텍스트는 2,000자까지 쓸 수 있습니다.');
++    }
++    if (length > limits.text) throw error('본문은 50,000자까지 쓸 수 있습니다.');
++    return parsed.markdown;
++  }
+   function safeLink(value) {
+     return typeof value === 'string' && value.length <= 2048 && codec().safeLink(value);
+   }
+@@ -79,30 +101,44 @@
+       } else throw error('지원하지 않는 본문 블록입니다.');
+     }
+     // Parse again to validate references, limits and permitted grammar before returning a snapshot.
+-    return codec().canonicalize(codec().fromDelta(ops).markdown);
++    return validatedMarkdown(codec().fromDelta(ops).markdown);
+   }
+   function create(options = {}) {
+     const T = root.HaedoTiptap;
+     if (!T?.Editor || !options.element) throw error('편집기를 불러오지 못했습니다. 새로고침해 주세요.', 'editor_unavailable');
+     const selections = new WeakSet();
+     let errorElement = null;
+-    let composing = false, disposed = false, timer = null, generation = 0, last = codec().canonicalize(options.markdown ?? '&nbsp;\n');
++    let composing = false, disposed = false, timer = null, generation = 0, last = validatedMarkdown(options.markdown ?? '&nbsp;\n');
+     const Photo = T.Node.create({ name: 'photo', group: 'block', atom: true, draggable: true,
+       addAttributes: () => ({ id: { default: null }, caption: { default: '' }, alt: { default: '' } }),
+       // Clipboard HTML cannot manufacture references to private photo records.
+       parseHTML: () => [],
+       renderHTML: ({ node }) => ['figure', { 'data-haedo-photo': node.attrs.id }, ['figcaption', {}, node.attrs.caption || node.attrs.alt || '사진']],
+       addNodeView() { return ({ node }) => {
+-        const dom = root.document.createElement('figure'); dom.dataset.haedoPhoto = node.attrs.id;
+-        const source = options.resolvePhoto?.(node.attrs.id);
+-        if (typeof source === 'string' && source.startsWith('blob:')) {
+-          const img = root.document.createElement('img'); img.src = source; img.alt = node.attrs.alt; img.style.maxWidth = '100%'; dom.append(img);
+-        } else { const label = root.document.createElement('span'); label.textContent = node.attrs.alt || '사진'; dom.append(label); }
+-        const caption = root.document.createElement('figcaption'); caption.textContent = node.attrs.caption; caption.style.whiteSpace = 'pre-wrap'; dom.append(caption);
+-        return { dom };
++        const dom = root.document.createElement('figure'); dom.className = 'photo-block'; dom.contentEditable = 'false'; dom.tabIndex = -1; dom.setAttribute('role', 'group');
++        const select = root.document.createElement('button'); select.type = 'button'; select.className = 'photo-select'; select.setAttribute('aria-label', '사진 설명·순서 편집');
++        const img = root.document.createElement('img'); img.style.maxWidth = '100%'; select.append(img);
++        const caption = root.document.createElement('figcaption'), text = root.document.createElement('button'); text.type = 'button'; text.className = 'photo-caption-text'; text.setAttribute('aria-label', '사진 설명 편집'); text.style.whiteSpace = 'pre-wrap'; caption.append(text); dom.append(select, caption);
++        function update(next) {
++          if (next.type !== node.type || next.attrs.id !== node.attrs.id) return false;
++          node = next; const value = node.attrs;
++          dom.dataset.haedoPhoto = dom.dataset.photoId = value.id; dom.dataset.caption = value.caption; dom.dataset.alt = value.alt;
++          dom.setAttribute('aria-label', (value.caption || value.alt || '사진') + ' · 사진 설명·순서 편집');
++          const source = options.resolvePhoto?.(value.id);
++          if (typeof source === 'string' && source.startsWith('blob:')) { if (img.getAttribute('src') !== source) img.src = source; }
++          else img.removeAttribute('src');
++          img.alt = value.alt || value.caption || '첨부 사진'; text.textContent = value.caption || '사진 설명 추가';
++          for (const [label, content] of [['사진 설명', value.caption], ['사진 대체 텍스트', value.alt]]) {
++            const input = dom.querySelector('[aria-label="' + label + '"]');
++            if (input && input.value !== content) input.value = content;
++          }
++          return true;
++        }
++        update(node);
++        return { dom, update, stopEvent: event => !!event.target.closest('button,input,textarea,.photo-inspector'), ignoreMutation: () => true };
+       }; }
+     });
+-    const AI = T.Mark.create({ name: 'ai', parseHTML: () => [{ tag: 'span[data-author="ai"]' }], renderHTML: () => ['span', { 'data-author': 'ai' }, 0] });
++    const AI = T.Mark.create({ name: 'ai', parseHTML: () => [{ tag: 'span[data-author="ai"]' }], renderHTML: () => ['span', { 'data-author': 'ai', class: 'photo-ai-text' }, 0] });
+     const Link = T.Mark.create({ name: 'link', inclusive: false,
+       addAttributes: () => ({ href: { default: null } }),
+       parseHTML: () => [{ tag: 'a[href]', getAttrs: element => safeLink(element.getAttribute('href')) ? { href: element.getAttribute('href') } : false }],
+@@ -159,7 +195,7 @@
+     const editor = new T.Editor({ element: options.element, content: toJSON(last), injectCSS: false,
+       extensions: [T.Document, T.Paragraph, T.Text, T.Heading.configure({ levels: [1, 2] }), T.Bold, T.Italic,
+         T.Blockquote.extend({ content: 'paragraph+' }), T.BulletList, OrderedList,
+-        T.ListItem.extend({ content: 'paragraph' }), T.UndoRedo, Photo, AI, Link, SupportedDocument],
++        T.ListItem.extend({ content: 'paragraph' }), T.UndoRedo.configure({ newGroupDelay: 700 }), Photo, AI, Link, SupportedDocument, ...(options.extensions || [])],
+       editorProps: {
+         handlePaste: (_view, event) => {
+           if (!unsupportedClipboardList(event)) return false;
+@@ -169,7 +205,8 @@
+         handleDOMEvents: { compositionstart: () => { composition(true); return false; }, compositionend: () => { composition(false); return false; },
+           click: (_view, event) => !!event.target.closest?.('a') } },
+       onUpdate: () => { generation++; if (errorElement) { errorElement.remove(); errorElement = null; } emit(); },
+-      onSelectionUpdate: () => { generation++; }
++      onSelectionUpdate: () => { generation++; options.onSelectionChange?.(); },
++      onTransaction: ({ transaction }) => options.onTransaction?.(transaction)
+     });
+     function guard() {
+       if (disposed) throw error('닫힌 편집기입니다.', 'editor_disposed');
+@@ -179,6 +216,7 @@
+       isComposing: () => composing || (!disposed && editor.view.composing),
+       getMarkdown() { guard(); return fromJSON(editor.getJSON()); },
+       getCommittedMarkdown: () => last,
++      async flush() { guard(); editor.view.domObserver.flush(); guard(); clearTimeout(timer); timer = null; emit(); return last; },
+       setMarkdown(markdown) { guard(); const content = toJSON(markdown); editor.commands.setContent(content); return fromJSON(editor.getJSON()); },
+       selection() { guard(); const { from, to } = editor.state.selection; const snapshot = Object.freeze({ from, to, generation }); selections.add(snapshot); return snapshot; },
+       replaceSelection(snapshot, text, { ai = false } = {}) {
+@@ -191,5 +229,227 @@
+       dispose() { if (disposed) return; disposed = true; clearTimeout(timer); errorElement?.remove(); editor.destroy(); }
+     });
+   }
+-  return Object.freeze({ toJSON, fromJSON, create });
++  // Delta counts text in UTF-16 units, one unit per line ending/photo. PM also
++  // counts container boundaries, so list/quote depths cannot use a fixed offset.
++  function positions(document) {
++    const boundaries = [], spans = []; let length = 0;
++    document.descendants((node, pos) => {
++      if (node.type.name === 'photo') {
++        boundaries[length] = pos; spans.push({ from: pos, to: pos + 1, index: length, size: 1, photo: true });
++        boundaries[++length] = pos + 1; return false;
++      }
++      if (!node.isTextblock) return;
++      const size = node.content.size, from = pos + 1;
++      spans.push({ from, to: from + size, index: length, size });
++      for (let offset = 0; offset <= size; offset++) boundaries[length + offset] = from + offset;
++      length += size + 1; boundaries[length] = from + size;
++      return false;
++    });
++    function toPM(index) {
++      if (!Number.isInteger(index) || index < 0 || index > length) throw error('선택 범위를 확인해 주세요.');
++      return boundaries[index] ?? document.content.size;
++    }
++    function toDelta(pos) {
++      for (const span of spans) {
++        if (pos < span.from) return span.index;
++        if (pos <= span.to) return span.index + Math.min(span.size, pos - span.from);
++      }
++      return length;
++    }
++    return { toPM, toDelta, length, spans };
++  }
++  function createBridge(options = {}) {
++    const T = root.HaedoTiptap, Delta = options.Delta || root.Quill?.import('delta');
++    if (!Delta || !T?.closeHistory || !T?.TextSelection || !T?.EditorState) throw error('편집기 구성 파일을 새로고침해 주세요.', 'editor_unavailable');
++    const listeners = new Map(), sources = new Map();
++    let adapter, disposed = false, source = 'user', replaying = false, historyTransaction = false, observed, savedRange = { index: 0, length: 0 };
++    const guard = () => { if (disposed) throw error('닫힌 편집기입니다.', 'editor_disposed'); if (adapter.isComposing()) throw error('한글 입력을 마친 뒤 다시 시도해 주세요.', 'composition_active'); };
++    const send = (event, ...args) => { for (const listener of [...(listeners.get(event) || [])]) listener(...args); };
++    const delta = markdown => new Delta(codec().toDelta(markdown));
++    function currentRange() {
++      const map = positions(adapter.editor.state.doc), { from, to } = adapter.editor.state.selection;
++      return { index: map.toDelta(from), length: map.toDelta(to) - map.toDelta(from) };
++    }
++    function changed(markdown) {
++      const next = delta(markdown), before = observed; observed = next;
++      savedRange = currentRange();
++      const patch = before.diff(next);
++      if (patch.ops.length) {
++        if (source !== 'silent') send('text-change', patch, before, source);
++        send('editor-change', 'text-change', patch, before, source);
++        options.onChange?.(markdown);
++      }
++      historyTransaction = false;
++    }
++    observed = delta(codec().canonicalize(options.markdown ?? '&nbsp;\n'));
++    adapter = create({ ...options,
++      resolvePhoto: id => sources.get(id) || options.resolvePhoto?.(id),
++      onChange: changed,
++      onTransaction(transaction) { historyTransaction = !!T.isHistoryTransaction?.(transaction); options.onTransaction?.(transaction); },
++      onSelectionChange() {
++        if (!adapter) return;
++        const before = savedRange; savedRange = currentRange();
++        if (source !== 'silent') send('selection-change', { ...savedRange }, before, source);
++        send('editor-change', 'selection-change', { ...savedRange }, before, source);
++      }
++    });
++    const editor = adapter.editor;
++    function withSource(nextSource, run) { const previous = source; source = nextSource || 'api'; try { return run(); } finally { source = previous; } }
++    function cleanOps(ops, pendingSources) {
++      if (!Array.isArray(ops)) throw error('본문 형식을 확인해 주세요.');
++      return ops.map(op => {
++        if (!op || typeof op !== 'object' || !Object.hasOwn(op, 'insert')) throw error('본문 형식을 확인해 주세요.');
++        if (op.attributes) for (const [key, value] of Object.entries(op.attributes)) {
++          const valid = ['bold', 'italic', 'blockquote'].includes(key) ? value === true : key === 'author' ? value === 'ai' :
++            key === 'link' ? safeLink(value) : key === 'header' ? [1, 2].includes(value) : key === 'list' ? ['bullet', 'ordered'].includes(value) : false;
++          if (!valid) throw error('지원하지 않는 본문 서식입니다.');
++        }
++        if (typeof op.insert === 'string') return op;
++        if (!op.insert || Object.keys(op.insert).length !== 1 || !op.insert.photo || typeof op.insert.photo !== 'object') throw error('지원하지 않는 본문 요소입니다.');
++        const { id, caption = '', alt = '', src } = op.insert.photo;
++        if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id) || typeof caption !== 'string' || typeof alt !== 'string' ||
++          Object.keys(op.insert.photo).some(key => !['id', 'caption', 'alt', 'src'].includes(key))) throw error('사진 정보를 확인해 주세요.');
++        if (typeof src === 'string' && src.startsWith('blob:')) pendingSources.set(id, src);
++        return { insert: { photo: { id, caption, alt } } };
++      });
++    }
++    function install(ops, origin = 'api') {
++      guard();
++      const pendingSources = new Map();
++      const markdown = validatedMarkdown(codec().fromDelta(cleanOps(ops, pendingSources)).markdown), content = toJSON(markdown);
++      const next = editor.schema.nodeFromJSON(content), previous = editor.state.doc;
++      for (const [id, url] of pendingSources) sources.set(id, url);
++      const start = previous.content.findDiffStart(next.content);
++      if (start == null) return new Delta();
++      let { a: endA, b: endB } = previous.content.findDiffEnd(next.content);
++      const overlap = start - Math.min(endA, endB);
++      if (overlap > 0) { endA += overlap; endB += overlap; }
++      const before = observed;
++      withSource(origin, () => {
++        const transaction = editor.state.tr.replace(start, endA, next.slice(start, endB)).setMeta('haedoOrigin', origin);
++        if (origin === 'silent') transaction.setMeta('addToHistory', false);
++        editor.view.dispatch(transaction);
++      });
++      return before.diff(observed);
++    }
++    function updateContents(change, origin = 'api') { guard(); return install(observed.compose(new Delta(change.ops || change)).ops, origin); }
++    function setSelection(index, length = 0, origin = 'api') {
++      guard();
++      if (typeof length === 'string') { origin = length; length = 0; }
++      if (index && typeof index === 'object') { origin = typeof length === 'string' ? length : origin; length = index.length; index = index.index; }
++      if (index == null) { editor.view.dom.blur(); return; }
++      const map = positions(editor.state.doc), max = observed.length();
++      index = Math.max(0, Math.min(index, max)); length = Math.max(0, Math.min(length, max - index));
++      withSource(origin, () => editor.view.dispatch(editor.state.tr.setSelection(T.TextSelection.create(editor.state.doc, map.toPM(index), map.toPM(index + length)))));
++      savedRange = { index, length };
++    }
++    const history = {
++      get ignoreChange() { return replaying || historyTransaction; },
++      // The existing UI uses this to join its authorship normalization to the
++      // input. PM groups the synchronous appended mark change automatically.
++      lastRecorded: 0,
++      cutoff() { guard(); editor.view.dispatch(T.closeHistory(editor.state.tr)); },
++      undo() { guard(); replaying = true; try { return withSource('user', () => editor.commands.undo()); } finally { replaying = false; } },
++      redo() { guard(); replaying = true; try { return withSource('user', () => editor.commands.redo()); } finally { replaying = false; } },
++      clear() {
++        guard(); const { doc, selection, storedMarks, plugins } = editor.state;
++        editor.view.updateState(T.EditorState.create({ doc, selection, storedMarks, plugins }));
++      }
++    };
++    function attributes(name, value) { return typeof name === 'object' ? name : { [name]: value }; }
++    function formatText(index, length, name, value, origin = 'api') {
++      if (typeof name === 'object') { origin = value || 'api'; value = undefined; }
++      const attrs = Object.fromEntries(Object.entries(attributes(name, value)).map(([key, item]) => [key, item === false ? null : item]));
++      return updateContents(new Delta().retain(index).retain(length, attrs), origin);
++    }
++    function getFormat(index = savedRange.index, length = savedRange.length) {
++      guard(); const inline = [], blocks = []; let at = 0, lineStart = 0;
++      for (const op of observed.ops) {
++        if (typeof op.insert !== 'string') { at++; lineStart = at; continue; }
++        const attrs = op.attributes || {};
++        for (const part of op.insert.split(/(\n)/)) {
++          if (part === '\n') {
++            if (at >= index && (length ? lineStart < index + length : lineStart <= index)) blocks.push(Object.fromEntries(Object.entries(attrs).filter(([key]) => ['header', 'list', 'blockquote'].includes(key))));
++            at++; lineStart = at;
++          } else {
++            if (length && at < index + length && at + part.length > index) inline.push(Object.fromEntries(Object.entries(attrs).filter(([key]) => ['bold', 'italic', 'link', 'author'].includes(key))));
++            at += part.length;
++          }
++        }
++      }
++      if (!length) {
++        const state = editor.state, map = positions(state.doc), pos = map.toPM(index);
++        const active = state.selection.empty && state.selection.from === pos ? state.storedMarks || state.selection.$from.marks() : state.doc.resolve(pos).marks();
++        inline.push(Object.fromEntries(active.map(mark => mark.type.name === 'ai' ? ['author', 'ai'] : mark.type.name === 'link' ? ['link', mark.attrs.href] : [mark.type.name, true])));
++      }
++      const common = values => values.length ? Object.fromEntries(Object.entries(values[0]).filter(([key, value]) => values.every(item => item[key] === value))) : {};
++      return { ...common(inline), ...common(blocks) };
++    }
++    function format(name, value, origin = 'user') {
++      guard(); const range = currentRange();
++      if (['header', 'list', 'blockquote'].includes(name)) return formatLine(range.index, range.length, name, value, origin);
++      if (range.length) return formatText(range.index, range.length, name, value, origin);
++      const kind = name === 'author' ? 'ai' : name;
++      if (!['bold', 'italic', 'link', 'ai'].includes(kind) || (kind === 'link' && value && !safeLink(value))) throw error('지원하지 않는 글자 서식입니다.');
++      return withSource(origin, () => value ? editor.commands.setMark(kind, kind === 'link' ? { href: value } : {}) : editor.commands.unsetMark(kind));
++    }
++    function formatLine(index, length, name, value, origin = 'user') {
++      guard(); const attrs = attributes(name, value), change = new Delta(); let at = 0, previous = 0;
++      for (const op of observed.ops) {
++        if (typeof op.insert !== 'string') { at++; continue; }
++        for (const char of op.insert.split('')) {
++          if (char === '\n' && at >= index && previous <= index + length) {
++            const existing = { ...(op.attributes || {}) };
++            for (const key of ['header', 'list', 'blockquote']) existing[key] = null;
++            Object.assign(existing, Object.fromEntries(Object.entries(attrs).map(([key, item]) => [key, item === false ? null : item])));
++            change.retain(at - change.length()).retain(1, existing);
++          }
++          at++; if (char === '\n') previous = at;
++        }
++      }
++      return updateContents(change, origin);
++    }
++    const getPhotoIndex = node => {
++      const id = typeof node === 'string' ? node : node?.closest?.('[data-photo-id]')?.dataset.photoId;
++      let index = 0;
++      for (const op of observed.ops) { if (op.insert?.photo?.id === id) return index; index += typeof op.insert === 'string' ? op.insert.length : 1; }
++      return -1;
++    };
++    const bridge = {
++      root: editor.view.dom, editor, history, composition: { get isComposing() { return adapter.isComposing(); } },
++      selection: { get savedRange() { return { ...savedRange }; } },
++      on(event, listener) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(listener); return bridge; },
++      off(event, listener) { listeners.get(event)?.delete(listener); return bridge; },
++      getContents(index = 0, length = observed.length() - index) { if (disposed) guard(); return observed.slice(index, index + length); },
++      getLength: () => observed.length(), getText: (index = 0, length = observed.length() - index) => observed.slice(index, index + length).ops.map(op => typeof op.insert === 'string' ? op.insert : '').join(''),
++      getSelection(focus = false) { guard(); if (focus) editor.view.focus(); savedRange = currentRange(); return { ...savedRange }; },
++      setSelection, updateContents, setContents: (value, origin = 'api') => install(value.ops || value, origin),
++      insertText(index, text, attrs = {}, origin = 'api') { if (typeof attrs === 'string') { origin = attrs; attrs = {}; } return updateContents(new Delta().retain(index).insert(text, attrs), origin); },
++      deleteText: (index, length, origin = 'api') => updateContents(new Delta().retain(index).delete(length), origin),
++      insertEmbed(index, kind, value, origin = 'api') { if (kind !== 'photo') throw error('지원하지 않는 본문 요소입니다.'); return updateContents(new Delta().retain(index).insert({ photo: value }), origin); },
++      formatText, formatLine, format, getFormat,
++      enable(value = true) { if (disposed) guard(); editor.setEditable(value, false); }, isEnabled: () => !disposed && editor.isEditable,
++      focus() { guard(); editor.view.focus(); }, blur() { editor.view.dom.blur(); },
++      getMarkdown: adapter.getMarkdown, getCommittedMarkdown: adapter.getCommittedMarkdown,
++      isComposing: adapter.isComposing, flush: adapter.flush, getPhotoIndex,
++      updatePhoto(id, patch, origin = 'user') {
++        const index = getPhotoIndex(id); if (index < 0) throw error('사진이 바뀌었습니다.');
++        if (!patch || Object.keys(patch).some(key => !['caption', 'alt'].includes(key))) throw error('사진 정보를 확인해 주세요.');
++        const value = observed.slice(index, index + 1).ops[0].insert.photo;
++        return updateContents(new Delta().retain(index).delete(1).insert({ photo: { ...value, ...patch } }), origin);
++      },
++      removePhoto(id) { const index = getPhotoIndex(id); if (index < 0) return false; history.cutoff(); const result = bridge.deleteText(index, 1, 'user'); history.cutoff(); return result; },
++      movePhoto(id, direction) {
++        guard(); if (![-1, 1].includes(direction)) throw error('사진 순서를 확인해 주세요.');
++        const doc = editor.getJSON(), at = doc.content.findIndex(node => node.type === 'photo' && node.attrs.id === id), next = at + direction;
++        if (at < 0 || next < 0 || next >= doc.content.length) return false;
++        [doc.content[at], doc.content[next]] = [doc.content[next], doc.content[at]];
++        const ops = codec().toDelta(fromJSON(doc)); history.cutoff(); const result = install(ops, 'user'); history.cutoff(); return result;
++      },
++      dispose() { if (disposed) return; disposed = true; bridges.delete(options.element); bridges.delete(editor.view.dom); listeners.clear(); adapter.dispose(); sources.clear(); }
++    };
++    bridges.set(options.element, bridge); bridges.set(editor.view.dom, bridge);
++    return Object.freeze(bridge);
++  }
++  return Object.freeze({ toJSON, fromJSON, create, createBridge, positions, find });
+ });
+diff --git a/index.html b/index.html
+index b092ce5..e5450df 100644
+--- a/index.html
++++ b/index.html
+@@ -158,6 +158,8 @@
+   <script src="assets/life/account-docs-sync.js"></script>
+   <script src="vendor/markdown-it/markdown-it.umd.min.js"></script>
+   <script src="assets/life/post-markdown.js"></script>
++  <script src="vendor/tiptap/tiptap.umd.min.js"></script>
++  <script src="assets/life/post-markdown-editor.js"></script>
+   <script src="vendor/dompurify/purify.min.js"></script>
+   <script src="vendor/js-yaml/js-yaml.umd.min.js"></script>
+   <script src="assets/life/source-markdown.js"></script>
+diff --git a/life.html b/life.html
+index d8cfae2..fe2df3a 100644
+--- a/life.html
++++ b/life.html
+@@ -127,6 +127,8 @@
+   <script src="assets/life/account-docs-sync.js"></script>
+   <script src="vendor/markdown-it/markdown-it.umd.min.js"></script>
+   <script src="assets/life/post-markdown.js"></script>
++  <script src="vendor/tiptap/tiptap.umd.min.js"></script>
++  <script src="assets/life/post-markdown-editor.js"></script>
+   <script src="vendor/dompurify/purify.min.js"></script>
+   <script src="vendor/js-yaml/js-yaml.umd.min.js"></script>
+   <script src="assets/life/source-markdown.js"></script>
+diff --git a/scripts/prepare-site.mjs b/scripts/prepare-site.mjs
+index b65839d..46272d8 100644
+--- a/scripts/prepare-site.mjs
++++ b/scripts/prepare-site.mjs
+@@ -41,7 +41,7 @@ try {
+   // Publish runtime files explicitly. Design previews, samples and future
+   // internal assets must not become public just by living under assets/vendor.
+   for (const path of ['assets/life/library-meta.js','assets/life/library-remote.js','assets/life/library-meta-sync.js','assets/life/library-originals-remote.js','assets/life/account-library.js','assets/life/source-folders.js','assets/life/source-folders-ui.js','assets/life/source-folders.css','assets/life/records-list.js','assets/life/records.css','vendor/js-yaml/js-yaml.umd.min.js','vendor/js-yaml/LICENSE','vendor/js-yaml/argparse-LICENSE','vendor/js-yaml/README.md','vendor/js-yaml/manifest.json','assets/life/annual-plan.js','assets/life/annual-plan-ui.js','assets/life/annual-plan.css','assets/life/schedule-data.js','assets/life/schedule-ui.js','assets/life/schedule.css','assets/life/source-edit.js','assets/life/source-edit-ui.js','assets/life/source-markdown.js','assets/life/source-markdown.css','vendor/markdown-it/markdown-it.umd.min.js','vendor/markdown-it/manifest.json','vendor/markdown-it/README.md','vendor/markdown-it/LICENSE','vendor/markdown-it/licenses/argparse-LICENSE','vendor/markdown-it/licenses/entities-LICENSE','vendor/markdown-it/licenses/linkify-it-LICENSE','vendor/markdown-it/licenses/mdurl-LICENSE','vendor/markdown-it/licenses/punycode.js-LICENSE-MIT.txt','vendor/markdown-it/licenses/uc.micro-LICENSE.txt','vendor/dompurify/purify.min.js','vendor/dompurify/manifest.json','vendor/dompurify/README.md','vendor/dompurify/LICENSE','vendor/dompurify/LICENSE-MPL','vendor/dompurify/license_header','cover.html','assets/life/public-cover.js','assets/life/public-cover-reader.js','assets/life/public-cover-view.js','assets/life/public-cover-remote.js','assets/life/public-cover-ui.js','assets/life/public-cover-return.js','assets/life/public-cover.css','assets/life/material-continuity.js','assets/life/material-continuity-remote.js','assets/life/material-continuity-sync.js','assets/life/material-continuity-ui.js','assets/life/material-writing.js','assets/life/material-writing-sources.js','assets/life/material-writing-ui.js','assets/life/material-writing.css','taste.html','assets/life/nine-public.js','assets/life/nine-public-view.js','assets/life/nine-public-remote.js','assets/life/nine-public-sharing.js','assets/life/nine-public.css','series.html','assets/life/blog-series.js','assets/life/blog-series-package.js','assets/life/blog-series-remote.js','assets/life/blog-series-public.js','assets/life/blog-series-reader.js','assets/life/blog-series-ui.js','assets/life/blog-series-sharing.js','assets/life/blog-series.css','blog.html', 'assets/life/source-reference.js', 'assets/life/blog.js', 'assets/life/blog-evidence.js', 'assets/life/blog-remote.js', 'assets/life/sync-common.js','assets/life/blog-sync.js', 'assets/life/account-blog-ui.js', 'assets/life/naver-blog.js', 'assets/life/naver-capture.js', 'assets/life/naver-media.js', 'assets/life/naver-media-receipt.js', 'assets/life/naver-capture-sync.js', 'assets/life/naver-capture-ui.js', 'assets/life/naver-blog-sync.js', 'assets/life/naver-blog-ui.js', 'assets/life/naver-blog.css', 'assets/life/blog-public-ui.js', 'assets/life/blog-manager.js', 'assets/life/blog-public.js', 'assets/life/blog-public.css', 'assets/life/blog-manager.css', 'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html', 'share.html',
+-    'assets/life/post-markdown.js',
++    'assets/life/post-markdown.js', 'assets/life/post-markdown-editor.js', 'vendor/tiptap/tiptap.umd.min.js', 'vendor/tiptap/LICENSES.txt', 'vendor/tiptap/manifest.json',
+     'assets/app.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js',
+     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
+     'assets/life/obsidian-update.js', 'assets/life/obsidian-update-ui.js', 'assets/life/original-attachments.js', 'assets/life/original-attachments-ui.js', 'assets/life/original-attachments.css',
+diff --git a/sw.js b/sw.js
+index c908848..16b1ef7 100644
+--- a/sw.js
++++ b/sw.js
+@@ -6,7 +6,7 @@ const SHELL=[
+   './assets/life/records-list.js','./assets/life/records.css',
+   './assets/life/annual-plan.js','./assets/life/annual-plan-ui.js','./assets/life/annual-plan.css','./assets/life/schedule-data.js','./assets/life/schedule-ui.js','./assets/life/schedule.css',
+   './assets/life/source-edit.js','./assets/life/source-edit-ui.js','./assets/life/source-markdown.js','./assets/life/source-markdown.css',
+-  './vendor/markdown-it/markdown-it.umd.min.js','./assets/life/post-markdown.js','./vendor/dompurify/purify.min.js',
++  './vendor/markdown-it/markdown-it.umd.min.js','./assets/life/post-markdown.js','./vendor/tiptap/tiptap.umd.min.js','./assets/life/post-markdown-editor.js','./vendor/dompurify/purify.min.js',
+   './vendor/js-yaml/js-yaml.umd.min.js',
+   './assets/life/naver-blog.js','./assets/life/naver-capture.js','./assets/life/naver-media.js','./assets/life/naver-media-receipt.js','./assets/life/naver-capture-sync.js','./assets/life/naver-capture-ui.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
+   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
+diff --git a/tests/structure-baseline-browser.cjs b/tests/structure-baseline-browser.cjs
+index 9cf807a..9ea73eb 100644
+--- a/tests/structure-baseline-browser.cjs
++++ b/tests/structure-baseline-browser.cjs
+@@ -166,6 +166,7 @@ const PINNED = {
+     "PhotoPostUI",
+     "PlatformRemote",
+     "PostMarkdown",
++    "PostMarkdownEditor",
+     "Preservation",
+     "PreservationPackage",
+     "PreservationReferences",
+@@ -221,6 +222,7 @@ const PINNED = {
+     "HaedoMotion",
+     "HaedoNavigation",
+     "HaedoPlatformData",
++    "HaedoTiptap",
+     "LifeObsidianUpdateUI",
+     "LifeOriginalAttachmentsUI",
+     "ObsidianDecisions",
+diff --git a/tests/photo-post-markdown-transition.test.cjs b/tests/photo-post-markdown-transition.test.cjs
+new file mode 100644
+index 0000000..22f5b31
+--- /dev/null
++++ b/tests/photo-post-markdown-transition.test.cjs
+@@ -0,0 +1,96 @@
++'use strict';
++const test = require('node:test'), assert = require('node:assert/strict');
++const P = require('../assets/life/photo-post.js'), M = require('../assets/life/post-markdown.js');
++
++function fixture() {
++  const doc = P.create(() => 'original', '2026-11-05T00:00:00.000Z');
++  doc.status = 'saved'; doc.title = '원래 제목'; doc.revision = 7;
++  doc.photos = ['first', 'second', 'unused'].map((id, i) => ({ id, name: id + '.png', type: 'image/png', width: 4, height: 3,
++    size: 8, digest: String(i + 1).repeat(64), blob: new Blob([new Uint8Array(8).fill(i)], { type: 'image/png' }) }));
++  doc.ops = [{ insert: '앞\n' }, { insert: { photo: { id: 'second', caption: '둘\n설명', alt: '둘' } } },
++    { insert: { photo: { id: 'first', caption: '첫 설명', alt: '하나' } } }, { insert: '끝\n' }];
++  doc.attachments = [{ type: 'book', title: '읽은 책', creator: '저자', url: 'https://example.org/book' }];
++  P.validate(doc); return doc;
++}
++
++test('new Markdown drafts have one canonical body and retain create identity/time defaults', () => {
++  const doc = P.createMarkdownDraft(() => 'new', '2026-11-05T01:02:03.000Z');
++  assert.equal(doc.format, 'life-post-md-v1'); assert.equal(doc.markdown, '&nbsp;\n');
++  assert.equal(Object.hasOwn(doc, 'ops'), false); assert.equal(doc.revision, 0);
++  assert.equal(doc.status, 'draft'); assert.equal(doc.createdAt, '2026-11-05T01:02:03.000Z');
++  assert.equal(doc.updatedAt, doc.createdAt); assert.deepEqual(doc.photos, []); assert.deepEqual(doc.attachments, []);
++  assert.equal(doc.archived, false); assert.equal(doc.replaces, null); P.validate(doc);
++});
++
++test('preparation preserves source metadata and all photo bytes/order, including unused originals', async () => {
++  const doc = fixture(), before = structuredClone(doc);
++  const { document, warnings } = P.prepareMarkdownEdit(doc);
++  const { ops, photos, format, ...metadata } = before;
++  assert.deepEqual(Object.fromEntries(Object.keys(metadata).map(key => [key, document[key]])), metadata);
++  assert.deepEqual(document.photos, photos); assert.deepEqual(document.photos.map(p => p.id), ['first', 'second', 'unused']);
++  for (let i = 0; i < photos.length; i++) assert.deepEqual(await document.photos[i].blob.arrayBuffer(), await photos[i].blob.arrayBuffer());
++  assert.deepEqual(M.toDelta(document.markdown).filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id), ['second', 'first']);
++  assert.deepEqual(warnings, { paragraphBreaks: 0, nbspParagraphs: 0, dropped: { underline: 0, align: 0 } });
++  assert.deepEqual(doc, before); P.validate(document);
++});
++
++test('boundary conversion requires explicit true, adds only needed paragraph breaks and never changes original', () => {
++  const doc = fixture(); doc.ops = [{ insert: '앞' }, { insert: '' }, ...doc.ops.slice(1, 2),
++    { insert: '중간\n끝 조각' }, { insert: '의 나머지' }, ...doc.ops.slice(2)];
++  const before = structuredClone(doc); P.validate(doc);
++  for (const options of [undefined, {}, { allowParagraphBreaks: false }, { allowParagraphBreaks: 'true' }])
++    assert.throws(() => P.prepareMarkdownEdit(doc, options), { code: 'post_markdown_conversion_boundary' });
++  const { document, warnings } = P.prepareMarkdownEdit(doc, { allowParagraphBreaks: true });
++  assert.equal(warnings.paragraphBreaks, 2);
++  assert.equal(P.contentOps(document).filter(op => typeof op.insert === 'string').map(op => op.insert).join(''), '앞\n중간\n끝 조각의 나머지\n끝\n');
++  assert.deepEqual(doc, before); assert.equal(Object.hasOwn(document, 'ops'), false); P.validate(document);
++});
++
++test('NBSP-only paragraphs and dropped underline/alignment are reported without hiding preserved marks', () => {
++  const doc = fixture(); doc.ops = [{ insert: '\u00a0', attributes: { bold: true, author: 'ai', link: 'https://example.org/' } },
++    { insert: '\n' }, { insert: '가\u00a0나', attributes: { underline: true, bold: true, author: 'ai', link: 'https://example.org/' } },
++    { insert: '\n', attributes: { align: 'center' } }];
++  const before = structuredClone(doc), { document, warnings } = P.prepareMarkdownEdit(doc);
++  assert.deepEqual(warnings, { paragraphBreaks: 0, nbspParagraphs: 1, dropped: { underline: 1, align: 1 } });
++  assert.equal(P.contentOps(document).map(op => op.insert).join(''), '\n가\u00a0나\n');
++  assert.deepEqual(P.contentOps(document).find(op => op.insert.includes('가')).attributes,
++    { bold: true, author: 'ai', link: 'https://example.org/' });
++  assert.deepEqual(doc, before);
++});
++
++test('v1 upgrades only the required envelope; existing Markdown preparation remains immutable', () => {
++  const old = fixture(); old.format = 'life-photo-post-v1'; delete old.attachments; delete old.archived;
++  const before = structuredClone(old), first = P.prepareMarkdownEdit(old);
++  assert.equal(first.document.format, 'life-post-md-v1'); assert.deepEqual(first.document.attachments, []);
++  assert.equal(first.document.archived, false); assert.deepEqual(old, before);
++  assert.deepEqual(P.prepareMarkdownEdit(first.document), { document: first.document,
++    warnings: { paragraphBreaks: 0, nbspParagraphs: 0, dropped: { underline: 0, align: 0 } } });
++});
++
++test('long inline formatting stays editable within the unchanged operation cap and preserves its source', () => {
++  const doc = fixture(); doc.ops = [{ insert: '가\n'.repeat(2600), attributes: { bold: true } }];
++  const before = structuredClone(doc); P.validate(doc);
++  const prepared = P.prepareMarkdownEdit(doc, { allowParagraphBreaks: true });
++  assert.equal(M.toDelta(prepared.document.markdown).length, 1);
++  P.validate(prepared.document);
++  assert.deepEqual(doc, before);
++});
++
++test('replaceBody returns a fully validated detached document, keeping the body format and metadata', () => {
++  const legacy = fixture(), md = P.prepareMarkdownEdit(legacy).document;
++  const body = [{ insert: '고친 AI 글', attributes: { author: 'ai', bold: true } }, { insert: '\n' }];
++  for (const doc of [legacy, md]) {
++    const before = structuredClone(doc), replacement = P.replaceBody(doc, body);
++    assert.equal(replacement.format, doc.format); assert.deepEqual(replacement.photos, doc.photos);
++    assert.equal(P.plainText(replacement).startsWith('고친 AI 글\n'), true);
++    assert.equal(Object.hasOwn(replacement, 'ops'), doc.format !== 'life-post-md-v1');
++    if (doc.format === 'life-post-md-v1') assert.equal(replacement.markdown, M.fromDelta(body).markdown);
++    else assert.deepEqual(replacement.ops, body);
++    assert.deepEqual(doc, before); P.validate(replacement);
++    assert.throws(() => P.replaceBody(doc, [{ insert: { photo: { id: 'unknown', caption: '', alt: '' } } }, { insert: '\n' }]));
++    assert.throws(() => P.replaceBody(doc, [{ insert: 'x'.repeat(50001) + '\n' }]));
++    assert.throws(() => P.replaceBody(doc, [{ insert: 'text\n', attributes: { unsupported: true } }]));
++    assert.throws(() => P.replaceBody(doc, [{ insert: 'text\n', privateNote: 'must not be silently dropped' }]));
++    assert.deepEqual(doc, before);
++  }
++});
+diff --git a/tests/post-markdown-editor-bridge-browser.cjs b/tests/post-markdown-editor-bridge-browser.cjs
+new file mode 100644
+index 0000000..57fd5f8
+--- /dev/null
++++ b/tests/post-markdown-editor-bridge-browser.cjs
+@@ -0,0 +1,181 @@
++/* Actual Tiptap bridge in a standalone synthetic document. No account, server,
++ * product UI integration, or native Apple/IME claim. */
++'use strict';
++const assert = require('node:assert/strict');
++const fs = require('node:fs/promises'), path = require('node:path');
++const { playwright } = require('./unified-home-browser.cjs');
++const ROOT = path.resolve(__dirname, '..'), OUT = path.join(ROOT, '.local/post-markdown-editor-bridge');
++const assets = ['vendor/quill/quill.js', 'vendor/markdown-it/markdown-it.umd.min.js', 'vendor/tiptap/tiptap.umd.min.js',
++  'assets/life/post-markdown.js', 'assets/life/post-markdown-editor.js', 'assets/life/writing-ai.js'];
++async function main() {
++  await fs.mkdir(OUT, { recursive: true });
++  const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
++  const errors = [], requests = [], results = [];
++  async function check(name, run) {
++    const context = await browser.newContext({ viewport: { width: 390, height: 900 }, locale: 'ko-KR' });
++    await context.route('**/*', route => { requests.push(route.request().url()); return route.abort(); });
++    const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
++    page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
++    try {
++      await page.setContent('<!doctype html><meta charset="utf-8"><style>.ProseMirror{white-space:pre-wrap;padding:20px;min-height:100px}figure{margin:0}</style><main id="host"></main>');
++      for (const asset of assets) await page.addScriptTag({ path: path.join(ROOT, asset) });
++      await page.evaluate(() => {
++        window.Delta = Quill.import('delta'); window.M = HaedoLife.PostMarkdown; window.A = HaedoLife.PostMarkdownEditor;
++        window.open = markdown => {
++          window.bridge?.dispose(); document.querySelector('#host').replaceChildren(); window.events = [];
++          window.bridge = A.createBridge({ element: document.querySelector('#host'), markdown });
++          bridge.on('text-change', (delta, old, origin) => events.push({ delta: delta.ops, old: old.ops, origin, history: bridge.history.ignoreChange }));
++        };
++      });
++      await run(page); results.push({ name, pass: true }); console.log('PASS ' + name);
++    } catch (e) { results.push({ name, pass: false, error: e.stack }); console.error('FAIL ' + name + '\n' + e.stack); }
++    finally { await context.close(); }
++  }
++  try {
++    await check('public instance lookup follows editor children and releases disposed instances', async page => {
++      const result = await page.evaluate(() => {
++        open('본문\n'); const host = document.querySelector('#host'), root = bridge.root, child = root.firstChild;
++        const found = [host, root, child].every(node => A.find(node) === bridge);
++        bridge.dispose(); return { found, removed: [host, root, child].every(node => A.find(node) === null) };
++      });
++      assert.deepEqual(result, { found: true, removed: true });
++    });
++    await check('Delta positions across heading, list, quote, emoji and photos select exact text', async page => {
++      const value = await page.evaluate(() => {
++        open('# 제목\n\n- 항목😀\n\n> 인용\n\n![대체](haedo-photo:p "설명")\n\n끝\n');
++        const ops = bridge.getContents().ops, text = bridge.getText();
++        const at = text.indexOf('항목'); bridge.setSelection(at, 4); const selected = bridge.getContents(at, 4).ops.map(x => x.insert).join('');
++        const range = bridge.getSelection(); const pm = bridge.editor.state.selection;
++        return { selected, range, at, pmFrom: pm.from, photo: bridge.getPhotoIndex('p'), ops };
++      });
++      assert.equal(value.selected, '항목😀'); assert.deepEqual(value.range, { index: value.at, length: 4 });
++      assert.notEqual(value.pmFrom, value.at + 1); assert(value.photo > value.at);
++    });
++    await check('AI partial multi-line acceptance preserves marks/photos and is one undo after prior typing', async page => {
++      const result = await page.evaluate(() => {
++        open('**가나다**\n\n![대체](haedo-photo:p "설명")\n\n끝\n');
++        bridge.setSelection(3); bridge.editor.commands.insertContent('X');
++        const manual = bridge.getMarkdown(), before = bridge.getContents();
++        const ai = HaedoLife.WritingAI.create({ request: async () => { throw new Error('No request expected'); }, isCurrent: () => true });
++        const next = ai.apply(before.ops, { token: {}, index: 0, length: 3, original: '가나다',
++          ranges: [{ id: 'a', start: 0, end: 1, before: '가', insert: '거절' }, { id: 'b', start: 1, end: 3, before: '나다', insert: '새\n줄' }], accepted: ['b'] });
++        bridge.history.cutoff(); bridge.updateContents(before.diff(new Delta(next.ops)), 'user'); bridge.history.cutoff();
++        const applied = bridge.getMarkdown(); bridge.history.undo(); const undo = bridge.getMarkdown();
++        bridge.history.undo(); const twice = bridge.getMarkdown(); bridge.history.redo(); bridge.history.redo();
++        return { manual, applied, undo, twice, redo: bridge.getMarkdown(), events, photos: bridge.getContents().ops.filter(x => x.insert.photo) };
++      });
++      assert.equal(result.undo, result.manual); assert.equal(result.redo, result.applied); assert.notEqual(result.twice, result.manual);
++      assert.match(result.applied, /data-author="ai"/); assert(!result.applied.includes('거절'));
++      assert.deepEqual(result.photos.map(x => x.insert.photo), [{ id: 'p', caption: '설명', alt: '대체' }]);
++      assert(result.events.some(e => e.history));
++    });
++    await check('normal typed text inherits AI for the owner cleanup hook and undo does not strip old marks', async page => {
++      await page.evaluate(() => { open('<span data-author="ai">AI</span>\n'); bridge.setSelection(1); bridge.focus(); });
++      await page.keyboard.insertText('내');
++      const typed = await page.evaluate(() => ({ ops: bridge.getContents().ops, events }));
++      assert(typed.events.some(e => e.delta.some(op => op.insert === '내' && op.attributes?.author === 'ai')));
++      const result = await page.evaluate(() => {
++        bridge.formatText(1, 1, 'author', false, 'user'); const normalized = bridge.getContents().ops;
++        bridge.history.undo(); const old = bridge.getContents().ops;
++        bridge.history.redo(); return { normalized, old, redone: bridge.getContents().ops };
++      });
++      const plain = result.normalized.find(op => op.insert.includes?.('내')); assert.equal(plain.attributes?.author, undefined);
++      assert.equal(result.old.filter(op => typeof op.insert === 'string').map(op => op.insert).join(''), 'AI\n');
++      assert.equal(result.old[0].attributes.author, 'ai'); assert.deepEqual(result.redone, result.normalized);
++    });
++    await check('caption update preserves photo node, focused inspector input, and undo content', async page => {
++      const result = await page.evaluate(() => {
++        open('앞\n\n![대체](haedo-photo:p "원래")\n\n뒤\n');
++        const figure = document.querySelector('.photo-block'), input = document.createElement('textarea');
++        input.setAttribute('aria-label', '사진 설명'); input.value = '원래'; figure.append(input); input.focus(); input.setSelectionRange(1, 1);
++        bridge.history.cutoff(); bridge.updatePhoto('p', { caption: '새 설명\n다음', alt: '새 대체' }); bridge.history.cutoff();
++        const updated = { same: figure === document.querySelector('.photo-block'), focused: document.activeElement === input,
++          input: input.value, attrs: bridge.getContents().ops.find(x => x.insert.photo).insert.photo };
++        bridge.history.undo(); return { updated, old: bridge.getContents().ops.find(x => x.insert.photo).insert.photo, sameAfter: figure === document.querySelector('.photo-block') };
++      });
++      assert.equal(result.updated.same, true); assert.equal(result.updated.focused, true); assert.equal(result.updated.input, '새 설명\n다음');
++      assert.deepEqual(result.updated.attrs, { id: 'p', caption: '새 설명\n다음', alt: '새 대체' });
++      assert.equal(result.old.caption, '원래'); assert.equal(result.sameAfter, true);
++    });
++    await check('one validated insertion handles consecutive photos, movement and deletion undo', async page => {
++      const result = await page.evaluate(() => {
++        open('앞\n'); const change = new Delta().retain(2).insert({ photo: { id: 'a', caption: 'A', alt: '' } }).insert({ photo: { id: 'b', caption: 'B', alt: '' } });
++        bridge.history.cutoff(); bridge.updateContents(change, 'user'); bridge.history.cutoff();
++        const inserted = bridge.getMarkdown(); bridge.movePhoto('b', -1); const moved = bridge.getContents().ops.filter(x => x.insert.photo).map(x => x.insert.photo.id);
++        bridge.removePhoto('a'); const removed = bridge.getContents().ops.filter(x => x.insert.photo).map(x => x.insert.photo.id);
++        bridge.history.undo(); const restored = bridge.getContents().ops.filter(x => x.insert.photo).map(x => x.insert.photo.id);
++        bridge.history.undo(); return { inserted, moved, removed, restored, undoMove: bridge.getMarkdown() };
++      });
++      assert.deepEqual(result.moved, ['b', 'a']); assert.deepEqual(result.removed, ['b']); assert.deepEqual(result.restored, ['b', 'a']); assert.equal(result.undoMove, result.inserted);
++    });
++    await check('composition guards committed state, immediate end flush emits once and dispose blocks delayed work', async page => {
++      const result = await page.evaluate(async () => {
++        open('기존\n'); bridge.root.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
++        bridge.editor.view.dispatch(bridge.editor.state.tr.insertText('새', 1));
++        const during = { committed: bridge.getCommittedMarkdown(), count: events.length };
++        let refused; try { await bridge.flush(); } catch (e) { refused = e.code; }
++        bridge.root.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
++        const flushed = await bridge.flush(), count = events.length;
++        await new Promise(resolve => setTimeout(resolve, 60)); const later = events.length;
++        bridge.dispose(); let disposed; try { bridge.insertText(0, 'X'); } catch (e) { disposed = e.code; }
++        return { during, refused, flushed, count, later, disposed };
++      });
++      assert.deepEqual(result.during, { committed: '기존\n', count: 0 }); assert.equal(result.refused, 'composition_active');
++      assert.equal(result.flushed, '새기존\n'); assert.equal(result.count, 1); assert.equal(result.later, 1); assert.equal(result.disposed, 'editor_disposed');
++    });
++    await check('silent setContents and history clear do not emit saved edits or retain old history', async page => {
++      const result = await page.evaluate(() => {
++        open('원래\n'); bridge.insertText(0, 'X', 'user'); bridge.setContents([{ insert: '새 문서\n' }], 'silent');
++        bridge.history.clear(); const count = events.length, before = bridge.getMarkdown(); const changed = bridge.history.undo();
++        return { count, before, after: bridge.getMarkdown(), changed };
++      });
++      assert.equal(result.count, 1); assert.equal(result.before, '새 문서\n'); assert.equal(result.after, result.before); assert.equal(result.changed, false);
++    });
++    await check('collapsed toolbar format follows stored marks and paragraph formatting', async page => {
++      const result = await page.evaluate(() => {
++        open('- **본문**\n'); bridge.setSelection(2); const before = bridge.getFormat();
++        bridge.format('bold', false); const off = bridge.getFormat(); bridge.format('italic', true); const italic = bridge.getFormat();
++        bridge.setSelection(0, 2); const selected = bridge.getFormat(); bridge.setSelection(1); bridge.format('header', 2);
++        return { before, off, italic, selected, heading: bridge.getMarkdown(), header: bridge.getFormat().header };
++      });
++      assert.deepEqual(result.before, { bold: true, list: 'bullet' });
++      assert.deepEqual(result.off, { list: 'bullet' }); assert.deepEqual(result.italic, { italic: true, list: 'bullet' });
++      assert.deepEqual(result.selected, { bold: true, list: 'bullet' }); assert.equal(result.header, 2); assert.equal(result.heading, '## **본문**\n');
++    });
++    await check('large packed AI and owner document survives editing and immediate composition flush', async page => {
++      const result = await page.evaluate(async () => {
++        const markdown = '<span data-author="ai">가</span>\n\n'.repeat(2600) + '사람\n'; open(markdown);
++        const before = bridge.getContents().ops.length; bridge.setSelection(5200); bridge.focus();
++        bridge.root.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
++        bridge.editor.view.dispatch(bridge.editor.state.tr.insertText('새'));
++        bridge.root.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
++        await bridge.flush(); const ops = bridge.getContents().ops, last = ops.filter(op => typeof op.insert === 'string').at(-1);
++        return { before, after: ops.length, ending: bridge.getMarkdown().slice(-10), author: last.attributes?.author, count: events.length };
++      });
++      assert(result.before <= 5000); assert(result.after <= 5000); assert(result.ending.endsWith('새사람\n')); assert.equal(result.author, undefined); assert.equal(result.count, 1);
++    });
++    await check('native input and API refuse over-limit content before changing body or history', async page => {
++      const result = await page.evaluate(() => {
++        open('가'.repeat(49999) + '\n'); const before = bridge.getMarkdown(); bridge.setSelection(1);
++        bridge.editor.view.dispatch(bridge.editor.state.tr.insertText('나')); const nativeSame = bridge.getMarkdown() === before;
++        let failure; try { bridge.insertText(1, '나'); } catch (e) { failure = e.code; }
++        return { nativeSame, apiSame: bridge.getMarkdown() === before, failure, events: events.length, undo: bridge.history.undo() };
++      });
++      assert.deepEqual(result, { nativeSame: true, apiSame: true, failure: 'invalid_editor_document', events: 0, undo: false });
++    });
++    await check('native formatting and invalid body update preserve exact history when rejected', async page => {
++      const result = await page.evaluate(() => {
++        open('본문\n'); bridge.setSelection(0, 2); bridge.format('bold', true); bridge.format('list', 'bullet');
++        const formatted = bridge.getMarkdown(); let failure;
++        try { bridge.updateContents(new Delta().retain(0).insert({ photo: { id: 'invalid id', caption: '', alt: '' } }), 'user'); } catch (e) { failure = e.code; }
++        return { formatted, same: bridge.getMarkdown() === formatted, failure, range: bridge.getSelection() };
++      });
++      assert.match(result.formatted, /- \*\*본문\*\*/); assert.equal(result.same, true); assert.equal(result.failure, 'invalid_editor_document');
++    });
++  } finally {
++    await browser.close(); await fs.writeFile(path.join(OUT, 'report.json'), JSON.stringify({ results, errors, requests }, null, 2));
++  }
++  assert.deepEqual(errors, []); assert.deepEqual(requests, []); assert(results.every(result => result.pass), 'bridge checks failed');
++  console.log('Bridge: ' + results.length + '/' + results.length + ', console/page/external 0');
++}
++main().catch(error => { console.error(error); process.exitCode = 1; });
+diff --git a/tests/post-markdown-writing-browser.cjs b/tests/post-markdown-writing-browser.cjs
+new file mode 100644
+index 0000000..27857d0
+--- /dev/null
++++ b/tests/post-markdown-writing-browser.cjs
+@@ -0,0 +1,291 @@
++/* Real D2 writing UI → IndexedDB → real B3 Edge/isolated PostgreSQL → public reader.
++ * Auth/Storage/library HTTP is synthetic. HEIC fixture has a synthetic ftyp original
++ * and a real canvas JPEG view: byte preservation, not device HEIC decoding.
++ * BASE_URL=http://127.0.0.1:4256 BLOG_POSTGRES_CONTAINER=haedo-blog-postgres-...
++ * BLOG_POSTGRES_DATABASE=haedo_blog_qa_b2_... node tests/post-markdown-writing-browser.cjs --prepare-database
++ */
++'use strict';
++process.env.BASE_URL ||= 'http://127.0.0.1:4256';
++const assert = require('node:assert/strict');
++const fs = require('node:fs/promises'), path = require('node:path');
++const { createHash } = require('node:crypto');
++const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
++const { openBlogMenu } = require('./helpers/feature-menus.cjs');
++const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
++const { MarkdownPublishCloud, syntheticSession } = require('./helpers/post-markdown-publish-cloud.cjs');
++const output = path.resolve(process.env.MARKDOWN_WRITING_OUTPUT || '.local/post-markdown-writing');
++const report = { checks: [], consoleErrors: [], pageErrors: [], external: [], dialogs: [],
++  scope: 'Real Chromium UI, SDK/IDB, B3 publication/media handlers and isolated PostgreSQL. Synthetic Auth/Storage/library transport and scoped native IDB abort. Synthetic composition events do not prove physical Korean IME behavior. Synthetic HEIC header with real JPEG view proves byte preservation, not HEIC decoding or Apple-device behavior.' };
++const sha = bytes => createHash('sha256').update(bytes).digest('hex');
++// B3's SQL fixture owns blog-original Storage paths. Route library-original
++// paths to the existing library transport instead of its blog-only assertion.
++class WritingCloud extends MarkdownPublishCloud {
++  async handle(route, device) {
++    if (/^\/storage\/v1\/object\/(?:authenticated\/)?life-library-originals(?:\/|$)/.test(new URL(route.request().url()).pathname))
++      return FakeCloud.prototype.handle.call(this, route, device);
++    return super.handle(route, device);
++  }
++}
++async function poll(read, accept, label, timeout = 30000) {
++  const start = Date.now(); let value;
++  do { value = await read(); if (accept(value)) return value; await new Promise(resolve => setTimeout(resolve, 100)); } while (Date.now() - start < timeout);
++  throw Error(label + ': ' + JSON.stringify(value));
++}
++const body = page => page.locator('.post-markdown-editor[contenteditable="true"]');
++async function documents(page) {
++  return page.evaluate(async () => {
++    const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws);
++    return Promise.all(rows.map(async row => {
++      const doc = await s.readPhotoPost(ws, row.id);
++      return { ...doc, photos: await Promise.all(doc.photos.map(async p => {
++        const { blob, view, ...meta } = p;
++        return { ...meta, actual: await HaedoLife.PhotoPost.digest(blob), ...(view ? { view: { ...view, blob: undefined, actual: await HaedoLife.PhotoPost.digest(view.blob) } } : {}) };
++      })), evidence: await s.readPostEvidence(ws, row.id), opsView: HaedoLife.PhotoPost.contentOps(doc) };
++    }));
++  });
++}
++async function savedByTitle(page, title) {
++  return poll(() => documents(page), docs => docs.some(d => d.title === title && d.status === 'saved'), 'saved ' + title).then(docs => docs.find(d => d.title === title && d.status === 'saved'));
++}
++async function reader(page, id) {
++  await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
++  await page.locator('[data-photo-post-id="' + id + '"] .home-post-open').click();
++  await page.locator('.photo-article').waitFor();
++}
++async function seedLegacy(page, label, boundary = false) {
++  return page.evaluate(async ({ label, boundary }) => {
++    const L = HaedoLife, s = L.Shell.storage, C = L.Core, P = L.PhotoPost, ws = await s.getActive();
++    const raw = '\ufeff원문\r\ne\u0301와 🌱 정확한 과거 판\r\n끝', quote = 'e\u0301와 🌱 정확한 과거 판';
++    const initial = await s.read(ws), old = await C.prepareImport({ origin: 'obsidian', title: 'D2 근거 ' + label, text: raw, authorRelation: 'self' }, initial);
++    let next = C.applyChanges(initial, C.buildImportChanges(initial, old));
++    const newer = await C.prepareImport({ origin: 'obsidian', title: 'D2 근거 ' + label, text: 'UNSELECTED_NEW_VERSION', existingSourceId: old.source.id, authorRelation: 'self' }, next);
++    next = C.applyChanges(next, C.buildImportChanges(next, newer));
++    const result = await s.commitLocal({ workspaceId: ws, baseRevision: initial.revision, operationId: C.id(), changes: { put: { sources: next.sources, sourceVersions: next.sourceVersions, records: next.records } } });
++    if (result.status !== 'stored') throw Error('source fixture failed');
++    const bundle = await s.read(ws), ref = await L.SourceReference.build({ bundle, sourceId: old.source.id, versionId: old.version.id, locator: { start: raw.indexOf(quote), end: raw.indexOf(quote) + quote.length } });
++    const photos = [];
++    for (const [name, color] of [['A', '#dc1e1e'], ['B', '#1eb43c']]) {
++      const canvas = document.createElement('canvas'); canvas.width = 24; canvas.height = 16;
++      const g = canvas.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 24, 16);
++      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
++      photos.push(await P.readPhoto(new File([blob], name + '.png', { type: 'image/png' }), C.id));
++    }
++    const canvas = document.createElement('canvas'); canvas.width = 24; canvas.height = 16;
++    canvas.getContext('2d').fillRect(0, 0, 24, 16);
++    const jpeg = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
++    const bytes = new Uint8Array(88); new DataView(bytes.buffer).setUint32(0, 24);
++    bytes.set(new TextEncoder().encode('ftypheic\0\0\0\0mif1heic'), 4);
++    for (let i = 24; i < bytes.length; i++) bytes[i] = i * 7 & 255;
++    const blob = new Blob([bytes], { type: 'image/heic' });
++    photos.push({ id: C.id(), name: 'preserved.HEIC', type: blob.type, width: 24, height: 16, size: blob.size, digest: await P.digest(blob), blob,
++      view: { type: jpeg.type, width: 24, height: 16, size: jpeg.size, digest: await P.digest(jpeg), blob: jpeg } });
++    const doc = P.create(C.id); doc.title = 'D2 과거 원본 ' + label; doc.status = 'saved'; doc.photos = photos;
++    doc.ops = [{ insert: '직접 쓴 e\u0301와 🌱\n' }, { insert: '굵은 문장', attributes: { bold: true } }, { insert: '\n' },
++      { insert: { photo: { id: photos[1].id, caption: 'B 설명', alt: '초록' } } }, { insert: '사진 사이\n' },
++      { insert: { photo: { id: photos[0].id, caption: 'A 설명', alt: '빨강' } } }, { insert: '\n끝 문단\n' }];
++    if (boundary) doc.ops[2] = { insert: '사진 앞 나눔 없는 경계' };
++    const saved = await s.savePhotoPostWithEvidence(ws, doc, 0, [ref], 0);
++    return { ws, id: saved.id, title: saved.title, photoIds: photos.map(p => p.id), raw, ref };
++  }, { label, boundary });
++}
++async function main() {
++  assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname));
++  await fs.mkdir(output, { recursive: true });
++  const server = new WritingCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE }).enableAccountLibrary();
++  if (process.argv.includes('--prepare-database')) {
++    server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
++    const apply = sql => server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], sql);
++    for (const file of ['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql',
++      'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql',
++      'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql',
++      'supabase/migrations/20261105051632_life_post_markdown.sql']) apply(await fs.readFile(path.resolve(__dirname, '..', file), 'utf8'));
++    apply("create table auth.users(id uuid primary key,is_anonymous boolean not null default false); create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz); create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$; grant execute on function auth.jwt() to authenticated,service_role;");
++    apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
++  }
++  await server.initialize(); report.sources = [];
++  for (const file of ['assets/life/photo-post-ui.js', 'assets/life/photo-post.js', 'assets/life/post-markdown-editor.js', 'assets/life/post-markdown.js', 'assets/life/storage.js', 'vendor/tiptap/tiptap.umd.min.js']) {
++    const response = await fetch(base + '/' + file); assert(response.ok);
++    const actual = Buffer.from(await response.arrayBuffer()), expected = await fs.readFile(path.resolve(__dirname, '..', file));
++    assert.equal(sha(actual), sha(expected), 'serve this checkout: ' + file); report.sources.push({ file, sha256: sha(expected) });
++  }
++  const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
++  report.browser = browser.version(); const contexts = [], pages = [], rejectNextDialog = new WeakSet();
++  async function device(name, width, account = accounts.a) {
++    const context = await makeContext(browser, server, name, account, { viewport: { width, height: 1000 } }); contexts.push(context);
++    await context.route('**/*', route => {
++      const origin = new URL(route.request().url()).origin;
++      if ([new URL(base).origin, cloud].includes(origin)) return route.fallback();
++      report.external.push(origin); return route.abort();
++    });
++    if (!account) await context.addInitScript(() => {
++      for (const key of ['indexedDB', 'localStorage', 'sessionStorage']) Object.defineProperty(window, key, { get() { throw Error('Anonymous private storage access: ' + key); } });
++    });
++    const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(20000);
++    page.on('pageerror', error => report.pageErrors.push({ name, message: error.message }));
++    page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ name, message: event.text(), url: event.location().url }); });
++    page.on('dialog', async dialog => {
++      const reject = rejectNextDialog.has(page); rejectNextDialog.delete(page);
++      report.dialogs.push({ name, type: dialog.type(), message: dialog.message(), accepted: !reject });
++      if (reject) await dialog.dismiss(); else await dialog.accept();
++    });
++    if (account) {
++      await page.goto(base + '/index.html'); await ready(page);
++      await page.evaluate(async value => { const result = await HaedoAuth.client.auth.setSession(value); if (result.error) throw result.error; await HaedoAuth.verify(); }, syntheticSession(account));
++    }
++    return { page, context };
++  }
++  const pass = name => { report.checks.push({ name, pass: true }); console.log('PASS ' + name); };
++  try {
++    for (const width of (process.env.MARKDOWN_WRITING_WIDTHS || '390,1440').split(',').map(Number)) {
++      const owner = await device('d2-owner-' + width, width), page = owner.page;
++      // Empty accounts open the writer. Subsequent width/device may already have account posts.
++      if (!await page.locator('#photoTitle').count()) await page.locator('[data-haedo-compose]').click();
++      await page.locator('#photoTitle').fill('D2 새 글 ' + width);
++      await body(page).pressSequentially('새 본문 e\u0301와 🌱');
++      await poll(() => documents(page), docs => docs.some(d => d.title === 'D2 새 글 ' + width && d.format === 'life-post-md-v1' && d.markdown.includes('새 본문')), 'Markdown autosave');
++      const draft = (await documents(page)).find(d => d.title === 'D2 새 글 ' + width);
++      assert.equal(Object.hasOwn(draft, 'ops'), false); assert.equal(draft.status, 'draft');
++      // Real keyboard undo/redo, then synthetic composition lifecycle (not native IME).
++      await body(page).press('End'); await body(page).pressSequentially('UNDO_SENTINEL');
++      await body(page).press('Control+z'); assert(!(await body(page).innerText()).includes('UNDO_SENTINEL'));
++      await body(page).press('Control+Shift+z'); assert((await body(page).innerText()).includes('UNDO_SENTINEL'));
++      const beforeOversize = await body(page).innerText();
++      await body(page).press('Control+a');
++      await body(page).evaluate(node => {
++        const data = new DataTransfer(); data.setData('text/plain', 'X'.repeat(50001));
++        node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
++      });
++      assert.equal(await body(page).innerText(), beforeOversize, 'rejected oversized paste retains selected source text');
++      await body(page).press('ArrowRight'); await body(page).press('Control+End');
++      await body(page).evaluate(node => node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' })));
++      await page.keyboard.insertText(' 조합 입력');
++      await body(page).evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '조합 입력' })));
++      await page.getByRole('button', { name: '글 저장', exact: true }).click();
++      const fresh = await savedByTitle(page, 'D2 새 글 ' + width);
++      assert(fresh.markdown.includes('조합 입력')); assert.equal(Object.hasOwn(fresh, 'ops'), false);
++      await page.reload(); await ready(page); await reader(page, fresh.id);
++      assert((await page.locator('.photo-article').innerText()).includes('조합 입력'));
++      pass(width + ': UI new Markdown, autosave, keyboard undo/redo, synthetic composition, explicit save and reload');
++
++      const f = await seedLegacy(page, String(width)), original = (await documents(page)).find(d => d.id === f.id);
++      await page.reload(); await ready(page); await reader(page, f.id);
++      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await body(page).waitFor();
++      await page.locator('#photoTitle').fill('D2 바뀐 글 ' + width);
++      await body(page).press('Control+End'); await body(page).pressSequentially('추가 문장');
++      await poll(() => documents(page), docs => docs.some(d => d.title === 'D2 바뀐 글 ' + width && d.status === 'draft'), 'legacy editing draft autosave');
++      assert.deepEqual((await documents(page)).find(d => d.id === f.id), original, 'autosave leaves exact v2 original intact');
++      assert.equal((await documents(page)).filter(d => d.title === '복구 사본 · ' + f.title).length, 0, 'autosave creates no recovery');
++      // Abort exactly the recovery put, inside the real native IDB transaction.
++      await page.evaluate(title => {
++        const put = IDBObjectStore.prototype.put;
++        window.__d2Abort = { hit: 0 };
++        IDBObjectStore.prototype.put = function(value, ...args) {
++          if (this.name === 'meta' && value?.value?.title === '복구 사본 · ' + title) {
++            IDBObjectStore.prototype.put = put; window.__d2Abort.hit++; this.transaction.abort();
++          }
++          return put.call(this, value, ...args);
++        };
++      }, f.title);
++      await page.getByRole('button', { name: '글 저장', exact: true }).click();
++      await page.waitForFunction(() => window.__d2Abort.hit === 1);
++      await page.waitForFunction(() => document.querySelector('.photo-status')?.dataset.state === 'error');
++      assert.deepEqual((await documents(page)).find(d => d.id === f.id), original, 'aborted transition retains exact original');
++      assert.equal((await documents(page)).filter(d => d.title === '복구 사본 · ' + f.title).length, 0);
++      assert((await body(page).innerText()).includes('추가 문장'), 'failed save keeps editor input');
++      await page.getByRole('button', { name: '글 저장', exact: true }).click();
++      const converted = await savedByTitle(page, 'D2 바뀐 글 ' + width), docs = await documents(page);
++      const recoveries = docs.filter(d => d.title === '복구 사본 · ' + f.title); assert.equal(recoveries.length, 1);
++      const recovery = recoveries[0]; assert.equal(recovery.format, original.format); assert.deepEqual(recovery.ops, original.ops);
++      assert.deepEqual(recovery.photos, original.photos); assert.deepEqual(recovery.evidence.refs, original.evidence.refs);
++      assert.deepEqual(converted.photos, original.photos); assert.deepEqual(converted.evidence.refs, original.evidence.refs);
++      assert.equal(converted.format, 'life-post-md-v1'); assert.equal(Object.hasOwn(converted, 'ops'), false);
++      assert.deepEqual(converted.opsView.filter(op => op.insert?.photo).map(op => op.insert.photo), original.opsView.filter(op => op.insert?.photo).map(op => op.insert.photo));
++      pass(width + ': v2 explicit transition is atomic on failure/retry, keeps one recovery and exact evidence/photo/unused HEIC/view bytes');
++
++      await page.screenshot({ path: path.join(output, 'reader-' + width + '.png'), fullPage: true });
++      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await body(page).waitFor();
++      await body(page).press('Control+End'); await body(page).pressSequentially('두 번째 수정');
++      await page.screenshot({ path: path.join(output, 'editor-' + width + '.png'), fullPage: true });
++      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'no horizontal overflow');
++      await page.getByRole('button', { name: '글 저장', exact: true }).click();
++      await poll(() => documents(page), ds => ds.some(d => d.title === converted.title && d.status === 'saved' && d.markdown?.includes('두 번째 수정')), 'second edit saved');
++      assert.equal((await documents(page)).filter(d => d.title === '복구 사본 · ' + f.title).length, 1, 'later Markdown edits create no legacy recovery');
++
++      const downloadPromise = page.waitForEvent('download');
++      await page.getByRole('button', { name: '사진 포함 백업', exact: true }).click();
++      const download = await downloadPromise, zipPath = path.join(output, 'roundtrip-' + width + '.zip'); await download.saveAs(zipPath);
++      const zip = await fs.readFile(zipPath);
++      const roundtrip = await page.evaluate(async bytes => {
++        const P = HaedoLife.PhotoPost, doc = await P.readBackup(new Blob([new Uint8Array(bytes)]), HaedoLife.Core.id);
++        return { format: doc.format, markdown: doc.markdown, photos: await Promise.all(doc.photos.map(async p => ({ digest: p.digest, actual: await P.digest(p.blob), view: p.view && { digest: p.view.digest, actual: await P.digest(p.view.blob) } }))),
++          body: P.contentOps(doc).map(op => op.insert?.photo ? { ...op, insert: { photo: { ...op.insert.photo, id: doc.photos.findIndex(p => p.id === op.insert.photo.id) } } } : op) };
++      }, [...zip]);
++      const current = (await documents(page)).find(d => d.title === converted.title && d.status === 'saved');
++      assert.equal(roundtrip.format, 'life-post-md-v1');
++      assert.deepEqual(roundtrip.photos, current.photos.map(p => ({ digest: p.digest, actual: p.actual, view: p.view && { digest: p.view.digest, actual: p.view.actual } })));
++      assert.deepEqual(roundtrip.body, current.opsView.map(op => op.insert?.photo ? { ...op, insert: { photo: { ...op.insert.photo, id: current.photos.findIndex(p => p.id === op.insert.photo.id) } } } : op));
++      pass(width + ': actual UI ZIP download roundtrips canonical body/order and original/view bytes through the product importer');
++
++      await poll(() => page.evaluate(async id => { const s = HaedoLife.Shell.storage; return s.readBlogSyncState(await s.getActive(), id); }, current.id), state => state?.status === 'synced' && !state.pending, 'account sync');
++      const other = await device('d2-other-' + width, width);
++      await poll(() => documents(other.page), ds => ds.some(d => d.title === current.title && d.markdown === current.markdown), 'second device gets Markdown');
++      const remote = (await documents(other.page)).find(d => d.title === current.title && d.markdown === current.markdown);
++      assert.deepEqual(remote.photos, current.photos); await page.reload(); await ready(page);
++      pass(width + ': separate browser device receives exact private Markdown/photo bytes via account sync');
++
++      await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click();
++      await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
++      await page.locator('.blog-post[data-post-id="' + current.id + '"]').getByRole('button', { name: '공개 내용 검토', exact: true }).click();
++      await page.locator('.blog-manager-preview').waitFor(); assert.equal(await page.locator('[data-photo-id]:checked').count(), 0);
++      const visitor = await device('d2-visitor-' + width, width, null);
++      for (const selected of [[], [f.photoIds[1]]]) {
++        for (const checkbox of await page.locator('[data-photo-id]').all()) await checkbox.setChecked(selected.includes(await checkbox.getAttribute('data-photo-id')));
++        await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click();
++        await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
++        await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
++        await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
++        await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
++        const link = page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href');
++        const published = server.rpc(null, 'life_blog_public_read', { p_token: new URL(url).searchParams.get('post') });
++        assert.equal(published.snapshot.photos.length, selected.length);
++        assert.deepEqual(published.snapshot.ops.filter(op => op.insert?.photo).map(op => op.insert.photo.id), selected);
++        await visitor.page.goto(url); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published');
++        assert.equal(await visitor.page.locator('#blogContent img').count(), selected.length);
++        assert((await visitor.page.locator('#blogContent').innerText()).includes('두 번째 수정'));
++        await visitor.page.waitForFunction(() => [...document.querySelectorAll('#blogContent img')].every(img => img.complete && img.naturalWidth > 0));
++        if (selected.length) assert(published.snapshot.photos.every(photo => !current.photos.some(original => original.digest === photo.digest)));
++        await visitor.page.screenshot({ path: path.join(output, 'public-' + width + '-' + selected.length + '.png'), fullPage: true });
++      }
++      assert.equal((await documents(page)).find(d => d.id === current.id).markdown, current.markdown);
++      pass(width + ': edited Markdown reaches real B3 Edge/SQL and anonymous reader with default zero or only explicitly selected photos');
++
++      const boundary = await seedLegacy(page, '취소 ' + width, true);
++      await page.reload(); await ready(page); await reader(page, boundary.id);
++      const beforeCancel = await documents(page), dialogsBefore = report.dialogs.length;
++      rejectNextDialog.add(page); await page.getByRole('button', { name: '글 수정', exact: true }).click();
++      await poll(async () => report.dialogs.length, count => count > dialogsBefore, 'boundary conversion confirmation');
++      assert.match(report.dialogs.at(-1).message, /문단/); assert.equal(report.dialogs.at(-1).accepted, false);
++      assert.equal(await body(page).count(), 0, 'cancel stays out of the Markdown editor');
++      await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
++      assert.deepEqual(await documents(page), beforeCancel, 'cancel followed by navigation never writes a converted or legacy editing draft');
++      await reader(page, boundary.id); assert.equal(await body(page).count(), 0);
++      pass(width + ': boundary conversion refusal, navigation and reopen preserve every original and create no draft/recovery');
++      await owner.context.close(); await other.context.close(); await visitor.context.close();
++    }
++    assert(server.edgeFetches.some(call => call.service && /publish_commit$/.test(call.path)));
++    assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []);
++    for (const source of report.sources) assert.equal(sha(await fs.readFile(path.resolve(__dirname, '..', source.file))), source.sha256, 'source changed during run: ' + source.file);
++    report.pass = true;
++  } catch (error) {
++    report.failure = error.stack;
++    for (let i = 0; i < pages.length; i++) if (!pages[i].isClosed()) {
++      await pages[i].screenshot({ path: path.join(output, 'failure-' + i + '.png'), fullPage: true }).catch(() => {});
++      await fs.writeFile(path.join(output, 'failure-' + i + '.html'), await pages[i].content()).catch(() => {});
++    }
++    throw error;
++  } finally {
++    await Promise.allSettled(contexts.map(context => context.close())); await browser.close();
++    report.edgeRequests = server.edgeRequests; await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
++  }
++}
++if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });

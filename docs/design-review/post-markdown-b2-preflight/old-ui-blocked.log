@@ -1,0 +1,8 @@
+PASS exact historical PhotoPostUI normal edit→native-IDB conversion rev2→old explicit save conflict retains visible input, target and original recovery {
+  oldUiSHA: '7d7a9ee98d9822991923761d3d8e7dae5d7d4640948a899327f67b3baa8b09ba',
+  draftRevision: 1,
+  targetRevision: 2
+}
+PASS noncooperative raw connection blocks upgrade; after it closes a failed open can still finish IDBversion upgrade without migration writes {"beforeClose":{"events":["storage_version_changed","raw-versionchange:1>2"],"version":1},"late":{"failure":"storage_blocked","version":2}}
+SW registrations 0
+Browser 151.0.7922.173

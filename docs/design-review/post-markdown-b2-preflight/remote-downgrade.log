@@ -1,0 +1,2 @@
+state error shape "photo_post_update_required"
+PASS safety but blocked convergence: newerremotev2 -> localmd guard keeps both originals, whole conflict transaction aborts before recoverycopy {"localFormat":"life-post-md-v1","remoteFormat":"life-photo-post-v2","error":"photo_post_update_required","localRows":1}

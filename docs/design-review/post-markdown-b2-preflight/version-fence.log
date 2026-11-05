@@ -1,0 +1,12 @@
+PASS exact pinned old connection closes on versionchange; old reopen(version1) rejected [ 'storage_version_changed', 'storage_version_changed' ]
+PASS current commitBlogSync real-IDB atomic conversion+recovery rollback/success {
+  aborted: true,
+  error: 'storage_aborted',
+  oldFormat: 'life-photo-post-v2',
+  newFormat: 'life-post-md-v1',
+  newRevision: 2,
+  copyFormat: 'life-photo-post-v2',
+  exactOps: true,
+  draftPreserved: true
+}
+Browser 151.0.7922.173

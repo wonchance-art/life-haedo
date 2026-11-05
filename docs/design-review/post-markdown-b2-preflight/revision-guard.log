@@ -1,0 +1,11 @@
+PASS no DB bump: exactold pendingv2draft save rejects targetrevision mismatch; old read cannot create fresh editingdraft from md target nor resume md editingdraft {
+  errors: [ 'photo_post_conflict', 'invalid_photo_post', 'invalid_photo_post' ],
+  draftRevision: 1,
+  draftReplaces: { id: '4e302e45-196b-459f-93c5-b3ba73738717', revision: 1 }
+}
+PASS target+originalrecovery+mdedit preserved {
+  target: 'life-post-md-v1',
+  copy: 'life-photo-post-v2',
+  edit: 'life-post-md-v1'
+}
+Browser 151.0.7922.173
