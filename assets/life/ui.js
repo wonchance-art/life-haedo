@@ -2844,7 +2844,7 @@
       const Settings = global.HaedoLife.SettingsUI;
       const workspaceId = state.bundle.workspaceId, renderToken = renderGeneration;
       const manage = Settings.row({ label: '현재 자료공간', ariaLabel: '현재 자료공간', description: '현재 작업공간. 눌러 다른 작업공간을 선택합니다.',
-        sub: (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개',
+        sub: Settings.formatWorkspaceCount?.(state.bundle, { local: !managedLibrary }),
         value: state.bundle.title || '내 자료', id: 'lifeCurrentWorkspace', focusKey: 'manage:workspace', onClick: guarded(() => {}) });
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
@@ -2915,6 +2915,7 @@
         readLanguages: storage.readDiscoveryLanguageSettings ? () => storage.readDiscoveryLanguageSettings(workspaceId) : null
       } : null;
       settingsUI = Settings.create({
+        storage, workspaceId,
         rows: { account: accountRows, workspace: [manage, management], backup: [open], public: [cover, pages] },
         account: { email: auth?.getAccount?.()?.email || '' }, news,
         isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId

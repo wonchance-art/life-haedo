@@ -46,6 +46,8 @@ const blogPublicCopiesMigration = 'supabase/migrations/20261102120000_life_blog_
 // settle, release, cap, RLS and concurrency cases run in supabase/tests/life-ai-usage.sql
 // and run-sql-replay-postgres.
 const aiUsageMigration = 'supabase/migrations/20261104090000_life_ai_usage.sql';
+// D: fixture-verified private RSS intake, disabled until the reviewed URL is configured.
+const rssIntakeMigration = ['supabase/migrations/20261105051010_rss_private_intake.sql', 'd4914f97717f81e55cc05cefa642bff5e4137753bdaa3becdc8cc8914866187c'];
 // B1 schema/publication guards are exercised by run-post-markdown-sql-postgres.
 const postMarkdownMigration = ['supabase/migrations/20261105051632_life_post_markdown.sql', 'f4860de28a2010fb90257c3ce587a526c334ef4306d841110705708150edfb62'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
@@ -83,8 +85,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], privateReaderMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration, postMarkdownMigration[0]].sort(),
-      'Exactly the ten legacy and twenty-four reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], privateReaderMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration, rssIntakeMigration[0], postMarkdownMigration[0]].sort(),
+      'Exactly the ten legacy and twenty-five reviewed additive migrations are required; missing or unknown files are rejected.');
     assert.equal(hash(await fs.readFile(path.join(root, postMarkdownMigration[0]))), postMarkdownMigration[1], 'Reviewed Markdown migration changed.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
@@ -658,6 +660,56 @@ async function main() {
       assert.deepEqual(claim(), expected); assert.deepEqual(privateData(), populated);
       psql(await fs.readFile(path.join(root, 'supabase/tests/discovery-private-installation.sql'), 'utf8'));
       report.privateReaderMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, existingRowsAndPrivilegesPreserved: true, populatedCacheReinstallPreserved: true, exactCachedResponse: true, syntheticLiveSession: true, hostedAccess: false };
+    });
+    await check('Reviewed RSS installation rolls back atomically, preserves all populated rows and catalog entries, and starts private and disabled', async () => {
+      const [file, expectedHash] = rssIntakeMigration;
+      const ddl = await fs.readFile(path.join(root, file), 'utf8');
+      assert.equal(hash(ddl), expectedHash, 'Only the exact independently reviewed RSS migration is accepted.');
+      assert.match(ddl, /begin;/); assert.match(ddl, /commit;\s*$/i);
+      const allNamespaces = "array(select nspname from pg_namespace where nspname !~ '^pg_' and nspname not in ('information_schema','installation_probe'))";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      psql(`create function installation_probe.rss_prior_data_snapshot() returns jsonb language plpgsql as $$
+ declare r record; data jsonb; result jsonb:='{}';begin
+ for r in select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname=any(${allNamespaces}) and c.relkind='r' order by n.nspname,c.relname loop
+ execute format('select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),''[]''::jsonb) from %I.%I t',r.nspname,r.relname) into data;
+ result:=result||jsonb_build_object(r.nspname||'.'||r.relname,data);end loop;return result;end $$;`);
+      const dataSnapshot = () => sql('select installation_probe.rss_prior_data_snapshot();');
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog);
+      assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.equal(sql("select to_jsonb(to_regnamespace('haedo_rss_private') is null and not exists(select 1 from pg_proc where pronamespace='public'::regnamespace and proname like 'life_rss_%'));"), true);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog);
+      psql(ddl);
+      const installedData = dataSnapshot(), installedCatalog = sql(allCatalog);
+      assert.deepEqual(Object.keys(installedData).filter(key => key.startsWith('haedo_rss_private.')).sort(),
+        ['connections','items','observations','receipts','runtime'].map(name => 'haedo_rss_private.' + name).sort());
+      assert.deepEqual(installedData['haedo_rss_private.runtime'], [{ singleton: true, ready: false, allowed_feed_urls: [] }]);
+      for (const name of ['connections','items','observations','receipts']) assert.deepEqual(installedData['haedo_rss_private.' + name], []);
+      assert.deepEqual(Object.fromEntries(Object.entries(installedData).filter(([key]) => !key.startsWith('haedo_rss_private.'))), intactData);
+      const userNames = ['control','list','save'], workerNames = ['claim','due','finish','known'];
+      const publicNames = [...userNames,...workerNames].map(name => 'life_rss_' + name).sort();
+      assert.deepEqual(installedCatalog.functions.filter(row => row[0] === 'public' && row[1].startsWith('life_rss_')).map(row => row[1]).sort(), publicNames);
+      assert.deepEqual({
+        schemas: installedCatalog.schemas.filter(row => row[0] !== 'haedo_rss_private'),
+        functions: installedCatalog.functions.filter(row => row[0] !== 'haedo_rss_private' && !(row[0] === 'public' && publicNames.includes(row[1]))),
+        relations: installedCatalog.relations.filter(row => row[0] !== 'haedo_rss_private'),
+        policies: installedCatalog.policies.filter(row => row.schemaname !== 'haedo_rss_private')
+      }, intactCatalog, 'Only the new private RSS schema and seven exact public RPC wrappers may change the prior installation.');
+      const gates = sql("select jsonb_build_object('rls',(select count(*)=5 and bool_and(relrowsecurity) from pg_class where relnamespace='haedo_rss_private'::regnamespace and relkind='r'),'privateTables',(select bool_and(not has_table_privilege(r,c.oid,'SELECT,INSERT,UPDATE,DELETE')) from unnest(array['anon','authenticated','service_role']) r cross join pg_class c where c.relnamespace='haedo_rss_private'::regnamespace and c.relkind='r'),'helperPrivate',(select bool_and(not has_function_privilege(r,'haedo_rss_private.view_connection(haedo_rss_private.connections)','execute')) from unnest(array['anon','authenticated','service_role']) r));");
+      assert(Object.values(gates).every(Boolean));
+      const functionGates = sql("select jsonb_agg(jsonb_build_object('schema',n.nspname,'name',p.proname,'definer',p.prosecdef,'path',p.proconfig,'anon',has_function_privilege('anon',p.oid,'execute'),'authenticated',has_function_privilege('authenticated',p.oid,'execute'),'service',has_function_privilege('service_role',p.oid,'execute')) order by n.nspname,p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_rss_private' and p.proname<>'view_connection' or n.nspname='public' and p.proname like 'life_rss_%';");
+      assert.equal(functionGates.length, 14);
+      for (const gate of functionGates) {
+        const name = gate.schema === 'public' ? gate.name.slice('life_rss_'.length) : gate.name;
+        assert(userNames.includes(name) || workerNames.includes(name));
+        assert.equal(gate.definer, gate.schema === 'haedo_rss_private'); assert.deepEqual(gate.path, ['search_path=pg_catalog']);
+        assert.equal(gate.anon, false); assert.equal(gate.authenticated, userNames.includes(name)); assert.equal(gate.service, workerNames.includes(name));
+      }
+      assert.equal(rpc('life_rss_list', [q(bundle.workspaceId) + '::uuid']).ready, false);
+      assert.deepEqual(rpc('life_rss_due', ['2'], 'service_role'), []);
+      assert.throws(() => rpc('life_rss_save', [q(bundle.workspaceId) + '::uuid', q('https://fixture.example.test/feed.xml')]), /rss_setup_required/);
+      assert.deepEqual(dataSnapshot(), installedData, 'Disabled RPC probes must not alter any old or new data.');
+      assert.deepEqual(sql(allCatalog), installedCatalog);
+      report.rssIntakeMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, existingRowsAndCatalogExact: true, runtimeDisabled: true, noAllowedFeeds: true, privateRegistryGates: gates, userRpcCount: 3, workerRpcCount: 4 };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';
