@@ -15,7 +15,7 @@
   // photos are compared by their recorded digests, in order.
   function restoredContent(doc) {
     const order = new Map((doc.photos || []).map((photo, index) => [photo.id, index]));
-    const ops = (doc.ops || []).map(op => op?.insert?.photo ? { ...op, insert: { photo: { ...op.insert.photo, id: order.get(op.insert.photo.id) ?? null } } } : op);
+    const ops = (life.PhotoPost.contentOps(doc) || []).map(op => op?.insert?.photo ? { ...op, insert: { photo: { ...op.insert.photo, id: order.get(op.insert.photo.id) ?? null } } } : op);
     const photos = (doc.photos || []).map(photo => [photo.name, photo.type, photo.width, photo.height, photo.size, photo.digest,
       photo.view ? [photo.view.type, photo.view.width, photo.view.height, photo.view.size, photo.view.digest] : null]);
     return JSON.stringify([doc.title, doc.status, doc.archived === true, ops, photos, doc.attachments || []]);
@@ -365,7 +365,7 @@
           const doc = await storage.readPhotoPost(row.workspaceId || context.workspaceId, row.id);
           if (!current()) return;
           if (doc.status !== 'saved' || doc.archived !== !!row.archived) throw new Error('post_changed');
-          const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
+          const embedded = life.PhotoPost.contentOps(doc).find(op => op.insert?.photo)?.insert.photo;
           const photo = doc.photos.find(item => item.id === embedded?.id);
           // HEIC originals are displayed through their JPEG view.
           const display = photo?.view?.blob ?? photo?.blob;

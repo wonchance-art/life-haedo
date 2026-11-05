@@ -8,6 +8,7 @@
   const LIMITS = Object.freeze({ bytes: 2 * 1024 * 1024, name: 500, intro: 2000 });
   const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   const model = () => root.HaedoLife?.PhotoPost || require("./photo-post.js");
+  const markdown = () => root.HaedoLife?.PostMarkdown || require("./post-markdown.js");
   const fault = (code = "invalid_blog_document") => Object.assign(new Error("글의 형식과 사진 원본을 확인해 주세요."), { code });
   const check = (value, code) => { if (!value) throw fault(code); };
   const plain = (value) => value && typeof value === "object" && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -30,8 +31,8 @@
     return blob;
   }
   function validateManifest(value) {
-    const v2 = value?.format === "life-photo-post-v2";
-    fields(value, ["format", "id", "revision", "title", "status", "replaces", "createdAt", "updatedAt", "ops", "photos", ...(v2 ? ["attachments", "archived"] : [])]);
+    const md = value?.format === "life-post-md-v1", v2 = md || value?.format === "life-photo-post-v2";
+    fields(value, ["format", "id", "revision", "title", "status", "replaces", "createdAt", "updatedAt", md ? "markdown" : "ops", "photos", ...(v2 ? ["attachments", "archived"] : [])]);
     check(Array.isArray(value.photos));
     for (const photo of value.photos) {
       fields(photo, needsView(photo) ? [...photoKeys, "view"] : photoKeys);
@@ -104,7 +105,7 @@
     return manifest;
   }
   // AI authorship marks stay private (owner decision 2026-11-02). A public copy
-  // drops only that attribute; text and every other format are unchanged. The
+  // drops only that attribute; text and every other visible format are unchanged. The
   // server publish RPC applies the same rule to the stored document.
   function withoutAuthorship(op) {
     if (!op.attributes || !Object.hasOwn(op.attributes, "author")) return copy(op);
@@ -118,6 +119,14 @@
   const READING_FORMAT = "life-blog-private-reading-v1";
   function validateSnapshot(value) { return checkSnapshot(value, false); }
   function validateReadingSnapshot(value) { return checkSnapshot(value, true); }
+  function validationBodyOps(ops) {
+    if (ops.length && typeof ops.at(-1)?.insert === "string") return ops;
+    // Per-op types, aggregate text size and photo references do not depend on
+    // order. Reuse an existing complete line in this validation-only surrogate
+    // so a photo-ending body at 5,000 ops/50,000 chars needs no extra allowance.
+    const end = ops.findIndex((op) => typeof op.insert === "string" && op.insert.endsWith("\n"));
+    return end >= 0 ? [...ops.slice(0, end), ...ops.slice(end + 1), ops[end]] : [...ops, { insert: "\n" }];
+  }
   function checkSnapshot(value, reading) {
     const code = "invalid_blog_snapshot";
     fields(value, ["format", "title", "ops", "attachments", "photos", "author"], code);
@@ -132,8 +141,14 @@
       return { ...photo, name: "사진", blob: placeholder(photo) };
     });
     try {
+      // Markdown can end with an independent photo, or become empty when every
+      // photo is omitted. Validate those reading projections with a temporary
+      // terminal paragraph; never add that paragraph to the visible snapshot.
+      // Text-ending ops still obey the existing complete-line contract.
+      check(Array.isArray(value.ops), code);
+      const validationOps = validationBodyOps(value.ops);
       const doc = { ...model().create(() => "public", "2000-01-01T00:00:00.000Z"), title: value.title,
-        ops: value.ops, photos, attachments: value.attachments, status: "saved" };
+        ops: validationOps, photos, attachments: value.attachments, status: "saved" };
       const used = model().validate(doc);
       check(used.size === photos.length, code);
       bytes(value, code);
@@ -151,11 +166,15 @@
   function privateReadingSnapshot(doc, options = {}) { return project(doc, options, true); }
   function project(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}, reading) {
     model().validate(doc);
+    // Markdown remains the private stored source. Public/reading copies keep
+    // their established, validated Delta shape, so anonymous readers do not
+    // need a new format or a Markdown parser. This is a projection, not a save.
+    const ops = doc.format === "life-post-md-v1" ? markdown().toDelta(doc.markdown) : doc.ops;
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
     check(Array.isArray(photoIds) && photoIds.every((id) => typeof id === "string") && new Set(photoIds).size === photoIds.length, "invalid_blog_selection");
     const selected = new Set(photoIds), available = new Set(doc.photos.map((p) => p.id));
     check(photoIds.every((id) => available.has(id)), "invalid_blog_selection");
-    const used = new Set(doc.ops.filter((op) => typeof op.insert !== "string").map((op) => op.insert.photo.id));
+    const used = new Set(ops.filter((op) => typeof op.insert !== "string").map((op) => op.insert.photo.id));
     check(photoIds.every((id) => used.has(id)), "invalid_blog_selection");
     const crypto = root.crypto || (typeof require === "function" && require("node:crypto").webcrypto);
     const copied = copies === null ? null : new Map((copies instanceof Map ? [...copies.values()] : Array.isArray(copies) ? copies : [null]).map((c) => [c?.id, c]));
@@ -168,17 +187,23 @@
           typeof c.digest === "string" && /^[a-f0-9]{64}$/.test(c.digest), "invalid_blog_selection");
       }
     }
-    const mapping = new Map(doc.photos.filter((p) => selected.has(p.id)).map((p) => [p.id, crypto.randomUUID()]));
+    // Preview image URLs and server publishing both follow this metadata order.
+    const selectedPhotos = doc.photos.filter((p) => selected.has(p.id));
+    const mapping = new Map(selectedPhotos.map((p) => [p.id, crypto.randomUUID()]));
+    const projectOps = (values) => values.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
+      { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } });
     const snapshot = { format: reading ? READING_FORMAT : "life-blog-public-v1", title: doc.title,
-      ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? (reading ? copy(op) : withoutAuthorship(op)) :
-        { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
+      ops: projectOps(ops),
       // An original is never projected publicly when copies are given; the
       // public photo for that position is its copy. A HEIC original is never
       // projected even privately: its JPEG view stands in for it.
-      attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map((p) => {
+      attachments: copy(doc.attachments || []), photos: selectedPhotos.map((p) => {
         const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
+    // Preserve the existing server projection for v1/v2 byte for byte. Markdown
+    // enters through toDelta above, then uses the same selection/AI-removal rules.
+    // Operation boundaries may differ; never reorder photos or invent paragraphs.
     checkSnapshot(snapshot, reading);
     return snapshot;
   }

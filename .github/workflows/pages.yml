@@ -53,6 +53,10 @@ jobs:
         run: node tests/run-account-docs-postgres.cjs
       - name: Verify immutable exact Naver photo receipts and owner boundaries
         run: node tests/run-naver-media-postgres.cjs
+      - name: Verify Markdown post format guards, publication refusal and old-client overwrite protection
+        run: node tests/run-post-markdown-sql-postgres.cjs
+      - name: Verify Markdown post guards survive replay of earlier installation bundles
+        run: node tests/run-post-markdown-install-replay.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -425,6 +429,18 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify v2 and Markdown manager previews keep photo order, captions and public digest
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-manager-preview-browser.cjs
+      - name: Verify Markdown public rendering matches v2 and refused paragraph boundaries
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-public-browser.cjs
+      - name: Verify the unconnected Markdown editor round trip and composition boundaries
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-editor-browser.cjs
+      - name: Verify Markdown post thumbnails match their v2 sources
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-thumbnails-browser.cjs
       - name: Verify series reader lifecycle, originals and restored contents position
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-reader-browser.cjs

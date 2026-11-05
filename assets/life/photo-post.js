@@ -35,6 +35,20 @@
   const posts = () =>
     root.HaedoLife?.PagePosts ||
     (typeof require === "function" && require("./page-posts.js"));
+  const markdown = () => root.HaedoLife?.PostMarkdown ||
+    (typeof require === "function" && require("./post-markdown.js"));
+  const isMarkdown = (d) => d?.format === "life-post-md-v1";
+  // Projection only: Markdown stays the sole persisted body in the new format.
+  const contentOps = (d) => isMarkdown(d) ? markdown().toDelta(d.markdown) : d.ops;
+  function remapBody(d, ids) {
+    if (isMarkdown(d)) return { markdown: markdown().remapPhotos(d.markdown, ids) };
+    return { ops: structuredClone(d.ops).map(op => {
+      if (typeof op.insert === "string") return op;
+      const next = ids.get(op.insert.photo.id);
+      if (typeof next !== "string") throw fault("사진 참조를 옮기지 못했습니다.");
+      return { ...op, insert: { photo: { ...op.insert.photo, id: next } } };
+    }) };
+  }
   // Serializable photo fields: removes the original and the view Blob while
   // keeping key order, so non-HEIC manifests stay byte-identical.
   function metadata(p) {
@@ -54,13 +68,13 @@
   function manifest(d) {
     return {
       format:
-        d.format === "life-photo-post-v1"
+        isMarkdown(d) ? "life-post-md-backup-v1" : d.format === "life-photo-post-v1"
           ? "life-photo-post-backup-v1"
           : "life-photo-post-backup-v2",
       title: d.title,
-      ops: d.ops,
+      ...(isMarkdown(d) ? { markdown: d.markdown } : { ops: d.ops }),
       photos: d.photos.map(metadata),
-      ...(d.format === "life-photo-post-v2"
+      ...(d.format === "life-photo-post-v2" || isMarkdown(d)
         ? { attachments: d.attachments }
         : {}),
     };
@@ -121,7 +135,7 @@
       throw fault("링크는 http 또는 https 주소로 입력해 주세요.");
     }
   }
-  function ops(values, photoIds) {
+  function ops(values, photoIds, markdownBody = false) {
     if (!Array.isArray(values) || !values.length || values.length > LIMITS.ops)
       throw fault("본문 길이를 확인해 주세요.");
     let length = 0;
@@ -174,8 +188,8 @@
     }
     if (
       length > LIMITS.text ||
-      typeof values.at(-1).insert !== "string" ||
-      !values.at(-1).insert.endsWith("\n")
+      (!markdownBody && (typeof values.at(-1).insert !== "string" ||
+      !values.at(-1).insert.endsWith("\n")))
     )
       throw fault("본문은 50,000자까지 쓸 수 있습니다.");
     return used;
@@ -251,7 +265,11 @@
     }
   }
   function validate(d) {
-    const v2 = d?.format === "life-photo-post-v2";
+    if (typeof d?.format === "string" &&
+        !["life-photo-post-v1", "life-photo-post-v2", "life-post-md-v1"].includes(d.format))
+      throw fault("새 형식의 글입니다. 새로고침한 뒤 다시 열어 주세요.", "photo_post_update_required");
+    const md = isMarkdown(d);
+    const v2 = d?.format === "life-photo-post-v2" || md;
     fields(d, [
       "format",
       "id",
@@ -261,12 +279,12 @@
       "replaces",
       "createdAt",
       "updatedAt",
-      "ops",
+      md ? "markdown" : "ops",
       "photos",
       ...(v2 ? ["attachments", "archived"] : []),
     ]);
     if (
-      !["life-photo-post-v1", "life-photo-post-v2"].includes(d.format) ||
+      !["life-photo-post-v1", "life-photo-post-v2", "life-post-md-v1"].includes(d.format) ||
       !["draft", "saved"].includes(d.status)
     )
       throw fault("사진 글 형식을 확인해 주세요.");
@@ -302,7 +320,12 @@
       throw fault(
         "한 글의 원본 사진은 합계 256 MiB까지 보관할 수 있습니다. 해상도는 줄이지 않습니다.",
       );
-    const used = ops(d.ops, ids);
+    if (md) {
+      text(d.markdown, 1024 * 1024, "본문");
+      if (markdown().canonicalize(d.markdown) !== d.markdown)
+        throw fault("본문을 편집기에서 다시 확인한 뒤 저장해 주세요.");
+    }
+    const used = ops(contentOps(d), ids, md);
     const manifestBytes = new TextEncoder().encode(
       JSON.stringify(manifest(d)),
     ).length;
@@ -321,7 +344,7 @@
     return used;
   }
   const plainText = (d) =>
-    d.ops
+    contentOps(d)
       .map((op) =>
         typeof op.insert === "string" ? op.insert : op.insert.photo.caption,
       )
@@ -916,16 +939,17 @@
     } catch (_) {
       throw fault("사진 글 백업의 내용을 확인해 주세요.");
     }
-    const v2 = m?.format === "life-photo-post-backup-v2";
+    const md = m?.format === "life-post-md-backup-v1";
+    const v2 = m?.format === "life-photo-post-backup-v2" || md;
     fields(m, [
       "format",
       "title",
-      "ops",
+      md ? "markdown" : "ops",
       "photos",
       ...(v2 ? ["attachments"] : []),
     ]);
     if (
-      !["life-photo-post-backup-v1", "life-photo-post-backup-v2"].includes(
+      !["life-photo-post-backup-v1", "life-photo-post-backup-v2", "life-post-md-backup-v1"].includes(
         m.format,
       ) ||
       !Array.isArray(m.photos) ||
@@ -935,7 +959,14 @@
     const d = create(makeId),
       ids = new Map();
     d.title = m.title;
-    d.ops = m.ops;
+    if (md) {
+      d.format = "life-post-md-v1";
+      delete d.ops;
+      d.markdown = m.markdown;
+      text(d.markdown, 1024 * 1024, "본문");
+      if (markdown().canonicalize(d.markdown) !== d.markdown)
+        throw fault("백업 본문 형식을 확인해 주세요. 원래 파일은 유지했습니다.");
+    } else d.ops = m.ops;
     d.attachments = v2 ? structuredClone(m.attachments) : [];
     const oldIds = new Set();
     for (const p of m.photos) {
@@ -974,17 +1005,8 @@
       1 + m.photos.length + m.photos.filter((p) => p.view).length
     )
       throw fault("사진 글 전용 백업 파일인지 확인해 주세요.");
-    ops(d.ops, oldIds);
-    d.ops = structuredClone(d.ops).map((op) =>
-      typeof op.insert === "string"
-        ? op
-        : {
-            ...op,
-            insert: {
-              photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) },
-            },
-          },
-    );
+    ops(contentOps(d), oldIds, md);
+    Object.assign(d, remapBody(d, ids));
     validate(d);
     return d;
   }
@@ -995,6 +1017,8 @@
     validate,
     compact,
     plainText,
+    contentOps,
+    remapBody,
     readPhoto,
     detectType,
     viewRequired,

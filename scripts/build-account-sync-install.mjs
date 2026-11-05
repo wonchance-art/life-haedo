@@ -25,7 +25,54 @@ export function body(sql, name) {
   return lines.filter(line => !/^(begin|commit);\s*$/i.test(line)).join('\n').trim();
 }
 
+// A historical install must not erase a reviewed later Markdown validator or
+// publisher. Capture only the exact D2 definitions; unknown/partial installs
+// stop before writes. Pre-D2 definitions must match the original/account/AI
+// migrations before the original fresh-install path can run.
+export async function markdownPreservation(root) {
+  const name = '20261105051632_life_post_markdown.sql';
+  const sql = await readFile(new URL(`supabase/migrations/${name}`, root), 'utf8');
+  const hashOf = (source, functionName) => {
+    const start = source.indexOf('create or replace function haedo_blog_private.' + functionName + '(');
+    const open = source.indexOf('$$', start), close = source.indexOf('$$', open + 2);
+    if (start < 0 || open < 0 || close < 0 || close !== source.indexOf('\nend $$;', start) + 5) throw new Error(functionName + ': body quotes not found');
+    return createHash('md5').update(source.slice(open + 2, close), 'utf8').digest('hex');
+  };
+  const functions = [
+    { name: 'valid_delta_document', signature: 'jsonb,uuid' },
+    { name: 'valid_document', signature: 'jsonb,uuid' },
+    { name: 'publish', signature: 'uuid,bigint,uuid,text[],jsonb,bigint' },
+  ].map(f => ({ ...f, hash: hashOf(sql, f.name) }));
+  const legacy = await Promise.all(['20261017144744_life_blog_originals.sql', '20261101091500_life_blog_account_sync.sql', '20261102110000_life_blog_ai_authorship.sql']
+    .map(file => readFile(new URL(`supabase/migrations/${file}`, root), 'utf8')));
+  const older = functions.slice(1).map(f => ({ ...f, hashes: [...new Set(legacy.map(source => hashOf(source, f.name)))] }));
+  return {
+    source: `${name}  ${createHash('sha256').update(sql).digest('hex')}`,
+    capture: `  if to_regprocedure('haedo_blog_private.valid_delta_document(jsonb,uuid)') is not null
+    or to_regprocedure('haedo_blog_private.markdown_no_downgrade()') is not null
+    or to_regprocedure('haedo_blog_private.markdown_publication_requires_parser()') is not null
+${functions.slice(1).map(f => `    or (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.${f.name}(${f.signature})')) = '${f.hash}'`).join('\n')}
+  then
+${functions.map(f => `    if (select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.${f.name}(${f.signature})')) is distinct from '${f.hash}' then
+      raise exception 'haedo_blog_private.${f.name} differs from the repository definition; nothing was changed';
+    end if;`).join('\n')}
+${functions.slice(1).map(f => `    markdown_definitions := markdown_definitions || jsonb_build_object('${f.name}', pg_get_functiondef(to_regprocedure('haedo_blog_private.${f.name}(${f.signature})')));`).join('\n')}
+  else
+    -- A genuinely pre-D2 database still has to match a reviewed predecessor.
+    -- An unknown operator edit is not permission to reinstall an older body.
+${older.map(f => `    if not coalesce((select md5(prosrc) from pg_proc where oid = to_regprocedure('haedo_blog_private.${f.name}(${f.signature})')) in (${f.hashes.map(hash => `'${hash}'`).join(', ')}), false) then
+      raise exception 'haedo_blog_private.${f.name} differs from the repository definition; nothing was changed';
+    end if;`).join('\n')}
+  end if;`,
+    restore: `  -- Restore reviewed later definitions within this same atomic statement.
+  for r in select value from jsonb_each_text(markdown_definitions) loop
+    execute r.value;
+  end loop;`,
+  };
+}
+
 export async function build(root = new URL('../', import.meta.url)) {
+  const preservation = await markdownPreservation(root);
   const parts = [];
   for (const [index, name] of MIGRATIONS.entries()) {
     const sql = await readFile(new URL(`supabase/migrations/${name}`, root), 'utf8');
@@ -35,9 +82,14 @@ export async function build(root = new URL('../', import.meta.url)) {
     parts.push({ name, tag, sha: createHash('sha256').update(sql).digest('hex'), body: text });
   }
   return `-- 해도 2026-11-01 계정 자동 연동 설치 (Supabase SQL Editor에서 한 번에 실행)
--- 생성: node scripts/build-account-sync-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
+-- 생성: node scripts/build-account-sync-install.mjs — 원본 이력은 유지하고 생성기로 다시 만든다.
 -- 포함 마이그레이션(순서, 원본 sha256):
 ${parts.map(p => `--   ${p.name}  ${p.sha}`).join('\n')}
+--
+-- 후속 Markdown 보존 기준: ${preservation.source}
+-- D2가 설치되어 있으면 검증된 두 함수 정의를 같은 DO 문 안에서 보존한다.
+-- D2 미설치에서는 검증된 원본·계정·AI 정의만 원래 경로로 설치한다(새 helper 불필요).
+-- 이 세 이전 판과 다른 함수 본문은 설치 전에 거부한다.
 --
 -- 안전 장치:
 --   * 설치 전체가 DO 블록 "한 문장"이다. SQL Editor가 문장을 어떤 연결·트랜잭션으로
@@ -53,7 +105,9 @@ declare
   r record;
   n bigint;
   before jsonb := '{}'::jsonb;
+  markdown_definitions jsonb := '{}'::jsonb;
 begin
+${preservation.capture}
   for r in
     select format('%I.%I', ns.nspname, c.relname) as relation
     from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
@@ -64,6 +118,8 @@ begin
   end loop;
 
 ${parts.map(p => `  -- ===== ${p.name} =====\n  execute ${p.tag}\n${p.body}\n${p.tag};\n`).join('\n')}
+${preservation.restore}
+
   for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
     execute format('select count(*) from %s', r.relation) into n;
     if n <> r.rows then
