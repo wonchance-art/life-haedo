@@ -12,7 +12,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const Discovery = require('../assets/life/discovery.js');
-const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
+const { accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
+const { DiscoveryPrivateCloud } = require('./helpers/discovery-private-cloud.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const out = path.resolve(process.env.EXTERNAL_DISCOVERY_OUTPUT || path.join(__dirname, '../.local/external-discovery-browser'));
 const feedPath = '/assets/life/discovery-feed.json';
@@ -135,7 +136,7 @@ async function main() {
   report.browser = browser.version();
   async function check(name, run, { synthetic = true, width = 820, strictPublisher = false } = {}) {
     if (process.env.EXTERNAL_DISCOVERY_MATCH && !new RegExp(process.env.EXTERNAL_DISCOVERY_MATCH).test(name)) return;
-    const server = new FakeCloud(), device = 'external-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: { width, height: width === 390 ? 844 : 1000 }, hasTouch: width <= 820, reducedMotion: 'reduce' });
+    const server = new DiscoveryPrivateCloud(), device = 'external-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: { width, height: width === 390 ? 844 : 1000 }, hasTouch: width <= 820, reducedMotion: 'reduce' });
     let expectedFeedFailure = false, expectedPublisher = null;
     // Observe independently of route handlers: fulfilled synthetic feed routes
     // must receive the same privacy checks as real static catalogue requests.
@@ -174,7 +175,7 @@ async function main() {
       target.on('pageerror', error => { if (harnessFrameError(error.message)) (report.harnessFrameErrors ||= []).push(label); else report.pageErrors.push({ check: label, message: error.message }); });
       target.on('console', message => { if (message.type() !== 'error') return; const row = { check: label, message: message.text() }; if (expectedFeedFailure && message.location().url.includes(feedPath) && /503|ERR_FAILED/.test(message.text())) report.expectedErrors.push(row); else report.consoleErrors.push(row); });
     }; observe(page, name);
-    try { await run({ page, context, server, device, observe, armPublisher: url => { expectedPublisher = url; }, expectFeedFailure: value => { expectedFeedFailure = value; } }); assert.equal(server.writes().length, 0); report.checks.push({ name, syntheticFeed: synthetic, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context, server, device, observe, armPublisher: url => { expectedPublisher = url; }, expectFeedFailure: value => { expectedFeedFailure = value; } }); assert.equal(server.writes().length, 0); assert.deepEqual(server.privateRouteErrors, []); report.checks.push({ name, syntheticFeed: synthetic, privateReaderRequests: server.privateRequests.length, privateRouteErrors: server.privateRouteErrors.length, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, syntheticFeed: synthetic, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
