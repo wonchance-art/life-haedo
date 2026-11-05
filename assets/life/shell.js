@@ -17,6 +17,10 @@
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, accountDocsSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   let retained = false, resumePoint = null, suspension = 0;
+  // Resource teardown can clear activeKey after a failed opening. Remember the
+  // verified owner separately so a repeated verify notification keeps its error
+  // frame; explicit start/retry/resume still calls show() to attempt recovery.
+  let lastAccountKey = null;
   let workerScheduled = false;
   function scheduleWorker() {
     if (workerScheduled || !('serviceWorker' in root.navigator)) return;
@@ -137,6 +141,7 @@
   function show(account) {
     if (suspended || isReadOnly()) return Promise.resolve(null);
     const key = account.projectUrl + '|' + account.userId;
+    lastAccountKey = key;
     if (activeKey === key && (mounted || showing)) {
       if (mounted && retained && !leaving) reveal(account);
       return Promise.resolve(mounted || showing);
@@ -244,9 +249,10 @@
     return pending;
   }
   auth?.onAccountChange(account => {
-    if (!account) { if (publicHome) showWelcome(); else { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); } }
+    if (!account) { lastAccountKey = null; if (publicHome) showWelcome(); else { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); } }
     else if (!isReadOnly()) {
       const key = account.projectUrl + '|' + account.userId;
+      if (key === lastAccountKey) return;
       // A retained view is revealed only by its own completed resume verify.
       // A different owner always destroys it through the existing hard boundary.
       if (retained && key === activeKey) return;
@@ -254,7 +260,7 @@
       show(account);
     }
   });
-  root.document.addEventListener('haedo:signed-out', () => { if (publicHome) showWelcome(); else { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); } });
+  root.document.addEventListener('haedo:signed-out', () => { lastAccountKey = null; if (publicHome) showWelcome(); else { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); } });
   root.document.addEventListener('haedo:auth-unavailable', () => {
     const account = auth?.getAccount();
     if (retained && account && activeKey === account.projectUrl + '|' + account.userId) conceal();
