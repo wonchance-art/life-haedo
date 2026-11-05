@@ -50,7 +50,7 @@
     if (!storage?.account || !storage.readBlogSyncState || !storage.writeBlogSyncState || !auth || !remote || !blog?.pack || !photoPost?.validate) throw fault('auth_required');
     const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map();
     const holds = new Map(), retries = new Map(), draftDue = new Map();
-    let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null, soon = null;
+    let disposed = false, started = false, timer = null, timerDue = 0, draftTimer = null, running = null, rerun = null, soon = null;
     // Delay of the next cycle while server posts wait for this device's first library (0: none waiting).
     let unplacedDelay = 0;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
@@ -734,6 +734,7 @@
     function schedule(delay) {
       if (disposed || !started) return;
       if (timer) timers.clearTimeout(timer);
+      timerDue = now() + delay;
       timer = timers.setTimeout(() => {
         timer = null;
         // A hidden page stops pulling the server list, but anything waiting
@@ -772,7 +773,15 @@
           : { uploadOnly: !!options.uploadOnly, flushDrafts: !!options.flushDrafts };
         return running;
       }
-      if (timer) { timers.clearTimeout(timer); timer = null; }
+      // An upload-only pass (the editor's draft timer, a hidden page's flush) does not do
+      // what an already scheduled pass may be for: a hidden page's draft flush or a server
+      // list. That pass still follows when it was due, not a full interval after this one
+      // (2026-11-05 CI: the draft timer ran inside the 1 s after a conflict cycle, skipped
+      // the new kept copy as a draft in its quiet period, and the copy waited 30 s).
+      if (timer) {
+        if (options.uploadOnly) soon = Math.min(soon ?? interval, Math.max(0, timerDue - now()));
+        timers.clearTimeout(timer); timer = null;
+      }
       running = (async () => {
         let next = options, result;
         try {

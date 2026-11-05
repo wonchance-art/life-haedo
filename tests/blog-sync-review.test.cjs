@@ -380,3 +380,32 @@ test('receive: a failed early list is requested again after the account check', 
   assert.equal(calls, 2);
   assert.equal((await list(b)).length, docs.length);
 });
+
+// 2026-11-05 CI (run 42073312877): the editor's draft timer fired inside the second after
+// the cycle that kept a conflict copy. That upload-only pass skipped the copy (a draft
+// still in its quiet period: it keeps its content time), cancelled the one-second
+// follow-up and scheduled the regular interval, so the copy waited 30 s on a hidden tab.
+test('an upload-only pass right after a conflict cycle does not postpone the kept copy to the regular interval', async () => {
+  const { cloud, time, a, b } = await pair(), timers = [];
+  const doc = { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} };
+  const events = { document: doc, addEventListener() {}, removeEventListener() {} };
+  const post0 = await save(a, await post({ title: '원래 글' })); await a.sync.syncNow(); await b.sync.syncNow();
+  // A's losing edit was written two seconds ago, so its kept copy is inside a draft's quiet period.
+  const aDraft = await edit(a, post0.id, { title: '맥 이른 수정' }, '2026-11-01T11:59:58.000Z'); await finish(a, aDraft, '2026-11-01T11:59:58.000Z');
+  const bDraft = await edit(b, post0.id, { title: '아이패드 늦은 수정' }, '2026-11-01T11:59:59.000Z'); await finish(b, bDraft, '2026-11-01T11:59:59.000Z'); await b.sync.syncNow();
+  const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote, makeId: Core.id, locks: null, now: () => time.now, events,
+    timers: { setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; }, clearTimeout() {} } });
+  sync.start();
+  await sync.syncNow(); // keeps A's edit as a new local draft and asks for a follow-up within a second
+  const kept = Sync.CONFLICT_PREFIX + '맥 이른 수정';
+  const onServer = () => [...cloud.rows.values()].some(row => row.data.status === 'draft' && row.data.title === kept);
+  assert((await list(a)).some(row => row.title === kept)); assert.equal(onServer(), false);
+  assert.equal(timers.at(-1).delay, 1000);
+  doc.visibilityState = 'hidden'; time.advance(250);
+  await sync.syncNow({ uploadOnly: true }); // the editor's draft timer: upload-only, no draft flush
+  assert.equal(onServer(), false, 'the draft timer pass leaves a draft in its quiet period');
+  assert(timers.at(-1).delay <= 750, 'the follow-up stays due one second after the conflict cycle, not after the interval: ' + timers.at(-1).delay);
+  timers.at(-1).fn(); for (let n = 0; n < 40 && !onServer(); n++) await new Promise(done => setTimeout(done, 25));
+  assert(onServer(), 'the hidden page flush uploads the kept copy');
+  sync.dispose();
+});
