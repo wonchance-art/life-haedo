@@ -9,7 +9,7 @@
 // to this migration's own (a re-run); otherwise it stops with nothing changed.
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { body } from './build-account-sync-install.mjs';
+import { body, markdownPreservation } from './build-account-sync-install.mjs';
 
 export const MIGRATIONS = ['20261102110000_life_blog_ai_authorship.sql'];
 export const PREVIOUS = '20261101091500_life_blog_account_sync.sql';
@@ -36,6 +36,7 @@ const SAMPLE = `jsonb_build_object('format','life-photo-post-v2','id','00000000-
     'ops',jsonb_build_array(jsonb_build_object('insert','AI','attributes',jsonb_build_object('author','ai')),jsonb_build_object('insert',E'\\n')))`;
 
 export async function build(root = new URL('../', import.meta.url)) {
+  const preservation = await markdownPreservation(root);
   const parts = [];
   for (const [index, name] of MIGRATIONS.entries()) {
     const sql = await readFile(new URL(`supabase/migrations/${name}`, root), 'utf8');
@@ -47,12 +48,14 @@ export async function build(root = new URL('../', import.meta.url)) {
   const previous = await readFile(new URL(`supabase/migrations/${PREVIOUS}`, root), 'utf8');
   const expected = FUNCTIONS.map(f => ({ ...f, before: md5(prosrc(previous, f.name)), after: md5(prosrc(parts[0].sql, f.name)) }));
   return `-- 해도 2026-11-02 AI 글 표시 서버 검증 설치 (Supabase SQL Editor에서 한 번에 실행)
--- 생성: node scripts/build-blog-ai-authorship-install.mjs — 직접 고치지 말고 원본 마이그레이션을 고친 뒤 다시 생성한다.
+-- 생성: node scripts/build-blog-ai-authorship-install.mjs — 원본 이력은 유지하고 생성기로 다시 만든다.
 -- 포함 마이그레이션(순서, 원본 sha256):
 ${parts.map(p => `--   ${p.name}  ${p.sha}`).join('\n')}
 --
 -- 선행 조건: 20261101-account-sync-install.sql이 적용되어 있어야 한다. 그 설치를 다시 실행하면
--- 같은 두 함수가 이전 정의로 돌아가므로 이 설치도 다시 실행한다.
+-- D2 이전의 같은 두 함수가 이전 정의로 돌아가므로 이 설치도 다시 실행한다.
+-- 후속 Markdown 보존 기준: ${preservation.source}
+-- 검증된 D2 정의가 이미 있으면 이 설치의 이전 함수 재정의는 건너뛴다.
 -- 클라이언트(AI 글 표시를 쓰는 앱 버전)를 배포하기 전에 적용한다.
 --
 -- 안전 장치:
@@ -70,13 +73,15 @@ declare
   n bigint;
   h text;
   before jsonb := '{}'::jsonb;
+  markdown_definitions jsonb := '{}'::jsonb;
 begin
   if to_regprocedure('haedo_blog_private.valid_document(jsonb,uuid)') is null
      or to_regprocedure('haedo_blog_private.photo_media(jsonb)') is null then
     raise exception 'apply 20261101-account-sync-install.sql first';
   end if;
+${preservation.capture}
 ${expected.map(f => `  select md5(prosrc) into h from pg_proc where oid = to_regprocedure('haedo_blog_private.${f.name}(${f.signature})');
-  if h is null or h not in ('${f.before}', '${f.after}') then
+  if not (markdown_definitions ? '${f.name}') and (h is null or h not in ('${f.before}', '${f.after}')) then
     raise exception 'haedo_blog_private.${f.name} differs from the repository definition (md5 %); nothing was changed', coalesce(h, 'missing');
   end if;`).join('\n')}
   for r in
@@ -88,7 +93,8 @@ ${expected.map(f => `  select md5(prosrc) into h from pg_proc where oid = to_reg
     before := before || jsonb_build_object(r.relation, n);
   end loop;
 
-${parts.map(p => `  -- ===== ${p.name} =====\n  execute ${p.tag}\n${p.body}\n${p.tag};\n`).join('\n')}
+  if markdown_definitions = '{}'::jsonb then
+${parts.map(p => `  -- ===== ${p.name} =====\n  execute ${p.tag}\n${p.body}\n${p.tag};\n`).join('\n')}  end if;
   for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
     execute format('select count(*) from %s', r.relation) into n;
     if n <> r.rows then

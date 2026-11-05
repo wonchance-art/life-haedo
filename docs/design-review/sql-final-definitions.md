@@ -9,19 +9,20 @@
 - 테이블: 만든 파일보다 뒤 파일의 `alter table`이 열·제약을 바꾸는 경우. RLS 켜기·소유자 변경은 제외한다.
 - 인자 목록이 바뀌어 오버로드가 남는지는 `npm run test:sql-replay`가 재생한 DB 카탈로그와 대조한다.
 
-## 함수 (22개 재정의)
+## 함수 (23개 재정의)
 
 | 함수 | 정의한 파일 수 | 최종 | 이전 정의 |
 | --- | ---: | --- | --- |
 | `public.life_composition_valid(jsonb)` | 6 | `20261101140000_life_sync_edit_times`<br>이전 본문은 `public.life_composition_valid_content`로 이름을 바꿔 유지 | `20261006010000_life_compositions`, `20261008010000_life_composition_books`, `20261008020000_life_composition_insights`, `20261008030000_life_composition_editions`, `20261012010000_life_page_posts` |
-| `haedo_blog_private.publish(uuid, bigint, uuid, text[], jsonb, bigint)` | 3 | `20261102110000_life_blog_ai_authorship` | `20261017144744_life_blog_originals`, `20261101091500_life_blog_account_sync` |
-| `haedo_blog_private.valid_document(jsonb, uuid)` | 3 | `20261102110000_life_blog_ai_authorship` | `20261017144744_life_blog_originals`, `20261101091500_life_blog_account_sync` |
+| `haedo_blog_private.publish(uuid, bigint, uuid, text[], jsonb, bigint)` | 4 | `20261105051632_life_post_markdown` | `20261017144744_life_blog_originals`, `20261101091500_life_blog_account_sync`, `20261102110000_life_blog_ai_authorship` |
+| `haedo_blog_private.valid_document(jsonb, uuid)` | 4 | `20261105051632_life_post_markdown` | `20261017144744_life_blog_originals`, `20261101091500_life_blog_account_sync`, `20261102110000_life_blog_ai_authorship` |
 | `haedo_naver_private.inventory_claim(integer, uuid, uuid)` | 3 | `20261029112456_naver_observed_inventory_baseline` | `20261021113658_life_naver_captures`, `20261029040646_naver_inventory_automatic_rescan` |
 | `haedo_naver_private.save(uuid, text, bigint, boolean)` | 3 | `20261102100000_naver_enable_schedules_first_inventory` | `20261021093111_life_naver_subscriptions`, `20261021094614_naver_conflict_http409` |
 | `haedo_blog_private.delete_post(uuid, bigint)` | 2 | `20261101160000_life_blog_delete_guard` | `20261101091500_life_blog_account_sync` |
 | `haedo_blog_private.list(uuid)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.prepare_asset(uuid, text, text, bigint, text, integer, integer)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.public_media(uuid, text)` | 2 | `20261102120000_life_blog_public_photo_copies` | `20261017144744_life_blog_originals` |
+| `haedo_blog_private.publish_copies(uuid, bigint, uuid, text[], jsonb, bigint, jsonb)` | 2 | `20261105051632_life_post_markdown` | `20261102120000_life_blog_public_photo_copies` |
 | `haedo_blog_private.read(uuid)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.ready(uuid, uuid, jsonb)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.save(uuid, uuid, bigint, uuid, jsonb)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |

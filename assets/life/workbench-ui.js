@@ -1266,7 +1266,7 @@
           const edit = () => { if (!currentSeries()) return; session.seriesReading = null; clearError(); redraw(); };
           session.seriesReader ||= life.BlogSeriesReader.create({ storage, workspaceId: session.workspaceId, isCurrent: currentSeries,
             renderPhoto: doc => {
-              const used = new Set(doc.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
+              const used = new Set(life.PhotoPost.contentOps(doc).filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
               const originals = doc.photos.filter(photo => used.has(photo.id));
               const snapshot = life.Blog.privateReadingSnapshot(doc, { photoIds: originals.map(photo => photo.id) });
               const imageUrls = snapshot.photos.map((photo, index) => [photo.id, URL.createObjectURL(originals[index].blob)]);

@@ -68,7 +68,7 @@ async function main() {
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v194');
+  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v197');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
   assert.equal(report.oldSwSHA256, previousWorker.sha256, 'Prior worker must be the exact ' + previousWorker.commit + ' v' + previousVersion + ' source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
@@ -94,11 +94,12 @@ async function main() {
   });
   await new Promise(resolve => host.listen(0, '127.0.0.1', resolve));
   process.env.BASE_URL = 'http://127.0.0.1:' + host.address().port;
-  const { FakeCloud, platformContext, accounts, cloud, base } = require('./life-sync-browser.cjs');
+  const { platformContext, accounts, cloud, base } = require('./life-sync-browser.cjs');
+  const { DiscoveryPrivateCloud } = require('./helpers/discovery-private-cloud.cjs');
   const { playwright, ready } = require('./unified-home-browser.cjs');
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   report.browser = browser.version();
-  const context = await browser.newContext({ serviceWorkers: 'allow', viewport: { width: 820, height: 1000 } }), fake = new FakeCloud(), device = 'discovery-pwa-anonymous';
+  const context = await browser.newContext({ serviceWorkers: 'allow', viewport: { width: 820, height: 1000 } }), fake = new DiscoveryPrivateCloud(), device = 'discovery-pwa-anonymous';
   await platformContext(context, fake, device, accounts.a);
   await context.route('**/*', route => {
     const request = route.request(), url = new URL(request.url());
@@ -271,6 +272,7 @@ async function main() {
     assert.ok(report.catalogRequests.length > 2);
     assert.ok(report.catalogRequests.every(row => row.method === 'GET' && !row.queryCount && !row.hasCookie && !row.hasAuthorization && !row.hasBody && !row.referer));
     assert.deepEqual(report.modelRequests, []); assert.deepEqual(report.unexpectedExternal, []); assert.equal(fake.writes().length, 0); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(fake.privateRouteErrors, []); report.privateReaderRequests = fake.privateRequests.length; report.privateRouteErrors = fake.privateRouteErrors;
     report.realRemoteWrites = 0; report.pass = true;
   } catch (error) { report.failure = { message: error.message, stack: error.stack }; throw error; }
   finally { await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n'); await context.close(); await browser.close(); await new Promise(resolve => host.close(resolve)); }
