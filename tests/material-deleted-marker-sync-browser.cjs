@@ -21,7 +21,7 @@ const ACCOUNT_RPCS = new Set(['life_account_document_put', 'life_account_documen
 // subclass also sends the two existing account-document calls to their actual
 // SQL functions, rather than claiming the inherited in-memory model proves RLS.
 class DeletedMarkerCloud extends LocalSQLMaterialCloud {
-  constructor(options) { super(options); this.documentCalls = []; this.offlineDevices = new Set(); this.responseGates = new Map(); this.pausedMaterials = new Map(); }
+  constructor(options) { super(options); this.documentCalls = []; this.offlineDevices = new Set(); this.responseGates = new Map(); this.pausedMaterials = new Map(); this.offlineAbortedRequests = new WeakSet(); }
   pauseMaterials(device) {
     assert(!this.pausedMaterials.has(device)); let release;
     const gate = { waiting: new Promise(resolve => { release = resolve; }), release: () => { this.pausedMaterials.delete(device); release(); } };
@@ -72,7 +72,7 @@ class DeletedMarkerCloud extends LocalSQLMaterialCloud {
   }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url()), rpc = url.pathname.split('/').at(-1);
-    if (this.offlineDevices.has(device) && request.method() !== 'OPTIONS') { this.expectedFailures++; return route.abort('internetdisconnected'); }
+    if (this.offlineDevices.has(device) && request.method() !== 'OPTIONS') { this.expectedFailures++; this.offlineAbortedRequests.add(request); return route.abort('internetdisconnected'); }
     if (url.pathname.startsWith('/rest/v1/rpc/life_material_') && request.method() === 'POST') await this.pausedMaterials.get(device)?.waiting;
     const blogGate = rpc === 'life_blog_read' && request.method() === 'POST' && this.responseGates.get('blog')?.predicate({ device, body: request.postDataJSON() });
     if (!url.pathname.startsWith('/rest/v1/rpc/') || (!ACCOUNT_RPCS.has(rpc) && !blogGate)) return super.handle(route, device);
@@ -198,7 +198,7 @@ async function main() {
   assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)); await fs.mkdir(output, { recursive: true });
   const server = new DeletedMarkerCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
   if (process.argv.includes('--prepare-database')) await server.prepareAll(); await server.initialize();
-  const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], expectedErrors: 0, sourceLoads: [],
+  const report = { checks: [], visual: [], consoleErrors: [], consoleEvents: [], networkFailures: [], pageErrors: [], external: [], expectedErrors: 0, sourceLoads: [],
     scope: 'Actual app/SDK/IndexedDB and disposable PostgreSQL material/blog/account-document RPCs and RLS. Synthetic Auth/Storage HTTP; no production accounts, real OAuth, Apple hardware or deployment.' };
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] }); report.browser = browser.version();
   const contexts = []; const only = process.env.C3_CASE || '';
@@ -210,7 +210,7 @@ async function main() {
   }
   async function device(name, owner = accounts.a) {
     const context = await makeContext(browser, server, name, owner, { viewport: { width: 1440, height: 1000 } }); contexts.push(context);
-    const state = { name, context, offline: false };
+    const state = { name, context, offline: false }, requestStarts = new WeakMap();
     await context.route(/\/assets\/life\/(?:storage|account-docs-sync|material-continuity-sync|material-writing-ui)\.js$/, async route => {
       const file = new URL(route.request().url()).pathname;
       const override = file.endsWith('/storage.js') ? process.env.C3_STORAGE_OVERRIDE : file.endsWith('/account-docs-sync.js') ? process.env.C3_ACCOUNT_DOCS_OVERRIDE : file.endsWith('/material-writing-ui.js') ? process.env.C3_UI_OVERRIDE : process.env.C3_CONTINUITY_OVERRIDE;
@@ -221,9 +221,10 @@ async function main() {
       if ([new URL(base).origin, cloud].includes(origin)) return route.fallback(); report.external.push(origin); return route.abort('blockedbyclient'); });
     const page = await context.newPage(); state.page = page; page.setDefaultTimeout(15000);
     page.on('pageerror', error => report.pageErrors.push(error.message));
-    page.on('console', event => { if (event.type() !== 'error') return;
-      if (state.offline && event.location().url.startsWith(cloud) && /^Failed to load resource:.*ERR_(INTERNET_DISCONNECTED|FAILED)/.test(event.text())) report.expectedErrors++;
-      else report.consoleErrors.push(event.text()); });
+    page.on('request', request => requestStarts.set(request, { at: Date.now(), offline: state.offline }));
+    page.on('requestfailed', request => report.networkFailures.push({ device: name, url: request.url(), method: request.method(), error: request.failure()?.errorText,
+      startedAt: requestStarts.get(request)?.at, failedAt: Date.now(), startedOffline: requestStarts.get(request)?.offline === true, fixtureOfflineAbort: server.offlineAbortedRequests.has(request) }));
+    page.on('console', event => { if (event.type() === 'error') report.consoleEvents.push({ device: name, url: event.location().url, text: event.text(), at: Date.now() }); });
     await page.goto(base + '/index.html'); await ready(page); return state;
   }
   async function capture(page, name) {
@@ -286,8 +287,8 @@ async function main() {
       assert.equal(server.blogRequests.filter(request => request.rpc === 'life_blog_delete').length, writesBefore);
       assert.equal(server.documentCalls.filter(request => request.rpc === 'life_account_document_put').length, documentsBefore);
       assert(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: fixture.remotePostId }), 'Offline deletion has not reached the server');
-      server.offlineDevices.delete(a.name); await a.context.setOffline(false); await syncPosts(a.page); await syncDocuments(a.page);
-      a.offline = false; assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: fixture.remotePostId }), null);
+      server.offlineDevices.delete(a.name); await a.context.setOffline(false); a.offline = false; await syncPosts(a.page); await syncDocuments(a.page);
+      assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: fixture.remotePostId }), null);
       const b = await device('c3-offline-fresh-b'); await receive(b.page, fixture); await deletedUI(b.page, fixture, 'offline-deleted');
       for (const context of [a.context, b.context]) await context.close();
     });
@@ -376,7 +377,7 @@ async function main() {
       const fixture = { ...source, planId, postId: created.postId, original: (await allPlans(a.page)).find(row => row.plan.id === planId).plan };
       await removeOutput(a.page, fixture);
       assert.equal((await allPlans(a.page)).find(row => row.plan.id === planId).output.status, 'deleted');
-      server.offlineDevices.delete(a.name); await a.context.setOffline(false); await syncPosts(a.page); await syncDocuments(a.page); await syncMaterials(a.page); a.offline = false;
+      server.offlineDevices.delete(a.name); await a.context.setOffline(false); a.offline = false; await syncPosts(a.page); await syncDocuments(a.page); await syncMaterials(a.page);
       const retained = (await allPlans(a.page)).find(row => row.plan.id === planId); assert.deepEqual(retained.plan, fixture.original);
       assert.equal(server.materialRequests.some(request => request.rpc === 'life_material_put' && request.body.p_data?.plan?.id === planId), false, 'An unsent deleted output must never be exported as output:null');
       await enter(a.page, planId); await a.page.locator('#mwDeletedCopy').waitFor();
@@ -421,14 +422,30 @@ async function main() {
       assert.equal(await a.page.evaluate(() => __c3DelayedLookup.target.innerHTML), oldMarkup, 'The stale output target must not be rewritten after the real lookup completes');
       await a.context.close();
     });
-    assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []); report.pass = true;
+    assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (error) { report.pass = false; report.error = error.stack; throw error; }
   finally {
     for (const gate of pendingGates) gate.release();
     for (const context of contexts) await context.close().catch(() => {}); await browser.close();
+    // Console events can be delivered after the device has reconnected. Match
+    // each expected resource error to one actual failed request that began
+    // offline or was explicitly aborted by this fixture; the current online
+    // flag alone cannot establish why a completed request failed.
+    const failures = report.networkFailures.map(value => ({ ...value, consumed: false }));
+    for (const event of report.consoleEvents) {
+      const failure = event.url.startsWith(cloud) && /^Failed to load resource:.*ERR_(INTERNET_DISCONNECTED|FAILED)/.test(event.text) &&
+        failures.find(value => !value.consumed && value.device === event.device && value.url === event.url &&
+          event.at >= value.startedAt && Math.abs(event.at - value.failedAt) <= 1000 &&
+          (value.startedOffline || value.fixtureOfflineAbort) && /^net::ERR_(INTERNET_DISCONNECTED|FAILED)$/.test(value.error || ''));
+      if (failure) { failure.consumed = true; report.expectedErrors++; }
+      else report.consoleErrors.push(event);
+    }
+    if (report.consoleErrors.length || report.pageErrors.length || report.external.length) report.pass = false;
     report.rpcCounts = { material: server.materialRequests.length, blog: server.blogRequests.length, accountDocument: server.documentCalls.length };
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   }
+  assert.deepEqual(report.consoleErrors, [], 'Every expected console error must match an actual failed request from the controlled offline interval');
+  assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []);
   console.log(JSON.stringify({ pass: report.pass, checks: report.checks, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, expectedErrors: report.expectedErrors, output }));
 }
 module.exports = { DeletedMarkerCloud, main };
