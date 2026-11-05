@@ -227,6 +227,7 @@
       }
     }
     function cleanup() {
+      host?.querySelector('.photo-editor')?.disposeAITool?.();
       if (status) root.HaedoMotion?.cancel(status);
       dismissControls?.();
       dismissControls = null;
@@ -1850,13 +1851,73 @@
       const insertPhoto = button("사진", () => photoInput.click());
       insertPhoto.classList.add("photo-insert-photo");
       insertPhoto.prepend(glyph("image"));
-      // The floating bar is one ordered list of items (D1). A later control,
-      // e.g. the planned AI 제안, joins this list with its own id. Width budget:
-      // seven 44px controls fit 360px; an eighth needs another item moved into
-      // 서식 below 390px (photo-post.css, floating tools on phones).
+      // The editor adapter lives at the tool registration boundary so a future
+      // editor can replace it without changing the suggestion panel.
+      const suggest = iconControl(button("AI 제안", () => {
+        if (imeActive()) throw new Error("입력을 마친 뒤 다시 눌러 주세요.");
+        guard();
+        if (!life.WritingAI || !life.WritingAIUI?.open)
+          throw new Error("AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.");
+        settleAuthorship();
+        const range = editor.getSelection() || editor.selection?.savedRange;
+        if (!range?.length) throw new Error(life.WritingAI.MESSAGES.ai_selection_required);
+        if (range.index + range.length >= editor.getLength())
+          throw new Error("마지막 빈 줄을 제외하고 AI에 보낼 글을 선택해 주세요.");
+        const selectionOps = editor.getContents(range.index, range.length).ops;
+        if (selectionOps.some(op => typeof op.insert !== "string"))
+          throw new Error(life.WritingAI.MESSAGES.ai_selection_has_photo);
+        const target = doc, targetEditor = editor, token = epoch, version = dirtyTick;
+        const selectedRange = { index: range.index, length: range.length };
+        const isTarget = () => current(token) && doc === target && editor === targetEditor && mode === "edit";
+        form.aiSuggestions?.dispose();
+        form.aiSuggestions = life.WritingAIUI.open({
+          selectionText: selectionOps.map(op => op.insert).join(""),
+          tasks: ["polish", "shorten", "continue", "custom"],
+          isCurrent: isTarget,
+          onApply(result, accepted, { apply }) {
+            guard();
+            if (imeActive()) throw new Error(life.WritingAI.MESSAGES.ai_composing);
+            const now = editor.selection?.savedRange;
+            if (!isTarget() || dirtyTick !== version || !now || now.index !== selectedRange.index || now.length !== selectedRange.length)
+              throw new Error(life.WritingAI.MESSAGES.ai_selection_changed);
+            const before = editor.getContents();
+            const next = apply(before.ops, { ...selectedRange, original: result.original,
+              ranges: result.ranges, accepted, composing: imeActive() });
+            // Validate before changing the editor; preserve the normal autosave,
+            // authorship and one-step undo paths after accepting a suggestion.
+            M.validate({ ...doc, ops: next.ops });
+            editor.history.cutoff();
+            aiInserting = true;
+            try { editor.updateContents(before.diff(new Delta(next.ops)), "user"); }
+            finally { aiInserting = false; editor.history.cutoff(); }
+            editor.setSelection(next.selection.index, next.selection.length, "silent");
+          },
+          onClose() { if (isTarget()) suggest.focus(); },
+        });
+      }), "edit", "AI 제안");
+      suggest.id = "photoAI";
+      suggest.addEventListener("pointerdown", event => event.preventDefault());
+      // Preserve the wide toolbar; only the narrow phone row moves its link
+      // into additional formats. Move the existing control, never recreate it.
+      const linkControl = primaryFormats.querySelector(".ql-link");
+      const narrowTools = root.matchMedia("(max-width: 390px)");
+      const placeLink = () => {
+        const destination = narrowTools.matches ? formatPanel : primaryFormats;
+        if (linkControl.parentNode !== destination) {
+          const focused = document.activeElement === linkControl;
+          destination.append(linkControl);
+          if (focused) (narrowTools.matches && !extraFormats.open ? formatSummary : linkControl).focus({ preventScroll: true });
+        }
+      };
+      placeLink(); narrowTools.addEventListener("change", placeLink);
+      form.disposeAITool = () => {
+        narrowTools.removeEventListener("change", placeLink);
+        form.aiSuggestions?.dispose();
+      };
       const toolItems = [
         ["photo", insertPhoto],
         ["inline", primaryFormats],
+        ["ai", suggest],
         ["formats", extraFormats],
         ["history", history],
         ["keyboard", hideKeyboard],

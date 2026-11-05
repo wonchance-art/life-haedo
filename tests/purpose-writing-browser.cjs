@@ -1,5 +1,5 @@
 /* Purpose workflow: real local app, bundled SDK and scoped IndexedDB. Only
- * synthetic Auth/blog/library HTTP and native IO fault gates are intercepted.
+ * synthetic Auth/blog/library HTTP and scoped storage/native IO fault gates are intercepted.
  * This does not verify hosted RLS, Google OAuth or physical Apple devices. */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4198';
@@ -107,7 +107,7 @@ async function manager(page) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const report = { scope: 'Actual local product modules/SDK/IDB; synthetic HTTP and native IO gates only. Source may be changing until root freeze.', before: await hashes(), after: null, checks: [], consoleErrors: [], pageErrors: [], external: [], served: {} };
+  const report = { scope: 'Actual local product modules/SDK/IDB; synthetic HTTP and scoped storage/native IO gates only. Source may be changing until root freeze.', before: await hashes(), after: null, checks: [], consoleErrors: [], pageErrors: [], external: [], served: {} };
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   async function check(name, run, width = 1440) {
     if (process.env.PURPOSE_WRITING_MATCH && !new RegExp(process.env.PURPOSE_WRITING_MATCH).test(name)) return;
@@ -160,19 +160,26 @@ async function main() {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     }, width);
 
-    await check('stale expected manager rejects retained rows after fresh IDB failure', async ({ device }) => {
+    await check('stale expected manager rejects retained rows after fresh storage read failure', async ({ device }) => {
       const { page } = await device('fresh-read'), f = await seed(page);
       const result = await page.evaluate(async f => {
         const s = HaedoLife.Shell.storage, host = document.createElement('div'); document.body.append(host);
-        const instance = HaedoLife.BlogManager.create({ storage: s, workspaceId: f.workspaceId, auth: HaedoAuth, isCurrent: () => true });
+        let failNextPhotoRead = false, failures = 0, rejected = false, message = '';
+        const listPhotoPosts = s.listPhotoPosts.bind(s);
+        // Only this manager consumes the fault; background readers keep the real storage.
+        const storage = { ...s, async listPhotoPosts(...args) {
+          if (failNextPhotoRead) { failNextPhotoRead = false; failures++; throw new DOMException('Injected manager photo read failure', 'AbortError'); }
+          return listPhotoPosts(...args);
+        } };
+        const instance = HaedoLife.BlogManager.create({ storage, workspaceId: f.workspaceId, auth: HaedoAuth, isCurrent: () => true });
         await instance.mount(host); const before = host.querySelectorAll('.blog-post').length;
-        const get = IDBObjectStore.prototype.get; let failures = 0, rejected = false, message = '';
-        IDBObjectStore.prototype.get = function(key) { const request = get.call(this, key); if (this.name === 'meta' && key === 'photo-posts:' + f.workspaceId) { IDBObjectStore.prototype.get = get; failures++; this.transaction.abort(); } return request; };
+        failNextPhotoRead = true;
+        const competingRows = (await s.listPhotoPosts(f.workspaceId)).length, failuresBeforeMount = failures;
         try { await instance.mount(host, { postId: f.postId, expectedRevision: f.revision }); } catch (error) { rejected = true; message = error.message; }
-        finally { IDBObjectStore.prototype.get = get; }
         const state = host.querySelector('.blog-manager-list')?.dataset.state, visibleRows = host.querySelectorAll('.blog-post').length;
-        instance.dispose(); host.remove(); return { before, failures, rejected, message, state, visibleRows };
+        instance.dispose(); host.remove(); return { before, competingRows, failuresBeforeMount, failures, rejected, message, state, visibleRows };
       }, f);
+      assert(result.competingRows >= 2); assert.equal(result.failuresBeforeMount, 0);
       assert(result.before >= 2); assert.equal(result.failures, 1); assert.equal(result.rejected, true); assert.equal(result.state, 'error'); assert.equal(result.visibleRows, 0); assert.match(result.message, /선택한 글이 바뀌었습니다/);
     });
 

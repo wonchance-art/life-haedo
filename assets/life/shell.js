@@ -191,7 +191,10 @@
         });
       }
       if (bootstrap?.legacy) sync.setAutomatic?.(true);
-      if (!automatic || bootstrap?.legacy) sync.start().catch(() => {
+      // A legacy (capability 0) bootstrap already started this account's sync.
+      // Starting it again reset the verified connection and left no account
+      // until a second server check returned.
+      if (!automatic) sync.start().catch(() => {
         if (token === generation && !signal.aborted) notice('서버에 연결하지 못했습니다. 바뀐 자료는 보존되고 연결되면 계정에 자동 저장됩니다.');
       });
       if (!automatic || bootstrap?.legacy) compositionSync.start();

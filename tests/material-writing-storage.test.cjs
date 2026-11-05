@@ -10,7 +10,7 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 // and publish no writes until done. Native IndexedDB is checked independently in
 // the browser journey; this adapter does not claim to emulate its event loop.
 function adapter() {
-  const rows = new Map(), paths = new Map(), control = { fail: null, failCompletion: false, writes: [] }; let tail = Promise.resolve();
+  const rows = new Map(), paths = new Map(), control = { fail: null, readFault: null, failCompletion: false, writes: [] }; let tail = Promise.resolve();
   const idb = { async openDB(_name, _version, callbacks) {
     let closed = false;
     const db = {
@@ -35,7 +35,13 @@ function adapter() {
         async function run(name, method, value) {
           await ready; if (ended) throw new DOMException('inactive', 'AbortError');
           const store = working.get(name);
-          if (method === 'get') return copy(store.get(key(value)));
+          if (method === 'get') {
+            // A read-wrapper exception must reach the application transaction
+            // boundary; do not abort here or a catch-all mutation goes unnoticed.
+            const error = control.readFault?.({ name, id: value });
+            if (error) { control.readFault = null; throw error; }
+            return copy(store.get(key(value)));
+          }
           if (method === 'getAll') return copy([...store.values()]);
           if (method === 'getAllKeys') return [...store.keys()].map(value => JSON.parse(value));
           if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
@@ -193,4 +199,160 @@ test('declared source hashes cannot certify changed raw text and empty outlines 
   await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), { code: 'invalid_source_reference' }); assert.deepEqual(f.rows, before);
   const blank = copy(f.state); blank.plans[0].blocks = []; const saved = await f.a.saveMaterialWriting(f.ws, blank, blank.revision), changed = copy(f.rows);
   await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, saved.revision), { code: 'invalid_material_writing' }); assert.deepEqual(f.rows, changed);
+});
+
+test('explicit deletion retires output durably while preserving the preparation, receipt and exact sources', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+  const post = await f.a.readPhotoPost(f.ws, created.postId), before = await f.a.readMaterialWriting(f.ws), bundle = await f.a.read(f.ws);
+  const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`), receipt = copy(f.rows.get('meta').get(receiptKey));
+  assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+  const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  const after = await f.a.readMaterialWriting(f.ws);
+  assert.equal(after.revision, before.revision + 1); assert.deepEqual(after.plans, before.plans);
+  assert.deepEqual(f.rows.get('meta').get(receiptKey), receipt); assert.deepEqual(await f.a.read(f.ws), bundle);
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+  assert(events.some(event => event.type === 'material_writing_changed' && event.revision === after.revision));
+  await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, after.revision), { code: 'material_writing_output_deleted' });
+  await assert.rejects(f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), { code: 'material_writing_output_deleted' });
+  assert.equal((await f.a.listPhotoPosts(f.ws)).length, 0);
+  // Server acknowledgement clears only the upload tombstone, never the local output history.
+  await f.a.clearBlogTombstone(f.ws, post.id);
+  assert.equal((await f.b.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
+  const freshPlan = copy(f.plan); freshPlan.id = Core.id();
+  for (const material of freshPlan.materials) { const old = material.id; material.id = Core.id(); for (const block of freshPlan.blocks) if (block.materialId === old) block.materialId = material.id; }
+  for (const block of freshPlan.blocks) block.id = Core.id();
+  const copied = await f.a.saveMaterialWriting(f.ws, { ...after, plans: [...after.plans, freshPlan] }, after.revision);
+  const next = await f.a.createMaterialWritingPost(f.ws, freshPlan.id, copied.revision);
+  assert.notEqual(next.postId, post.id); assert.equal((await f.a.readMaterialWritingOutput(f.ws, freshPlan.id)).status, 'available');
+});
+
+test('missing documents, stale revisions and published-post refusals never forge deletion evidence', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const before = copy(f.rows);
+  await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision + 1), { code: 'photo_post_conflict' }); assert.deepEqual(f.rows, before);
+  await f.a.writeBlogSyncState(f.ws, post.id, { publication: { active: true } });
+  const published = copy(f.rows);
+  await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision), { code: 'blog_post_published' }); assert.deepEqual(f.rows, published);
+  f.rows.get('meta').delete(key(`photo-post:${f.ws}:${post.id}`));
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'missing', postId: post.id });
+  await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, created.planRevision), { code: 'material_writing_output_missing' });
+  await assert.rejects(f.foreign.readMaterialWritingOutput(f.ws, f.plan.id));
+});
+
+test('output retirement and post deletion roll back together on marker, preparation or index write failure', async () => {
+  for (const point of ['marker', 'preparation', 'index', 'completion']) {
+    const f = await fixture();
+    try {
+      const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId), before = copy(f.rows);
+      const target = point === 'marker' ? `material-writing-output-deleted:${f.ws}:${post.id}` : point === 'preparation' ? `material-writing:${f.ws}` : `photo-posts:${f.ws}`;
+      if (point === 'completion') f.control.failCompletion = true;
+      else f.control.fail = ({ id }) => id === target;
+      await assert.rejects(f.a.deletePhotoPost(f.ws, post.id, post.revision));
+      assert.deepEqual(f.rows, before, point); assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+    } finally { f.close(); }
+  }
+});
+
+for (const remote of [false, true]) for (const point of ['preparation', 'receipt']) {
+  test(`${remote ? 'remote' : 'local'} deletion rolls back when material-writing ${point} read throws ${point === 'receipt' ? 'without an error code' : 'a storage error'}`, async t => {
+    const f = await fixture(); t.after(f.close);
+    const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+    const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+    const before = copy(f.rows), marker = `material-writing-output-deleted:${f.ws}:${post.id}`;
+    const target = point === 'preparation' ? `material-writing:${f.ws}` : `material-writing-output:${f.ws}:${f.plan.id}`;
+    const error = new Error('synthetic material-writing read failure');
+    if (point === 'preparation') error.code = 'storage_read_failure';
+    let reads = 0, injected = false;
+    f.control.readFault = ({ name, id }) => {
+      if (name !== 'meta' || id !== target) return;
+      // The first preparation read selects affected plans outside the catch;
+      // fail its second read inside materialWritingValue, or its receipt read.
+      if (++reads !== (point === 'preparation' ? 2 : 1)) return;
+      injected = true; return error;
+    };
+    f.control.writes.length = 0;
+    const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+    const deleting = remote
+      ? f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision })
+      : f.a.deletePhotoPost(f.ws, post.id, post.revision);
+    await assert.rejects(deleting, { code: point === 'preparation' ? 'storage_read_failure' : 'storage_error' });
+    assert(injected, 'error originates inside materialWritingValue');
+    assert(f.control.writes.some(write => write.name === 'meta' && write.method === 'put' && write.id === marker), 'marker write was attempted before the read failed');
+    assert.deepEqual(f.rows, before, 'entire transaction rolls back, including binding, evidence and index');
+    assert.equal(f.rows.get('meta').has(key(marker)), false, 'no deletion marker is committed');
+    assert.deepEqual(await f.a.readPhotoPost(f.ws, post.id), post, 'the original post remains readable');
+    assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'available');
+    assert.deepEqual(events, [], 'an aborted deletion emits no change event');
+  });
+}
+
+test('confirmed remote deletion retires the same local output without changing its handoff receipt', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+  const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`), receipt = copy(f.rows.get('meta').get(receiptKey));
+  const before = await f.a.readMaterialWriting(f.ws), events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+  await f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision });
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+  const after = await f.a.readMaterialWriting(f.ws); assert.equal(after.revision, before.revision + 1); assert.deepEqual(after.plans, before.plans);
+  assert(events.some(event => event.type === 'material_writing_changed' && event.revision === after.revision));
+  assert.equal((await f.a.listPhotoPosts(f.ws)).length, 0);
+  assert.deepEqual(f.rows.get('meta').get(receiptKey), receipt);
+});
+
+for (const remote of [false, true]) for (const related of [false, true]) {
+  test(`${remote ? 'remote' : 'local'} deletion survives a damaged preparation receipt for ${related ? 'its own' : 'an unrelated'} post`, async t => {
+    const f = await fixture(); t.after(f.close);
+    const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+    const P = require('../assets/life/photo-post.js');
+    const post = related ? await f.a.readPhotoPost(f.ws, created.postId) : await f.a.savePhotoPost(f.ws, P.create(Core.id), 0);
+    const binding = await f.a.writeBlogSyncState(f.ws, post.id, { remoteId: Core.id(), enabled: true, remoteRevision: 1, localRevision: post.revision });
+    const receiptKey = key(`material-writing-output:${f.ws}:${f.plan.id}`);
+    const damaged = { key: `material-writing-output:${f.ws}:${f.plan.id}`, value: { postId: created.postId, damaged: true } };
+    f.rows.get('meta').set(receiptKey, copy(damaged));
+    const stateKey = key(`material-writing:${f.ws}`), before = copy(f.rows.get('meta').get(stateKey));
+    const events = [], off = f.a.subscribe(f.ws, event => events.push(event)); t.after(off);
+    if (remote) await f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision });
+    else await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+    await assert.rejects(f.a.readPhotoPost(f.ws, post.id), { code: 'photo_post_missing' });
+    assert.deepEqual(f.rows.get('meta').get(key(`material-writing-output-deleted:${f.ws}:${post.id}`))?.value, { postId: post.id });
+    assert.deepEqual(f.rows.get('meta').get(stateKey), before, 'damaged preparation is not rewritten or revised');
+    assert.deepEqual(f.rows.get('meta').get(receiptKey), damaged, 'damaged receipt stays available for recovery');
+    assert(!events.some(event => event.type === 'material_writing_changed'));
+    if (!related) assert.equal((await f.a.readPhotoPost(f.ws, created.postId)).id, created.postId, 'other post is preserved');
+  });
+}
+
+test('deletion evidence survives when the related preparation is not present yet', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), post = await f.a.readPhotoPost(f.ws, created.postId);
+  const stateKey = key(`material-writing:${f.ws}`), pendingPreparation = copy(f.rows.get('meta').get(stateKey));
+  f.rows.get('meta').delete(stateKey);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  // A later exact preparation installation must not turn a confirmed deletion
+  // into a transient missing document merely because the streams arrived apart.
+  f.rows.get('meta').set(stateKey, pendingPreparation);
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
+});
+
+test('a newer server post restored after a refused deletion takes precedence over deletion history', async t => {
+  const f = await fixture(); t.after(f.close);
+  const created = await f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision);
+  let post = await f.a.readPhotoPost(f.ws, created.postId); post.status = 'saved'; post = await f.a.savePhotoPost(f.ws, post, post.revision);
+  const remoteId = Core.id(), binding = { remoteId, enabled: true, remoteRevision: 1, localRevision: post.revision };
+  await f.a.writeBlogSyncState(f.ws, post.id, binding);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
+  // BlogSync discards the pending deletion after conflict/published refusal and
+  // installs the server's newer post through its ordinary receive transaction.
+  await f.a.clearBlogTombstone(f.ws, remoteId);
+  const next = { ...post, revision: 0, title: '다른 기기의 더 최신 글' };
+  await f.a.commitBlogSync(f.ws, { postId: post.id, post: next, baseRevision: 0, bindingRevision: 0, binding: { ...binding, remoteRevision: 2 } });
+  const live = await f.a.readMaterialWritingOutput(f.ws, f.plan.id);
+  assert.equal(live.status, 'available'); assert.equal(live.postId, post.id);
+  assert.equal((await f.a.createMaterialWritingPost(f.ws, f.plan.id, (await f.a.readMaterialWriting(f.ws)).revision)).postId, post.id);
+  assert.equal((await f.a.readPhotoPost(f.ws, post.id)).title, '다른 기기의 더 최신 글');
 });

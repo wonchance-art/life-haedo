@@ -21,7 +21,8 @@ const newBody='최신 원문으로 바뀌면 안 되는 문장.\r\n이 버전에
 async function go(page,view='activities') {await page.goto(`${base}/index.html?section=${sections[view]}&view=${view}`);await ready(page);await page.locator(`.life-workbench[data-mode="${view}"]`).waitFor();await page.waitForFunction(()=>!document.querySelector('.life-workbench')?.getAttribute('aria-busy')||document.querySelector('.life-workbench')?.getAttribute('aria-busy')==='false');}
 async function storedState(page, view) {
   const status=page.locator('#wbStatus[data-state="saved"]'); await status.waitFor({state:'attached'});
-  assert.equal(await status.textContent(),'이 기기에 저장됨');
+  // This account-scoped fixture has no account upload acknowledgement.
+  assert.equal(await status.textContent(),'저장됨 · 계정에 올리기 대기');
   if(view==='workbench-backup') {
     assert.equal(await status.isHidden(),true);
     assert.equal(await page.locator('#wbBackupDownload').isVisible(),true);

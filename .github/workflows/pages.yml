@@ -429,6 +429,30 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify the source reader keeps the shared compose control without covering reader tools
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reader-compose-browser.cjs
+      - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-browser.cjs
+      - name: Verify material AI questions cite exact excerpts and discard stale sources before and after sending
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-ai-browser.cjs
+      - name: Verify the AI and link tools keep one row, 44px targets and an open review across widths
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-toolbar-browser.cjs
+      - name: Verify schedule quarter counts sit below titles with mobile navigation preserved
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-quarter-layout-browser.cjs
+      - name: Verify damaged-space guidance, two-step save status and the shared heading row
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/minor-defects-ui-browser.cjs
+      - name: Verify composition and editor save lines read the account sync status
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-save-status-browser.cjs
+      - name: Verify deleting a finished post clears its preparation link and offers a fresh preparation
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-output-browser.cjs
       - name: Verify v2 and Markdown manager previews keep photo order, captions and public digest
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-manager-preview-browser.cjs
@@ -638,6 +662,9 @@ jobs:
             .local/account-materials/
             .local/account-library/
             .local/startup-performance-browser/
+            .local/writing-ai/
+            .local/material-writing-ai/
+            .local/writing-ai-toolbar/
             .local/naver-blog/
             .local/naver-capture/
             .local/naver-photo-status/

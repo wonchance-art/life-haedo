@@ -13,6 +13,11 @@
   min-height: 100svh;
   padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
 }
+/* The reader owns its heading row, just as the editor does. A successful save
+   remains announced without inserting a second row above the title. */
+.photo-posts[data-mode="read"] { display: flex; flex-direction: column; margin-top: 0; }
+.photo-posts[data-mode="read"] > .photo-status[data-state="success"] { order: 1; margin: 0 auto 20px; }
+.photo-posts[data-mode="read"] > .photo-article { width: 100%; margin-top: 0; }
 .photo-status {
   position: relative;
   min-height: 1.6em;
@@ -231,12 +236,19 @@
 .photo-more-menu > button:hover { background: var(--soft, #f7f7f8); }
 .photo-more-menu > button.photo-delete { margin-top: 4px; color: var(--color-error, #a3243d); }
 .photo-more-menu > .photo-server-scope { margin: 4px 12px 8px; font-size: 13px; line-height: 1.6; color: var(--ink-soft, #66666f); }
-.photo-read-actions { max-width: 680px; margin-inline: auto; display: flex; align-items: center; gap: 8px; padding-block: 8px; flex-wrap: nowrap; }
+.photo-read-actions { width: 100%; max-width: 680px; margin-inline: auto; display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top, 0px)) 0 10px; border-bottom: 1px solid var(--line, #ececee); flex-wrap: nowrap; }
 .photo-read-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
 .photo-read-tools > .photo-read-edit { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink, #182522); font-size: var(--haedo-text-control, 15px); }
 .photo-read-tools > .photo-read-edit:hover { background: var(--soft, #eaf1ed); }
 .photo-read-tools > .photo-read-edit svg { flex: none; width: 20px; height: 20px; }
 .photo-read-actions .photo-more-menu { max-width: calc(100vw - 40px); }
+@media (max-width: 760px) {
+  /* The global compose control keeps its 44px corner target while the reader
+     retains back, privacy, labelled edit, download, more and search. Tools may
+     wrap to a second row rather than lose their labels or touch targets. */
+  .photo-read-actions { padding: calc(6px + env(safe-area-inset-top, 0px)) 44px 6px 0; gap: 4px; flex-wrap: wrap; }
+  .photo-read-tools { gap: 0; }
+}
 .photo-entry-excerpt {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
