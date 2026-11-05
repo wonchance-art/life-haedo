@@ -499,6 +499,9 @@ jobs:
       - name: Verify exact Naver original photos across independent account devices
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/naver-media-continuity-browser.cjs
+      - name: Verify Naver connection switching keeps scope and exact versions restore on two devices
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/naver-ui-continuity-browser.cjs
       - name: Verify annual planning, dated month preservation and private local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-annual-plan-browser.cjs
