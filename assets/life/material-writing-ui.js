@@ -284,7 +284,15 @@
         if (!current()) return;
         if (result.postId !== postId) throw new Error('연결한 글이 바뀌었습니다. 작성 준비를 다시 불러와 주세요.');
         if (result.status === 'deleted') {
-          pending.textContent = '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.';
+          let localOnly = false;
+          if (typeof storage.readMaterialContinuityState === 'function') {
+            const continuity = await storage.readMaterialContinuityState(workspaceId, owner.id);
+            if (!current()) return;
+            localOnly = !continuity?.head?.data?.output || !continuity.output || continuity.head.data.output.postId !== continuity.output.postId;
+          }
+          pending.textContent = localOnly
+            ? '이 기기에만 있는 준비입니다. 완성 글을 삭제했습니다. 다른 기기로 보내려면 새 준비 사본을 만들어 주세요.'
+            : '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.';
           const start = el('button', '새 준비 사본 만들기', 'life-button'); start.type = 'button'; start.id = 'mwDeletedCopy';
           // Reuse the existing copy action, including its input/IME/size guards.
           start.addEventListener('click', () => { if (current()) surface.querySelector('#mwCopy')?.click(); }); target.append(start);

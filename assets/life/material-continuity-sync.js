@@ -43,7 +43,7 @@
   }
   // Open editors register here so background passes never replace unsaved input
   // and can ask a clean editor to reload after a received change.
-  const holds = new Map(), shared = new WeakMap();
+  const holds = new Map(), shared = new WeakMap(), deferredOutputReads = new WeakSet();
   function watch(workspaceId, handlers) {
     const entry = { busy: typeof handlers?.busy === 'function' ? handlers.busy : () => false, reload: typeof handlers?.reload === 'function' ? handlers.reload : null };
     if (!holds.has(workspaceId)) holds.set(workspaceId, new Set());
@@ -92,6 +92,7 @@
     }
     async function checkedRow(c, id) {
       const row = await remote.read(id); guard(c); if (!row) throw fault('material_remote_missing');
+      if (row.id !== id) throw fault('material_receive_changed');
       if (row.deleted) throw fault('material_remote_deleted');
       row.data = await model.verify(row.data); guard(c); return row;
     }
@@ -176,9 +177,42 @@
       });
     }
     async function outputPost(c, row) {
+      try { return await readOutputPost(c, row); }
+      catch (error) {
+        // Only transport/auth/cancel failures retry on the next pass. A truncated
+        // response already surfaces as network_error. invalid_remote_data is a
+        // verification failure of one consistent server read (an unsupported or
+        // damaged row) and, like a revision mismatch, keeps the ordinary
+        // 30-minute adoption delay until the preparation or a deletion marker
+        // changes; re-reading it every pass would refetch up to 16 MiB each time.
+        if (['network_error', 'auth_required', 'request_cancelled'].includes(error?.code)) deferredOutputReads.add(error);
+        throw error;
+      }
+    }
+    async function readOutputPost(c, row) {
       if (row.data.output?.state !== 'saved') return null;
       const output = row.data.output, postRow = await blogRemote.read(output.postId); guard(c);
-      if (!postRow || postRow.revision !== output.revision) throw fault('material_output_changed');
+      // The caller obtained and verified this saved descriptor from the server.
+      // Only a successful, account-scoped read returning exactly null may prove
+      // its output was deleted before this device received the preparation.
+      // Errors and present posts still take the normal exact-revision path.
+      if (postRow === null) {
+        if (typeof storage.readMaterialContinuityOutputDeletion === 'function') {
+          const deleted = await storage.readMaterialContinuityOutputDeletion(row); guard(c);
+          if (deleted === true) return null;
+        }
+        // Storage validates every identity again and commits this proof's
+        // canonical marker atomically with the received preparation.
+        return { deletedOutput: { binding: clone(owner), remoteId: row.id, revision: row.revision,
+          workspaceId: row.data.bundle.workspaceId, planId: row.data.plan.id, output: clone(output) } };
+      }
+      if (!postRow || !Number.isInteger(postRow.revision) || postRow.revision < 1 ||
+          typeof postRow.id !== 'string' || typeof postRow.workspace_id !== 'string' ||
+          !Array.isArray(postRow.data?.photos) || !postRow.assets || typeof postRow.assets !== 'object' || Array.isArray(postRow.assets)) {
+        // A partial response cannot establish either deletion or a changed revision.
+        throw fault('invalid_remote_data');
+      }
+      if (postRow.revision !== output.revision) throw fault('material_output_changed');
       const blobs = new Map();
       for (const photo of postRow.data.photos) { blobs.set(photo.id, await blogRemote.downloadAsset(postRow.assets[photo.id])); guard(c); }
       const doc = await blog.hydrate(postRow.data, blobs); guard(c);
@@ -188,7 +222,7 @@
     async function install(c, row, options = {}) {
       const completed = await outputPost(c, row); guard(c);
       try {
-        const result = await storage.installMaterialContinuity(row, { ...options, ...(completed ? { post: completed.doc, blogRow: completed.row } : {}) }); guard(c); emit(c); return result;
+        const result = await storage.installMaterialContinuity(row, { ...options, ...(completed?.deletedOutput ? { deletedOutput: completed.deletedOutput } : completed ? { post: completed.doc, blogRow: completed.row } : {}) }); guard(c); emit(c); return result;
       } catch (error) {
         if (error.code === 'local_changed' && options.target) {
           guard(c); const targetContext = context(options.target.workspaceId, options.target.planId), state = await read(targetContext);
@@ -275,7 +309,7 @@
       if (!state) throw fault('material_not_connected'); const row = await checkedRow(c, state.remoteId);
       const completed = await outputPost(c, row);
       return { local: { data: local.data, fingerprint: local.preparationFingerprint, ...reviewStamp(local) },
-        remote: row, remotePost: completed ? blog.pack(completed.doc) : null, expected: { fingerprint: local.preparationFingerprint, remoteRevision: row.revision, reviewFingerprint: local.fingerprint } };
+        remote: row, remotePost: completed?.doc ? blog.pack(completed.doc) : null, expected: { fingerprint: local.preparationFingerprint, remoteRevision: row.revision, reviewFingerprint: local.fingerprint } };
     }
     async function resolve(ws, id, choice, expected) {
       return serial(ws, id, async c => {
@@ -394,7 +428,7 @@
       }
       if (held(ws)) return null;
       const completed = await outputPost(c, row); guard(c);
-      const result = await storage.adoptMaterialContinuity(row, completed ? { post: completed.doc, blogRow: completed.row } : {}); guard(c);
+      const result = await storage.adoptMaterialContinuity(row, completed?.deletedOutput ? { deletedOutput: completed.deletedOutput } : completed ? { post: completed.doc, blogRow: completed.row } : {}); guard(c);
       emit(context(ws, planId)); return result;
     }
     function dispose() { if (disposed) return; disposed = true; remote.dispose?.(); blogRemote?.dispose?.(); blogSync?.dispose?.(); ownBlogSync?.dispose?.(); listeners.clear(); }
@@ -428,7 +462,7 @@
     const UNAVAILABLE = new Set(['schema_missing', 'permission_denied']);
     // One metadata list per pass decides every body read: unchanged linked preparations and
     // server preparations that could not be installed here are not fetched again.
-    const adoptSkips = new Map(); let knownSpaces = null; const ADOPT_RETRY = 30 * 60000;
+    const adoptSkips = new Map(); let knownSpaces = null, deletionEvidenceEpoch = 0; const ADOPT_RETRY = 30 * 60000;
     async function listAll() {
       const items = []; let cursor = null;
       for (let page = 0; page < 50 && !disposed; page++) { const result = await instance.list(cursor); items.push(...(result.items || [])); if (!result.next) break; cursor = result.next; }
@@ -470,11 +504,12 @@
             if (disposed) return;
             const skip = adoptSkips.get(item.id);
             if (skip && skip.revision === item.revision && Date.now() - skip.at < ADOPT_RETRY) continue;
+            const evidenceEpoch = deletionEvidenceEpoch;
             try {
               const adopted = await instance.adopt(item);
               if (adopted) { adoptSkips.delete(item.id); await reloadHeld(adopted.workspaceId, adopted); }
-              else adoptSkips.set(item.id, { revision: item.revision, at: Date.now() });
-            } catch (_) { adoptSkips.set(item.id, { revision: item.revision, at: Date.now() }); }
+              else if (evidenceEpoch === deletionEvidenceEpoch) adoptSkips.set(item.id, { revision: item.revision, at: Date.now() });
+            } catch (error) { if (!deferredOutputReads.has(error) && evidenceEpoch === deletionEvidenceEpoch) adoptSkips.set(item.id, { revision: item.revision, at: Date.now() }); }
           }
           if (again && !disposed) items = await listAll();
         } while (again && !disposed);
@@ -491,8 +526,17 @@
     const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
     const pageshow = event => { if (event?.persisted) parked = false; };
     const nudge = event => {
+      if (disposed) return;
+      const deletionEvidence = event?.type === 'account_doc_applied' && typeof event.key === 'string' && event.key.startsWith('materialOutputDeleted:');
+      if (deletionEvidence) {
+        // Evidence can arrive after an unsuccessful receive, or while that
+        // receive is still running. Retry against the newly committed marker;
+        // an older in-flight failure must not restore its 30-minute skip.
+        deletionEvidenceEpoch++; adoptSkips.clear();
+        if (running) { again = true; return; }
+      }
       // Writes made by a running pass also announce changes; they never schedule another pass.
-      if (disposed || running || parked || event?.type !== 'material_writing_changed' || soon) return;
+      if (running || parked || !deletionEvidence && event?.type !== 'material_writing_changed' || soon) return;
       soon = root.setTimeout(() => { soon = null; pass(); }, 2000); soon?.unref?.();
     };
     return Object.freeze({
