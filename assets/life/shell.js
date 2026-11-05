@@ -21,32 +21,33 @@
   // generation. Only real recovery, an owner change or a manual retry resets it.
   let failure = null, retryOwner = null, automaticRetries = 0;
   const AUTO_RETRY_LIMIT = 3;
-  const permanentFailures = new Set(['schema_missing', 'permission_denied', 'account_mismatch', 'storage_quota',
-    'storage_version_changed', 'crypto_unavailable', 'sync_common_missing', 'hash_mismatch', 'duplicate_id',
-    'missing_reference', 'manifest_mismatch', 'source_history_missing', 'source_identity_mismatch', 'unsafe_url',
-    'QuotaExceededError', 'VersionError', 'SecurityError']);
+  const retryableFailures = new Set(['network_error', 'storage_unavailable', 'request_cancelled', 'storage_aborted']);
   const accountKey = account => account ? account.projectUrl + '|' + account.userId : null;
   function resetRecovery() { failure = null; retryOwner = null; automaticRetries = 0; }
   function recoveryOwner(key) {
     if (retryOwner && retryOwner !== key) resetRecovery();
     retryOwner = key;
   }
-  function recordFailure(error, key) {
+  function recordFailure(error, key, message) {
     if (key) recoveryOwner(key);
-    const code = typeof error?.code === 'string' ? error.code : error?.name || 'unknown_error';
-    // Unknown failures get the bounded recovery path. Known malformed data,
-    // permissions and incompatible storage need an explicit user action.
-    failure = { key, code, retryable: !/^(invalid_|unsupported_)/.test(code) && !permanentFailures.has(code) };
+    const code = typeof error?.code === 'string' ? error.code : null;
+    const name = error?.name || 'unknown_error';
+    // Raw IndexedDB exceptions can carry numeric DOM codes. Match only the
+    // known transient names; a string error code always controls classification.
+    const retryable = retryableFailures.has(code) || code === null && ['AbortError', 'InvalidStateError'].includes(name) || error?.code == null && name === 'Error';
+    failure = { key, code: code || name, retryable, message };
+    retryNotice(message);
   }
   function retryAutomatically() {
-    if (!failure?.retryable || automaticRetries >= AUTO_RETRY_LIMIT || starting || showing || suspended || retained || leaving || isReadOnly()) return;
-    if (root.document.visibilityState === 'hidden' || root.navigator.onLine === false) return;
+    if (!failure?.retryable || automaticRetries >= AUTO_RETRY_LIMIT || starting || showing || suspended || retained || leaving || isReadOnly()) return false;
+    if (root.document.visibilityState === 'hidden' || root.navigator.onLine === false) return false;
     const key = accountKey(auth?.getAccount());
     // An initial Auth network failure has no verified owner yet. A real logout
     // clears its failure record through the null-account notification instead.
-    if (failure.key && failure.key !== key) return;
+    if (failure.key && failure.key !== key) return false;
     automaticRetries += 1;
     start();
+    return true;
   }
   let workerScheduled = false;
   function scheduleWorker() {
@@ -244,8 +245,7 @@
     } catch (error) {
       if (signal.aborted || token !== generation) return null;
       hide();
-      recordFailure(error, key);
-      retryNotice(error?.message || '자료 화면을 열지 못했습니다. 저장된 자료는 보존돼 있습니다.');
+      recordFailure(error, key, error?.message || '자료 화면을 열지 못했습니다. 저장된 자료는 보존돼 있습니다.');
       return null;
     }
   }
@@ -271,8 +271,7 @@
         if (suspended || auth.epoch !== authEpoch) return null;
         if (cached && cached === mounted && transition === suspension && auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId === activeKey) conceal();
         else hide();
-        recordFailure(error, accountKey(auth.getAccount()));
-        retryNotice('개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
+        recordFailure(error, accountKey(auth.getAccount()), '개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
         return null;
       } finally { opening?.end(); }
     })();
@@ -298,8 +297,7 @@
     const account = auth?.getAccount();
     if (retained && account && activeKey === account.projectUrl + '|' + account.userId) conceal();
     else hide();
-    recordFailure({ code: event.code || 'auth_error' }, accountKey(account));
-    retryNotice('로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.');
+    recordFailure({ code: event.code || 'auth_error' }, accountKey(account), '로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.');
   });
   root.document.addEventListener('visibilitychange', () => {
     if (!root.document.hidden) retryAutomatically();
@@ -331,7 +329,12 @@
     event.preventDefault();
     suspended = false;
     if (mounted && retained || !failure) start();
-    else retryAutomatically();
+    else if (!retryAutomatically() && !starting && !showing) {
+      const status = root.document.getElementById('lifeStartup');
+      // An aborted attempt can leave only a loading message. Restore its last
+      // error, but retain a complete error frame and its already focused button.
+      if (status.hidden || status.getAttribute('role') !== 'alert' || status.querySelector('p')?.textContent !== failure.message || !status.querySelector('button:not(:disabled)')) retryNotice(failure.message);
+    }
   });
   root.addEventListener('online', retryAutomatically);
   // Persisted pageshow is owned by Auth's page-resume event above. Do not race

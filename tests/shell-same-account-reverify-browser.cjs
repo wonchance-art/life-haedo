@@ -139,6 +139,22 @@ async function main() {
       }); } finally { db.close(); }
     }, { workspaceId, replacement });
   }
+  async function activePointer(page, workspaceId, restore) {
+    return page.evaluate(async ({ workspaceId, restore }) => {
+      const request = indexedDB.open('life-tools-v1');
+      const db = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      try { return await new Promise((resolve, reject) => {
+        const tx = db.transaction('meta', 'readwrite'), store = tx.objectStore('meta'); let entry;
+        tx.oncomplete = () => resolve(entry); tx.onerror = tx.onabort = () => reject(tx.error || Error('Fixture active pointer transaction failed'));
+        if (restore) { entry = restore; store.put(restore); return; }
+        const rows = store.getAll(); rows.onsuccess = () => {
+          const matches = rows.result.filter(row => row.key.startsWith('activeWorkspace:') && row.value === workspaceId);
+          if (matches.length !== 1) { tx.abort(); return; }
+          entry = matches[0]; store.delete(entry.key);
+        };
+      }); } finally { db.close(); }
+    }, { workspaceId, restore });
+  }
   async function observeError(page) {
     await page.evaluate(() => {
       const box = document.querySelector('#lifeStartup');
@@ -352,7 +368,7 @@ async function main() {
       const fixture = await seed(page); await markView(page);
       // This deliberately dispatched boundary proves the listener behavior only.
       // A mounted real Auth failure above does NOT emit this event (count zero).
-      await page.evaluate(() => document.dispatchEvent(new Event('haedo:auth-unavailable')));
+      await page.evaluate(() => { const event = new Event('haedo:auth-unavailable'); event.code = 'network_error'; document.dispatchEvent(event); });
       await page.locator('#lifeStartup[role="alert"] button').waitFor(); await observeError(page);
       assert.equal(await page.evaluate(() => __c2Unavailable), 1);
       assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.equal(await page.evaluate(() => HaedoLife.Shell.storage), null);
@@ -508,6 +524,80 @@ async function main() {
       assert.equal(network.capabilities.length, failure === 'bootstrap' ? 2 : 1);
       row.recoveredWithoutClick = true; row.authAfterRecovery = authRequests.length; row.capabilitiesAfterRecovery = network.capabilities.length;
     }, 390, { initialFailure: failure === 'auth' ? '/auth/v1/user' : '/rest/v1/rpc/life_library_capabilities' });
+    for (const variant of ['limit', 'offline']) await check('interrupted automatic retry restores the last failure and one button on ' + variant + ' resume', async ({ page, context, gate, network, authRequests }) => {
+      const fixture = await seed(page);
+      // Remove only this synthetic owner's active pointer so a capabilities
+      // outage cannot fall back to the existing workspace. Original bytes and
+      // ownership stay intact, and the exact pointer is restored before retry.
+      const pointer = await activePointer(page, fixture.workspaceId);
+      network.alwaysFailure = '/rest/v1/rpc/life_library_capabilities';
+      // Initial pageshow must finish before the first failure is delivered; it
+      // must not consume an automatic attempt intended for the gated sequence.
+      let releaseInitialFailure; const loaded = new Promise(resolve => { releaseInitialFailure = resolve; });
+      await context.route(cloud + '/rest/v1/rpc/life_library_capabilities', async route => { await loaded; return route.fallback(); });
+      try { await page.reload(); await frames(page); } finally { releaseInitialFailure(); }
+      await page.locator('#lifeStartup[role="alert"] button').waitFor();
+      await page.evaluate(() => HaedoLife.Shell.ready); await frames(page);
+      const lastMessage = await page.locator('#lifeStartup p').textContent();
+      const completedRetries = variant === 'limit' ? 2 : 0;
+      for (let index = 0; index < completedRetries; index++) {
+        const request = gate(); await page.evaluate(() => dispatchEvent(new Event('online'))); await arrived(request);
+        request.release(); await request.finished; await page.locator('#lifeStartup[role="alert"] button').waitFor(); await frames(page);
+        assert.equal(await page.locator('#lifeStartup p').textContent(), lastMessage);
+      }
+      const pending = gate(); await page.evaluate(() => dispatchEvent(new Event('online'))); await arrived(pending);
+      assert.equal(await page.locator('#lifeStartup').getAttribute('role'), 'status');
+      assert.equal(await page.locator('#lifeStartup button').count(), 0);
+      const capabilitiesBeforeSuspend = network.capabilities.length;
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+      if (variant === 'offline') { await context.setOffline(true); assert.equal(await page.evaluate(() => navigator.onLine), false); }
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await frames(page);
+      const snapshot = async () => ({ role: await page.locator('#lifeStartup').getAttribute('role'), message: await page.locator('#lifeStartup p').textContent(),
+        retryCount: await page.locator('#lifeStartup').getByRole('button', { name: '다시 확인', exact: true }).count(), allButtons: await page.locator('#lifeStartup button').count(),
+        appHidden: await page.locator('#lifeApp').isHidden(), storageMissing: await page.evaluate(() => HaedoLife.Shell.storage === null), capabilities: network.capabilities.length });
+      const expected = { role: 'alert', message: lastMessage, retryCount: 1, allButtons: 1, appHidden: true, storageMissing: true, capabilities: capabilitiesBeforeSuspend };
+      const row = { variant, completedRetries, pendingAttempt: completedRetries + 1, lastMessage, afterResume: await snapshot() };
+      (report.interruptedRetries ||= []).push(row);
+      assert.deepEqual(row.afterResume, expected);
+      assert.equal(await page.locator('#lifeStartup button').isEnabled(), true);
+      assert.doesNotMatch(await page.locator('body').innerText(), /계정 재검증 합성 원문|읽던 정확한 판/);
+      assert.deepEqual(await rawBundle(page, fixture.workspaceId), fixture.originalBundle);
+      pending.release(); await pending.finished; await frames(page);
+      row.afterLateResponse = await snapshot(); assert.deepEqual(row.afterLateResponse, expected);
+      assert.equal(await page.evaluate(() => HaedoAuth.getAccount()?.userId), accounts.a.id);
+      assert.deepEqual(await rawBundle(page, fixture.workspaceId), fixture.originalBundle);
+      await activePointer(page, fixture.workspaceId, pointer); network.alwaysFailure = null;
+      const manual = gate(), authBeforeManual = authRequests.length;
+      await page.locator('#lifeStartup').getByRole('button', { name: '다시 확인', exact: true }).click(); await arrived(manual);
+      // While offline, the real retry has already started and is held at HTTP.
+      // Restoring connectivity now cannot replace it with a separate auto retry.
+      if (variant === 'offline') await context.setOffline(false);
+      manual.release(); await manual.finished; await ready(page); await frames(page);
+      assert(authRequests.length > authBeforeManual); assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.account.userId), accounts.a.id);
+      assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), fixture.workspaceId);
+      assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), fixture.workspaceId), fixture.originalBundle);
+      row.manualRecovered = true; row.originalBundlePreserved = true;
+    }, 390, { expectedFailure: '/rest/v1/rpc/life_library_capabilities', expectedFailureCount: variant === 'limit' ? 3 : 1 });
+    for (const code of ['duplicate_excerpt', 'immutable_source_version']) await check('permanent data code ' + code + ' preserves the error without automatic rebuild', async ({ page, context, gate, authRequests, network }) => {
+      const fixture = await seed(page);
+      await context.addInitScript(({ workspaceId, code }) => {
+        let release; const promise = new Promise(resolve => { release = resolve; });
+        window.__c2ReadGate = { workspaceId, entered: false, used: false, promise, release, failureCode: code };
+      }, { workspaceId: fixture.workspaceId, code });
+      const background = gate(1); await page.reload(); await page.waitForFunction(() => __c2ReadGate.entered); await arrived(background);
+      await page.evaluate(() => __c2ReadGate.release()); await page.locator('#lifeStartup[role="alert"] button').waitFor();
+      await page.evaluate(() => HaedoLife.Shell.ready); await frames(page); await observeError(page);
+      const mounts = await page.evaluate(() => __c2Mounts), capabilities = network.capabilities.length;
+      background.release(); await background.finished; await page.waitForFunction(() => __c2Error.notifications > 0); await frames(page);
+      const authBeforeVerify = authRequests.length; await page.evaluate(() => HaedoAuth.verify()); await frames(page); assert(authRequests.length > authBeforeVerify);
+      const authAfterVerify = authRequests.length;
+      await page.evaluate(() => { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }); await frames(page);
+      const state = await errorState(page); (report.permanentCodes ||= []).push({ code, ...state, mountDelta: state.mounts - mounts, capabilitiesDelta: network.capabilities.length - capabilities });
+      assert.equal(state.loadingTransitions, 0); assert.equal(state.mounts, mounts); assert.equal(network.capabilities.length, capabilities);
+      assert.equal(authRequests.length, authAfterVerify); assert.equal(state.sameParagraph, true); assert.equal(state.sameRetry, true); assert.equal(state.retryEnabled, true);
+      assert.equal(state.role, 'alert'); assert.equal(state.text, state.originalText); assert.equal(await page.locator('#lifeApp').isHidden(), true);
+      assert.deepEqual(await rawBundle(page, fixture.workspaceId), fixture.originalBundle);
+    });
   } finally {
     await browser.close(); await new Promise(resolve => server.close(resolve)); report.finishedAt = new Date().toISOString();
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
