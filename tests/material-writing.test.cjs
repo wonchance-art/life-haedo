@@ -126,3 +126,14 @@ test('final PhotoPost text/ops and private wrapper size limits reject excess rat
   for (let i = 0; i < M.LIMITS.materials; i++) plan.materials.push({ id: C.id(), sourceId: C.id(), sourceVersionId: C.id(), contentHash: null, note: '한'.repeat(M.LIMITS.note) });
   assert.throws(() => M.validate(state), /2 MiB/); assert.equal(plan.materials[0].note.length, M.LIMITS.note);
 });
+
+test('output projection requires an exact deletion receipt and never treats a missing document as deleted', () => {
+  const post = P.create(C.id, now), output = { postId: post.id };
+  assert.deepEqual(M.resolveOutput(null), { status: 'none' });
+  assert.deepEqual(M.resolveOutput(output, post), { status: 'available', postId: post.id, revision: 0 });
+  assert.deepEqual(M.resolveOutput(output), { status: 'missing', postId: post.id });
+  assert.deepEqual(M.resolveOutput(output, null, output), { status: 'deleted', postId: post.id });
+  assert.throws(() => M.resolveOutput(output, null, { postId: C.id() }), /연결/);
+  assert.throws(() => M.resolveOutput(output, null, { ...output, confirmed: true }));
+  assert.throws(() => M.resolveOutput(output, { ...post, id: C.id() }), /연결/);
+});
