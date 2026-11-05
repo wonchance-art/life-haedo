@@ -2,7 +2,7 @@
 
 > 2026-10-29 이전 절은 [roadmap-archive.md](roadmap-archive.md)에 원문 그대로 옮겼다.
 
-## 11-05 Codex 집중 구현 묶음 A–F — 총괄 통합, 라이브 `haedo-v197`, 실기기 확인 전 (2026-11-05 KST)
+## 11-05 Codex 집중 구현 묶음 A–F — 총괄 통합, 라이브 `haedo-v197`, B1 운영 적용, 실기기 확인 전 (2026-11-05 KST)
 
 - **지시서:** 묶음 6개를 파일 담당이 겹치지 않게 Codex 세션에 맡겼다. 지시서와 회신은 채널 [#212](https://github.com/wonchance-art/life-haedo/pull/212)에 있다. #212는 병합하지 않는다.
 - **병합·배포**
@@ -13,13 +13,21 @@
     - 재검수 결과 블로커·메이저 0. 변이 5종이 모두 검사에 걸렸다.
     - 총괄 커밋 `a890d49`에서 SQL 2개와 브라우저 4개 검사를 CI에 등록했다.
   - 라이브 확인: v196·v197 각각 1440·390에서 index·life·timeline 200, 오류 0
-- **B1 운영 마이그레이션 `20261105051632_life_post_markdown`: 미적용 (소유자 결정으로 보류)**
-  - 적용 전 기록
-    - 행 수: posts 6, assets 0, receipts 12, publications 0, profiles 0
-    - 글 형식: 모두 v2
-    - `valid_document`·`publish`·`publish_copies` 운영 본문 해시와 ACL이 저장소의 직전 정의를 재생한 결과와 같다.
-  - 시도: `apply_migration` 3회와 `execute_sql` 1회 모두 서버의 실행 승인 질문에 답이 오지 않아 시간 초과로 끝났다. 매번 운영은 바뀌지 않았다(트리거 0, 이력 없음, 해시 그대로).
-  - 영향: 지금 화면에는 Markdown 글을 만드는 경로가 없다. **B2 병합 전에 반드시 적용한다.** 방법은 대시보드 SQL Editor 직접 실행 또는 승인 창 재시도 중에서 고른다.
+- **B1 운영 마이그레이션 `20261105051632_life_post_markdown`: 적용됨 (소유자가 대시보드 SQL Editor에서 실행, 08:0x UTC)**
+  - SQL Editor 실행에서 마지막 보호 단계가 `42P01 relation "blog_markdown_guard" does not exist`로 실패했다. Editor는 파일 전체를 한 세션 트랜잭션으로 돌리지 않아 `on commit drop` 임시 표가 먼저 사라졌다. 그 앞의 정의는 모두 적용됐고 보호 비교와 `notify pgrst`만 실행되지 않았다.
+  - 적용 뒤 확인(읽기 전용):
+    - 함수 6개 본문 해시가 저장소 전체 재생 결과와 같다: `publish d872bf11…`, `publish_copies fa7f1208…`, `valid_document 88dd7c33…`, `valid_delta_document da3cbe33…`, `markdown_no_downgrade 996cd098…`, `markdown_publication_requires_parser 6cf41069…`
+    - ACL과 `security definer` 여부도 재생 결과와 같다.
+    - 트리거 2개가 있다.
+    - 행 수는 적용 전과 같다(posts 6, assets 0, receipts 12, publications 0, profiles 0). 이 파일에는 행을 바꾸는 문장이 없다.
+    - 기존 글 6/6이 새 `valid_document`를 통과한다.
+  - 남은 것: 마이그레이션 이력 1행 기록(`schema_migrations`)과 스키마 다시 읽기 알림.
+  - 배운 점: 임시 표로 보호하는 마이그레이션은 SQL Editor에서는 보호가 걸리지 않는다. 운영 적용은 `apply_migration` 또는 한 세션 psql로 한다.
+- **적용 전 기록**
+  - 행 수: posts 6, assets 0, receipts 12, publications 0, profiles 0
+  - 글 형식: 모두 v2
+  - `valid_document`·`publish`·`publish_copies` 운영 본문 해시와 ACL이 저장소의 직전 정의를 재생한 결과와 같았다.
+  - 앞선 시도: `apply_migration` 3회와 `execute_sql` 1회는 서버의 실행 승인 질문에 답이 오지 않아 시간 초과로 끝났다. 매번 운영은 바뀌지 않았다.
 - **진행 중**
   - D SNS RSS 1단계(#213)
     - 두 번의 재검수로 MAJOR 4건을 고쳤다.
@@ -37,7 +45,7 @@
 
 1. **Markdown 글쓰기 완주 (B3 → B2):** 서버 공개 사본(B3)과 새 편집기 연결(B2)을 붙인다. 흐름은 처음 고칠 때 변환 → 저장 → 두 기기 동기화 → 선택 공개 → 백업 복원이다.
    - 이유: D2 소유자 결정의 본체이고, 지금은 기반만 있다.
-   - 선행: A 병합, B1 운영 마이그레이션 적용, B3 운영 반영
+   - 선행: A 병합, B3 운영 반영 (B1 운영 마이그레이션은 적용됨, 이력 1행 기록만 남음)
    - 완료 기준: 위 두 B2 관문 해결, 공개 사본과 v2 비교 렌더 일치, 독립 검수 통과
 2. **RSS 수신 운영 개시:** D 병합 → 마이그레이션·Edge·Cron 적용 → 실제 피드 1개로 새 글 비공개 보관과 읽기·검색 확인
    - 선행: 남은 상한 두 건 수정과 재검수, 소유자의 피드 주소
