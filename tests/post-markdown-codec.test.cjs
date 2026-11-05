@@ -101,26 +101,30 @@ test('50,000 empty list lines keep the same single block-format operation and or
   assert.doesNotThrow(() => PhotoPost.validate(converted));
 });
 
-test('conversion that exceeds existing operation capacity fails before returning or changing the legacy document', () => {
+test('long inline formatting converts without exceeding existing capacity or changing the legacy document', () => {
   const PhotoPost = require('../assets/life/photo-post.js');
   const legacy = PhotoPost.create(() => 'styled-long');
   legacy.ops = [{ insert: 'a\n'.repeat(3000), attributes: { bold: true } }];
   const before = structuredClone(legacy);
   assert.doesNotThrow(() => PhotoPost.validate(legacy));
-  assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+  const converted = M.fromV2(legacy).document;
+  assert.deepEqual(M.toDelta(converted.markdown), legacy.ops);
+  assert.doesNotThrow(() => PhotoPost.validate(converted));
   assert.deepEqual(legacy, before);
   assert.doesNotThrow(() => PhotoPost.validate(legacy));
 });
 
 
 for (const [name, attributes] of [['heading', { header: 1 }], ['quote', { blockquote: true }], ['list', { list: 'bullet' }]]) {
-  test('oversized ' + name + ' conversion preserves the valid legacy body without returning an invalid candidate', () => {
+  test('long ' + name + ' conversion uses an equivalent in-capacity representation', () => {
     const PhotoPost = require('../assets/life/photo-post.js');
     const legacy = PhotoPost.create(() => 'long-formatted');
     legacy.ops = [{ insert: '가\n'.repeat(2600), attributes }];
     const before = structuredClone(legacy);
     assert.doesNotThrow(() => PhotoPost.validate(legacy));
-    assert.throws(() => M.fromV2(legacy), { code: 'post_markdown_conversion_limit' });
+    const converted = M.fromV2(legacy).document;
+    assert.deepEqual(M.toDelta(converted.markdown), legacy.ops);
+    assert.doesNotThrow(() => PhotoPost.validate(converted));
     assert.deepEqual(legacy, before);
   });
 }
