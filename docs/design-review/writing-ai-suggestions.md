@@ -1,5 +1,7 @@
 # 글쓰기 안의 AI 제안 — 서버와 기기 모듈 (묶음 B 단계 1·2, 2026-11-04)
 
+**2026-11-05 화면 연결:** A 작업자가 편집기 선택 제안과 자료 질문·개요를 연결했다. 최신 연결 지점·검증·후속 조건은 [AI 제안 화면 연결](writing-ai-ui.md)을 따른다. 아래의 화면 미연결·운영 미적용 문구는 11-04 구현 당시 기록이며, 운영 설치 상태는 [로드맵](../life-tools-design/roadmap.md)의 총괄 기록과 구분한다.
+
 근거: [글쓰기·메모 AI 적용 검토](../life-tools-design/writing-ai-review.md) §6 묶음 B와 §8(소유자 결정 자료), [AI와 자동화](../life-tools-design/ai-workflows.md) §3~§7, [AI 글 표시](ai-authorship.md)(묶음 A).
 
 이번 범위는 **서버(Edge 함수 `haedo-ai`·월 상한 마이그레이션)와 기기 모듈(`assets/life/writing-ai.js`)** 이다. 화면 연결, 운영 DB 적용, 비밀값 등록, Edge 배포, 실제 공급자 호출은 하지 않았다.
@@ -205,7 +207,7 @@ const next = ai.apply(quill.getContents().ops, {
   - AI 글 안의 줄바꿈은 표시 없는 새 문단이 된다. 바꾼 구간 안의 줄 서식(제목·목록)은 이어지지 않는다.
   - 선택 밖의 사진 embed·서식은 그대로 둔다.
 - `verifyCitations(sources, citations)`는 정확히 일치하는 인용만 `{status:'quoted', quote, start, end}`(발췌 안 UTF-16 구간)로 돌려준다. 그 밖에는 `{status:'unverified', label:'출처 미확인'}`이고 `quote`가 없다. 2글자 미만 인용도 확인하지 않은 것으로 본다.
-- 앱은 아직 이 모듈을 불러오지 않는다. 그래서 `sw.js` 셸 목록·캐시 이름과 `prepare-site.mjs` 배포 목록에 넣지 않았다(`npm run check` 규칙은 페이지가 불러오는 파일만 요구한다). 화면 연결 때 세 곳에 함께 넣는다.
+- 앱은 `index.html`·`life.html`에서 이 모듈과 `writing-ai-ui.js`를 불러온다. 두 모듈·화면 CSS는 `sw.js` 셸과 `prepare-site.mjs` 배포 목록에도 등록했다. CACHE 판올림은 총괄 병합 단계에서 한다.
 
 ## 검사
 
