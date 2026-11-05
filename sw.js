@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v198';
+const CACHE='haedo-v203';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -14,7 +14,7 @@ const SHELL=[
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
   './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
   './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
-  './assets/life/preservation-ui.js','./assets/life/full-backup.js','./assets/life/full-backup-ui.js','./assets/life/settings-ui.js','./assets/life/settings.css','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
+  './assets/life/preservation-ui.js','./assets/life/full-backup.js','./assets/life/full-backup-ui.js','./assets/life/settings-ui.js', './assets/life/rss-connection.js', './assets/life/rss-connection-ui.js','./assets/life/settings.css','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
   './assets/life/blog-remote.js','./assets/life/sync-common.js','./assets/life/blog-sync.js','./assets/life/account-blog-ui.js','./assets/life/blog-public-ui.js','./assets/life/blog-manager.js','./assets/life/blog-public.js',
   './assets/life/blog-public.css','./assets/life/blog-manager.css','./','./index.html','./login.html',
   './workspace.html','./timeline.html','./assets/life/obsidian-decisions.js','./assets/life/obsidian-link-candidates.js','./assets/life/obsidian-link-commit.js','./assets/life/obsidian-link-candidates-ui.js','./assets/life/obsidian-package.js','./goals.html',
@@ -26,7 +26,7 @@ const SHELL=[
   './assets/platform-life-remote.js','./assets/timeline-entry.js','./life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js',
   './assets/life/unified-search.js','./assets/life/unified-search-ui.js','./assets/life/core.js','./assets/life/writing.js','./assets/life/writing-ui.js',
   './assets/life/nine-board.js','./assets/life/nine-board-ui.js','./assets/life/nine-board.css','./assets/life/page-posts.js','./assets/life/page-posts-view.js',
-  './assets/life/page-media.js','./assets/life/page-composer.js','./assets/life/photo-post.js','./assets/life/photo-post-attachments.js','./assets/life/photo-post-ui.js',
+  './assets/life/page-media.js','./assets/life/page-composer.js','./assets/life/photo-post.js','./assets/life/photo-post-attachments.js','./assets/life/photo-post-ui.js','./assets/life/writing-ai.js','./assets/life/writing-ai-ui.js','./assets/life/writing-ai-ui.css',
   './assets/life/photo-post.css','./vendor/quill/quill.js','./vendor/quill/quill.snow.css','./vendor/fflate/fflate.js','./assets/life/page-posts.css',
   './assets/life/workbench.js','./assets/life/reflection.js','./assets/life/reflection-lenses.js','./assets/life/reflection-lenses-ui.js','./assets/life/books.js',
   './assets/life/book-history.js','./assets/life/book-print.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js',

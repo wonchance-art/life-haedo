@@ -57,6 +57,10 @@ jobs:
         run: node tests/run-post-markdown-sql-postgres.cjs
       - name: Verify Markdown post guards survive replay of earlier installation bundles
         run: node tests/run-post-markdown-install-replay.cjs
+      - name: Verify RSS intake ownership, bounded sweeps, leases, retries and receipts
+        run: node tests/run-rss-postgres.cjs
+      - name: Verify Markdown publication commit ownership, sessions, source CAS, public copies and receipts
+        run: node tests/run-post-markdown-publish-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -429,6 +433,33 @@ jobs:
       - name: Verify private series editing, exact snapshots and independent ZIP copies
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-browser.cjs
+      - name: Verify the source reader keeps the shared compose control without covering reader tools
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reader-compose-browser.cjs
+      - name: Verify RSS connection rows, preview, stop, retry and disconnect without real feed requests
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/rss-connection-browser.cjs
+      - name: Verify editor AI suggestions send only the selection and apply only the reviewed range
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-browser.cjs
+      - name: Verify material AI questions cite exact excerpts and discard stale sources before and after sending
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-ai-browser.cjs
+      - name: Verify the AI and link tools keep one row, 44px targets and an open review across widths
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-ai-toolbar-browser.cjs
+      - name: Verify schedule quarter counts sit below titles with mobile navigation preserved
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-quarter-layout-browser.cjs
+      - name: Verify damaged-space guidance, two-step save status and the shared heading row
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/minor-defects-ui-browser.cjs
+      - name: Verify composition and editor save lines read the account sync status
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-save-status-browser.cjs
+      - name: Verify deleting a finished post clears its preparation link and offers a fresh preparation
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-output-browser.cjs
       - name: Verify v2 and Markdown manager previews keep photo order, captions and public digest
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-manager-preview-browser.cjs
@@ -638,6 +669,9 @@ jobs:
             .local/account-materials/
             .local/account-library/
             .local/startup-performance-browser/
+            .local/writing-ai/
+            .local/material-writing-ai/
+            .local/writing-ai-toolbar/
             .local/naver-blog/
             .local/naver-capture/
             .local/naver-photo-status/
@@ -854,6 +888,9 @@ jobs:
       - name: Verify additive installation rollback and preservation of existing records
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/integrated-release-installation.cjs
+      - name: Verify saved Markdown publishes through the server projection and anonymous reading
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_md_publish" node tests/post-markdown-publish-browser.cjs --prepare-database
       - name: Verify series publication receipts, independent wrappers and current revocation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-series-backend.cjs

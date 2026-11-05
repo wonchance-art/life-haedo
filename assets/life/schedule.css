@@ -83,6 +83,20 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-quarter-photo { display: flex; justify-content: flex-end; }
 .schedule-quarter-photo > .schedule-thumb { width: 36px; height: 36px; }
 .schedule-count { color: var(--ink-soft); font-size: var(--haedo-text-meta); white-space: nowrap; }
+/* Keep the count with its title instead of adding a separate alignment column. */
+@media (min-width: 761px) {
+  .schedule-quarter-row {
+    grid-template-columns: 40px 112px auto minmax(0, 1fr) 36px;
+    grid-template-areas: "month week dots title photo" "month week dots count photo";
+    padding-block: 4px;
+  }
+  .schedule-quarter-row > .schedule-quarter-month { grid-area: month; }
+  .schedule-quarter-row > .schedule-week-label { grid-area: week; }
+  .schedule-quarter-row > .schedule-dots { grid-area: dots; }
+  .schedule-quarter-row > .schedule-lead { grid-area: title; }
+  .schedule-quarter-row > .schedule-count { grid-area: count; }
+  .schedule-quarter-row > .schedule-quarter-photo { grid-area: photo; }
+}
 
 /* M: calendar of soft cells (no lines). */
 .schedule-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }

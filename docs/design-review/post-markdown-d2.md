@@ -24,7 +24,7 @@ B3 설치는 한 DO 문장 안에서 정의 변경과 행 수/해시 전후 보�
 
 재현 명령은 [함수 README](../../supabase/functions/haedo-blog-publish/README.md)와 [설치 안내](../../supabase/operations/post-markdown-publish-install.md)에 있다. B2는 A 병합·B3 운영 반영 뒤에 연결하며, 구형 탭의 v2 교체 초안 보호와 변환 거부 글의 수정 경로까지 완료해야 한다.
 
-**PR221 총괄 검수 보완:** 최초 `e08b516`은 검사 Origin을 4173에 고정해 CI의 4184에서 403으로 실패했다. 운영 허용 목록은 유지하고 검사 생성자에만 `BASE_URL` 출처를 주입해 실제 4184의 10개 흐름을 통과했다. `verify_jwt=false`로 배포 결정을 맞추고 누락·위조·만료 토큰의 Auth 거부와 429/5xx의 일시 오류를 검사했다. 실제 `authenticator` 역할 모델의 commit 거부 및 임의 SQL을 제공하지 않는 RPC 경계, A 소유자/세션으로 B 글을 commit할 때 `missing`과 행 보존을 보강했다. 후자의 소유자 조건 제거 변이는 새 검사에서 실패한다. 설치 마지막에는 같은 DO 안에서 PostgREST 스키마 갱신을 알린다. SQL·handler/harness·화면 오류의 독립 재검수를 마쳤다. 별도 CI `purpose-writing-browser`의 전역 IDB 오류 주입 경합은 [총괄 확인](https://github.com/wonchance-art/life-haedo/pull/221#issuecomment-6653795319)에 따라 A의 `95bb941` 수정이 main에 들어오면 합치며, B3에서 해당 파일을 따로 고치지 않는다.
+**PR221 총괄 검수 보완:** 최초 `e08b516`은 검사 Origin을 4173에 고정해 CI의 4184에서 403으로 실패했다. 운영 허용 목록은 유지하고 검사 생성자에만 `BASE_URL` 출처를 주입해 실제 4184의 10개 흐름을 통과했다. `verify_jwt=false`로 배포 결정을 맞추고 누락·위조·만료 토큰의 Auth 거부와 429/5xx의 일시 오류를 검사했다. 실제 `authenticator` 역할 모델의 commit 거부 및 임의 SQL을 제공하지 않는 RPC 경계, A 소유자/세션으로 B 글을 commit할 때 `missing`과 행 보존을 보강했다. 후자의 소유자 조건 제거 변이는 새 검사에서 실패한다. 설치 마지막에는 같은 DO 안에서 PostgREST 스키마 갱신을 알린다. SQL·handler/harness·화면 오류의 독립 재검수를 마쳤다. 총괄 재검수(`c74dd72`)에서도 이전 지적 7개 해결, 새 BLOCKER·MAJOR 0, 변이 10종 검출을 확인했다. 별도 CI `purpose-writing-browser`의 전역 IDB 오류 주입 경합은 [총괄 확인](https://github.com/wonchance-art/life-haedo/pull/221#issuecomment-6653795319)에 따라 A의 `95bb941` 수정이 main에 들어오면 합치며, B3에서 해당 파일을 따로 고치지 않는다.
 
 ## B1 기반 구현 — 2026-11-05
 
