@@ -1,5 +1,29 @@
 # D2 준비 — Markdown 정본 형식 `life-post-md-v1`과 v2 → Markdown 변환 (2026-11-04)
 
+## B3 서버 공개 투영 — 로컬 구현·독립 검수 완료, 운영 반영 전 (2026-11-05)
+
+기준은 main `321e00b`와 [B3 착수 지시](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6652546434)다. B1은 PR216으로 병합·배포됐다. [최신 운영 확인](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6653067297)에 따르면 소유자가 SQL Editor에서 B1을 적용했고 총괄이 함수 6개 해시/ACL·트리거 2개·행 수 보존·기존 글 6/6 검증을 확인했다. B1 운영 적용 관문은 해제됐으며, B2에는 A 병합·B3 운영 반영·구형 탭 교체 초안 보호·변환 거부 글 편집 경로가 남았다. 작업자가 운영에 접근하거나 적용한 것은 아니다.
+
+- **명시 공개만:** 새 md 공개 요청은 기존 공개 선택·사진 사본·영수증 흐름을 유지한다. `blog-sync`가 새 md 요청의 형식만 영속 대기에 기록하고 `blog-remote`가 `haedo-blog-publish`로 보낸다. 오래된 형식 표시 없는 대기는 기존 RPC를 그대로 쓰며, 이미 보관된 요청을 다른 내용이나 새 요청 ID로 바꾸지 않는다. 브라우저가 Markdown·ops·소유자 ID를 보내지 않는다.
+- **서버 원문:** Edge가 실제 Auth 사용자와 서버 세션을 확인하고, 사용자 JWT로 prepare RPC를 호출해 저장된 원문·revision·해시를 읽는다. 같은 요청의 영수증이 있으면 원문을 다시 해석하지 않고 그 결과를 돌려준다. 신뢰할 수 없는 요청 본문을 정본으로 쓰지 않는다.
+- **하나의 codec:** Edge는 저장소의 실제 `post-markdown.js`와 기존 `PhotoPost`·`Blog.publicSnapshot`을 상대 경로로 직접 불러온다. 파서 사본이나 PostgreSQL Markdown 해석기는 만들지 않는다. 선택 사진·AI 표시 제거·서식 투영은 같은 코드가 수행한다. UUID는 공개 때마다 새로 생기므로, 사진 ID의 대응을 고정한 뒤 클라이언트·Edge 결과의 바이트를 비교한다.
+- **공개 확정:** Edge가 commit 직전에 사용자 JWT를 한 번 더 확인하고, service 전용 commit RPC가 소유자/현재 세션·원문 해시/revision·공개 revision·등록한 사진 사본과 실제 Storage 메타데이터를 다시 확인한다. 공개 사진 ID는 기존처럼 `doc.photos`의 선택 순서로 만들고, 공개 사본·미디어 참조·영수증을 같은 트랜잭션에 저장한다. 제목·첨부는 서버 원문에서 가져온다. 기존 v1/v2 publish 정의·동작은 유지한다.
+- **비공개 보호:** 직접 호출한 기존 RPC의 md 공개는 계속 거부한다. 새 commit은 DB의 실제 `service_role`만 호출할 수 있으며 사용자 정의 GUC나 요청의 role 문자열을 신뢰하지 않는다. 서비스 키는 Edge 내부에서만 사용하고 `sb_secret_`은 apikey 헤더에만 둔다. 로그와 오류 응답에 본문·토큰·키를 남기지 않는다.
+- **인계 항목:** `life_blog_markdown_publication_unavailable`과 `life_blog_update_required`는 글 보존과 다음 행동을 알리는 문구로 표시한다. 기존 공개 사본에는 원문 형식 식별자가 없으므로 `validationBodyOps`의 빈/사진 종료 호환 판독은 유지한다. 저장된 v1/v2 원문과 서버 v2 공개 검증은 원래 계약 그대로이며, 공개 판독기를 임의로 좁히지 않는다. 실행형 gzip 고정본을 골든 JSON으로 바꾸는 검토는 B3 출시 후에 한다.
+
+B3 설치는 한 DO 문장 안에서 정의 변경과 행 수/해시 전후 보호를 끝내며, 문장별 커밋 모드와 중간 오류에서도 원자성을 검사한다. 운영 설치 순서와 선행 조건은 [B3 설치 안내](../../supabase/operations/post-markdown-publish-install.md)를 따른다. 실제 운영 적용·배포·두 기기 검증은 이번 로컬 구현·격리 검수와 구분한다.
+
+### B3 검증과 남은 관문
+
+- 총괄의 [main 반영 지시](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6653353388)에 따라 `5811afd`를 합쳤다. `photo-post-ui.js`와 CACHE·워크플로는 작업자가 수정하지 않았다.
+- 전체 Node 검사 2,110개, 정적 검사, 허용 목록 밖 Markdown 링크 0. 첫 전체 실행은 새 worktree의 네이버 시험용 `cheerio/slim` 미설치로 실패했으며, CI와 같은 fixture `npm ci` 뒤 모두 통과했다.
+- 격리 PostgreSQL 17.11에서 게시 계약 72개, B1/B3 설치 재실행 63개, 통합 설치 13개를 확인했다. 단일 DO의 문장별 자동 커밋·중간 실패/행 해시 불일치 전체 롤백, 실제 DB 역할·세션 재검사, 소유권·CAS·원문 해시·등록 사본·동일 요청 재시도를 검사한다. 원문 해시·공개 사본 표시·잠금 뒤 세션 재검사·commit ACL 제거 변이는 모두 실패한다.
+- 실제 UI·SDK·IndexedDB → 실제 Edge handler → 격리 DB → 미디어 Edge → 익명 읽기를 390·1440px에서 확인했다. Auth/Storage HTTP는 합성 서버다. 사진 0장, AI 표시 제거, 본문/메타데이터의 다른 사진 순서, 응답 유실, commit 직전 인증 거부, DB 세션 만료, 계정 전환을 검사하며 콘솔·페이지 오류·외부 요청은 0이다. 실제 OAuth·운영 Storage·Apple 기기 검증은 아니다.
+- 실제 Deno 2.1.4에서 진입점 타입 검사와 공통 투영 8개를 통과했다. 같은 문서의 Markdown 해석을 5회에서 1회로 줄이되 문법·정본·모델 검증을 유지했다. 미리 만든 최대 입력의 투영은 25,000문단/50,000자에서 184ms·최대 RSS 약 138MiB, 빈 목록 50,000줄에서 330ms·약 172MiB였다. 이는 로컬 프로세스 측정이며 호스팅 isolate의 전체 메모리나 실제 배포 번들을 보증하지 않는다.
+- 기존 v1/v2 공개 JSON의 바이트 비교, 공유 codec의 검증 제거 변이, 독립 클라이언트·SQL·handler 검수를 통과했다. 미해결 blocker/major는 없다. 실제 Supabase 번들 업로드·운영 설치·배포·현재 head CI 등록/통과는 총괄 관문이다.
+
+재현 명령은 [함수 README](../../supabase/functions/haedo-blog-publish/README.md)와 [설치 안내](../../supabase/operations/post-markdown-publish-install.md)에 있다. B2는 A 병합·B3 운영 반영 뒤에 연결하며, 구형 탭의 v2 교체 초안 보호와 변환 거부 글의 수정 경로까지 완료해야 한다.
+
 ## B1 기반 구현 — 2026-11-05
 
 총괄 [집중 구현 지시서](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650230384), [접점 승인](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650334085), [공개 계약 결정](https://github.com/wonchance-art/life-haedo/issues/212#issuecomment-6650375672)에 따른다. 아래의 ‘미결’과 검사 전용 설명은 최초 변환기 당시 기록이다.
@@ -141,6 +165,8 @@ B2 전제 조건: md 글의 수정 초안도 반드시 md-v1으로 만들고 변
 - 바꿀 조건: Tiptap 편집기를 붙인 뒤 그 직렬화가 같은 시험 문서·무작위 문서를 통과하면, v2 이행만 이 모듈에 남기고 새 글 저장은 편집기 직렬화로 옮긴다.
 
 ## 미결
+
+- NBSP 한 글자만 있는 줄은 정본 문법의 빈 문단 표시와 같아 빈 줄로 바뀐다. 기존 문법의 의도한 한계이며, B2의 변환 안내·복구 사본으로 원래 판을 보존한다.
 
 - **B2 변환 거부 글의 수정 경로(2026-11-05 총괄 확정):** `post_markdown_conversion_boundary`로 거부된 글도 새 편집기에서 고칠 수 있어야 한다. 처음 수정할 때 “사진 앞뒤에 문단 나눔이 생깁니다”를 미리 알리고 명시 저장하면 변환·원래 판의 `복구 사본` 보관을 하는 방식이 후보이며, B2 착수 때 확정한다. 그 전에 총괄만 운영에서 해당 글 수를 집계하며 본문을 꺼내지 않는다. [문단 경계 결정](https://github.com/wonchance-art/life-haedo/pull/216#issuecomment-6651492490).
 

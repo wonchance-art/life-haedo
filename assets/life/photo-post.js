@@ -264,7 +264,7 @@
       pairs.set(p.blob, v.blob);
     }
   }
-  function validate(d) {
+  function inspect(d) {
     if (typeof d?.format === "string" &&
         !["life-photo-post-v1", "life-photo-post-v2", "life-post-md-v1"].includes(d.format))
       throw fault("새 형식의 글입니다. 새로고침한 뒤 다시 열어 주세요.", "photo_post_update_required");
@@ -320,12 +320,15 @@
       throw fault(
         "한 글의 원본 사진은 합계 256 MiB까지 보관할 수 있습니다. 해상도는 줄이지 않습니다.",
       );
+    let bodyOps = d.ops;
     if (md) {
       text(d.markdown, 1024 * 1024, "본문");
-      if (markdown().canonicalize(d.markdown) !== d.markdown)
+      const parsed = markdown().parse(d.markdown);
+      if (parsed.markdown !== d.markdown)
         throw fault("본문을 편집기에서 다시 확인한 뒤 저장해 주세요.");
+      bodyOps = parsed.ops;
     }
-    const used = ops(contentOps(d), ids, md);
+    const used = ops(bodyOps, ids, md);
     const manifestBytes = new TextEncoder().encode(
       JSON.stringify(manifest(d)),
     ).length;
@@ -336,15 +339,19 @@
     if (
       d.status === "saved" &&
       !d.title.trim() &&
-      !plainText(d).trim() &&
+      !plainTextFromOps(d, bodyOps).trim() &&
       !used.size &&
       !(d.attachments || []).length
     )
       throw fault("글을 쓰거나 사진을 붙여 주세요.");
-    return used;
+    return { used, bodyOps };
   }
-  const plainText = (d) =>
-    contentOps(d)
+  // Both APIs perform every document/media/body validation. Projection callers
+  // can reuse the decoded body without reparsing or caching private Markdown.
+  function validate(d) { return inspect(d).used; }
+  function validatedBody(d) { return inspect(d).bodyOps; }
+  const plainTextFromOps = (d, bodyOps) =>
+    bodyOps
       .map((op) =>
         typeof op.insert === "string" ? op.insert : op.insert.photo.caption,
       )
@@ -355,6 +362,7 @@
           .map((a) => [a.title, a.creator, a.url].filter(Boolean).join(" · "))
           .join("\n")
       : "");
+  const plainText = (d) => plainTextFromOps(d, contentOps(d));
   function create(makeId, time = new Date().toISOString()) {
     return {
       format: "life-photo-post-v2",
@@ -1015,6 +1023,7 @@
     create,
     upgrade,
     validate,
+    validatedBody,
     compact,
     plainText,
     contentOps,

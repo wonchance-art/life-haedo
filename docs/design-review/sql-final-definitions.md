@@ -9,7 +9,7 @@
 - 테이블: 만든 파일보다 뒤 파일의 `alter table`이 열·제약을 바꾸는 경우. RLS 켜기·소유자 변경은 제외한다.
 - 인자 목록이 바뀌어 오버로드가 남는지는 `npm run test:sql-replay`가 재생한 DB 카탈로그와 대조한다.
 
-## 함수 (23개 재정의)
+## 함수 (24개 재정의)
 
 | 함수 | 정의한 파일 수 | 최종 | 이전 정의 |
 | --- | ---: | --- | --- |
@@ -20,6 +20,7 @@
 | `haedo_naver_private.save(uuid, text, bigint, boolean)` | 3 | `20261102100000_naver_enable_schedules_first_inventory` | `20261021093111_life_naver_subscriptions`, `20261021094614_naver_conflict_http409` |
 | `haedo_blog_private.delete_post(uuid, bigint)` | 2 | `20261101160000_life_blog_delete_guard` | `20261101091500_life_blog_account_sync` |
 | `haedo_blog_private.list(uuid)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
+| `haedo_blog_private.markdown_publication_requires_parser()` | 2 | `20261105081055_life_post_markdown_publish` | `20261105051632_life_post_markdown` |
 | `haedo_blog_private.prepare_asset(uuid, text, text, bigint, text, integer, integer)` | 2 | `20261101091500_life_blog_account_sync` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.public_media(uuid, text)` | 2 | `20261102120000_life_blog_public_photo_copies` | `20261017144744_life_blog_originals` |
 | `haedo_blog_private.publish_copies(uuid, bigint, uuid, text[], jsonb, bigint, jsonb)` | 2 | `20261105051632_life_post_markdown` | `20261102120000_life_blog_public_photo_copies` |
