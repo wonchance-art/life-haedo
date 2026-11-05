@@ -433,8 +433,13 @@ async function main() {
     // flag alone cannot establish why a completed request failed.
     const failures = report.networkFailures.map(value => ({ ...value, consumed: false }));
     for (const event of report.consoleEvents) {
-      const failure = event.url.startsWith(cloud) && /^Failed to load resource:.*ERR_(INTERNET_DISCONNECTED|FAILED)/.test(event.text) &&
+      // Chromium may request the document favicon after the app is usable.
+      // With service workers blocked, the exact favicon GET can fail during
+      // native offline mode too; no other local asset receives this exception.
+      const favicon = event.url === new URL('/icon.svg', base).href;
+      const failure = (event.url.startsWith(cloud) || favicon) && /^Failed to load resource:.*ERR_(INTERNET_DISCONNECTED|FAILED)/.test(event.text) &&
         failures.find(value => !value.consumed && value.device === event.device && value.url === event.url &&
+          (!favicon || value.method === 'GET') &&
           event.at >= value.startedAt && Math.abs(event.at - value.failedAt) <= 1000 &&
           (value.startedOffline || value.fixtureOfflineAbort) && /^net::ERR_(INTERNET_DISCONNECTED|FAILED)$/.test(value.error || ''));
       if (failure) { failure.consumed = true; report.expectedErrors++; }
