@@ -14,6 +14,10 @@ const root = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.POST_MARKDOWN_OLD_INPUT_OUTPUT || path.join(root, '.local/post-markdown-old-tab-input', new Date().toISOString().replace(/[:.]/g, '-')));
 const report = { scope: 'Linux Chromium; unchanged 2eebd27 PhotoPostUI/model/storage in current app shell; real IndexedDB, synthetic Auth HTTP and CompositionEvent; no full historical shell, production account, provider or native Apple IME', checks: [], consoleErrors: [], pageErrors: [], externalRequests: [] };
 const fixtureRoot = path.join(__dirname, 'fixtures/post-markdown-old-client');
+const promptlyUpgrade = (work, ms = 30000) => {
+  let timer;
+  return Promise.race([work, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('current-tab upgrade did not finish within ' + ms + 'ms')), ms); })]).finally(() => clearTimeout(timer));
+};
 const snapshot = page => page.evaluate(() => {
   const title = document.querySelector('#photoTitle'), body = document.querySelector('.ql-editor');
   return { title: title?.value, body: body?.innerHTML, ops: body ? Quill.find(document.querySelector('.photo-quill')).getContents().ops : null,
@@ -111,13 +115,14 @@ async function main() {
         input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: 'ㅎ', isComposing: true }));
       });
       const pending = await snapshot(old);
-      const upgrade = await current.evaluate(async () => {
+      // A held old-tab transaction must fail this scenario, not hang the job.
+      const upgrade = await promptlyUpgrade(current.evaluate(async () => {
         const store = HaedoLife.Storage.forAccount({ projectUrl: 'https://life-sync-test.supabase.co', userId: '11111111-1111-4111-8111-111111111111' });
         await store.open();
         const db = await idb.openDB('life-tools-v1');
         try { return { version: db.version, rows: (await db.getAll('meta')).filter(row => row.key.startsWith('photo-post:')) }; }
         finally { db.close(); }
-      });
+      }));
       await old.waitForFunction(() => oldEvents.some(event => event.code === 'storage_version_changed'));
       await old.waitForFunction(() => /새로고침|저장이 중단되었습니다/.test(document.querySelector('.photo-status-text')?.textContent || ''));
       const after = await snapshot(old);

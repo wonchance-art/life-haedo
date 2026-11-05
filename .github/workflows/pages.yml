@@ -454,6 +454,12 @@ jobs:
       - name: Verify schedule quarter counts sit below titles with mobile navigation preserved
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-quarter-layout-browser.cjs
+      - name: Verify a native IndexedDB upgrade fences old tabs before Markdown writes
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-old-tab-browser.cjs
+      - name: Verify old-tab unsaved input and composition survive the storage upgrade
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-markdown-old-tab-input-browser.cjs
       - name: Verify damaged-space guidance, two-step save status and the shared heading row
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/minor-defects-ui-browser.cjs
@@ -675,6 +681,8 @@ jobs:
             .local/writing-ai/
             .local/material-writing-ai/
             .local/writing-ai-toolbar/
+            .local/post-markdown-old-tab/
+            .local/post-markdown-old-tab-input/
             .local/naver-blog/
             .local/naver-capture/
             .local/naver-photo-status/
