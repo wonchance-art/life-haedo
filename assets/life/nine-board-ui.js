@@ -3,10 +3,11 @@
   'use strict';
   const life=root.HaedoLife ||= {},M=life.NineBoard;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
-  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onComposeArea=null,onComposed=()=>{},onPublishArea=null,onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
+  function create({storage,workspaceId,isCurrent,libraryMetaSync=null,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onComposeArea=null,onComposed=()=>{},onPublishArea=null,onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
     let state=null,base=[],host=null,status=null,error=null,selected=null,areaId=null,editing=null,preview=false,overview=false;
     let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false,importUpdate=null;
     let evidencePicker=null,evidencePending=false,incoming=null;
+    let syncState=null,syncRevision=null,syncError=null,syncSequence=0,syncRetrying=false,stopSync=null,stopStorage=null;
     let composeReview=null,composeReceipt=null,composeSequence=0;
     const composing=new Set(),pendingFields=new Set(),urls=new Set(),fresh=()=>life.Core.id(),valid=()=>isCurrent(),board=()=>state?.boards.find(b=>b.id===selected),area=()=>board()?.areas.find(a=>a.id===areaId);
     const fault=(code,message)=>Object.assign(new Error(message),{code});
@@ -14,9 +15,35 @@
     // account state; only an account-less store may say the board stays in this browser.
     const synced=storage?.isAccountScoped===true;
     function dirty(){return evidencePending||!!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
+    async function refreshSavedStatus(){
+      if(!libraryMetaSync||!valid()||!host?.isConnected)return;
+      const sequence=++syncSequence,target=host,token=epoch;
+      try{
+        // Read the local aggregate AFTER its acknowledgement: an edit during the read
+        // must not borrow an older library metadata receipt.
+        const value=await libraryMetaSync.getState(workspaceId);
+        const snapshot=await storage.readLibraryMetaSnapshot(workspaceId);
+        if(!valid()||sequence!==syncSequence||host!==target||token!==epoch)return;
+        syncState=value;syncRevision=snapshot.metadata.nineBoard.revision===state?.revision?snapshot.metadata.revision:null;syncError=null;
+      }catch(cause){if(!valid()||sequence!==syncSequence||host!==target||token!==epoch)return;syncState=null;syncRevision=null;syncError=cause;}
+      message();
+    }
+    function watchSavedStatus(){
+      stopSync?.();stopStorage?.();
+      stopSync=libraryMetaSync?.subscribe(event=>{if(!event.workspaceId||event.workspaceId===workspaceId)refreshSavedStatus();});
+      stopStorage=libraryMetaSync&&storage.subscribe?.(workspaceId,event=>{
+        if(['nine_board_changed','collection_changed','source_folders_changed','library_meta_sync_changed'].includes(event.type)){
+          syncRevision=null;message();refreshSavedStatus();
+        }
+      });
+      refreshSavedStatus();
+    }
     function message(){
       if(!host?.isConnected||!status||!valid())return;
-      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':synced?'저장됨':'이 기기에 저장됨';
+      const saved=life.WorkbenchUI?.savedPresentation?.(syncState,syncRevision,{account:storage.account,workspaceId,error:syncError})||{key:storage.account?'pending':'local',label:storage.account?'저장됨 · 계정에 올리기 대기':'저장됨'};
+      status.dataset.syncState=saved.key;
+      const retry=host.querySelector('.nb-sync-retry');if(retry){retry.hidden=saved.key!=='error'||!libraryMetaSync;retry.disabled=syncRetrying;}
+      status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':saved.label;
       status.dataset.state=failure?'error':dirty()?'dirty':'saved';importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
@@ -32,7 +59,7 @@
       const version=tick,payload=structuredClone(state);
       const task=(async()=>{
         try{const saved=await storage.saveNineBoard(workspaceId,payload,payload.revision);
-          if(!valid())return;state.revision=saved.revision;base=structuredClone(saved.boards);stored=version;clear();
+          if(!valid())return;state.revision=saved.revision;base=structuredClone(saved.boards);stored=version;syncRevision=null;clear();refreshSavedStatus();
         }catch(cause){report(cause);throw cause;}finally{saving=null;message();}
       })();saving=task;message();await task;if(tick!==stored)return flush();
     }
@@ -312,7 +339,7 @@
       for(const b of state.boards){const o=el('option',b.title||'제목 없는 구성');o.value=b.id;selector.append(o);}selector.value=selected||'';selector.hidden=!state.boards.length;
       selector.addEventListener('change',async()=>{const next=selector.value;try{await flush();selected=next;areaId=board()?.areas[0]?.id;editing=null;overview=false;render();}catch(cause){selector.value=selected;report(cause);}});
       toolbar.append(selector,button('새 9칸 구성',async()=>{await flush();if(state.boards.length>=20)throw new Error('9칸 구성은 20개까지 보관할 수 있습니다.');const b=M.create(fresh);state.boards.push(b);selected=b.id;areaId=b.areas[0].id;preview=false;overview=false;mark();render();host.querySelector('#nbTitle').focus();}));
-      status=el('p','','life-meta nb-status');status.setAttribute('role','status');error=el('p','','life-error nb-error');error.setAttribute('role','alert');error.hidden=true;
+      status=el('p','','life-meta nb-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');error=el('p','','life-error nb-error');error.setAttribute('role','alert');error.hidden=true;
       host.append(toolbar,status,error);
       const recovery=el('div',null,'life-actions nb-recovery');
       recovery.append(button('다시 저장',async()=>{await flush();clear();}),button('내 변경을 새 사본으로 보관',recover),button('전체 구성 JSON 백업 받기',()=>backup()));
@@ -376,6 +403,12 @@
         imageExport.append(label,areas,button('선택 영역 PNG 받기',()=>image(areas.value)),help);
         files.append(imageExport);
       }
+      const retry=button('계정에 올리기 다시 시도',async()=>{
+        if(!libraryMetaSync||syncRetrying)return;
+        syncRetrying=true;message();
+        try{await libraryMetaSync.syncNow(workspaceId);}catch(cause){if(valid())syncError=cause;}
+        finally{syncRetrying=false;await refreshSavedStatus();}
+      });retry.classList.add('nb-sync-retry');retry.hidden=true;status.after(retry);
       if(failure)report(failure);else message();
     }
     async function mount(target,searchTarget=null,incomingReference=null){
@@ -384,6 +417,7 @@
         if(incomingReference){M.reference(incomingReference);incoming=structuredClone(incomingReference);preview=false;overview=false;}
         if(searchTarget){const found=life.UnifiedSearch.resolveNineTarget(state,searchTarget);selected=found.board.id;areaId=found.area?.id||found.board.areas[0]?.id;preview=true;overview=!found.area;editing=null;}
         if(!board()){selected=state.boards[0]?.id;areaId=board()?.areas[0]?.id;}render();
+        watchSavedStatus();
         if(searchTarget){const focus=searchTarget.itemIndex!=null?host.querySelector('.nb-grid [data-item-index="'+searchTarget.itemIndex+'"]'):host.querySelector(searchTarget.areaId?'.nb-area-heading':'.nb-display');
           if(searchTarget.itemIndex!=null&&focus?.querySelector('.nb-reason'))focus.querySelector('.nb-reason').open=true;
           focus?.focus({preventScroll:true});focus?.scrollIntoView({block:'nearest'});}
@@ -391,7 +425,7 @@
     }
     // Completed receipts belong to this storage/workspace instance, not a mounted view.
     // Keep one across editor/open failures; pending previews are always discarded.
-    function detach(){epoch++;clearCompose();clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
+    function detach(){epoch++;syncSequence++;stopSync?.();stopStorage?.();stopSync=null;stopStorage=null;clearCompose();clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
     // A post deleted elsewhere (its read view) must not stay behind the 보관된 초안 열기 receipt.
     function forgetPost(postId){if(composeReceipt&&composeReceipt.postId===postId){composeReceipt=null;host?.querySelector('.nb-compose-result')?.remove();}}
     return {mount,flush,dirty,detach,forgetPost,hasBlockedInput:()=>evidencePending||!!manual||pendingFields.size>0||composing.size>0||busy};
