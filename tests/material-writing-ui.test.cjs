@@ -14,6 +14,7 @@ class Node {
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }
   addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
+  click() { if (!this.disabled) return this.emit('click'); }
   async emit(name) { await Promise.all((this.listeners[name] || []).map(fn => fn({ target: this, type: name }))); }
   focus() { if (!this.disabled) this.ownerDocument.activeElement = this; }
   setSelectionRange(start, end, direction) { this.selectionStart = start; this.selectionEnd = end; this.selectionDirection = direction; }
@@ -110,6 +111,27 @@ test('delayed handoff blocks external flush and preserves later composing input 
   const title = f.get('#mwTitle'); await title.emit('compositionstart'); title.value = '완료 중 한글'; hold.resolve(); await creating; await settle();
   assert.equal(f.creates(), 1); assert.equal(f.opens.length, 0); assert.ok(f.get('#mwTitle') === title); assert.equal(title.value, '완료 중 한글'); assert.ok(f.get('#mwContinue'));
   await title.emit('compositionend'); await f.ui.flush(); await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
+});
+
+test('late output availability preserves the draft-stored notice while newer IME input waits', async t => {
+  const f = await fixture(t), createGate = deferred(), outputGate = deferred();
+  f.setBeforeCreate(() => createGate.promise);
+  f.storage.readMaterialWritingOutput = async () => {
+    await outputGate.promise;
+    return { status: 'available', postId: f.db().plans[0].output.postId };
+  };
+  await f.preview(); const creating = f.get('#mwCreate').emit('click'); await settle();
+  const title = f.get('#mwTitle'); await title.emit('compositionstart'); title.value = '초안 보관 중 이어 쓴 한글';
+  createGate.resolve(); await creating; await settle();
+  const notice = '글 초안은 보관했습니다. 그동안의 입력은 이 화면에 남아 있습니다. 입력을 마친 뒤 이어서 쓰기를 눌러 주세요.';
+  assert.equal(f.get('.mw-status').textContent, notice);
+  outputGate.resolve(); await settle();
+  assert.ok(f.get('#mwContinue')); assert.equal(f.get('.mw-status').textContent, notice);
+  assert.equal(f.creates(), 1); assert.equal(f.opens.length, 0);
+  assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '초안 보관 중 이어 쓴 한글');
+  await title.emit('compositionend'); await f.ui.flush();
+  assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+  await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
 });
 
 test('a CAS conflict recovers a fresh plan with new material/block IDs, retained exact refs and no output', async t => {
@@ -276,4 +298,52 @@ test('save line states the actual store: account-synced preparations never claim
       if (accountScoped) assert(!/브라우저/.test(f.host.textContent), 'no browser-only storage wording while the account syncs');
     });
   }
+});
+
+test('a confirmed deleted output removes resume and reuses the guarded fresh-preparation path', async t => {
+  const f = await fixture(t); await f.preview(); await f.click('#mwCreate');
+  const original = f.db(), postId = original.plans[0].output.postId;
+  f.docs.delete(postId); f.storage.readMaterialWritingOutput = async () => ({ status: 'deleted', postId });
+  await f.ui.reload({}); await settle();
+  assert.equal(f.host.querySelector('#mwContinue'), null); assert.match(f.get('.mw-output').textContent, /글을 삭제했습니다/);
+  const title = f.get('#mwTitle'); await title.emit('compositionstart');
+  await f.click('#mwDeletedCopy'); assert.equal(f.db().plans.length, 1); assert.equal(f.get('#mwTitle'), title);
+  await title.emit('compositionend'); await f.ui.flush(); const beforeCopy = f.db();
+  await f.click('#mwDeletedCopy'); await f.ui.flush(); await settle();
+  assert.equal(f.db().plans.length, 2); assert.deepEqual(f.db().plans[0], beforeCopy.plans[0]);
+  const next = f.db().plans[1]; assert.equal(next.output, null); assert.notEqual(next.id, original.plans[0].id);
+  assert.deepEqual(next.blocks.map(block => block.text), original.plans[0].blocks.map(block => block.text));
+  assert.equal(f.ui.getView().planId, next.id); assert.equal(f.creates(), 1, 'making a preparation copy never automatically creates a new post');
+});
+
+test('a missing or unreadable output is not called deleted and can be checked again without changing preparation', async t => {
+  const f = await fixture(t); await f.preview(); await f.click('#mwCreate'); const before = f.db(), postId = before.plans[0].output.postId;
+  let status = 'missing', failed = false;
+  f.storage.readMaterialWritingOutput = async () => { if (failed) throw Error('연결 조회 실패'); return { status, postId }; };
+  await f.ui.reload({}); await settle(); assert.equal(f.host.querySelector('#mwContinue'), null);
+  assert.match(f.get('.mw-output').textContent, /아직 찾지 못했습니다/); assert.doesNotMatch(f.get('.mw-output').textContent, /삭제했습니다/);
+  failed = true; await f.click('#mwOutputRetry'); assert.match(f.get('.mw-output').textContent, /연결 조회 실패/);
+  failed = false; status = 'available'; await f.click('#mwOutputRetry'); assert.ok(f.get('#mwContinue')); assert.deepEqual(f.db(), before);
+});
+
+test('late deleted-output lookups cannot replace another preparation or a detached account view', async t => {
+  const f = await fixture(t); await f.preview(); await f.click('#mwCreate');
+  const postId = f.db().plans[0].output.postId, gate = deferred();
+  f.storage.readMaterialWritingOutput = async () => { await gate.promise; return { status: 'deleted', postId }; };
+  await f.ui.reload({}); assert.match(f.get('.mw-output').textContent, /확인하는 중/);
+  await f.click('#mwNew'); const selected = f.ui.getView().planId; gate.resolve(); await settle();
+  assert.equal(f.ui.getView().planId, selected); assert.equal(f.host.querySelector('#mwDeletedCopy'), null); assert.equal(f.host.querySelector('#mwContinue'), null);
+  const held = deferred(); f.storage.readMaterialWritingOutput = async () => { await held.promise; return { status: 'deleted', postId }; };
+  await f.ui.reload({ planId: f.db().plans[0].id }); f.ui.detach(); f.setScope(false); const text = f.host.textContent;
+  held.resolve(); await settle(); assert.equal(f.host.textContent, text); assert.equal(f.host.querySelector('#mwDeletedCopy'), null);
+});
+
+test('remote output deletion refreshes only its controls while an unsaved IME field stays intact', async t => {
+  const f = await fixture(t); await f.preview(); await f.click('#mwCreate'); const postId = f.db().plans[0].output.postId;
+  const title = await f.input('#mwTitle', '아직 저장하지 않은 제목'); await title.emit('compositionstart'); title.value = '아직 조합 중인 제목'; title.focus();
+  f.storage.readMaterialWritingOutput = async () => ({ status: 'deleted', postId });
+  await f.remoteChange(() => {});
+  assert.equal(f.host.querySelector('#mwContinue'), null); assert.ok(f.get('#mwDeletedCopy'));
+  assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '아직 조합 중인 제목'); assert.equal(f.document.activeElement, title);
+  assert.equal(f.get('#mwIncoming').hidden, false);
 });
