@@ -826,7 +826,10 @@
     async function finishPublication(c, state) {
       let result;
       const copies = state.publishPending.copies?.length ? { copies: state.publishPending.copies } : {};
-      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, ...copies, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
+      // Route is part of the durable request, never inferred again from a later
+      // local/remote document. Old pending operations retain their RPC receipt.
+      const format = Object.hasOwn(state.publishPending, 'documentFormat') ? { documentFormat: state.publishPending.documentFormat } : {};
+      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, ...copies, ...format, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
       catch (error) {
         if (error.code === 'blog_conflict') {
           const row = await remote.read(state.remoteId); guard(c);
@@ -893,6 +896,7 @@
         if (!usable(state.publishPending)) {
           for (const copy of copies) { await remote.uploadPublicCopy(state.remoteId, copyMeta(copy), copy.blob); guard(c); }
           state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection,
+            ...(latest.format === 'life-post-md-v1' ? { documentFormat: latest.format } : {}),
             ...(copies.length ? { copies: copies.map(copyMeta) } : {}) } });
         }
         return finishPublication(c, state);

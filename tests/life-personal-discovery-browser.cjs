@@ -20,7 +20,7 @@ const old = file => {
   const pinned = legacyFixture.files[file], bytes = gunzipSync(Buffer.from(pinned.gzipBase64, 'base64'));
   assert.equal(bytes.length, pinned.bytes); assert.equal(sha(bytes), pinned.sha256, 'Pinned old shell has its original bytes'); return bytes;
 };
-const report = { createdAt: new Date().toISOString(), scope: 'Synthetic Auth/owner cache/account-document HTTP, actual application/SDK/independent IndexedDB and actual Service Worker; publisher iframe responses synthetic. No operating accounts, SQL/RLS, publisher acquisition, Apple-device or recommendation-usefulness claim.', checks: [], captures: [], consoleErrors: [], pageErrors: [], unexpectedExternal: [], publisherRequests: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Synthetic Auth/owner cache/account-document HTTP, actual application/SDK/independent IndexedDB and actual Service Worker; publisher iframe responses synthetic. One explicitly injected abort-uncooperative privateReader isolates the actual DiscoveryUI request guard. No operating accounts, SQL/RLS, publisher acquisition, Apple-device or recommendation-usefulness claim.', checks: [], captures: [], consoleErrors: [], pageErrors: [], unexpectedExternal: [], publisherRequests: [], closedContexts: 0 };
 const now = new Date().toISOString(), license = { label: '합성 출처', url: 'https://creativecommons.org/licenses/by/4.0/' };
 let png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9ZkAAAAASUVORK5CYII=';
 function fixture() {
@@ -258,6 +258,73 @@ async function main() {
       await page.locator('#discoveryReader[data-reader-state="ready"]').waitFor(); assert.equal(await readText(page), catalog.articles[0].bodyText);
       assert.equal(await page.evaluate(() => document.activeElement.dataset.discoveryReaction), 'liked', 'Response must not steal user-moved focus');
     });
+    await check('same selected article retry keeps the newer import when an aborted reader resolves late', async ({ device, server }) => {
+      const { page } = await device('same-selection-retry');
+      // The HTTP client has its own abort guard. Inject through the existing
+      // public factory seam to test the UI guard without that guard masking it.
+      // Keep the real UI module, storage, events and buttons; expose only this
+      // test's deferred requests and the public onImport output, no UI state.
+      await nav(page, 'schedule'); assert.equal(await page.locator('#discoveryReader').count(), 0);
+      const before = await state(page);
+      await page.evaluate(async () => {
+        const storage = HaedoLife.Shell.storage, bundle = await storage.read(await storage.getActive());
+        const container = document.createElement('section'); container.id = 'privateReaderRacePanel'; document.querySelector('#lifeMain').append(container);
+        const harness = { requests: [], imports: [] };
+        const privateReader = { loadPrivateArticle(metadata, { workspaceId, signal }) {
+          let resolve; const promise = new Promise(done => { resolve = done; });
+          harness.requests.push({ metadata, workspaceId, signal, promise, resolve });
+          // Deliberately ignore signal: an already queued completion may still arrive.
+          return promise;
+        } };
+        const ui = HaedoLife.DiscoveryUI.create({ container, storage, getBundle: () => bundle,
+          isCurrent: () => HaedoLife.Shell.storage === storage, privateReader,
+          onImport: article => { harness.imports.push(structuredClone(article)); } });
+        harness.dispose = () => { ui.dispose(); container.remove(); delete window.__privateReaderRaceHarness; };
+        window.__privateReaderRaceHarness = harness; await ui.render();
+      });
+      try {
+        await idle(page); await row(page, 'alpha').locator('[data-discovery-select]').click();
+        await page.waitForFunction(() => __privateReaderRaceHarness.requests.length === 1);
+        assert.equal(await page.locator('#discoveryReader').getAttribute('data-reader-state'), 'loading');
+        await page.locator('#discoveryNewsSettings').click(); await page.locator('#discoveryNewsSettingsBack').click();
+        await page.locator('#discoveryReader[data-reader-state="error"]').waitFor();
+        await page.locator('#discoveryReaderRetry').click();
+        await page.waitForFunction(() => __privateReaderRaceHarness.requests.length === 2);
+        const fence = await page.evaluate(() => {
+          const [first, retry] = __privateReaderRaceHarness.requests;
+          return { sameMetadataObject: first.metadata === retry.metadata, sameWorkspace: first.workspaceId === retry.workspaceId,
+            firstAborted: first.signal.aborted, retryAborted: retry.signal.aborted };
+        });
+        assert.equal(fence.sameMetadataObject, true, 'Settings and retry retain the same selected metadata object');
+        assert.equal(fence.sameWorkspace, true); assert.equal(fence.firstAborted, true, 'UI forwards cancellation to the older request'); assert.equal(fence.retryAborted, false);
+        const key = server.articleKey(accounts.a.id, catalog.articles[0].sourceId, catalog.articles[0].url);
+        const response = (bodyText, digit) => { const result = structuredClone(server.privateArticles.get(key)); result.content.bodyText = bodyText; delete result.content.images; result.contentHash = digit.repeat(64); return result; };
+        const oldReply = response('UI OLD REQUEST A\r\n이전 요청의 본문입니다.', '1'), newReply = response('UI CURRENT RETRY B\r\n재시도에서 읽은 정확한 본문입니다.', '2');
+        async function complete(index, reply) {
+          await page.evaluate(async ({ index, reply }) => {
+            const request = __privateReaderRaceHarness.requests[index];
+            request.resolve(HaedoLife.DiscoveryPrivateRemote.project(request.metadata, reply));
+            await request.promise; // UI continuation was registered before this completion barrier.
+          }, { index, reply });
+        }
+        await complete(1, newReply); await page.locator('#discoveryReader[data-reader-state="ready"]').waitFor();
+        assert.equal(await readText(page), newReply.content.bodyText);
+        await complete(0, oldReply);
+        assert.equal(await readText(page), newReply.content.bodyText, 'An older completion cannot replace the visible retry result');
+        // ready→ready DOM preservation could hide a stale privateArticle. Check
+        // the actual public callback used to start a material import as well.
+        await (await reveal(page.locator('#discoveryReader [data-discovery-import]'))).click();
+        await page.waitForFunction(() => __privateReaderRaceHarness.imports.length === 1);
+        const imported = await page.evaluate(() => __privateReaderRaceHarness.imports[0]);
+        assert.equal(imported.bodyText, newReply.content.bodyText, 'The import must keep the newer retry body after the older completion');
+        assert.equal(imported.privateReceipt.contentHash, newReply.contentHash, 'The import receipt belongs to the newer retry');
+        assert.equal(imported.url, newReply.url); assert.equal(imported.sourceId, newReply.sourceId);
+        assert.deepEqual(await state(page), before, 'The injected import callback and reading race do not write material or judgment');
+        assert.equal(server.privateRequests.length, 0, 'This isolated UI race bypasses only the transport, using the explicit privateReader seam');
+        report.sameSelectionRetry = { ...fence, transport: 'injected deferred privateReader; abort deliberately ignored',
+          completionOrder: ['retry B', 'older A'], importedBodySHA256: sha(Buffer.from(imported.bodyText)), importedContentHash: imported.privateReceipt.contentHash };
+      } finally { await page.evaluate(() => window.__privateReaderRaceHarness?.dispose()); }
+    });
     await check('private response preserves a pressed bookmark control and applies the gesture once', async ({ device, hold }) => {
       const { page } = await device('pointer'), waiting = hold(); await row(page, 'alpha').locator('[data-discovery-select]').click(); await arrived(waiting);
       const control = page.locator('#discoveryReader [data-discovery-reaction="bookmarked"]'), handle = await control.elementHandle(), box = await control.boundingBox();
@@ -289,7 +356,7 @@ async function main() {
   } finally {
     await browser.close(); await new Promise(resolve => host.close(resolve));
     report.finishedAt = new Date().toISOString();
-    report.limitations = ['Auth and private owner cache are synthetic HTTP fixtures; deployed provider acquisition and production SQL/RLS are unverified.', 'Viewport checks use headless Chromium 153, not physical phones or Apple WebKit.', 'Mixed-worker test uses a local explicit registration.update() with unchanged CACHE haedo-v194. Coordinator CACHE bump and actual deployment/update remain unverified.', 'No real account, production write, provider network, or recommendation-usefulness evaluation.'];
+    report.limitations = ['Auth and private owner cache are synthetic HTTP fixtures; deployed provider acquisition and production SQL/RLS are unverified.', 'Viewport checks use headless Chromium 153, not physical phones or Apple WebKit.', 'Mixed-worker test uses pinned old shell bytes and a local explicit registration.update() to install the current source CACHE; actual deployed updates remain unverified.', 'Same-selection retry isolates the actual UI with an explicitly injected deferred privateReader; it does not test transport cancellation or deployed Edge behavior.', 'No real account, production write, provider network, or recommendation-usefulness evaluation.'];
     await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   }
   assert(report.checks.length, 'At least one check must run'); assert(report.checks.every(check => check.pass), 'Private news browser failures are in report.json');
