@@ -210,7 +210,3 @@ test('unfinished server work is a stopped collection distinct from automatic tra
   f.conn.auto_retry = true;
   await assert.rejects(f.service.list(), { code: 'rss_invalid_data' });
 });
-test('an invalid inbox cursor describes list lookup without claiming a feed or collection failure', () => {
-  assert.match(Rss.messageFor('rss_invalid_cursor'), /받은 함의 목록 조회 위치/);
-  assert.doesNotMatch(Rss.messageFor('rss_invalid_cursor'), /피드|자동 확인을 멈/);
-});

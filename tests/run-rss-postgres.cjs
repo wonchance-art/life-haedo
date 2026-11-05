@@ -198,7 +198,9 @@ async function main(){try{
  // An unstable real GUID/URL must not turn the one fresh-head recheck into
  // an unbounded loop, including old articles that are quarantined each time.
  for(const identityKind of ['guid','url'])for(const old of [false,true]){
-  installOld();let changes=0,fetches=0,runs=0;const published=old?'2000-01-01T00:00:00Z':new Date().toISOString();
+  // RSS dates have second precision; place this fixture's baseline earlier.
+  installOld();sql(`update haedo_rss_private.connections set baseline_started_at=baseline_started_at-interval '1 minute' where id='${c.id}';`);
+  let changes=0,fetches=0,runs=0;const published=new Date(old?'2000-01-01T00:00:00Z':Date.now()).toUTCString();
   const unstable=async url=>{fetches++;const page=Number(new URL(url).searchParams.get('page')||1);
    if(page===3)return new Response(knownTail);
    if(page===2)return new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="${pageURL(3)}"/><entry><title>unknown</title><content>고정 본문</content></entry></feed>`);
@@ -215,13 +217,13 @@ async function main(){try{
  test('recovered immediate recheck completes at the hourly interval despite new IDs',()=>{assert.equal(state().sweep_is_recheck,false);assert.equal(state().failure_count,0);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});control('disconnect');
  // The one-recheck bound delays a later head insertion until the next
  // scheduled cycle, but preserves it once that hourly deadline is reached.
- installOld();let delayedHead=false;const firstDate=new Date().toISOString();
+ installOld();let delayedHead=false,recheckHead=false;const firstDate=new Date().toISOString();
  const delayed=async url=>{const page=Number(new URL(url).searchParams.get('page')||1);
-  if(page===1)return new Response(xmlFeed([{id:'bounded-first',date:firstDate},...(delayedHead?[{id:'bounded-delayed',date:firstDate}]:[])],pageURL(2)));
+  if(page===1)return new Response(xmlFeed([{id:'bounded-first',date:firstDate},...(recheckHead?[{id:'bounded-recheck',date:firstDate}]:[]),...(delayedHead?[{id:'bounded-delayed',date:firstDate}]:[])],pageURL(2)));
   if(page===2)return new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="${pageURL(3)}"/><entry><title>unknown delayed</title><content>원문</content></entry></feed>`);
   return new Response(knownTail);
  };
- await tick(delayed);await tick(delayed);assert.equal(state().sweep_is_recheck,true);await tick(delayed);delayedHead=true;await tick(delayed);
+ await tick(delayed);await tick(delayed);assert.equal(state().sweep_is_recheck,true);recheckHead=true;await tick(delayed);delayedHead=true;await tick(delayed);
  assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));assert(!allItems().some(i=>i.connection_id===c.id&&i.identity==='atom:bounded-delayed'));
  due();let delayedRuns=0;while(worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id)){await tick(delayed);assert(++delayedRuns<=3);}
  test('new head arrival during the capped recheck tail is preserved on the next hourly cycle',()=>{assert.equal(allItems().filter(i=>i.connection_id===c.id&&i.identity==='atom:bounded-delayed'&&i.disposition==='stored').length,1);assert.equal(state().last_error,null);assert.equal(state().cursor,null);assert.equal(state().sweep_is_recheck,false);});control('disconnect');
@@ -326,7 +328,7 @@ async function main(){try{
  mutation('fifty-page baseline partial halts automatically',"if page_cap+accepted_pages>=50 and not p_complete and p_error is null then","if false then",()=>{finish(lease,[entry('cap-mutation')],{next:pageURL(51),complete:false});assert.equal(state().last_error,'baseline_page_limit');});
  control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
  finish(lease,[entry('unknown-one',{identity:'unidentified:one',hold_reason:'missing_identity'})],{next:pageURL(3),complete:false});lease=claim();
- mutation('completed unidentified sweep returns to hourly cadence',"cursor is not null and sweep_new_count+new_identities>0","cursor is not null",()=>{finish(lease,[entry('unknown-two',{identity:'unidentified:two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
+ mutation('completed unidentified sweep returns to hourly cadence',"cursor is not null and sweep_new_count+new_identities>0 and not sweep_is_recheck)) then stamp","cursor is not null and not sweep_is_recheck)) then stamp",()=>{finish(lease,[entry('unknown-two',{identity:'unidentified:two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  control('disconnect');restart();lease=claim();finish(lease,[]);control('activate');lease=claim();
  mutation('new unidentified identities do not trigger another immediate sweep',"if c.status='active' and not observed_before and item->>'identity' ~ '^(guid:|atom:|url:)' then","if c.status='active' and not observed_before then",()=>{finish(lease,[entry('new-unknown-one',{identity:'unidentified:new-one',hold_reason:'missing_identity'})],{next:pageURL(3),complete:false});const tail=claim();finish(tail,[entry('new-unknown-two',{identity:'unidentified:new-two',hold_reason:'missing_identity'})]);assert(!worker('select public.life_rss_due(2);').some(row=>row.connection_id===c.id));});
  control('disconnect');installOld();lease=claim();finish(lease,[entry('limited-head')],{next:pageURL(3),complete:false});lease=claim();finish(lease,[entry('limited-tail')]);lease=claim();finish(lease,[entry('limited-recheck-head')],{next:pageURL(3),complete:false});lease=claim();
