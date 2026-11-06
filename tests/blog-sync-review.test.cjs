@@ -404,8 +404,152 @@ test('an upload-only pass right after a conflict cycle does not postpone the kep
   doc.visibilityState = 'hidden'; time.advance(250);
   await sync.syncNow({ uploadOnly: true }); // the editor's draft timer: upload-only, no draft flush
   assert.equal(onServer(), false, 'the draft timer pass leaves a draft in its quiet period');
-  assert(timers.at(-1).delay <= 750, 'the follow-up stays due one second after the conflict cycle, not after the interval: ' + timers.at(-1).delay);
+  assert.equal(timers.at(-1).delay, 750, 'the follow-up stays due exactly one second after the conflict cycle');
   timers.at(-1).fn(); for (let n = 0; n < 40 && !onServer(); n++) await new Promise(done => setTimeout(done, 25));
   assert(onServer(), 'the hidden page flush uploads the kept copy');
   sync.dispose();
+});
+
+// Timer deadlines use the same clock as BlogSync. Advancing time never fires a
+// callback implicitly, so a cycle can be held across its earlier flush deadline.
+async function scheduledDraft(t) {
+  const cloud = server(), time = clock(), a = await device(cloud, 'hidden-timer', { time });
+  const jobs = new Map(), events = new EventTarget(); events.document = new EventTarget();
+  events.document.visibilityState = 'visible';
+  let serial = 0, listCalls = 0;
+  const syncList = a.remote.syncList;
+  a.remote.syncList = async (...args) => { listCalls++; return syncList(...args); };
+  const timers = {
+    setTimeout(fn, delay) { const id = ++serial; jobs.set(id, { fn, delay, due: time.now + delay }); return id; },
+    clearTimeout(id) { jobs.delete(id); },
+  };
+  const sync = Sync.create({ storage: a.storage, auth: a.auth, blog: Blog, photoPost: Photo, remote: a.remote,
+    makeId: Core.id, locks: null, now: () => time.now, events, timers });
+  t.after(() => sync.dispose());
+  const draft = await save(a, await post({ title: '숨긴 페이지의 새 초안', status: 'draft', time: new Date(time.now).toISOString() }));
+  sync.start(); await sync.syncNow();
+  events.document.visibilityState = 'hidden';
+  sync.holdPost(a.ws, draft.id)(); // releasing an editor asks for a pass in 500 ms
+  const due = time.now + 500;
+  const next = () => { assert.equal(jobs.size, 1, 'only one cycle timer is pending'); return [...jobs.values()][0]; };
+  assert.equal(next().due, due);
+  function fire() {
+    const job = next(); assert(job.due <= time.now, 'only a due timer can fire');
+    const id = [...jobs.keys()][0]; jobs.delete(id); job.fn();
+  }
+  function event(type, extra = {}, target = events) { target.dispatchEvent(Object.assign(new Event(type), extra)); }
+  function holdVerification() {
+    const verify = a.auth.verify; let release;
+    const gate = new Promise(done => { release = done; }); let calls = 0;
+    a.auth.verify = async () => { calls++; if (calls === 1) await gate; return verify(); };
+    return { release, calls: () => calls };
+  }
+  return { cloud, time, a, draft, sync, jobs, events, due, next, fire, event, holdVerification, listCalls: () => listCalls };
+}
+
+async function untilScheduled(predicate) {
+  // IndexedDB fixture transactions finish on setImmediate; no wall-clock delay
+  // changes the fake clock or masks a timer that was incorrectly postponed.
+  for (let n = 0; n < 1000; n++) {
+    if (predicate()) return;
+    await new Promise(done => setImmediate(done));
+  }
+  assert(predicate(), 'the asynchronous cycle settled');
+}
+
+test('hidden online preserves the absolute flush deadline across running time and repeated/burst requests', async t => {
+  const f = await scheduledDraft(t), checks = f.a.auth.verifications, lists = f.listCalls();
+  f.time.advance(125);
+  const hold = f.holdVerification();
+  f.event('online');
+  assert.equal(hold.calls(), 1); assert.equal(f.jobs.size, 0);
+  for (let n = 0; n < 8; n++) f.event('online');
+  f.time.advance(200); hold.release();
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.a.auth.verifications - checks, 2, 'the online burst merges into one rerun');
+  assert.equal(f.next().due, f.due, 'time spent in the cycle does not move the earlier flush');
+  assert.equal(f.next().delay, 175);
+  assert.equal(f.cloud.rows.has(f.draft.id), false, 'online preserves the draft quiet period');
+  f.time.advance(50); f.event('online');
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.next().due, f.due, 'a later online event keeps the same deadline');
+  assert.equal(f.next().delay, 125);
+  assert.equal(f.listCalls() - lists, 3, 'online keeps its normal full-cycle semantics');
+  f.time.advance(125); f.fire();
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.cloud.rows.get(f.draft.id)?.data.title, f.draft.title, 'the scheduled hidden flush uploads the draft');
+  assert.equal(f.listCalls() - lists, 3, 'the hidden follow-up does not pull the server list');
+  assert.equal(f.next().delay, 30000);
+  const quietChecks = f.a.auth.verifications;
+  f.time.advance(30000); f.fire();
+  // Wait for the local-only dirty check as well as any mistakenly started cycle.
+  await f.a.storage.listBlogSyncStates(f.a.ws); await new Promise(done => setImmediate(done));
+  assert.equal(f.a.auth.verifications, quietChecks);
+  assert.equal(f.jobs.size, 0, 'a clean hidden page stops polling');
+});
+
+test('an overdue hidden flush runs once at zero delay then returns to the interval', async t => {
+  const f = await scheduledDraft(t), hold = f.holdVerification(), lists = f.listCalls();
+  f.time.advance(125); f.event('online'); f.time.advance(600); hold.release();
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.next().due, f.time.now, 'an expired deadline runs as soon as the current cycle completes');
+  assert.equal(f.next().delay, 0);
+  assert.equal(f.cloud.rows.has(f.draft.id), false);
+  f.fire(); await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.cloud.rows.has(f.draft.id), true);
+  assert.equal(f.next().delay, 30000, 'the consumed deadline cannot create a zero-delay loop');
+  assert.equal(f.listCalls() - lists, 1, 'only the original online cycle pulls the server list');
+});
+
+test('an upload-only pass also preserves the earlier absolute deadline while it runs', async t => {
+  const f = await scheduledDraft(t), hold = f.holdVerification();
+  f.time.advance(125);
+  const pending = f.sync.syncNow({ uploadOnly: true });
+  f.time.advance(200); hold.release(); await pending;
+  assert.equal(f.next().due, f.due);
+  assert.equal(f.next().delay, 175);
+  assert.equal(f.cloud.rows.has(f.draft.id), false);
+});
+
+test('becoming visible during hidden online gives the visible cycle priority without a timer loop', async t => {
+  const f = await scheduledDraft(t), hold = f.holdVerification(), lists = f.listCalls();
+  f.time.advance(125); f.event('online');
+  f.events.document.visibilityState = 'visible';
+  f.event('visibilitychange', {}, f.events.document);
+  f.time.advance(200); hold.release();
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.next().delay, 0, 'visibility asks for an immediate full pass');
+  f.fire(); await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.listCalls() - lists, 2, 'the visible follow-up pulls the server list');
+  assert.equal(f.next().delay, 30000);
+  assert.equal(f.cloud.rows.has(f.draft.id), false, 'visibility preserves the draft quiet period');
+});
+
+test('disposing during hidden online does not resurrect the retained timer', async t => {
+  const f = await scheduledDraft(t), hold = f.holdVerification();
+  f.event('online'); f.time.advance(600); f.sync.dispose(); hold.release();
+  await untilScheduled(() => !f.sync.getStatus().running);
+  await new Promise(done => setImmediate(done));
+  assert.equal(f.jobs.size, 0);
+  const lists = f.listCalls(); f.event('online');
+  assert.equal(f.listCalls(), lists, 'dispose detached the online listener');
+  assert.equal(f.cloud.rows.has(f.draft.id), false);
+});
+
+test('a parked page starts no retained flush and resumes its regular schedule on pageshow', async t => {
+  const f = await scheduledDraft(t);
+  f.time.advance(125); f.event('online');
+  await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.next().due, f.due);
+  f.event('pagehide', { persisted: true });
+  const checks = f.a.auth.verifications, lists = f.listCalls();
+  f.event('online'); f.time.advance(375); f.fire();
+  await f.a.storage.listBlogSyncStates(f.a.ws); await new Promise(done => setImmediate(done));
+  assert.equal(f.a.auth.verifications, checks); assert.equal(f.listCalls(), lists);
+  assert.equal(f.jobs.size, 0); assert.equal(f.cloud.rows.has(f.draft.id), false);
+  f.event('pageshow', { persisted: true });
+  assert.equal(f.next().delay, 30000, 'resuming keeps the existing account-verification scheduling contract');
+  f.time.advance(30000); f.fire(); await untilScheduled(() => f.jobs.size === 1);
+  assert.equal(f.cloud.rows.has(f.draft.id), true);
+  assert.equal(f.listCalls(), lists, 'the resumed hidden flush remains upload-only');
 });

@@ -48,11 +48,11 @@
     // as soon as its originals sync for this account (no per-workspace opt-in).
     const autoEnable = compositionDomain;
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
-    let disposed = false, started = false, wiring = null, refreshing = false, unlistenSources = null, parked = false;
+    let disposed = false, started = false, wiring = null, refreshing = false, refreshAgain = false, unlistenSources = null, parked = false;
     // Between a persisted pagehide and its pageshow the page sits in the back/forward cache:
     // starting work there evicts it, and nothing begun then may stand in for the resumed page's
     // own account check. A cached page resumes on the regular poll.
-    const pagehide = event => { if (event?.persisted) { parked = true; for (const timer of timers.values()) root.clearTimeout(timer); timers.clear(); } };
+    const pagehide = event => { if (event?.persisted) { parked = true; refreshAgain = false; for (const timer of timers.values()) root.clearTimeout(timer); timers.clear(); } };
     const pageshow = event => { if (event?.persisted) parked = false; };
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     function guard(context) {
@@ -271,20 +271,33 @@
       });
     }
     async function automatic() {
-      if (disposed || parked || refreshing || root.document?.visibilityState === 'hidden') return;
+      if (disposed || parked || root.document?.visibilityState === 'hidden') { refreshAgain = false; return; }
+      if (refreshing) { refreshAgain = true; return; }
       refreshing = true;
+      // A source event can arrive after its old state was read but before this scan finishes.
+      // Coalesce those wakeups without a recursive call or another timer. enable() also emits
+      // source events itself: a failed probe waits for the next independent wakeup instead of
+      // retrying its own event forever. A stale source-pending result gets one fresh attempt;
+      // repeated pending results wait for the next independent wakeup too.
+      const failedEnables = new Set(), retriedSources = new Set();
       try {
-        guard(); const rows = await storage.listWorkspaces(); guard();
-        for (const row of rows) {
-          const state = await getState(row.workspaceId);
-          if (state.enabled) { watch(row.workspaceId); schedule(row.workspaceId); }
-          else if (autoEnable) {
-            const source = await sourceSync.getState(row.workspaceId); guard();
-            if (source?.enabled && source.status === 'synced' && sameAccount(source.binding)) await enable(row.workspaceId).catch(() => {});
+        do {
+          refreshAgain = false;
+          guard(); const rows = await storage.listWorkspaces(); guard();
+          for (const row of rows) {
+            const state = await getState(row.workspaceId);
+            if (state.enabled) { watch(row.workspaceId); schedule(row.workspaceId); }
+            else if (autoEnable && !failedEnables.has(row.workspaceId)) {
+              const source = await sourceSync.getState(row.workspaceId); guard();
+              if (source?.enabled && source.status === 'synced' && sameAccount(source.binding)) await enable(row.workspaceId).catch(error => {
+                if (error?.code === 'composition_source_pending' && !retriedSources.has(row.workspaceId)) retriedSources.add(row.workspaceId);
+                else failedEnables.add(row.workspaceId);
+              });
+            }
           }
-        }
+        } while (refreshAgain && !disposed && !parked && root.document?.visibilityState !== 'hidden');
       } catch (_) { /* State stays durable; an explicit retry gives the current error. */ }
-      finally { refreshing = false; }
+      finally { refreshing = false; refreshAgain = false; }
     }
     function start() {
       guard(); if (started) return; started = true;
@@ -301,7 +314,7 @@
       automatic();
     }
     function dispose() {
-      if (disposed) return; disposed = true;
+      if (disposed) return; disposed = true; refreshAgain = false;
       for (const timer of timers.values()) root.clearTimeout(timer);
       for (const stop of watches.values()) stop();
       timers.clear(); watches.clear(); listeners.clear();

@@ -166,6 +166,70 @@ async function main() {
     finally { held?.entered?.resolve(); held?.allowB?.resolve(); held?.release?.resolve(); report.observations.push({ check: name, requests: copy(server.requests), libraryRequests: copy(server.libraryRequests), assets: copy(server.libraryAssetCalls), expectedTransportFailures: server.expectedFailures, routeErrors: copy(server.libraryRouteErrors) }); for (const d of devices) { await d.context.close(); report.closedContexts++; } }
   }
   try {
+    await check('storage recovery notice preserves error code, active input and exact materials until reload', async ({ device }) => {
+      const a = await device('storage-notice');
+      // Fault only the account coordinator's list read, leaving the real scoped
+      // IDB and every other manager intact. Reload removes this document's fault.
+      await a.context.route('**/assets/life/account-library.js', async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, body: await response.text() + `
+;(() => {
+  const api = HaedoLife.AccountLibrary;
+  HaedoLife.AccountLibrary = Object.freeze({ ...api, create(options) {
+    const storage = Object.create(options.storage);
+    Object.defineProperty(storage, 'listAccountLibraries', { value: async (...args) => {
+      if (globalThis.__accountLibraryStorageFault) {
+        globalThis.__accountLibraryStorageFaultCalls = (globalThis.__accountLibraryStorageFaultCalls || 0) + 1;
+        throw Object.assign(new Error('private raw storage detail'), { code: globalThis.__accountLibraryStorageFault });
+      }
+      return options.storage.listAccountLibraries(...args);
+    } });
+    return api.create({ ...options, storage });
+  } });
+})();` });
+      });
+      await a.login(); const f = await importMarkdown(a.page); await synced(a.page, f.id);
+      const before = await snapshot(a.page);
+      const cases = [
+        ['storage_version_changed', '다른 버전의 저장소입니다. 이 화면을 새로고침하세요.'],
+        ['storage_blocked', '다른 탭이 저장소 열기를 막고 있습니다. 다른 탭을 닫고 다시 여세요.'],
+        ['storage_terminated', '브라우저 저장소를 읽거나 저장하지 못했습니다. 입력을 보존하고 새로고침하세요.']
+      ];
+      const observed = [];
+      for (const [code, message] of cases) {
+        await records(a.page); const input = a.page.locator('#lifeSearch');
+        await input.fill('익명'); await input.focus();
+        await input.evaluate(el => { el.setSelectionRange(1, 2); globalThis.__storageNoticeInput = el; });
+        const failure = await a.page.evaluate(async code => {
+          globalThis.__accountLibraryStorageFault = code;
+          return HaedoLife.Shell.accountLibrary.reconcile();
+        }, code);
+        assert.equal(failure.status, 'error'); assert.deepEqual(failure.error, { code, message });
+        await a.page.locator('#lifeAccountStorage[data-state="error"]').waitFor();
+        assert.deepEqual(await input.evaluate(el => ({ same: el === globalThis.__storageNoticeInput, focused: document.activeElement === el,
+          value: el.value, start: el.selectionStart, end: el.selectionEnd })), { same: true, focused: true, value: '익명', start: 1, end: 2 });
+        exactGraph(await snapshot(a.page), before);
+        await openManagement(a.page); await button(a.page, '계정 보관');
+        const notice = a.page.locator('#lifeMain .life-help').filter({ hasText: message });
+        await notice.waitFor(); assert.equal(await notice.textContent(), message);
+        assert.equal(await a.page.locator('#lifeMain').getByText('서버에 연결하지 못했습니다.', { exact: false }).count(), 0);
+        assert.equal(await a.page.getByText('private raw storage detail', { exact: false }).count(), 0);
+        for (const width of [1440, 390]) {
+          await a.page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+          await notice.scrollIntoViewIfNeeded();
+          const layout = await notice.evaluate(el => { const box = el.getBoundingClientRect(); return { width: innerWidth, documentWidth: document.documentElement.scrollWidth,
+            left: box.left, right: box.right, height: box.height, text: el.textContent }; });
+          assert(layout.documentWidth <= width); assert(layout.left >= 0 && layout.right <= width); assert(layout.height > 0);
+          const file = 'storage-notice-' + code + '-' + width + '.png'; await a.page.screenshot({ path: path.join(output, file), fullPage: true });
+          report.visual.push({ file, storageNotice: code, ...layout });
+        }
+        const calls = await a.page.evaluate(() => __accountLibraryStorageFaultCalls); assert(calls > 0);
+        await a.page.reload(); await ready(a.page); await synced(a.page, f.id);
+        assert.equal((await state(a.page, f.id)).error, null); exactGraph(await snapshot(a.page), before);
+        observed.push({ code, message, faultCalls: calls, reloadRecovered: true, inputAndExactGraphPreserved: true });
+      }
+      report.storageRecoveryNotices = observed;
+    });
     await check('default A import, exact quote and saved profiles automatically arrive on fresh B; B edit returns to A at three widths', async ({ server, device }) => {
       const a = await device('a'); await a.login(); await synced(a.page); const f = await importMarkdown(a.page), rich = await richProfile(a.page, f); await synced(a.page, f.id);
       const b = await device('b'); await b.login(); await synced(b.page, f.id); assert.equal(await b.page.evaluate(() => HaedoLife.Shell.storage.getActive()), f.id); exactGraph(await snapshot(b.page), await snapshot(a.page));
