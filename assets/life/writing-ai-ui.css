@@ -41,8 +41,9 @@
   min-height: 44px;
   font: inherit;
   color: inherit;
-  border: 1px solid var(--line, #e3e9e6);
-  border-radius: 8px;
+  /* Field and button edges use the app's 3:1 field line and control radius (WCAG 1.4.11). */
+  border: 1px solid var(--field-line, #86968d);
+  border-radius: var(--control-radius, 12px);
   background: var(--paper, #fff);
   padding: 8px 12px;
 }

@@ -178,7 +178,7 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-shell a.haedo-nav-compose:active{background:var(--haedo-selected)}
  .haedo-shell a.haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent)}
  .haedo-nav-compose:focus-visible>.haedo-tooltip{display:block;top:calc(100% + 4px);right:0;left:auto;transform:none}
- /* Screens with their own top bar (e.g. the source reader) keep it; the pencil sits only in the shared heading row. */
+ /* Screens with their own top bar hide the pencil; the source reader shows it again in assets/life/ui.css (#223). */
  body.haedo-shell:has(.life-toolbar[hidden]) .haedo-nav-compose{display:none}
  /* The timeline editor's heading row shares the pencil's row and keeps room for it. */
  body.haedo-shell[data-haedo-compose-inline] > .haedo-nav > .haedo-nav-compose{display:none}
