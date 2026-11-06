@@ -749,11 +749,32 @@ test('first-sync deletion without a remote claim stays local and never exports a
   await f.a.deletePhotoPost(f.ws, post.id, post.revision);
   const before = await f.a.readMaterialWriting(f.ws), source = await f.a.read(f.ws);
   assert.equal(await f.a.readMaterialContinuityState(f.ws, f.plan.id), null);
-  await assert.rejects(f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), { code: 'material_writing_output_deleted' });
+  await assert.rejects(f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), { code: 'material_writing_output_deleted',
+    message: '이 기기에만 있는 준비입니다. 첫 동기화 전에 완성 글을 삭제해 다른 기기로 보내지 못했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본으로 다시 시작해 주세요.' });
   assert.deepEqual(await f.a.readMaterialWriting(f.ws), before);
   assert.deepEqual(await f.a.read(f.ws), source);
   assert.deepEqual(before.plans[0].output, { postId: post.id });
   assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
+});
+
+test('a deleted local output with a remote preparation head keeps the shared notice and its rejection contract', async t => {
+  const f = await fixture(); t.after(f.close); const post = await handoff(f);
+  await f.a.deletePhotoPost(f.ws, post.id, post.revision);
+  const before = await f.a.readMaterialWriting(f.ws), source = await f.a.read(f.ws);
+  const plan = before.plans.find(value => value.id === f.plan.id);
+  const row = { id: Core.id(), revision: 1, data: C.snapshot(source, plan, null) };
+  await f.a.writeMaterialContinuityState(f.ws, f.plan.id, { binding: accountA, enabled: true, remoteId: row.id,
+    remoteRevision: row.revision, head: row, mapping: null, output: null, pending: null, conflict: null, localClaim: null, error: null }, 0);
+  const continuity = await f.a.readMaterialContinuityState(f.ws, f.plan.id), rows = copy(f.rows);
+  assert.deepEqual(continuity.head, row); assert.equal(continuity.output, null);
+  await assert.rejects(f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), { code: 'material_writing_output_deleted',
+    message: '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.' });
+  assert.deepEqual(f.rows, rows, 'the rejected snapshot must not change any persisted row');
+  assert.deepEqual(await f.a.readMaterialContinuityState(f.ws, f.plan.id), continuity);
+  assert.deepEqual(await f.a.readMaterialWriting(f.ws), before);
+  assert.deepEqual(await f.a.read(f.ws), source);
+  assert.deepEqual(plan.output, { postId: post.id });
+  assert.deepEqual(await f.a.readMaterialWritingOutput(f.ws, f.plan.id), { status: 'deleted', postId: post.id });
 });
 
 test('a received receipt cannot replace the canonical output identity already confirmed for its preparation', async t => {

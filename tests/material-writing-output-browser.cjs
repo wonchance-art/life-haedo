@@ -16,6 +16,10 @@ async function contextFor(browser, report, device, width) {
     const source = await fs.readFile(process.env.MATERIAL_OUTPUT_UI_OVERRIDE, 'utf8');
     await context.route('**/assets/life/material-writing-ui.js', route => route.fulfill({ contentType: 'application/javascript', body: source }));
   }
+  if (process.env.MATERIAL_OUTPUT_STORAGE_OVERRIDE) {
+    const source = await fs.readFile(process.env.MATERIAL_OUTPUT_STORAGE_OVERRIDE, 'utf8');
+    await context.route('**/assets/life/storage.js', route => route.fulfill({ contentType: 'application/javascript', body: source }));
+  }
   return context;
 }
 function observe(page, report) {
@@ -77,7 +81,15 @@ async function continuityRecovery(browser, report, width, mode) {
     assert.equal(await page.locator('.mw-output .life-help').innerText(), sharedDeleted, `${mode}: use the shared deletion notice`);
     assert.equal(await page.locator('.mw-output').getByRole('button', { name: '새 준비 사본 만들기', exact: true }).count(), 1);
     assert(await page.evaluate(() => __outputContinuity.calls > 0));
-    if (mode === 'account-head') assert.equal(await page.evaluate(() => __outputContinuity.observedHead), true);
+    if (mode === 'account-head') {
+      assert.equal(await page.evaluate(() => __outputContinuity.observedHead), true);
+      const panel = page.locator('#mcPanel');
+      await panel.locator('summary').click();
+      await panel.locator('.mc-error').waitFor({ state: 'visible' });
+      assert.equal(await panel.evaluate(node => node.open), true);
+      assert.equal(await panel.locator('.mc-error').innerText(), sharedDeleted, 'the real preparation sync panel must show the shared deletion notice');
+      assert.equal(await panel.locator('.mc-error').innerText(), await page.locator('.mw-output .life-help').innerText());
+    }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     await page.screenshot({ path: path.join(output, `${mode}-${width}.png`), fullPage: true });
 
@@ -108,8 +120,16 @@ async function continuityRecovery(browser, report, width, mode) {
     await page.locator('#mwQuestion').fill('새 사본에만 이어 쓴 비공개 질문');
     await page.locator('#mwBlocks [data-kind="paragraph"] textarea').fill('새 사본의 본문에 이어 쓴 문장\n🌱 원래 준비는 그대로 남깁니다.');
     await page.locator('.mw-status[data-state="saved"]').waitFor();
+    // Selection waits for the current read-only source load before rendering.
+    // Finish each navigation before selecting again or reading the reopened copy.
     await page.locator('#mwPlanSelect').selectOption(seeded.otherId);
+    await page.waitForFunction(id => document.querySelector('#mwPlanSelect')?.value === id &&
+      document.querySelector('#mwTitle')?.value === '늦은 조회가 바꾸면 안 되는 다른 준비' &&
+      document.querySelector('.mw-status')?.dataset.state === 'saved', seeded.otherId);
     await page.locator('#mwPlanSelect').selectOption(freshId);
+    await page.waitForFunction(id => document.querySelector('#mwPlanSelect')?.value === id &&
+      document.querySelector('#mwTitle')?.value === '새 준비 사본에서 이어 쓴 제목' &&
+      document.querySelector('.mw-status')?.dataset.state === 'saved', freshId);
     assert.equal(await page.locator('#mwTitle').inputValue(), '새 준비 사본에서 이어 쓴 제목');
     assert.equal(await page.locator('#mwQuestion').inputValue(), '새 사본에만 이어 쓴 비공개 질문');
     assert.equal(await page.locator('#mwBlocks [data-kind="paragraph"] textarea').inputValue(), '새 사본의 본문에 이어 쓴 문장\n🌱 원래 준비는 그대로 남깁니다.');
@@ -129,7 +149,7 @@ async function continuityRecovery(browser, report, width, mode) {
     assert.equal(result.fresh.blocks[0].text, '새 사본의 본문에 이어 쓴 문장\n🌱 원래 준비는 그대로 남깁니다.');
     assert.notEqual(result.fresh.blocks[0].id, seeded.before.blocks[0].id);
     await page.screenshot({ path: path.join(output, `${mode}-continued-${width}.png`), fullPage: true });
-    report.checks.push({ width, scenario: mode, sharedDeletionNotice: true, copyActionRetained: true, lateLookupIsolated: true,
+    report.checks.push({ width, scenario: mode, sharedDeletionNotice: true, syncPanelChecked: mode === 'account-head', copyActionRetained: true, lateLookupIsolated: true,
       keyboardCopy: true, originalAndExactSourcePreserved: true, continuedCopyReopened: true });
   } finally { await context.close(); }
 }
@@ -137,8 +157,10 @@ async function main() {
   await fs.mkdir(output, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   const uiPath = process.env.MATERIAL_OUTPUT_UI_OVERRIDE || path.resolve(__dirname, '../assets/life/material-writing-ui.js');
+  const storagePath = process.env.MATERIAL_OUTPUT_STORAGE_OVERRIDE || path.resolve(__dirname, '../assets/life/storage.js');
   const report = { checks: [], pageErrors: [], consoleErrors: [], external: [], browser: browser.version(),
     uiSha256: createHash('sha256').update(await fs.readFile(uiPath)).digest('hex'), uiOverride: !!process.env.MATERIAL_OUTPUT_UI_OVERRIDE,
+    storageSha256: createHash('sha256').update(await fs.readFile(storagePath)).digest('hex'), storageOverride: !!process.env.MATERIAL_OUTPUT_STORAGE_OVERRIDE,
     scope: 'Synthetic Auth/FakeCloud; actual app and IndexedDB. No real account, production DB or Apple hardware.' };
   try {
     for (const width of [1440, 390]) {
