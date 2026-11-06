@@ -69,8 +69,9 @@
         main.before(reflectionNotice);
       }
       const title = typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
-      const subject = title ? 'RSS 글 “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”을' : 'RSS 글을';
-      reflectionNotice.textContent = subject + ' 보관하지 못했습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+      // The title goes after a colon so the sentence never depends on its final consonant.
+      const named = title ? ': “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”' : '';
+      reflectionNotice.textContent = 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
     };
     // Keep module loading and private inbox requests off the first-screen path.
     const queue = () => root.requestAnimationFrame(() => {

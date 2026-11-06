@@ -1,4 +1,12 @@
-# RSS 자동 반영 인계 — 보류, 병합 불가
+# RSS 자동 반영 인계 — 2026-11-06 C 완주로 병합, 운영 활성화 전 후속 3건
+
+> **현재 상태 (2026-11-06, 총괄):** 아래 보류 기록은 E의 11-05 인계 당시 상태다. C가 BLOCKER 2·MAJOR 2·MINOR를 고쳤고(head `b6aea87`, [완료 보고](https://github.com/wonchance-art/life-haedo/pull/227)), 총괄 독립 재검수 BLOCKER 0·MAJOR 0으로 병합했다. 운영 RSS는 아직 비활성(허용 피드 0)이다.
+> **운영 활성화 전에 고칠 후속(MINOR):**
+> 1. 연결이 살아 있고 화면이 보이는 동안 커서 앞 lease 구간(마지막 수집분 본문)을 매분 다시 받는다. 커서가 lease보다 오래되면 겹침을 한 번 읽은 뒤 정확한 커서만 쓰도록 바꾼다(`rss-connection.js` overlapCursor/reflectInbox).
+> 2. '연결 없음'·'runtime 꺼짐'으로 멈춘 반영이 page-ready·bfcache 복귀로 다시 확인하지 않아, 다른 기기에서 연결을 등록하면 열린 탭은 새로 열 때까지 반영하지 않는다(createReflection ready/wake).
+> 3. 응답 단위의 형식 오류(예: 프록시의 HTML 200)도 `rss_invalid_data`로 영구 정지된다. 항목 단위가 아닌 응답 단위 오류는 일시 오류로 분류한다.
+> 참고: 매분 경로의 bundle 전체 읽기는 1,000건 warm 약 106ms, 18,000건 약 1.85초(측정, 허용 범위).
+
 
 2026-11-05 UTC. [초안 PR #227](https://github.com/wonchance-art/life-haedo/pull/227), 브랜치 `codex/rss-inbox-reflection`.
 제품 구현 커밋은 `5719b92cdab943d9a2d925f57ae9bb073cf6f741`, 기준 main은 `5fcaa3f80947fa78352a9d8e1724de557141b4e8`이다.
