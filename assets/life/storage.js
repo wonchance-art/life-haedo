@@ -2480,7 +2480,9 @@
           if (state?.head && state.output && materialCanonicalDeletion(workspaceId, planId, plan.output.postId, state) &&
               (override === undefined || stablePayload(override) === stablePayload(state.output)))
             return clone({ data, localRevision: wrapper.revision, plan, post: null, refs: state.output.refs || [], editingDrafts: [], state });
-          throw fault('material_writing_output_deleted', '이 기기에만 있는 준비입니다. 첫 동기화 전에 완성 글을 삭제해 다른 기기로 보내지 못했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본으로 다시 시작해 주세요.');
+          throw fault('material_writing_output_deleted', state?.head
+            ? '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.'
+            : '이 기기에만 있는 준비입니다. 첫 동기화 전에 완성 글을 삭제해 다른 기기로 보내지 못했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본으로 다시 시작해 주세요.');
         }
         post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
         if (!post) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 새 글을 자동 생성하지 않습니다.');

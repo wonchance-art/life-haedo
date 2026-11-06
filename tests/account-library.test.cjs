@@ -74,6 +74,53 @@ test('a failed catalog bootstrap retries the default barrier and starts original
     assert.equal(h.originalStarts, 1); assert.equal((await manager.getState()).status, 'synced');
   } finally { manager.dispose(); }
 });
+const storageNotices = [
+  ['storage_version_changed', '다른 버전의 저장소입니다. 이 화면을 새로고침하세요.'],
+  ['storage_blocked', '다른 탭이 저장소 열기를 막고 있습니다. 다른 탭을 닫고 다시 여세요.'],
+  ['storage_quota', '브라우저 저장 공간이 부족합니다. 입력을 보존하고 백업을 내려받으세요.'],
+  ['storage_unavailable', '이 브라우저에서 저장소를 사용할 수 없습니다. 입력을 보존하고 브라우저 저장소 설정을 확인하세요.'],
+  ...['storage_terminated', 'storage_aborted', 'storage_error', 'storage_future'].map(code =>
+    [code, '브라우저 저장소를 읽거나 저장하지 못했습니다. 입력을 보존하고 새로고침하세요.'])
+];
+for (const [code, message] of storageNotices) test('account library preserves ' + code + ' and offers storage recovery through public operations', async () => {
+  const h = harness({ local: [first], active: first }), before = structuredClone([...h.spaces]);
+  const list = h.args.storage.listAccountLibraries;
+  h.args.storage.listAccountLibraries = async () => { throw Object.assign(new Error('private raw detail'), { code }); };
+  const manager = create(h.args);
+  try {
+    const failed = await manager.bootstrap();
+    assert.deepEqual(failed.error, { code, message }); assert.equal(failed.cached, true);
+    assert.deepEqual((await manager.getState()).error, { code, message });
+    assert.deepEqual([...h.spaces], before); assert.equal(h.active, first);
+    assert(!h.log.some(value => /^(receive|adopt|enable|source:222)/.test(value)), 'No replacement or upload while storage is unavailable');
+    h.args.storage.listAccountLibraries = list; await manager.retry();
+    assert.equal((await manager.getState()).status, 'synced');
+    const recovered = structuredClone([...h.spaces]);
+    h.args.storage.listAccountLibraries = async () => { throw Object.assign(new Error('private raw detail'), { code }); };
+    const failedAgain = await manager.reconcile();
+    assert.equal(failedAgain.status, 'error'); assert.deepEqual(failedAgain.error, { code, message });
+    assert.deepEqual([...h.spaces], recovered); assert.equal(h.active, first);
+    h.args.storage.listAccountLibraries = list; await manager.retry();
+    assert.equal((await manager.getState()).error, null);
+    h.args.sync.getState = async () => { throw Object.assign(new Error('private raw detail'), { code }); };
+    const failedRead = await manager.getState();
+    assert.equal(failedRead.status, 'error'); assert.deepEqual(failedRead.domains.sources.error, { code, message });
+  } finally { manager.dispose(); }
+});
+test('non-storage failures keep their existing public mapping without leaking raw errors', async () => {
+  for (const [code, expected, message] of [
+    ['auth_required', 'auth_required', '로그인 계정을 다시 확인해 주세요.'],
+    ['request_cancelled', 'request_cancelled', '계정이 바뀌어 이전 자료 요청을 중단했습니다.'],
+    ['network_error', 'network_error', '서버에 연결하지 못했습니다. 자료는 전송 대기 상태로 유지됩니다.'],
+    ...['storage', 'unknown', null, 42, {}].map(code => [code, 'network_error', '서버에 연결하지 못했습니다. 자료는 전송 대기 상태로 유지됩니다.'])
+  ]) {
+    const h = harness({ local: [first], active: first });
+    h.args.storage.listAccountLibraries = async () => { throw Object.assign(new Error('private raw detail'), { code }); };
+    const manager = create(h.args);
+    try { assert.deepEqual((await manager.bootstrap()).error, { code: expected, message }); }
+    finally { manager.dispose(); }
+  }
+});
 test('an incomplete repeated catalog cursor never uploads local data or installs a partial received set', async () => {
   const h = harness({ local: [first], active: first });
   h.remote.catalog = async () => ({ items: [{ id: first }], next: first });

@@ -773,20 +773,24 @@
           : { uploadOnly: !!options.uploadOnly, flushDrafts: !!options.flushDrafts };
         return running;
       }
-      // An upload-only pass (the editor's draft timer, a hidden page's flush) does not do
-      // what an already scheduled pass may be for: a hidden page's draft flush or a server
-      // list. That pass still follows when it was due, not a full interval after this one
-      // (2026-11-05 CI: the draft timer ran inside the 1 s after a conflict cycle, skipped
-      // the new kept copy as a draft in its quiet period, and the copy waited 30 s).
+      // An upload-only pass may skip the server list; a normal pass on a hidden page
+      // may skip a draft still in its quiet period. Neither replaces the already due
+      // pass (including the hidden timer's draft flush). Keep its absolute deadline:
+      // time spent in this cycle must not postpone it. A fired timer has been consumed
+      // above, so an overdue follow-up runs once rather than retaining a zero-delay loop.
+      const preservedDue = timer && (options.uploadOnly || events?.document?.visibilityState === 'hidden') ? timerDue : null;
       if (timer) {
-        if (options.uploadOnly) soon = Math.min(soon ?? interval, Math.max(0, timerDue - now()));
         timers.clearTimeout(timer); timer = null;
       }
       running = (async () => {
         let next = options, result;
         try {
           while (next && !disposed) { rerun = null; result = await withLock(() => cycle(next)); next = rerun; }
-        } finally { running = null; const next = soon ?? interval; soon = null; schedule(next); }
+        } finally {
+          running = null;
+          const next = soon ?? interval;
+          soon = null; schedule(preservedDue === null ? next : Math.min(next, Math.max(0, preservedDue - now())));
+        }
         return result;
       })();
       return running;
