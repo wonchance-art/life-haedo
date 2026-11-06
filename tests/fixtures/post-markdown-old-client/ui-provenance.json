@@ -1,0 +1,12 @@
+{
+  "commit": "2eebd27cbde54f697c9de3a09382f2e21b39a743",
+  "repository": "https://github.com/wonchance-art/life-haedo",
+  "files": [
+    {
+      "source": "assets/life/photo-post-ui.js",
+      "fixture": "photo-post-ui.js.gz",
+      "bytes": 108899,
+      "sha256": "7d7a9ee98d9822991923761d3d8e7dae5d7d4640948a899327f67b3baa8b09ba"
+    }
+  ]
+}

@@ -50,7 +50,7 @@
     if (!storage?.account || !storage.readBlogSyncState || !storage.writeBlogSyncState || !auth || !remote || !blog?.pack || !photoPost?.validate) throw fault('auth_required');
     const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map();
     const holds = new Map(), retries = new Map(), draftDue = new Map();
-    let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null, soon = null;
+    let disposed = false, started = false, timer = null, timerDue = 0, draftTimer = null, running = null, rerun = null, soon = null;
     // Delay of the next cycle while server posts wait for this device's first library (0: none waiting).
     let unplacedDelay = 0;
     // Set between a persisted pagehide and the next pageshow (back/forward cache).
@@ -734,6 +734,7 @@
     function schedule(delay) {
       if (disposed || !started) return;
       if (timer) timers.clearTimeout(timer);
+      timerDue = now() + delay;
       timer = timers.setTimeout(() => {
         timer = null;
         // A hidden page stops pulling the server list, but anything waiting
@@ -772,12 +773,24 @@
           : { uploadOnly: !!options.uploadOnly, flushDrafts: !!options.flushDrafts };
         return running;
       }
-      if (timer) { timers.clearTimeout(timer); timer = null; }
+      // An upload-only pass may skip the server list; a normal pass on a hidden page
+      // may skip a draft still in its quiet period. Neither replaces the already due
+      // pass (including the hidden timer's draft flush). Keep its absolute deadline:
+      // time spent in this cycle must not postpone it. A fired timer has been consumed
+      // above, so an overdue follow-up runs once rather than retaining a zero-delay loop.
+      const preservedDue = timer && (options.uploadOnly || events?.document?.visibilityState === 'hidden') ? timerDue : null;
+      if (timer) {
+        timers.clearTimeout(timer); timer = null;
+      }
       running = (async () => {
         let next = options, result;
         try {
           while (next && !disposed) { rerun = null; result = await withLock(() => cycle(next)); next = rerun; }
-        } finally { running = null; const next = soon ?? interval; soon = null; schedule(next); }
+        } finally {
+          running = null;
+          const next = soon ?? interval;
+          soon = null; schedule(preservedDue === null ? next : Math.min(next, Math.max(0, preservedDue - now())));
+        }
         return result;
       })();
       return running;
@@ -823,7 +836,7 @@
       return () => { if (released) return; released = true; const count = (holds.get(k) || 1) - 1; if (count > 0) holds.set(k, count); else { holds.delete(k); kick(500); } };
     }
     // ---- publication (explicit only) --------------------------------------------
-    async function finishPublication(c, state) {
+    async function finishPublication(c, state, { preservePendingOnConflict = false } = {}) {
       let result;
       const copies = state.publishPending.copies?.length ? { copies: state.publishPending.copies } : {};
       // Route is part of the durable request, never inferred again from a later
@@ -831,7 +844,7 @@
       const format = Object.hasOwn(state.publishPending, 'documentFormat') ? { documentFormat: state.publishPending.documentFormat } : {};
       try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, ...copies, ...format, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
       catch (error) {
-        if (error.code === 'blog_conflict') {
+        if (error.code === 'blog_conflict' && !preservePendingOnConflict) {
           const row = await remote.read(state.remoteId); guard(c);
           await writeState(c, state, { publication: row?.publication || null, publishPending: null });
         }
@@ -869,12 +882,30 @@
       // A request recorded before public copies existed would publish an
       // original; it is replaced by a new request with copies.
       const usable = pending => !!pending && (!needsCopies || !!pending.copies);
-      if (usable(before?.publishPending)) {
+      const legacyMarkdown = pending => initial.format === 'life-post-md-v1' && !!pending && !Object.hasOwn(pending, 'documentFormat');
+      // Even a pre-copy Markdown request must replay its original RPC first:
+      // a completed receipt or an uncertain ACK cannot be replaced by Edge.
+      if (usable(before?.publishPending) || legacyMarkdown(before?.publishPending)) {
         if (before.publishPending.localRevision !== initial.revision || canonical(before.publishPending.selection) !== canonical(selection)) throw fault('local_changed');
         return serial(ws, id, async () => {
-          const state = await readState(c), latest = await readPost(c);
-          if (latest.revision !== initial.revision || state?.publishPending?.operationId !== before.publishPending.operationId) throw fault('local_changed');
-          return finishPublication(c, state);
+          let state = await readState(c); const latest = await readPost(c);
+          if (latest.revision !== initial.revision || canonical(state?.publishPending) !== canonical(before.publishPending)) throw fault('local_changed');
+          try { return await finishPublication(c, state, { preservePendingOnConflict: legacyMarkdown(state.publishPending) }); }
+          catch (error) {
+            // Only BlogRemote's exact legacy RPC rejection proves that receipt
+            // replay found no completed operation and the transaction rolled back.
+            // Inspect this one-call proof before further error normalization.
+            if (!legacyMarkdown(state.publishPending) || error.code !== 'blog_publication_unavailable' || error.publicationRolledBack !== true) throw error;
+            const fresh = await readPost(c);
+            if (fresh.revision !== initial.revision || fresh.format !== 'life-post-md-v1') throw fault('local_changed');
+            const pending = state.publishPending;
+            if (pending.selection.photoIds.some(id => !Array.isArray(pending.copies) || !pending.copies.some(copy => copy.id === id))) throw fault('blog_public_copies_required');
+            // Preserve the reviewed operation, both CAS values, author, photo
+            // order and immutable copies; only the durable transport is repaired.
+            state = await writeState(c, state, { publishPending: { ...pending, documentFormat: 'life-post-md-v1' } },
+              { expectedLocalRevision: initial.revision, isCurrent: () => current(c) });
+            return finishPublication(c, state);
+          }
         });
       }
       if (choices.expectedRemoteRevision !== undefined && choices.expectedRemoteRevision !== (before?.remoteRevision || 0) || choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (before?.publication?.revision || 0)) throw fault('local_changed');
@@ -884,6 +915,9 @@
       return serial(ws, id, async () => {
         let state = await readState(c); const latest = await readPost(c);
         if (latest.revision !== choices.expectedLocalRevision || state.localRevision !== latest.revision || state.pending) throw fault('local_changed');
+        // Another tab may have recorded a legacy request while copies were
+        // prepared. Its receipt must be replayed on the next explicit retry.
+        if (legacyMarkdown(state.publishPending)) throw fault('local_changed');
         // Compare the reviewed preview with the current server publication
         // before any publication request (another device may have published).
         if (!state.publishPending) {

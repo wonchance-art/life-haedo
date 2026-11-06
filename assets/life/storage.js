@@ -3,7 +3,13 @@
   'use strict';
 
   const DB_NAME = 'life-tools-v1';
-  const DB_VERSION = 1;
+  // Version 1 clients can replace an unreadable Markdown post with an old v2
+  // draft. A native version upgrade closes their connections before open()
+  // resolves; their later version-1 opens fail instead of touching md rows.
+  // Keep every store and row: this is a connection barrier, not a data rewrite.
+  // Never lower this number, even when reverting: a lower version cannot open
+  // a database already upgraded on a device. A rollback keeps 2 or raises it.
+  const DB_VERSION = 2;
   const SYNC_MAX_BYTES = 16 * 1024 * 1024;
   const COLLECTIONS = ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'];
   const clone = value => structuredClone(value);
@@ -1629,6 +1635,77 @@
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
       return result;
     }
+    // Explicit first-edit confirmation/save only: never call from autosave.
+    // The recovery comes from the exact stored source, not an editor snapshot.
+    async function savePostTransition(workspaceId, input, baseRevision, request) {
+      collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
+      onlyFields(request, ['sourceId', 'sourceRevision', 'recoveryId'], 'invalid_photo_post');
+      const { sourceId, sourceRevision, recoveryId } = request;
+      requireId(sourceId, '원래 글'); requireId(recoveryId, '복구 사본'); requireRevision(sourceRevision);
+      const value = photoPost().compact(input), sameId = value.id === sourceId;
+      if (value.format !== 'life-post-md-v1' || recoveryId === sourceId || recoveryId === value.id ||
+          (sameId ? baseRevision !== sourceRevision : value.status !== 'saved' || value.replaces?.id !== sourceId || value.replaces?.revision !== sourceRevision))
+        throw fault('invalid_photo_post', '전환할 원래 글과 복구 사본을 확인해 주세요.');
+      if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      // Hash outside IDB. Include actual bytes, so a reused operation cannot
+      // silently accept a changed Blob with an unchanged caller-supplied digest.
+      const photos = await Promise.all(value.photos.map(async photo => ({ ...photoPost().metadata(photo),
+        bytes: await photoPost().digest(photo.blob), ...(photo.view ? { viewBytes: await photoPost().digest(photo.view.blob) } : {}) })));
+      const payload = await photoPost().digest(new Blob([stablePayload({ value: { ...value, photos }, baseRevision, sourceId, sourceRevision, recoveryId })]));
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const receiptKey = `photo-transition:${workspaceId}:${sourceId}:${sourceRevision}`, receipt = (await meta.get(receiptKey))?.value;
+        if (receipt) {
+          if (receipt.payload !== payload) throw fault('operation_mismatch', '이미 전환한 글에 다른 저장 요청이 들어왔습니다. 입력을 보존했습니다.');
+          const post = (await meta.get(`photo-post:${workspaceId}:${value.id}`))?.value;
+          const recovery = (await meta.get(`photo-post:${workspaceId}:${recoveryId}`))?.value;
+          if (!post || post.revision !== receipt.postRevision || !recovery || recovery.revision !== receipt.recoveryRevision)
+            throw fault('photo_post_conflict', '전환한 글이나 복구 사본이 바뀌었습니다. 목록을 다시 확인해 주세요.');
+          photoPost().validate(post); photoPost().validate(recovery);
+          return { post: clone(post), recoveryId, replayed: true };
+        }
+        const source = (await meta.get(`photo-post:${workspaceId}:${sourceId}`))?.value;
+        if (!source || source.revision !== sourceRevision || !sameId && source.status !== 'saved')
+          throw fault('photo_post_conflict', '원래 글이 바뀌었습니다. 입력과 원래 글을 보존했습니다.');
+        photoPost().validate(source);
+        if (sameId && (value.status !== source.status || stablePayload(value.replaces) !== stablePayload(source.replaces)))
+          throw fault('invalid_photo_post', '초안 전환은 원래 저장 상태와 수정 대상을 유지해야 합니다.');
+        if (!['life-photo-post-v1', 'life-photo-post-v2'].includes(source.format))
+          throw fault('photo_post_conflict', '이미 전환한 글입니다. 목록을 다시 확인해 주세요.');
+        for (const prefix of ['photo-post', 'post-evidence', 'blog-sync']) if (await meta.get(`${prefix}:${workspaceId}:${recoveryId}`))
+          throw fault('photo_post_conflict', '복구 사본 식별자가 이미 쓰이고 있습니다.');
+        const originalEvidence = await postEvidenceRow(meta, workspaceId, `post-evidence:${workspaceId}:${sourceId}`);
+        const refs = originalEvidence ? checkedEvidence(originalEvidence.refs, workspaceId) : [];
+        checkEvidenceTargets(refs, bundle);
+        // Match BlogSync's existing recovery naming, including whole-character
+        // title truncation. Keep the exact original title in the local receipt.
+        let title = source.title || '', suffix = '';
+        if (!title.startsWith('복구 사본 · ')) title = '복구 사본 · ' + title;
+        else if (!/ \(\d\d-\d\d \d\d:\d\d UTC\)$/.test(title)) {
+          const at = new Date(source.updatedAt), two = number => String(number).padStart(2, '0');
+          suffix = ` (${two(at.getUTCMonth() + 1)}-${two(at.getUTCDate())} ${two(at.getUTCHours())}:${two(at.getUTCMinutes())} UTC)`;
+        }
+        let head = '';
+        for (const char of title) { if (head.length + char.length + suffix.length > 500) break; head += char; }
+        const recovery = { ...clone(source), id: recoveryId, title: head + suffix, revision: 0, status: 'draft', replaces: null };
+        if (recovery.format !== 'life-photo-post-v1') recovery.archived = false;
+        // Final first permits a replacement at the 200-post limit. Both writes,
+        // refs, identity/receipt transfers and material output moves share tx.
+        const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
+        const kept = await writePhotoPost(tx, workspaceId, recovery, 0,
+          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);
+        await meta.put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } });
+        effects.evidence = !!originalEvidence;
+        return { post, recoveryId, replayed: false };
+      });
+      if (!result.replayed) {
+        const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+        if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+        if (effects.evidence) accountDocChanged(`post-evidence:${workspaceId}:${recoveryId}`, `post-evidence:${workspaceId}:${value.id}`);
+      }
+      return result;
+    }
     async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
         // The bundle's content is read (and the whole bundle validated) only by
         // the source checks below; a plain post write checks the workspace only.
@@ -1782,6 +1859,113 @@
     const materialWriting = () => root.HaedoLife?.MaterialWriting || (typeof require === 'function' && require('./material-writing.js'));
     const materialOutputKey = (workspaceId, planId) => `material-writing-output:${workspaceId}:${planId}`;
     const materialOutputDeletedKey = (workspaceId, postId) => `material-writing-output-deleted:${workspaceId}:${postId}`;
+    const materialOutputAccountKey = planId => `materialOutputDeleted:${accountKey}:${planId}`;
+    function validateMaterialOutputDeletion(value, planId) {
+      onlyFields(value, ['version', 'workspaceId', 'planId', 'postId'], 'invalid_material_output_deletion');
+      if (value.version !== 1 || value.planId !== planId) throw fault('invalid_material_output_deletion', '삭제한 완성 글의 준비 연결을 확인해 주세요.');
+      for (const name of ['workspaceId', 'planId', 'postId']) requireId(value[name], '삭제한 글 연결');
+      return value;
+    }
+    async function materialOutputDeletionValue(meta, planId) {
+      const row = await meta.get(materialOutputAccountKey(planId));
+      return row === undefined ? undefined : validateMaterialOutputDeletion(row.value, planId);
+    }
+    function materialCanonicalDeletion(workspaceId, planId, postId, state) {
+      if (!state) return { version: 1, workspaceId, planId, postId };
+      validateMaterialContinuityState(state, workspaceId);
+      if (!state.head || !state.output) return null;
+      const data = state.head.data, mapping = state.mapping;
+      if (mapping ? mapping.workspaceId.from !== data.bundle.workspaceId || mapping.workspaceId.to !== workspaceId || mapping.planIds[data.plan.id] !== planId
+        : data.bundle.workspaceId !== workspaceId || data.plan.id !== planId) return null;
+      return { version: 1, workspaceId: data.bundle.workspaceId, planId: data.plan.id, postId: state.output.postId };
+    }
+    async function materialPlanDeletion(meta, workspaceId, plan) {
+      const state = (await meta.get(materialContinuityKey(workspaceId, plan.id)))?.value || null;
+      return materialLocalDeletionTarget(meta, workspaceId, plan.id, plan.output.postId, state);
+    }
+    async function materialLocalDeletionTarget(meta, workspaceId, planId, postId, state) {
+      const target = materialCanonicalDeletion(workspaceId, planId, postId, state);
+      if (!target || !state) return target;
+      // A conflict can bind an existing local preparation to another device's
+      // different output. Shared plan identity alone cannot retire that output.
+      const binding = (await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value;
+      if (binding) return blogBindingShape(binding) && binding.remoteId === target.postId ? target : null;
+      if (postId === target.postId) return target;
+      // A completed local replacement can outlive its Blog binding after an
+      // older tab deleted it. The owned claim plus the atomically moved handoff
+      // receipt preserves that lineage; a conflict or pending change does not.
+      if (!state.conflict && !state.pending && state.localClaim?.postId === target.postId && state.localClaim.claimId === state.output.claimId &&
+          (await materialReceipt(meta, workspaceId, planId))?.postId === postId) return target;
+      return null;
+    }
+    async function materialRemoteDeletion(meta, row) {
+      if (!account || !row.data.output) return false;
+      const value = await materialOutputDeletionValue(meta, row.data.plan.id);
+      return !!value && value.workspaceId === row.data.bundle.workspaceId && value.postId === row.data.output.postId;
+    }
+    async function readMaterialContinuityOutputDeletion(inputRow) {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에서 삭제한 글 연결을 확인해 주세요.');
+      const row = materialRemoteRow(inputRow);
+      return transaction(['meta'], 'readonly', tx => materialRemoteDeletion(tx.objectStore('meta'), row));
+    }
+    function validateMaterialDeletedProof(proof, row) {
+      if (proof === undefined) return false;
+      onlyFields(proof, ['binding', 'remoteId', 'revision', 'workspaceId', 'planId', 'output'], 'invalid_material_output_deletion');
+      materialBinding(proof.binding);
+      if (row.data.output?.state !== 'saved' || proof.remoteId !== row.id || proof.revision !== row.revision ||
+          proof.workspaceId !== row.data.bundle.workspaceId || proof.planId !== row.data.plan.id || stablePayload(proof.output) !== stablePayload(row.data.output))
+        throw fault('invalid_material_output_deletion', '서버에서 확인한 준비와 삭제한 완성 글의 정확한 연결이 다릅니다.');
+      return true;
+    }
+    async function acceptMaterialDeletedOutput(meta, row, proof, effects) {
+      if (validateMaterialDeletedProof(proof, row)) await putMaterialOutputDeletion(meta, {
+        version: 1, workspaceId: row.data.bundle.workspaceId, planId: row.data.plan.id, postId: row.data.output.postId
+      }, effects);
+      return materialRemoteDeletion(meta, row);
+    }
+    async function putMaterialOutputDeletion(meta, value, effects, options = {}) {
+      if (!account || !value) return;
+      validateMaterialOutputDeletion(value, value.planId);
+      const prior = await materialOutputDeletionValue(meta, value.planId);
+      if (prior && stablePayload(prior) !== stablePayload(value)) {
+        // Confirmed post deletion keeps its local evidence even when an older
+        // canonical marker names another output. Receiving proof stays strict.
+        if (options.preservePrior) return;
+        throw fault('invalid_material_output_deletion', '삭제 기록의 다른 준비 연결을 덮어쓰지 않았습니다.');
+      }
+      if (!prior) {
+        const key = materialOutputAccountKey(value.planId);
+        await meta.put({ key, value });
+        (effects.materialDeletionKeys ||= []).push(key);
+      }
+    }
+    // A matching preparation or its durable handoff receipt is positive evidence.
+    // An absent preparation alone cannot prove that a deletion is unrelated.
+    async function materialDeletionTargets(meta, workspaceId, postId, row) {
+      const ids = new Set(), plans = Array.isArray(row?.value?.plans) ? row.value.plans : [];
+      for (const plan of plans) if (plan?.output?.postId === postId) {
+        try { materialWriting().validate({ ...materialWriting().empty(workspaceId), plans: [plan] }); ids.add(plan.id); }
+        catch (error) { if (!/^(invalid_|workspace_mismatch$)/.test(error?.code || '')) throw error; }
+      }
+      const prefix = `material-writing-output:${workspaceId}:`;
+      for (const key of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff'))) {
+        if (typeof key !== 'string' || !key.startsWith(prefix) || ids.has(key.slice(prefix.length))) continue;
+        try { const receipt = await materialReceipt(meta, workspaceId, key.slice(prefix.length)); if (receipt?.postId === postId) ids.add(key.slice(prefix.length)); }
+        catch (error) { if (!/^(invalid_|workspace_mismatch$)/.test(error?.code || '')) throw error; }
+      }
+      const binding = (await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value;
+      if (binding && blogBindingShape(binding)) {
+        const linked = `material-continuity:${workspaceId}:`;
+        for (const key of await meta.getAllKeys(root.IDBKeyRange?.bound(linked, linked + '\uffff'))) {
+          if (typeof key !== 'string' || !key.startsWith(linked) || ids.has(key.slice(linked.length))) continue;
+          try {
+            const state = (await meta.get(key))?.value, planId = key.slice(linked.length);
+            if (state?.output?.postId === binding.remoteId && materialCanonicalDeletion(workspaceId, planId, postId, state)) ids.add(planId);
+          } catch (error) { if (!/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) throw error; }
+        }
+      }
+      return [...ids];
+    }
     async function materialReceipt(meta, workspaceId, planId) {
       const row = await meta.get(materialOutputKey(workspaceId, planId));
       if (row === undefined) return null;
@@ -1813,8 +1997,16 @@
       const postId = plan.output.postId;
       const resolve = materialWriting().resolveOutput;
       if (!resolve) throw fault('app_version_mismatch', '앱의 일부 파일이 이전 버전입니다. 새로고침한 뒤 연결한 글을 다시 확인해 주세요. 준비와 글은 그대로 유지합니다.');
-      return resolve(plan.output, (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value || null,
-        (await meta.get(materialOutputDeletedKey(workspaceId, postId)))?.value || null);
+      const post = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value || null;
+      // A verified restored/current post remains authoritative over old deletion evidence.
+      if (post) return resolve(plan.output, post, null);
+      let deletion = (await meta.get(materialOutputDeletedKey(workspaceId, postId)))?.value || null;
+      if (!deletion && account) {
+        const target = await materialPlanDeletion(meta, workspaceId, plan);
+        const canonical = target && await materialOutputDeletionValue(meta, target.planId);
+        if (canonical && stablePayload(canonical) === stablePayload(target)) deletion = { postId };
+      }
+      return resolve(plan.output, null, deletion);
     }
     async function readMaterialWritingOutput(workspaceId, planId) {
       collectionScope(workspaceId); requireId(planId, '글 준비');
@@ -1826,14 +2018,24 @@
       });
     }
     // Keep the immutable handoff receipt for idempotency, but retire its active
-    // target with durable local evidence. Unlike a blog upload tombstone, this
+    // target with durable account evidence. Unlike a blog upload tombstone, this
     // marker survives the server's deletion acknowledgement. The same helper is
     // used for local deletion and a confirmed deletion received from the server.
-    async function retireMaterialWritingOutput(meta, workspaceId, postId) {
-      // Blog sync can confirm a deletion before the related preparation arrives.
-      // Keep that evidence independently of the current preparation list.
-      await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
+    async function retireMaterialWritingOutput(meta, workspaceId, postId, effects = {}) {
       const row = await meta.get(`material-writing:${workspaceId}`);
+      const targets = await materialDeletionTargets(meta, workspaceId, postId, row);
+      if (!targets.length) return null;
+      // The marker and the deletion share one transaction. A receipt may precede
+      // its preparation, so retain that proof even when the wrapper is absent.
+      await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
+      for (const planId of targets) {
+        let target = null;
+        try {
+          const state = (await meta.get(materialContinuityKey(workspaceId, planId)))?.value || null;
+          target = await materialLocalDeletionTarget(meta, workspaceId, planId, postId, state);
+        } catch (error) { if (!/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) throw error; }
+        await putMaterialOutputDeletion(meta, target, effects, { preservePrior: true });
+      }
       if (!Array.isArray(row?.value?.plans) || !row.value.plans.some(plan => plan?.output?.postId === postId)) return null;
       let state;
       try { state = clone(await materialWritingValue(meta, workspaceId)); }
@@ -1846,6 +2048,112 @@
       state.revision++;
       await meta.put({ key: `material-writing:${workspaceId}`, value: state });
       return state.revision;
+    }
+    async function refreshMaterialDeletionPlans(meta, deletion) {
+      const changedPlans = [];
+      for (const key of await meta.getAllKeys()) {
+        if (typeof key !== 'string' || !key.startsWith('material-writing:')) continue;
+        const workspaceId = key.slice('material-writing:'.length);
+        if (!sameAccount(await workspaceOwner(meta, workspaceId), account)) continue;
+        let state, affected = false; const connections = [];
+        try {
+          state = clone(await materialWritingValue(meta, workspaceId));
+          for (const plan of state.plans) {
+            const continuity = (await meta.get(materialContinuityKey(workspaceId, plan.id)))?.value || null;
+            const target = plan.output ? await materialPlanDeletion(meta, workspaceId, plan) : continuity?.output && materialCanonicalDeletion(workspaceId, plan.id, continuity.output.postId, continuity);
+            if (!target || stablePayload(target) !== stablePayload(deletion)) continue;
+            if (plan.output && await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`)) continue;
+            if (!plan.output) {
+              // A writing claim may arrive before its deletion receipt. Attach
+              // only the exact confirmed target; never recreate a document.
+              const live = await blogCopies(meta, workspaceId, deletion.postId);
+              if (live.some(copy => copy.revision > 0)) continue;
+              plan.output = { postId: core().id() };
+              connections.push({ planId: plan.id, output: clone(plan.output) });
+            }
+            affected = true;
+          }
+        } catch (error) {
+          // The receipt remains useful even if an unrelated local preparation
+          // needs repair. Actual storage failures must still abort the apply.
+          if (/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) continue;
+          throw error;
+        }
+        if (affected) {
+          state.revision++; materialWriting().validate(state);
+          for (const connection of connections) {
+            await meta.put({ key: materialOutputKey(workspaceId, connection.planId), value: connection.output });
+            await meta.put({ key: materialOutputDeletedKey(workspaceId, connection.output.postId), value: connection.output });
+          }
+          await meta.put({ key, value: state });
+          changedPlans.push({ workspaceId, revision: state.revision });
+        }
+      }
+      return changedPlans;
+    }
+    async function promoteMaterialOutputDeletions() {
+      // One indexed read pass discovers newly written legacy markers, including
+      // markers from an older tab. Already promoted rows never take a write lock.
+      const candidates = await transaction(['meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), keys = await meta.getAllKeys(), groups = new Map(), prefix = 'material-writing-output-deleted:';
+        for (const key of keys) {
+          if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
+          const parts = key.slice(prefix.length).split(':'); if (parts.length !== 2) continue;
+          const [workspaceId, postId] = parts;
+          if (!groups.has(workspaceId)) groups.set(workspaceId, { posts: new Map(), receipts: [] });
+          groups.get(workspaceId).posts.set(postId, key);
+        }
+        const receiptPrefix = 'material-writing-output:';
+        for (const key of keys) if (typeof key === 'string' && key.startsWith(receiptPrefix)) {
+          const [workspaceId, planId, extra] = key.slice(receiptPrefix.length).split(':');
+          if (planId && extra === undefined && groups.has(workspaceId)) groups.get(workspaceId).receipts.push(planId);
+        }
+        const result = [];
+        for (const [workspaceId, group] of groups) {
+          if (!sameAccount(await workspaceOwner(meta, workspaceId), account)) continue;
+          const row = await meta.get(`material-writing:${workspaceId}`), linked = new Map();
+          for (const plan of Array.isArray(row?.value?.plans) ? row.value.plans : []) if (group.posts.has(plan?.output?.postId)) {
+            try { materialWriting().validate({ ...materialWriting().empty(workspaceId), plans: [plan] }); linked.set(plan.id, plan.output.postId); }
+            catch (error) { if (!/^invalid_/.test(error?.code || '')) throw error; }
+          }
+          for (const planId of group.receipts) if (!linked.has(planId)) {
+            try { const receipt = await materialReceipt(meta, workspaceId, planId); if (group.posts.has(receipt?.postId)) linked.set(planId, receipt.postId); }
+            catch (error) { if (!/^invalid_/.test(error?.code || '')) throw error; }
+          }
+          for (const [planId, postId] of linked) {
+            try {
+              const marker = (await meta.get(group.posts.get(postId)))?.value;
+              onlyFields(marker, ['postId'], 'invalid_material_output_deletion'); if (marker.postId !== postId) continue;
+              const state = (await meta.get(materialContinuityKey(workspaceId, planId)))?.value || null;
+              const value = await materialLocalDeletionTarget(meta, workspaceId, planId, postId, state);
+              if (value && !(await materialOutputDeletionValue(meta, value.planId))) result.push({ workspaceId, planId, postId, value });
+            } catch (error) { if (!/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) throw error; }
+          }
+        }
+        return result;
+      });
+      if (!candidates.length) return;
+      const effects = {};
+      await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        for (const candidate of candidates) {
+          const { workspaceId, planId, postId, value } = candidate;
+          if (!sameAccount(await workspaceOwner(meta, workspaceId), account)) continue;
+          try {
+            const marker = (await meta.get(materialOutputDeletedKey(workspaceId, postId)))?.value;
+            onlyFields(marker, ['postId'], 'invalid_material_output_deletion'); if (marker.postId !== postId) continue;
+            const row = await meta.get(`material-writing:${workspaceId}`), plan = row?.value?.plans?.find(item => item?.id === planId);
+            let linked = false;
+            if (plan?.output?.postId === postId) { materialWriting().validate({ ...materialWriting().empty(workspaceId), plans: [plan] }); linked = true; }
+            if (!linked) linked = (await materialReceipt(meta, workspaceId, planId))?.postId === postId;
+            if (!linked) continue;
+            const state = (await meta.get(materialContinuityKey(workspaceId, planId)))?.value || null;
+            const current = await materialLocalDeletionTarget(meta, workspaceId, planId, postId, state);
+            if (current && stablePayload(current) === stablePayload(value)) await putMaterialOutputDeletion(meta, value, effects);
+          } catch (error) { if (!/^(invalid_|workspace_mismatch$|account_mismatch$)/.test(error?.code || '')) throw error; }
+        }
+      });
+      accountDocChanged(...(effects.materialDeletionKeys || []));
     }
     async function saveMaterialWriting(workspaceId, input, baseRevision) {
       collectionScope(workspaceId); requireRevision(baseRevision); const state = clone(input); materialWriting().validate(state);
@@ -2166,8 +2474,16 @@
       const state = await materialContinuityState(meta, workspaceId, planId), data = materialSnapshotData(bundle, plan, state, override);
       let post = null, refs = [], editingDrafts = [];
       if (plan.output) {
-        if ((await materialOutputState(meta, workspaceId, plan)).status === 'deleted')
-          throw fault('material_writing_output_deleted', '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작해 주세요.');
+        if ((await materialOutputState(meta, workspaceId, plan)).status === 'deleted') {
+          // A bound preparation retains its confirmed output descriptor; deleting
+          // its post neither clears the handoff nor invents a new writing claim.
+          if (state?.head && state.output && materialCanonicalDeletion(workspaceId, planId, plan.output.postId, state) &&
+              (override === undefined || stablePayload(override) === stablePayload(state.output)))
+            return clone({ data, localRevision: wrapper.revision, plan, post: null, refs: state.output.refs || [], editingDrafts: [], state });
+          throw fault('material_writing_output_deleted', state?.head
+            ? '이 준비에서 만든 글을 삭제했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본을 만들어 다시 시작할 수 있습니다.'
+            : '이 기기에만 있는 준비입니다. 첫 동기화 전에 완성 글을 삭제해 다른 기기로 보내지 못했습니다. 준비와 자료는 남아 있습니다. 새 준비 사본으로 다시 시작해 주세요.');
+        }
         post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
         if (!post) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 새 글을 자동 생성하지 않습니다.');
         photoPost().validate(post);
@@ -2239,11 +2555,17 @@
         remoteManifest: clone(manifest), localRevision, pending: null, conflict: null, publishPending: null, unpublishPending: null,
         publication: prior?.publication || null, status: enabled ? 'synced' : 'paused', error: null };
     }
-    async function installMaterialPost(tx, workspaceId, mapped, original, remoteWorkspaceId, priorPlan, preserveLocal, blogRow = null) {
+    async function installMaterialPost(tx, workspaceId, mapped, original, remoteWorkspaceId, priorPlan, preserveLocal, blogRow = null, deletionRow = null) {
       const meta = tx.objectStore('meta'), output = mapped.data.output;
       const oldPost = priorPlan?.output && (await meta.get(`photo-post:${workspaceId}:${priorPlan.output.postId}`))?.value;
       const oldBinding = oldPost && (await meta.get(`blog-sync:${workspaceId}:${oldPost.id}`))?.value;
+      const sameOldOutput = !!oldPost && !!output && (oldPost.id === output.postId || oldBinding?.remoteId === output.postId);
       if (!output || output.state !== 'saved') {
+        if (output && (!oldPost || preserveLocal && !sameOldOutput) && deletionRow && await materialRemoteDeletion(meta, deletionRow)) {
+          const postId = !oldPost && priorPlan?.output?.postId || core().id();
+          await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
+          return { postId };
+        }
         if (!oldPost || output && (oldPost.id === output.postId || oldBinding?.remoteId === output.postId)) return priorPlan?.output || null;
         if (preserveLocal) return null;
         throw fault('local_changed', '이 기기의 기존 글은 유지합니다. 양쪽 준비와 글을 보존하는 선택을 먼저 확인해 주세요.');
@@ -2262,7 +2584,15 @@
         if (!evidence) await meta.put({ key, value: { revision: 1, refs: clone(refs) } });
         return { postId: received.localPostId };
       }
-      if (!original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      if (!original) {
+        if (deletionRow && await materialRemoteDeletion(meta, deletionRow)) {
+          if (sameOldOutput) return { postId: oldPost.id };
+          const postId = !oldPost && priorPlan?.output?.postId || core().id();
+          await meta.put({ key: materialOutputDeletedKey(workspaceId, postId), value: { postId } });
+          return { postId };
+        }
+        throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      }
       const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
       const blog = root.HaedoLife?.Blog || require('./blog.js');
       const state = materialBlogState(output.postId, blogRow?.workspace_id || remoteWorkspaceId, output.revision, blog.pack(original), saved.revision);
@@ -2270,7 +2600,7 @@
       await meta.put({ key: `blog-sync:${workspaceId}:${saved.id}`, value: state });
       return { postId: saved.id };
     }
-    async function materialNewWorkspace(tx, data, post, boundRow = null, blogRow = null, privateRecovery = false) {
+    async function materialNewWorkspace(tx, data, post, boundRow = null, blogRow = null, privateRecovery = false, deletionRow = boundRow) {
       const bundle = core().createWorkspace({ title: data.plan.title || '받은 글 준비' }), workspaceId = bundle.workspaceId;
       const mapped = materialRemapped(data, workspaceId, null), plan = mapped.data.plan;
       bundle.sources = mapped.data.bundle.sources; bundle.sourceVersions = mapped.data.bundle.sourceVersions; bundle.links = mapped.data.bundle.links; core().validateWorkspace(bundle);
@@ -2281,7 +2611,7 @@
       if (privateRecovery && post) {
         const saved = await writePhotoPost(tx, workspaceId, materialLocalPost(post), 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
         plan.output = { postId: saved.id };
-      } else plan.output = await installMaterialPost(tx, workspaceId, mapped, post, data.bundle.workspaceId, null, false, blogRow);
+      } else plan.output = await installMaterialPost(tx, workspaceId, mapped, post, data.bundle.workspaceId, null, false, blogRow, deletionRow);
       const wrapper = { ...materialWriting().empty(workspaceId), revision: 1, plans: [plan] }; materialWriting().validate(wrapper);
       await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper });
       if (plan.output) await meta.put({ key: materialOutputKey(workspaceId, plan.id), value: clone(plan.output) });
@@ -2294,8 +2624,9 @@
     }
     async function installMaterialContinuity(inputRow, options = {}) {
       scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에 준비 사본을 받아 주세요.');
-      onlyFields(options, ['target', 'expectedFingerprint', 'expectedReview', 'preserveLocal', 'preserveRemote', 'post', 'blogRow'], 'invalid_material_continuity');
+      onlyFields(options, ['target', 'expectedFingerprint', 'expectedReview', 'preserveLocal', 'preserveRemote', 'post', 'blogRow', 'deletedOutput'], 'invalid_material_continuity');
       const row = materialRemoteRow(inputRow), settings = clone(options), model = materialContinuity();
+      validateMaterialDeletedProof(settings.deletedOutput, row);
       let expectedReview = null;
       if (settings.expectedReview !== undefined) {
         onlyFields(settings.expectedReview, ['post', 'refs', 'editingDrafts'], 'invalid_material_continuity');
@@ -2303,6 +2634,7 @@
       }
       await model.verify(row.data); scopeGuard();
       let original = settings.post || null;
+      if (original && settings.deletedOutput !== undefined) throw fault('invalid_material_output_deletion', '실제 글과 삭제 증거를 동시에 적용하지 않았습니다.');
       if (original) {
         photoPost().validate(original);
         if (row.data.output?.state !== 'saved' || original.id !== row.data.output.postId || original.status !== 'saved' || original.replaces !== null) throw fault('invalid_material_continuity', '검토한 완성 글과 서버 준비의 연결이 다릅니다.');
@@ -2317,11 +2649,13 @@
         if (settings.expectedFingerprint !== before.fingerprint) throw fault('material_continuity_changed', '비교한 준비가 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.');
         if (expectedReview !== null && materialReviewPayload(before) !== expectedReview) throw fault('material_continuity_changed', '비교한 글 본문이나 정확한 근거가 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.');
       }
+      const effects = {};
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), receipt = (await meta.get(materialInstallKey(row.id)))?.value;
+        const deleted = !original && await acceptMaterialDeletedOutput(meta, row, settings.deletedOutput, effects);
         if (!target) {
           if (receipt) throw fault('material_continuity_exists', '다른 탭에서 이미 이 준비를 받았습니다. 기존 준비를 다시 열어 주세요.');
-          if (row.data.output?.state === 'saved' && !original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+          if (row.data.output?.state === 'saved' && !original && !deleted) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
           const result = await materialNewWorkspace(tx, row.data, original, row, settings.blogRow);
           await meta.put({ key: activeKey, value: result.workspaceId }); return result;
         }
@@ -2349,7 +2683,7 @@
           }
         }
         if (settings.preserveRemote) {
-          recovery = await materialNewWorkspace(tx, row.data, original, null, null, true);
+          recovery = await materialNewWorkspace(tx, row.data, original, null, null, true, row);
           const oldBlog = current.post && (await meta.get(`blog-sync:${target.workspaceId}:${current.post.id}`))?.value;
           const differentOutput = current.post && (oldBlog?.remoteId || current.post.id) !== row.data.output?.postId;
           let localRecovery = null, planRevision = current.localRevision, output = current.plan.output;
@@ -2366,6 +2700,17 @@
             await meta.delete(materialOutputKey(target.workspaceId, target.planId)); await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
           }
           const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null); let appended = false;
+          if (!output && deleted && row.data.output) {
+            // Keeping the local preparation does not unclaim the remote output.
+            // Its different local post is already preserved above; retain the
+            // exact deleted target on the active preparation as well.
+            output = await installMaterialPost(tx, target.workspaceId, mapped, null, row.data.bundle.workspaceId, null, true, null, row);
+            const wrapper = clone(await materialWritingValue(meta, target.workspaceId));
+            wrapper.plans.find(plan => plan.id === target.planId).output = output;
+            wrapper.revision++; planRevision = wrapper.revision; materialWriting().validate(wrapper);
+            await meta.put({ key: materialOutputKey(target.workspaceId, target.planId), value: clone(output) });
+            await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
+          }
           immutableVersions(bundle, mapped.data.bundle, { partial: true });
           // The chosen local plan and source metadata stay authoritative, while
           // the winning output's exact evidence dependencies become available.
@@ -2388,7 +2733,7 @@
         }
         bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle);
         const wrapper = clone(await materialWritingValue(meta, target.workspaceId)), at = wrapper.plans.findIndex(plan => plan.id === target.planId), plan = mapped.data.plan;
-        plan.output = await installMaterialPost(tx, target.workspaceId, mapped, original, row.data.bundle.workspaceId, current.plan, !!settings.preserveLocal, settings.blogRow);
+        plan.output = await installMaterialPost(tx, target.workspaceId, mapped, original, row.data.bundle.workspaceId, current.plan, !!settings.preserveLocal, settings.blogRow, row);
         wrapper.plans[at] = plan; wrapper.revision++; materialWriting().validate(wrapper);
         if (plan.output) await meta.put({ key: materialOutputKey(target.workspaceId, plan.id), value: clone(plan.output) });
         else if (current.plan.output) await meta.delete(materialOutputKey(target.workspaceId, plan.id));
@@ -2400,6 +2745,7 @@
           ...(recovery ? { recoveryWorkspaceId: recovery.workspaceId, recoveryPlanId: recovery.planId } : {}), ...(editingRecovery.length ? { editingRecovery } : {}) };
       });
       changed(installed.workspaceId, installed.bundle.revision); materialWritingChanged(installed.workspaceId, installed.planRevision);
+      accountDocChanged(...(effects.materialDeletionKeys || []));
       return installed;
     }
     // Automatic receive of a preparation that another device of the same account created
@@ -2409,20 +2755,24 @@
     // metadata and every other plan stay untouched.
     async function adoptMaterialContinuity(inputRow, options = {}) {
       scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에 준비를 받아 주세요.');
-      onlyFields(options, ['post', 'blogRow'], 'invalid_material_continuity');
+      onlyFields(options, ['post', 'blogRow', 'deletedOutput'], 'invalid_material_continuity');
       const row = materialRemoteRow(inputRow), settings = clone(options), model = materialContinuity();
+      validateMaterialDeletedProof(settings.deletedOutput, row);
       await model.verify(row.data); scopeGuard();
       const workspaceId = row.data.bundle.workspaceId, planId = row.data.plan.id;
       let original = settings.post || null;
+      if (original && settings.deletedOutput !== undefined) throw fault('invalid_material_output_deletion', '실제 글과 삭제 증거를 동시에 적용하지 않았습니다.');
       if (original) {
         photoPost().validate(original);
         if (row.data.output?.state !== 'saved' || original.id !== row.data.output.postId || original.status !== 'saved' || original.replaces !== null) throw fault('invalid_material_continuity', '서버 준비와 완성 글의 연결이 다릅니다.');
         const blog = root.HaedoLife?.Blog || require('./blog.js'); original = await blog.hydrate(blog.pack(original), new Map(original.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
         if (settings.blogRow && (settings.blogRow.id !== row.data.output.postId || settings.blogRow.revision !== row.data.output.revision || typeof settings.blogRow.workspace_id !== 'string' || stablePayload(settings.blogRow.data) !== stablePayload(blog.pack(original)))) throw fault('invalid_material_continuity', '서버 완성 글의 버전·본문·연결이 다릅니다.');
       }
-      if (row.data.output?.state === 'saved' && !original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      const effects = {};
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), bundles = tx.objectStore('bundles');
+        const deleted = !original && await acceptMaterialDeletedOutput(meta, row, settings.deletedOutput, effects);
+        if (row.data.output?.state === 'saved' && !original && !deleted) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
         if ((await meta.get(materialInstallKey(row.id)))?.value) throw fault('material_continuity_exists', '이미 받은 준비입니다.');
         const bundle = clone(await checkedBundle(bundles, workspaceId, meta));
         const wrapper = clone(await materialWritingValue(meta, workspaceId));
@@ -2444,7 +2794,7 @@
           if (evidence && stablePayload(evidence.refs) !== stablePayload(refs)) throw fault('material_output_changed', '완성 글의 인용 근거가 다릅니다. 기존 글을 바꾸지 않았습니다.');
           if (!evidence) await meta.put({ key, value: { revision: 1, refs: clone(refs) } });
           plan.output = { postId: copy.localPostId };
-        } else plan.output = await installMaterialPost(tx, workspaceId, mapped, original, workspaceId, null, false, settings.blogRow || null);
+        } else plan.output = await installMaterialPost(tx, workspaceId, mapped, original, workspaceId, null, false, settings.blogRow || null, row);
         wrapper.plans.push(plan); wrapper.revision++; materialWriting().validate(wrapper);
         await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper });
         if (plan.output) await meta.put({ key: materialOutputKey(workspaceId, plan.id), value: clone(plan.output) });
@@ -2455,6 +2805,7 @@
       });
       if (installed.appended) changed(workspaceId, installed.bundle.revision);
       materialWritingChanged(workspaceId, installed.planRevision);
+      accountDocChanged(...(effects.materialDeletionKeys || []));
       delete installed.appended; return installed;
     }
     const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
@@ -2912,7 +3263,7 @@
         let saved = null;
         if (remove) {
           if (!current || !prior) throw fault('photo_post_missing', '삭제할 글을 확인하지 못했습니다.');
-          const materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId);
+          const materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId, effects);
           if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(key); await meta.delete(bindingKey); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
           const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
@@ -2932,11 +3283,12 @@
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      accountDocChanged(...(effects.materialDeletionKeys || []));
       return result;
     }
     async function deletePhotoPost(workspaceId, postId, baseRevision) {
       collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
-      let materialRevision = null;
+      let materialRevision = null; const effects = {};
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const key = `photo-post:${workspaceId}:${postId}`, current = (await meta.get(key))?.value;
@@ -2945,7 +3297,7 @@
         if (current.revision !== baseRevision) throw fault('photo_post_conflict', '다른 탭이나 기기에서 글이 바뀌었습니다. 삭제하지 않았습니다.');
         const bindingKey = `blog-sync:${workspaceId}:${postId}`, binding = (await meta.get(bindingKey))?.value;
         if (binding?.publication?.active) throw fault('blog_post_published', '공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.');
-        materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId);
+        materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId, effects);
         await meta.delete(key); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
         if (binding) {
           await meta.delete(bindingKey);
@@ -2958,6 +3310,7 @@
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (materialRevision !== null) materialWritingChanged(workspaceId, materialRevision);
+      accountDocChanged(...(effects.materialDeletionKeys || []));
       return result;
     }
     async function clearBlogTombstone(workspaceId, remoteId) {
@@ -5166,7 +5519,8 @@
       // Items are only added (union by rid), so merging both sides never loses one.
       platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false },
       // 하루 행복도: 날짜별로 합치고(LISTS), 두 기기가 같은 날을 고치면 늦은 쪽, 진 쪽은 이 기기에 남긴다.
-      happinessDays: { read: meta => happinessDaysValue(meta), event: 'happiness_days_changed', recovery: true }
+      happinessDays: { read: meta => happinessDaysValue(meta), event: 'happiness_days_changed', recovery: true },
+      materialOutputDeleted: { read: (meta, planId) => materialOutputDeletionValue(meta, planId), event: null, recovery: false }
     });
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
@@ -5252,6 +5606,9 @@
     async function listAccountDocs() {
       scopeGuard();
       if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서만 자동 저장할 수 있습니다.');
+      // Older open tabs can still write legacy evidence after this release's
+      // first pass. Promote only proven links and never remove the old proof.
+      await promoteMaterialOutputDeletions();
       return transaction(['meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'), result = [], owners = new Map();
         for (const key of await meta.getAllKeys()) {
@@ -5317,8 +5674,8 @@
     // release skipped rows of kinds it did not know and still moved its cursor
     // past them, so those rows would never come again (a restored-copy marker
     // is written once). Raise this number whenever a prefix is added above.
-    // 1: the 2026-11-01 kinds. 2: adds restored-copy. 3: adds platformRecovery. 4: adds happinessDays.
-    const ACCOUNT_DOC_SCHEMA = 4;
+    // 1: the 2026-11-01 kinds. 2: restored-copy. 3: platformRecovery. 4: happinessDays. 5: materialOutputDeleted.
+    const ACCOUNT_DOC_SCHEMA = 5;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
     // reads the change list again from the start. Rows it already has return
@@ -5378,7 +5735,7 @@
       const { expectedHash, recoveryReason = null } = input;
       if (expectedHash !== null && typeof expectedHash !== 'string') throw fault('invalid_request', '자동 저장 기준을 확인해 주세요.');
       const incoming = clone(input.value);
-      let rejected = null;
+      let rejected = null, materialChanges = [];
       const result = await transaction(['meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), allowed = await accountDocAllowed(meta, parsed);
         if (allowed === false) throw fault('workspace_access_denied', '다른 계정의 작업공간에는 적용하지 않았습니다.');
@@ -5388,6 +5745,10 @@
         if (plain(value) && plain(local) && Number.isSafeInteger(value.revision) && Number.isSafeInteger(local.revision) &&
             local.revision >= value.revision && local.revision < Number.MAX_SAFE_INTEGER) value.revision = local.revision + 1;
         try {
+          if (parsed.prefix === 'materialOutputDeleted') {
+            validateMaterialOutputDeletion(value, parsed.workspaceId);
+            if (local !== undefined && stablePayload(local) !== stablePayload(value)) throw fault('invalid_material_output_deletion', '삭제 기록의 다른 준비 연결을 덮어쓰지 않았습니다.');
+          }
           await meta.put({ key: parsed.key, value });
           await parsed.spec.read(meta, parsed.workspaceId, parsed.key);
         } catch (error) {
@@ -5398,6 +5759,7 @@
           throw fault('account_doc_rejected', rejected.message);
         }
         const applied = await accountDocLocal(meta, parsed), hash = accountDocHash(applied);
+        if (parsed.prefix === 'materialOutputDeleted' && (local === undefined || stablePayload(local) !== stablePayload(applied))) materialChanges = await refreshMaterialDeletionPlans(meta, applied);
         if (recoveryReason && local !== undefined && (parsed.spec.recovery || recoveryReason === 'first_sync')) {
           await addAccountDocRecovery(meta, parsed.key, local, recoveryReason);
         }
@@ -5413,7 +5775,11 @@
         if (rejected && error?.code === 'account_doc_rejected') return { status: 'rejected', error: rejected };
         throw error;
       });
-      if (result.status === 'applied') { accountDocApplied(parsed, result.value); delete result.value; }
+      if (result.status === 'applied') {
+        accountDocApplied(parsed, result.value);
+        for (const change of materialChanges) materialWritingChanged(change.workspaceId, change.revision);
+        delete result.value;
+      }
       return result;
     }
     // Sign-in adoption: every account-less workspace on this device becomes a new copy owned
@@ -5595,10 +5961,10 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
-      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, readMaterialContinuityOutputDeletion, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy, attachNaverCaptureCopy, listNaverCaptures,

@@ -318,7 +318,7 @@ for (const remote of [false, true]) for (const related of [false, true]) {
     if (remote) await f.a.commitBlogSync(f.ws, { postId: post.id, remove: true, baseRevision: post.revision, bindingRevision: binding.revision });
     else await f.a.deletePhotoPost(f.ws, post.id, post.revision);
     await assert.rejects(f.a.readPhotoPost(f.ws, post.id), { code: 'photo_post_missing' });
-    assert.deepEqual(f.rows.get('meta').get(key(`material-writing-output-deleted:${f.ws}:${post.id}`))?.value, { postId: post.id });
+    assert.deepEqual(f.rows.get('meta').get(key(`material-writing-output-deleted:${f.ws}:${post.id}`))?.value, related ? { postId: post.id } : undefined);
     assert.deepEqual(f.rows.get('meta').get(stateKey), before, 'damaged preparation is not rewritten or revised');
     assert.deepEqual(f.rows.get('meta').get(receiptKey), damaged, 'damaged receipt stays available for recovery');
     assert(!events.some(event => event.type === 'material_writing_changed'));

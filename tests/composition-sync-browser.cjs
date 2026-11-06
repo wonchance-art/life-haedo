@@ -161,8 +161,15 @@ async function main() {
       assert.equal(server.compositionWrites().length, 0); assert.equal(server.writes().length, 0);
       await noManualChoice(a.page);
       await enable(a.page); await a.page.locator('#compositionError').waitFor(); assert.equal(server.compositionWrites().length, 0); assert.equal((await metadata(a.page, id)).enabled, false);
-      await sourcesOn(a.page, id); assert.equal(server.compositionWrites().length, 0); await enable(a.page); await waitStatus(a.page, 'synced');
+      // Owner rule 2026-11-01: once the originals sync, the open page enrols the composition by itself
+      // (no reload, no button). Wait for that background start instead of racing it with a zero-write check.
+      await sourcesOn(a.page, id);
+      await waitForState(a.page, id => HaedoLife.Shell.compositionSync.getState(id).then(state => state.enabled && state.status === 'synced'), id);
+      const started = server.compositionWrites(); assert.equal(started.length, 1, 'exactly one automatic composition upload');
+      assert.deepEqual({ device: started[0].device, expected: started[0].expected }, { device: 'a', expected: 0 });
+      assert.equal(server.composition(accounts.a.id, id).source_revision, server.row(accounts.a.id, id).revision);
       assert.deepEqual(semantic(server.composition(accounts.a.id, id).data), semantic(before));
+      await enable(a.page); await waitStatus(a.page, 'synced'); assert.equal(server.compositionWrites().length, 1);
       await receiveSources(b.page, id); assert.equal(server.compositionWrites('b').length, 0);
       await receiveComposition(b.page); await noManualChoice(b.page); assert.deepEqual(semantic(await composition(b.page, id)), semantic(before)); assert.equal(server.compositionWrites('b').length, 0);
       await b.page.goto(base + '/index.html?section=records&view=page'); await ready(b.page); await b.page.locator('.wb-page-entry').waitFor();

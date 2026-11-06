@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const Workbench = require('../assets/life/workbench.js');
-const source = fs.readFileSync(require.resolve('../assets/life/composition-sync.js'), 'utf8');
+const source = fs.readFileSync(process.env.COMPOSITION_SYNC_MODULE || require.resolve('../assets/life/composition-sync.js'), 'utf8');
 // The page loads sync-lifecycle.js before the engines (S2).
 const lifecycleSource = fs.readFileSync(require.resolve('../assets/life/sync-lifecycle.js'), 'utf8');
 const copy = value => structuredClone(value);
@@ -12,6 +12,15 @@ const OWNER = { projectUrl: 'https://composition-fixture.example.invalid', userI
 const WORKSPACE = '33333333-3333-4333-8333-333333333333';
 const OPERATION = '44444444-4444-4444-8444-444444444444';
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+const settled = () => new Promise(resolve => setImmediate(resolve));
+function eventTarget() {
+  const listeners = new Map();
+  return {
+    addEventListener(type, listener) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(listener); },
+    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+    dispatch(type, event = {}) { for (const listener of [...(listeners.get(type) || [])]) listener(event); }
+  };
+}
 const cancelled = error => { assert.equal(error.code, 'request_cancelled'); return true; };
 
 function addArchivedEdition(book) {
@@ -34,10 +43,12 @@ function fixture(t, options = {}) {
       syncedLocalRevision: 1, outbox: null, conflict: null, status: 'synced', error: null, lastRecoveryId: null },
     row: { workspace_id: WORKSPACE, revision: 1, source_revision: 1, data: copy(local), updated_at: '2026-10-06T00:00:00Z' }
   };
-  const timers = new Map(), timerScheduled = deferred(); let nextTimer = 0;
+  const timers = new Map(), deadlines = new Map(), intervals = new Map(), timerScheduled = deferred(); let nextTimer = 0, now = 0;
+  const sourceListeners = new Set();
+  const notifySources = () => { for (const listener of [...sourceListeners]) listener({ workspaceId: WORKSPACE, type: 'state' }); };
   const storage = {
     account: copy(OWNER),
-    async listWorkspaces() { return [{ workspaceId: WORKSPACE }]; },
+    async listWorkspaces() { state.listReads = (state.listReads || 0) + 1; return state.listOverride ? state.listOverride() : [{ workspaceId: WORKSPACE }]; },
     async getCompositionState() { return copy(state.meta); },
     subscribe() { return () => {}; },
     async bindCompositionSync() { state.mutations.push('bind'); state.meta.enabled = true; },
@@ -91,9 +102,18 @@ function fixture(t, options = {}) {
   // (syncNow) brings the local copy up to the server's.
   state.source = { local: 1, server: 1 };
   const sourceSync = {
-    async getState() { state.sourceReads = (state.sourceReads || 0) + 1; return { enabled: true, status: state.source.pending ? 'pending' : 'synced', binding, remoteRevision: state.source.local }; },
-    async syncNow() { state.calls.push('sources'); state.source.local = Math.max(state.source.local, state.source.server); state.source.pending = false; },
-    subscribe() { return () => {}; }
+    async getState() {
+      state.sourceReads = (state.sourceReads || 0) + 1;
+      const snapshot = { enabled: true, status: state.source.pending ? 'pending' : 'synced', binding, remoteRevision: state.source.local };
+      return state.sourceReadOverride ? state.sourceReadOverride(snapshot, state.sourceReads) : snapshot;
+    },
+    async syncNow() {
+      state.calls.push('sources');
+      if (state.sourceSyncOverride) await state.sourceSyncOverride();
+      state.source.local = Math.max(state.source.local, state.source.server); state.source.pending = false;
+      if (state.emitSourceSync) notifySources();
+    },
+    subscribe(listener) { sourceListeners.add(listener); return () => sourceListeners.delete(listener); }
   };
   const remote = {
     async read() {
@@ -110,19 +130,234 @@ function fixture(t, options = {}) {
   };
   const auth = { getAccount: () => copy(state.account), get epoch() { return state.epoch; } };
   const context = {
-    module: { exports: {} },
-    setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); timerScheduled.resolve(); return id; },
-    clearTimeout(id) { timers.delete(id); }, setInterval() { return 1; }, clearInterval() {}
+    module: { exports: {} }, ...eventTarget(), document: { ...eventTarget(), visibilityState: 'visible' },
+    setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, callback); deadlines.set(id, now + delay); timerScheduled.resolve(); return id; },
+    clearTimeout(id) { timers.delete(id); deadlines.delete(id); },
+    setInterval(callback, delay) { const id = ++nextTimer; intervals.set(id, { callback, delay, at: now + delay }); return id; },
+    clearInterval(id) { intervals.delete(id); }
   };
   vm.createContext(context); vm.runInContext(lifecycleSource, context); vm.runInContext(source, context);
   // Engine conflict-recording tests pass autoResolve: null; the default latest-wins
   // resolver is exercised by omitting the option (defaultResolver: true).
-  const manager = context.module.exports.create({ storage, sourceSync, remote, auth,
+  const manager = context.module.exports.create({ storage, sourceSync, remote, auth, polling: options.polling ?? true,
     initialReceive: options.initialReceive ? (...args) => options.initialReceive(state, ...args) : null,
     ...(options.defaultResolver ? {} : { autoResolve: Object.hasOwn(options, 'autoResolve') ? options.autoResolve : null }) });
   t.after(() => manager.dispose());
-  return { manager, state, timers, timerScheduled, changeAccount(value) { state.account = copy(value); state.epoch++; } };
+  return { manager, state, timers, timerScheduled, context, notifySources,
+    async advance(milliseconds) {
+      const until = now + milliseconds; let callbacks = 0;
+      while (true) {
+        const timeouts = [...deadlines].filter(([id]) => timers.has(id)).map(([id, at]) => ({ id, at }));
+        const repeating = [...intervals].map(([id, task]) => ({ id, ...task, interval: true }));
+        const next = timeouts.concat(repeating).filter(task => task.at <= until).sort((a, b) => a.at - b.at)[0];
+        if (!next) break;
+        assert.ok(++callbacks <= 100, 'automatic work must not keep scheduling itself'); now = next.at;
+        if (next.interval) { intervals.get(next.id).at += next.delay; next.callback(); }
+        else { const callback = timers.get(next.id); timers.delete(next.id); deadlines.delete(next.id); callback(); }
+        await settled();
+      }
+      now = until; await settled();
+    },
+    changeAccount(value) { state.account = copy(value); state.epoch++; }
+  };
 }
+
+test('automatic enrollment consumes the final source event during a stale pending read without focus or polling', async t => {
+  const f = fixture(t, { polling: false }), entered = deferred(), reply = deferred();
+  f.state.meta.enabled = false; f.state.source.pending = true; f.state.emitSourceSync = true;
+  f.state.local.revision = 2; f.state.local.reflection.note = '자동 등록 직전에 저장한 실제 구성';
+  f.state.prepareOverride = () => ({ operationId: OPERATION, expectedRevision: 1, sourceRevision: 1, localRevision: 2, data: copy(f.state.local) });
+  f.state.writeOverride = request => {
+    f.state.row = { ...f.state.row, revision: 2, data: copy(request.data) };
+    return { status: 'stored', revision: 2 };
+  };
+  f.state.sourceReadOverride = (snapshot, count) => {
+    if (count === 1) { entered.resolve(snapshot); return reply.promise; }
+    return snapshot;
+  };
+  f.manager.start(); const stale = await entered.promise;
+  f.state.source.pending = false;
+  for (let i = 0; i < 20; i++) f.notifySources();
+  reply.resolve(stale); await settled();
+  assert.equal(f.state.meta.enabled, true, 'the last synced event must enroll the composition immediately');
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+  assert.equal(f.state.sent.length, 1, 'ordinary enable/run must upload the saved composition once');
+  assert.equal(f.state.meta.outbox, null);
+  assert.equal(f.state.meta.syncedLocalRevision, 2);
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 1);
+  // Its own source check may request one state-only pass before watch() is installed.
+  assert.equal(f.state.listReads, 3, 'the burst and the later own-source event each cause one follow-up');
+  await f.advance(500);
+  const idle = { lists: f.state.listReads, reads: f.state.reads, writes: f.state.sent.length };
+  await f.advance(1000);
+  assert.deepEqual({ lists: f.state.listReads, reads: f.state.reads, writes: f.state.sent.length }, idle);
+  assert.equal(f.timers.size, 0, 'the completed sync must not create its own timer loop');
+});
+
+test('automatic callers in one burst cause one follow-up and a quiet pass adds no work', async t => {
+  const f = fixture(t, { polling: false }), entered = deferred(), reply = deferred();
+  f.state.meta.enabled = false; f.state.source.pending = true;
+  f.state.listOverride = () => {
+    if (f.state.listReads === 1) { entered.resolve(); return reply.promise; }
+    return [{ workspaceId: WORKSPACE }];
+  };
+  f.manager.start(); await entered.promise;
+  for (let i = 0; i < 20; i++) { f.notifySources(); f.context.dispatch('focus'); f.context.dispatch('online'); }
+  reply.resolve([{ workspaceId: WORKSPACE }]); await settled();
+  assert.equal(f.state.listReads, 2, 'all callers during the active scan share one follow-up');
+  assert.equal(f.state.sourceReads, 2);
+  assert.deepEqual(f.state.calls, []);
+  await f.advance(2000);
+  assert.equal(f.state.listReads, 2); assert.equal(f.timers.size, 0);
+});
+
+test('a final source event during the follow-up source read is also consumed', async t => {
+  const f = fixture(t, { polling: false }), first = deferred(), second = deferred(), reply = deferred();
+  f.state.meta.enabled = false; f.state.source.pending = true;
+  f.state.sourceReadOverride = (snapshot, count) => {
+    if (count === 1) { first.resolve(snapshot); return reply.promise; }
+    if (count === 2) { second.resolve(snapshot); return secondReply.promise; }
+    return snapshot;
+  };
+  const secondReply = deferred();
+  f.manager.start(); const stale = await first.promise;
+  f.notifySources(); reply.resolve(stale);
+  const secondStale = await Promise.race([second.promise, settled().then(() => null)]);
+  assert.ok(secondStale, 'the queued follow-up must start without a focus or poll');
+  f.state.source.pending = false; f.notifySources(); secondReply.resolve(secondStale); await settled();
+  assert.equal(f.state.meta.enabled, true);
+  assert.equal(f.state.listReads, 3, 'a later event represents a new wakeup, not the original burst');
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+  await f.advance(1000); assert.equal(f.state.listReads, 3); assert.equal(f.timers.size, 0);
+});
+
+test('automatic enrollment keeps a last synced event during the pre-watch enable source read', async t => {
+  const f = fixture(t, { polling: false }), entered = deferred(), reply = deferred();
+  f.state.meta.enabled = false; f.state.emitSourceSync = true;
+  f.state.sourceReadOverride = (snapshot, count) => {
+    // automatic reads once, then enable checks before and after its own source sync.
+    if (count === 3) { entered.resolve({ ...snapshot, status: 'pending' }); return reply.promise; }
+    return snapshot;
+  };
+  f.manager.start(); const stale = await entered.promise;
+  f.notifySources(); reply.resolve(stale); await settled();
+  assert.equal(f.state.meta.enabled, true, 'a lock before watch registration must not discard the final external event');
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 2);
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+  await f.advance(500);
+  const reads = f.state.reads; await f.advance(1500);
+  assert.equal(f.state.reads, reads); assert.equal(f.timers.size, 0);
+});
+
+test('own source events with a failed automatic probe settle and a later focus can retry', async t => {
+  const f = fixture(t, { polling: false }), runaway = deferred();
+  f.state.meta.enabled = false; f.state.emitSourceSync = true;
+  // A bad implementation is made observable instead of starving the event loop forever.
+  f.state.sourceSyncOverride = () => f.state.calls.filter(value => value === 'sources').length > 4 ? runaway.promise : undefined;
+  t.after(() => runaway.resolve());
+  f.state.readOverride = () => { throw Object.assign(new Error('offline fixture'), { code: 'network_error' }); };
+  f.manager.start(); await settled();
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 1, 'a failed registration must not repeat its own source check');
+  assert.equal(f.state.reads, 1); assert.equal(f.state.listReads, 2);
+  assert.equal(f.state.meta.enabled, false); assert.deepEqual(f.state.mutations, []);
+  await f.advance(1000); assert.equal(f.state.reads, 1); assert.equal(f.timers.size, 0);
+  f.state.readOverride = null; f.context.dispatch('focus'); await settled();
+  assert.equal(f.state.meta.enabled, true, 'the same workspace may retry on the next independent wakeup');
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+  await f.advance(500);
+  const reads = f.state.reads; await f.advance(1500); assert.equal(f.state.reads, reads);
+});
+
+test('automatic enrollment stops after a pending recheck and a later source event can resume', async t => {
+  const f = fixture(t, { polling: false });
+  f.state.meta.enabled = false; f.state.emitSourceSync = true;
+  f.state.sourceReadOverride = (snapshot, count) => {
+    if (count === 3) { f.state.source.pending = true; return { ...snapshot, status: 'pending' }; }
+    return snapshot;
+  };
+  f.manager.start(); await settled();
+  assert.equal(f.state.listReads, 2); assert.equal(f.state.sourceReads, 4);
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 1);
+  assert.equal(f.state.reads, 0); assert.equal(f.state.meta.enabled, false);
+  await f.advance(1000); assert.equal(f.state.listReads, 2); assert.equal(f.timers.size, 0);
+  f.state.source.pending = false; f.notifySources(); await settled();
+  assert.equal(f.state.meta.enabled, true);
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+});
+
+test('repeated stale pending results with own source events have a bounded retry and later focus recovers', async t => {
+  const f = fixture(t, { polling: false }), runaway = deferred();
+  f.state.meta.enabled = false; f.state.emitSourceSync = true;
+  f.state.sourceSyncOverride = () => f.state.calls.filter(value => value === 'sources').length > 4 ? runaway.promise : undefined;
+  t.after(() => runaway.resolve());
+  // Each automatic scan sees ready, while enable's post-sync read still sees pending.
+  f.state.sourceReadOverride = (snapshot, count) => count % 3 === 0 ? { ...snapshot, status: 'pending' } : snapshot;
+  f.manager.start(); await settled();
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 2, 'a source-pending result gets one retry per wakeup, not an endless own-event loop');
+  assert.equal(f.state.listReads, 3); assert.equal(f.state.reads, 0);
+  assert.equal(f.state.meta.enabled, false); assert.deepEqual(f.state.mutations, []);
+  await f.advance(1000); assert.equal(f.state.listReads, 3); assert.equal(f.timers.size, 0);
+  f.state.sourceReadOverride = null; f.context.dispatch('focus'); await settled();
+  assert.equal(f.state.meta.enabled, true);
+  assert.equal(f.state.mutations.filter(value => value === 'bind').length, 1);
+});
+
+test('ordinary automatic sync with its own source events becomes idle without another scan', async t => {
+  const f = fixture(t, { polling: false }); f.state.emitSourceSync = true;
+  f.manager.start(); await settled();
+  assert.equal(f.timers.size, 1);
+  await f.advance(499); assert.equal(f.state.reads, 0);
+  await f.advance(1); assert.equal(f.state.reads, 1);
+  assert.equal(f.state.calls.filter(value => value === 'sources').length, 1);
+  await f.advance(1500);
+  assert.equal(f.state.listReads, 1); assert.equal(f.state.reads, 1); assert.equal(f.timers.size, 0);
+});
+
+test('bfcache parking clears a queued follow-up even when pageshow precedes the stale reply', async t => {
+  const f = fixture(t), entered = deferred(), reply = deferred();
+  f.state.meta.enabled = false; f.state.source.pending = true;
+  f.state.sourceReadOverride = (snapshot, count) => {
+    if (count === 1) { entered.resolve(snapshot); return reply.promise; }
+    return snapshot;
+  };
+  f.manager.start(); const stale = await entered.promise;
+  f.state.source.pending = false; f.notifySources();
+  f.context.dispatch('pagehide', { persisted: true }); f.context.dispatch('pageshow', { persisted: true });
+  reply.resolve(stale); await settled();
+  assert.equal(f.state.listReads, 1); assert.equal(f.state.meta.enabled, false);
+  await f.advance(29999); assert.equal(f.state.listReads, 1);
+  await f.advance(1); assert.equal(f.state.listReads, 2); assert.equal(f.state.meta.enabled, true);
+});
+
+test('a queued automatic follow-up observes hidden, bfcache, disposed and account boundaries', async t => {
+  for (const boundary of ['hidden', 'bfcache', 'disposed', 'account']) await t.test(boundary, async t => {
+    const f = fixture(t, { polling: boundary === 'bfcache' }), entered = deferred(), reply = deferred();
+    f.state.meta.enabled = false; f.state.source.pending = true;
+    f.state.sourceReadOverride = (snapshot, count) => {
+      if (count === 1) { entered.resolve(snapshot); return reply.promise; }
+      return snapshot;
+    };
+    f.manager.start(); const stale = await entered.promise;
+    f.state.source.pending = false; f.notifySources();
+    if (boundary === 'hidden') { f.context.document.visibilityState = 'hidden'; f.context.document.dispatch('visibilitychange'); }
+    if (boundary === 'bfcache') f.context.dispatch('pagehide', { persisted: true });
+    if (boundary === 'disposed') f.manager.dispose();
+    if (boundary === 'account') f.changeAccount(null);
+    reply.resolve(stale); await settled(); await f.advance(1000);
+    assert.equal(f.state.listReads, 1, 'an invalidated queued wakeup cannot start another workspace scan');
+    assert.equal(f.state.meta.enabled, false); assert.deepEqual(f.state.calls, []); assert.deepEqual(f.state.mutations, []);
+    assert.equal(f.timers.size, 0);
+    if (boundary === 'disposed') { f.notifySources(); f.context.dispatch('focus'); await settled(); assert.equal(f.state.listReads, 1); return; }
+    if (boundary === 'hidden') { f.context.document.visibilityState = 'visible'; f.context.document.dispatch('visibilitychange'); }
+    if (boundary === 'account') { f.changeAccount(OWNER); f.context.dispatch('focus'); }
+    if (boundary === 'bfcache') {
+      f.context.dispatch('pageshow', { persisted: true }); await settled();
+      assert.equal(f.state.listReads, 1, 'bfcache resumes on its normal poll, not stale pending work');
+      await f.advance(29000);
+    }
+    await settled(); assert.equal(f.state.meta.enabled, true); assert.equal(f.state.listReads, 2);
+  });
+});
 
 test('pausing a stalled read allows a new generation to resume before the old response arrives', async t => {
   const f = fixture(t), entered = deferred(), oldReply = deferred(), resumedRead = deferred();

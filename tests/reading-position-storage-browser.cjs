@@ -71,7 +71,7 @@ async function main() {
       assert.deepEqual(await first.evaluate(id => S.readReadingPosition(id), f.id), f.state);
       const r = await first.evaluate(async f => {
         await S.saveReadingPosition(f.id, { ...f.position, offset: 4 }, 1);
-        const db = await idb.openDB('life-tools-v1', 1), rows = (await db.getAll('meta')).filter(row => row.key === key(f.id)); db.close();
+        const db = await idb.openDB('life-tools-v1'), rows = (await db.getAll('meta')).filter(row => row.key === key(f.id)); db.close();
         return { rows: rows.length, keys: Object.keys(rows[0].value.position).sort() };
       }, f);
       assert.deepEqual(r, { rows: 1, keys: ['offset', 'sourceId', 'sourceVersionId', 'updatedAt'] });
@@ -139,7 +139,7 @@ async function main() {
       const r = await first.evaluate(async () => {
         const f = await fixture(); await S.saveReadingPosition(f.id, f.position, 0);
         await importSource(f.id, { origin: 'other', title: '남아 있는 최신 원문', text: '이 버전으로 자동 이동하면 안 된다.', existingSourceId: f.position.sourceId });
-        const db = await idb.openDB('life-tools-v1', 1), bundle = await db.get('bundles', f.id);
+        const db = await idb.openDB('life-tools-v1'), bundle = await db.get('bundles', f.id);
         bundle.sourceVersions = bundle.sourceVersions.filter(value => value.id !== f.position.sourceVersionId); C.validateWorkspace(bundle);
         await db.put('bundles', bundle); const before = await db.get('meta', key(f.id));
         const state = await S.readReadingPosition(f.id), rejected = await errorCode(() => S.saveReadingPosition(f.id, f.position, 1)), after = await db.get('meta', key(f.id)); db.close();
@@ -223,7 +223,7 @@ async function main() {
     await check('unknown metadata formats and content-bearing fields are rejected without overwriting their row', async () => {
       const r = await first.evaluate(async () => {
         const f = await fixture(); await S.saveReadingPosition(f.id, f.position, 0);
-        const db = await idb.openDB('life-tools-v1', 1), original = await db.get('meta', key(f.id)), codes = [], unchanged = [];
+        const db = await idb.openDB('life-tools-v1'), original = await db.get('meta', key(f.id)), codes = [], unchanged = [];
         for (const corrupt of [{ ...original.value, format: 'life-reading-position-future' }, { ...original.value, position: { ...original.value.position, text: '저장해서는 안 되는 원문 사본' } }]) {
           const row = { key: key(f.id), value: corrupt }; await db.put('meta', row);
           codes.push(await errorCode(() => S.readReadingPosition(f.id)), await errorCode(() => S.saveReadingPosition(f.id, f.position, 1)), await errorCode(() => S.clearReadingPosition(f.id, 1)));
