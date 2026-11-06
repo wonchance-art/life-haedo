@@ -434,6 +434,8 @@ async function main() {
         try { await service.more(before); } finally { service.dispose(); }
       }, cursor(server.items[0]));
       await archive(page, server.items.slice(1, 3));
+      assert.equal((await progress(page)).cursor, null, 'manual pagination never advances the automatic inbox cursor');
+      assert.deepEqual((await progress(page)).receipts, [], 'manual pagination never claims a proven automatic prefix');
       await startHeld(page);
       await until(page, () => __rssReflectors.at(-1).instance.getStatus().state === 'idle' && __rssReflectors.at(-1).instance.getStatus().checkedItems > 0, 'automatic prefix after manual more');
       await archive(page, server.items); assert.equal((await progress(page)).receipts.length, 5);
