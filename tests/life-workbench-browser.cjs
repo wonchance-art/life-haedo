@@ -3,6 +3,7 @@
  * No live Supabase/SNS, production credentials or Apple hardware claims. */
 'use strict';
 const { awaitCondition } = require('./helpers/await-condition.cjs'); // Playwright waitForFunction treats a returned Promise as truthy.
+const { isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
@@ -13,7 +14,7 @@ const out=process.env.WORKBENCH_OUTPUT?path.resolve(process.env.WORKBENCH_OUTPUT
 const sections={activities:'records',page:'records',discover:'tools',reflection:'tools','workbench-backup':'manage'};
 // Legacy links remain a compatibility check; active sections follow the new IA.
 const activeSections={...sections,discover:'records',reflection:'records'};
-const report={createdAt:new Date().toISOString(),scope:'Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification',checks:[],visual:[],consoleErrors:[],pageErrors:[],expectedErrors:0,external:[],realRemoteWrites:0};
+const report={createdAt:new Date().toISOString(),scope:'Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification',checks:[],visual:[],consoleErrors:[],pageErrors:[],expectedErrors:0,external:[],realRemoteWrites:0,rssReads:[],appStarts:[]};
 const longTitle='전시를 보고 돌아오는 길에서 다시 만난 오래된 질문과 사진 속 빛의 방향을 따라 천천히 이어 읽는 기록 — 긴 제목과 여러 원문이 함께 있어도 선택 도구와 본문이 겹치지 않는 익명 사례';
 const oldBody='작품 사이의 빈자리에 오래 머물렀다.\r\n보존할 구절🌱: 산책과 공간을 다시 읽는다.\r\n이것은 처음 받은 본문이다.';
 const newBody='최신 원문으로 바뀌면 안 되는 문장.\r\n이 버전에서는 기록한 장소와 관찰이 달라졌다.';
@@ -118,17 +119,49 @@ async function main() {
   const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});report.browser=browser.version();
   async function check(name,run,{viewport={width:1440,height:1000},hasTouch=false,readGate=false}={}) {
     if(process.env.WORKBENCH_TEST_MATCH&&!new RegExp(process.env.WORKBENCH_TEST_MATCH).test(name))return;
-    const server=new FakeCloud(),context=await makeContext(browser,server,`workbench-${report.checks.length}`,accounts.a,{viewport,hasTouch}),page=await context.newPage();page.setDefaultTimeout(10000);observe(page,report,name);
+    const server=new FakeCloud(),device=`workbench-${report.checks.length}`,context=await makeContext(browser,server,device,accounts.a,{viewport,hasTouch}),page=await context.newPage();page.setDefaultTimeout(10000);observe(page,report,name);
     await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push({origin:u.origin,path:u.pathname});return route.abort('blockedbyclient');});
-    const accountLookups=[];
-    context.on('request',request=>{const u=new URL(request.url());if(u.origin===cloud&&u.pathname==='/rest/v1/life_account_materials')accountLookups.push({method:request.method(),ownerFilterMatches:u.searchParams.get('owner_id')==='eq.'+accounts.a.id,hasBody:!!request.postData()});});
+    const accountLookups=[],rssRequests=[],appStarts=[];
+    await context.exposeBinding('__workbenchRssStarted',({page,frame},start)=>{if(frame===page.mainFrame()){appStarts.push(start);report.appStarts.push({device,...start});}});
+    await context.addInitScript(origin=>{
+      if(window!==top||location.origin!==origin)return;
+      const documentId=crypto.randomUUID();let sequence=0;window.__workbenchRssStarts=[];
+      document.addEventListener('haedo:page-ready',()=>{
+        const storage=HaedoLife.Shell.storage,ownerId=storage.account.userId;
+        __workbenchRssStarts.push(storage.getActive().then(workspaceId=>__workbenchRssStarted({documentId,sequence:++sequence,ownerId,workspaceId})));
+      });
+    },new URL(base).origin);
+    context.on('request',request=>{const u=new URL(request.url());if(u.pathname.startsWith('/functions/v1/haedo-rss'))rssRequests.push(request);if(u.origin===cloud&&u.pathname==='/rest/v1/life_account_materials')accountLookups.push({method:request.method(),ownerFilterMatches:u.searchParams.get('owner_id')==='eq.'+accounts.a.id,hasBody:!!request.postData()});});
+    async function auditRss(){
+      await page.evaluate(()=>Promise.all(window.__workbenchRssStarts||[]));
+      const reads=rssRequests.map(request=>{
+        const ownerId=server.libraryOwner(request),workspaceId=request.postDataJSON()?.workspaceId;
+        const start=appStarts.find(row=>row.ownerId===ownerId&&row.workspaceId===workspaceId);
+        assert.ok(start&&start.ownerId===accounts.a.id,'RSS read requires a known owner/workspace app start');
+        assert.ok(isRssInboxRead(request,{cloud,server,ownerId:start.ownerId,workspaceId:start.workspaceId}),'unexpected RSS request');
+        return {device,ownerId,workspaceId,action:'list'};
+      });
+      for(const start of appStarts)assert.ok(reads.filter(row=>row.ownerId===start.ownerId&&row.workspaceId===start.workspaceId).length<=appStarts.filter(row=>row.ownerId===start.ownerId&&row.workspaceId===start.workspaceId).length,'RSS reads exceed actual owner/workspace starts');
+      // Pair each simulated row with one strictly validated HTTP request.
+      // A kind-only exclusion could hide a missing, duplicate or unrelated call.
+      const unmatched=[...reads],accepted=new Set();
+      for(const row of server.requests){
+        if(row.kind!=='rss-list')continue;
+        const index=unmatched.findIndex(read=>read.device===row.device&&read.ownerId===row.owner&&read.workspaceId===row.id);
+        assert.notEqual(index,-1,'server RSS row has no matching validated HTTP request');
+        unmatched.splice(index,1);accepted.add(row);
+      }
+      assert.equal(unmatched.length,0,'validated RSS HTTP request has no matching server row');
+      report.rssReads.push(...reads);return accepted;
+    }
     if(readGate)await installReadGate(context);
     try{await run({page,context,server});
       // Current authenticated bootstrap may read its own registration list;
       // it must not automatically fetch workspace data or write remotely.
       assert.ok(accountLookups.every(row=>row.method==='GET'&&row.ownerFilterMatches&&!row.hasBody),'account material lookup crossed the seeded read scope');
       assert.ok(server.requests.filter(row=>row.kind==='account-materials-list').every(row=>row.owner===accounts.a.id),'account material lookup changed owner');
-      assert.equal(server.requests.filter(row=>row.kind!=='account-materials-list').length,0,'composition flow requested simulated remote workspace data');
+      const acceptedRssRows=await auditRss();
+      assert.equal(server.requests.filter(row=>row.kind!=='account-materials-list'&&!acceptedRssRows.has(row)).length,0,'composition flow requested simulated remote workspace data');
       (report.allowedAccountMaterialLookups||=[]).push({name,count:accountLookups.length,ownerScopedGETOnly:true});report.checks.push({name,pass:true});console.log('PASS '+name);}
     catch(error){report.checks.push({name,pass:false,error:error.stack});console.error('FAIL '+name+'\n'+error.stack);await page.screenshot({path:path.join(out,`failure-${report.checks.length}.png`),fullPage:true}).catch(()=>{});}
     finally{await context.close();}
