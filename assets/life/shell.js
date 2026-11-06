@@ -78,6 +78,8 @@
       const idle = root.requestIdleCallback || (callback => root.setTimeout(callback, 0));
       idle.call(root, () => {
         if (!current()) return;
+        // Offline, RSS sends nothing and loads nothing; the 'online' event queues it again.
+        if (root.navigator.onLine === false && !life.RssConnection) return;
         if (!rssLoading) rssLoading = life.RssConnection ? Promise.resolve() : new Promise((resolve, reject) => {
           const src = new URL('assets/life/rss-connection.js', root.document.baseURI).href;
           const existing = [...root.document.scripts].find(script => script.src === src);
@@ -94,6 +96,7 @@
       }, { timeout: 2000 });
     });
     root.document.addEventListener('haedo:page-ready', queue, { signal });
+    root.addEventListener('online', queue, { signal });
     queue();
   }
   function scheduleWorker() {
