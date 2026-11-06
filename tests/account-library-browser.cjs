@@ -10,7 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { CompositionCloud } = require('./composition-sync-browser.cjs');
 const { accounts, cloud, base, openManagement } = require('./life-sync-browser.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 const { playwright, ready, shellReady, settle, makeContext, nav } = require('./unified-home-browser.cjs');
 const { fixture: originalFixture } = require('./fixtures/original-attachments.cjs');
 const output = path.resolve(process.env.ACCOUNT_LIBRARY_OUTPUT || '.local/account-library');
@@ -20,7 +20,7 @@ const edited = raw.replace(/\r\n?/g, '\n') + '\n## 두 번째 기기의 수정\n
 const sha = value => createHash('sha256').update(value).digest('hex');
 const copy = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
-const report = { createdAt: new Date().toISOString(), scope: 'Anonymous capability-1 account-default HTTP fixture, real bundled SDK and independent account-scoped IndexedDB contexts. Actual import/quote/folder/edit/original-file UI; explicitly labelled saved profile setup through actual storage. No manual sync enable/download/syncNow, production SQL/RLS, real accounts, personal vault, actual devices or OS file-save claim.', checks: [], visual: [], observations: [], consoleErrors: [], expectedConsoleErrors: [], pageErrors: [], externalRequests: [], forbiddenWrites: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Anonymous capability-1 account-default HTTP fixture, real bundled SDK and independent account-scoped IndexedDB contexts. Actual import/quote/folder/edit/original-file UI; explicitly labelled saved profile setup through actual storage. No manual sync enable/download/syncNow, production SQL/RLS, real accounts, personal vault, actual devices or OS file-save claim.', checks: [], visual: [], observations: [], consoleErrors: [], expectedConsoleErrors: [], pageErrors: [], externalRequests: [], forbiddenWrites: [], rssReads: [], appStarts: [], closedContexts: 0 };
 async function waitFor(read, predicate, label) {
   const deadline = Date.now() + 15000; let last;
   do { last = await read(); if (predicate(last)) return last; await new Promise(done => setTimeout(done, 25)); } while (Date.now() < deadline);
@@ -141,8 +141,32 @@ async function main() {
     const server = new CompositionCloud().enableAccountLibrary(), devices = []; let held;
     async function device(label, account = accounts.a) {
       const name = 'account-' + report.checks.length + '-' + label, context = await makeContext(browser, server, name, null, { viewport: { width: 820, height: 1000 }, hasTouch: true, reducedMotion: 'reduce' });
+      const rssRequests = [], appStarts = [];
+      await context.exposeBinding('__libraryRssStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) { appStarts.push(start); report.appStarts.push({ device: name, ...start }); } });
+      await context.addInitScript(() => {
+        if (window !== top) return;
+        const documentId = performance.timeOrigin + ':' + Math.random(); let sequence = 0; window.__libraryRssStarts = [];
+        document.addEventListener('haedo:page-ready', () => {
+          const storage = HaedoLife.Shell.storage, ownerId = storage.account.userId;
+          __libraryRssStarts.push(storage.getActive().then(workspaceId => __libraryRssStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+        });
+      });
+      async function auditRss() {
+        for (const page of context.pages()) await page.evaluate(() => Promise.all(window.__libraryRssStarts || []));
+        const reads = rssRequests.map(request => {
+          const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+          const start = appStarts.find(row => row.ownerId === ownerId && row.workspaceId === workspaceId);
+          assert(start && [accounts.a.id, accounts.b.id].includes(start.ownerId), 'RSS read requires a known owner/workspace app start');
+          assert(isRssInboxRead(request, { cloud, server, ownerId: start.ownerId, workspaceId: start.workspaceId }), 'unexpected RSS request');
+          return { device: name, ownerId, workspaceId, action: 'list' };
+        });
+        for (const start of appStarts) assert(reads.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length <= appStarts.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length, 'RSS reads exceed actual owner/workspace starts');
+        report.rssReads.push(...reads);
+      }
       context.on('request', request => {
-        const u = new URL(request.url()), method = request.method(); if (u.origin !== cloud || ['GET', 'OPTIONS'].includes(method) || u.pathname.startsWith('/auth/')) return;
+        const u = new URL(request.url()), method = request.method();
+        if (u.pathname.startsWith('/functions/v1/haedo-rss')) { rssRequests.push(request); return; }
+        if (u.origin !== cloud || ['GET', 'OPTIONS'].includes(method) || u.pathname.startsWith('/auth/')) return;
         const owner = server.libraryOwner(request); let body; try { body = request.postDataJSON(); } catch (_) {}
         const compositionRead = method === 'POST' && u.pathname === '/rest/v1/rpc/life_composition_get' && owner === value.owner && body && Object.keys(body).length === 1 && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.p_workspace_id);
         const rpc = u.pathname.split('/').at(-1), allowedRpc = method === 'POST' && u.pathname === '/rest/v1/rpc/' + rpc && isBackgroundSync(request.url()); // Owner-scoped account sync calls only (2026-11-01 owner directive).
@@ -150,7 +174,7 @@ async function main() {
         if (!(compositionRead || owner === value.owner && (allowedRpc || chunk))) report.forbiddenWrites.push({ name, method, path: u.pathname, owner });
       });
       await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ name, path: u.origin + u.pathname }); return route.abort('blockedbyclient'); });
-      const value = { context, name, owner: account.id, page: null, login: null, expectedFailures: false }; devices.push(value);
+      const value = { context, name, owner: account.id, page: null, login: null, expectedFailures: false, auditRss }; devices.push(value);
       context.on('page', page => { page.setDefaultTimeout(15000); page.on('pageerror', error => report.pageErrors.push({ name, message: error.message })); page.on('console', event => { if (event.type() !== 'error') return; const error = { name, message: event.text(), location: event.location().url }; if (value.expectedFailures && error.location.startsWith(cloud) && /^Failed to load resource:/.test(error.message) && /ERR_(FAILED|INTERNET_DISCONNECTED|ABORTED)|status of (400|403|404|409|503)/.test(error.message)) report.expectedConsoleErrors.push(error); else report.consoleErrors.push(error); }); });
       value.page = await context.newPage();
       value.login = async (owner = account) => {
@@ -161,7 +185,7 @@ async function main() {
       return value;
     }
     console.log('RUN ' + name);
-    try { await action({ server, device, hold(value) { held = value; } }); assert.deepEqual(server.libraryCapabilities, { version: 1, metadataVersion: 1, originalsVersion: 1 }); assert(server.libraryRequests.some(row => row.rpc === 'life_library_capabilities')); assert.deepEqual(server.libraryRouteErrors, []); assert.equal(server.publicationWrites?.().length || 0, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await action({ server, device, hold(value) { held = value; } }); assert.deepEqual(server.libraryCapabilities, { version: 1, metadataVersion: 1, originalsVersion: 1 }); assert(server.libraryRequests.some(row => row.rpc === 'life_library_capabilities')); assert.deepEqual(server.libraryRouteErrors, []); assert.equal(server.publicationWrites?.().length || 0, 0); for (const d of devices) await d.auditRss(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); for (const d of devices) await d.page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '-' + d.name + '.png'), fullPage: true }).catch(() => {}); }
     finally { held?.entered?.resolve(); held?.allowB?.resolve(); held?.release?.resolve(); report.observations.push({ check: name, requests: copy(server.requests), libraryRequests: copy(server.libraryRequests), assets: copy(server.libraryAssetCalls), expectedTransportFailures: server.expectedFailures, routeErrors: copy(server.libraryRouteErrors) }); for (const d of devices) { await d.context.close(); report.closedContexts++; } }
   }

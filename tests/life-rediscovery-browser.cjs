@@ -96,14 +96,14 @@ async function main() {
     page.setDefaultTimeout(12000); observe(page, report, name); await instrument(context);
     const rssRequests = [], recorded = new Set();
     await context.exposeBinding('__rediscoveryAppStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) report.appStarts.push({ device, ...start }); });
-    await context.addInitScript(() => {
-      if (window !== top) return;
+    await context.addInitScript(origin => {
+      if (window !== top || location.origin !== origin) return;
       const documentId = crypto.randomUUID(); let sequence = 0; window.__rediscoveryStartReports = [];
       document.addEventListener('haedo:page-ready', () => {
         const storage = HaedoLife.Shell.storage, ownerId = HaedoAuth.user.id;
         __rediscoveryStartReports.push(storage.getActive().then(workspaceId => __rediscoveryAppStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
       });
-    });
+    }, new URL(base).origin);
     context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && url.pathname.startsWith('/functions/v1/haedo-rss')) rssRequests.push(request); });
     async function auditRss() {
       await page.evaluate(() => Promise.all(window.__rediscoveryStartReports || []));
@@ -115,6 +115,10 @@ async function main() {
         if (!recorded.has(request)) { recorded.add(request); report.rssReads.push({ device, ownerId, workspaceId, action: 'list' }); }
       }
       assert.ok(rssRequests.length <= starts.length, 'RSS reads exceed actual starts: ' + JSON.stringify({ device, rssReads: rssRequests.length, starts: starts.length }));
+      for (const start of starts) {
+        const sameScope = row => row.device === device && row.ownerId === start.ownerId && row.workspaceId === start.workspaceId;
+        assert.ok(report.rssReads.filter(sameScope).length <= starts.filter(sameScope).length, 'RSS reads exceed actual starts for their owner/workspace');
+      }
     }
     await context.route('**/*', route => { const url = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push({ origin: url.origin, path: url.pathname }); return route.abort('blockedbyclient'); });
     try { await run({ page, context, server, device, auditRss }); await auditRss(); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }

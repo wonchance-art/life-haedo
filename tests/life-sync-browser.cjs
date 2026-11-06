@@ -264,6 +264,10 @@ async function main() {
       return { device, ownerId, workspaceId, action: 'list' };
     });
     for (const device of new Set(appStarts.map(start => start.device))) assert.ok(reads.filter(row => row.device === device).length <= appStarts.filter(row => row.device === device).length, device + ': RSS reads exceed actual starts');
+    for (const start of appStarts) {
+      const sameScope = row => row.device === start.device && row.ownerId === start.ownerId && row.workspaceId === start.workspaceId;
+      assert.ok(reads.filter(sameScope).length <= appStarts.filter(sameScope).length, 'RSS reads exceed actual starts for their device/owner/workspace');
+    }
     return reads;
   }
   async function flushStarts() {
@@ -273,14 +277,14 @@ async function main() {
     const context = await browser.newContext({serviceWorkers:'block',viewport:{width:1100,height:900}});
     contexts.push(context); await platformContext(context,server,name);
     await context.exposeBinding('__syncAppStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) appStarts.push({ device: name, ...start }); });
-    await context.addInitScript(() => {
-      if (window !== top) return;
+    await context.addInitScript(origin => {
+      if (window !== top || location.origin !== origin) return;
       const documentId = crypto.randomUUID(); let sequence = 0; window.__syncStartReports = [];
       document.addEventListener('haedo:page-ready', () => {
         const storage = HaedoLife.Shell.storage, ownerId = HaedoAuth.user.id;
         __syncStartReports.push(storage.getActive().then(workspaceId => __syncAppStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
       });
-    });
+    }, new URL(base).origin);
     context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && url.pathname.startsWith('/functions/v1/haedo-rss')) rssRequests.push({ device: name, request }); });
     const page = await context.newPage(); page.setDefaultTimeout(10000); observe(page);
     await page.goto(`${base}/life.html`); await ready(page);
