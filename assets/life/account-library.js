@@ -19,6 +19,9 @@
     catalog_too_large: '계정 자료 목록을 모두 확인하지 못했습니다. 기존 자료는 유지됩니다.',
     storage_version_changed: '다른 버전의 저장소입니다. 이 화면을 새로고침하세요.',
     storage_blocked: '다른 탭이 저장소 열기를 막고 있습니다. 다른 탭을 닫고 다시 여세요.',
+    // Refreshing cannot free space or re-enable a blocked store: say what can.
+    storage_quota: '브라우저 저장 공간이 부족합니다. 입력을 보존하고 백업을 내려받으세요.',
+    storage_unavailable: '이 브라우저에서 저장소를 사용할 수 없습니다. 입력을 보존하고 브라우저 저장소 설정을 확인하세요.',
     storage_error: '브라우저 저장소를 읽거나 저장하지 못했습니다. 입력을 보존하고 새로고침하세요.',
     network_error: '서버에 연결하지 못했습니다. 자료는 전송 대기 상태로 유지됩니다.'
   };

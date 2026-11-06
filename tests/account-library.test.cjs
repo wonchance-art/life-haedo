@@ -77,7 +77,9 @@ test('a failed catalog bootstrap retries the default barrier and starts original
 const storageNotices = [
   ['storage_version_changed', '다른 버전의 저장소입니다. 이 화면을 새로고침하세요.'],
   ['storage_blocked', '다른 탭이 저장소 열기를 막고 있습니다. 다른 탭을 닫고 다시 여세요.'],
-  ...['storage_terminated', 'storage_unavailable', 'storage_quota', 'storage_aborted', 'storage_error', 'storage_future'].map(code =>
+  ['storage_quota', '브라우저 저장 공간이 부족합니다. 입력을 보존하고 백업을 내려받으세요.'],
+  ['storage_unavailable', '이 브라우저에서 저장소를 사용할 수 없습니다. 입력을 보존하고 브라우저 저장소 설정을 확인하세요.'],
+  ...['storage_terminated', 'storage_aborted', 'storage_error', 'storage_future'].map(code =>
     [code, '브라우저 저장소를 읽거나 저장하지 못했습니다. 입력을 보존하고 새로고침하세요.'])
 ];
 for (const [code, message] of storageNotices) test('account library preserves ' + code + ' and offers storage recovery through public operations', async () => {
