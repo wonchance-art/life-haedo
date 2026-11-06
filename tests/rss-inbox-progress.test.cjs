@@ -44,7 +44,7 @@ function adapter() {
           if (method === 'getAllKeys') return [...store.keys()].map(value => JSON.parse(value));
           if (method === 'getKey') return store.has(key(value)) ? copy(value) : undefined;
           assert.equal(mode, 'readwrite'); const path = paths.get(name), id = method === 'delete' ? value : Array.isArray(path) ? path.map(field => value[field]) : value[path];
-          control.writes.push({ name, method, id }); written++;
+          control.writes.push({ name, method, id, bytes: method === 'delete' ? 0 : Buffer.byteLength(JSON.stringify(value)) }); written++;
           if (control.fail?.({ name, method, id, value })) { control.fail = null; const error = new DOMException('quota', 'QuotaExceededError'); abort(error); throw error; }
           if (method === 'delete') store.delete(key(id));
           else { if (method === 'add' && store.has(key(id))) throw new DOMException('duplicate', 'ConstraintError'); store.set(key(id), copy(value)); }
@@ -118,7 +118,9 @@ test('an ACK cannot substitute another valid body hash or version for the exact 
   assert.equal((await f.a.read(f.ws)).sourceVersions.length, 2);
   const progress = await f.a.readRssInboxProgress(f.ws);
   const progressKey = `rssInboxProgress:${JSON.stringify([accountA.projectUrl, accountA.userId])}:${f.ws}`;
-  f.rows.get('meta').get(key(progressKey)).value.receipts[0].contentHash = other.contentHash;
+  const stored = f.rows.get('meta').get(key(progressKey)).value;
+  if (stored.format === 2) f.rows.get('meta').get(key(progressKey + ':page:0')).value[0][5] = other.contentHash;
+  else stored.receipts[0].contentHash = other.contentHash;
   const rewind = await f.a.readRssInboxProgress(f.ws);
   assert.equal(rewind.revision, progress.revision); assert.equal(rewind.cursor, null);
   assert.deepEqual(rewind.receipts, []); assert.equal(rewind.needsRepair, true, 'persisted proof also requires the exact body hash');
@@ -249,4 +251,104 @@ test('failure reading the persisted ACK is reported without turning it into an e
     ? new DOMException('synthetic read failure', 'InvalidStateError') : null;
   await assert.rejects(f.a.readRssInboxProgress(f.ws), { code: 'storage_unavailable' });
   assert.deepEqual(f.rows, before); assert.deepEqual(await f.a.readRssInboxProgress(f.ws), progress);
+});
+
+test('unchanged exact bodies reuse digest proofs while changed bytes, restore and a new storage instance recheck them', async t => {
+  const f = await fixture(); t.after(f.close);
+  const receipts = [await f.source(1), await f.source(2), await f.source(3)];
+  const subtle = globalThis.crypto.subtle, digest = subtle.digest; let hashes = 0;
+  subtle.digest = function (...args) { hashes++; return digest.apply(this, args); };
+  t.after(() => { subtle.digest = digest; });
+  assert.equal((await f.save(receipts)).status, 'stored'); assert.equal(hashes, 3);
+  for (let index = 0; index < 3; index++) assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, receipts);
+  assert.equal(hashes, 3, 'unchanged polls must not hash all acknowledged bodies again');
+  const raw = f.rows.get('bundles').get(key(f.ws)); raw.revision++;
+  assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, receipts);
+  assert.equal(hashes, 3, 'a new revision still proves identical exact bytes with their existing digest');
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, receipts);
+  assert.equal(hashes, 6, 'a different storage instance must verify every body itself');
+  const version = raw.sourceVersions[1], original = version.contentText;
+  version.contentText += ' damaged';
+  const damaged = await f.a.readRssInboxProgress(f.ws);
+  assert.equal(hashes, 7); assert.deepEqual(damaged.receipts, receipts.slice(0, 1)); assert.equal(damaged.needsRepair, true);
+  version.contentText = original;
+  assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, receipts); assert.equal(hashes, 8);
+  raw.sourceVersions = raw.sourceVersions.filter(value => value.id !== version.id); raw.revision++;
+  assert.equal((await f.a.readRssInboxProgress(f.ws)).needsRepair, true);
+  raw.sourceVersions.push(version); raw.revision++;
+  assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, receipts); assert.equal(hashes, 9, 'removed proof cannot survive restore');
+  const other = { ...await f.a.read(f.ws), workspaceId: Core.id() };
+  await f.a.installWorkspace(other);
+  assert.equal((await f.a.saveRssInboxProgress(other.workspaceId, { cursor: receipts.at(-1).cursor, receipts }, 0,
+    { expectedBundleRevision: other.revision })).status, 'stored');
+  assert.equal(hashes, 12, 'another workspace must establish its own exact proofs');
+  assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, receipts);
+  assert.equal(hashes, 15, 'only the most recently verified workspace retains full body proofs');
+  f.a.close(); await assert.rejects(f.a.readRssInboxProgress(f.ws), { code: 'storage_scope_closed' });
+});
+
+test('compact receipt pages bound append writes and preserve all old evidence across truncation and restart', async t => {
+  const f = await fixture(); t.after(f.close);
+  const receipts = Array.from({ length: 1300 }, (_, index) => {
+    const itemId = '10000000-0000-4000-8000-' + String(index).padStart(12, '0');
+    return { kind: 'held', itemId, cursor: { fetched_at: '2026-11-05T02:00:00.000Z', id: itemId } };
+  });
+  let revision = 0; const writes = [];
+  for (let count = 100; count <= receipts.length; count += 100) {
+    const start = f.control.writes.length;
+    assert.equal((await f.save(receipts.slice(0, count), revision++)).status, 'stored');
+    const changed = f.control.writes.slice(start).filter(row => row.name === 'meta');
+    const bytes = changed.reduce((total, row) => total + row.bytes, 0); writes.push({ count, bytes, records: changed.length });
+    assert(changed.length <= 3, 'append changes at most two compact pages and the head');
+    assert(bytes < 40000, 'per-page receipt writes must stay bounded as prior pages grow');
+  }
+  assert(writes.at(-1).bytes < writes[0].bytes * 4, 'a late append must not rewrite all prior receipts');
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, receipts, 'old receipts survive a fresh instance');
+  assert.equal((await f.save(receipts.slice(0, 3), revision++)).status, 'stored');
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, receipts.slice(0, 3));
+  assert.equal((await f.save([], revision++)).status, 'stored');
+  assert.deepEqual((await f.a.readRssInboxProgress(f.ws)).receipts, []);
+  assert.equal((await f.save(receipts, revision)).status, 'stored');
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, receipts);
+});
+
+test('legacy manifests migrate without losing proofs and missing compact pages rewind without writes', async t => {
+  const f = await fixture(); t.after(f.close);
+  const receipt = await f.source(1), progressKey = `rssInboxProgress:${JSON.stringify([accountA.projectUrl, accountA.userId])}:${f.ws}`;
+  f.rows.get('meta').set(key(progressKey), { key: progressKey, value: { revision: 7, cursor: receipt.cursor, receipts: [receipt] } });
+  const legacy = await f.a.readRssInboxProgress(f.ws);
+  assert.deepEqual(legacy.receipts, [receipt]); assert.equal(legacy.revision, 7); assert.equal(legacy.needsRepair, false);
+  assert.equal((await f.save([receipt], 7)).status, 'stored');
+  assert.equal(f.rows.get('meta').get(key(progressKey)).value.format, 2);
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, [receipt]);
+  f.rows.get('meta').delete(key(progressKey + ':page:0'));
+  const before = copy(f.rows), broken = await f.a.readRssInboxProgress(f.ws);
+  assert.equal(broken.revision, 8); assert.equal(broken.cursor, null); assert.deepEqual(broken.receipts, []); assert.equal(broken.needsRepair, true);
+  assert.deepEqual(f.rows, before);
+  assert.equal((await f.save([receipt], broken.revision)).status, 'stored');
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, [receipt]);
+  const page = f.rows.get('meta').get(key(progressKey + ':page:0')).value;
+  page[0][3] = {}; page[0][3].self = page[0][3];
+  const malformed = await f.a.readRssInboxProgress(f.ws);
+  assert.equal(malformed.needsRepair, true); assert.deepEqual(malformed.receipts, []);
+  assert.equal((await f.save([receipt], malformed.revision)).status, 'stored', 'malformed page can be replaced by verified originals');
+  f.control.readFault = ({ name, id }) => name === 'meta' && id === progressKey + ':page:0' ? new DOMException('synthetic page read failure', 'InvalidStateError') : null;
+  await assert.rejects(f.a.readRssInboxProgress(f.ws), { code: 'storage_unavailable' });
+  assert.deepEqual((await f.b.readRssInboxProgress(f.ws)).receipts, [receipt]);
+});
+
+test('a failed compact head write rolls back new pages and keeps the previous complete ACK', async t => {
+  const f = await fixture(); t.after(f.close);
+  const receipts = Array.from({ length: 300 }, (_, index) => {
+    const itemId = '10000000-0000-4000-8000-' + String(index).padStart(12, '0');
+    return { kind: 'held', itemId, cursor: { fetched_at: '2026-11-05T02:00:00.000Z', id: itemId } };
+  });
+  assert.equal((await f.save(receipts.slice(0, 256))).status, 'stored');
+  const before = copy(f.rows), progress = await f.a.readRssInboxProgress(f.ws);
+  const headKey = `rssInboxProgress:${JSON.stringify([accountA.projectUrl, accountA.userId])}:${f.ws}`;
+  const start = f.control.writes.length;
+  f.control.fail = ({ name, id }) => name === 'meta' && id === headKey;
+  await assert.rejects(f.save(receipts, progress.revision), { code: 'storage_quota' });
+  assert(f.control.writes.slice(start).some(row => row.id === headKey + ':page:1'), 'new page was attempted before the failed head');
+  assert.deepEqual(f.rows, before); assert.deepEqual(await f.b.readRssInboxProgress(f.ws), progress);
 });
