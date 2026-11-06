@@ -53,6 +53,25 @@
   let workerScheduled = false;
   function scheduleRssReflection(instance, storage, token, signal) {
     const current = () => !signal.aborted && token === generation && mounted === instance && !suspended && !retained && !leaving;
+    let reflectionNotice = null;
+    const clearNotice = () => { reflectionNotice?.remove(); reflectionNotice = null; };
+    signal.addEventListener('abort', clearNotice, { once: true });
+    const onStatus = status => {
+      if (!current()) return;
+      if (status.state !== 'blocked') { clearNotice(); return; }
+      const main = root.document.querySelector('#lifeApp #lifeMain');
+      if (!main) return;
+      if (!reflectionNotice?.isConnected) {
+        reflectionNotice = root.document.createElement('p');
+        reflectionNotice.id = 'rssReflectionError';
+        reflectionNotice.className = 'life-error';
+        reflectionNotice.setAttribute('role', 'alert');
+        main.before(reflectionNotice);
+      }
+      const title = typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
+      const subject = title ? 'RSS 글 “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”을' : 'RSS 글을';
+      reflectionNotice.textContent = subject + ' 보관하지 못했습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+    };
     // Keep module loading and private inbox requests off the first-screen path.
     const queue = () => root.requestAnimationFrame(() => {
       const idle = root.requestIdleCallback || (callback => root.setTimeout(callback, 0));
@@ -68,7 +87,7 @@
         }).catch(error => { rssLoading = null; throw error; });
         rssLoading.then(() => {
           if (!current() || rssReflection || !life.RssConnection?.createReflection) return;
-          rssReflection = life.RssConnection.createReflection({ storage, auth, core: life.Core, isCurrent: current });
+          rssReflection = life.RssConnection.createReflection({ storage, auth, core: life.Core, isCurrent: current, onStatus });
           rssReflection.start();
         }).catch(() => { /* RSS can retry on the next opening; the current screen stays usable. */ });
       }, { timeout: 2000 });

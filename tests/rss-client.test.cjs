@@ -2,23 +2,52 @@
 const test = require('node:test'), assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const Core = require('../assets/life/core.js');
-const Rss = require('../assets/life/rss-connection.js');
+const Rss = require(process.env.RSS_CONNECTION_MODULE || '../assets/life/rss-connection.js');
 const owner = { userId: '10000000-0000-4000-8000-000000000001', projectUrl: 'https://rss-fixture.invalid' };
 const sha = text => createHash('sha256').update(text).digest('hex');
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
+const cursorStamp = cursor => BigInt(Date.parse(cursor.fetched_at)) * 1000n + BigInt((cursor.fetched_at.match(/\.(\d+)/)?.[1] || '').padEnd(6, '0').slice(3));
+function cursorOrder(a, b) { const left = cursorStamp(a), right = cursorStamp(b); return left < right ? -1 : left > right ? 1 : a.id.localeCompare(b.id); }
+function inbox(f, visible, pageSize = 100) {
+  f.env.pageFor = request => {
+    const rows = visible().slice().sort(cursorOrder).filter(row => !request.before || cursorOrder(row, request.before) > 0);
+    const items = rows.slice(0, pageSize), last = items.at(-1);
+    return { ...f.page, items, has_more: rows.length > pageSize,
+      next_cursor: rows.length > pageSize ? { fetched_at: last.fetched_at, id: last.id } : null };
+  };
+}
 function fixture() {
   let bundle = Core.createWorkspace(), commits = 0, notify = () => {};
-  const env = { current: true, held: null, conflict: false, requests: [], beforeCommit: null };
+  const env = { current: true, held: null, conflict: false, requests: [], beforeCommit: null,
+    accessToken: 'synthetic-rss-fixture-token', serverChecks: 0, manualChecks: 0, progressWrites: 0, verifierCreations: 0 };
+  let progress = { revision: 0, cursor: null, receipts: [], needsRepair: false };
   const conn = { id: Core.id(), workspace_id: bundle.workspaceId, feed_url: 'https://feed.example.test/rss', status: 'active', revision: 1,
     baseline_count: 4, baseline_at: '2026-11-05T00:00:00.000Z' };
   const page = { configured: true, connections: [conn], items: [], has_more: false, next_cursor: null };
-  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner }), async verify() { return auth.user; },
+  const auth = { epoch: 1, user: { id: owner.userId }, getAccount: () => ({ ...owner }), async verify() { env.manualChecks++; return auth.user; },
+    get session() { return { access_token: env.accessToken, user: auth.user }; },
     onAccountChange(fn) { notify = fn; return () => { notify = () => {}; }; },
-    client: { functions: { async invoke(name, options) {
+    client: { supabaseKey: 'synthetic-public-fixture-key', auth: {
+      async getSession() { return { data: { session: { access_token: env.accessToken, user: { id: owner.userId } } }, error: null }; },
+      async getUser(token) { env.serverChecks++; assert.equal(token, env.accessToken); return { data: { user: auth.user }, error: null }; }
+    }, functions: { async invoke(name, options) {
       assert.equal(name, 'haedo-rss'); env.requests.push(options.body);
       if (env.held) await env.held;
       return { data: structuredClone(env.pageFor ? env.pageFor(options.body) : page) };
     } } } };
   const storage = { isAccountScoped: true, account: owner, async read() { return structuredClone(bundle); },
+    async readRssInboxProgress() { return { ...structuredClone(progress), bundleRevision: bundle.revision }; },
+    async saveRssInboxProgress(_id, input, expectedRevision, options) {
+      env.beforeAck?.();
+      if (!options.isCurrent()) throw { code: 'rss_cancelled' };
+      if (progress.revision !== expectedRevision || bundle.revision !== options.expectedBundleRevision) return { status: 'conflict' };
+      assert.equal(new Set(input.receipts.map(row => row.itemId)).size, input.receipts.length);
+      assert.deepEqual(input.cursor, input.receipts.at(-1)?.cursor || null);
+      for (let index = 1; index < input.receipts.length; index++) assert(cursorOrder(input.receipts[index - 1].cursor, input.receipts[index].cursor) < 0);
+      progress = { ...structuredClone(input), revision: progress.revision + 1, needsRepair: false }; env.progressWrites++;
+      return { status: 'stored', ...structuredClone(progress), bundleRevision: bundle.revision };
+    },
     async commitLocal(request, options) {
       env.beforeCommit?.();
       if (!options.isCurrent()) throw { code: 'rss_cancelled' };
@@ -26,13 +55,23 @@ function fixture() {
       if (request.baseRevision !== bundle.revision) return { status: 'conflict' };
       bundle = Core.applyChanges(bundle, request.changes); commits++; return { status: 'stored' };
     } };
-  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current });
+  const clientFactory = (projectUrl, key, options) => {
+    assert.equal(projectUrl, owner.projectUrl); assert.equal(key, 'synthetic-public-fixture-key');
+    env.verifierCreations++;
+    assert.equal(options.auth.persistSession, false); assert.equal(options.auth.autoRefreshToken, false); assert.equal(options.auth.detectSessionInUrl, false);
+    assert.match(options.auth.storageKey, /^haedo-rss-verifier-\d+$/);
+    const isolated = options.auth.storage;
+    assert.equal(isolated.getItem('probe'), null); isolated.setItem('probe', 'memory-only'); assert.equal(isolated.getItem('probe'), 'memory-only');
+    isolated.removeItem('probe'); assert.equal(isolated.getItem('probe'), null);
+    return { auth: { getUser: token => auth.client.auth.getUser(token) } };
+  };
+  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current, clientFactory });
   function item(overrides = {}) {
     const body = '\ufeff피드 원문 🌱\r\n<img src="https://invalid.test/private">';
     return { id: Core.id(), owner_id: owner.userId, connection_id: conn.id, identity: 'guid:one', title: 'RSS 글', url: 'https://feed.example.test/one',
       content_text: body, content_hash: sha(body), published_at: '2026-11-05T01:00:00.000Z', fetched_at: '2026-11-05T02:00:00.000Z', disposition: 'stored', reason: null, ...overrides };
   }
-  return { env, page, conn, auth, storage, service, item, notify: () => notify(), get bundle() { return structuredClone(bundle); }, get commits() { return commits; },
+  return { env, page, conn, auth, storage, service, item, clientFactory, notify: () => notify(), get bundle() { return structuredClone(bundle); }, get commits() { return commits; }, get progress() { return structuredClone(progress); },
     mutate(action) { bundle = action(bundle); } };
 }
 test('exact feed text and deterministic IDs survive retry, concurrent receipt and a second device', async () => {
@@ -212,4 +251,166 @@ test('unfinished server work is a stopped collection distinct from automatic tra
   assert.equal(f.env.requests.at(-1).action, 'retry');
   f.conn.auto_retry = true;
   await assert.rejects(f.service.list(), { code: 'rss_invalid_data' });
+});
+
+test('automatic reflection verifies once without common notifications across pages and material commits; manual actions still verify', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  let commonNotifications = 0;
+  f.auth.verify = async () => { f.env.manualChecks++; commonNotifications++; f.notify(); return f.auth.user; };
+  const rows = Array.from({ length: 4 }, (_, index) => f.item({ id: '10000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'), identity: 'automatic:' + index }));
+  inbox(f, () => rows, 2);
+  const result = await f.service.reflect();
+  assert.equal(result.appliedItems, 4); assert.equal(f.commits, 4); assert.equal(f.env.requests.length, 2);
+  assert.equal(f.env.serverChecks, 1); assert.equal(f.env.manualChecks, 0); assert.equal(commonNotifications, 0);
+  assert.equal(f.progress.receipts.length, 4);
+  await f.service.list(); assert.equal(f.env.manualChecks, 1); assert.equal(commonNotifications, 1);
+  assert.equal(f.env.serverChecks, 1, 'manual settings keep their existing common verification path');
+});
+
+test('late automatic verification success and failure discard epoch, owner, navigation, disposal and token changes', async t => {
+  for (const result of ['success', 'failure']) for (const boundary of ['epoch', 'owner', 'navigation', 'dispose', 'token']) {
+    await t.test(result + ' after ' + boundary, async t => {
+      const f = fixture(), held = deferred(); t.after(f.service.dispose); t.after(() => held.resolve());
+      f.page.items = [f.item()]; let entered = false, commonNotifications = 0;
+      f.auth.verify = async () => { commonNotifications++; f.notify(); return f.auth.user; };
+      f.auth.client.auth.getUser = async token => {
+        assert.equal(token, 'synthetic-rss-fixture-token'); entered = true; await held.promise;
+        return result === 'success' ? { data: { user: { id: owner.userId } }, error: null }
+          : { data: { user: null }, error: { code: 'session_not_found' } };
+      };
+      const pending = f.service.reflect().then(value => ({ value }), error => ({ error }));
+      await settle(); assert.equal(entered, true, 'automatic reflection must use its isolated explicit-token verifier');
+      if (boundary === 'epoch') f.auth.epoch++;
+      if (boundary === 'owner') { f.auth.user = { id: Core.id() }; f.notify(); }
+      if (boundary === 'navigation') f.env.current = false;
+      if (boundary === 'dispose') f.service.dispose();
+      if (boundary === 'token') f.env.accessToken = 'synthetic-replacement-token';
+      held.resolve(); const outcome = await pending;
+      assert.equal(outcome.error?.code, 'rss_cancelled');
+      assert.equal(f.env.requests.length, 0); assert.equal(f.commits, 0); assert.equal(f.env.progressWrites, 0);
+      assert.equal(commonNotifications, 0);
+    });
+  }
+});
+
+test('automatic reflectors of multiple workspaces reuse one memory-only verifier for the shared client', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  await f.service.reflect(); await f.service.reflect();
+  assert.equal(f.env.verifierCreations, 1);
+  const otherWorkspace = Core.id();
+  const other = Rss.create({ storage: f.storage, auth: f.auth, core: Core, workspaceId: otherWorkspace, clientFactory: f.clientFactory });
+  t.after(other.dispose);
+  f.env.pageFor = body => ({ ...f.page, connections: [{ ...f.conn, workspace_id: body.workspaceId }] });
+  await other.reflect();
+  assert.equal(f.env.verifierCreations, 1); assert.equal(f.env.serverChecks, 3);
+  other.dispose(); await f.service.reflect(); assert.equal(f.env.verifierCreations, 1); assert.equal(f.env.serverChecks, 4);
+});
+
+test('a token change while a reflected response is pending or at commit cannot apply or acknowledge it', async t => {
+  for (const stage of ['response', 'commit', 'ack']) await t.test(stage, async t => {
+    const f = fixture(), held = deferred(); t.after(f.service.dispose);
+    f.page.items = [f.item()];
+    if (stage === 'response') f.env.held = held.promise;
+    if (stage === 'commit') f.env.beforeCommit = () => { f.env.accessToken = 'synthetic-replacement-token'; };
+    if (stage === 'ack') f.env.beforeAck = () => { f.env.accessToken = 'synthetic-replacement-token'; };
+    const pending = f.service.reflect().then(value => ({ value }), error => ({ error }));
+    if (stage === 'response') { await settle(); f.env.accessToken = 'synthetic-replacement-token'; held.resolve(); }
+    const outcome = await pending;
+    assert.equal(outcome.error?.code, 'rss_cancelled');
+    assert.equal(f.commits, stage === 'ack' ? 1 : 0); assert.equal(f.env.progressWrites, 0);
+  });
+});
+
+test('late initial session reads cannot start verification after navigation and missing sessions send nothing', async t => {
+  const f = fixture(), held = deferred(); t.after(f.service.dispose);
+  f.auth.client.auth.getSession = () => held.promise;
+  const pending = f.service.reflect().then(value => ({ value }), error => ({ error }));
+  await settle(); f.env.current = false;
+  held.resolve({ data: { session: { user: { id: owner.userId }, access_token: f.env.accessToken } }, error: null });
+  assert.equal((await pending).error?.code, 'rss_cancelled'); assert.equal(f.env.serverChecks, 0); assert.equal(f.env.requests.length, 0);
+  const missing = fixture(); t.after(missing.service.dispose);
+  missing.auth.client.auth.getSession = async () => ({ data: { session: null }, error: null });
+  await assert.rejects(missing.service.reflect(), { code: 'rss_auth_required' }); assert.equal(missing.env.requests.length, 0);
+});
+
+test('two connections whose finishes commit in reverse order are both received once through the lease overlap', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const other = { ...f.conn, id: Core.id() }; f.page.connections.push(other);
+  const early = f.item({ connection_id: other.id, identity: 'early', fetched_at: '2026-11-05T01:58:00.000001Z' });
+  const later = f.item({ identity: 'later', fetched_at: '2026-11-05T02:00:00.000001Z' });
+  let visible = [later]; inbox(f, () => visible);
+  await f.service.reflect(); assert.equal(f.commits, 1); assert.equal(f.progress.cursor.id, later.id);
+  visible = [early, later]; const second = await f.service.reflect();
+  assert.equal(second.appliedItems, 1); assert.equal(f.commits, 2); assert.equal(f.bundle.sourceVersions.length, 2);
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [early.id, later.id]);
+  assert.equal(f.env.requests[1].before.fetched_at, '2026-11-05T01:57:59.999Z');
+  assert.equal(f.env.requests[1].before.id, '00000000-0000-0000-0000-000000000000');
+  const acknowledgements = f.env.progressWrites; await f.service.reflect();
+  assert.equal(f.commits, 2); assert.equal(f.env.progressWrites, acknowledgements, 'an overlap containing only proved IDs writes no ACK');
+  assert.deepEqual(f.bundle.sourceVersions.map(row => row.contentText), [later.content_text, early.content_text]);
+});
+
+test('same-timestamp lower UUID and submillisecond late items are retained and sorted before the old ACK', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const later = f.item({ id: '10000000-0000-4000-8000-000000000003', identity: 'later', fetched_at: '2026-11-05T02:00:00.000002Z' });
+  const sameTime = f.item({ id: '10000000-0000-4000-8000-000000000002', identity: 'same-time', fetched_at: later.fetched_at });
+  const earlier = f.item({ id: '10000000-0000-4000-8000-000000000004', identity: 'earlier', fetched_at: '2026-11-05T02:00:00.000001Z' });
+  let visible = [later]; inbox(f, () => visible); await f.service.reflect();
+  visible = [later, sameTime, earlier]; await f.service.reflect();
+  assert.equal(f.commits, 3); assert.deepEqual(f.progress.receipts.map(row => row.itemId), [earlier.id, sameTime.id, later.id]);
+});
+
+test('overlap pagination advances past an all-duplicate first page without repeated receipt writes', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const rows = Array.from({ length: 3 }, (_, index) => f.item({ id: '10000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'), identity: 'page:' + index }));
+  let visible = rows.slice(0, 2); inbox(f, () => visible, 2); await f.service.reflect();
+  const firstAck = f.env.progressWrites; visible = rows; const result = await f.service.reflect();
+  assert.equal(result.appliedItems, 1); assert.equal(f.env.requests.length, 3);
+  assert.deepEqual(f.env.requests[2].before, { fetched_at: rows[1].fetched_at, id: rows[1].id });
+  assert.equal(f.env.progressWrites, firstAck + 1); assert.equal(f.commits, 3);
+});
+
+test('a newly visible earlier failure rolls ACK back to the proven prefix and cannot skip the item on retry', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const prior = f.item({ identity: 'prior', fetched_at: '2026-11-05T01:57:00.000Z' });
+  const missing = f.item({ identity: 'late-failure', fetched_at: '2026-11-05T01:59:00.000Z' });
+  const later = f.item({ identity: 'later', fetched_at: '2026-11-05T02:00:00.000Z' });
+  const future = f.item({ identity: 'future', fetched_at: '2026-11-05T03:00:00.000Z' });
+  let visible = [prior, later]; inbox(f, () => visible); await f.service.reflect();
+  assert.equal(f.progress.cursor.id, later.id);
+  visible = [prior, missing, later, future]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
+  const failed = await f.service.reflect(); assert.equal(failed.receiveError, Rss.messages.rss_receive_conflict);
+  assert.equal(f.commits, 2); assert.equal(f.progress.cursor.id, prior.id);
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [prior.id]);
+  assert.equal(f.bundle.sourceVersions.length, 2, 'ACK rollback never deletes an already preserved body');
+  f.env.beforeCommit = null; const recovered = await f.service.reflect();
+  assert.equal(recovered.appliedItems, 2); assert.equal(f.commits, 4);
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [prior.id, missing.id, later.id, future.id]);
+  assert.equal(new Set(f.bundle.sourceVersions.map(row => row.id)).size, 4);
+});
+
+test('a malformed late overlap item prevents all page writes and leaves the fixed ACK window retryable', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const later = f.item({ identity: 'later', fetched_at: '2026-11-05T02:00:00.000Z' });
+  const early = f.item({ identity: 'early', fetched_at: '2026-11-05T01:59:00.000Z' });
+  const future = f.item({ identity: 'future', fetched_at: '2026-11-05T03:00:00.000Z' });
+  let visible = [later]; inbox(f, () => visible); await f.service.reflect();
+  const ack = f.progress; visible = [{ ...early, content_hash: '0'.repeat(64) }, later, future];
+  await assert.rejects(f.service.reflect(), { code: 'rss_invalid_data' });
+  assert.deepEqual(f.progress, ack); assert.equal(f.commits, 1);
+  await assert.rejects(f.service.reflect(), { code: 'rss_invalid_data' });
+  assert.deepEqual(f.env.requests[1].before, f.env.requests[2].before, 'the overlap follows the unchanged ACK, not wall-clock time');
+  visible = [early, later, future]; await f.service.reflect();
+  assert.equal(f.commits, 3); assert.deepEqual(f.progress.receipts.map(row => row.itemId), [early.id, later.id, future.id]);
+});
+
+test('a permanently rejected validated row exposes only its item identity and title beside the safe error', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const row = f.item({ title: '<img src=x onerror=alert(1)> 검증된 RSS 제목' }); f.page.items = [row];
+  f.env.beforeCommit = () => { throw { code: 'rss_invalid_data', diagnostic: row.content_text }; };
+  const result = await f.service.reflect();
+  assert.equal(result.receiveErrorCode, 'rss_invalid_data'); assert.equal(result.blockedItemId, row.id); assert.equal(result.blockedItemTitle, row.title);
+  assert.equal(result.receiveError, Rss.messages.rss_invalid_data);
+  assert.equal(f.commits, 0); assert.equal(f.progress.cursor, null);
+  assert.doesNotMatch(JSON.stringify(result), /피드 원문|diagnostic|content_text/);
 });
