@@ -43,6 +43,8 @@ h4 { font-size: 16px; line-height: 1.7; }
 .life-scope { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 36px; }
 .life-status { font-size: var(--haedo-text-badge); color: var(--ink-soft); margin-top: 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
 .life-status:empty { display: none; }
+/* A status with its retry button wraps as a row: 8px apart, left-aligned when it wraps. */
+.life-status:has(> .life-button) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .life-error { margin-top: 16px; margin-bottom: 20px; padding: 16px; border: 1px solid var(--color-error); border-radius: var(--control-radius); color: var(--color-error); background: var(--error-soft); overflow-wrap: anywhere; }
 .life-error .life-button { display: block; margin-top: 12px; }
 .life-nav { position: fixed; z-index: 20; left: 0; top: 96px; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 16px; background: var(--paper); }
@@ -316,6 +318,10 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-management { margin-bottom: 0; padding: 20px 0 24px; }
 .life-management .life-panel-heading h2 { font-size: 16px; }
 .life-management-note { margin: 12px 0 0; font-size: var(--haedo-text-meta); }
+/* RSS connection (#213): the app's field tokens and an 8px rhythm between actions. */
+#rssConnectionPanel input[type=url] { box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: var(--control-radius); background: var(--field); color: var(--ink); font: inherit; font-size: 16px; }
+#rssConnectionPanel .life-button { margin: 0 8px 8px 0; }
+#rssConnectionPanel h4 { margin: 24px 0 8px; }
 .life-management-backups { margin-top: 32px; }
 .life-management-backups > h2 { font-size: var(--haedo-text-control); font-weight: 600; color: var(--ink-soft); }
 .life-management-backups .life-meta { word-break: keep-all; overflow-wrap: anywhere; }
@@ -514,6 +520,8 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
   body.haedo-shell:has(#lifeMain[data-mode=source]) > .haedo-nav > .haedo-nav-compose { display: flex; }
   /* Keep an 8px gap between the reader actions and the shared 44px pencil. */
   #lifeMain[data-mode=source] .life-reader-tools { padding-inline-end: max(52px, calc(env(safe-area-inset-right, 0px) + 44px)); }
+  /* The source save status shares the pencil's row; its text and retry button wrap before it. */
+  body.haedo-shell:has(#lifeMain[data-mode=source]) .life-status { padding-inline-end: max(52px, calc(env(safe-area-inset-right, 0px) + 44px)); }
 }
 
 

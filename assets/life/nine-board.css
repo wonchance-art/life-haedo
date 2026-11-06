@@ -3,6 +3,7 @@
 .nb-toolbar,.nb-area-nav { gap: 8px; margin: 16px 0; }
 .nb-toolbar select { max-width: 100%; min-height: 44px; font-size: 16px; }
 .nb-status { min-height: 24px; }
+.nb-sync-retry { margin-bottom: 8px; }
 .nb-title { font-size: 30px; line-height: 1.3; margin: 28px 0 12px; overflow-wrap: anywhere; }
 .nb-area-heading { font-size: 24px; line-height: 1.4; margin: 28px 0 8px; overflow-wrap: anywhere; }
 .nb-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 70ch; }
