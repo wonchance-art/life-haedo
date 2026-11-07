@@ -202,6 +202,25 @@ async function main() {
       const value = { skip, owner, used: false, entered: new Promise(resolve => { enter = resolve; }), released: new Promise(resolve => { release = resolve; }), finished: new Promise(resolve => { finish = resolve; }), enter, release, finish };
       gates.push(value); return value;
     };
+    let rssHeld;
+    const holdRssAuth = outcome => {
+      assert(options.rssIsolation && !rssHeld);
+      let enter, release, finish;
+      rssHeld = { outcome, used: false, entered: new Promise(resolve => { enter = resolve; }), released: new Promise(resolve => { release = resolve; }), finished: new Promise(resolve => { finish = resolve; }), enter, release, finish };
+      return rssHeld;
+    };
+    if (options.rssIsolation) await context.route('**/assets/life/rss-connection.js', async route => {
+      const response = await route.fetch(); let source = await response.text(); const originalSHA256 = digest(source);
+      const call = 'result = await verifier.auth.getUser(context.accessToken);';
+      assert.equal(source.split(call).length, 2, 'Observe exactly one actual RSS SDK verification boundary');
+      source = source.replace(call, "const c2Call = root.__c2RssSdkCalls = (root.__c2RssSdkCalls || 0) + 1; " + call + " (root.__c2RssSdkResults ||= []).push({ owner: owner.userId, call: c2Call, errorName: result?.error?.name || null, sessionMissing: !!root.supabase.isAuthSessionMissingError(result?.error) });");
+      if (process.env.SHELL_REVERIFY_RSS_MUTATION === 'shared-verifier') source = source.replace(call, 'result = await client.auth.getUser(context.accessToken);');
+      // Only this regression schedules the real reflector explicitly; the
+      // original eighteen scenarios retain their normal automatic startup.
+      source += `\n;(()=>{const api=HaedoLife.RssConnection;HaedoLife.RssConnection=Object.freeze({...api,createReflection(options){const instance=api.createReflection(options);globalThis.__c2RssReflector=instance;return Object.freeze({...instance,start(){}});}});})();`;
+      (report.rssScriptLoads ||= []).push({ originalSHA256, servedSHA256: digest(source), mutation: process.env.SHELL_REVERIFY_RSS_MUTATION || null });
+      await route.fulfill({ response, body: source });
+    });
     await context.route('**/*', route => { const origin = new URL(route.request().url()).origin;
       if ([new URL(base).origin, cloud].includes(origin)) return route.fallback(); report.external.push({ name, origin }); return route.abort('blockedbyclient'); });
     let releaseOpeningFailure;
@@ -224,7 +243,20 @@ async function main() {
     });
     await context.route(cloud + '/auth/v1/user', async route => {
       const owner = fake.libraryOwner(route.request()), request = { owner, completed: false }; authRequests.push(request);
-      const held = gates.find(value => !value.used && value.owner === owner);
+      if (rssHeld && !rssHeld.used && owner === accounts.a.id) {
+        request.rssOutcome = rssHeld.outcome; request.clientInfo = route.request().headers()['x-client-info'];
+        const held = rssHeld; held.used = true; held.enter(request); await held.released;
+        try {
+          // The real SDK recognizes session_not_found only with this API
+          // version exposed over CORS; an ordinary AuthApiError is insufficient.
+          await route.fulfill({ status: held.outcome === 'success' ? 200 : 401, contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'X-Supabase-Api-Version', 'x-supabase-api-version': '2024-01-01' },
+            body: JSON.stringify(held.outcome === 'success' ? session(accounts.a).user : { code: 'session_not_found', message: 'Synthetic old session no longer exists' }) });
+          request.completed = true;
+        } finally { rssHeld = null; held.finish(); }
+        return;
+      }
+      const held = gates.find(value => !value.used && value.owner === owner && route.request().headers()['x-client-info'] === 'haedo-platform');
       let holding = null;
       if (held && held.skip-- <= 0) { holding = held; held.used = true; held.enter(request); await held.released; }
       try { await route.fallback(); request.completed = true; } finally { holding?.finish(); }
@@ -234,9 +266,15 @@ async function main() {
     page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ name, message: message.text(), location: message.location().url }); });
     page.on('requestfailed', request => network.failedRequests.push({ url: request.url(), error: request.failure()?.errorText }));
     try {
-      console.log('RUN ' + name); await page.goto(base + '/index.html?section=records'); releaseOpeningFailure(); if (!options.initialFailure) await ready(page); await run({ page, context, fake, gate, authRequests, network });
+      console.log('RUN ' + name); await page.goto(base + '/index.html?section=records'); releaseOpeningFailure(); if (!options.initialFailure) await ready(page); await run({ page, context, fake, gate, authRequests, network, holdRssAuth });
       const expectedFailure = options.initialFailure || options.expectedFailure;
-      if (!expectedFailure) {
+      if (options.rssIsolation) {
+        assert.deepEqual([report.pageErrors.length, report.external.length], [initialErrors[0], initialErrors[2]]);
+        const errors = report.consoleErrors.slice(initialErrors[1]); assert.equal(errors.length, 1);
+        assert.deepEqual({ name: errors[0].name, location: errors[0].location }, { name, location: cloud + '/auth/v1/user' });
+        assert.match(errors[0].message, /^Failed to load resource:.*status of 401/);
+        assert.deepEqual(network.failedRequests, []);
+      } else if (!expectedFailure) {
         assert.deepEqual([report.pageErrors.length, report.consoleErrors.length, report.external.length], initialErrors, 'No filtered console/page/external errors');
       } else {
         assert.deepEqual([report.pageErrors.length, report.external.length], [initialErrors[0], initialErrors[2]]);
@@ -247,7 +285,7 @@ async function main() {
     } catch (error) {
       report.checks.push({ name, pass: false, error: error.stack, authRequests, network }); console.error('FAIL ' + name + '\n' + error.stack);
       await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png') }).catch(() => {});
-    } finally { releaseOpeningFailure(); gates.forEach(value => value.release()); await context.close(); report.closedContexts++; }
+    } finally { releaseOpeningFailure(); rssHeld?.release(); gates.forEach(value => value.release()); await context.close(); report.closedContexts++; }
   }
   try {
     for (const width of [1440, 390]) await check('completed startup error survives a late same-account verify and explicit retry recovers at ' + width, async ({ page, context, fake, gate, authRequests }) => {
@@ -350,6 +388,36 @@ async function main() {
       assert.equal(await page.evaluate(() => HaedoLife.Shell.storage === __c2OldStorage), false); assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.account.userId), accounts.a.id);
       assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), fixture.workspaceId), fixture.originalBundle);
     });
+    await check('late isolated RSS Auth success and missing session preserve the current shell account', async ({ page, holdRssAuth, authRequests }) => {
+      const fixture = await seed(page), transport = [];
+      await page.waitForFunction(() => !!window.__c2RssReflector);
+      page.on('response', response => {
+        if (response.url() === cloud + '/auth/v1/user' && response.status() === 401) transport.push({ status: response.status(), method: response.request().method(), apiVersion: response.headers()['x-supabase-api-version'] });
+      });
+      for (const outcome of ['success', 'session_not_found']) {
+        const held = holdRssAuth(outcome), requestsBefore = authRequests.length, call = outcome === 'success' ? 1 : 2;
+        await page.evaluate(workspaceId => {
+          window.__c2RssBefore = { epoch: HaedoAuth.epoch, user: HaedoAuth.user, storage: HaedoLife.Shell.storage };
+          window.__c2RssWork = { done: false };
+          __c2RssReflector.syncNow(workspaceId).then(status => { __c2RssWork.status = status.state; }, error => { __c2RssWork.error = error.code; }).finally(() => { __c2RssWork.done = true; });
+        }, fixture.workspaceId);
+        await arrived(held);
+        assert.equal(await page.evaluate(() => __c2RssWork.done), false, 'The actual RSS Auth response is still held');
+        assert.deepEqual(await page.evaluate(() => ({ calls: __c2RssSdkCalls, completed: (window.__c2RssSdkResults || []).length })), { calls: call, completed: call - 1 });
+        held.release(); await held.finished; await page.waitForFunction(() => __c2RssWork.done); await frames(page);
+        const results = await page.evaluate(() => __c2RssSdkResults); assert.equal(results.length, call); const sdk = results.at(-1);
+        assert.deepEqual(sdk, { owner: accounts.a.id, call, errorName: outcome === 'success' ? null : 'AuthSessionMissingError', sessionMissing: outcome !== 'success' }, 'The bundled SDK must take the actual missing-session branch');
+        const state = await page.evaluate(() => ({ epoch: HaedoAuth.epoch, previousEpoch: __c2RssBefore.epoch, sameUser: HaedoAuth.user === __c2RssBefore.user,
+          userId: HaedoAuth.user?.id || null, sameStorage: HaedoLife.Shell.storage === __c2RssBefore.storage, storageOwner: HaedoLife.Shell.storage?.account?.userId || null }));
+        (report.rssIsolation ||= []).push({ outcome, sdk, state, work: await page.evaluate(() => __c2RssWork) });
+        assert.equal(state.epoch, state.previousEpoch, 'Late RSS verification must not change the shared Auth epoch');
+        assert.equal(state.sameUser, true, 'Late RSS verification must retain the exact shared Auth user');
+        assert.equal(state.userId, accounts.a.id); assert.equal(state.sameStorage, true); assert.equal(state.storageOwner, accounts.a.id);
+        assert(authRequests.length > requestsBefore, 'RSS verification remains in the complete Auth request ledger');
+        assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), fixture.workspaceId), fixture.originalBundle);
+      }
+      assert.deepEqual(transport, [{ status: 401, method: 'GET', apiVersion: '2024-01-01' }]);
+    }, 1440, { rssIsolation: true });
     await check(report.recoveryRows['mounted-real-auth-failure'], async ({ page, gate, authRequests, network }) => {
       await page.locator('[data-haedo-compose]').click(); await page.locator('#photoTitle').fill('네트워크 확인 중 미저장 제목');
       await page.locator('.ql-editor').fill('네트워크 확인 중 보존할 본문 🌱'); await markView(page);

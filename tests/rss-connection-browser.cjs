@@ -206,7 +206,7 @@ async function main() {
     const page = await context.newPage(); observe(page, report, name); page.setDefaultTimeout(12000);
     try {
       await page.goto(base + '/index.html'); await ready(page); await settle(page);
-      assert.equal(server.calls.length, 0, 'no RSS request until the settings row is opened');
+      assert.ok(server.calls.every(call => call.body.action === 'list'), 'startup may only list the inbox; collection and settings changes still require an explicit action');
       await run({ page, context, server });
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) {
@@ -537,4 +537,5 @@ async function main() {
   console.log(JSON.stringify(result));
   if (report.checks.some(check => !check.pass) || report.consoleErrors.length || report.pageErrors.length || report.externalRequests.length) process.exitCode = 1;
 }
-main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+module.exports = { RssCloud, FEED, RAW, hash, gate, arrived, sources, until, open, idle, checkSource, observe };

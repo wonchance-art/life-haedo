@@ -4,7 +4,7 @@
  */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -13,7 +13,7 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, nav, makeContext, observe } = require('./unified-home-browser.cjs');
 const out = path.resolve('.local/home-refinement/qa');
-const report = { scope: 'Linux Chromium viewport simulation; anonymous mocked Auth HTTP, real account-scoped IndexedDB and synthetic photo bytes. No live OAuth, native IME, Apple device or deployment evidence.', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, libraryCapabilityReads: [], remoteWrites: [], privateSaves: [], external: [], captures: [] };
+const report = { rss: [], scope: 'Linux Chromium viewport simulation; anonymous mocked Auth HTTP, real account-scoped IndexedDB and synthetic photo bytes. No live OAuth, native IME, Apple device or deployment evidence.', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, libraryCapabilityReads: [], remoteWrites: [], privateSaves: [], external: [], captures: [] };
 const homeReady = page => page.locator('#homePosts[aria-busy="false"]').waitFor();
 async function openHome(page) { await page.goto(base + '/index.html'); await ready(page); await homeReady(page); }
 async function home(page) { await nav(page, 'home'); await homeReady(page); }
@@ -67,13 +67,29 @@ async function main() {
     if (process.env.REFINEMENT_TEST_MATCH && !new RegExp(process.env.REFINEMENT_TEST_MATCH).test(name)) return;
     const server = new ShareCloud(), device = 'refinement-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 320, height: 568 }, hasTouch: true, ...contextOptions }); await instrument(context);
+
+    const rss = { starts: [], reads: [] }, rssWorkspaces = new Map();
+    await context.exposeBinding('__recordRssStart', (_source, value) => { rss.starts.push(value); rssWorkspaces.set(value.owner, value.workspaceId); });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = crypto.randomUUID(); window.__rssStartReports = [];
+      // Successful owner reveals are counted independently of HTTP requests.
+      document.addEventListener('haedo:page-ready', () => { const storage = HaedoLife.Shell.storage;
+        __rssStartReports.push(storage.getActive().then(workspaceId => window.__recordRssStart({ documentId, owner: storage.account.userId, workspaceId })));
+      });
+    });
     await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) {
-      if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push({ name, path: url.pathname }); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isRssInboxRead(request, { cloud, server, ownerId: accounts.a.id, workspaceId: rssWorkspaces.get(accounts.a.id) })) rss.reads.push({ owner: server.libraryOwner(request), path: url.pathname });
+      else if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push({ name, path: url.pathname }); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.pathname === '/rest/v1/rpc/life_blog_save' && request.method() === 'POST') report.privateSaves.push({ name, postId: request.postDataJSON().p_post_id });
       else report.remoteWrites.push({ method: request.method(), path: url.pathname });
     } if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
     const page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
-    try { await run(page); assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);
+    try { await run(page);
+      await page.evaluate(() => Promise.all(window.__rssStartReports || []));
+      assert(rss.reads.length > 0); assert(rss.reads.length <= rss.starts.length, 'RSS list reads must not exceed actual app starts');
+      report.rss.push({ name, ...rss });
+      assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);
       // 2026-11-01: saved posts and drafts reach the owner's private account
       // storage automatically (background sync). They stay private: same
       // owner, never published, and no other write path is used.

@@ -3,7 +3,7 @@
  * No real account, server write, external calendar, Apple device or OS file-save claim. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -17,7 +17,7 @@ const entry = base + '/index.html?section=tools&view=annual-plan';
 const PRIVATE = '합성개인계획_외부전송금지';
 const RAW = '\ufeff연간 계획과 분리된 합성 원문 😀\r\nCafe\u0301와 정확한 줄바꿈';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { createdAt: new Date().toISOString(), scope: 'Local actual UI/Core/bundled SDK/scoped IndexedDB with anonymous FakeCloud Auth. Birthdate, annual/monthly plans, composition events, account sessions and save/read delays are synthetic. No production user/DB, publisher/AI/calendar requests, actual Apple hardware or OS file-save proof.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Local actual UI/Core/bundled SDK/scoped IndexedDB with anonymous FakeCloud Auth. Birthdate, annual/monthly plans, composition events, account sessions and save/read delays are synthetic. No production user/DB, publisher/AI/calendar requests, actual Apple hardware or OS file-save proof.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], rssReads: [], appStarts: [], closedContexts: 0 };
 async function wait(page, predicate, argument, label = 'annual plan state') {
   await awaitCondition(page, predicate, argument, { timeout: 20000, label });
 }
@@ -91,11 +91,34 @@ async function main() {
     const server = new FakeCloud(), device = 'annual-plan-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
     await storageGate(context);
+    const rssRequests = [], appStarts = [];
+    await context.exposeBinding('__annualRssStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) { appStarts.push(start); report.appStarts.push({ check: name, ...start }); } });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = performance.timeOrigin + ':' + Math.random(); let sequence = 0; window.__annualRssStarts = [];
+      document.addEventListener('haedo:page-ready', () => {
+        const storage = HaedoLife.Shell.storage, ownerId = storage.account.userId;
+        __annualRssStarts.push(storage.getActive().then(workspaceId => __annualRssStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+      });
+    });
+    async function auditRss() {
+      for (const page of context.pages()) await page.evaluate(() => Promise.all(window.__annualRssStarts || []));
+      const reads = rssRequests.map(request => {
+        const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+        const start = appStarts.find(row => row.ownerId === ownerId && row.workspaceId === workspaceId);
+        assert(start && [accounts.a.id, accounts.b.id].includes(start.ownerId), 'RSS read requires a known owner/workspace app start');
+        assert(isRssInboxRead(request, { cloud, server, ownerId: start.ownerId, workspaceId: start.workspaceId }), 'unexpected RSS request');
+        return { check: name, ownerId, workspaceId, action: 'list' };
+      });
+      for (const start of appStarts) assert(reads.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length <= appStarts.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length, 'RSS reads exceed actual owner/workspace starts');
+      report.rssReads.push(...reads);
+    }
     context.on('request', request => {
       const u = new URL(request.url()), body = request.postData() || '';
       // Owner directive 2026-11-01: the plan follows the signed-in account (owner-only RPC).
       if (isBackgroundSync(request.url())) { (report.backgroundSync ||= []).push({ check: name, path: u.pathname }); return; }
       if ([PRIVATE, RAW, '2000-02-29'].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
+      if (u.pathname.startsWith('/functions/v1/haedo-rss')) { rssRequests.push(request); return; }
       if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 });
       else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });
     });
@@ -112,7 +135,7 @@ async function main() {
     });
     const page = await context.newPage();
     console.log('RUN ' + name);
-    try { await run({ page, context, server }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context, server }); assert.equal(server.writes().length, 0); await auditRss(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); report.closedContexts++; }
   }

@@ -5830,6 +5830,175 @@
       }
       return { adopted, failed, repaired };
     }
+    // Device-local evidence of an exact RSS inbox prefix. It is deliberately
+    // absent from account documents and backup exports: another installation
+    // must verify its own originals before advancing its cursor.
+    const rssProgressKey = workspaceId => `rssInboxProgress:${accountKey}:${workspaceId}`;
+    const rssProgressError = () => fault('invalid_rss_progress', 'RSS 자료 반영 기록을 확인하지 못했습니다. 원문은 유지됩니다.');
+    const RSS_RECEIPT_PAGE = 256;
+    // Only the current connection's most recently checked workspace is retained.
+    // Closing its connection releases the cache key; closed storage instances
+    // need not keep entire source bodies alive for the rest of the page.
+    const rssProofCache = new WeakMap();
+    const rssReceiptPageKey = (workspaceId, page) => `${rssProgressKey(workspaceId)}:page:${page}`;
+    function rssReceiptPage(receipts) {
+      return receipts.map(receipt => [receipt.kind, receipt.itemId, receipt.cursor.fetched_at,
+        ...(receipt.kind === 'stored' ? [receipt.sourceId, receipt.sourceVersionId, receipt.contentHash] :
+          receipt.kind === 'trashed' ? [receipt.sourceId, receipt.trashLinkId, receipt.trashLinkRevision] : [])]);
+    }
+    function rssExpandPage(page) {
+      if (!Array.isArray(page) || page.length > RSS_RECEIPT_PAGE) throw rssProgressError();
+      return page.map(tuple => {
+        if (!Array.isArray(tuple) || tuple.length !== (tuple[0] === 'held' ? 3 : 6)) throw rssProgressError();
+        const [kind, itemId, fetched_at, sourceId, detail, proof] = tuple;
+        return { kind, itemId, cursor: { fetched_at, id: itemId }, ...(kind === 'stored' ? { sourceId, sourceVersionId: detail, contentHash: proof } :
+          kind === 'trashed' ? { sourceId, trashLinkId: detail, trashLinkRevision: proof } : {}) };
+      });
+    }
+    async function rssReadReceipts(meta, workspaceId, raw) {
+      if (raw?.format === undefined) return raw?.receipts; // Earlier installations stored the full manifest in the head.
+      if (raw.format !== 2 || !Number.isSafeInteger(raw.receiptCount) || raw.receiptCount < 0) throw rssProgressError();
+      const receipts = [];
+      for (let index = 0; index < Math.ceil(raw.receiptCount / RSS_RECEIPT_PAGE); index++) {
+        const page = (await meta.get(rssReceiptPageKey(workspaceId, index)))?.value;
+        const values = rssExpandPage(page);
+        if (values.length !== Math.min(RSS_RECEIPT_PAGE, raw.receiptCount - receipts.length)) throw rssProgressError();
+        receipts.push(...values);
+      }
+      return receipts;
+    }
+    function rssCursorStamp(cursor) {
+      if (!plain(cursor) || Object.keys(cursor).length !== 2 ||
+        !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(cursor.id || '') ||
+        typeof cursor.fetched_at !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(cursor.fetched_at) ||
+        !Number.isFinite(Date.parse(cursor.fetched_at))) throw rssProgressError();
+      const fraction = (cursor.fetched_at.match(/\.(\d+)/)?.[1] || '').padEnd(6, '0');
+      return BigInt(Date.parse(cursor.fetched_at)) * 1000n + BigInt(fraction.slice(3));
+    }
+    function rssProgressShape(input) {
+      if (!plain(input) || Object.keys(input).some(key => !['cursor', 'receipts'].includes(key)) || !Array.isArray(input.receipts)) throw rssProgressError();
+      let previous = null; const ids = new Set();
+      for (const receipt of input.receipts) {
+        if (!plain(receipt) || !['stored', 'held', 'trashed'].includes(receipt.kind)) throw rssProgressError();
+        const stamp = rssCursorStamp(receipt.cursor);
+        if (receipt.itemId !== receipt.cursor.id || ids.has(receipt.itemId) || previous &&
+          (stamp < previous.stamp || stamp === previous.stamp && receipt.itemId <= previous.id)) throw rssProgressError();
+        const fields = ['kind', 'itemId', 'cursor', ...(receipt.kind === 'stored' ? ['sourceId', 'sourceVersionId', 'contentHash'] :
+          receipt.kind === 'trashed' ? ['sourceId', 'trashLinkId', 'trashLinkRevision'] : [])];
+        if (Object.keys(receipt).some(key => !fields.includes(key))) throw rssProgressError();
+        if (receipt.kind !== 'held' && (typeof receipt.sourceId !== 'string' || !receipt.sourceId || receipt.sourceId.length > 128)) throw rssProgressError();
+        if (receipt.kind === 'stored' && (typeof receipt.sourceVersionId !== 'string' || !receipt.sourceVersionId || receipt.sourceVersionId.length > 128 || !/^[a-f\d]{64}$/.test(receipt.contentHash || ''))) throw rssProgressError();
+        if (receipt.kind === 'trashed' && (typeof receipt.trashLinkId !== 'string' || !receipt.trashLinkId || !Number.isSafeInteger(receipt.trashLinkRevision) || receipt.trashLinkRevision < 1)) throw rssProgressError();
+        ids.add(receipt.itemId); previous = { stamp, id: receipt.itemId };
+      }
+      const last = input.receipts.at(-1)?.cursor || null;
+      if (stablePayload(input.cursor) !== stablePayload(last)) throw rssProgressError();
+      return input;
+    }
+    async function rssBodyProofs(bundle, receipts) {
+      const needed = new Set(receipts.filter(receipt => receipt.kind === 'stored').map(receipt => receipt.sourceVersionId));
+      const versions = bundle.sourceVersions.filter(version => needed.has(version.id));
+      const cacheConnection = connection, cached = cacheConnection && rssProofCache.get(cacheConnection);
+      const previous = cached?.workspaceId === bundle.workspaceId ? cached : null, proofs = new Map();
+      // Immutable source text is the cache key, not its claimed hash or only
+      // the bundle revision. A changed/restored body must earn its own proof.
+      const reusable = previous && bundle.revision >= previous.revision ? previous.proofs : new Map();
+      const missing = versions.filter(version => {
+        const proof = reusable.get(version.id);
+        if (proof?.text !== version.contentText) return true;
+        proofs.set(version.id, proof); return false;
+      });
+      // Digest outside an IDB transaction; WebCrypto must not let it auto-close.
+      const hashes = await preparedStageHashes({ put: { sourceVersions: missing } }, 'rss-progress');
+      scopeGuard();
+      for (const version of missing) proofs.set(version.id, { hash: hashes.get(version.id), text: version.contentText });
+      // Missing versions are evicted, so restoring them later rechecks their
+      // bytes. A fresh storage instance also always begins without proofs.
+      if (cacheConnection && connection === cacheConnection) rssProofCache.set(cacheConnection, { workspaceId: bundle.workspaceId, revision: bundle.revision, proofs });
+      return proofs;
+    }
+    function rssValidPrefix(bundle, receipts, proofs) {
+      const sources = new Set(bundle.sources.map(source => source.id));
+      const versions = new Map(bundle.sourceVersions.map(version => [version.id, version]));
+      const trash = new Map(bundle.links.filter(link => link.kind === 'source_trash').map(link => [link.entityRefs?.[0]?.entityId, link]));
+      let count = 0;
+      for (const receipt of receipts) {
+        if (receipt.kind === 'stored') {
+          const version = versions.get(receipt.sourceVersionId);
+          const proof = proofs.get(receipt.sourceVersionId);
+          if (!sources.has(receipt.sourceId) || version?.sourceId !== receipt.sourceId || version.contentHash !== receipt.contentHash ||
+            proof?.hash !== receipt.contentHash || proof.text !== version.contentText) break;
+        } else if (receipt.kind === 'trashed') {
+          const link = trash.get(receipt.sourceId);
+          if (!sources.has(receipt.sourceId) || link?.id !== receipt.trashLinkId || link.revision !== receipt.trashLinkRevision) break;
+        }
+        count++;
+      }
+      return receipts.slice(0, count);
+    }
+    async function readRssInboxProgress(workspaceId) {
+      scopeGuard(); requireId(workspaceId, '작업공간');
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 RSS 자료를 확인해 주세요.');
+      const { raw, bundle, storedReceipts, damagedPages } = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const raw = (await meta.get(rssProgressKey(workspaceId)))?.value;
+        try { return { raw: clone(raw), bundle: clone(bundle), storedReceipts: await rssReadReceipts(meta, workspaceId, raw) }; }
+        catch (error) {
+          if (error?.code !== 'invalid_rss_progress') throw error;
+          return { raw: clone(raw), bundle: clone(bundle), damagedPages: true };
+        }
+      });
+      const revision = Number.isSafeInteger(raw?.revision) && raw.revision >= 0 ? raw.revision : 0;
+      let receipts = [], needsRepair = false;
+      if (raw !== undefined) {
+        try {
+          if (!plain(raw) || revision !== raw.revision || damagedPages) throw rssProgressError();
+          rssProgressShape({ cursor: raw.cursor, receipts: storedReceipts });
+          receipts = rssValidPrefix(bundle, storedReceipts, await rssBodyProofs(bundle, storedReceipts));
+          needsRepair = receipts.length !== storedReceipts.length;
+        } catch (error) { if (error?.code !== 'invalid_rss_progress') throw error; needsRepair = true; }
+      }
+      return { revision, cursor: clone(receipts.at(-1)?.cursor || null), receipts: clone(receipts), bundleRevision: bundle.revision, needsRepair };
+    }
+    async function saveRssInboxProgress(workspaceId, input, expectedRevision, { expectedBundleRevision, isCurrent = () => true } = {}) {
+      scopeGuard(); requireId(workspaceId, '작업공간'); requireRevision(expectedRevision); requireRevision(expectedBundleRevision);
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 RSS 자료를 확인해 주세요.');
+      if (typeof isCurrent !== 'function') throw rssProgressError();
+      const candidate = clone(input); rssProgressShape(candidate);
+      const snapshot = await read(workspaceId), proofs = await rssBodyProofs(snapshot, candidate.receipts);
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const current = () => { scopeGuard(); if (!isCurrent()) throw fault('request_cancelled', '이전 계정의 RSS 반영을 중지했습니다.'); };
+        current();
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const raw = (await meta.get(rssProgressKey(workspaceId)))?.value;
+        const revision = Number.isSafeInteger(raw?.revision) && raw.revision >= 0 ? raw.revision : 0;
+        current();
+        if (revision !== expectedRevision || bundle.revision !== expectedBundleRevision) return { status: 'conflict' };
+        if (revision === Number.MAX_SAFE_INTEGER || rssValidPrefix(bundle, candidate.receipts, proofs).length !== candidate.receipts.length) throw rssProgressError();
+        // Keep every proof for restore validation, but only rewrite changed
+        // compact pages. Ordinary appends no longer rewrite the entire inbox.
+        const count = Math.ceil(candidate.receipts.length / RSS_RECEIPT_PAGE);
+        for (let index = 0; index < count; index++) {
+          const key = rssReceiptPageKey(workspaceId, index), page = rssReceiptPage(candidate.receipts.slice(index * RSS_RECEIPT_PAGE, (index + 1) * RSS_RECEIPT_PAGE));
+          const previous = (await meta.get(key))?.value;
+          let unchanged = false;
+          try { unchanged = stablePayload(previous ?? null) === stablePayload(page); }
+          catch (error) { if (error?.code !== 'invalid_request') throw error; }
+          if (!unchanged) await meta.put({ key, value: page });
+          current();
+        }
+        const oldCount = raw?.format === 2 && Number.isSafeInteger(raw.receiptCount) && raw.receiptCount >= 0 ? Math.ceil(raw.receiptCount / RSS_RECEIPT_PAGE) : 0;
+        for (let index = count; index < oldCount; index++) {
+          const key = rssReceiptPageKey(workspaceId, index);
+          if (!await meta.get(key)) break; // A damaged count cannot cause an unbounded cleanup.
+          await meta.delete(key); current();
+        }
+        const value = { format: 2, revision: revision + 1, cursor: candidate.cursor, receiptCount: candidate.receipts.length };
+        await meta.put({ key: rssProgressKey(workspaceId), value });
+        current();
+        return { status: 'stored', revision: value.revision, cursor: clone(candidate.cursor), receipts: clone(candidate.receipts), bundleRevision: bundle.revision };
+      });
+    }
     function subscribeAll(listener) {
       scopeGuard();
       if (!account) throw fault('auth_scope_required', '확인된 계정의 자료 알림만 받을 수 있습니다.');
@@ -5851,6 +6020,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readRssInboxProgress, saveRssInboxProgress,
       readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery, readHappinessDays, writeHappinessDay, absorbTimelineDays,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,

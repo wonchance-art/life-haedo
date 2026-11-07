@@ -16,6 +16,7 @@
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, accountDocsSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
+  let rssReflection = null, rssLoading = null;
   let retained = false, resumePoint = null, suspension = 0;
   // Recovery belongs to one consecutive failure streak, not to each build's
   // generation. Only real recovery, an owner change or a manual retry resets it.
@@ -50,6 +51,54 @@
     return true;
   }
   let workerScheduled = false;
+  function scheduleRssReflection(instance, storage, token, signal) {
+    const current = () => !signal.aborted && token === generation && mounted === instance && !suspended && !retained && !leaving;
+    let reflectionNotice = null;
+    const clearNotice = () => { reflectionNotice?.remove(); reflectionNotice = null; };
+    signal.addEventListener('abort', clearNotice, { once: true });
+    const onStatus = status => {
+      if (!current()) return;
+      if (status.state !== 'blocked') { clearNotice(); return; }
+      const main = root.document.querySelector('#lifeApp #lifeMain');
+      if (!main) return;
+      if (!reflectionNotice?.isConnected) {
+        reflectionNotice = root.document.createElement('p');
+        reflectionNotice.id = 'rssReflectionError';
+        reflectionNotice.className = 'life-error';
+        reflectionNotice.setAttribute('role', 'alert');
+        main.before(reflectionNotice);
+      }
+      const title = typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
+      // The title goes after a colon so the sentence never depends on its final consonant.
+      const named = title ? ': “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”' : '';
+      reflectionNotice.textContent = 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+    };
+    // Keep module loading and private inbox requests off the first-screen path.
+    const queue = () => root.requestAnimationFrame(() => {
+      const idle = root.requestIdleCallback || (callback => root.setTimeout(callback, 0));
+      idle.call(root, () => {
+        if (!current()) return;
+        // Offline, RSS sends nothing and loads nothing; the 'online' event queues it again.
+        if (root.navigator.onLine === false && !life.RssConnection) return;
+        if (!rssLoading) rssLoading = life.RssConnection ? Promise.resolve() : new Promise((resolve, reject) => {
+          const src = new URL('assets/life/rss-connection.js', root.document.baseURI).href;
+          const existing = [...root.document.scripts].find(script => script.src === src);
+          const script = existing || root.document.createElement('script');
+          script.addEventListener('load', resolve, { once: true });
+          script.addEventListener('error', error => { script.remove(); reject(error); }, { once: true });
+          if (!existing) { script.src = src; root.document.head.append(script); }
+        }).catch(error => { rssLoading = null; throw error; });
+        rssLoading.then(() => {
+          if (!current() || rssReflection || !life.RssConnection?.createReflection) return;
+          rssReflection = life.RssConnection.createReflection({ storage, auth, core: life.Core, isCurrent: current, onStatus });
+          rssReflection.start();
+        }).catch(() => { /* RSS can retry on the next opening; the current screen stays usable. */ });
+      }, { timeout: 2000 });
+    });
+    root.document.addEventListener('haedo:page-ready', queue, { signal });
+    root.addEventListener('online', queue, { signal });
+    queue();
+  }
   function scheduleWorker() {
     if (workerScheduled || !('serviceWorker' in root.navigator)) return;
     workerScheduled = true;
@@ -136,6 +185,7 @@
     const container = conceal();
     controller?.abort(); controller = null;
     showing = null;
+    rssReflection?.dispose(); rssReflection = null;
     mounted?.dispose?.(); mounted = null;
     accountLibrary?.dispose?.(); accountLibrary = null;
     libraryMetaSync?.dispose?.(); libraryMetaSync = null;
@@ -240,6 +290,7 @@
       // device automatically. One engine per account; hide() disposes it.
       try { accountDocsSync = life.AccountDocsSync?.create({ storage, auth }) || null; accountDocsSync?.start(); }
       catch (_) { accountDocsSync = null; /* Local saves stay intact; the next open retries. */ }
+      scheduleRssReflection(instance, storage, token, signal);
       scheduleWorker();
       return mounted;
     } catch (error) {

@@ -4,7 +4,7 @@
 'use strict';
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -21,7 +21,7 @@ const parentName = '익명 연구', childName = '익명 관찰', renamedChild = 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const click = async (page, selector) => { await page.locator(selector).click(); await settle(page); };
 const byName = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
-const report = { createdAt: new Date().toISOString(), scope: 'Four actual local material-folder journeys through import/list/read/edit/common-backup UI, bundled SDK and scoped IndexedDB with anonymous intercepted FakeCloud Auth only. Raw Markdown, quotes, workbench group and names are synthetic. Group setup uses the actual storage API as an explicit fixture; one targeted IDB abort is isolated and removed before retry. CSS viewports are not real devices; no personal vault/account/provider, OS file-save or remote folder-sync proof.', checks: [], visual: [], observations: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Four actual local material-folder journeys through import/list/read/edit/common-backup UI, bundled SDK and scoped IndexedDB with anonymous intercepted FakeCloud Auth only. Raw Markdown, quotes, workbench group and names are synthetic. Group setup uses the actual storage API as an explicit fixture; one targeted IDB abort is isolated and removed before retry. CSS viewports are not real devices; no personal vault/account/provider, OS file-save or remote folder-sync proof.', checks: [], visual: [], observations: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], rssReads: [], appStarts: [], closedContexts: 0 };
 async function snapshot(page, workspaceId) {
   return page.evaluate(async workspaceId => { const s = HaedoLife.Shell.storage, id = workspaceId || await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), sourceFolders: await s.readSourceFolders(id), interest: await s.readInterestProfile(id), annual: await s.readAnnualPlan(id), collection: await s.readCollection(id), discoverySettings: await s.readDiscoverySettings(id) }; }, workspaceId);
 }
@@ -105,12 +105,39 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] }); report.browser = browser.version();
   async function check(name, run) {
     if (process.env.SOURCE_FOLDERS_MATCH && !new RegExp(process.env.SOURCE_FOLDERS_MATCH).test(name)) return;
-    const server = new FakeCloud(), context = await makeContext(browser, server, 'source-folders-' + report.checks.length, accounts.a, { viewport: { width: 820, height: 1000 }, hasTouch: true, reducedMotion: 'reduce' });
-    context.on('request', request => { const u = new URL(request.url()), body = request.postData() || ''; if ([titleA, titleB, note, raw, parentName, renamedChild].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname }); if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 }); else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname }); });
+    const server = new FakeCloud(), device = 'source-folders-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 820, height: 1000 }, hasTouch: true, reducedMotion: 'reduce' });
+    const rssRequests = [];
+    await context.exposeBinding('__folderAppStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) report.appStarts.push({ device, ...start }); });
+    await context.addInitScript(origin => {
+      if (window !== top || location.origin !== origin) return;
+      const documentId = crypto.randomUUID(); let sequence = 0; window.__folderStartReports = [];
+      document.addEventListener('haedo:page-ready', () => {
+        const storage = HaedoLife.Shell.storage, ownerId = storage.account.userId;
+        __folderStartReports.push(storage.getActive().then(workspaceId => __folderAppStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+      });
+    }, new URL(base).origin);
+    async function auditRss() {
+      for (const page of context.pages()) await page.evaluate(() => Promise.all(window.__folderStartReports || []));
+      const starts = report.appStarts.filter(row => row.device === device), reads = [];
+      for (const request of rssRequests) {
+        const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+        assert.ok(starts.some(start => start.ownerId === ownerId && start.workspaceId === workspaceId), 'RSS read lacks a verified owner/workspace start');
+        assert.ok(isRssInboxRead(request, { cloud, server, ownerId: accounts.a.id, workspaceId }), 'unexpected RSS request');
+        reads.push({ device, ownerId, workspaceId, action: 'list' });
+      }
+      report.rssReads.push(...reads);
+      assert.ok(reads.length > 0, 'the folder journeys must observe their initial RSS inbox reads');
+      assert.ok(reads.length <= starts.length, 'RSS reads exceed actual app starts');
+      for (const start of starts) {
+        const sameScope = row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId;
+        assert.ok(reads.filter(sameScope).length <= starts.filter(sameScope).length, 'RSS reads exceed actual starts for their owner/workspace');
+      }
+    }
+    context.on('request', request => { const u = new URL(request.url()), body = request.postData() || ''; if ([titleA, titleB, note, raw, parentName, renamedChild].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname }); if (u.origin === cloud && u.pathname.startsWith('/functions/v1/haedo-rss')) rssRequests.push(request); if (isRssInboxRead(request, { cloud, server, ownerId: accounts.a.id })) return; if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 }); else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname }); });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ check: name, destination: u.origin + u.pathname }); return route.abort('blockedbyclient'); });
     context.on('page', page => { page.setDefaultTimeout(15000); page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); }); page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message })); });
     const page = await context.newPage(); console.log('RUN ' + name);
-    try { await run({ page, context }); assert.equal(server.writes().length, 0); assert.equal(await page.evaluate(() => !!window.__folderPutOriginal), false, 'Targeted IDB abort hook must be removed'); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context }); await auditRss(); assert.equal(server.writes().length, 0); assert.equal(await page.evaluate(() => !!window.__folderPutOriginal), false, 'Targeted IDB abort hook must be removed'); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); report.closedContexts++; }
   }

@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
+const { isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { current, abortWorkbenchWrites, go } = require('./life-workbench-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
@@ -88,13 +89,39 @@ async function excluded(page, sourceId) {
 async function main() {
   await fs.mkdir(out, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-  const report = { createdAt: new Date().toISOString(), browser: browser.version(), scope: 'Actual local app/SDK/IndexedDB; anonymous HTTP interception; browser size/touch only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [], productionWrites: 0 };
+  const report = { createdAt: new Date().toISOString(), browser: browser.version(), scope: 'Actual local app/SDK/IndexedDB; anonymous HTTP interception; browser size/touch only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [], productionWrites: 0, rssReads: [], appStarts: [] };
   async function check(name, run, options = {}) {
     if (process.env.REDISCOVERY_TEST_MATCH && !new RegExp(process.env.REDISCOVERY_TEST_MATCH).test(name)) return;
     const server = new FakeCloud(), device = 'rediscovery-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, options), page = await context.newPage();
     page.setDefaultTimeout(12000); observe(page, report, name); await instrument(context);
+    const rssRequests = [], recorded = new Set();
+    await context.exposeBinding('__rediscoveryAppStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) report.appStarts.push({ device, ...start }); });
+    await context.addInitScript(origin => {
+      if (window !== top || location.origin !== origin) return;
+      const documentId = crypto.randomUUID(); let sequence = 0; window.__rediscoveryStartReports = [];
+      document.addEventListener('haedo:page-ready', () => {
+        const storage = HaedoLife.Shell.storage, ownerId = HaedoAuth.user.id;
+        __rediscoveryStartReports.push(storage.getActive().then(workspaceId => __rediscoveryAppStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+      });
+    }, new URL(base).origin);
+    context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && url.pathname.startsWith('/functions/v1/haedo-rss')) rssRequests.push(request); });
+    async function auditRss() {
+      await page.evaluate(() => Promise.all(window.__rediscoveryStartReports || []));
+      const starts = report.appStarts.filter(row => row.device === device);
+      for (const request of rssRequests) {
+        const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+        assert.ok(starts.some(start => start.ownerId === ownerId && start.workspaceId === workspaceId), 'RSS request lacks a verified owner/workspace start');
+        assert.ok(isRssInboxRead(request, { cloud, server, ownerId, workspaceId }), 'unexpected RSS request');
+        if (!recorded.has(request)) { recorded.add(request); report.rssReads.push({ device, ownerId, workspaceId, action: 'list' }); }
+      }
+      assert.ok(rssRequests.length <= starts.length, 'RSS reads exceed actual starts: ' + JSON.stringify({ device, rssReads: rssRequests.length, starts: starts.length }));
+      for (const start of starts) {
+        const sameScope = row => row.device === device && row.ownerId === start.ownerId && row.workspaceId === start.workspaceId;
+        assert.ok(report.rssReads.filter(sameScope).length <= starts.filter(sameScope).length, 'RSS reads exceed actual starts for their owner/workspace');
+      }
+    }
     await context.route('**/*', route => { const url = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push({ origin: url.origin, path: url.pathname }); return route.abort('blockedbyclient'); });
-    try { await run({ page, context, server, device }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context, server, device, auditRss }); await auditRss(); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
@@ -109,7 +136,7 @@ async function main() {
     for (const field of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[field], [], scene + ' ' + field);
   }
   try {
-    await check('past-version seed shows three explained latest-source candidates and keeps storage unchanged', async ({ page, server }) => {
+    await check('past-version seed shows three explained latest-source candidates and keeps storage unchanged', async ({ page, server, auditRss }) => {
       const f = await fixture(page), before = await current(page); await page.reload(); await ready(page); await openRecordsMenu(page); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await pick(page, f.refs.seed);
       assert.deepEqual(new Set(await candidates(page).evaluateAll(rows => rows.map(row => row.dataset.versionId))), new Set(['topic', 'group', 'term'].map(key => f.refs[key].versionId)));
       for (const key of ['topic', 'group', 'term']) {
@@ -122,10 +149,11 @@ async function main() {
       // authenticated boot (first load and the reload above) GETs only the owner's
       // private life_account_materials pointer list. Rediscovery itself still issues
       // no request: any other ledger entry or another owner fails.
-      assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'), []);
+      await auditRss();
+      assert.deepEqual(server.requests.filter(r => !['account-materials-list', 'rss-list'].includes(r.kind)), []);
       assert.ok(server.requests.every(r => r.owner === accounts.a.id));
       // Two authenticated boots happened (fixture goto + reload): at most one list read each.
-      const listReads = server.requests.length; assert.ok(listReads >= 1 && listReads <= 2, 'account materials list read ' + listReads + ' times for 2 boots');
+      const listReads = server.requests.filter(r => r.kind === 'account-materials-list').length; assert.ok(listReads >= 1 && listReads <= 2, 'account materials list read ' + listReads + ' times for 2 boots');
       await page.locator('#wbDiscoverySeed').getByRole('button', { name: '이 원문 버전 열기', exact: true }).click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), seedOld);
       await page.getByRole('button', { name: '다시 찾기로 돌아가기', exact: true }).click(); await settle(page);

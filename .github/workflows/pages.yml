@@ -439,6 +439,9 @@ jobs:
       - name: Verify RSS connection rows, preview, stop, retry and disconnect without real feed requests
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/rss-connection-browser.cjs
+      - name: Verify RSS inbox reflection with isolated auth, overlap re-reads and durable device acknowledgements
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/rss-inbox-reflection-browser.cjs
       - name: Verify same-account verification keeps permanent errors, retries transient failures within a cap and restores the retry button
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/shell-same-account-reverify-browser.cjs
@@ -681,6 +684,7 @@ jobs:
             .local/writing-ai/
             .local/material-writing-ai/
             .local/writing-ai-toolbar/
+            .local/rss-reflection/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
