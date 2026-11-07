@@ -98,7 +98,8 @@ async function main() {
       assert.equal(rows.find(row => row.version === ids.newVersion).badges.includes('이전 버전'), false);
       for (const width of [1440, 820, 390]) { await page.setViewportSize({ width, height: width === 390 ? 844 : width === 820 ? 1180 : 960 }); await frames(page); await capture(page, 'records-list-' + width); }
       await page.setViewportSize({ width: 390, height: 844 }); await frames(page);
-      assert.equal(await page.locator('#lifeRecordsReaderEmpty').isVisible(), false, 'phones keep one column');
+      // 2026-11-07 owner rule: no reading-column placeholder at any width (was: shown at 1101px+).
+      assert.equal(await page.locator('#lifeRecordsReaderEmpty, .records-reader-empty').count(), 0, 'no reading placeholder');
       await page.locator(`#lifeSearchResults .life-source-card[data-version-id="${ids.rainVersion}"] .life-source-open`).click(); await settle(page);
       assert.equal(await page.locator('#lifeRecordsPane').isVisible(), false); assert.equal(await page.locator('#lifeSourceText').isVisible(), true);
     });
@@ -124,7 +125,8 @@ async function main() {
     });
     await check('two-column reading keeps the durable reading position while the list scrolls; match moves stay out of it', async ({ page }) => {
       const ids = await seedRecords(page); await nav(page, 'records'); await page.locator('#lifeSearch').fill('도서관'); await frames(page);
-      assert.equal(await page.locator('#lifeRecordsReaderEmpty').isVisible(), true);
+      // 2026-11-07 owner rule: the list view has no reading column until an original is opened.
+      assert.equal(await page.locator('#lifeRecordsReaderEmpty, .records-reader-empty').count(), 0, 'no reading placeholder before opening');
       await page.locator(`#lifeSearchResults .life-source-card[data-version-id="${ids.newVersion}"] .life-source-open`).click(); await settle(page); await frames(page);
       const pane = page.locator('#lifeRecordsPane'); assert.equal(await pane.isVisible(), true);
       // Saved passage and list matches are painted over the unchanged text node (not split into marks), and survive the move into the reading column.
