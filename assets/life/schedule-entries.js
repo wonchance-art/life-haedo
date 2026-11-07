@@ -190,7 +190,7 @@
       if (mirrorError !== next && same()) { mirrorError = next; document.dispatchEvent(new Event('haedo:store')); }
     }).finally(() => { mirroring = null; });
   }
-  // A panel host: kind 'day' | 'week' | 'year'. isCurrent() is false once the screen changed.
+  // A panel host: kind 'day' | 'week' | 'month' | 'year'. isCurrent() is false once the screen changed.
   function render(host, { kind, date, week = [], year, today, storageAccount, storage, isCurrent, go }) {
     const s = open(storageAccount);
     if (!s) return () => {};
@@ -205,6 +205,8 @@
     const moodNotice = el('p', null, 'life-error schedule-happiness-error'); moodNotice.setAttribute('role', 'alert'); moodNotice.hidden = true;
     host.replaceChildren(body, status, error, moodNotice);
     let dirty = false, painted = false;
+    // 행복도 is shown in the day and week panels only (not in the year goals or the month habit tracker).
+    const moodShown = kind === 'day' || kind === 'week';
     // 행복도 for this paint: the timelines are read once per paint, not once per day shown.
     let mood = { source: null, on: () => null };
     // The first paint may run while the host is still being built (not yet in the page).
@@ -335,6 +337,26 @@
       section.append(scroll);
       return [section];
     }
+    // 일정 M: the habit tracker of this month (HaedoHabitTracker, the one habits.html shows). A tap goes
+    // through the same save path as the day/week checks: from the stored state, through s.change.
+    function monthPanel() {
+      const month = String(date).slice(0, 7), [y, m] = month.split('-').map(Number);
+      const habits = s.items.filter(item => item.kind === 'habit' && model().habitMonth(item.data, y, m, today).days.some(day => day.scheduled));
+      const section = el('section', null, 'schedule-entry-section schedule-month-habits'); section.setAttribute('aria-label', '이 달 습관');
+      section.append(el('h3', '습관', 'schedule-entry-title'));
+      if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'life-meta schedule-empty')); return [section]; }
+      const list = el('div');
+      global.HaedoHabitTracker.render(list, { habits, month, today, model: model(), focusScope: 'schedule:month-habit', heading: 'h4',
+        onToggle: (item, day, wasDone) => act(() => {
+          const latest = s.items.find(row => row.id === item.id);
+          if (!latest) throw new Error('습관을 찾지 못했습니다. 화면을 다시 열어 주세요.');
+          // Toggle from the stored state: a cell that no longer shows it (a repeated tap) changes nothing.
+          if (latest.data.checks.includes(day) !== wasDone) return;
+          s.change(latest.id, 'habit', model().toggleHabit(latest.data, day, today));
+        })() });
+      section.append(list);
+      return [section];
+    }
     function yearPanel() {
       const goals = model().activeGoals(s.items, year + '-01-01').filter(goal => !goal.data.target || goal.data.target.startsWith(String(year)) || goal.data.target > year + '-12-31');
       const section = el('section', null, 'schedule-entry-section'); section.setAttribute('aria-label', '목표');
@@ -352,11 +374,11 @@
       // Until the account document is read (or when it cannot be), no day shows a timeline's old point:
       // a day deleted in 일정 D must not come back as its old value for a moment. A page whose storage has
       // no happinessDays (mixed versions) shows the timeline's points as before.
-      if (kind !== 'year') mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
-      body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : yearPanel()));
+      if (moodShown) mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
+      body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : kind === 'month' ? monthPanel() : yearPanel()));
       painted = true;
       // 'loading' until the 행복도 document is read here (one more repaint follows), then 'ready'.
-      host.dataset.happiness = kind !== 'year' && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
+      host.dataset.happiness = moodShown && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
       const itemState = saveState(s.items), moodState = kind === 'day' && days ? days.sync : 'ok';
       const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
       const unseen = s.recoveryUnseen;
@@ -382,8 +404,8 @@
       }
       if (mirrorError) { status.hidden = false; status.append(el('span', ' ' + mirrorError, 'schedule-entry-recovery-error')); }
       // A newer app wrote the 행복도 document, or this page mixes module versions: nothing is written.
-      moodNotice.hidden = !(days?.refresh && kind !== 'year') && !(days?.error && kind === 'day');
-      if (days?.refresh && kind !== 'year') { moodNotice.textContent = REFRESH; moodNotice.dataset.code = 'app_refresh_required'; }
+      moodNotice.hidden = !(days?.refresh && moodShown) && !(days?.error && kind === 'day');
+      if (days?.refresh && moodShown) { moodNotice.textContent = REFRESH; moodNotice.dataset.code = 'app_refresh_required'; }
       else if (days?.error && kind === 'day') { moodNotice.textContent = days.error; delete moodNotice.dataset.code; }
       if (focusKey) [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }

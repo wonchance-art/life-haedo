@@ -353,12 +353,15 @@
     resolveButton(item, row);
     return row;
   }
-  function checkHabit(item, date) {
+  // Toggled from the stored copy: a click on a cell that no longer shows the stored state does nothing.
+  function checkHabit(item, date, wasDone) {
     try {
+      const latest = store.items.find((row) => row.id === item.id) || item;
+      if (wasDone !== undefined && latest.data.checks.includes(date) !== wasDone) return;
       store.change(
-        item.id,
+        latest.id,
         "habit",
-        model.toggleHabit(item.data, date, HaedoData.localDate()),
+        model.toggleHabit(latest.data, date, HaedoData.localDate()),
       );
     } catch (e) {
       toast(e.message);
@@ -446,63 +449,51 @@
         filter === "done" ? null : () => openItem("goal"),
       );
   }
+  // 습관 트래커(2026-11-07): one month per habit (HaedoHabitTracker). Not past the current month.
+  let habitMonth = null;
   function renderHabits() {
     const today = HaedoData.localDate(),
-      dates = Array.from({ length: 7 }, (_, i) => model.addDays(today, i - 6));
+      tracker = HaedoHabitTracker,
+      current = tracker.monthOf(today);
+    if (!habitMonth || habitMonth > current) habitMonth = current;
     const habits = store.items.filter((item) => item.kind === "habit");
-    byId("habitWeekLabel").textContent =
-      dates[0].slice(5) + " — " + today.slice(5);
+    byId("habitMonthLabel").textContent = tracker.monthLabel(habitMonth);
+    byId("habitNextMonth").disabled = habitMonth >= current;
+    byId("habitThisMonth").hidden = habitMonth === current;
     byId("itemCount").textContent = habits.length + "개";
-    const rows = habits.map((item) => {
-      const row = el("div", "habit-row"),
-        copy = el("button", "habit-copy");
-      copy.append(
-        el("strong", "", item.data.title),
-        el(
-          "small",
-          "",
-          "연속 " +
-            model.streak(item.data, today) +
-            "회 · " +
-            item.data.days.map((n) => weekdays[n]).join(", "),
-        ),
-      );
-      copy.setAttribute("aria-label", item.data.title + " 수정");
-      copy.onclick = () => openItem("habit", item);
-      const week = el("div", "habit-week");
-      for (const date of dates) {
-        const day = el("div", "habit-day");
-        day.append(el("span", "", weekdays[model.dayOfWeek(date)]));
-        const done = item.data.checks.includes(date),
-          button = el(
-            "button",
-            "habit-check" + (done ? " done" : ""),
-            done ? "" : date.slice(8),
-          );
-        if (done) button.append(icon("check"));
-        button.disabled = !model.scheduled(item.data, date);
-        button.setAttribute("aria-pressed", String(done));
-        button.setAttribute(
-          "aria-label",
-          item.data.title + " " + date + (done ? " 완료 취소" : " 완료"),
-        );
-        button.onclick = () => checkHabit(item, date);
-        if (date === today) button.setAttribute("aria-current", "date");
-        day.append(button);
-        week.append(day);
-      }
-      row.append(copy, week);
-      resolveButton(item, row);
-      return row;
+    const list = byId("habitList"),
+      active = document.activeElement,
+      focusKey = list.contains(active) ? active?.dataset?.focusKey : null;
+    tracker.render(list, {
+      habits,
+      month: habitMonth,
+      today,
+      model,
+      focusScope: "habits",
+      onOpen: (item) => openItem("habit", item),
+      onToggle: checkHabit,
     });
-    byId("habitList").replaceChildren(...rows);
-    if (!habits.length)
-      empty(
-        byId("habitList"),
-        "반복하고 싶은 일을 정해보세요.",
-        "습관 추가",
-        () => openItem("habit"),
-      );
+    for (const item of habits) {
+      const card = [...list.children].find((node) => node.dataset.habit === item.id);
+      if (card) resolveButton(item, card);
+    }
+    if (!habits.length) {
+      list.classList.remove("habit-tracker");
+      empty(list, "반복하고 싶은 일을 정해보세요.", "습관 추가", () => openItem("habit"));
+    }
+    tracker.restoreFocus(list, focusKey);
+  }
+  function showHabitMonth(month) {
+    habitMonth = month;
+    render();
+    // A month button that is now disabled or hidden would drop focus to the page: keep it on the label.
+    const active = document.activeElement;
+    if (!active || active === document.body || active.disabled || active.hidden) byId("habitMonthLabel").focus();
+  }
+  if (page === "habits") {
+    byId("habitPrevMonth").onclick = () => showHabitMonth(HaedoHabitTracker.shiftMonth(habitMonth, -1));
+    byId("habitNextMonth").onclick = () => showHabitMonth(HaedoHabitTracker.shiftMonth(habitMonth, 1));
+    byId("habitThisMonth").onclick = () => showHabitMonth(HaedoHabitTracker.monthOf(HaedoData.localDate()));
   }
   function render() {
     if (auth.user?.id !== uid) return;

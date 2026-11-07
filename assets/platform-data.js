@@ -165,6 +165,29 @@
     }
     return count;
   }
+  // One month of a habit for the tracker (2026-11-07 "습관은 트래커 처럼"): each day's state and the
+  // month's count. Only scheduled days up to today count (scheduled = done + not yet done); a check on
+  // a day that is not scheduled (days changed later) is shown but not counted.
+  function habitMonth(habit, year, month, today) {
+    const pad = (n) => String(n).padStart(2, "0");
+    const length = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const checks = new Set(Array.isArray(habit?.checks) ? habit.checks : []);
+    const days = [];
+    let planned = 0,
+      done = 0;
+    for (let day = 1; day <= length; day++) {
+      const date = year + "-" + pad(month) + "-" + pad(day),
+        isScheduled = Array.isArray(habit?.days) && typeof habit?.created === "string" && scheduled(habit, date),
+        future = date > today,
+        checked = checks.has(date);
+      if (isScheduled && !future) {
+        planned++;
+        if (checked) done++;
+      }
+      days.push({ date, scheduled: isScheduled, future, done: checked, open: isScheduled && !future });
+    }
+    return { year, month, days, scheduled: planned, done };
+  }
   function toggleHabit(habit, date, today) {
     if (
       !root.HaedoData.validDate(date) ||
@@ -387,6 +410,7 @@
     scheduled,
     streak,
     toggleHabit,
+    habitMonth,
     validItem,
     happinessScore,
     happinessOn,

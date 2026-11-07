@@ -22,7 +22,7 @@ const SHELL=[
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css','./assets/haedo-type.css','./vendor/pretendard/PretendardVariable.woff2',
   './assets/haedo-motion.js','./assets/haedo-motion.css','./assets/data.js','./assets/sync.js','./assets/app.js',
   './assets/workspace.js','./assets/platform-config.js','./assets/platform.css','./assets/platform-auth.js','./assets/haedo-navigation.js',
-  './assets/haedo-shell.css','./assets/timeline-shell.css','./assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js',
+  './assets/haedo-shell.css','./assets/timeline-shell.css','./assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/habit-tracker.js','./assets/habit-tracker.css',
   './assets/platform-life-remote.js','./assets/timeline-entry.js','./life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js',
   './assets/life/unified-search.js','./assets/life/unified-search-ui.js','./assets/life/core.js','./assets/life/writing.js','./assets/life/writing-ui.js',
   './assets/life/nine-board.js','./assets/life/nine-board-ui.js','./assets/life/nine-board.css','./assets/life/page-posts.js','./assets/life/page-posts-view.js',
