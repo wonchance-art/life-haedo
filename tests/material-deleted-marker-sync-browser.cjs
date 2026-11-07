@@ -194,6 +194,14 @@ function copyContent(plan) {
     blocks: plan.blocks.map(({ id, materialId, ...rest }) => rest) };
 }
 
+// The shell lazy-loads its RSS module after the first screen (#227). A device
+// that goes offline before that load finishes aborts an online-started local
+// asset request, which this audit rightly does not excuse. Going offline is
+// a controlled step after startup, so wait for that startup load first.
+async function startupSettled(page) {
+  await page.waitForFunction(() => !!globalThis.HaedoLife?.RssConnection, null, { timeout: 12000 });
+}
+
 async function main() {
   assert(['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)); await fs.mkdir(output, { recursive: true });
   const server = new DeletedMarkerCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
@@ -281,6 +289,7 @@ async function main() {
       const a = await device('c3-offline-a'), fixture = await createOutput(a.page, '오프라인 삭제 뒤에도 남길 준비');
       await openOutput(a.page, fixture);
       const writesBefore = server.blogRequests.filter(request => request.rpc === 'life_blog_delete').length, documentsBefore = server.documentCalls.filter(request => request.rpc === 'life_account_document_put').length;
+      await startupSettled(a.page);
       a.offline = true; server.offlineDevices.add(a.name); await a.context.setOffline(true); assert.equal(await a.page.evaluate(() => navigator.onLine), false);
       await deleteOpenOutput(a.page); assert.equal(await postCount(a.page, fixture.postId), 0);
       assert.equal((await allPlans(a.page)).find(row => row.plan.id === fixture.planId).output.status, 'deleted');
@@ -366,6 +375,7 @@ async function main() {
     });
     await check('first-sync-deleted-local', async () => {
       const a = await device('c3-unsynced-a');
+      await startupSettled(a.page);
       a.offline = true; server.offlineDevices.add(a.name); await a.context.setOffline(true);
       const source = await seedMaterials(a.page), planId = await seedPlan(a.page, source, '첫 연결 전에 글을 지운 준비');
       const created = await a.page.evaluate(async ({ workspaceId, planId }) => {
