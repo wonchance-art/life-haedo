@@ -96,7 +96,7 @@ async function snap(page, scene) {
         // 2026-11-03 soft redesign C: 자료 opened from its list at 1101px+ reads beside the list (soft-library);
         // the reading column itself stays within 720px. 2026-11-07 owner request: that split fills the width up to
         // the 24px gutter (no 1200px cap), and the 자료 list alone (no reading placeholder) widens up to 960px.
-        const { split, wideList } = await page.evaluate(() => ({ split: document.querySelector('#lifeMain')?.dataset.split === 'records', wideList: document.querySelector('#lifeMain')?.dataset.wide === 'records' && innerWidth > 1100 }));
+        const { split, wideList } = await page.evaluate(() => ({ split: document.querySelector('#lifeMain')?.dataset.split === 'records' && innerWidth > 1100, wideList: document.querySelector('#lifeMain')?.dataset.wide === 'records' && innerWidth > 1100 }));
         const limit = scene === 'tools' ? 1152 : split ? size.width - 216 - 24 - 48 : wideList ? 960 : 720;
         if (metrics.contentWidth > limit + 1) report.qualityFailures.push({ scene, width: size.width, check: scene === 'tools' ? 'calendarMaximum1152' : split ? 'recordsSplitWithinGutters' : wideList ? 'recordsListMaximum960' : 'contentMaximum720', details: metrics.contentWidth });
         if (split) {
