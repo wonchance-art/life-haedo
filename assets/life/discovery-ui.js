@@ -1083,14 +1083,13 @@
       surface.dataset.reading = String(!!article); setImmersive(!!article);
       if (!article) {
         cancelPrivateRead(); disposeReaderView();
-        const empty = node('div', null, 'discovery-reader-empty'); empty.append(node('p', '목록에서 글을 고르면 여기에서 원문을 봅니다.', 'life-meta'));
-        current.readerHost.replaceChildren(empty); return;
+        current.readerHost.replaceChildren(); return;
       }
       let view = current.reader;
       if (!view || view.selection !== current.selected || !view.element.isConnected) {
         disposeReaderView();
         const element = node('article', null, 'discovery-reader'); element.id = 'discoveryReader'; element.dataset.readerUrl = article.canonicalUrl; element.setAttribute('aria-label', '원문 보기');
-        const back = button(null, 'discoveryReaderBack', closeReader, 'discovery-reader-back'); back.setAttribute('aria-label', '뉴스로 돌아가기'); back.append(icon('back'), node('span', '뉴스'));
+        const back = button(null, 'discoveryReaderBack', closeReader, 'discovery-reader-back'); back.setAttribute('aria-label', '뉴스로 돌아가기'); back.title = '뉴스로 돌아가기'; back.append(icon('back'), node('span', '뉴스'));
         const head = node('div', null, 'discovery-reader-head'), tools = node('div', null, 'discovery-reader-tools');
         tools.setAttribute('role', 'toolbar'); tools.setAttribute('aria-label', '글 동작');
         const page = node('section', null, 'discovery-reader-page'), notes = node('div', null, 'discovery-reader-notes');
@@ -1163,7 +1162,12 @@
       const focused = root.document.activeElement, settingsFocus = current.settingsScreen && current.settingsPanel?.contains(focused) ? { element: focused, id: focused.id, key: focused.dataset.focusKey, scrollY: root.scrollY || 0 } : null;
       ensureSurface(); current.editor.hidden = false; drawEditor(); surface.setAttribute('aria-busy', String(busy()));
       current.reactionHost.hidden = current.body.hidden = current.layout.hidden = !!current.settingsScreen; current.settingsPanel.hidden = !current.settingsScreen;
-      if (current.settingsScreen) delete container.dataset.split; else { container.dataset.split = 'news'; ensureSplit(); }
+      // 2026-11-07 owner decision: like 자료, no reading column until an article is opened. Wide screens
+      // show the list alone (data-wide); an opened article reads beside it (data-split) with the separator.
+      const reading = !current.settingsScreen && !!selectedArticle();
+      if (current.settingsScreen) { delete container.dataset.split; delete container.dataset.wide; disposeSplit(); }
+      else if (reading) { container.dataset.split = 'news'; delete container.dataset.wide; ensureSplit(); }
+      else { delete container.dataset.split; container.dataset.wide = 'news'; disposeSplit(); }
       current.managementBody.replaceChildren(); current.recoveryBody.replaceChildren(); current.catalogStatus.replaceChildren(); current.topicNextHost.replaceChildren();
       const readerOpen = !current.settingsScreen && !!selectedArticle(), readerNotes = node('div');
       const body = node('div'), recoveryHost = current.settingsScreen ? current.recoveryBody : readerOpen ? readerNotes : body;

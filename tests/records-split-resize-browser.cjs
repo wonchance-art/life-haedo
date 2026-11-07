@@ -263,13 +263,59 @@ async function main() {
       assert.equal((await split(page, '#lifeMain')).now, 600, 'the stored width applies again when the window widens');
     }, { width: 1100, height: 900 });
 
+    await check('news list has no reading column until an article opens; closing returns to the list and the row', async ({ page }) => {
+      await nav(page, 'news'); await idle(page);
+      const listOnly = async label => {
+        const layout = await page.evaluate(() => {
+          const main = document.querySelector('#lifeMain'), css = getComputedStyle(main), host = document.querySelector('#discoveryReaderHost'), list = document.querySelector('#discoveryListPane');
+          return { split: main.dataset.split || null, wide: main.dataset.wide || null, handles: document.querySelectorAll('.haedo-split-handle').length, reading: document.querySelector('#discoveryReview').dataset.reading,
+            host: host.checkVisibility(), hostChildren: host.childElementCount, placeholder: document.querySelectorAll('.discovery-reader-empty').length, text: document.body.innerText.includes('목록에서 글을 고르면'),
+            content: main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), list: list.getBoundingClientRect().width, app: document.querySelector('.life-app').getBoundingClientRect().width };
+        });
+        assert.deepEqual([layout.split, layout.wide, layout.handles, layout.reading, layout.host, layout.hostChildren, layout.placeholder, layout.text], [null, 'news', 0, 'false', false, 0, 0, false], label + ': list only');
+        assert(Math.abs(layout.list - layout.content) <= 1, label + ': the list fills the content width');
+        assert.equal(Math.round(layout.content), Math.min(960, Math.round(layout.app - 48)), label + ': same frame as the 자료 list');
+      };
+      for (const width of [1101, 1440, 1920]) {
+        await page.setViewportSize({ width, height: 960 }); await frames(page); await listOnly(String(width));
+        if (width !== 1101) await capture(page, 'news-list-' + width); else assert.equal(await horizontalOverflow(page), false);
+      }
+      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page);
+      const row = page.locator('#discoveryList [data-discovery-id="910002"] [data-discovery-select]');
+      await row.click(); await idle(page); await frames(page); await page.locator('#discoveryReaderFrame').waitFor();
+      let state = await split(page, '.discovery-layout'); assertSeparator(state);
+      assert.equal(state.controls, 'discoveryListPane'); assert.equal(state.now, 440, 'news default list width'); assert.equal(state.stored, null);
+      assert.equal(await page.evaluate(() => [document.querySelector('#lifeMain').dataset.split, document.querySelector('#lifeMain').dataset.wide || null].join()), 'news,');
+      const back = page.locator('#discoveryReaderBack');
+      assert.deepEqual(await back.evaluate(node => { const box = node.getBoundingClientRect(); return { visible: node.checkVisibility(), name: node.getAttribute('aria-label'), width: Math.round(box.width), height: Math.round(box.height) }; }),
+        { visible: true, name: '뉴스로 돌아가기', width: 44, height: 44 }, 'wide screens can close the reading column');
+      await capture(page, 'news-open-1440');
+      await page.setViewportSize({ width: 1920, height: 1000 }); await frames(page); await capture(page, 'news-open-1920');
+      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page);
+      const historyLength = await page.evaluate(() => history.length);
+      await back.click(); await idle(page); await frames(page);
+      await listOnly('closed');
+      assert.equal(await page.evaluate(() => document.activeElement?.closest('[data-discovery-id]')?.dataset.discoveryId), '910002', 'focus returns to the opened row');
+      assert.equal(await page.evaluate(() => history.length), historyLength, 'closing on a wide screen writes no history');
+      assert.equal(await page.evaluate(() => window.__splitObservers.size), 0, 'closing removes the separator observer');
+      // Narrow screens keep their behaviour: the reader replaces the list; back returns to the same row.
+      await page.setViewportSize({ width: 820, height: 1180 }); await frames(page); await capture(page, 'news-list-820');
+      await row.click(); await idle(page); await frames(page);
+      assert.deepEqual(await page.evaluate(() => ({ list: document.querySelector('#discoveryListPane').checkVisibility(), reader: document.querySelector('#discoveryReader').checkVisibility(), handle: document.querySelector('.haedo-split-handle')?.checkVisibility() ?? false })), { list: false, reader: true, handle: false });
+      await capture(page, 'news-open-820');
+      await page.goBack(); await idle(page); await frames(page);
+      assert.equal(await page.evaluate(() => document.querySelector('#discoveryReview').dataset.reading), 'false', 'browser back closes the narrow reader');
+      await page.setViewportSize({ width: 390, height: 844 }); await frames(page); await capture(page, 'news-list-390');
+      await row.click(); await idle(page); await frames(page); await capture(page, 'news-open-390');
+      await page.locator('#discoveryReaderBack').click(); await idle(page); await frames(page);
+      assert.equal(await page.evaluate(() => document.activeElement?.closest('[data-discovery-id]')?.dataset.discoveryId), '910002', 'phone back returns to the row');
+    });
+
     await check('news separator: drag, clamps, keyboard, persistence and no separator below 1101px', async ({ page }) => {
       await nav(page, 'news'); await idle(page);
-      let state = await split(page, '.discovery-layout'); assertSeparator(state);
-      assert.equal(state.controls, 'discoveryListPane'); assert.equal(state.now, 440, 'news default list width');
       await page.locator('#discoveryList [data-discovery-id="910001"] [data-discovery-select]').click(); await idle(page); await frames(page);
       await page.locator('#discoveryReaderFrame').waitFor();
-      state = await split(page, '.discovery-layout'); assertSeparator(state);
+      let state = await split(page, '.discovery-layout'); assertSeparator(state);
       const moved = await drag(page, '.discovery-layout', -100, { release: false });
       assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#discoveryReaderFrame')).pointerEvents), 'none', 'the frame cannot take the pointer while dragging');
       assert.equal(moved.during.now, 340); await page.mouse.up(); await frames(page);
@@ -288,13 +334,15 @@ async function main() {
       state = await split(page, '.discovery-layout'); assertSeparator(state); assert.equal(state.now, 360); await capture(page, 'news-split-1920');
       await page.reload(); await ready(page); await settle(page);
       if (!await page.locator('.discovery-layout').count()) { await nav(page, 'news'); }
-      await idle(page); state = await split(page, '.discovery-layout'); assert.equal(state.now, 360, 'news width after reload');
+      await idle(page);
+      if (!await page.locator('#discoveryReaderFrame').count()) { await page.locator('#discoveryList [data-discovery-id="910001"] [data-discovery-select]').click(); await idle(page); await frames(page); }
+      state = await split(page, '.discovery-layout'); assert.equal(state.now, 360, 'news width after reload');
       for (const [width, height] of [[1100, 900], [820, 1180], [390, 844]]) {
         await page.setViewportSize({ width, height }); await frames(page);
         assert.equal(await page.evaluate(() => document.querySelector('.haedo-split-handle')?.checkVisibility() ?? false), false, width + ': no separator');
         assert.equal(await horizontalOverflow(page), false, width + ': horizontal overflow');
       }
-      await nav(page, 'records');
+      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page); await nav(page, 'records');
       assert.deepEqual(await page.evaluate(() => ({ handles: document.querySelectorAll('.haedo-split-handle').length, observers: window.__splitObservers.size })), { handles: 0, observers: 0 }, 'leaving news removes its separator');
     }, { width: 1440, height: 960 });
   } finally {
