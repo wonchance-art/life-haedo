@@ -55,7 +55,7 @@
 .records-row .life-record-notes .life-excerpt-card { gap: 4px; padding: 8px 0 0; border: 0; }
 .records-row .life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 8px; border-top: 1px solid var(--haedo-line); }
 .records-row .life-record-notes .life-quote { font-size: var(--haedo-text-control); line-height: 1.6; }
-.records-pane-count, .records-list-column #lifeSearchCount { margin: 8px 0 0; color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
+.records-pane-count, #lifeMain[data-wide=records] #lifeSearchCount { margin: 8px 0 0; color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
 
 /* The original open beside the list: its row keeps a 2px outline (the face may widen past the column). */
 .records-pane-row[data-current=true]::before, .records-pane .records-excerpt-row[data-current=true]::before { content: ""; position: absolute; inset: 0 -12px; border-radius: 12px; box-shadow: inset 0 0 0 2px var(--haedo-accent); pointer-events: none; }
@@ -83,27 +83,51 @@
 /* Saved passages: a tint plus an underline, so they read without relying on colour alone. */
 ::highlight(haedo-excerpt) { background-color: #dfece5; text-decoration-line: underline; text-decoration-color: #145b50; text-decoration-thickness: 2px; }
 
-/* 1101px 이상: 목록과 읽기 칸 */
-.records-reader-empty, .records-pane { display: none; }
+/* 1101px 이상: 목록과 읽기 칸 (2026-11-07 소유자 요청: 고르기 전에는 읽기 칸이 없고, 너비는 화면을 따른다).
+ * 목록만 볼 때: 틀의 왼쪽 시작선은 다른 화면과 같고, 목록은 화면 너비를 따라 최대 960px까지 넓어진다.
+ * 원문을 열면: 오른쪽 24px 여백까지 채우고, 목록(기본 400px, 끌어서 280px~) · 구분선 44px · 읽기 칸(420px 이상)이다.
+ * 읽기 칸의 본문은 720px 이하로 가운데에 두고 남는 폭은 양옆 여백이 된다. 구분선은 assets/life/split-resize.js. */
+.records-pane { display: none; }
 @media (min-width: 1101px) {
-  body.haedo-shell .life-app:has(> #lifeMain[data-split]) { width: auto; max-width: 1200px; margin-left: max(16px, calc((100% - 768px) / 2)); margin-right: 24px; }
-  .life-app:has(> #lifeMain[data-split]) > :is(.life-toolbar, .life-status, .life-error) { max-width: none; }
-  #lifeMain[data-split] { max-width: none; }
-  #lifeMain[data-split=records] { display: grid; grid-template-columns: minmax(320px, 400px) minmax(0, 1fr); column-gap: 32px; align-items: start; }
+  body.haedo-shell .life-app:has(> #lifeMain:is([data-split], [data-wide])) { width: auto; max-width: none; margin-left: max(16px, calc((100% - 768px) / 2)); margin-right: 24px; }
+  body.haedo-shell .life-app:has(> #lifeMain[data-wide=records]) { max-width: 1008px; }
+  .life-app:has(> #lifeMain:is([data-split], [data-wide])) > :is(.life-toolbar, .life-status, .life-error) { max-width: none; }
+  #lifeMain:is([data-split], [data-wide]) { max-width: none; }
+  #lifeMain[data-split=records] { display: grid; grid-template-columns: minmax(0, var(--haedo-split-list, 400px)) 44px minmax(0, 1fr); align-items: start; }
   #lifeMain[data-split=records] > * { grid-column: 1 / -1; min-width: 0; }
-  #lifeMain[data-split=records] > :is(.records-list-column, .records-pane) { grid-column: 1; grid-row: 1; }
-  #lifeMain[data-split=records] > :is(.records-reader-empty, .records-reader-pane) { grid-column: 2; grid-row: 1; }
-  .records-reader-empty { position: sticky; top: calc(var(--haedo-header-height, 64px) + 24px); display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 12px; color: var(--haedo-muted); }
-  .records-reader-empty > p { margin: 0; font-size: var(--haedo-text-control); }
+  #lifeMain[data-split=records] > .records-pane { grid-column: 1; grid-row: 1; }
+  #lifeMain[data-split=records] > .haedo-split-handle { grid-column: 2; grid-row: 1; }
+  #lifeMain[data-split=records] > .records-reader-pane { grid-column: 3; grid-row: 1; }
   .records-pane { position: sticky; top: 16px; display: block; max-height: calc(100vh - 32px); margin-inline: -12px; padding-inline: 12px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
   .records-pane .records-pane-search { position: sticky; top: 0; z-index: 2; margin-top: 0; }
-  .records-reader-pane > .life-reader { max-width: 720px; }
+  .records-reader-pane > .life-reader { max-width: 720px; margin-inline: auto; }
 }
+/* 목록 너비 구분선 (자료·뉴스 공용, assets/life/split-resize.js): 44px 끌기 영역, 가운데 1px 선과 화면 가운데의 손잡이. */
+.haedo-split-handle { display: none; }
+@media (min-width: 1101px) {
+  .haedo-split-handle { position: relative; display: block; align-self: stretch; width: 44px; min-height: 44px; cursor: col-resize; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .haedo-split-handle::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); background: var(--haedo-line); }
+  .haedo-split-grip { position: sticky; top: calc(50vh - 20px); display: block; width: 6px; height: 40px; margin: 0 auto; border-radius: 3px; background: var(--field-line, #86968d); }
+  .haedo-split-handle:focus { outline: none; }
+  .haedo-split-handle:is(:focus-visible, [data-dragging=true])::before { width: 2px; background: var(--haedo-focus); }
+  .haedo-split-handle:is(:focus-visible, [data-dragging=true]) > .haedo-split-grip { background: var(--haedo-accent); }
+  .haedo-split-handle:focus-visible > .haedo-split-grip { outline: 3px solid var(--haedo-focus); outline-offset: 3px; }
+  @media (hover: hover) and (pointer: fine) {
+    .haedo-split-handle:hover::before { width: 2px; background: var(--haedo-focus); }
+    .haedo-split-handle:hover > .haedo-split-grip { background: var(--haedo-accent); }
+  }
+}
+/* While dragging: no text selection, the resize cursor everywhere, and frames cannot take the pointer. */
+html[data-haedo-split-dragging] { cursor: col-resize; -webkit-user-select: none; user-select: none; }
+html[data-haedo-split-dragging] body { cursor: col-resize; }
+html[data-haedo-split-dragging] iframe { pointer-events: none; }
 @media (max-width: 760px) {
   .life-card.records-row, .records-row { grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; }
   .records-row > .records-when { white-space: normal; }
 }
 @media (forced-colors: active) {
   .records-tab[aria-selected=true] { box-shadow: none; text-decoration: underline 2px; }
+  .haedo-split-handle::before, .haedo-split-grip { background: CanvasText; }
+  .haedo-split-handle:is(:focus-visible, [data-dragging=true])::before, .haedo-split-handle:is(:focus-visible, [data-dragging=true]) > .haedo-split-grip { background: Highlight; }
   .records-badge { border: 1px solid CanvasText; }
 }

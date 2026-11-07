@@ -195,6 +195,7 @@ const PINNED = {
     "SourceFoldersUI",
     "SourceMarkdown",
     "SourceReference",
+    "SplitResize",
     "Storage",
     "Sync",
     "SyncCommon", // S1: shared sync helpers (assets/life/sync-common.js)

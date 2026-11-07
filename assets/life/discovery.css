@@ -364,8 +364,11 @@
 .discovery-news .discovery-reader-empty { display: none; }
 @media (min-width: 1101px) {
   #lifeMain[data-split=news] .discovery-news { max-width: none; margin-inline: 0; }
-  #lifeMain[data-split=news] .discovery-layout { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); column-gap: 32px; align-items: start; }
-  #lifeMain[data-split=news] .discovery-reader-host { position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
+  /* List (default 440px, dragged from 280px) · 44px separator (assets/life/split-resize.js) · reader (420px and up). */
+  #lifeMain[data-split=news] .discovery-layout { display: grid; grid-template-columns: minmax(0, var(--haedo-split-list, 440px)) 44px minmax(0, 1fr); align-items: start; }
+  #lifeMain[data-split=news] .discovery-list-pane { grid-column: 1; grid-row: 1; min-width: 0; }
+  #lifeMain[data-split=news] .discovery-layout > .haedo-split-handle { grid-column: 2; grid-row: 1; }
+  #lifeMain[data-split=news] .discovery-reader-host { grid-column: 3; grid-row: 1; position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
   .discovery-news .discovery-reader { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; height: 100%; }
   .discovery-news .discovery-reader-notes { grid-column: 1 / -1; grid-row: 2; }
   .discovery-news .discovery-reader-head { grid-column: 1; grid-row: 1; padding-top: 6px; }

@@ -16,6 +16,7 @@
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
     const downloadUrls = new Set();
+    let splitDispose = null, splitLayout = null;
     let settingsWrite = null, topicWrite = null, actionWrite = null, languageWrite = null, timer = null, fetchEpoch = 0, suspended = false;
     const actionsModel = () => root.HaedoLife.DiscoveryActions;
     const recommendations = () => root.HaedoLife.DiscoveryRecommendations;
@@ -839,7 +840,7 @@
       settingsPanel.append(settingsHeading, recoveryBody, editor, languageHost, preferences, options, records);
       // List and reading column. The reader host stays attached so an open original page is never reloaded by a redraw.
       const layout = node('div', null, 'discovery-layout'), listPane = node('section', null, 'discovery-list-pane'), readerHost = node('div', null, 'discovery-reader-host');
-      listPane.setAttribute('aria-label', '뉴스 목록'); readerHost.id = 'discoveryReaderHost';
+      listPane.setAttribute('aria-label', '뉴스 목록'); listPane.id = 'discoveryListPane'; readerHost.id = 'discoveryReaderHost';
       listPane.append(reactionHost, body); layout.append(listPane, readerHost);
       surface.append(layout, settingsPanel); container.replaceChildren(surface);
       current.reader = null;
@@ -1162,7 +1163,7 @@
       const focused = root.document.activeElement, settingsFocus = current.settingsScreen && current.settingsPanel?.contains(focused) ? { element: focused, id: focused.id, key: focused.dataset.focusKey, scrollY: root.scrollY || 0 } : null;
       ensureSurface(); current.editor.hidden = false; drawEditor(); surface.setAttribute('aria-busy', String(busy()));
       current.reactionHost.hidden = current.body.hidden = current.layout.hidden = !!current.settingsScreen; current.settingsPanel.hidden = !current.settingsScreen;
-      if (current.settingsScreen) delete container.dataset.split; else container.dataset.split = 'news';
+      if (current.settingsScreen) delete container.dataset.split; else { container.dataset.split = 'news'; ensureSplit(); }
       current.managementBody.replaceChildren(); current.recoveryBody.replaceChildren(); current.catalogStatus.replaceChildren(); current.topicNextHost.replaceChildren();
       const readerOpen = !current.settingsScreen && !!selectedArticle(), readerNotes = node('div');
       const body = node('div'), recoveryHost = current.settingsScreen ? current.recoveryBody : readerOpen ? readerNotes : body;
@@ -1361,7 +1362,16 @@
       if (current?.pending) throw Object.assign(new Error('읽음·제외 선택이 아직 보관되지 않았습니다. 선택 다시 보관 또는 선택 취소를 눌러 주세요.'), { code: 'discovery_unsaved' });
       await readingUI?.flush();
     }
+    // The line between the list and the reading column sets the list width (assets/life/split-resize.js, this device only).
+    function ensureSplit() {
+      if (splitDispose && splitLayout === current.layout && splitLayout.isConnected) return;
+      disposeSplit(); splitLayout = current.layout;
+      splitDispose = root.HaedoLife.SplitResize?.attach(current.layout, { key: 'caeyeon_life_split_news', before: current.readerHost, controls: 'discoveryListPane',
+        min: 280, readerMin: 420, defaultWidth: 440 }) || null;
+    }
+    function disposeSplit() { splitDispose?.(); splitDispose = null; splitLayout = null; }
     function leave() {
+      disposeSplit();
       readingUI?.leave(); cancelPrivateRead(); disposeReaderView();
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
       setImmersive(false); for (const element of inerted) element.inert = false; inerted = [];
