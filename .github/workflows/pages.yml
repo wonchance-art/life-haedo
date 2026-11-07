@@ -184,6 +184,9 @@ jobs:
       - name: Verify records rows, kind tabs, two-pane reading, news reader, framed sources and phone full-screen reading
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/records-news-browser.cjs
+      - name: Verify records and news list-only default, opened reader split and drag/keyboard width control
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/records-split-resize-browser.cjs
       - name: Verify private collection storage and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-library-browser.cjs
@@ -685,6 +688,7 @@ jobs:
             .local/material-writing-ai/
             .local/writing-ai-toolbar/
             .local/rss-reflection/
+            .local/records-split-resize/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
