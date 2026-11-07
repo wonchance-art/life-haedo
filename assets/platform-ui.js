@@ -354,9 +354,15 @@
     return row;
   }
   // Toggled from the stored copy: a click on a cell that no longer shows the stored state does nothing.
+  // A habit no longer in the list (removed here or on the server) is never saved from the old card.
   function checkHabit(item, date, wasDone) {
     try {
-      const latest = store.items.find((row) => row.id === item.id) || item;
+      const latest = store.items.find((row) => row.id === item.id);
+      if (!latest) {
+        toast("습관을 찾지 못했습니다. 화면을 다시 열어 주세요.");
+        render();
+        return;
+      }
       if (wasDone !== undefined && latest.data.checks.includes(date) !== wasDone) return;
       store.change(
         latest.id,
@@ -457,7 +463,9 @@
       current = tracker.monthOf(today);
     if (!habitMonth || habitMonth > current) habitMonth = current;
     const habits = store.items.filter((item) => item.kind === "habit");
-    byId("habitMonthLabel").textContent = tracker.monthLabel(habitMonth);
+    // Announced (aria-live) when the month changes; an unchanged label is not rewritten on repaints.
+    const monthName = tracker.monthLabel(habitMonth);
+    if (byId("habitMonthLabel").textContent !== monthName) byId("habitMonthLabel").textContent = monthName;
     byId("habitNextMonth").disabled = habitMonth >= current;
     byId("habitThisMonth").hidden = habitMonth === current;
     byId("itemCount").textContent = habits.length + "개";

@@ -15,34 +15,48 @@
   const FILTERS = Object.freeze([['all', '전체'], ['posts', '글'], ['excerpts', '발췌'], ['photos', '사진']]);
   const data = () => life.ScheduleData;
   // Loaded on first use, not on the first screen (2026-11-04 lead condition: no startup cost).
-  // The habit tracker of 일정 M (habit-tracker.js/.css, 2026-11-07) is the same one habits.html shows.
-  const ENTRY_SCRIPTS = Object.freeze([['HaedoSync', 'assets/sync.js'], ['HaedoPlatformStore', 'assets/platform-store.js'], ['HaedoHabitTracker', 'assets/habit-tracker.js'], ['ScheduleEntries', 'assets/life/schedule-entries.js']]);
-  const ENTRY_STYLE = 'assets/habit-tracker.css';
-  let entryLoad = null;
-  const entriesReady = () => !!(life.ScheduleEntries && global.HaedoPlatformStore && global.HaedoHabitTracker);
+  const ENTRY_SCRIPTS = Object.freeze([['HaedoSync', 'assets/sync.js'], ['HaedoPlatformStore', 'assets/platform-store.js'], ['ScheduleEntries', 'assets/life/schedule-entries.js']]);
+  // The habit tracker of 일정 M (habit-tracker.js/.css, 2026-11-07, the one habits.html shows) is loaded
+  // apart and only for the month slot: if it fails, only that slot falls back to its link; D·W·Y stay.
+  const TRACKER_SCRIPT = 'assets/habit-tracker.js', TRACKER_STYLE = 'assets/habit-tracker.css';
+  let entryLoad = null, trackerLoad = null, trackerStyled = false;
+  const entriesReady = () => !!(life.ScheduleEntries && global.HaedoPlatformStore);
+  const trackerReady = () => !!global.HaedoHabitTracker && trackerStyled;
+  const ready = kind => entriesReady() && (kind !== 'month' || trackerReady());
+  const failed = () => new Error('일정 입력 칸을 불러오지 못했습니다.');
+  function addScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = src;
+      script.onload = resolve; script.onerror = () => { script.remove(); reject(failed()); };
+      document.head.append(script);
+    });
+  }
   function loadEntries() {
     if (entriesReady()) return Promise.resolve(life.ScheduleEntries);
     entryLoad ||= (async () => {
-      if (!document.querySelector('link[data-entry-style]')) {
-        await new Promise((resolve, reject) => {
-          const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = ENTRY_STYLE; link.dataset.entryStyle = 'true';
-          link.onload = resolve; link.onerror = () => { link.remove(); reject(new Error('일정 입력 칸을 불러오지 못했습니다.')); };
-          document.head.append(link);
-        });
-      }
       for (const [name, src] of ENTRY_SCRIPTS) {
         if (name === 'ScheduleEntries' ? life.ScheduleEntries : global[name]) continue;
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script'); script.src = src;
-          script.onload = resolve; script.onerror = () => reject(new Error('일정 입력 칸을 불러오지 못했습니다.'));
-          document.head.append(script);
-        });
+        await addScript(src);
       }
-      if (!entriesReady()) throw new Error('일정 입력 칸을 불러오지 못했습니다.');
+      if (!entriesReady()) throw failed();
       return life.ScheduleEntries;
     })().catch(error => { entryLoad = null; throw error; });
     return entryLoad;
   }
+  // Script and style both: an unstyled month of 30 buttons is not shown (the link is, instead).
+  function loadTracker() {
+    if (trackerReady()) return Promise.resolve();
+    trackerLoad ||= Promise.all([
+      trackerStyled ? null : new Promise((resolve, reject) => {
+        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = TRACKER_STYLE;
+        link.onload = () => { trackerStyled = true; resolve(); }; link.onerror = () => { link.remove(); reject(failed()); };
+        document.head.append(link);
+      }),
+      global.HaedoHabitTracker ? null : addScript(TRACKER_SCRIPT),
+    ]).then(() => { if (!trackerReady()) throw failed(); }).catch(error => { trackerLoad = null; throw error; });
+    return trackerLoad;
+  }
+  const loadFor = kind => kind === 'month' ? Promise.all([loadEntries(), loadTracker()]).then(([entries]) => entries) : loadEntries();
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text != null) node.textContent = String(text);
@@ -205,8 +219,8 @@
         if (!slot.childElementCount && fallback) slot.append(fallback());
       };
       // Already loaded: paint now, so a redraw can restore focus to the same control.
-      if (entriesReady()) { paint(life.ScheduleEntries); return slot; }
-      loadEntries().then(entries => { if (showing(context) && slot.isConnected) paint(entries); }).catch(() => {
+      if (ready(kind)) { paint(life.ScheduleEntries); return slot; }
+      loadFor(kind).then(entries => { if (showing(context) && slot.isConnected) paint(entries); }).catch(() => {
         if (!showing(context) || !slot.isConnected) return;
         slot.setAttribute('aria-busy', 'false');
         if (fallback) slot.replaceChildren(fallback());

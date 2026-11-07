@@ -1,7 +1,7 @@
 /* 습관 트래커(2026-11-07): one month per habit, shared by habits.html and 일정 M (habit-tracker.js).
  * Tokens come from haedo-shell.css (--ink, --paper, --line, --field-line, --color-primary). Done days use
- * the ink fill of the former week row (white on #182522); open days are outlined (#86968d, 3.2:1 on white);
- * days that take no tap are text only (#5d6b65, 5.6:1). Spacing uses multiples of 4. */
+ * the ink fill of the former week row (white on #182522); open days are outlined (#86968d, 3.11:1 on white);
+ * days that take no tap are text only (#5d6b65, 5.59:1). Measured on the real #fff surface. Spacing uses multiples of 4. */
 .habit-tracker { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 332px), 1fr)); gap: 0 32px; min-width: 0; }
 .habit-tracker-card { min-width: 0; padding: 24px 0; border-bottom: 1px solid var(--line); }
 .habit-tracker-head { min-width: 0; }
@@ -27,7 +27,7 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 .habit-tracker-day[data-state=done]:disabled { border-color: var(--ink-soft); background: var(--ink-soft); cursor: default; }
 .habit-tracker-day > .life-glyph { flex: none; width: 16px; height: 16px; }
 /* Today: the bold number with a short straight line under it (16 × 2px), whatever the cell's shape.
-   Teal (#145b50, 7.6:1 on white) on outlined and plain cells; white on a filled (done) cell. */
+   Teal (#145b50, 7.95:1 on white) on outlined and plain cells; white on a filled (done) cell (15.83:1). */
 .habit-tracker-number { position: relative; display: inline-block; }
 .habit-tracker-day[aria-current=date] { gap: 6px; font-weight: 750; }
 .habit-tracker-day[aria-current=date] > .habit-tracker-number::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 16px; height: 2px; margin-left: -8px; border-radius: 1px; background: var(--color-primary); }

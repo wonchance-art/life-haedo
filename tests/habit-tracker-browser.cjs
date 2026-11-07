@@ -19,7 +19,8 @@ const report = { checks: [], consoleErrors: [], pageErrors: [], overflow: [] };
 const LONG = '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적어 두기';
 // Mon/Wed/Fri since October; 11-02 done. November: open 11-04, 11-06; 11-09 on is future.
 const walk = { title: '아침 산책', days: [1, 3, 5], created: '2026-10-01', checks: ['2026-10-30', '2026-11-02'] };
-const daily = { title: LONG, days: [0, 1, 2, 3, 4, 5, 6], created: '2026-11-04', checks: ['2026-11-05'] };
+// 11-03 is before its start: a kept check that takes no tap (and is not counted).
+const daily = { title: LONG, days: [0, 1, 2, 3, 4, 5, 6], created: '2026-11-04', checks: ['2026-11-03', '2026-11-05'] };
 const cell = (scope, id, date) => `[data-focus-key="${scope}:${id}:${date}"]`;
 const focusKey = page => page.evaluate(() => document.activeElement?.dataset?.focusKey || document.activeElement?.id || document.activeElement?.tagName);
 
@@ -66,9 +67,14 @@ async function main() {
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     await page.clock.setFixedTime(new Date(TODAY));
     page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
-    page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); });
+    page.on('console', event => {
+      if (event.type() !== 'error') return;
+      // A check that blocks a module on purpose expects exactly that failed request.
+      if (page.__expectBlocked && /Failed to load resource/.test(event.text())) { report.expectedErrors = (report.expectedErrors || 0) + 1; return; }
+      report.consoleErrors.push({ check: name, message: event.text() });
+    });
     console.log('RUN ' + name);
-    try { await run({ page, tables }); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context, tables }); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
@@ -79,8 +85,11 @@ async function main() {
   try {
     await check('habits.html shows each habit as this month: done filled, open outlined, the rest disabled', async ({ page, tables }) => {
       seed(tables);
-      await page.goto(base + '/habits.html'); await habitsReady(page, 2);
+      // Saturdays only, with a check kept on a Wednesday (the days were changed later).
+      tables.seed('haedo_items', accounts.a.id, { id: 'h3', kind: 'habit', name: '주말 정리', data: { title: '주말 정리', days: [6], created: '2026-10-01', checks: ['2026-11-04'] } });
+      await page.goto(base + '/habits.html'); await habitsReady(page, 3);
       assert.equal(await page.locator('#habitMonthLabel').textContent(), '2026년 11월');
+      assert.equal(await page.locator('#habitMonthLabel').getAttribute('aria-live'), 'polite', 'a month change is announced');
       assert.equal(await page.getByRole('button', { name: '다음 달' }).isDisabled(), true, 'not past the current month');
       assert.equal(await page.locator('#habitThisMonth').isHidden(), true);
       const card = page.locator('.habit-tracker-card[data-habit="h1"]');
@@ -102,13 +111,18 @@ async function main() {
         const line = getComputedStyle(n.querySelector('.habit-tracker-number'), '::after');
         return [n.dataset.state, getComputedStyle(n).boxShadow, getComputedStyle(n).fontWeight, line.width, line.height, line.backgroundColor];
       }));
-      assert.deepEqual(todayMark, [['off', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)']]);
+      assert.deepEqual(todayMark, [['off', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)']]);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-02 완료 취소' }).count(), 1);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-04 완료', exact: true }).count(), 1);
       // Created mid-month: days before 11-04 take no tap; 11-05 done.
       const second = page.locator('.habit-tracker-card[data-habit="h2"]');
       assert.equal(await second.locator('.habit-tracker-summary').textContent(), '이번 달 1/4회 · 연속 0회 · 월, 화, 수, 목, 금, 토, 일');
       assert.equal(await second.locator(cell('habits', 'h2', '2026-11-03')).isDisabled(), true);
+      // Kept checks that take no tap say why instead of offering "완료 취소".
+      const kept = async (id, date) => page.locator('#habitList ' + cell('habits', id, date)).evaluate(n => [n.dataset.state, n.disabled, n.getAttribute('aria-label')]);
+      assert.deepEqual(await kept('h2', '2026-11-03'), ['done', true, LONG + ' 2026-11-03 완료(시작 전)']);
+      assert.deepEqual(await kept('h3', '2026-11-04'), ['done', true, '주말 정리 2026-11-04 완료(정한 요일 아님)']);
+      assert.equal(await page.locator('.habit-tracker-card[data-habit="h3"] .habit-tracker-summary').textContent(), '이번 달 0/1회 · 연속 0회 · 토', 'the kept check is not counted');
       assert.equal(await second.locator(cell('habits', 'h2', '2026-11-07')).isDisabled(), false, 'today is open');
       // Done is the ink fill with white (contrast on the real white surface).
       // Styles and boxes are read in one page evaluation (a locator resolves first and runs later; a repaint
@@ -194,6 +208,41 @@ async function main() {
       assert.equal(await page.locator('[data-section-back]').getAttribute('href'), 'index.html?section=tools');
     });
 
+    await check('a cell of a habit no longer in the list saves nothing, says so and repaints', async ({ page, tables }) => {
+      seed(tables);
+      await page.goto(base + '/habits.html'); await habitsReady(page, 2);
+      await page.waitForFunction(() => HaedoPlatformStore.items.every(i => i.state === 'ok'));
+      // Removed while this card stays on screen (the repaint notice is held back once).
+      await page.evaluate(() => { const hold = event => event.stopImmediatePropagation();
+        document.addEventListener('haedo:store', hold, { capture: true }); HaedoPlatformStore.remove('h1'); document.removeEventListener('haedo:store', hold, { capture: true }); });
+      assert.equal(await page.locator('.habit-tracker-card[data-habit="h1"]').count(), 1, 'the old card is still shown');
+      await page.locator(cell('habits', 'h1', '2026-11-04')).click();
+      await page.locator('#platformToast').filter({ hasText: '습관을 찾지 못했습니다. 화면을 다시 열어 주세요.' }).waitFor();
+      assert.equal(await page.locator('.habit-tracker-card[data-habit="h1"]').count(), 0, 'repainted without it');
+      assert.equal(await page.evaluate(() => HaedoPlatformStore.items.some(i => i.id === 'h1')), false, 'not brought back');
+      const stored = await page.evaluate(id => JSON.parse(localStorage.getItem('caeyeon_life_account_' + id + '_items')).find(i => i.id === 'h1').data, accounts.a.id);
+      assert.equal(stored.deleted, true);
+      assert.deepEqual(stored.checks, ['2026-10-30', '2026-11-02'], 'no check added to the removed habit');
+    });
+
+    for (const blocked of ['habit-tracker.js', 'habit-tracker.css']) await check('a failed ' + blocked + ' falls back only in 일정 M; W and D keep their habit checks', async ({ page, context, tables }) => {
+      seed(tables);
+      page.__expectBlocked = true;
+      const asked = [];
+      await context.route('**/assets/' + blocked, route => { asked.push(new URL(page.url()).searchParams.get('view')); return route.abort(); });
+      await page.goto(base + '/index.html?section=schedule&view=week&date=2026-11-07'); await ready(page);
+      await page.locator('.schedule-entries-week .schedule-habit-grid input[type=checkbox]').first().waitFor();
+      assert.ok(await page.locator('.schedule-entries-week .schedule-habit-grid input[type=checkbox]').count() >= 3);
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-06'); await ready(page);
+      await page.locator('.schedule-entries-day').getByRole('checkbox', { name: '아침 산책', exact: true }).waitFor();
+      assert.deepEqual(asked, [], 'W and D do not ask for the tracker');
+      await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page);
+      await page.waitForFunction(() => document.querySelector('.schedule-entries-month')?.getAttribute('aria-busy') === 'false');
+      await page.locator('.schedule-entries-month').getByRole('link', { name: '습관 체크' }).waitFor();
+      assert.equal(await page.locator('.schedule-entries-month .habit-tracker-day').count(), 0, 'no unstyled or partial tracker');
+      assert.deepEqual([...new Set(asked)], ['month'], 'only the month slot asks for it');
+    });
+
     for (const width of [1440, 820, 390]) await check('habits.html fits ' + width + ' (44px days, no sideways scroll)', async ({ page, tables }) => {
       seed(tables);
       tables.seed('haedo_items', accounts.a.id, { id: 'h3', kind: 'habit', name: '물 마시기', data: { title: '물 마시기', days: [0, 6], created: '2026-09-01', checks: ['2026-11-01', '2026-11-07'] } });
@@ -219,6 +268,8 @@ async function main() {
       const slot = page.locator('.schedule-entries-month');
       assert.equal(await slot.locator('.habit-tracker-card[data-habit="h1"] .habit-tracker-summary').textContent(), '이번 달 1/3회 · 연속 0회 · 월, 수, 금');
       assert.equal(await slot.locator('.habit-tracker-card').first().locator('h4').textContent(), '아침 산책');
+      assert.equal(await slot.getAttribute('aria-label'), '이 달 습관');
+      assert.equal(await slot.locator('[aria-label="이 달 습관"]').count(), 0, 'named once, by the slot');
       const day = slot.locator(cell('schedule:month-habit', 'h1', '2026-11-04'));
       await day.click();
       await slot.locator('.schedule-entry-status').filter({ hasText: '계정에 올리기 대기' }).waitFor();

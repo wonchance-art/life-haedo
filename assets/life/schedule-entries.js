@@ -342,7 +342,8 @@
     function monthPanel() {
       const month = String(date).slice(0, 7), [y, m] = month.split('-').map(Number);
       const habits = s.items.filter(item => item.kind === 'habit' && model().habitMonth(item.data, y, m, today).days.some(day => day.scheduled));
-      const section = el('section', null, 'schedule-entry-section schedule-month-habits'); section.setAttribute('aria-label', '이 달 습관');
+      // Named once, by the slot (이 달 습관); the section has its 습관 heading.
+      const section = el('section', null, 'schedule-entry-section schedule-month-habits');
       section.append(el('h3', '습관', 'schedule-entry-title'));
       if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'life-meta schedule-empty')); return [section]; }
       const list = el('div');

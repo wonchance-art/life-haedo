@@ -8,7 +8,6 @@
   const WEEK = Object.freeze(["월", "화", "수", "목", "금", "토", "일"]);
   const DAY_NAMES = Object.freeze(["일", "월", "화", "수", "목", "금", "토"]);
   const pad = (n) => String(n).padStart(2, "0");
-  const validMonth = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ""));
   const monthOf = (date) => String(date).slice(0, 7);
   function shiftMonth(value, n) {
     const [year, month] = value.split("-").map(Number), index = year * 12 + (month - 1) + n;
@@ -72,7 +71,9 @@
         // Only scheduled days up to today take a tap (toggleHabit refuses the rest as well).
         button.disabled = !day.open;
         button.setAttribute("aria-pressed", String(day.done));
-        button.setAttribute("aria-label", item.data.title + " " + day.date + (day.done ? " 완료 취소" : " 완료"));
+        // A kept check that takes no tap says why, not "완료 취소" (the button is disabled).
+        const kept = day.future ? " 완료(오늘 뒤)" : day.date < item.data.created ? " 완료(시작 전)" : " 완료(정한 요일 아님)";
+        button.setAttribute("aria-label", item.data.title + " " + day.date + (day.done ? (day.open ? " 완료 취소" : kept) : " 완료"));
         if (day.date === today) button.setAttribute("aria-current", "date");
         button.append(el("span", "habit-tracker-number", Number(day.date.slice(8))));
         if (day.done) button.append(root.HaedoLife.Icons.create("check", { size: 16 }));
@@ -92,7 +93,7 @@
     const node = [...container.querySelectorAll("[data-focus-key]")].find((candidate) => candidate.dataset.focusKey === key);
     if (node && !node.disabled) node.focus({ preventScroll: true });
   }
-  const api = Object.freeze({ WEEK, render, restoreFocus, summaryText, dayList, monthOf, shiftMonth, monthLabel, validMonth });
+  const api = Object.freeze({ WEEK, render, restoreFocus, summaryText, dayList, monthOf, shiftMonth, monthLabel });
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HaedoHabitTracker = api;
 })(globalThis);
