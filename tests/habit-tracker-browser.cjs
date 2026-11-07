@@ -69,8 +69,11 @@ async function main() {
     page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
     page.on('console', event => {
       if (event.type() !== 'error') return;
-      // A check that blocks a module on purpose expects exactly that failed request.
-      if (page.__expectBlocked && /Failed to load resource/.test(event.text())) { report.expectedErrors = (report.expectedErrors || 0) + 1; return; }
+      // A check that blocks a module on purpose expects exactly that failed request (that file only).
+      const url = event.location()?.url || '';
+      if (/Failed to load resource/.test(event.text()) && (page.__expectBlocked || []).some(file => new URL(url, base).pathname.endsWith('/assets/' + file))) {
+        report.expectedErrors = (report.expectedErrors || 0) + 1; return;
+      }
       report.consoleErrors.push({ check: name, message: event.text() });
     });
     console.log('RUN ' + name);
@@ -227,7 +230,7 @@ async function main() {
 
     for (const blocked of ['habit-tracker.js', 'habit-tracker.css']) await check('a failed ' + blocked + ' falls back only in 일정 M; W and D keep their habit checks', async ({ page, context, tables }) => {
       seed(tables);
-      page.__expectBlocked = true;
+      page.__expectBlocked = [blocked];
       const asked = [];
       await context.route('**/assets/' + blocked, route => { asked.push(new URL(page.url()).searchParams.get('view')); return route.abort(); });
       await page.goto(base + '/index.html?section=schedule&view=week&date=2026-11-07'); await ready(page);
@@ -241,6 +244,38 @@ async function main() {
       await page.locator('.schedule-entries-month').getByRole('link', { name: '습관 체크' }).waitFor();
       assert.equal(await page.locator('.schedule-entries-month .habit-tracker-day').count(), 0, 'no unstyled or partial tracker');
       assert.deepEqual([...new Set(asked)], ['month'], 'only the month slot asks for it');
+    });
+
+    // One file fails while the other is still on its way (re-review MINOR): the slot asks again (first
+    // frame, refresh frame, a month step) and must reuse the pending file, not add a second tag.
+    for (const [failing, slow] of [['habit-tracker.css', 'habit-tracker.js'], ['habit-tracker.js', 'habit-tracker.css']]) await check('a failed ' + failing + ' while ' + slow + ' is slow adds each tag once and the month still shows', async ({ page, context, tables }) => {
+      seed(tables);
+      page.__expectBlocked = [failing];
+      let failed = 0, slowAsked = 0;
+      await context.route('**/assets/' + failing, route => { if (failed++ === 0) return route.abort(); return route.continue(); });
+      await context.route('**/assets/' + slow, async route => {
+        slowAsked++;
+        const response = await route.fetch();
+        await new Promise(done => setTimeout(done, 2000));
+        // Counts how many times the tracker script runs.
+        const body = slow.endsWith('.js') ? (await response.text()) + '\n;window.__trackerRuns = (window.__trackerRuns || 0) + 1;' : undefined;
+        return route.fulfill({ response, body });
+      });
+      await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page); await scheduleMonth(page);
+      // Wait until the slow file is in, then step the month and back (a person retrying).
+      await page.waitForTimeout(2600);
+      const stepped = !(await page.locator('.schedule-entries-month .habit-tracker-day').count());
+      if (stepped) {
+        await page.locator('[data-schedule-step="1"]').click(); await scheduleMonth(page);
+        await page.locator('[data-schedule-step="-1"]').click(); await scheduleMonth(page);
+      }
+      console.log('  (' + failing + ' failed first; month shown ' + (stepped ? 'after a month step' : 'without a step') + ')');
+      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-tracker-day').length >= 30, null, { timeout: 10000 });
+      const tags = await page.evaluate(() => ({ scripts: document.querySelectorAll('script[src$="assets/habit-tracker.js"]').length, links: document.querySelectorAll('link[href$="assets/habit-tracker.css"]').length, runs: window.__trackerRuns ?? null }));
+      assert.deepEqual({ scripts: tags.scripts, links: tags.links }, { scripts: 1, links: 1 }, 'one tag each');
+      if (slow.endsWith('.js')) assert.equal(tags.runs, 1, 'the tracker script ran once');
+      assert.equal(slowAsked, 1, 'the slow file was asked for once');
+      assert.equal(failed, 2, 'the failed file was asked for again once');
     });
 
     for (const width of [1440, 820, 390]) await check('habits.html fits ' + width + ' (44px days, no sideways scroll)', async ({ page, tables }) => {

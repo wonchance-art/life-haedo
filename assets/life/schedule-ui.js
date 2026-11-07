@@ -19,7 +19,7 @@
   // The habit tracker of 일정 M (habit-tracker.js/.css, 2026-11-07, the one habits.html shows) is loaded
   // apart and only for the month slot: if it fails, only that slot falls back to its link; D·W·Y stay.
   const TRACKER_SCRIPT = 'assets/habit-tracker.js', TRACKER_STYLE = 'assets/habit-tracker.css';
-  let entryLoad = null, trackerLoad = null, trackerStyled = false;
+  let entryLoad = null, trackerStyled = false;
   const entriesReady = () => !!(life.ScheduleEntries && global.HaedoPlatformStore);
   const trackerReady = () => !!global.HaedoHabitTracker && trackerStyled;
   const ready = kind => entriesReady() && (kind !== 'month' || trackerReady());
@@ -44,17 +44,33 @@
     return entryLoad;
   }
   // Script and style both: an unstyled month of 30 buttons is not shown (the link is, instead).
+  // Each file keeps its own pending load: a failure of one forgets only that one, so a slot asking
+  // again while the other is still on its way reuses it instead of adding a second tag.
+  let styleLoad = null, trackerScriptLoad = null;
+  function loadTrackerStyle() {
+    if (trackerStyled) return Promise.resolve();
+    styleLoad ||= new Promise((resolve, reject) => {
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = TRACKER_STYLE;
+      link.onload = () => { trackerStyled = true; resolve(); };
+      link.onerror = () => { link.remove(); styleLoad = null; reject(failed()); };
+      document.head.append(link);
+    });
+    return styleLoad;
+  }
+  function loadTrackerScript() {
+    if (global.HaedoHabitTracker) return Promise.resolve();
+    trackerScriptLoad ||= new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = TRACKER_SCRIPT;
+      const fail = () => { script.remove(); trackerScriptLoad = null; reject(failed()); };
+      script.onload = () => { if (global.HaedoHabitTracker) resolve(); else fail(); };
+      script.onerror = fail;
+      document.head.append(script);
+    });
+    return trackerScriptLoad;
+  }
   function loadTracker() {
     if (trackerReady()) return Promise.resolve();
-    trackerLoad ||= Promise.all([
-      trackerStyled ? null : new Promise((resolve, reject) => {
-        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = TRACKER_STYLE;
-        link.onload = () => { trackerStyled = true; resolve(); }; link.onerror = () => { link.remove(); reject(failed()); };
-        document.head.append(link);
-      }),
-      global.HaedoHabitTracker ? null : addScript(TRACKER_SCRIPT),
-    ]).then(() => { if (!trackerReady()) throw failed(); }).catch(error => { trackerLoad = null; throw error; });
-    return trackerLoad;
+    return Promise.all([loadTrackerStyle(), loadTrackerScript()]).then(() => { if (!trackerReady()) throw failed(); });
   }
   const loadFor = kind => kind === 'month' ? Promise.all([loadEntries(), loadTracker()]).then(([entries]) => entries) : loadEntries();
   function el(tag, text, className) {
