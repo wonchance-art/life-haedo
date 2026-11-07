@@ -225,6 +225,48 @@ async function main() {
       assert.deepEqual(await page.evaluate(() => ({ handles: document.querySelectorAll('.haedo-split-handle').length, observers: window.__splitObservers.size })), { handles: 0, observers: 0 }, 'no listeners left after repeated opens');
     }, { width: 1920, height: 1000 });
 
+    await check('a press without moving keeps the stored width; the resize scroll is not saved as reading', async ({ page }) => {
+      await seedRecords(page); await page.evaluate(([key]) => localStorage.setItem(key, '536'), [RECORDS_KEY]);
+      await nav(page, 'records'); await openRecord(page);
+      assert.equal((await split(page, '#lifeMain')).now, 536);
+      // Narrow window: the shown width is clamped; a click or a touch tap on the line must not store that clamp.
+      await page.setViewportSize({ width: 1101, height: 900 }); await frames(page); await frames(page);
+      let state = await split(page, '#lifeMain'); assert(state.now < 536); assert.equal(state.stored, '536');
+      await page.mouse.click(state.x, state.y); await frames(page);
+      state = await split(page, '#lifeMain'); assert.equal(state.stored, '536', 'a click keeps the preference'); assert.equal(state.now, state.max);
+      await page.mouse.move(state.x, state.y); await page.mouse.down(); await page.mouse.move(state.x + 0.2, state.y + 30); await page.mouse.up(); await frames(page);
+      assert.equal((await split(page, '#lifeMain')).stored, '536', 'a press that does not move the line keeps the preference');
+      await page.evaluate(({ x, y }) => {
+        const handle = document.querySelector('#lifeMain > .haedo-split-handle'), init = { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0, buttons: 1 };
+        handle.dispatchEvent(new PointerEvent('pointerdown', init)); handle.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0 }));
+      }, state); await frames(page);
+      assert.equal((await split(page, '#lifeMain')).stored, '536', 'a touch tap keeps the preference');
+      await page.setViewportSize({ width: 1920, height: 1000 }); await frames(page); await frames(page);
+      assert.equal((await split(page, '#lifeMain')).now, 536, 'the chosen width returns on a wide window');
+      // A touch drag (synthetic pointer events) still chooses a width.
+      state = await split(page, '#lifeMain');
+      await page.evaluate(({ x, y }) => {
+        const handle = document.querySelector('#lifeMain > .haedo-split-handle'), init = { pointerId: 42, pointerType: 'touch', isPrimary: true, clientY: y, bubbles: true, cancelable: true, button: 0, buttons: 1 };
+        handle.dispatchEvent(new PointerEvent('pointerdown', { ...init, clientX: x })); handle.dispatchEvent(new PointerEvent('pointermove', { ...init, clientX: x - 56 }));
+        return new Promise(resolve => requestAnimationFrame(() => { handle.dispatchEvent(new PointerEvent('pointerup', { ...init, clientX: x - 56, buttons: 0 })); resolve(); }));
+      }, state); await frames(page);
+      state = await split(page, '#lifeMain'); assert.equal(state.now, 480); assert.equal(state.stored, '480', 'a touch drag stores its width');
+      // Reading in the middle with recent scroll intent (a wheel turn): dragging reflows the column and the module
+      // scrolls to keep the line; that program scroll must not be saved as the reading position.
+      await page.locator('#lifeMain > .haedo-split-handle').focus(); await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, 700);
+      await page.evaluate(() => scrollTo({ top: 2400, behavior: 'instant' })); await frames(page);
+      const position = () => page.evaluate(async () => JSON.stringify(await HaedoLife.Shell.storage.readReadingPosition(await HaedoLife.Shell.storage.getActive())));
+      await page.waitForTimeout(600); const before = await position();
+      await page.mouse.move(state.x, state.y); await page.mouse.down(); await page.mouse.wheel(4, 0);
+      for (let step = 1; step <= 8; step++) { await page.mouse.move(state.x - step * 50, state.y); await frames(page); }
+      await page.mouse.up(); await frames(page);
+      const held = await page.evaluate(() => ({ y: scrollY, now: document.querySelector('#lifeMain > .haedo-split-handle').getAttribute('aria-valuenow'), h: document.documentElement.scrollHeight }));
+      assert(held.y !== 2400 && held.now === '300', 'the reading line was held by a program scroll: ' + JSON.stringify(held));
+      await page.waitForTimeout(1200);
+      assert.equal(await position(), before, 'no reading position from the resize scroll');
+      assert.equal(await page.evaluate(() => HaedoLife.SplitResize.adjusting()), false);
+    }, { width: 1920, height: 1000 });
+
     await check('stored widths that are not numbers are ignored; storage failure keeps the drag working', async ({ page }) => {
       await seedRecords(page);
       await nav(page, 'records');

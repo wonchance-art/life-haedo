@@ -12,6 +12,10 @@
 (function (root) {
   'use strict';
   const STEP = 16, LARGE_STEP = 64;
+  // Shared by every separator on the page: a drag in progress, or a scroll this module just made to keep the
+  // reading line in place. assets/life/ui.js does not count that time as reading (reading-position.js).
+  let dragging = 0, holdingScroll = 0;
+  const adjusting = () => dragging > 0 || holdingScroll > 0;
   function readStored(key) {
     try {
       const raw = root.localStorage.getItem(key);
@@ -57,18 +61,33 @@
       if (!target?.isConnected) return null;
       const box = target.getBoundingClientRect(), y = view.innerHeight / 3;
       if (box.top >= y || box.bottom <= y) return null;
-      let range = null;
-      if (doc.caretRangeFromPoint) range = doc.caretRangeFromPoint(box.left + 2, y);
-      else if (doc.caretPositionFromPoint) {
-        const point = doc.caretPositionFromPoint(box.left + 2, y);
-        if (point) { range = doc.createRange(); range.setStart(point.offsetNode, point.offset); }
+      // One exact text node (the original reader): find the character on that line by binary search on range
+      // geometry (caretRangeFromPoint ignores text while dragging turns selection off). Other content: the element there.
+      let top = null;
+      const text = target.firstChild;
+      if (text && text.nodeType === 3 && target.childNodes.length === 1 && text.length) {
+        const range = doc.createRange();
+        let low = 0, high = text.length - 1;
+        while (low < high) {
+          const mid = (low + high) >> 1;
+          range.setStart(text, mid); range.setEnd(text, mid + 1);
+          if (range.getBoundingClientRect().bottom < y) low = mid + 1; else high = mid;
+        }
+        range.setStart(text, low); range.setEnd(text, low + 1);
+        top = () => range.getBoundingClientRect().top;
+      } else {
+        const element = doc.elementFromPoint(box.left + 2, y);
+        if (!element || !target.contains(element)) return null;
+        top = () => element.getBoundingClientRect().top;
       }
-      if (!range || !target.contains(range.startContainer)) return null;
-      const node = range.startContainer;
-      if (node.nodeType === 3 && range.startOffset < node.length) range.setEnd(node, range.startOffset + 1);
-      const top = () => range.getBoundingClientRect().top;
       const before = top();
-      return () => { const moved = top() - before; if (Math.abs(moved) >= 1) view.scrollBy({ top: moved, behavior: 'instant' }); };
+      return () => {
+        const moved = top() - before;
+        if (Math.abs(moved) < 1) return;
+        // The scroll event fires in the next frame before its animation callbacks, so one frame covers it.
+        holdingScroll++; view.requestAnimationFrame(() => { holdingScroll--; });
+        view.scrollBy({ top: moved, behavior: 'instant' });
+      };
     }
     function apply(value) {
       if (disposed || !visible()) return;
@@ -97,13 +116,17 @@
 
     function endDrag(commit) {
       if (!drag) return;
-      const current = drag; drag = null;
+      const current = drag; drag = null; dragging--;
       if (frame) { view.cancelAnimationFrame(frame); frame = 0; }
       doc.removeEventListener('keydown', escape, true);
       delete doc.documentElement.dataset.haedoSplitDragging;
       delete separator.dataset.dragging;
       try { if (separator.hasPointerCapture(current.id)) separator.releasePointerCapture(current.id); } catch { /* already released */ }
-      if (commit) choose(current.next); else apply(current.start);
+      // Only a pointer that actually moved the line chooses a width. A press without movement (click, tap)
+      // keeps the stored preference, so a width clamped by a narrow window is never stored by accident.
+      if (commit && current.moved) choose(current.next);
+      else if (commit) apply();
+      else apply(current.start);
     }
     function escape(event) {
       if (event.key !== 'Escape' || !drag) return;
@@ -114,7 +137,7 @@
       if (drag || !visible() || event.pointerType === 'mouse' && event.button !== 0) return;
       event.preventDefault();
       apply();
-      drag = { id: event.pointerId, x: event.clientX, start: width, next: width };
+      drag = { id: event.pointerId, x: event.clientX, start: width, next: width, moved: false }; dragging++;
       try { separator.setPointerCapture(event.pointerId); } catch { /* the pointer already ended */ }
       doc.documentElement.dataset.haedoSplitDragging = 'true';
       separator.dataset.dragging = 'true';
@@ -124,6 +147,7 @@
       if (!drag || event.pointerId !== drag.id) return;
       event.preventDefault();
       drag.next = drag.start + event.clientX - drag.x;
+      if (Math.round(drag.next) !== drag.start) drag.moved = true;
       schedule();
     }
     const pointerUp = event => { if (drag && event.pointerId === drag.id) endDrag(true); };
@@ -169,5 +193,5 @@
     };
   }
   root.HaedoLife ||= {};
-  root.HaedoLife.SplitResize = Object.freeze({ attach });
+  root.HaedoLife.SplitResize = Object.freeze({ attach, adjusting });
 })(typeof window !== 'undefined' ? window : globalThis);

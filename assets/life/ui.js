@@ -4661,7 +4661,8 @@
       function watchReading() {
         readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           reader, ...(formattedView ? { positionAdapter: markdown.adapter } : {}),
-          isReading: () => !disposed && sourceActive && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
+          // Dragging the list width (and the scroll that keeps the reading line in place) is not reading.
+          isReading: () => !disposed && sourceActive && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden && !global.HaedoLife.SplitResize?.adjusting?.(),
           onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
           onError: () => {
             if (!reader.isConnected || disposed) return;
