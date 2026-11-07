@@ -51,4 +51,25 @@ function isBackgroundSyncWrite(url) {
   return isPrivateOriginalUpload(url);
 }
 
-module.exports = { reads, writes, rpcName, isBackgroundSync, isBackgroundSyncWrite, isPrivateOriginalUpload };
+// These no-RSS fixtures permit one initial inbox read, never collection or
+// control actions. Keep this request-aware exception separate from URL lists.
+function isRssInboxRead(request, { cloud, server, ownerId, workspaceId } = {}) {
+  try {
+    const url = new URL(request.url());
+    if (request.method() !== 'POST' || url.origin !== cloud || url.pathname !== '/functions/v1/haedo-rss' ||
+        url.search || url.hash || url.username || url.password) return false;
+    const authorization = request.headers().authorization;
+    if (typeof authorization !== 'string' || !/^Bearer \S+$/i.test(authorization)) return false;
+    const owner = server.libraryOwner(request);
+    if (!owner || (ownerId && owner !== ownerId)) return false;
+    const raw = request.postData();
+    if (typeof raw !== 'string') return false;
+    const body = JSON.parse(raw);
+    return body !== null && !Array.isArray(body) && typeof body === 'object' &&
+      Object.keys(body).sort().join(',') === 'action,workspaceId' && body.action === 'list' &&
+      typeof body.workspaceId === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.workspaceId) &&
+      (!workspaceId || body.workspaceId === workspaceId);
+  } catch (_) { return false; }
+}
+
+module.exports = { reads, writes, rpcName, isBackgroundSync, isBackgroundSyncWrite, isPrivateOriginalUpload, isRssInboxRead };

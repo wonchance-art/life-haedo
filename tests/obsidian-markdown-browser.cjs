@@ -3,7 +3,7 @@
  * BASE_URL=http://127.0.0.1:4173 node tests/obsidian-markdown-browser.cjs */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -37,7 +37,7 @@ const invalid = '\uFEFF---\r\ntitle: [닫히지 않은 익명 값\r\n---\r\n\r\n
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const click = async (page, selector) => { await page.locator(selector).click(); await settle(page); };
 const byName = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
-const report = { createdAt: new Date().toISOString(), scope: 'Actual local file import/read/raw quoting/edit preview/save/reopen/backup UI, bundled SDK and account-scoped IndexedDB; anonymous synthetic Markdown and intercepted FakeCloud Auth only. Direct renderer negative controls and seeded hidden-property reading point are explicit test fixtures. No real vault/working files, production account/DB/provider, Obsidian plugin runtime, Apple device or OS file-save proof.', checks: [], visual: [], observations: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Actual local file import/read/raw quoting/edit preview/save/reopen/backup UI, bundled SDK and account-scoped IndexedDB; anonymous synthetic Markdown and intercepted FakeCloud Auth only. Direct renderer negative controls and seeded hidden-property reading point are explicit test fixtures. No real vault/working files, production account/DB/provider, Obsidian plugin runtime, Apple device or OS file-save proof.', checks: [], visual: [], observations: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], rssReads: [], appStarts: [], closedContexts: 0 };
 async function snapshot(page) {
   return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), interest: await s.readInterestProfile(w) }; });
 }
@@ -106,16 +106,39 @@ async function main() {
   async function check(name, run) {
     if (process.env.OBSIDIAN_MARKDOWN_MATCH && !new RegExp(process.env.OBSIDIAN_MARKDOWN_MATCH).test(name)) return;
     const server = new FakeCloud(), context = await makeContext(browser, server, 'obsidian-md-' + report.checks.length, accounts.a, { viewport: { width: 820, height: 1000 }, hasTouch: true, reducedMotion: 'reduce' });
+    const rssRequests = [], appStarts = [];
+    await context.exposeBinding('__obsidianRssStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) { appStarts.push(start); report.appStarts.push({ check: name, ...start }); } });
+    await context.addInitScript(() => {
+      if (window !== top) return;
+      const documentId = performance.timeOrigin + ':' + Math.random(); let sequence = 0; window.__obsidianRssStarts = [];
+      document.addEventListener('haedo:page-ready', () => {
+        const storage = HaedoLife.Shell.storage, ownerId = storage.account.userId;
+        __obsidianRssStarts.push(storage.getActive().then(workspaceId => __obsidianRssStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+      });
+    });
+    async function auditRss() {
+      for (const page of context.pages()) await page.evaluate(() => Promise.all(window.__obsidianRssStarts || []));
+      const reads = rssRequests.map(request => {
+        const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+        const start = appStarts.find(row => row.ownerId === ownerId && row.workspaceId === workspaceId);
+        assert(start && start.ownerId === accounts.a.id, 'RSS read requires a known owner/workspace app start');
+        assert(isRssInboxRead(request, { cloud, server, ownerId: start.ownerId, workspaceId: start.workspaceId }), 'unexpected RSS request');
+        return { check: name, ownerId, workspaceId, action: 'list' };
+      });
+      for (const start of appStarts) assert(reads.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length <= appStarts.filter(row => row.ownerId === start.ownerId && row.workspaceId === start.workspaceId).length, 'RSS reads exceed actual owner/workspace starts');
+      report.rssReads.push(...reads);
+    }
     context.on('request', request => {
       const u = new URL(request.url()), body = request.postData() || '';
       if ([propertyTitle, quote, note, raw].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
+      if (u.pathname.startsWith('/functions/v1/haedo-rss')) { rssRequests.push(request); return; }
       if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(u.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 });
       else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });
     });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.externalRequests.push({ check: name, destination: u.origin + u.pathname }); return route.abort('blockedbyclient'); });
     context.on('page', page => { page.setDefaultTimeout(15000); page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); }); page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message })); });
     const page = await context.newPage(); console.log('RUN ' + name);
-    try { await run({ page, context }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run({ page, context }); assert.equal(server.writes().length, 0); await auditRss(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); report.closedContexts++; }
   }

@@ -5,6 +5,7 @@
  */
 'use strict';
 const assert = require('node:assert/strict');
+const { isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs');
 const base = (process.env.BASE_URL || 'http://127.0.0.1:4173').replace(/\/$/, '');
 if (!['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname)) throw new Error('Local anonymous test server required.');
 const cloud = 'https://life-sync-test.supabase.co';
@@ -80,6 +81,14 @@ class WorkspaceCloud {
     if (url.pathname === '/auth/v1/logout') {this.requests.push({kind:'logout',device,owner:account?.id});return send(null,204);}
     if (!account) return send({code:'PGRST301',message:'No test account'},401);
     if (this.schemaMissing) { this.expectedFailures++; return send({code:'PGRST205',message:'Anonymous test schema is unavailable'},404); }
+    // The idle RSS reflector probes once; this shared fixture has no RSS setup.
+    // Collection/control actions remain unregistered and fail below.
+    if (url.pathname === '/functions/v1/haedo-rss' && method === 'POST' && body.action === 'list') {
+      assert.ok(Object.keys(body).every(key => ['action', 'workspaceId', 'before'].includes(key)));
+      assert.match(body.workspaceId, /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i);
+      this.requests.push({kind:'rss-list',owner:account.id,id:body.workspaceId,device});
+      return send({configured:false,connections:[],other_connections:[],items:[],has_more:false,next_cursor:null});
+    }
     if (url.pathname === '/rest/v1/rpc/life_naver_media_receipt_read' && method === 'POST') {
       // These legacy source fixtures have no registered version/media mapping.
       // Keep this one authenticated read explicit; unknown RPCs still fail.
@@ -246,10 +255,37 @@ async function loginUI(page,account=accounts.a,server,device) {
 async function main() {
   const browser = await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server = new FakeCloud();
-  const contexts = [];
+  const contexts = [], appStarts = [], rssRequests = [];
+  function auditRss() {
+    const reads = rssRequests.map(({ device, request }) => {
+      const ownerId = server.libraryOwner(request), workspaceId = request.postDataJSON()?.workspaceId;
+      assert.ok(appStarts.some(start => start.device === device && start.ownerId === ownerId && start.workspaceId === workspaceId), 'RSS read lacks a verified app start for its owner/workspace');
+      assert.ok(isRssInboxRead(request, { cloud, server, ownerId, workspaceId }), 'unexpected RSS request');
+      return { device, ownerId, workspaceId, action: 'list' };
+    });
+    for (const device of new Set(appStarts.map(start => start.device))) assert.ok(reads.filter(row => row.device === device).length <= appStarts.filter(row => row.device === device).length, device + ': RSS reads exceed actual starts');
+    for (const start of appStarts) {
+      const sameScope = row => row.device === start.device && row.ownerId === start.ownerId && row.workspaceId === start.workspaceId;
+      assert.ok(reads.filter(sameScope).length <= appStarts.filter(sameScope).length, 'RSS reads exceed actual starts for their device/owner/workspace');
+    }
+    return reads;
+  }
+  async function flushStarts() {
+    for (const context of contexts) for (const page of context.pages()) await page.evaluate(() => Promise.all(window.__syncStartReports || []));
+  }
   async function device(name) {
     const context = await browser.newContext({serviceWorkers:'block',viewport:{width:1100,height:900}});
     contexts.push(context); await platformContext(context,server,name);
+    await context.exposeBinding('__syncAppStarted', ({ page, frame }, start) => { if (frame === page.mainFrame()) appStarts.push({ device: name, ...start }); });
+    await context.addInitScript(origin => {
+      if (window !== top || location.origin !== origin) return;
+      const documentId = crypto.randomUUID(); let sequence = 0; window.__syncStartReports = [];
+      document.addEventListener('haedo:page-ready', () => {
+        const storage = HaedoLife.Shell.storage, ownerId = HaedoAuth.user.id;
+        __syncStartReports.push(storage.getActive().then(workspaceId => __syncAppStarted({ documentId, sequence: ++sequence, ownerId, workspaceId })));
+      });
+    }, new URL(base).origin);
+    context.on('request', request => { const url = new URL(request.url()); if (url.origin === cloud && url.pathname.startsWith('/functions/v1/haedo-rss')) rssRequests.push({ device: name, request }); });
     const page = await context.newPage(); page.setDefaultTimeout(10000); observe(page);
     await page.goto(`${base}/life.html`); await ready(page);
     return {context,page,name};
@@ -263,8 +299,14 @@ async function main() {
       // 내 자료 부팅 시 현재 계정의 목록을 GET" — an owner-scoped read of the private
       // life_account_materials pointer list, once per booted device. Anything else
       // (workspace list/read/write, another owner) is still a failure.
+      await flushStarts();
+      const deadline = Date.now() + 10000;
+      while (rssRequests.length < 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+      const rssReads = auditRss(), perDevice = rows => rows.reduce((counts, row) => ({ ...counts, [row.device]: (counts[row.device] || 0) + 1 }), {});
+      assert.deepEqual(perDevice(appStarts), { a: 1, b: 1 }, 'two verified device starts were observed independently of requests');
+      assert.deepEqual(perDevice(rssReads), { a: 1, b: 1 }, 'each started device reads its RSS inbox exactly once');
       const bootReads = server.requests.filter(r => r.kind === 'account-materials-list');
-      assert.deepEqual(server.requests.filter(r => r.kind !== 'account-materials-list'),[],'authentication alone issued workspace data requests');
+      assert.deepEqual(server.requests.filter(r => !['account-materials-list', 'rss-list'].includes(r.kind)),[],'authentication alone issued workspace data requests');
       const readsPerDevice = bootReads.reduce((n, r) => ({ ...n, [r.device]: (n[r.device] || 0) + 1 }), {});
       assert.deepEqual(readsPerDevice,{ a: 1, b: 1 },'each booted device lists its own account materials exactly once');
       assert.ok(bootReads.every(r => r.owner === accounts.a.id),'account materials list crossed accounts');
@@ -475,6 +517,10 @@ async function main() {
       server.schemaMissing = false;
     });
     await check('unexpected browser console/page errors',async () => assert.deepEqual(unexpectedErrors,[]));
+    await check('RSS inbox reads stay within verified device starts and account workspaces', async () => {
+      await flushStarts(); const rssReads = auditRss();
+      console.log('RSS start audit ' + JSON.stringify({ rssReads, appStarts }));
+    });
   } finally {
     await Promise.all(contexts.map(context=>context.close())); await browser.close();
   }
