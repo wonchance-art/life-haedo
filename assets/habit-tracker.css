@@ -26,9 +26,13 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 /* A check on a day no longer scheduled (the days were changed later): kept and shown, not changeable. */
 .habit-tracker-day[data-state=done]:disabled { border-color: var(--ink-soft); background: var(--ink-soft); cursor: default; }
 .habit-tracker-day > .life-glyph { flex: none; width: 16px; height: 16px; }
-.habit-tracker-day[aria-current=date] { font-weight: 750; box-shadow: inset 0 -3px 0 var(--color-primary); }
+/* Today: the bold number with a short straight line under it (16 × 2px), whatever the cell's shape.
+   Teal (#145b50, 7.6:1 on white) on outlined and plain cells; white on a filled (done) cell. */
+.habit-tracker-number { position: relative; display: inline-block; }
+.habit-tracker-day[aria-current=date] { gap: 6px; font-weight: 750; }
+.habit-tracker-day[aria-current=date] > .habit-tracker-number::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 16px; height: 2px; margin-left: -8px; border-radius: 1px; background: var(--color-primary); }
 .habit-tracker-day[aria-current=date]:not([data-state=open]):not([data-state=done]) { color: var(--color-primary); }
-.habit-tracker-day[data-state=done][aria-current=date] { box-shadow: inset 0 -3px 0 var(--haedo-selected, #eaf1ed); }
+.habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: #fff; }
 /* The month line of habits.html: ‹ 2026년 11월 › 이번 달. */
 .habit-month-nav { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .habit-month-nav h2 { margin: 0 4px; color: var(--ink); font-size: var(--haedo-text-control); font-weight: 650; line-height: 1.65; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -44,4 +48,6 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-tracker-day[data-state=open] { border-color: ButtonText; }
   .habit-tracker-day[data-state=done] { forced-color-adjust: none; border-color: Highlight; background: Highlight; color: HighlightText; }
   .habit-tracker-day:disabled { color: GrayText; }
+  .habit-tracker-day[aria-current=date] > .habit-tracker-number::after { forced-color-adjust: none; background: CanvasText; }
+  .habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: HighlightText; }
 }
