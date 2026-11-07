@@ -16,23 +16,63 @@
   const data = () => life.ScheduleData;
   // Loaded on first use, not on the first screen (2026-11-04 lead condition: no startup cost).
   const ENTRY_SCRIPTS = Object.freeze([['HaedoSync', 'assets/sync.js'], ['HaedoPlatformStore', 'assets/platform-store.js'], ['ScheduleEntries', 'assets/life/schedule-entries.js']]);
-  let entryLoad = null;
+  // The habit tracker of 일정 M (habit-tracker.js/.css, 2026-11-07, the one habits.html shows) is loaded
+  // apart and only for the month slot: if it fails, only that slot falls back to its link; D·W·Y stay.
+  const TRACKER_SCRIPT = 'assets/habit-tracker.js', TRACKER_STYLE = 'assets/habit-tracker.css';
+  let entryLoad = null, trackerStyled = false;
+  const entriesReady = () => !!(life.ScheduleEntries && global.HaedoPlatformStore);
+  const trackerReady = () => !!global.HaedoHabitTracker && trackerStyled;
+  const ready = kind => entriesReady() && (kind !== 'month' || trackerReady());
+  const failed = () => new Error('일정 입력 칸을 불러오지 못했습니다.');
+  function addScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = src;
+      script.onload = resolve; script.onerror = () => { script.remove(); reject(failed()); };
+      document.head.append(script);
+    });
+  }
   function loadEntries() {
-    if (life.ScheduleEntries && global.HaedoPlatformStore) return Promise.resolve(life.ScheduleEntries);
+    if (entriesReady()) return Promise.resolve(life.ScheduleEntries);
     entryLoad ||= (async () => {
       for (const [name, src] of ENTRY_SCRIPTS) {
         if (name === 'ScheduleEntries' ? life.ScheduleEntries : global[name]) continue;
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script'); script.src = src;
-          script.onload = resolve; script.onerror = () => reject(new Error('일정 입력 칸을 불러오지 못했습니다.'));
-          document.head.append(script);
-        });
+        await addScript(src);
       }
-      if (!life.ScheduleEntries || !global.HaedoPlatformStore) throw new Error('일정 입력 칸을 불러오지 못했습니다.');
+      if (!entriesReady()) throw failed();
       return life.ScheduleEntries;
     })().catch(error => { entryLoad = null; throw error; });
     return entryLoad;
   }
+  // Script and style both: an unstyled month of 30 buttons is not shown (the link is, instead).
+  // Each file keeps its own pending load: a failure of one forgets only that one, so a slot asking
+  // again while the other is still on its way reuses it instead of adding a second tag.
+  let styleLoad = null, trackerScriptLoad = null;
+  function loadTrackerStyle() {
+    if (trackerStyled) return Promise.resolve();
+    styleLoad ||= new Promise((resolve, reject) => {
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = TRACKER_STYLE;
+      link.onload = () => { trackerStyled = true; resolve(); };
+      link.onerror = () => { link.remove(); styleLoad = null; reject(failed()); };
+      document.head.append(link);
+    });
+    return styleLoad;
+  }
+  function loadTrackerScript() {
+    if (global.HaedoHabitTracker) return Promise.resolve();
+    trackerScriptLoad ||= new Promise((resolve, reject) => {
+      const script = document.createElement('script'); script.src = TRACKER_SCRIPT;
+      const fail = () => { script.remove(); trackerScriptLoad = null; reject(failed()); };
+      script.onload = () => { if (global.HaedoHabitTracker) resolve(); else fail(); };
+      script.onerror = fail;
+      document.head.append(script);
+    });
+    return trackerScriptLoad;
+  }
+  function loadTracker() {
+    if (trackerReady()) return Promise.resolve();
+    return Promise.all([loadTrackerStyle(), loadTrackerScript()]).then(() => { if (!trackerReady()) throw failed(); });
+  }
+  const loadFor = kind => kind === 'month' ? Promise.all([loadEntries(), loadTracker()]).then(([entries]) => entries) : loadEntries();
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text != null) node.textContent = String(text);
@@ -186,7 +226,7 @@
     // editor links (fallback()).
     function entrySlot(context, kind, extra, fallback) {
       const slot = el('section', null, 'schedule-entries schedule-entries-' + kind); slot.setAttribute('aria-busy', 'true');
-      slot.setAttribute('aria-label', kind === 'year' ? '목표' : kind === 'week' ? '이번 주 습관과 행복도' : '그날 습관과 행복도');
+      slot.setAttribute('aria-label', kind === 'year' ? '목표' : kind === 'month' ? '이 달 습관' : kind === 'week' ? '이번 주 습관과 행복도' : '그날 습관과 행복도');
       const paint = entries => {
         const stop = entries.render(slot, { kind, date: context.date, today: data().today(), storageAccount: storage.account, storage, ...extra,
           isCurrent: () => showing(context), go: (mode, date) => { if (showing(context)) go(mode, date); } });
@@ -195,8 +235,8 @@
         if (!slot.childElementCount && fallback) slot.append(fallback());
       };
       // Already loaded: paint now, so a redraw can restore focus to the same control.
-      if (life.ScheduleEntries && global.HaedoPlatformStore) { paint(life.ScheduleEntries); return slot; }
-      loadEntries().then(entries => { if (showing(context) && slot.isConnected) paint(entries); }).catch(() => {
+      if (ready(kind)) { paint(life.ScheduleEntries); return slot; }
+      loadFor(kind).then(entries => { if (showing(context) && slot.isConnected) paint(entries); }).catch(() => {
         if (!showing(context) || !slot.isConnected) return;
         slot.setAttribute('aria-busy', 'false');
         if (fallback) slot.replaceChildren(fallback());
@@ -404,7 +444,8 @@
       const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-' + String(month).padStart(2, '0')) && entry.date >= now).sort((a, b) => a.date.localeCompare(b.date));
       const plans = el('section', null, 'schedule-month-plans'); plans.setAttribute('aria-label', '예정');
       plans.append(el('h2', '예정', 'schedule-aside-title'), planRows(context, entries, { empty: '이 달의 남은 예정이 없어요.' }));
-      wrap.append(grid, chosen, plans);
+      // 습관 트래커 of this month (2026-11-07), between the calendar and the remaining plans.
+      wrap.append(grid, chosen, entrySlot(context, 'month', {}, links.habits), plans);
       return wrap;
     }
     function itemRow(context, item, { compact = false } = {}) {

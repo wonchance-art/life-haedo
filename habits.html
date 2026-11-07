@@ -8,6 +8,7 @@
     <link rel="icon" href="icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="assets/platform.css" />
+    <link rel="stylesheet" href="assets/habit-tracker.css" />
     <link rel="stylesheet" href="assets/haedo-shell.css" />
     <link rel="stylesheet" href="assets/haedo-motion.css">
     <meta name="robots" content="noindex" />
@@ -50,13 +51,17 @@
       <div data-haedo-planning-navigation="habits"></div>
       <div class="p-status-line"><span id="syncMessage" role="status">기기 사본을 확인합니다.</span></div>
       <div class="p-list-tools">
-        <p id="habitWeekLabel"></p>
+        <div class="habit-month-nav">
+          <button type="button" id="habitPrevMonth" class="haedo-icon-button" aria-label="이전 달"><span data-haedo-icon="back" aria-hidden="true"></span></button>
+          <h2 id="habitMonthLabel" tabindex="-1" aria-live="polite"></h2>
+          <button type="button" id="habitNextMonth" class="haedo-icon-button" aria-label="다음 달"><span data-haedo-icon="forward" aria-hidden="true"></span></button>
+          <button type="button" id="habitThisMonth" class="p-text-link" hidden>이번 달</button>
+        </div>
         <span id="itemCount"></span>
       </div>
       <div id="habitList" class="habit-list"></div>
       <p class="p-muted habit-note">
-        정한 요일에만 체크할 수 있습니다. 지난 7일의 완료 기록도 수정할 수
-        있습니다.
+        정한 요일의 오늘까지 날짜를 체크하거나 취소할 수 있습니다.
       </p>
     </main>
     <dialog id="itemDialog" class="p-dialog" aria-labelledby="itemDialogTitle">
@@ -176,6 +181,7 @@
     <script src="assets/life/icons.js"></script>
     <script src="assets/haedo-motion.js"></script>
     <script src="assets/haedo-navigation.js"></script>
+    <script src="assets/habit-tracker.js"></script>
     <script src="assets/platform-ui.js"></script>
   </body>
 </html>

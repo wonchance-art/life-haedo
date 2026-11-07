@@ -175,6 +175,9 @@ jobs:
       - name: Verify schedule habit checks, goal progress, day happiness input and item recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-entries-browser.cjs
+      - name: Verify habit month tracker on the habits screen and the schedule month view
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/habit-tracker-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -689,6 +692,7 @@ jobs:
             .local/writing-ai-toolbar/
             .local/rss-reflection/
             .local/records-split-resize/
+            .local/habit-tracker/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/

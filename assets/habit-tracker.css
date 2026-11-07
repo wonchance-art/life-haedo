@@ -1,0 +1,53 @@
+/* 습관 트래커(2026-11-07): one month per habit, shared by habits.html and 일정 M (habit-tracker.js).
+ * Tokens come from haedo-shell.css (--ink, --paper, --line, --field-line, --color-primary). Done days use
+ * the ink fill of the former week row (white on #182522); open days are outlined (#86968d, 3.11:1 on white);
+ * days that take no tap are text only (#5d6b65, 5.59:1). Measured on the real #fff surface. Spacing uses multiples of 4. */
+.habit-tracker { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 332px), 1fr)); gap: 0 32px; min-width: 0; }
+.habit-tracker-card { min-width: 0; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.habit-tracker-head { min-width: 0; }
+.habit-tracker-title { display: block; margin: 0; color: var(--ink); font-size: var(--haedo-text-control); font-weight: 650; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere; }
+button.habit-tracker-title { width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; }
+button.habit-tracker-title > strong { display: block; font-size: var(--haedo-text-control); font-weight: 650; line-height: 1.65; }
+@media (hover: hover) and (pointer: fine) { button.habit-tracker-title:hover > strong { color: var(--color-primary); } }
+.habit-tracker-summary { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* Seven 44px columns; the 4px column gap shrinks to 0 before a column would drop under 44px (360px
+   phones). Under 348px wide screens (308px + 40px gutters) the columns share the width instead.
+   At most 448px (60px days) so a one-column card on a tablet does not stretch each day. */
+.habit-tracker-grid { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px clamp(0px, calc((100% - 308px) / 6), 4px); max-width: 448px; margin-top: 16px; }
+.habit-tracker-weekday { padding-bottom: 4px; color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.5; text-align: center; }
+.habit-tracker-day { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-badge); line-height: 1.2; font-variant-numeric: tabular-nums; }
+/* Not dimmed further (platform.css dims disabled buttons to .55): the dates stay readable for orientation. */
+.habit-tracker .habit-tracker-day:disabled { opacity: 1; cursor: default; }
+.habit-tracker-day:not(:disabled) { transition: background 150ms ease, color 150ms ease, border-color 150ms ease; }
+.habit-tracker-day[data-state=open]:active:not(:disabled) { background: var(--soft); }
+.habit-tracker-day[data-state=open] { border-color: var(--field-line); background: var(--paper); color: var(--ink); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .habit-tracker-day[data-state=open]:hover { background: var(--paper-2); } }
+.habit-tracker-day[data-state=done] { border-color: var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+/* A check on a day no longer scheduled (the days were changed later): kept and shown, not changeable. */
+.habit-tracker-day[data-state=done]:disabled { border-color: var(--ink-soft); background: var(--ink-soft); cursor: default; }
+.habit-tracker-day > .life-glyph { flex: none; width: 16px; height: 16px; }
+/* Today: the bold number with a short straight line under it (16 × 2px), whatever the cell's shape.
+   Teal (#145b50, 7.95:1 on white) on outlined and plain cells; white on a filled (done) cell (15.83:1). */
+.habit-tracker-number { position: relative; display: inline-block; }
+.habit-tracker-day[aria-current=date] { gap: 6px; font-weight: 750; }
+.habit-tracker-day[aria-current=date] > .habit-tracker-number::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 16px; height: 2px; margin-left: -8px; border-radius: 1px; background: var(--color-primary); }
+.habit-tracker-day[aria-current=date]:not([data-state=open]):not([data-state=done]) { color: var(--color-primary); }
+.habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: #fff; }
+/* The month line of habits.html: ‹ 2026년 11월 › 이번 달. */
+.habit-month-nav { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.habit-month-nav h2 { margin: 0 4px; color: var(--ink); font-size: var(--haedo-text-control); font-weight: 650; line-height: 1.65; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.habit-month-nav h2:focus { outline: none; }
+.habit-month-nav h2:focus-visible { outline: 3px solid var(--haedo-focus); outline-offset: 3px; border-radius: 4px; }
+.habit-month-nav .haedo-icon-button:disabled { opacity: 1; color: #c9d1cd; cursor: default; }
+@media (max-width: 347px) {
+  .habit-tracker-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); column-gap: 0; }
+  .habit-tracker-day { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .habit-tracker-day:not(:disabled) { transition: none; } }
+@media (forced-colors: active) {
+  .habit-tracker-day[data-state=open] { border-color: ButtonText; }
+  .habit-tracker-day[data-state=done] { forced-color-adjust: none; border-color: Highlight; background: Highlight; color: HighlightText; }
+  .habit-tracker-day:disabled { color: GrayText; }
+  .habit-tracker-day[aria-current=date] > .habit-tracker-number::after { forced-color-adjust: none; background: CanvasText; }
+  .habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: HighlightText; }
+}
