@@ -87,6 +87,10 @@ async function main() {
     const page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run(page);
       await page.evaluate(() => Promise.all(window.__rssStartReports || []));
+      // The shell defers RSS loading and its first inbox read to an idle callback (timeout 2000 ms)
+      // after page-ready, plus the module fetch; a short check can finish before that read leaves.
+      // Wait for the read itself instead of assuming it already happened (CI 2026-11-07 run 42385120007).
+      for (const deadline = Date.now() + 10000; !rss.reads.length && Date.now() < deadline;) await new Promise(resolve => setTimeout(resolve, 50));
       assert(rss.reads.length > 0); assert(rss.reads.length <= rss.starts.length, 'RSS list reads must not exceed actual app starts');
       report.rss.push({ name, ...rss });
       assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);

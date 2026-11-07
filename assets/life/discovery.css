@@ -361,23 +361,28 @@
 .discovery-news .discovery-reader-page[data-frame=blocked] { align-items: flex-start; gap: 12px; padding: 24px; }
 .discovery-news .discovery-reader-blocked { margin: 0; color: var(--news-muted); font-size: 15px; line-height: 1.6; }
 .discovery-news .discovery-reader-fallback { min-height: 44px; text-decoration: none; }
-.discovery-news .discovery-reader-empty { display: none; }
+/* 2026-11-07: no reading column (and no placeholder) until an article is opened, at every width. */
+.discovery-news[data-reading=false] .discovery-reader-host { display: none; }
 @media (min-width: 1101px) {
-  #lifeMain[data-split=news] .discovery-news { max-width: none; margin-inline: 0; }
-  #lifeMain[data-split=news] .discovery-layout { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); column-gap: 32px; align-items: start; }
-  #lifeMain[data-split=news] .discovery-reader-host { position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
-  .discovery-news .discovery-reader { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; height: 100%; }
+  /* The list alone follows the 자료 list frame (up to 960px, assets/life/records.css); opened, it reads beside it. */
+  #lifeMain:is([data-split=news], [data-wide=news]) .discovery-news { max-width: none; margin-inline: 0; }
+  /* List (default 440px, dragged from 280px) · 44px separator (assets/life/split-resize.js) · reader (420px and up). */
+  #lifeMain[data-split=news] .discovery-layout { display: grid; grid-template-columns: minmax(0, var(--haedo-split-list, 440px)) 44px minmax(0, 1fr); align-items: start; }
+  #lifeMain[data-split=news] .discovery-list-pane { grid-column: 1; grid-row: 1; min-width: 0; }
+  #lifeMain[data-split=news] .discovery-layout > .haedo-split-handle { grid-column: 2; grid-row: 1; }
+  #lifeMain[data-split=news] .discovery-reader-host { grid-column: 3; grid-row: 1; position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
+  .discovery-news .discovery-reader { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; height: 100%; }
+  /* ‹ closes the reading column and returns to the list alone (icon only; its name stays 뉴스로 돌아가기). */
+  .discovery-news .discovery-reader-back { position: relative; display: inline-flex; grid-column: 1; grid-row: 1; justify-content: center; width: 44px; height: 44px; padding: 0; }
+  .discovery-news .discovery-reader-back > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .discovery-news .discovery-reader-notes { grid-column: 1 / -1; grid-row: 2; }
-  .discovery-news .discovery-reader-head { grid-column: 1; grid-row: 1; padding-top: 6px; }
-  .discovery-news .discovery-reader-tools { grid-column: 2; grid-row: 1; align-self: start; flex-wrap: nowrap; }
+  .discovery-news .discovery-reader-head { grid-column: 2; grid-row: 1; padding-top: 6px; }
+  .discovery-news .discovery-reader-tools { grid-column: 3; grid-row: 1; align-self: start; flex-wrap: nowrap; }
   .discovery-news .discovery-reader-page { grid-column: 1 / -1; grid-row: 3; }
   .discovery-news .discovery-reader-frame { height: 100%; min-height: 0; }
-  .discovery-news .discovery-reader-empty { position: sticky; top: 16px; display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; color: var(--news-muted); }
-  .discovery-news .discovery-reader-empty > p { margin: 0; font-size: 15px; }
 }
 @media (max-width: 1100px) {
   .discovery-news[data-reading=true] .discovery-list-pane { display: none; }
-  .discovery-news[data-reading=false] .discovery-reader-host { display: none; }
   .discovery-news .discovery-reader-back { display: inline-flex; }
   .discovery-news .discovery-reader-tools { margin-left: -12px; }
   /* Tools start at the left here, so the options panel opens toward the right. */

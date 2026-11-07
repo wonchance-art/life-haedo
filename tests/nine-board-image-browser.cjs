@@ -73,6 +73,8 @@ async function main(){
   assert.match(await page.locator('.nb-files > p.life-help').first().textContent(),/^원래 구성은 이 브라우저에 보관됩니다\. 선택 영역 공개는 별도로 검토하며/);
   await context.unroute(base+'/assets/life/nine-board-ui.js');report.checks.push('A store without an account keeps the browser-only status and file note; account stores never show them');
   await page.evaluate(()=>Promise.all(window.__rssStartReports));
+  // The first RSS inbox read is deferred to an idle callback after page-ready; wait for it (see home-refinement-browser).
+  for(const deadline=Date.now()+10000;!report.rssReads.length&&Date.now()<deadline;)await new Promise(resolve=>setTimeout(resolve,50));
   assert(report.rssReads.length > 0);assert(report.rssReads.length <= report.starts.length,'RSS list reads must not exceed actual app starts');
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);
  }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true});throw error;}

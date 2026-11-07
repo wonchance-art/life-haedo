@@ -130,6 +130,7 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    let splitCleanup = null;
     let readerMatchRefresh = null;
     let readerWatch = null;
     let readingResumeCleanup = null;
@@ -3736,6 +3737,9 @@
       draw();
       main.append(pane, readerColumn);
       main.dataset.split = 'records';
+      // The list width is chosen by dragging the line between the columns (this device only).
+      splitCleanup = global.HaedoLife.SplitResize?.attach(main, { key: 'caeyeon_life_split_records', before: readerColumn, controls: pane.id,
+        min: 280, readerMin: 420, defaultWidth: 400, keepVisible: () => readerColumn.querySelector('#lifeSourceText') || readerColumn.querySelector('.life-reader') }) || null;
       const saved = state.recordsPaneScroll?.workspaceId === workspaceId ? state.recordsPaneScroll.top : 0;
       requestAnimationFrame(() => {
         if (!pane.isConnected) return;
@@ -4012,16 +4016,9 @@
       renderReadingResume(main, 'sources');
       main.append(selectionBar, kindTabs, count, list, more);
       update();
-      // Wide screens read beside this list (assets/life/records.css); the empty reading
-      // column only says where an opened original appears.
-      const column = node('div', null, 'records-list-column');
-      column.append(...main.childNodes);
-      const placeholder = node('aside', null, 'records-reader-empty');
-      placeholder.id = 'lifeRecordsReaderEmpty';
-      placeholder.setAttribute('aria-label', '읽기 칸');
-      placeholder.append(node('p', '목록에서 자료를 고르면 여기에서 읽습니다.', 'life-meta'));
-      main.append(column, placeholder);
-      main.dataset.split = 'records';
+      // 2026-11-07 owner request: no reading column until an original is opened. On wide screens
+      // the list itself uses the wider frame (assets/life/records.css); the reader appears beside it on open.
+      main.dataset.wide = 'records';
     }
 
     function metadata(source, version, expanded = false) {
@@ -4664,7 +4661,8 @@
       function watchReading() {
         readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           reader, ...(formattedView ? { positionAdapter: markdown.adapter } : {}),
-          isReading: () => !disposed && sourceActive && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
+          // Dragging the list width (and the scroll that keeps the reading line in place) is not reading.
+          isReading: () => !disposed && sourceActive && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden && !global.HaedoLife.SplitResize?.adjusting?.(),
           onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
           onError: () => {
             if (!reader.isConnected || disposed) return;
@@ -5916,12 +5914,14 @@
       collection?.leave();
       unifiedSearch?.leave();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      splitCleanup?.(); splitCleanup = null;
       readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       writeRoute(state.mode, false);
       renderHeader();
       main.dataset.mode = state.mode;
       delete main.dataset.split;
+      delete main.dataset.wide;
       main.replaceChildren();
       if (state.mode === 'home' && home) {
         // Home's configuration read must not lock independent navigation.
@@ -6205,6 +6205,7 @@
       cleanup(() => main?.removeEventListener('wheel', editingInput));
       if (focusFrame !== null) { cleanup(() => global.cancelAnimationFrame(focusFrame)); focusFrame = null; }
       if (readerCleanup) { cleanup(readerCleanup); readerCleanup = null; }
+      if (splitCleanup) { cleanup(splitCleanup); splitCleanup = null; }
       cleanup(() => readingResumeCleanup?.()); readingResumeCleanup = null;
       cleanup(() => readingPosition?.dispose());
       cleanup(invalidateBatchContext);
