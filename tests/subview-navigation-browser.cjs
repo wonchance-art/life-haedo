@@ -326,8 +326,13 @@ async function main() {
       // A reloaded plan subview returns to 일정's 계획, not to the list (review M2).
       await page.goto(base + '/index.html?section=schedule&view=annual-plan'); await ready(page); await mode(page, 'annual-plan');
       await page.reload(); await ready(page); await mode(page, 'annual-plan');
-      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '계획으로 돌아가기');
+      // 2026-11-08 S1: the plan screen's return is named for its destination (일정 Y), and its heading
+      // has no 통합 검색 (‹ + title + the screen's own add control only; 연간 계획 has none).
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '일정으로 돌아가기');
+      assert.equal(await page.locator('#lifeFindOpen').count(), 0);
+      assert.equal(await page.locator('#lifeApp .haedo-page-heading .haedo-heading-actions').count(), 0);
       await back(page, 'tools');
+      assert.equal(await page.locator('#lifeFindOpen').count(), 1, 'Y keeps its 통합 검색');
       assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
       // 2026-11-08 S8: no 연표 screen in between; Y's 연표 link and the old address open the 연표 목록.
       assert.equal(await page.locator('#lifeMain .schedule-plan-links a[data-plan-destination="time"]').getAttribute('href'), 'workspace.html');

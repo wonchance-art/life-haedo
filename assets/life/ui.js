@@ -2295,7 +2295,7 @@
       const scheduleParts = (state.mode === 'home' || calendarModes.has(state.mode)) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
       if (scheduleParts && calendarModes.has(state.mode)) heading.textContent = scheduleParts.title;
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '일정으로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '일정으로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -2303,7 +2303,7 @@
         headingGroup.append(back);
       }
       if (section === 'schedule' && planningModes.has(state.mode) && state.mode !== 'tools' && !subviewTitles[state.mode]) {
-        headingGroup.append(iconButton('계획으로 돌아가기', 'back', guarded(() => navigate('tools'))));
+        headingGroup.append(iconButton('일정으로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
       if (state.mode === 'related') {
         const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '자료로 돌아가기', 'back', guarded(returnFromRelated));
@@ -2350,7 +2350,8 @@
         // Home exposes these actions with labels in its shortcut row.
         if (section === 'records') { nav.append(add); actions.append(nav); }
       }
-      if (!['source', 'find'].includes(state.mode)) {
+      // A plan screen's heading is ‹ + title + its own add control only (2026-11-08 S1); 연간 계획 has none.
+      if (!['source', 'find', 'annual-plan'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; actions.append(find);
       }
       if (scheduleParts) actions.append(scheduleParts.help);
