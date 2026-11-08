@@ -11,7 +11,6 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
-const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 
 const out = process.env.BLOG_OUT_DIR ? path.resolve(process.env.BLOG_OUT_DIR) : path.resolve(__dirname, '../.local/blog-platform');
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
@@ -202,9 +201,11 @@ async function main() {
       await home(page);
       for (const mode of ['preview', 'nine', 'share']) {
         if (mode === 'preview') {
-          // 2026-11-08 S3: the selected page and its visitor preview open from 자료.
-          const menu = await openRecordsMenu(page); await menu.getByRole('button', { name: '선택 자료 페이지', exact: true }).click();
+          // 2026-11-08 S3: the list's 자료 block (and its preview entry) is gone; the selected page and
+          // its visitor preview are 자료's. Use the page's preserved address, as for nine/share below.
+          await page.goto(base + '/index.html?view=page'); await ready(page);
           if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+          if (await page.locator('.photo-article').isVisible()) await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();
           const toggle = page.locator('#wbPagePreview'); await toggle.waitFor();
           if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
         }
