@@ -89,10 +89,12 @@
     container.replaceChildren(...cards);
   }
   // 간단 트래커 표 of 일정 M (2026-11-08 일정 통합 정리 S5): one read-only row per habit, one dot per day
-  // of the month. Done is filled, a scheduled day not done is outlined, the rest is blank; today's column
-  // is marked. Nothing here takes a tap but the row: the whole row is one link (href(item)) to the habit
-  // screen, where the month is checked. The dots are drawn for the eye only (aria-hidden): the link's name
-  // carries the habit and its n/m. options: habits, month, today, model, href(item), onOpen(item, event)
+  // of the month. Done is filled, a scheduled day not done is outlined, a check kept on a day that is not one
+  // to do is a ring with a dot inside (another shape, not only a lighter shade: review 2 m3), the rest is blank;
+  // today is marked on its day number only. Nothing here takes a tap but the row: the whole row is one link
+  // (href(item)) to the habit screen, where the month is checked, and ends in a › . The dots are drawn for the
+  // eye only (aria-hidden): the link's name carries the habit and its n/m, and one legend line in text under the
+  // table says what the three shapes are. options: habits, month, today, model, href(item), onOpen(item, event)
   // (optional: a plain click goes through it, e.g. to flush drafts first), focusScope.
   function renderCompact(container, { habits, month, today, model, href, onOpen, focusScope = "habit-row" }) {
     const [year, monthNumber] = month.split("-").map(Number), current = month === monthOf(today);
@@ -112,7 +114,7 @@
       if (day === todayDay) cell.dataset.today = "true";
       numbers.append(cell);
     }
-    head.append(el("span", "habit-compact-name"), el("span", "habit-compact-count"), numbers);
+    head.append(el("span", "habit-compact-name"), el("span", "habit-compact-count"), numbers, el("span", "habit-compact-go"));
     const list = el("ul", "habit-compact-rows");
     for (const item of habits) {
       const summary = model.habitMonth(item.data, year, monthNumber, today);
@@ -132,18 +134,32 @@
       dots.setAttribute("aria-hidden", "true");
       for (const day of summary.days) {
         // Done on a day to do is filled, a day to do is outlined, the rest is empty. A check kept on a day that
-        // is no longer one to do (not counted in n/m) has the lighter fill of the month tracker.
+        // is no longer one to do (not counted in n/m) is a ring with a dot inside.
         const dot = el("span", "habit-compact-dot");
         dot.dataset.state = day.done ? (day.scheduled ? "done" : "kept") : day.scheduled ? "planned" : "none";
         dot.dataset.date = day.date;
         if (day.date === today) dot.dataset.today = "true";
         dots.append(dot);
       }
-      link.append(el("span", "habit-compact-name", item.data.title), el("span", "habit-compact-count", count), dots);
+      // The trailing › says the row opens something (touch has no hover).
+      const go = el("span", "habit-compact-go");
+      go.setAttribute("aria-hidden", "true");
+      const icons = root.HaedoLife && root.HaedoLife.Icons;
+      if (icons) go.append(icons.create("forward", { size: 16 })); else go.textContent = "›";
+      link.append(el("span", "habit-compact-name", item.data.title), el("span", "habit-compact-count", count), dots, go);
       row.append(link);
       list.append(row);
     }
-    table.append(head, list);
+    // What the shapes are, in text (read in order after the rows); the shapes beside the words are drawn by CSS.
+    const legend = el("p", "habit-compact-legend");
+    for (const [state, text] of [["done", "완료"], ["planned", "할 날"], ["kept", "정한 요일이 아닌 날의 체크"]]) {
+      const entry = el("span", "habit-compact-legend-item"), mark = el("span", "habit-compact-dot");
+      mark.dataset.state = state;
+      mark.setAttribute("aria-hidden", "true");
+      entry.append(mark, el("span", null, text));
+      legend.append(entry);
+    }
+    table.append(head, list, legend);
     container.replaceChildren(table);
   }
   // Focus the same control after a repaint (data-focus-key), without scrolling the page.

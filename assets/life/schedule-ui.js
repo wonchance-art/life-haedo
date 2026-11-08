@@ -316,7 +316,7 @@
     };
     function planRows(context, entries, { empty, limit = 8 } = {}) {
       const list = el('div', null, 'schedule-plan-list');
-      if (!entries.length && empty) list.append(el('p', empty, 'life-meta schedule-empty'));
+      if (!entries.length && empty) list.append(el('p', empty, 'schedule-empty'));
       const thisYear = data().parts(data().today()).year;
       for (const entry of entries.slice(0, limit)) {
         const row = goButton(context, null, 'day', entry.date, 'schedule-plan-row', 'schedule:plan:' + entry.id);
@@ -326,12 +326,13 @@
         row.setAttribute('aria-label', data().dayTitle(entry.date) + ', ' + snippet(entry.text, 80));
         list.append(row);
       }
-      if (entries.length > limit) list.append(el('p', '그 밖의 계획 ' + (entries.length - limit) + '개는 연간 계획에서 볼 수 있어요.', 'life-meta schedule-empty'));
+      if (entries.length > limit) list.append(el('p', '그 밖의 계획 ' + (entries.length - limit) + '개는 연간 계획에서 볼 수 있어요.', 'life-meta schedule-more'));
       return list;
     }
     // 계획 칸: the links to the plan screens, (Y) the year's sentence, then the dated plan entries of the period.
-    function planAside(context, { heading, entries, empty, year }) {
-      const aside = el('aside', null, 'schedule-aside'); aside.setAttribute('aria-label', '계획');
+    // Named for its period (올해 · 이 해 · 이 분기), not 계획: the link line inside is the 계획 navigation (review 3 m4).
+    function planAside(context, { heading, entries, empty, year, label }) {
+      const aside = el('aside', null, 'schedule-aside'); aside.setAttribute('aria-label', label);
       if (links.plan) aside.append(links.plan());
       if (year) aside.append(...yearPlan(context, year, aside));
       const title = el('h2', heading, 'schedule-aside-title'); aside.append(title, planRows(context, entries, { empty }));
@@ -386,7 +387,7 @@
       draw();
       primary.append(filterTabs(context, draw), rows, legend());
       const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-') && (year !== data().parts(now).year || entry.date >= now)).sort((a, b) => a.date.localeCompare(b.date));
-      const aside = planAside(context, { heading: '예정', entries, empty: '이 해의 남은 예정이 없어요.', year });
+      const aside = planAside(context, { heading: '예정', entries, empty: '이 해의 남은 예정이 없어요.', year, label: year === data().parts(now).year ? '올해' : '이 해' });
       aside.append(entrySlot(context, 'year', { year }, null));
       wrap.append(primary, aside);
       return wrap;
@@ -421,7 +422,7 @@
       primary.append(filterTabs(context, draw), rows, legend());
       const first = weeks[0][0], last = weeks.at(-1)[6];
       const entries = context.result.plans.filter(entry => entry.date >= first && entry.date <= last && entry.date >= now).sort((a, b) => a.date.localeCompare(b.date));
-      wrap.append(primary, planAside(context, { heading: '예정', entries, empty: '이 분기의 남은 예정이 없어요.' }));
+      wrap.append(primary, planAside(context, { heading: '예정', entries, empty: '이 분기의 남은 예정이 없어요.', label: '이 분기' }));
       return wrap;
     }
     function dayLabel(day, entry) {
@@ -486,7 +487,8 @@
         caption.append(source); figure.append(quote, caption); content.append(figure);
       } else {
         mark.append(glyph(item.kind === 'source' ? 'book' : 'edit'));
-        const heading = el(compact ? 'h3' : 'h2', null, 'schedule-post-title');
+        // h3 under the day's 그날 기록 (D) or the day heading (W, the phone month); compact is the smaller title.
+        const heading = el('h3', null, 'schedule-post-title' + (compact ? ' schedule-post-title-compact' : ''));
         heading.append(opener(context, item, plainButton(postTitle(item), 'schedule-post-open')));
         content.append(heading);
         if (!compact && item.photos > 0) { const media = el('div', null, 'schedule-post-media'); media.append(thumb(context, item, '사진')); content.append(media); }
@@ -498,8 +500,8 @@
     function dayRows(context, day, options = {}) {
       const entry = context.result.days.get(day), list = el('div', null, 'schedule-day-rows');
       const items = [...(entry?.plans || []), ...[...(entry?.excerpts || []), ...(entry?.posts || [])].sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0))];
-      // D says it at body size (2026-11-08 S7); the phone month's list under the calendar keeps the meta size.
-      if (!items.length && !options.quiet) list.append(el('p', day > data().today() ? '아직 오지 않은 날이에요.' : '이 날 기록이 없어요.', options.compact ? 'life-meta schedule-empty' : 'schedule-empty schedule-day-empty'));
+      // Said at body size, in D and under the phone month (2026-11-08 S7, review 2 m6).
+      if (!items.length && !options.quiet) list.append(el('p', day > data().today() ? '아직 오지 않은 날이에요.' : '이 날 기록이 없어요.', 'schedule-empty' + (options.compact ? '' : ' schedule-day-empty')));
       for (const item of items) list.append(itemRow(context, item, options));
       return list;
     }
@@ -545,8 +547,10 @@
       // Fallback when the slot cannot load: the habit screen only. 행복도 is entered here in D alone; the timeline
       // shows it and is not offered as a second place for it (2026-11-08 S7, the former 연표에서 행복도 보기).
       primary.append(entrySlot(context, 'day', {}, links.habits));
-      const records = el('section', null, 'schedule-day-records'); records.setAttribute('aria-label', '그날 기록');
-      records.append(dayRows(context, context.date));
+      // 그날 기록 is an h2 like 습관 and 행복도 above it (review 3 n2); it is not shown (the records say what they are).
+      const records = el('section', null, 'schedule-day-records'), recordsTitle = el('h2', '그날 기록', 'life-sr-only');
+      recordsTitle.id = 'scheduleDayRecordsTitle'; records.setAttribute('aria-labelledby', recordsTitle.id);
+      records.append(recordsTitle, dayRows(context, context.date));
       primary.append(records);
       wrap.append(primary);
       const { month, day, year } = data().parts(context.date);
@@ -635,6 +639,13 @@
     return Object.freeze({ render, leave, dispose });
   }
 
+  // 으로/로 after a word (review 2 NIT: no "(으)로"): 로 after a vowel or ㄹ, 으로 after another final consonant.
+  // A word not ending in Hangul (a bare number) is read by its last digit: 2·4·5·9 end in a vowel, 1·7·8 in ㄹ.
+  function withRo(word) {
+    const text = String(word), last = text.at(-1) || '', code = last.charCodeAt(0) - 0xAC00;
+    if (code >= 0 && code < 11172) { const final = code % 28; return text + (final === 0 || final === 8 ? '로' : '으로'); }
+    return text + ('0136'.includes(last) ? '으로' : '로');
+  }
   // Header parts for 일정 (ui.js arranges them in its heading row).
   function headerParts({ mode, date, onView, onToday, onStep, onUp, onHelp }) {
     const unit = UNIT_OF[mode] || null, D = data();
@@ -680,7 +691,7 @@
       up = el('a', null, 'schedule-up');
       up.href = parent[0] === 'home' ? 'index.html' : 'index.html?section=schedule&view=' + parent[0] + (parent[0] === 'tools' ? '' : '&date=' + date);
       up.dataset.scheduleUp = parent[0]; up.dataset.focusKey = 'schedule:up';
-      up.setAttribute('aria-label', parent[1] + '(으)로 올라가기');
+      up.setAttribute('aria-label', withRo(unit === 'month' || unit === 'quarter' ? parent[1] + '년' : parent[1]) + ' 올라가기');
       up.append(glyph('back'), el('span', parent[1]));
       up.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -730,5 +741,5 @@
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }
-  life.ScheduleUI = Object.freeze({ create, headerParts, helpDialog, bindShortcuts, UNIT_OF, MODE_OF, isMode, scheduleMode });
+  life.ScheduleUI = Object.freeze({ create, headerParts, helpDialog, bindShortcuts, withRo, UNIT_OF, MODE_OF, isMode, scheduleMode });
 })(globalThis);

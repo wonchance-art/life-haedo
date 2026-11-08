@@ -332,6 +332,85 @@ async function main() {
       assert.equal(tables.calls.filter(call => call.method !== 'GET').length, 0, 'viewing and following the link wrote nothing');
     });
 
+    // Review 3 m2 (2026-11-08): 행복도 0–10 is one row only where each choice gets 44px (the slot ≥ 524px); else two
+    // rows, 0–5 and 6–10, at every width (1101–1300px beside the aside too, not only phones).
+    for (const width of [1101, 1200, 1300, 1440, 820, 320]) await check('행복도 choices are never under 44px at ' + width, async ({ page }) => {
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      const scale = await page.evaluate(() => ({ body: document.querySelector('.schedule-entries-day > .schedule-entry-body').getBoundingClientRect().width,
+        options: [...document.querySelectorAll('.schedule-happiness-option')].map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height, right: b.right }; }),
+        right: document.querySelector('.schedule-entries-day').getBoundingClientRect().right }));
+      const rows = [...new Set(scale.options.map(o => o.top))].map(top => scale.options.filter(o => o.top === top).map(o => o.n));
+      assert.deepEqual(scale.options.filter(o => o.w < 44 || o.h < 44).map(o => o.n + ':' + Math.round(o.w)), [], width + ': each choice is 44 × 44 (slot ' + scale.body + 'px)');
+      assert.deepEqual(rows, scale.body >= 524 ? [['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']] : [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']], width + ': rows');
+      if ([1101, 1200, 320].includes(width)) assert.equal(rows.length, 2, width + ': the slot beside the aside (or a phone) is narrower than eleven 44px choices');
+      assert.ok(scale.options.every(o => o.right <= scale.right + 1), width + ': the choices stay inside the slot');
+      await overflow(page, 'happiness ' + width);
+    }, { width, height: 900 });
+
+    // Review 3 m5·m6: 지우기 by keyboard leaves focus on the day's choice 0 (not the page); in forced colors each
+    // choice keeps a 1px CanvasText edge and the chosen one a 2px Highlight ring.
+    await check('행복도: 지우기 by keyboard keeps focus in the group; forced colors show the chosen choice', async ({ page }) => {
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.getByRole('radio', { name: '행복도 7' }).focus(); await page.keyboard.press('Space');
+      await page.locator('.schedule-happiness-clear').waitFor();
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:happiness:2026-11-03:7');
+      await page.emulateMedia({ forcedColors: 'active' });
+      const forced = await page.evaluate(() => {
+        const system = name => { const probe = document.createElement('span'); probe.style.color = name; document.body.append(probe); const value = getComputedStyle(probe).color; probe.remove(); return value; };
+        const style = n => { const c = getComputedStyle(n); return { outline: c.outlineStyle + ' ' + c.outlineWidth + ' ' + c.outlineColor, border: c.borderTopStyle + ' ' + c.borderTopWidth + ' ' + c.borderTopColor }; };
+        const options = [...document.querySelectorAll('.schedule-happiness-option')];
+        return { chosen: style(options.find(n => n.querySelector('input').checked)), other: style(options[0]), highlight: system('Highlight'), text: system('CanvasText') };
+      });
+      assert.equal(forced.chosen.outline, 'solid 2px ' + forced.highlight, 'forced colors: the chosen choice has a 2px Highlight ring');
+      assert.equal(forced.other.border, 'solid 1px ' + forced.text, 'forced colors: each choice has a 1px CanvasText edge');
+      assert.equal(forced.chosen.border, 'solid 1px ' + forced.text);
+      await page.emulateMedia({ forcedColors: 'none' });
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), '지우기');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => !document.querySelector('.schedule-happiness-clear') && !document.querySelector('.schedule-happiness-option input:checked'));
+      await page.waitForTimeout(200);
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset?.focusKey || document.activeElement?.tagName), 'schedule:happiness:2026-11-03:0', 'focus is on choice 0, not the page');
+      assert.equal(await page.evaluate(() => document.activeElement?.checked), false, 'focusing 0 does not choose it');
+    });
+
+    // Review 3 n1: the status line (a live region) is rebuilt only when what it says changes.
+    await check('the entry status line is not rewritten by a repaint that says the same', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
+      await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
+      await page.waitForTimeout(400);
+      const counted = await page.evaluate(async () => {
+        const status = document.querySelector('.schedule-entry-status'), changes = [];
+        const watch = new MutationObserver(list => changes.push(...list.map(m => m.type))); watch.observe(status, { childList: true, subtree: true, characterData: true });
+        const box = document.querySelector('.schedule-entries input[type=checkbox]');
+        for (const type of ['haedo:store', 'haedo:happiness', 'haedo:store']) document.dispatchEvent(new Event(type));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        watch.disconnect();
+        return { changes: changes.length, repainted: !box.isConnected, text: status.textContent };
+      });
+      assert.deepEqual(counted, { changes: 0, repainted: true, text: '저장됨 · 계정에 올림' }, 'the panel repainted, the status line stayed as it was');
+      // A change of what it says still rewrites it.
+      page.__expectFailure = true; tables.fail = 'haedo_items';
+      await page.getByRole('checkbox', { name: '아침 산책', exact: true }).uncheck();
+      await statusOf(page).filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 10000 });
+    });
+
+    // Review 2 m6: Y without a goal says so at body size and links 목표 추가 to the goal screen (drafts kept first).
+    await check('Y with no goal links 목표 추가 to the goal screen and writes nothing', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
+      await page.goto(base + '/index.html?section=tools&date=2026-11-03'); await ready(page); await shown(page, 'tools'); await entries(page);
+      await page.waitForFunction(() => HaedoPlatformStore.items.length === 1);
+      const add = page.locator('.schedule-entries-year').getByRole('link', { name: '목표 추가' });
+      assert.equal(await add.getAttribute('href'), 'goals.html');
+      assert.ok((await add.boundingBox()).height >= 44);
+      assert.match(await page.locator('.schedule-entries-year').innerText(), /진행 중인 목표가 없어요\./);
+      await add.click();
+      await page.waitForURL(url => url.pathname.endsWith('/goals.html'));
+      assert.equal(tables.calls.filter(call => call.method !== 'GET').length, 0, 'viewing and following the link wrote nothing');
+    });
+
     for (const width of [1440, 390, 360]) await check('day and week panels fit ' + width + ' without horizontal scroll or errors', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData(['2026-11-02']) });
       tables.seed('haedo_items', accounts.a.id, { id: 'h2', kind: 'habit', name: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', data: { ...habitData([]), title: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기' } });
@@ -355,7 +434,7 @@ async function main() {
             const parts = [['check', '.schedule-entries-day'], ['records', '.schedule-day-records'], ['others', '.schedule-other-years']].map(([name, sel]) => [name, document.querySelector('#lifeSchedule ' + sel)]).filter(([, n]) => n);
             const sorted = [...parts].sort(([, a], [, b]) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1).map(([name]) => name);
             const slot = document.querySelector('.schedule-entries-day');
-            return { sorted, inSlot: [...slot.querySelectorAll('h3, legend')].map(n => n.textContent), goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
+            return { sorted, inSlot: [...slot.querySelectorAll('h2')].map(n => n.textContent), goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
           });
           assert.deepEqual(order, { sorted: ['check', 'records'], inSlot: ['습관', '행복도'], goals: 0 }, 'the day shows its checks, then its records, and no goal');
           // An empty day says so at body size.

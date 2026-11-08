@@ -44,11 +44,12 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-tracker-day { min-width: 0; }
 }
 /* 간단 트래커 표 of 일정 M (2026-11-08 S5, renderCompact): rows are habits, columns the days of the month.
-   Read only: the whole row is one 44px link to the habit screen; the dots are not targets. Done is the ink
-   fill of the month tracker, a day to do is a --field-line ring (#86968d, 3.11:1 on white), the rest is empty.
-   Today: the teal number above and the same short straight line under its dot. */
+   Read only: the whole row is one 44px link to the habit screen, ending in a ›; the dots are not targets. Done is
+   the ink fill of the month tracker, a day to do is a --field-line ring (#86968d, 3.11:1 on white), a check kept on a
+   day that is not one to do is an --ink-soft ring with a dot inside (a shape of its own, review 2 m3), the rest is
+   empty. Today is the teal day number above its column only. One legend line in text follows the table. */
 .habit-compact { min-width: 0; }
-.habit-compact-head, .habit-compact-row { display: grid; grid-template-columns: minmax(0, 12em) 64px minmax(0, 1fr); column-gap: 16px; align-items: center; }
+.habit-compact-head, .habit-compact-row { display: grid; grid-template-columns: minmax(0, 12em) 64px minmax(0, 1fr) 16px; column-gap: 16px; align-items: center; }
 .habit-compact-head { padding: 0 12px 4px; margin-inline: -12px; }
 .habit-compact-rows { margin: 0; padding: 0; list-style: none; }
 .habit-compact-item { margin: 0; }
@@ -57,24 +58,36 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 .habit-compact-name { min-width: 0; font-size: var(--haedo-text-control); font-weight: 600; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
 .habit-compact-count { color: var(--ink-soft); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .habit-compact-days { display: grid; grid-template-columns: repeat(var(--habit-compact-days, 31), minmax(0, 1fr)); align-items: center; justify-items: center; min-width: 0; max-width: calc(var(--habit-compact-days, 31) * 22px); }
+/* The number row is its own container: where a column is narrower than a two-digit number, the last day's
+   number ends at the column's end instead of reaching past the dots (review 3 n7, 320px). */
+.habit-compact-head > .habit-compact-days { container: habit-compact-days / inline-size; }
 .habit-compact-number { color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@container habit-compact-days (width < 500px) { .habit-compact-number:last-child { justify-self: end; } }
 .habit-compact-number[data-today] { color: var(--color-primary); font-weight: 750; }
-.habit-compact-dot { position: relative; display: block; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+.habit-compact-go { display: flex; align-items: center; justify-content: center; color: var(--ink-soft); }
+.habit-compact-go > .life-glyph { width: 16px; height: 16px; }
+.habit-compact-dot { position: relative; display: block; flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
 .habit-compact-dot[data-state=done] { background: var(--ink); }
-.habit-compact-dot[data-state=kept] { background: var(--ink-soft); }
 .habit-compact-dot[data-state=planned] { border: 1.5px solid var(--field-line); }
-.habit-compact-dot[data-today]::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 2px; margin-left: -5px; border-radius: 1px; background: var(--color-primary); }
-/* Phone: the name has its own line (with n/m회 at its end) and the dots take the full width below. */
-@media (max-width: 760px) {
-  .habit-compact-head, .habit-compact-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name count" "days days"; row-gap: 8px; }
+.habit-compact-dot[data-state=kept] { border: 1.5px solid var(--ink-soft); }
+.habit-compact-dot[data-state=kept]::before { content: ""; position: absolute; inset: 0; margin: auto; width: 4px; height: 4px; border-radius: 50%; background: var(--ink-soft); }
+.habit-compact-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 8px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-meta); line-height: 1.6; }
+.habit-compact-legend-item { display: inline-flex; align-items: center; gap: 8px; }
+/* iPad portrait and phone (up to 1100px): the name has its own line (with n/m회 at its end) and the dots take
+   the full width below, so they are not squeezed beside the name (review 2 m3, 820px). The › spans both lines. */
+@media (max-width: 1100px) {
+  .habit-compact-head, .habit-compact-row { grid-template-columns: minmax(0, 1fr) auto 16px; grid-template-areas: "name count go" "days days go"; row-gap: 8px; }
   .habit-compact-head > .habit-compact-name, .habit-compact-head > .habit-compact-count { display: none; }
   .habit-compact-head { padding-bottom: 0; }
   .habit-compact-name { grid-area: name; }
   .habit-compact-count { grid-area: count; }
   .habit-compact-days { grid-area: days; max-width: none; }
+  .habit-compact-go { grid-area: go; }
   .habit-compact-row { padding-block: 8px 12px; }
+}
+@media (max-width: 760px) {
   .habit-compact-dot { width: 8px; height: 8px; }
-  .habit-compact-dot[data-today]::after { width: 8px; margin-left: -4px; }
+  .habit-compact-dot[data-state=kept]::before { width: 3px; height: 3px; }
 }
 @media (prefers-reduced-motion: reduce) { .habit-tracker-day:not(:disabled) { transition: none; } }
 @media (forced-colors: active) {
@@ -83,7 +96,6 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-tracker-day:disabled { color: GrayText; }
   .habit-tracker-day[aria-current=date] > .habit-tracker-number::after { forced-color-adjust: none; background: CanvasText; }
   .habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: HighlightText; }
-  .habit-compact-dot:is([data-state=done], [data-state=kept]) { forced-color-adjust: none; background: CanvasText; }
-  .habit-compact-dot[data-state=planned] { border-color: CanvasText; }
-  .habit-compact-dot[data-today]::after { forced-color-adjust: none; background: CanvasText; }
+  .habit-compact-dot[data-state=done], .habit-compact-dot[data-state=kept]::before { forced-color-adjust: none; background: CanvasText; }
+  .habit-compact-dot:is([data-state=planned], [data-state=kept]) { border-color: CanvasText; }
 }

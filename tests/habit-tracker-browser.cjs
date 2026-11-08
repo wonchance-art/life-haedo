@@ -333,6 +333,19 @@ async function main() {
       // A check kept from before the start is shown lighter and not counted.
       assert.deepEqual([dailyRow.count, dailyRow.dots['03'], dailyRow.dots['05'], dailyRow.dots['07']], ['1/4회', 'kept', 'done', 'planned+today']);
       assert.equal(await slot.locator('.habit-compact-number[data-today]').textContent(), '7', 'today\'s column is numbered');
+      // Review 2 m3: a kept check is another shape than done (a ring with a dot inside, not only a lighter fill); today is
+      // marked on its number only (no line under an empty cell); one legend line in text says what the shapes are.
+      const shapes = await page.evaluate(() => {
+        const look = selector => { const n = document.querySelector('.schedule-entries-month .habit-compact-rows ' + selector), c = getComputedStyle(n), inner = getComputedStyle(n, '::before');
+          return { ring: c.borderTopStyle !== 'none' && parseFloat(c.borderTopWidth) > 0, fill: c.backgroundColor !== 'rgba(0, 0, 0, 0)', inner: inner.content !== 'none' && parseFloat(inner.width) > 0 }; };
+        const today = document.querySelector('.schedule-entries-month .habit-compact-rows .habit-compact-dot[data-today]');
+        return { done: look('[data-state=done]'), kept: look('[data-state=kept]'), planned: look('[data-state=planned]'), todayMark: getComputedStyle(today, '::after').content };
+      });
+      assert.deepEqual(shapes, { done: { ring: false, fill: true, inner: false }, kept: { ring: true, fill: false, inner: true }, planned: { ring: true, fill: false, inner: false }, todayMark: 'none' });
+      const legend = slot.locator('.habit-compact-legend');
+      assert.deepEqual(await legend.locator('.habit-compact-legend-item').allInnerTexts(), ['완료', '할 날', '정한 요일이 아닌 날의 체크'], 'one legend line in text');
+      assert.equal(await legend.evaluate(n => !!n.closest('[aria-hidden="true"]') || getComputedStyle(n).display === 'none'), false, 'the legend is read');
+      assert.deepEqual(await legend.locator('.habit-compact-dot').evaluateAll(nodes => nodes.map(n => n.dataset.state + ':' + n.getAttribute('aria-hidden'))), ['done:true', 'planned:true', 'kept:true'], 'the shapes beside the words are the dots themselves');
       // No target but the rows: no button or field in the table, each row at least 44px tall.
       assert.equal(await slot.locator('.schedule-entry-body :is(button, input, [tabindex])').count(), 0, 'no per-cell target');
       const heights = await slot.locator('.habit-compact-row').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height >= 44));
@@ -366,7 +379,10 @@ async function main() {
       await page.locator('.schedule-entries-month').getByText('이 달에 할 습관이 없어요.').waitFor();
     });
 
-    for (const width of [1440, 820, 390, 360]) await check('일정 M fits ' + width + ' with the compact table', async ({ page, tables }) => {
+    // Review 2 m3 (2026-11-08, rule change): up to 1100px the name (with n/m회) has its own line and the dots the full
+    // width below, so they are not squeezed at 820; each row ends in a ›; review 3 n7: at 320 the last day number stays
+    // over the dots.
+    for (const width of [1440, 1101, 1100, 820, 390, 360, 320]) await check('일정 M fits ' + width + ' with the compact table', async ({ page, tables }) => {
       seed(tables);
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page); await scheduleMonth(page);
       await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-compact-row').length === 2);
@@ -381,9 +397,20 @@ async function main() {
       for (const row of rows) {
         assert.deepEqual([row.tall, row.inside, row.nameWhole, row.ordered], [true, true, true, true], width + ': rows are 44px, the 30 dots stay inside in day order, the name is whole');
         // Phone: the name has its own line and the dots are under it.
-        if (width <= 760) assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
+        if (width <= 1100) assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
         else assert.equal(row.nameAbove, false, width + ': name and dots share the row');
       }
+      // Each row ends in a › (drawn only), at its right end beside the dots.
+      const go = await page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => {
+        const mark = row.lastElementChild, box = mark.getBoundingClientRect(), days = row.querySelector('.habit-compact-days').getBoundingClientRect(), r = row.getBoundingClientRect();
+        return { go: mark.classList.contains('habit-compact-go'), hidden: mark.getAttribute('aria-hidden'), glyph: !!mark.querySelector('svg'), end: r.right - box.right <= 16, after: box.left >= days.right - 1 };
+      }));
+      assert.deepEqual(go, go.map(() => ({ go: true, hidden: 'true', glyph: true, end: true, after: true })), width + ': a › ends each row');
+      // The day numbers stay over the dot columns: the last one (30) does not reach past the last dot's column.
+      const numbers = await page.evaluate(() => { const head = document.querySelector('.schedule-entries-month .habit-compact-head .habit-compact-days'), box = head.getBoundingClientRect();
+        const range = document.createRange(), last = [...head.children].filter(n => n.textContent).at(-1); range.selectNodeContents(last); const text = range.getBoundingClientRect();
+        return { last: last.textContent, inside: text.right <= box.right + 0.5 && text.left >= box.left - 0.5 }; });
+      assert.deepEqual(numbers, { last: '30', inside: true }, width + ': the last day number stays over the dots');
       await page.screenshot({ path: path.join(output, 'schedule-month-' + width + '.png'), fullPage: true });
     }, { width, height: width <= 390 ? 844 : 960 });
   } finally { await browser.close(); }

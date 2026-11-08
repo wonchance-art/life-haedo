@@ -208,7 +208,7 @@
     // 행복도 notices apart from the goal/habit error line (a save failure there is not hidden by them).
     const moodNotice = el('p', null, 'life-error schedule-happiness-error'); moodNotice.setAttribute('role', 'alert'); moodNotice.hidden = true;
     host.replaceChildren(body, status, error, moodNotice);
-    let dirty = false, painted = false, retrying = false;
+    let dirty = false, painted = false, retrying = false, statusSaid = null;
     // 행복도 is shown in the day and week panels only (not in the year goals or the month habit tracker).
     const moodShown = kind === 'day' || kind === 'week';
     // 행복도 for this paint: the timelines are read once per paint, not once per day shown.
@@ -241,7 +241,8 @@
     // 일정 D: 0–10 (signed1 in the account document), 지우기 clears that day only. Days not come yet
     // cannot be entered. A choice not stored yet stays selected (also when the app must refresh).
     function happinessField(day) {
-      const field = el('fieldset', null, 'schedule-happiness'); field.append(el('legend', '행복도'));
+      // The legend holds the h2, so 행복도 is a heading beside 습관 and 그날 기록 and still names the group (review 3 n2).
+      const field = el('fieldset', null, 'schedule-happiness'), legend = el('legend'); legend.append(el('h2', '행복도', 'schedule-happiness-title')); field.append(legend);
       const stored = mood.on(day), waiting = days?.pending.has(day) ? days.pending.get(day) : undefined;
       const chosen = waiting !== undefined ? waiting : stored?.score ?? null, name = 'schedule-happiness-' + day;
       const scale = el('div', null, 'schedule-happiness-scale');
@@ -266,8 +267,9 @@
       if (day > today) field.append(el('p', '오지 않은 날은 기록할 수 없어요.', 'life-meta'));
       return field;
     }
-    // A link to the habit screen: a plain click goes through leave() (drafts kept first), others open as links.
-    function habitsLink(link, href) {
+    // A link to another page of the app (habit or goal screen): a plain click goes through leave() (drafts kept
+    // first), others open as links.
+    function pageLink(link, href) {
       link.href = href;
       if (leave) link.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -278,8 +280,8 @@
     // No habit at all (2026-11-08 S7): D·W·M say so and link to the habit screen, where one is added.
     function noHabits(section) {
       if (s.items.some(item => item.kind === 'habit')) return false;
-      const line = el('p', null, 'life-meta schedule-empty schedule-no-habits');
-      const add = habitsLink(el('a', '습관 추가', 'life-text-button schedule-habit-add'), 'habits.html');
+      const line = el('p', null, 'schedule-empty schedule-no-habits');
+      const add = pageLink(el('a', '습관 추가', 'schedule-empty-link schedule-habit-add'), 'habits.html');
       add.dataset.focusKey = 'schedule:habit-add';
       line.append(el('span', '아직 습관이 없어요. '), add);
       section.append(line);
@@ -307,8 +309,8 @@
     function dayPanel() {
       const due = model().dueHabits(s.items, date), parts = [];
       const habits = el('section', null, 'schedule-entry-section'); habits.setAttribute('aria-label', '습관');
-      habits.append(el('h3', '습관', 'schedule-entry-title'));
-      if (!noHabits(habits) && !due.length) habits.append(el('p', '이 날 할 습관이 없어요.', 'life-meta schedule-empty'));
+      habits.append(el('h2', '습관', 'schedule-entry-title'));
+      if (!noHabits(habits) && !due.length) habits.append(el('p', '이 날 할 습관이 없어요.', 'schedule-empty'));
       for (const row of due) {
         const line = el('label', null, 'schedule-habit');
         line.append(habitCheck(row, date, row.item.data.title), el('span', row.item.data.title));
@@ -320,7 +322,8 @@
     }
     function weekPanel() {
       const habits = s.items.filter(item => item.kind === 'habit' && week.some(day => model().scheduled(item.data, day)));
-      const section = el('section', null, 'schedule-entry-section schedule-week-entries'); section.setAttribute('aria-label', '이번 주 습관과 행복도');
+      // Named once, by the slot (이번 주 습관과 행복도, review 3 n3); the section has its h2.
+      const section = el('section', null, 'schedule-entry-section schedule-week-entries');
       const table = el('table', null, 'schedule-habit-grid');
       const head = el('tr'); head.append(el('th', '습관'));
       week.forEach((day, i) => { const th = el('th', WEEK[i]); th.scope = 'col'; if (day === today) th.dataset.today = 'true'; head.append(th); });
@@ -354,8 +357,8 @@
       });
       tbody.append(moodRow); table.append(tbody);
       const scroll = el('div', null, 'schedule-habit-scroll'); scroll.append(table);
-      section.append(el('h3', '습관 · 행복도', 'schedule-entry-title'));
-      if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'life-meta schedule-empty'));
+      section.append(el('h2', '습관 · 행복도', 'schedule-entry-title'));
+      if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'schedule-empty'));
       section.append(scroll);
       return [section];
     }
@@ -367,9 +370,9 @@
       const habits = s.items.filter(item => item.kind === 'habit' && model().habitMonth(item.data, y, m, today).days.some(day => day.scheduled));
       // Named once, by the slot (이 달 습관); the section has its 습관 heading.
       const section = el('section', null, 'schedule-entry-section schedule-month-habits');
-      section.append(el('h3', '습관', 'schedule-entry-title'));
+      section.append(el('h2', '습관', 'schedule-entry-title'));
       if (noHabits(section)) return [section];
-      if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'life-meta schedule-empty')); return [section]; }
+      if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'schedule-empty')); return [section]; }
       const table = el('div');
       global.HaedoHabitTracker.renderCompact(table, { habits, month, today, model: model(), focusScope: 'schedule:month-habit',
         href: () => 'habits.html?month=' + month, onOpen: leave ? () => { if (alive()) leave('habits.html?month=' + month); } : null });
@@ -378,10 +381,17 @@
     }
     function yearPanel() {
       const goals = model().activeGoals(s.items, year + '-01-01').filter(goal => !goal.data.target || goal.data.target.startsWith(String(year)) || goal.data.target > year + '-12-31');
-      const section = el('section', null, 'schedule-entry-section'); section.setAttribute('aria-label', '목표');
-      section.append(el('h3', '목표', 'schedule-entry-title'));
-      if (!goals.length) section.append(el('p', '진행 중인 목표가 없어요.', 'life-meta schedule-empty'));
-      else section.append(goalRows(goals));
+      // Named once, by the slot (목표, review 3 n3); its h2 is a sibling of 올해 계획 and 예정 in the aside.
+      const section = el('section', null, 'schedule-entry-section');
+      section.append(el('h2', '목표', 'schedule-entry-title'));
+      if (!goals.length) {
+        // No goal (review 2 m6): said at body size, with a link to the goal screen where one is added.
+        const line = el('p', null, 'schedule-empty schedule-no-goals');
+        const add = pageLink(el('a', '목표 추가', 'schedule-empty-link schedule-goal-add'), 'goals.html');
+        add.dataset.focusKey = 'schedule:goal-add';
+        line.append(el('span', '진행 중인 목표가 없어요. '), add);
+        section.append(line);
+      } else section.append(goalRows(goals));
       return [section];
     }
     function paint() {
@@ -401,35 +411,45 @@
       const itemState = saveState(s.items), moodState = kind === 'day' && days ? days.sync : 'ok';
       const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
       const unseen = s.recoveryUnseen;
-      status.hidden = !dirty && state === 'ok' && !unseen;
-      status.replaceChildren(el('span', STATE_TEXT[state]));
-      status.dataset.state = state;
-      if (state === 'error') {
-        // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
-        // aria-disabled, not disabled, while a retry runs: a focused button that turns disabled drops keyboard focus.
-        const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
-        retry.setAttribute('aria-disabled', String(retrying));
-        retry.addEventListener('click', () => {
-          if (!alive() || retrying) return;
-          retrying = true; retry.setAttribute('aria-disabled', 'true');
-          Promise.allSettled([s.retry(), life.Shell?.accountDocsSync?.syncNow?.()]).then(() => days?.syncState()).finally(() => { retrying = false; paint(); });
-        });
-        status.append(' ', retry);
+      status.hidden = !dirty && state === 'ok' && !unseen && !mirrorError;
+      // The status line is a live region: it is rebuilt only when what it says changes (review 3 n1), so a
+      // repaint for another reason (a 행복도 notice, a store notice) does not have it read out again.
+      const said = JSON.stringify([state, unseen, mirrorError]);
+      if (said !== statusSaid) {
+        statusSaid = said;
+        status.replaceChildren(el('span', STATE_TEXT[state]));
+        status.dataset.state = state;
+        if (state === 'error') {
+          // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
+          // aria-disabled, not disabled, while a retry runs: a focused button that turns disabled drops keyboard focus.
+          const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
+          retry.addEventListener('click', () => {
+            if (!alive() || retrying) return;
+            retrying = true; retry.setAttribute('aria-disabled', 'true');
+            Promise.allSettled([s.retry(), life.Shell?.accountDocsSync?.syncNow?.()]).then(() => days?.syncState()).finally(() => { retrying = false; paint(); });
+          });
+          status.append(' ', retry);
+        }
+        // Shown until acknowledged; the copies stay (list: habits.html#recovery, and in backups).
+        if (unseen) {
+          const view = el('a', '보기', 'life-text-button'); view.href = 'habits.html#recovery'; view.setAttribute('aria-label', '복구 사본 보기');
+          const seen = el('button', '확인', 'life-text-button'); seen.type = 'button'; seen.dataset.focusKey = 'schedule:entry:recovery-seen';
+          seen.setAttribute('aria-label', '복구 사본 알림 확인');
+          seen.addEventListener('click', () => { if (alive()) s.acknowledgeRecovery(); });
+          status.append(el('span', ' 다른 기기와 겹친 변경 ' + unseen + '개를 복구 사본으로 남겼습니다. ', 'schedule-entry-recovery'), view, ' ', seen);
+        }
+        if (mirrorError) status.append(el('span', ' ' + mirrorError, 'schedule-entry-recovery-error'));
       }
-      // Shown until acknowledged; the copies stay (list: habits.html#recovery, and in backups).
-      if (unseen) {
-        const view = el('a', '보기', 'life-text-button'); view.href = 'habits.html#recovery'; view.setAttribute('aria-label', '복구 사본 보기');
-        const seen = el('button', '확인', 'life-text-button'); seen.type = 'button'; seen.dataset.focusKey = 'schedule:entry:recovery-seen';
-        seen.setAttribute('aria-label', '복구 사본 알림 확인');
-        seen.addEventListener('click', () => { if (alive()) s.acknowledgeRecovery(); });
-        status.append(el('span', ' 다른 기기와 겹친 변경 ' + unseen + '개를 복구 사본으로 남겼습니다. ', 'schedule-entry-recovery'), view, ' ', seen);
-      }
-      if (mirrorError) { status.hidden = false; status.append(el('span', ' ' + mirrorError, 'schedule-entry-recovery-error')); }
+      status.querySelector('[data-focus-key="schedule:entry:retry"]')?.setAttribute('aria-disabled', String(retrying));
       // A newer app wrote the 행복도 document, or this page mixes module versions: nothing is written.
+      // Also an alert: its text is set only when it changes.
       moodNotice.hidden = !(days?.refresh && moodShown) && !(days?.error && kind === 'day');
-      if (days?.refresh && moodShown) { moodNotice.textContent = REFRESH; moodNotice.dataset.code = 'app_refresh_required'; }
-      else if (days?.error && kind === 'day') { moodNotice.textContent = days.error; delete moodNotice.dataset.code; }
-      const again = focusKey ? [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey) : null;
+      const notice = days?.refresh && moodShown ? REFRESH : days?.error && kind === 'day' ? days.error : null;
+      if (notice !== null && moodNotice.textContent !== notice) moodNotice.textContent = notice;
+      if (notice === REFRESH) moodNotice.dataset.code = 'app_refresh_required'; else if (notice !== null) delete moodNotice.dataset.code;
+      const byKey = key => key ? [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === key) : null;
+      // 지우기 goes away once the day has no value: focus moves to that day's choice 0, not to the page (review 3 m5).
+      const again = byKey(focusKey) || (/:clear$/.test(focusKey || '') ? byKey(focusKey.replace(/:clear$/, ':0')) : null);
       if (again) again.focus({ preventScroll: true });
       // A retry that succeeded removes its button: focus goes to the status line that now says so, not to the page.
       else if (focusKey === 'schedule:entry:retry' && !status.hidden) { status.tabIndex = -1; status.focus({ preventScroll: true }); }
