@@ -66,7 +66,7 @@ async function main() {
     try {
       await current.goto(base + '/upgrade.html');
       await old.goto(base + '/index.html'); await ready(old); await settle(old);
-      await old.locator('[data-haedo-compose]:visible, [data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+      await old.locator('[data-haedo-compose]:visible').first().click();
       await old.locator('#photoTitle').fill('업그레이드 전 저장한 제목');
       await old.locator('.ql-editor').fill('정확하게 남길 이전 본문 한글 🌳');
       await old.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '자동 저장됨');

@@ -27,20 +27,25 @@ async function restore(page) {
     await page.locator('.life-workbench[data-mode="books"][aria-busy="false"]').waitFor(); assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original.bundle.workspaceId); return current(page);
   } };
 }
-async function openLibrary(page) {
-  await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-  const library = page.locator('.home-library');
-  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
-}
-async function home(page) {
-  // Mobile writing intentionally hides the global dock. Leave through the
-  // visible book-list control before taking the normal Home navigation.
+// Mobile writing intentionally hides the global dock. Leave through the
+// visible book-list control before taking the normal navigation.
+async function leaveWriting(page) {
   const homeLink = page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]');
   if (!await homeLink.isVisible()) {
     await page.getByRole('button', { name: '책 목록', exact: true }).click();
     await page.locator('#wbBookList').waitFor();
   }
-  await nav(page, 'home'); await openLibrary(page);
+}
+async function home(page) {
+  await leaveWriting(page); await nav(page, 'home'); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+}
+// 2026-11-08 일정 통합 정리 S3: 일정's list has no 내 책 block; books open from 자료 (책 만들기 → 책 목록).
+async function openBookList(page) {
+  await leaveWriting(page);
+  const menu = await openRecordsMenu(page); await menu.getByRole('button', { name: '책 만들기', exact: true }).click();
+  await page.locator('.life-workbench[data-mode="books"][aria-busy="false"]').waitFor();
+  if (await page.locator('#wbBooksBack').isVisible()) await page.locator('#wbBooksBack').click();
+  await page.locator('#wbBookList').waitFor();
 }
 async function chapterFrom(page, container, chapter) {
   const outline = container.locator('details'); if (!await outline.evaluate(el => el.open)) await outline.locator(':scope > summary').click();
@@ -51,7 +56,7 @@ async function capture(page, report, scene, width) {
   await page.mouse.move(width - 2, 2); await page.evaluate(async () => { document.activeElement?.blur(); scrollTo(0, 0); await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
   const metrics = await page.evaluate(inspect), screenshot = `${scene}-${width}.png`; await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
   if (width === 390) await page.screenshot({ path: path.join(out, `${scene}-${width}-viewport.png`) });
-  const positions = await page.evaluate(() => ({ booksTop: document.querySelector('#homeBooks')?.getBoundingClientRect().top ?? null, chapterInputTop: document.querySelector('#wbChapterNote')?.getBoundingClientRect().top ?? null }));
+  const positions = await page.evaluate(() => ({ booksTop: document.querySelector('#wbBookList')?.getBoundingClientRect().top ?? null, chapterInputTop: document.querySelector('#wbChapterNote')?.getBoundingClientRect().top ?? null }));
   report.visual.push({ scene, width, screenshot, ...positions, ...metrics }); assert.equal(metrics.horizontalOverflow, false);
   for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ': ' + key);
 }
@@ -77,7 +82,9 @@ async function main() {
       const pending = await restore(page); await capture(page, report, 'restore-review', width); const restored = await pending.install(), book = restored.workbench.books[0], chapter = book.chapters[1];
       assert.notEqual(book.id, originalBook.id); assert.deepEqual(book.chapters.map(ch => ch.note), originalBook.chapters.map(ch => ch.note)); assert.equal(book.editions.length, 1); assert.notEqual(book.editions[0].id, originalBook.editions[0].id);
       const record = restored.bundle.records[0], old = restored.bundle.sourceVersions.find(v => v.id === record.sourceRefs[0].sourceVersionId), ref = record.sourceRefs[0]; assert.equal(old.contentText.slice(ref.locator.start, ref.locator.end), record.text); assert.equal(book.chapters[0].versionIds[0], old.id);
-      await home(page); const row = page.locator(`#homeBooks article[data-book-id="${book.id}"]`); assert.equal(await row.count(), 1); assert((await row.textContent()).includes(book.title)); await capture(page, report, 'home-books', width);
+      await home(page); assert.equal(await page.locator('#homeBooks, .home-library').count(), 0);
+      await openBookList(page); const row = page.locator(`#wbBookList [data-book-id="${book.id}"]`); assert.equal(await row.count(), 1); assert((await row.textContent()).includes(book.title)); await capture(page, report, 'book-list', width);
+      if (await row.locator('details').evaluate(el => el.open)) await row.locator('summary').click();
       await row.locator('summary').focus(); await page.keyboard.press('Enter'); assert.equal(await row.locator('details').evaluate(el => el.open), true); assert.equal(await row.locator('button[data-chapter-id]').count(), 4);
       await row.locator(`button[data-chapter-id="${chapter.id}"]`).focus(); await page.keyboard.press('Enter'); await page.waitForFunction(title => document.querySelector('#wbChapterTitle')?.value === title, chapter.title);
       const revised = chapter.note + '\n\n다시 읽으며 남긴 문장: 쉬는 동안 정한 하루의 순서를 일을 다시 시작한 뒤에도 이어 가고 싶다.'; await page.getByRole('textbox', { name: '이 장의 원고', exact: true }).fill(revised); await save(page);
@@ -89,17 +96,16 @@ async function main() {
         await fs.writeFile(path.join(out, 'reopened-edited-book.html'), raw.text); const standalone = await context.newPage(), url = base + '/__qa_completion_book__.html'; await standalone.route(url, route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: raw.text })); await standalone.goto(url); await standalone.evaluate(() => document.fonts.ready); const pdf = path.join(out, 'reopened-edited-book.pdf'); await standalone.pdf({ path: pdf, preferCSSPageSize: true, printBackground: true }); await standalone.close(); const pdfText = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8' }).replace(/\s/g, ''); assert(pdfText.includes(revised.replace(/\s/g, ''))); report.observations.push({ PDF: 'reopened-edited-book.pdf', generatedFromActualDownloadedHTML: true, nativePrintDialog: false });
       }
       const final = await current(page); assert.deepEqual(final.bundle, restored.bundle); assert.deepEqual(final.workbench.books[0].editions, book.editions); assert.deepEqual(final.workbench.reflection, restored.workbench.reflection); assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), pending.original.bundle.workspaceId), pending.original.bundle);
-      report.observations.push({ width, exactChapterChosenFromHomeAndList: true, keyboardChapterChoice: true, readerReturnFocusPreserved: true, restoredOldVersionAndExcerptPreserved: true, originalWorkspaceUnchanged: true });
+      report.observations.push({ width, exactChapterChosenFromList: true, keyboardChapterChoice: true, readerReturnFocusPreserved: true, restoredOldVersionAndExcerptPreserved: true, originalWorkspaceUnchanged: true });
     });
     await check('active-book limit, archived chapter/book, empty-book outline and account isolation', 390, async ({ page }) => {
-      const pending = await restore(page), restored = await pending.install(), book = restored.workbench.books[0]; await home(page); await chapterFrom(page, page.locator(`#homeBooks [data-book-id="${book.id}"]`), book.chapters[3]); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '이 장 숨기기', exact: true }).click(); await awaitCondition(page, ({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books[0].chapters.find(ch => ch.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.chapters[3].id }, { timeout: 12000, label: 'book-completion storage condition' });
+      const pending = await restore(page), restored = await pending.install(), book = restored.workbench.books[0]; await openBookList(page); await chapterFrom(page, page.locator(`#wbBookList [data-book-id="${book.id}"]`), book.chapters[3]); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '이 장 숨기기', exact: true }).click(); await awaitCondition(page, ({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books[0].chapters.find(ch => ch.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.chapters[3].id }, { timeout: 12000, label: 'book-completion storage condition' });
       const empty = await createBook(page, '짧은 산문을 모으는 다음 책'); await createBook(page, '나중에 다듬을 독서 기록'); const fourth = await createBook(page, '아직 목차를 만들지 않은 여행 기록');
-      await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 0); const first = page.locator(`#homeBooks [data-book-id="${book.id}"]`); await first.locator('summary').click(); assert.equal(await first.locator('button[data-chapter-id]').count(), 3); assert.equal(await first.locator(`[data-chapter-id="${book.chapters[3].id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${empty.id}"] details`).count(), 0); await capture(page, report, 'home-active-books', 390);
-      await page.getByRole('button', { name: '내 책 모두 보기', exact: true }).click(); await page.locator('#wbBookList').waitFor(); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 4); await openBook(page, book.id); await details(page, '책 설정'); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '책 숨기기', exact: true }).click(); await awaitCondition(page, ({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books.find(book => book.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.id }, { timeout: 12000, label: 'book-completion storage condition' }); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${book.id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 1);
-      await account(page, accounts.b); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 0);
+      await openBookList(page); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 4); assert.equal(await page.locator(`#wbBookList [data-book-id="${fourth.id}"]`).count(), 1); const first = page.locator(`#wbBookList [data-book-id="${book.id}"]`); if (!await first.locator('details').evaluate(el => el.open)) await first.locator('summary').click(); assert.equal(await first.locator('button[data-chapter-id]').count(), 3); assert.equal(await first.locator(`[data-chapter-id="${book.chapters[3].id}"]`).count(), 0); assert.equal(await page.locator(`#wbBookList [data-book-id="${empty.id}"] details`).count(), 0); await capture(page, report, 'book-list-active', 390); await openBook(page, book.id); await details(page, '책 설정'); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '책 숨기기', exact: true }).click(); await awaitCondition(page, ({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books.find(book => book.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.id }, { timeout: 12000, label: 'book-completion storage condition' }); await openBookList(page); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 3); assert.equal(await page.locator(`#wbBookList [data-book-id="${book.id}"]`).count(), 0); assert.equal(await page.locator(`#wbBookList [data-book-id="${fourth.id}"]`).count(), 1);
+      await account(page, accounts.b); await home(page); assert.equal(await page.locator('#homeBooks, .home-library').count(), 0);
       await openRecordsMenu(page); await page.getByRole('button', { name: '책 만들기', exact: true }).click(); await page.locator('#wbBookCreateTitle').waitFor();
       assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 0); assert.equal(await page.getByRole('button', { name: '빈 책 만들기', exact: true }).count(), 1);
-      await account(page, accounts.a); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.deepEqual((await current(page)).bundle, restored.bundle);
+      await account(page, accounts.a); await openBookList(page); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 3); assert.deepEqual((await current(page)).bundle, restored.bundle);
     });
     assert(report.checks.length); report.pass = report.checks.every(c => c.pass) && !report.consoleErrors.length && !report.pageErrors.length && !report.external.length;
   } finally { await browser.close(); report.finishedAt = new Date().toISOString(); const json = JSON.stringify(report, null, 2); await fs.writeFile(path.join(out, 'run-' + report.createdAt.replace(/[:.]/g, '-') + '.json'), json); await fs.writeFile(path.join(out, 'browser-report.json'), json); }
@@ -107,4 +113,4 @@ async function main() {
 }
 if (require.main === module) main().catch(error => { console.error(error); annotation(error); process.exitCode = 1; });
 
-module.exports = { restore, chapterFrom, openLibrary };
+module.exports = { restore, chapterFrom, openBookList };

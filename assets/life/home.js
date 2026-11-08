@@ -2,8 +2,6 @@
 (function (global) {
   'use strict';
   const life = global.HaedoLife = global.HaedoLife || {};
-  const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const RELATIONS = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' };
   function el(tag, text, className) {
     const element = document.createElement(tag);
     if (text != null) element.textContent = String(text);
@@ -149,30 +147,29 @@
     if (!Number.isFinite(date.getTime())) return null;
     return { text: prefix + dateFormat(date.getFullYear() !== now.getFullYear()).format(date), title: prefix + dateFormat(true).format(date) };
   }
-  function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
+  // 2026-11-08 일정 통합 정리 S3: the list is posts only. 프로필 편집 and 계정 보관 상태 live in the
+  // heading's 글 메뉴, 글쓰기 in the global menu, and the former 자료 entry block in the global 자료.
+  function create({ storage, core, host, getBundle, navigate, openSource, openPostInWorkspace = null, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
     // Post contents compared for restore copies, by ID/revision/update time; this view's storage only.
     const contentCache = new Map();
-    let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
-    function captureLibraryState() {
-      if (visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId) {
-        libraryOpen = libraryElement.open;
-      }
-    }
-    function captureState() { captureLibraryState(); return { ...listState, libraryOpen }; }
+    // ≥761px the posts search is an always-visible field; ≤760 it opens from the tab row's icon.
+    const wideSearch = global.matchMedia?.('(min-width: 761px)') || null;
+    let wideListener = null, searchContext = null;
+    const searchAlwaysShown = () => !!wideSearch?.matches;
+    function captureState() { return { ...listState }; }
     function adoptState(workspaceId, incoming) {
-      if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
+      if (listState.workspaceId !== workspaceId) listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT };
       if (incoming?.workspaceId !== workspaceId) return;
       listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
         searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
         limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT };
-      libraryOpen = incoming.libraryOpen === true;
     }
     function clearMedia() {
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
@@ -182,16 +179,6 @@
     function avatar(context) {
       const mark = el('span', initials(context.profile.name), 'home-avatar');
       mark.setAttribute('aria-hidden', 'true'); return mark;
-    }
-    function libraryAnchor(context) {
-      const focused = document.activeElement;
-      return context.materials?.contains(focused) ? { element: focused, top: focused.getBoundingClientRect().top } : null;
-    }
-    function restoreAnchor(anchor) {
-      if (anchor && anchor.element.isConnected && document.activeElement === anchor.element) {
-        const displacement = anchor.element.getBoundingClientRect().top - anchor.top;
-        if (Math.abs(displacement) > 0.5) global.scrollBy({ top: displacement, left: 0, behavior: 'instant' });
-      }
     }
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
@@ -225,14 +212,13 @@
       button.append(life.Icons.create(glyph), el('span', label, 'life-tooltip'));
       return button;
     }
-    function section(context, title, id, more) {
+    function section(context, title, id) {
       const container = el('section', null, 'home-section'); container.id = id;
       const heading = el('div', null, 'home-section-heading');
       const name = el('h2', title); name.id = id + 'Title';
       name.tabIndex = -1;
       container.setAttribute('aria-labelledby', name.id);
       heading.append(name);
-      if (more) heading.append(iconAction(context, title + ' 모두 보기', 'arrow', more));
       container.append(heading);
       return container;
     }
@@ -241,23 +227,10 @@
       const source = version && bundle.sources.find(item => item.id === version.sourceId);
       return source && version ? { source, version } : null;
     }
-    function metadata(info) {
-      const { source, version } = info;
-      const parts = [life.Writing?.isOwnSource(source, getBundle()) ? '내 글' : ORIGINS[source.origin] || '기타', RELATIONS[version.originalAuthor.relation] || RELATIONS.unknown];
-      if (version.contentText == null) parts.push('링크만 보관 · 본문 미확보');
-      else if (version.coverage.status === 'partial') parts.push('일부 본문');
-      else if (version.coverage.status === 'unknown') parts.push('확보 범위 미확인');
-      return parts.join(' · ');
-    }
     function snippet(text) {
       const normalized = String(text || '').replace(/\s+/g, ' ').trim();
       const characters = Array.from(normalized);
       return characters.length > 200 ? characters.slice(0, 200).join('') + '…' : normalized;
-    }
-    function dateLabel(value) {
-      const date = new Date(value);
-      if (!Number.isFinite(date.getTime())) return '담은 날짜 미확인';
-      return '담음 ' + new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date);
     }
     async function openVersion(context, versionId) {
       if (!showing(context)) return;
@@ -268,31 +241,6 @@
       }
       await openSource(info.source.id, info.version.id);
     }
-    function record(context, info, { body = true, date = false, compact = false, focusScope = 'recent' } = {}) {
-      const article = el('article', null, 'home-record' + (compact ? ' home-record-compact' : ''));
-      article.dataset.sourceId = info.source.id; article.dataset.versionId = info.version.id;
-      const heading = el('h3');
-      const open = action(context, info.source.title, () => openVersion(context, info.version.id), 'life-source-open home-record-open', { keepFocus: true });
-      open.dataset.focusKey = 'home:' + focusScope + ':' + info.version.id;
-      heading.append(open); article.append(heading);
-      if (body && info.version.contentText != null) article.append(el('p', snippet(info.version.contentText), 'home-text home-clamp'));
-      article.append(el('p', metadata(info), 'life-meta home-record-meta'));
-      if (date) {
-        const imported = el('time', dateLabel(info.version.importedAt), 'life-meta home-date');
-        imported.dateTime = info.version.importedAt; article.append(imported);
-      }
-      return article;
-    }
-    function quickLinks(context) {
-      const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary home-blog-write');
-      write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
-      // Hidden until the first list read decides it (updateList): an account with
-      // no posts shows only '첫 글 쓰기', so '새 글 쓰기' must not flash first.
-      nav.hidden = true;
-      nav.append(write); context.composeActions = nav;
-      return nav;
-    }
     function profileHeader(context) {
       const header = el('div', null, 'home-profile-bar');
       const profile = el('div', null, 'home-profile-open');
@@ -300,40 +248,7 @@
       const copy = el('div', null, 'home-profile-copy');
       const intro = el('p', '', 'home-blog-description'); intro.hidden = true;
       copy.append(profile, intro);
-      const manage = action(context, '', () => navigate('page', { blogContext: true, pageProfileEdit: true }), 'home-blog-action');
-      manage.setAttribute('aria-label', '프로필 편집'); manage.title = '프로필 편집';
-      manage.append(life.Icons.create('edit'), el('span', '프로필 편집', 'home-profile-edit-label'));
-      manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
-      const server = action(context, '', () => navigate('account-blog'), 'home-blog-action');
-      server.id = 'homeAccountBlog'; server.setAttribute('aria-label', '글 동기화'); server.title = '글 동기화';
-      server.append(life.Icons.create('cloud'), el('span', '글 동기화', 'home-profile-edit-label'));
-      server.dataset.homeDestination = 'account-blog'; server.dataset.focusKey = 'home:action:account-blog';
-      header.append(copy, manage, server); return header;
-    }
-    function library(context, bundle) {
-      const area = el('details', null, 'home-library');
-      if (libraryWorkspace !== context.workspaceId) { libraryOpen = false; libraryWorkspace = context.workspaceId; }
-      libraryElement = area;
-      area.open = libraryOpen;
-      area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
-      const summary = el('summary');
-      summary.append(el('span', '자료'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
-      area.append(summary);
-      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료');
-      [['자료 가져오기', 'import'], ['자료 목록', 'sources'], ['컬렉션', 'collection']].forEach(([label, mode]) => {
-        const button = action(context, label, () => navigate(mode));
-        button.dataset.homeDestination = mode;
-        button.dataset.focusKey = 'home:library:' + mode;
-        nav.append(button);
-      });
-      const preview = action(context, '선택 자료 페이지', () => navigate('page', { pagePreview: true }));
-      preview.dataset.homeDestination = 'preview';
-      preview.dataset.focusKey = 'home:library:preview';
-      nav.append(preview);
-      area.append(nav);
-      renderReadingResume?.(area);
-      if (bundle.sources.length) area.append(recent(context, bundle));
-      return area;
+      header.append(copy); return header;
     }
     function latestOwnPosts(bundle) {
       const rows = [];
@@ -541,7 +456,7 @@
       toolbar.append(tabs, toggle);
       const panel = el('div', null, 'home-search-panel'); panel.id = 'homeSearchPanel';
       const search = el('div', null, 'home-search');
-      const label = el('label', '내 글 검색', 'life-sr-only'); label.htmlFor = 'homePostSearch';
+      const label = el('label', '내 글 찾기', 'life-sr-only'); label.htmlFor = 'homePostSearch';
       const input = el('input'); input.type = 'search'; input.id = 'homePostSearch'; input.placeholder = '내 글 검색'; input.maxLength = 1000;
       input.value = listState.query; input.dataset.focusKey = 'home:search'; input.autocomplete = 'off';
       let composing = false;
@@ -553,7 +468,7 @@
       input.addEventListener('compositionend', () => { composing = false; apply(); });
       input.addEventListener('input', apply);
       input.addEventListener('keydown', event => {
-        if (event.key !== 'Escape' || listState.query.trim() || composing) return;
+        if (event.key !== 'Escape' || listState.query.trim() || composing || searchAlwaysShown()) return;
         event.preventDefault(); listState.searchExpanded = false; syncSearch(context); toggle.focus({ preventScroll: true });
       });
       const clear = action(context, '검색어 지우기', () => {
@@ -562,22 +477,33 @@
       }, 'home-search-clear'); clear.dataset.focusKey = 'home:search-clear';
       search.append(label, life.Icons.create('search'), input, clear);
       const scope = el('p', '', 'life-meta home-search-scope');
-      panel.append(search, scope); controls.append(toolbar, panel); area.append(controls);
+      panel.append(search); controls.append(toolbar, panel, scope); area.append(controls);
       context.tabs = tabs; context.controls = controls; context.searchPanel = panel; context.searchToggle = toggle;
       context.searchInput = input; context.searchScope = scope; context.searchClear = clear; syncSearch(context);
+      searchContext = context;
+      if (wideSearch && !wideListener) {
+        wideListener = () => { if (searchContext && showing(searchContext)) syncSearch(searchContext); };
+        wideSearch.addEventListener?.('change', wideListener);
+      }
       context.list = el('div', null, 'home-post-list'); context.list.id = 'homePostList'; context.list.setAttribute('role', 'tabpanel'); context.list.tabIndex = -1;
       context.feedback = el('p', null, 'life-sr-only'); context.feedback.setAttribute('role', 'status'); context.feedback.setAttribute('aria-live', 'polite');
       area.append(context.list, context.feedback);
     }
     function syncSearch(context) {
-      const expanded = listState.searchExpanded || !!listState.query.trim();
+      // Wide: the field sits in the tab row and is always shown, so the row has no second magnifier.
+      const always = searchAlwaysShown();
+      const expanded = always || listState.searchExpanded || !!listState.query.trim();
+      context.controls.dataset.searchMode = always ? 'field' : 'toggle';
       context.searchPanel.hidden = !expanded;
+      context.searchToggle.hidden = always;
       context.searchToggle.setAttribute('aria-expanded', String(expanded));
       const label = listState.query.trim() ? '검색어 수정' : expanded ? '내 글 검색 닫기' : '내 글 검색 열기';
       context.searchToggle.setAttribute('aria-label', label); context.searchToggle.title = label;
       context.searchToggle.querySelector('.life-tooltip').textContent = label;
       context.searchScope.textContent = TAB_LABELS[listState.tab] + ' 탭의 제목과 본문에서 찾습니다. 최근 수정·저장 순입니다.';
-      context.searchInput.placeholder = TAB_LABELS[listState.tab] + '에서 검색';
+      // The scope line under an always-shown field appears only while a search is applied.
+      context.searchScope.hidden = !expanded || always && !listState.query.trim();
+      context.searchInput.placeholder = always ? '내 글 찾기' : TAB_LABELS[listState.tab] + '에서 검색';
       context.searchClear.hidden = !listState.query;
     }
     function matchesQuery(row) {
@@ -599,8 +525,13 @@
     }
     function updateList(context, userAction = false) {
       if (!showing(context)) return;
+      // Before the first read ends (the wide search field is usable from the first frame) a search
+      // or tab choice is kept and applied when the list arrives; it never reads as a failed load.
+      if (!Object.keys(context.results).length) {
+        for (const button of context.tabs.children) { const selected = button.dataset.homeTab === listState.tab; button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1; }
+        syncSearch(context); return;
+      }
       const previousTab = context.renderedTab;
-      if (userAction) context.area.style.minHeight = '';
       clearMedia();
       const { rows, errors } = resultRows(context), query = listState.query.trim().toLocaleLowerCase('ko-KR');
       if (!rows.length && !errors.length && !query) listState.tab = 'posts';
@@ -615,8 +546,6 @@
         button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
         button.textContent = TAB_LABELS[tab] + (counts[tab] && tab !== 'posts' ? ' ' + counts[tab] : '');
       }
-      context.composeActions.hidden = !errors.length && counts.posts === 0 && listState.tab === 'posts' && !query;
-      context.composeActions.querySelector('.home-blog-write').dataset.focusKey = context.composeActions.hidden ? 'home:action:hidden-write' : 'home:action:write';
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
       const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
       const fragment = document.createDocumentFragment();
@@ -666,24 +595,7 @@
       const results = await Promise.allSettled(keys.map(key => Promise.resolve().then(read[key])));
       if (!showing(context)) return;
       keys.forEach((key, index) => { context.results[key] = results[index]; });
-      const anchor = libraryAnchor(context);
-      const libraryTop = anchor ? context.materials.getBoundingClientRect().top + global.scrollY : null;
-      updateList(context); reconcileLibrary(context);
-      // At the top of the document a shrinking composer cannot be corrected by
-      // scrolling upward. Keep its former space while a library entry has focus.
-      if (anchor && document.activeElement === anchor.element && anchor.element.isConnected) {
-        const shrink = libraryTop - (context.materials.getBoundingClientRect().top + global.scrollY);
-        if (shrink > 0.5) context.area.style.minHeight = Math.ceil(context.area.getBoundingClientRect().height + shrink) + 'px';
-      }
-      restoreAnchor(anchor);
-    }
-    function reconcileLibrary(context) {
-      const state = context.workbenchState;
-      if (!state || context.libraryState === state) return;
-      context.libraryState = state;
-      context.materials.querySelectorAll('#homeGroups, #homeBooks').forEach(node => node.remove());
-      if (state.groups.length) context.materials.append(groups(context, state));
-      if ((state.books || []).some(book => !book.archived)) context.materials.append(books(context, state));
+      updateList(context);
     }
     async function enrichDrafts(context) {
       if (!showing(context) || listState.tab !== 'drafts' || context.draftLoading || context.results.photo?.status !== 'fulfilled' || !Array.isArray(context.results.photo.value?.posts)) return;
@@ -701,70 +613,6 @@
         if (showing(context) && listState.tab === 'drafts') updateList(context);
       } finally { context.draftLoading = false; }
     }
-    function recent(context, bundle) {
-      const area = section(context, '최근 담은 기록', 'homeRecent', () => navigate('sources'));
-      const sourceIds = new Set(bundle.sources.filter(source => core.isSourceActive(bundle, source.id)).map(source => source.id)), latest = new Map();
-      bundle.sourceVersions.forEach((version, order) => {
-        if (!sourceIds.has(version.sourceId)) return;
-        const prior = latest.get(version.sourceId);
-        const time = Date.parse(version.importedAt) || 0;
-        if (!prior || time >= prior.time) latest.set(version.sourceId, { version, time, order });
-      });
-      const list = [...latest.values()].sort((a, b) => b.time - a.time || b.order - a.order).slice(0, 3);
-      if (!list.length) {
-        const empty = el('div', null, 'home-empty');
-        empty.append(el('p', '글이나 메모를 가져와 기록을 모아보세요.', 'life-meta'));
-        const add = action(context, '자료 가져오기', () => navigate('import'), 'life-primary');
-        add.id = 'homeFirstImport'; empty.append(add); area.append(empty);
-      }
-      list.forEach(({ version }) => area.append(record(context, sourceInfo(version.id, bundle), { date: true })));
-      return area;
-    }
-    function books(context, state) {
-      const area = section(context, '내 책', 'homeBooks', () => navigate('books', { bookList: true }));
-      const activeBooks = (state.books || []).filter(book => !book.archived);
-      if (!activeBooks.length) {
-        const empty = el('div', null, 'home-empty');
-        empty.append(el('p', '모아 둔 글로 책을 시작할 수 있습니다.', 'life-meta'), action(context, '책 만들기', () => navigate('books', { bookList: true })));
-        area.append(empty);
-      }
-      activeBooks.slice(0, 3).forEach(book => {
-        const chapters = book.chapters.filter(chapter => !chapter.archived);
-        const open = chapterId => navigate('books', { book: { workspaceId: context.workspaceId, bookId: book.id, chapterId } });
-        const row = el('article', null, 'home-book'); row.dataset.bookId = book.id;
-        const button = action(context, '', () => open(), 'home-group');
-        const copy = el('span', null, 'home-group-copy');
-        copy.append(el('strong', book.title, 'home-clamp'), el('span', chapters.length + '개 장', 'life-meta'));
-        button.append(life.Icons.create('book'), copy, life.Icons.create('chevron'));
-        row.append(button);
-        if (chapters.length) {
-          const outline = el('details', null, 'home-book-outline');
-          outline.append(el('summary', '목차'));
-          chapters.forEach((chapter, index) => {
-            const entry = action(context, (index + 1) + '. ' + chapter.title, () => open(chapter.id), 'home-chapter');
-            entry.dataset.chapterId = chapter.id; outline.append(entry);
-          });
-          row.append(outline);
-        }
-        area.append(row);
-      });
-      return area;
-    }
-    function groups(context, state) {
-      const area = section(context, '기록 묶음', 'homeGroups', () => navigate('activities'));
-      if (!state.groups.length) area.append(el('p', '관련된 기록을 묶어 정리할 수 있습니다.', 'life-meta home-empty-note'));
-      state.groups.slice(0, 2).forEach(group => {
-        const button = action(context, '', () => navigate('activities', { groupId: group.id }), 'home-group');
-        button.dataset.groupId = group.id;
-        button.dataset.focusKey = 'home:group:' + group.id;
-        const copy = el('span', null, 'home-group-copy');
-        const missing = group.versionIds.filter(id => !sourceInfo(id)).length;
-        copy.append(el('strong', group.title, 'home-clamp'), el('span', '연결한 기록 ' + group.versionIds.length + '개' + (missing ? ' · 원문 없음 ' + missing + '개' : ''), 'life-meta'));
-        button.append(life.Icons.create('link'), copy, life.Icons.create('chevron'));
-        area.append(button);
-      });
-      return area;
-    }
     async function render(options = {}) {
       if (!alive()) return;
       const bundle = getBundle();
@@ -781,7 +629,7 @@
       context.profileStatus.setAttribute('role', 'status');
       context.profileStatus.append(el('p', '프로필과 기존 글 정보를 불러오지 못했어요.', 'life-meta'),
         action(context, '프로필 다시 불러오기', () => load(context, ['workbench'])));
-      lead.append(profileHeader(context), context.profileStatus, quickLinks(context));
+      lead.append(profileHeader(context), context.profileStatus);
       context.resume = action(context, '', () => context.resumeRow && openRow(context, context.resumeRow), 'home-resume');
       context.resume.dataset.focusKey = 'home:resume'; context.resume.hidden = true;
       context.resumeLabel = el('span', null, 'home-resume-title');
@@ -792,8 +640,7 @@
       context.area = posts; listControls(context, posts);
       const loading = el('p', '글과 초안을 불러오는 중…', 'life-meta home-loading'); loading.setAttribute('role', 'status'); context.list.append(loading);
       posts.setAttribute('aria-busy', 'true'); composition.append(posts);
-      const materials = library(context, bundle); context.materials = materials;
-      surface.append(composition, materials); host.append(surface);
+      surface.append(composition); host.append(surface);
       watch(context);
       await load(context);
       if (!showing(context)) return;
@@ -833,10 +680,8 @@
     }
     function leave() {
       unwatch();
-      // A native details toggle is queued asynchronously. Preserve its current
-      // state before navigation makes that event's original context stale.
-      captureLibraryState();
-      libraryElement = null;
+      if (wideListener) { wideSearch?.removeEventListener?.('change', wideListener); wideListener = null; }
+      searchContext = null;
       global.HaedoMotion?.cancel(host.querySelector('#homePostList'));
       global.HaedoMotion?.cancel(host.querySelector('#homeSearchPanel'));
       generation += 1; visible = false; clearMedia();

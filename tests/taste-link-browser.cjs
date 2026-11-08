@@ -60,7 +60,7 @@ async function main() {
     await page.goto(base + '/index.html'); await ready(page); await settle(page);
     await page.locator('#homeComposition[aria-busy="false"]').waitFor();
     const before = await collection();
-    await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+    await page.locator('[data-haedo-compose]:visible').first().click();
     await page.locator('#photoTitle').fill('시인과 호숫가를 다시 읽은 날');
     await page.locator('.ql-editor').fill('익명 시인의 문장을 떠올리며 호숫가를 걸었다.');
 
@@ -313,7 +313,7 @@ async function main() {
       assert.equal(filled, 1000);
       await page.goto(base + '/index.html'); await ready(page); await settle(page);
       await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+      await page.locator('[data-haedo-compose]:visible').first().click();
       await page.locator('#photoTitle').fill('한도 확인 글');
       await review({ type: 'place', title: '한도를 넘는 장소' }); await click('첨부');
       await row('한도를 넘는 장소').getByText('컬렉션에 저장하지 못함 · 컬렉션 한도(1,000개·2 MiB)를 넘음', { exact: true }).waitFor();

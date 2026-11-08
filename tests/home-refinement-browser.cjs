@@ -7,6 +7,7 @@ const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs')
 const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
@@ -135,10 +136,14 @@ async function main() {
       assert.equal(await page.locator('#homePosts .home-post-author').count(), 0); assert.equal(await page.locator('.home-blog-description').isVisible(), false);
       for (const node of await page.locator('#homePosts .home-post-meta').all()) assert.match(await node.innerText(), /비공개/);
       assert.equal(await page.locator('#homePosts [data-home-kind="photo"] .home-post-meta').first().innerText().then(text => text.includes('비공개 원본') && !text.includes('이 브라우저')), true);
-      const prompt = page.locator('.home-blog-write'); assert.equal(await prompt.count(), 1); assert.equal(await page.locator('.home-compose-prompt').count(), 0); assert.equal(await prompt.evaluate(node => node.tagName), 'BUTTON'); await prompt.focus(); await page.keyboard.press('Enter');
+      // 2026-11-08 S3: the list has no write button of its own; the global 글쓰기 is the one write action.
+      assert.equal(await page.locator('.home-blog-write').count(), 0); assert.equal(await page.getByRole('button', { name: '새 글 쓰기', exact: true }).count(), 0);
+      const prompt = page.locator('[data-haedo-navigation] [data-haedo-compose]:visible'); assert.equal(await prompt.count(), 1); assert.equal(await page.locator('.home-compose-prompt').count(), 0); assert.equal(await prompt.evaluate(node => node.tagName), 'A'); await prompt.focus(); await page.keyboard.press('Enter');
       await page.locator('.ql-editor').waitFor(); await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor'));
       await page.getByRole('button', { name: '닫기', exact: true }).click(); await homeReady(page);
-      await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
+      // 프로필 편집 is in the heading's 글 메뉴 (2026-11-08 S3), not on the profile row.
+      assert.equal(await page.locator('.home-profile-bar button').count(), 0);
+      await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
       const toggle = page.locator('#wbShowIntro'); await toggle.check(); await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('.home-blog-description').innerText(), '직접 설정한 한글 소개'); assert.equal(await page.locator('.home-blog-description').isVisible(), true);
     });
@@ -223,9 +228,9 @@ async function main() {
       assert.equal(await page.locator('#homeBooks').count(), 0); assert.equal(await page.locator('#homeGroups').count(), 0);
       await page.evaluate(() => { window.__refinementFailWorkbench = false; }); await error.getByRole('button', { name: '프로필 다시 불러오기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('#homeTab-' + tab).getAttribute('aria-selected'), 'true'); assert.equal(await page.locator('.home-posts-error').count(), 0);
-      const library = page.locator('.home-library'); if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
-      assert.equal(await page.locator('#homeGroups [data-group-id="' + refs.group + '"]').count(), 1); assert.equal(await page.locator('#homeBooks [data-book-id="' + refs.book + '"]').count(), 1);
-      assert.match(await page.locator('#homeBooks').innerText(), /1개 장/); assert.match(await page.locator('.home-profile-bar').innerText(), /익명의 산책 기록/);
+      // 2026-11-08 S3: groups and books are 자료's (no list block); the retried read restores the profile.
+      assert.equal(await page.locator('.home-library, #homeGroups, #homeBooks').count(), 0);
+      assert.match(await page.locator('.home-profile-bar').innerText(), /익명의 산책 기록/);
       if (tab === 'posts') { assert.equal(await page.locator('#homePosts .home-post').count(), 8); await page.locator(`[data-source-id="${refs.source}"][data-version-id="${refs.version}"] .home-post-open`).click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), refs.sourceText); }
     });
   } finally { report.capturedAt = new Date().toISOString(); await browser.close(); await fs.writeFile(path.join(out, process.env.REFINEMENT_REPORT_NAME || (process.env.REFINEMENT_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json')), JSON.stringify(report, null, 2) + '\n'); }

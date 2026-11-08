@@ -34,12 +34,20 @@ async function instrumentStorage(context) {
   });
 }
 
-async function openLibrary(page) {
-  const library = page.locator('.home-library');
-  if (await library.count() && !await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
+// 2026-11-08 일정 통합 정리 S3: 일정's list is posts only. Its former 자료 block (가져오기, 자료 목록,
+// 컬렉션, 선택 자료 페이지, 최근 기록, 묶음, 책) is reached from the global 자료, as below.
+async function preview(page) {
+  const menu = await openRecordsMenu(page); await menu.getByRole('button', { name: '선택 자료 페이지', exact: true }).click();
+  const toggle = page.locator('#wbPagePreview'); await toggle.waitFor();
+  if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
+  await page.locator('#wbVisitor').waitFor();
 }
-async function preview(page) { await openLibrary(page); await page.locator('[data-home-destination="preview"]').click(); await page.locator('#wbVisitor').waitFor(); }
-async function recordWrite(page) { await openLibrary(page); await page.locator('[data-home-destination="sources"]').click(); await settle(page); await openRecordsMenu(page); await page.getByRole('button', { name: '자료 작성', exact: true }).click(); await settle(page); }
+async function openImport(page) {
+  await nav(page, 'records');
+  if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'import') await page.getByRole('button', { name: '가져오기', exact: true }).click();
+  await page.locator('#lifeMain[data-mode="import"]').waitFor(); await settle(page);
+}
+async function recordWrite(page) { await openRecordsMenu(page); await page.getByRole('button', { name: '자료 작성', exact: true }).click(); await settle(page); }
 async function recordActions(page) {
   const selection = await page.locator('#lifeSelectionToggle').getAttribute('aria-label');
   const menu = await openRecordsMenu(page);
@@ -57,9 +65,8 @@ async function home(page) {
   await page.locator('.life-home').waitFor();
   await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
   if (await page.locator('#homeTab-posts').getAttribute('aria-selected') !== 'true') await page.locator('#homeTab-posts').click();
-  await openLibrary(page);
 }
-async function freshHome(page) { await page.goto(base + '/index.html'); await ready(page); await page.locator('.life-home').waitFor(); await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false'); await openLibrary(page); }
+async function freshHome(page) { await page.goto(base + '/index.html'); await ready(page); await page.locator('.life-home').waitFor(); await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false'); }
 async function setPage(page, edit) {
   return page.evaluate(async source => {
     const storage = HaedoLife.Shell.storage, id = await storage.getActive(), w = await storage.readWorkbench(id);
@@ -126,44 +133,45 @@ async function main() {
       assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
       assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
-      for (const [destination, expected] of [['import', 'import'], ['write', 'page']]) { // 2026-11-02: 연표 moved to 일정's 계획
-        await page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`).click(); await settle(page);
-        await page.waitForFunction(expected => document.querySelector('#lifeMain')?.dataset.mode === expected, expected);
-        await home(page);
-      }
+      // 2026-11-08 S3: no 자료 block or second write button in the list; 가져오기 is 자료's, 글쓰기 the global one.
+      assert.equal(await page.locator('#lifeHome .home-library, #lifeHome [data-home-destination="import"], #lifeHome [data-home-destination="sources"], .home-blog-write').count(), 0);
+      await openImport(page); await home(page);
+      await page.locator('#homeFirstWrite').click(); await page.locator('#lifeMain[data-mode="page"]').waitFor(); await home(page);
       await page.goto(base + '/life.html'); await ready(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
       assert.deepEqual(await recordActions(page), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
       assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-label'), '기록 선택');
-      for (const view of ['topics', 'sources', 'activities', 'page', 'time', 'import']) {
+      for (const view of ['topics', 'sources', 'activities', 'page', 'import']) { // view=time opens workspace.html (S8)
         await page.goto(`${base}/life.html?view=${view}`); await ready(page);
         assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), view);
       }
     });
-    await check('home shows latest three originals and two groups without changing stored data', async ({ page }) => {
+    await check('the list leaves recent originals, groups and the selected page to 자료 without changing stored data', async ({ page }) => {
       const f = await fixture(page, { many: true }); await seedComposition(page, f.refs);
       await setPage(page, `for(let i=2;i<=3;i++)w.groups.push({id:c.id(),title:'추가 묶음 '+i,versionIds:[]});`);
       const before = await current(page);
       await page.evaluate(() => { window.__homeObserveWrites = true; __homeWrites.length = 0; });
       await home(page);
-      const cards = page.locator('#homeRecent > .home-record'); assert.equal(await cards.count(), 3);
-      const ids = await cards.evaluateAll(nodes => nodes.map(n => n.dataset.sourceId)); assert.equal(new Set(ids).size, 3);
-      assert.equal(await cards.first().getAttribute('data-version-id'), f.refs.at(-1).versionId);
-      assert((await cards.first().textContent()).includes(newBody.split('\r\n')[0]));
-      assert.equal(await page.locator('#homeGroups button[data-group-id]').count(), 2);
+      // 2026-11-08 S3: the former home blocks are not in 일정's list.
+      assert.equal(await page.locator('#homeRecent, #homeGroups, #homeBooks, #homeReadingResume, .home-library').count(), 0);
       assert.equal(await page.locator('#homePage').count(), 0, 'Home must not duplicate the selected-content page');
-      assert((await cards.first().locator('.home-date').textContent()).startsWith('담음 '));
+      assert.deepEqual(await current(page), before); assert.deepEqual(await page.evaluate(() => __homeWrites), []);
+      // 자료 lists the newest original first, exactly.
+      await nav(page, 'records'); if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
+      const cards = page.locator('#lifeSearchResults .life-source-card');
+      assert((await cards.count()) >= 3); assert.equal(await cards.first().getAttribute('data-version-id'), f.refs.at(-1).versionId);
       assert.deepEqual(await current(page), before); assert.deepEqual(await page.evaluate(() => __homeWrites), []);
       await preview(page);
       assert((await page.locator('#wbVisitor').textContent()).includes(oldBody.split('\r\n')[0]));
       assert(!(await page.locator('#wbVisitor').textContent()).includes(newBody.split('\r\n')[0]));
       assert.deepEqual(await current(page), before); assert.deepEqual(await page.evaluate(() => __homeWrites), []);
-      await home(page);
-      await page.locator(`#homeGroups button[data-group-id="${before.workbench.groups[0].id}"]`).click(); await settle(page);
+      // 묶음 opens from 자료's menu with every group.
+      const menu = await openRecordsMenu(page); await menu.getByRole('button', { name: '묶음', exact: true }).click(); await settle(page);
       await page.locator(`article[data-group-id="${before.workbench.groups[0].id}"]`).waitFor();
-      assert(await page.locator(`article[data-group-id="${before.workbench.groups[0].id}"] details`).first().evaluate(el => el.open));
+      assert.equal(await page.locator('article[data-group-id]').count(), before.workbench.groups.length);
+      assert.deepEqual(await current(page), before);
     });
     await check('home selected-content preview preserves visibility, pinned placement and fixed source versions', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs);
@@ -182,19 +190,18 @@ async function main() {
       await page.getByRole('button', { name: '편집으로 돌아가기', exact: true }).click();
       await page.locator('#wbPagePreview').waitFor(); assert.equal(await page.locator('#wbPagePreview').getAttribute('aria-pressed'), 'false');
     });
-    await check('home original reader returns to its exact home control and records finds saved notes', async ({ page }) => {
+    await check('a 자료 original reader returns to its exact control and records finds saved notes', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs); const before = await current(page); await home(page);
-      const open = page.locator('#homeRecent .home-record-open').first();
-      const expectedId = await open.locator('xpath=ancestor::article').getAttribute('data-version-id');
+      await nav(page, 'records'); await settle(page);
+      if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
+      const open = page.locator('#lifeSearchResults .life-source-card h3 .life-source-open').first();
+      const expectedId = await open.locator('xpath=ancestor::*[@data-version-id][1]').getAttribute('data-version-id');
       const expectedText = before.bundle.sourceVersions.find(version => version.id === expectedId).contentText;
       const key = await open.getAttribute('data-focus-key'); await open.click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), expectedText);
       assert.equal(await page.locator('#lifeVersion').inputValue(), expectedId);
-      assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '일정으로 돌아가기');
-      await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#homeRecent').waitFor();
+      await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#lifeMain[data-mode="sources"]').waitFor();
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
-      await nav(page, 'records'); await settle(page);
-      if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
       assert.deepEqual(await recordActions(page), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
@@ -207,40 +214,29 @@ async function main() {
       await page.locator('#lifeSearchReturn').click(); await settle(page); assert.equal(await page.locator('#lifeSearch').inputValue(), '원문 버전과 위치를 보존할 익명 발췌');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, quoteKey); assert.deepEqual(await current(page), before);
     });
-    await check('late home composition preserves focused recent original and exact keyboard opening', async ({ page }) => {
+    await check('late home composition keeps the always-shown search field, its focus and typed text', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs);
       const before = await current(page);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered);
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
       assert.equal(await page.locator('#homeComposition').getAttribute('aria-busy'), 'true');
-      const record = page.locator('#homeRecent > .home-record').first();
-      const versionId = await record.getAttribute('data-version-id');
-      const expected = before.bundle.sourceVersions.find(version => version.id === versionId);
-      assert(expected, 'Recent record must identify an exact stored version');
-      const button = await record.locator('.home-record-open').elementHandle();
-      await button.focus();
-      const beforeTop = await button.evaluate(node => node.getBoundingClientRect().top);
-      const parent = await page.locator('#homeRecent').evaluateHandle(node => node.parentElement);
+      // 2026-11-08 S3: from 761px the list search is a field in the tab row, usable before the list arrives.
+      const field = page.locator('#homePostSearch'); assert.equal(await field.isVisible(), true);
+      assert.equal(await page.locator('.home-search-toggle').isVisible(), false);
+      await field.focus(); await page.keyboard.type('구절'); const handle = await field.elementHandle();
+      assert.equal(await page.locator('#homePosts .home-load-error').count(), 0, 'typing before the first read is not a failed read');
       await page.evaluate(() => __homeReleaseRead());
       await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
-      assert.equal(await button.evaluate(node => node.isConnected && document.activeElement === node), true, 'A slow composition read must retain the focused original button');
-      // Browser scrolling rounds to physical pixels; tolerate its subpixel
-      // rounding while still rejecting any visible layout movement.
-      const afterTop = await button.evaluate(node => node.getBoundingClientRect().top);
-      assert(Math.abs(afterTop - beforeTop) <= 1, 'Late composition must not move the recent record under the user: ' + JSON.stringify({ beforeTop, afterTop }));
-      assert.equal(await page.evaluate(node => document.querySelector('#homeRecent').parentElement === node, parent), true, 'Recent records must retain their parent during composition loading');
-      assert.deepEqual(await current(page), before);
-      await page.keyboard.press('Enter'); await settle(page);
-      await page.locator('#lifeSourceText').waitFor();
-      assert.equal(await page.locator('#lifeSourceText').textContent(), expected.contentText);
+      assert.equal(await handle.evaluate(node => node.isConnected && document.activeElement === node), true, 'A slow composition read must keep the focused search field');
+      assert.equal(await field.inputValue(), '구절');
+      assert.equal(await page.locator('#homePosts .home-load-error').count(), 0);
       assert.deepEqual(await current(page), before);
     });
     await check('late home composition cannot replace a different section', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered);
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
       assert.equal(await page.locator('#homeComposition').getAttribute('aria-busy'), 'true');
-      assert.equal(await page.locator('#homeRecent > .home-record').count(), 3);
       await nav(page, 'tools'); const completed = await page.evaluate(() => window.__homeReadFinished || 0);
       await page.evaluate(() => __homeReleaseRead()); await page.waitForFunction(n => __homeReadFinished > n, completed);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools'); assert.equal(await page.locator('#lifeHome').count(), 0);
@@ -251,13 +247,13 @@ async function main() {
       const other = await page.evaluate(async active => { const s = HaedoLife.Shell.storage, created = await s.createWorkspace('다른 익명 작업공간'); await s.setActive(active); return created.workspaceId; }, f.workspaceId);
       await page.goto(base + '/index.html?section=records'); await ready(page);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered);
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
       await nav(page, 'manage'); await page.getByRole('button', { name: '현재 자료공간', exact: true }).click();
       await page.locator('#lifeWorkspace').selectOption(other); await settle(page);
       await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), other, { timeout: 10000, label: 'selected workspace becomes active' });
       const completed = await page.evaluate(() => window.__homeReadFinished || 0);
       await page.evaluate(() => __homeReleaseRead()); await page.waitForFunction(n => __homeReadFinished > n, completed);
-      await home(page); assert.equal(await page.locator('#homeRecent > .home-record').count(), 0);
+      await home(page);
       assert(!(await page.locator('#lifeHome').textContent()).includes('이전작업공간의페이지'));
       assert.equal((await current(page)).bundle.workspaceId, other);
       assert.equal(await page.evaluate(async id => (await HaedoLife.Shell.storage.readWorkbench(id)).page.title, f.workspaceId), '이전작업공간의페이지');
@@ -266,7 +262,7 @@ async function main() {
       const f = await fixture(page); await seedComposition(page, f.refs);
       await setPage(page, `w.page.title='A전용개인페이지';`); const before = await current(page);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered);
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
       await page.evaluate(() => { window.__homeSignout = HaedoAuth.client.auth.signOut({ scope: 'local' }); });
       await page.waitForFunction(() => document.querySelector('#lifeApp').hidden && !HaedoLife.Shell.storage);
       await page.evaluate(() => __homeReleaseRead());
@@ -279,13 +275,14 @@ async function main() {
     await check('composition read failure keeps original records usable and retry recovers', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs); const before = await current(page);
       await page.evaluate(() => { window.__homeFailRead = true; }); await home(page);
-      await page.locator('#homePosts .home-load-error').waitFor(); assert.equal(await page.locator('#homeRecent > .home-record').count(), 3);
+      await page.locator('#homePosts .home-load-error').waitFor();
       assert.equal(await page.locator('#homePage').count(), 0);
       await page.evaluate(() => { window.__homeFailRead = false; }); await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await page.locator('#homeComposition[aria-busy="false"]').waitFor(); assert.deepEqual(await current(page), before);
-      await openLibrary(page); await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').focus();
+      // 2026-11-08 S3: 글쓰기 is the global one (the list's own button is gone).
+      await page.locator('[data-haedo-compose]:visible').focus();
       await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
-      assert(await page.evaluate(() => document.activeElement.dataset.homeDestination === 'write' || document.activeElement.id === 'homeFirstWrite'));
+      assert(await page.evaluate(() => document.activeElement.matches('[data-haedo-compose]')));
       const focus = await page.evaluate(() => ({ visible: document.activeElement.matches(':focus-visible'), outline: getComputedStyle(document.activeElement).outlineWidth }));
       assert(focus.visible); assert(parseFloat(focus.outline) >= 3); await page.keyboard.press('Enter');
       await page.locator('#photoTitle').waitFor();
@@ -319,13 +316,16 @@ async function main() {
     });
     for (const size of [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }]) await check('home shortcuts preserve drafts and reach timeline, tools and management ' + size.width, async ({ page }) => {
       await freshHome(page);
-      assert.equal(await page.getByRole('button', { name: '자료 가져오기', exact: true }).count(), 1);
+      // 2026-11-08 S3: 가져오기 is 자료's (the list keeps only its empty-state 첫 글 쓰기).
+      assert.equal(await page.getByRole('button', { name: '자료 가져오기', exact: true }).count(), 0);
       assert.equal(await page.getByRole('button', { name: '첫 글 쓰기', exact: true }).count(), 1);
-      const start = page.locator('[data-home-destination="import"]');
+      await nav(page, 'records'); await page.locator('#lifeMain[data-mode="sources"]').waitFor();
+      const start = page.getByRole('button', { name: '가져오기', exact: true });
       if (size.width <= 820) await start.tap(); else { await start.focus(); await page.keyboard.press('Enter'); }
+      await page.locator('#lifeMain[data-mode="import"]').waitFor();
       await page.locator('#lifeImportTitle').fill('옮겨 적는 중인 산책 기록');
       await page.locator('#lifeImportText').fill('아직 저장을 확정하지 않은 원문과 출처를 그대로 둡니다.');
-      await home(page); await page.locator('[data-home-destination="import"]').click();
+      await home(page); await openImport(page);
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), '옮겨 적는 중인 산책 기록');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '아직 저장을 확정하지 않은 원문과 출처를 그대로 둡니다.');
       await home(page); await recordWrite(page);
@@ -334,8 +334,8 @@ async function main() {
       await home(page); await recordWrite(page);
       assert.equal(await page.locator('#lifeWritingTitle').inputValue(), '오늘 다시 생각한 일');
       assert.equal(await page.locator('#lifeWritingBody').inputValue(), '내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
-      await home(page); await nav(page, 'tools'); await page.getByRole('button', { name: '연표', exact: true }).click();
-      await page.getByRole('link', { name: /연표 목록/ }).click();
+      // 2026-11-08 S4·S8: Y's link line opens the 연표 목록 directly.
+      await home(page); await nav(page, 'tools'); await page.locator('#lifeMain .schedule-plan-links').getByRole('link', { name: '연표', exact: true }).click();
       await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
       await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').click(); await ready(page);
       await page.locator('#homePosts[aria-busy="false"]').waitFor();
@@ -343,7 +343,7 @@ async function main() {
       await nav(page, 'manage'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'manage');
       await home(page);
       assert.equal((await current(page)).bundle.sources.length, 0, 'Opening areas must not commit an import or writing draft');
-      await page.locator('[data-home-destination="import"]').click();
+      await openImport(page);
       // A full document navigation starts a fresh capture. Resume explicitly,
       // rather than guessing which saved draft should replace the new input.
       if (size.width === 390) {
@@ -369,13 +369,13 @@ async function main() {
       await freshHome(page); await snapshot(page, 'empty', size);
       const f = await fixture(page, { many: true }); await seedComposition(page, f.refs); await home(page); await snapshot(page, 'populated', size);
       const placement = await page.evaluate(() => {
-        const first = document.querySelector('#homeFirstWrite') || document.querySelector('[data-home-destination="write"]'), composition = document.querySelector('#homeComposition'), library = document.querySelector('.home-library');
-        return { firstBottom: first.getBoundingClientRect().bottom, compositionBeforeLibrary: composition.getBoundingClientRect().bottom <= library.getBoundingClientRect().top };
+        const write = [...document.querySelectorAll('[data-haedo-compose]')].find(node => node.checkVisibility());
+        return { writeBottom: write.getBoundingClientRect().bottom, library: document.querySelectorAll('.home-library, #homeRecent').length };
       });
-      assert(placement.firstBottom < size.height - 96, 'The primary blog writing action must appear above the mobile dock on first entry');
-      assert(placement.compositionBeforeLibrary, 'The blog feed must precede the private library');
+      assert(placement.writeBottom < size.height - 96, 'The global 글쓰기 must appear above the mobile dock on first entry');
+      assert.equal(placement.library, 0, '2026-11-08 S3: the list is the blog feed only');
       await nav(page, 'tools'); await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered); await snapshot(page, 'loading', size);
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered); await snapshot(page, 'loading', size);
       await page.evaluate(() => __homeReleaseRead()); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
       await nav(page, 'tools'); await page.evaluate(() => { window.__homeFailRead = true; }); await home(page); await snapshot(page, 'error', size);
       await page.evaluate(() => { window.__homeFailRead = false; }); await page.locator('.home-posts-error').getByRole('button', { name: '다시 불러오기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();

@@ -12,7 +12,7 @@ const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, password, cloud, base, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
 const { current, save, download } = require('./book-projects-browser.cjs');
-const { chapterFrom, openLibrary } = require('./book-completion-browser.cjs');
+const { chapterFrom } = require('./book-completion-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve(process.env.BOOK_RESTORE_OUTPUT || '.local/book-restore-entry/after');
@@ -212,12 +212,13 @@ async function main() {
       for (const delayed of ['workbench', 'list']) {
         const previous = await prepare(page, fixture); await page.evaluate(delayed => { window.__restoreHold = delayed; }, delayed);
         const click = page.locator('#wbRestoreInstall').click(); await page.waitForFunction(delayed => window.__restoreGateEntered === delayed, delayed);
-        await nav(page, 'home'); await openLibrary(page); await page.locator('#homeBooks').waitFor();
-        const nextFocus = page.locator('#homeBooks article[data-book-id] > button').first(); await nextFocus.focus(); const focusId = await nextFocus.locator('..').getAttribute('data-book-id');
+        // 2026-11-08 S3: the list has no 내 책 block; focus its 글 메뉴, which a header rebuild must keep.
+        await nav(page, 'home'); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+        const nextFocus = page.locator('#lifeBlogMenu > summary'); await nextFocus.focus();
         await page.evaluate(() => window.__restoreGateRelease()); await click;
         await page.waitForFunction(delayed => window.__restoreReadReturned === delayed, delayed); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home'); assert.equal(await page.locator('#lifeRestoreResult').count(), 0);
-        assert.equal(await page.evaluate(() => document.activeElement?.parentElement?.dataset.bookId), focusId, 'Late restore refresh must not steal keyboard focus');
+        assert.equal(await page.evaluate(() => document.activeElement?.matches('#lifeBlogMenu > summary')), true, 'Late restore refresh must not steal keyboard focus');
         const first = await current(page); assertRemapped(fixture, first); await untouched(page, previous);
       }
       const beforeAccount = await prepare(page, fixture); await page.evaluate(() => { window.__restoreHold = 'install'; window.__restoreGateEntered = null; window.__restoreGateFinished = null; });

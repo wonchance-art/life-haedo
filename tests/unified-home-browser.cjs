@@ -120,6 +120,7 @@ async function main() {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
+        assert.equal(await page.title(), '해도 · 내 블로그', 'the public home keeps its own tab title (2026-11-08 S2)');
         await assertCommonNavigation(page);
         assert.equal(await page.locator('[data-life-login=compose]').isVisible(), true);
         assert.equal(await page.locator('[data-life-return-login]').isVisible(), true);
@@ -178,8 +179,8 @@ async function main() {
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const instance = await page.evaluate(() => __homeInstance);
       const raw = '통합 홈에서 보관할 본문\r\n다시 읽을 문장🌱\r\n끝 문장', quote = '다시 읽을 문장🌱';
-      await page.locator('.home-library > summary').click();
-      await button(page, '자료 가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
+      // 2026-11-08 S3: 가져오기 is in the global 자료 (the list's former 자료 block is gone).
+      await nav(page, 'records'); await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
       await nav(page, 'tools'); await nav(page, 'manage'); await nav(page, 'records'); await button(page, '가져오기');
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), '전환 중 보존할 익명 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw.replaceAll('\r\n', '\n'));
@@ -230,9 +231,10 @@ async function main() {
       await card.locator('h3 .life-source-open').click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await page.locator('#lifeSearchReturn').click(); await settle(page); assert.equal(await card.count(), 1);
-      await nav(page, 'home'); await page.locator('.home-library > summary').click();
-      const recent = page.locator('#homeRecent'); assert((await recent.innerText()).includes(raw.slice(0, 100)));
-      await recent.getByRole('button', { name: '발췌 전 보관한 익명 자료', exact: true }).click(); await settle(page);
+      // 2026-11-08 S3: 일정's list is posts only; the former recent-records block lives in 자료 (above).
+      await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+      assert.equal(await page.locator('#lifeHome .home-library, #homeRecent, #homeGroups, #homeBooks, #homeReadingResume').count(), 0);
+      await nav(page, 'records'); await card.locator('h3 .life-source-open').click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
     });
     await check('tools lead to existing goal/habit editors and account timeline list with the same five-way navigation', async ({ page }) => {
@@ -245,8 +247,8 @@ async function main() {
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
       }
-      await nav(page, 'tools'); await button(page, '연표'); // 2026-11-02: 연표 is in 일정's 계획
-      await page.locator('#lifeMain a[href="workspace.html"]').click();
+      // 2026-11-08 S4·S8: Y's link line opens the 연표 목록 directly (no 연표 screen in between).
+      await nav(page, 'tools'); await page.locator('#lifeMain .schedule-plan-links a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
       await assertCommonNavigation(page);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
@@ -273,7 +275,16 @@ async function main() {
         assert.equal(await page.locator('[data-haedo-navigation] a[aria-current="page"]').evaluateAll(links => links.map(link => link.dataset.haedoSection)).then(list => list.join()), section, suffix);
         assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), section, suffix);
         assert.equal(await page.evaluate(() => location.pathname + location.search), address, suffix);
+        // 2026-11-08 S2: the tab names the open section (일정 · 해도); 해도 · 내 블로그 is the public home's.
+        assert.equal(await page.title(), { schedule: '일정 · 해도', records: '자료 · 해도', manage: '설정 · 해도', news: '뉴스 · 해도' }[section], suffix);
         await assertCommonNavigation(page);
+      }
+      // 2026-11-08 S8: the former 연표 screen's addresses open the 연표 목록 in their place.
+      for (const suffix of ['index.html?view=time', 'index.html?section=tools&view=time', 'index.html?section=schedule&view=time', 'life.html?view=time']) {
+        await page.goto(base + '/' + suffix);
+        await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
+        assert.equal(await page.evaluate(() => location.pathname + location.search), '/workspace.html', suffix);
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', suffix);
       }
       for (const [file, pageName] of [['timeline.html', 'workspace'], ['workspace.html', 'workspace'], ['goals.html', 'goals'], ['habits.html', 'habits']]) {
         await page.goto(base + '/' + file);
@@ -284,6 +295,25 @@ async function main() {
       // The former 계획 back link of goals/habits still lands on 일정's plan view.
       await page.locator('[data-section-back]').click(); await ready(page); await page.locator('#lifeMain[data-mode="tools"]').waitFor();
       assert.equal(await page.locator('#lifeApp [data-schedule-view="tools"]').getAttribute('aria-current'), 'true');
+    });
+    await check('통합 검색 keeps the section it was opened from marked through reload, return and history (2026-11-08 S2)', async ({ page }) => {
+      const current = () => page.locator('[data-haedo-navigation] a[aria-current="page"]').evaluateAll(links => links.map(link => link.dataset.haedoSection).join());
+      const find = async () => { await page.locator('#lifeMain[data-mode="find"]').waitFor(); await settle(page); };
+      await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      await page.locator('#lifeFindOpen').click(); await find();
+      assert.equal(await current(), 'schedule'); assert.equal(await page.title(), '일정 · 해도');
+      assert.equal(await page.evaluate(() => location.search), '?section=schedule&view=find');
+      await page.reload(); await ready(page); await find(); assert.equal(await current(), 'schedule', 'a reload keeps the section');
+      await page.locator('#lifeSubviewReturn').click(); await page.locator('#lifeMain[data-mode="home"]').waitFor(); assert.equal(await current(), 'schedule');
+      // From 자료 the same screen is 자료's; browser back/forward keep each entry's own section.
+      await nav(page, 'records'); await page.locator('#lifeFindOpen').click(); await find();
+      assert.equal(await current(), 'records'); assert.equal(await page.evaluate(() => location.search), '?section=records&view=find');
+      await page.goBack(); await page.locator('#lifeMain[data-mode="sources"]').waitFor(); await page.goForward(); await find(); assert.equal(await current(), 'records');
+      // The '/' shortcut on Y is the same 통합 검색 and stays 일정, also after back and forward.
+      await nav(page, 'tools'); await page.locator('#lifeApp .life-page-title').focus(); await page.keyboard.press('/'); await find(); assert.equal(await current(), 'schedule');
+      await page.goBack(); await page.locator('#lifeMain[data-mode="tools"]').waitFor(); assert.equal(await current(), 'schedule');
+      await page.goForward(); await find(); assert.equal(await current(), 'schedule');
+      assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), 'schedule');
     });
     await check('only a screen begun with 글쓰기 is the 글쓰기 screen, also after a reload (edit copy and draft tab stay 일정)', async ({ page }) => {
       const write = page.locator('[data-haedo-navigation] a[data-haedo-compose]'), schedule = page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]');
@@ -512,7 +542,7 @@ async function main() {
       } finally { release(); }
       await page.waitForFunction(() => !window.__signedOutDocument && globalThis.HaedoLife?.Shell && !document.querySelector('#lifeWelcome').hidden && HaedoAuth.user === null);
       assert.equal(await page.evaluate(() => HaedoAuth.user), null); assert.equal(await page.evaluate(() => HaedoLife.Shell.storage), null);
-      assert.equal(await page.locator('#lifeApp').isHidden(), true);
+      assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.equal(await page.title(), '해도 · 내 블로그');
       assert.doesNotMatch(await page.locator('body').innerText(), /늦은 응답 비공개 구절/);
     });
     await check('failed server verification shows recoverable error without opening private storage', async ({ page, server, device }) => {

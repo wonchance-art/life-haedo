@@ -131,7 +131,7 @@ async function main() {
     originalA = await preserved(a.page); originalB = await preserved(b.page);
     await check('A post saved with two original photos on A appears in B\'s home feed automatically, with exact bytes and identities', async () => {
       active = a.page;
-      await a.page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();
+      await a.page.locator('[data-haedo-compose]:visible').click();
       await a.page.locator('#photoTitle').fill('두 기기에서 이어 쓸 합성 여행 글');
       await a.page.locator('.ql-editor').fill('기억한 풍경을 내 말로 남깁니다. 🌱\n두 원본과 사진 설명을 그대로 보관합니다.\n');
       const images = await a.page.evaluate(() => [[4032, 3024], [1200, 1800]].map(([width, height], i) => {
@@ -165,7 +165,7 @@ async function main() {
     });
     await check('A draft written on B follows to A after its quiet period without being saved or published', async () => {
       active = b.page;
-      await b.page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();
+      await b.page.locator('[data-haedo-compose]:visible').click();
       await b.page.locator('#photoTitle').fill('B에서 쓰다 만 글'); await b.page.locator('.ql-editor').fill('B_UNFINISHED_BODY 🌱\n');
       await b.page.locator('.photo-status[data-state="draft"]').waitFor();
       draftB = await until(() => state(b.page), v => v.docs.some(d => d.title === 'B에서 쓰다 만 글'), 'B local autosave').then(v => v.docs.find(d => d.title === 'B에서 쓰다 만 글'));

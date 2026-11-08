@@ -181,11 +181,20 @@
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map(), naverBlogViews = new Map();
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage', 'backup', 'quarter', 'month', 'week', 'day']);
-    const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '계정 보관 상태', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리', backup: '백업·복원' };
     // 일정's plan views (the former 계획 section).
     const planningModes = new Set(['tools', 'annual-plan']);
+    const TIMELINE_LIST = 'workspace.html';
+    // 통합 검색 (view=find) belongs to the section it was opened from (2026-11-08 S2): the global menu
+    // keeps that section marked. Kept with the history entry and the address (`section`).
+    let findSection = null;
+    // The tab names the open section (2026-11-08 S2: 일정 · 해도). The page's own title (public home:
+    // 해도 · 내 블로그) comes back when the private app closes.
+    const pageTitle = document.title;
+    const sectionTitles = { news: '뉴스 · 해도', schedule: '일정 · 해도', records: '자료 · 해도', manage: '설정 · 해도' };
+    const findSections = new Set(['news', 'schedule', 'records', 'manage']);
     // 일정's calendar units (2026-11-02): Y is the former tools (계획) view; Q·M·W·D are new.
     const calendarModes = new Set(['tools', 'quarter', 'month', 'week', 'day']);
     const scheduleDate = () => { const sd = global.HaedoLife.ScheduleData; return !sd ? null : sd.valid(state.scheduleDate) ? state.scheduleDate : sd.today(); };
@@ -432,7 +441,6 @@
     home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate: (mode, options = {}) => navigate(mode, mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget) ? { ...options, blogContext: true } : options),
-      renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
       openPostInWorkspace: (workspaceId, target) => openPostInWorkspace(workspaceId, target),
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
@@ -1352,6 +1360,15 @@
 
     async function navigate(mode, options) {
       options ||= {};
+      // 2026-11-08 S8: the former 연표 screen (`view=time`, one link to the 연표 목록) is gone; an old
+      // entry or call opens the 연표 목록 itself after this screen's drafts are saved.
+      if (mode === 'time') {
+        await persistDrafts();
+        if (disposed) return false;
+        state.sourceDrafts.clear();
+        global.location[options.historyAction === 'replace' ? 'replace' : 'assign'](TIMELINE_LIST);
+        return false;
+      }
       const token = ++navigationGeneration;
       const workspace = workspaceGeneration, workspaceId = state.bundle?.workspaceId, account = state.syncAccountKey;
       const current = () => !disposed && token === navigationGeneration && workspace === workspaceGeneration &&
@@ -1359,6 +1376,8 @@
       const from = state.mode;
       const naverImportOrigin = from === 'naver-blog' ? { mode: 'naver-blog', workspaceId, scrollY: global.scrollY } : state.returnContext?.mode === 'naver-blog' ? { ...state.returnContext } : null;
       const fromSection = sectionFor(from);
+      const nextFindSection = mode !== 'find' ? findSection : findSections.has(options.findSection) ? options.findSection :
+        from === 'find' || from === 'source' && state.returnContext?.mode === 'find' ? findSection : fromSection;
       const changedTask = mode !== from || mode === 'source' && (options.sourceId !== undefined && options.sourceId !== state.sourceId ||
         options.sourceVersionId !== undefined && options.sourceVersionId !== state.sourceVersionId) ||
         mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget || options.nineTarget) ||
@@ -1452,6 +1471,7 @@
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!(options.pageCompose || options.composingPost); }
       }
       if (mode === 'home') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
+      findSection = nextFindSection;
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
@@ -1459,7 +1479,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = externalImport.article.privateReader === true
@@ -1659,6 +1679,7 @@
 
     // 2026-11-02: 뉴스·일정·자료·설정. The former home and tools modes are views of 일정 (schedule).
     function sectionFor(mode) {
+      if (mode === 'find' || mode === 'source' && state.returnContext?.mode === 'find') return findSection || 'records';
       if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || calendarModes.has(state.returnContext?.mode) || state.returnContext?.mode === 'page' && blogPageTask)) return 'schedule';
       if (calendarModes.has(mode)) return 'schedule';
       return global.HaedoNavigation?.getSectionForView(mode) || (['tools', 'annual-plan'].includes(mode) ? 'schedule' : mode === 'manage' ? 'manage' : 'records');
@@ -1668,6 +1689,11 @@
       return section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section === 'schedule' ? 'home' : section;
     }
 
+    // The section an address names for 통합 검색 (`?section=schedule&view=find`); without one it is 자료.
+    function addressFindSection() {
+      const section = global.HaedoNavigation?.normalizeSection(new URLSearchParams(global.location.search).get('section'));
+      return findSections.has(section) ? section : null;
+    }
     function routeMode() {
       const params = new URLSearchParams(global.location.search);
       const section = params.get('section');
@@ -1742,6 +1768,7 @@
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
       if (calendarModes.has(mode) && scheduleDate()) entry.scheduleDate = scheduleDate();
+      if (mode === 'find' && findSection) entry.findSection = findSection;
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
       return entry;
@@ -1760,6 +1787,7 @@
       if (!value || typeof value !== 'object' || depth > 4) return null;
       const out = {}, id = key => typeof value[key] === 'string' && historyIdPattern.test(value[key]);
       for (const key of ['mode', 'workspaceId', 'sourceId', 'sourceVersionId', 'task', 'blog', 'newsArticle', 'focusKey', 'focusId', 'focusTag', 'folderFilter', 'blogPostId']) if (id(key)) out[key] = value[key];
+      if (findSections.has(value.findSection)) out.findSection = value.findSection;
       if (global.HaedoLife.ScheduleData?.valid(value.scheduleDate)) out.scheduleDate = value.scheduleDate;
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
       for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
@@ -1829,11 +1857,11 @@
       url.searchParams.delete('blog');
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) url.searchParams.set('blog', blogRoute);
       // 일정's list keeps the plain index.html address; its plan and calendar views name the section.
-      if (section === 'schedule' && !['annual-plan', 'time', ...calendarModes].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
+      if (section === 'schedule' && !['annual-plan', 'find', ...calendarModes].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
-      else if (['tools', 'annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'backup', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', 'quarter', 'month', 'week', 'day', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      else if (['tools', 'annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'import', 'write', 'sync', 'backup', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', 'quarter', 'month', 'week', 'day', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       // Q·M·W·D name their date; Y names it only for another year than this one.
       const date = scheduleDate(), sd = global.HaedoLife.ScheduleData;
@@ -2054,6 +2082,7 @@
         else options.historyTask = null;
       } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
       if (entry.mode === 'external-discovery' && entry.newsArticle) options.newsArticle = entry.newsArticle;
+      if (entry.mode === 'find' && entry.findSection) options.findSection = entry.findSection;
       return options;
     }
 
@@ -2070,7 +2099,7 @@
         if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
         if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
         if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
-        try { await navigate(mode, { preserveContext: true, navigationMotion: 'tab', historyAction: 'replace' }); }
+        try { await navigate(mode, { preserveContext: true, navigationMotion: 'tab', historyAction: 'replace', ...(mode === 'find' ? { findSection: addressFindSection() } : {}) }); }
         catch (cause) { writeRoute(state.mode, 'replace'); throw cause; }
         return;
       }
@@ -2128,7 +2157,7 @@
       if (['transfer', 'workbench-backup', 'preservation'].includes(state.mode))
         return { mode: 'backup', workspaceId: state.bundle?.workspaceId, scrollY: 0, focusKey: 'backup:' + state.mode };
       // 일정's plan subviews (a reload or direct address) return to 계획, not to the list.
-      if (planningModes.has(state.mode) && state.mode !== 'tools' || state.mode === 'time')
+      if (planningModes.has(state.mode) && state.mode !== 'tools')
         return { mode: 'tools', workspaceId: state.bundle?.workspaceId, scrollY: 0, focusKey: 'tools:' + state.mode };
       return { mode: sectionRootMode(sectionFor(state.mode)), workspaceId: state.bundle?.workspaceId, scrollY: 0 };
     }
@@ -2167,7 +2196,8 @@
         // A control inside a closed <details> is opened below, so it still counts; one hidden at this width
         // (e.g. the wide-only menu link at 390) cannot take focus and is passed over.
         const shown = el => el.getClientRects().length > 0 || !!el.closest('details:not([open])');
-        const controls = [...root.querySelectorAll('button,a,summary,input')].filter(shown);
+        // The global 글쓰기 (outside the app root) is the list's write action since 2026-11-08 (S3).
+        const controls = [...root.querySelectorAll('button,a,summary,input'), ...document.querySelectorAll('[data-haedo-navigation] a[data-haedo-compose]')].filter(shown);
         const remoteId = origin.mode === 'account-blog' && /^account-blog:(?:open|receive|received|manage):([^:]+)(?::[^:]+)?$/.exec(origin.focusKey || '')?.[1];
         const receivedActions = remoteId ? controls.filter(el => el.dataset.remoteId === remoteId && el.dataset.action === 'open') : [];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
@@ -2211,6 +2241,7 @@
       const section = sectionFor(state.mode);
       syncWritingFocus();
       global.HaedoNavigation?.activate(section, { composing: composingNewPost() });
+      if (sectionTitles[section]) document.title = sectionTitles[section];
       status.hidden = state.mode === 'find';
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
@@ -2264,7 +2295,7 @@
       const scheduleParts = (state.mode === 'home' || calendarModes.has(state.mode)) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
       if (scheduleParts && calendarModes.has(state.mode)) heading.textContent = scheduleParts.title;
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '일정으로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', time: '연표로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '일정으로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -2405,15 +2436,36 @@
       return control;
     }
 
-    // 계획 칸 of Y (and Q): 연간 계획·목표·습관·연표 keep their editors and addresses.
+    // 계획 칸 of Y and Q (2026-11-08 S4): one line of links with the plan tabs' names. 연간 계획 opens in
+    // the app; 목표·습관·연표 are their own pages (연표 is the 연표 목록, workspace.html, S8).
     function planDestinations() {
-      const list = node('div', null, 'life-destinations schedule-destinations');
-      const annual = actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')); annual.dataset.focusKey = 'tools:annual-plan';
-      // 2026-11-02: 연표 is part of 일정 (handoff: timeline/workspace → 일정 Y·Q·M).
-      const time = actionRow('연표', '보관한 연표 목록과 새 연표', 'chronology', () => navigate('time')); time.dataset.focusKey = 'tools:time';
-      list.append(annual,
-        destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
-        destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'), time);
+      const list = node('nav', null, 'schedule-plan-links'); list.setAttribute('aria-label', '계획');
+      const link = (label, href, id, open) => {
+        const anchor = node('a', label); anchor.href = href; anchor.dataset.focusKey = 'tools:' + id; anchor.dataset.planDestination = id;
+        let pending = false;
+        anchor.addEventListener('click', event => {
+          if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          if (pending) return;
+          pending = true; anchor.setAttribute('aria-busy', 'true');
+          Promise.resolve(guarded(open)(event)).finally(() => { pending = false; anchor.removeAttribute('aria-busy'); });
+        });
+        return anchor;
+      };
+      // A page outside the app opens only after this screen's drafts are saved.
+      const page = href => async () => {
+        await persistDrafts();
+        if (disposed) return;
+        state.sourceDrafts.clear();
+        global.location.assign(href);
+      };
+      const items = [link('연간 계획', 'index.html?section=schedule&view=annual-plan', 'annual-plan', () => navigate('annual-plan')),
+        link('목표', 'goals.html', 'goals', page('goals.html')), link('습관', 'habits.html', 'habits', page('habits.html')),
+        link('연표', TIMELINE_LIST, 'time', page(TIMELINE_LIST))];
+      items.forEach((item, index) => {
+        if (index) { const separator = node('span', '·', 'schedule-plan-sep'); separator.setAttribute('aria-hidden', 'true'); list.append(separator); }
+        list.append(item);
+      });
       return list;
     }
     // 일정 Y (the former 계획 view) and Q·M·W·D: the calendar of saved records.
@@ -2426,29 +2478,33 @@
       const menu = node('details', null, 'life-feature-menu');
       menu.id = blog ? 'lifeBlogMenu' : 'lifeRecordsMenu';
       const summary = node('summary', null, 'life-icon-button');
-      const label = blog ? '블로그 메뉴' : '자료 메뉴';
+      const label = blog ? '글 메뉴' : '자료 메뉴';
       summary.setAttribute('aria-label', label);
       summary.append(global.HaedoLife.Icons.create('more'));
-      const tooltip = node('span', label, 'life-tooltip'); tooltip.setAttribute('aria-hidden', 'true'); summary.append(tooltip);
+      // The 글 메뉴 opens right under the title; a hover label there covered its panel (2026-11-08 S3).
+      if (!blog) { const tooltip = node('span', label, 'life-tooltip'); tooltip.setAttribute('aria-hidden', 'true'); summary.append(tooltip); }
       const panel = node('div', null, 'life-feature-menu-panel');
       const group = (name, items) => {
         const section = node('section'); section.setAttribute('aria-label', name);
-        section.append(node('h2', name));
-        for (const [name, glyph, mode, id] of items) {
+        if (!blog) section.append(node('h2', name));
+        for (const [name, glyph, mode, id, options] of items) {
           const control = actionRow(name, '', glyph, () => {
-            if (state.mode === mode) { menu.open = false; summary.focus({ preventScroll: true }); return; }
-            return navigate(mode, { featureNavigation: true });
+            if (state.mode === mode && !options) { menu.open = false; summary.focus({ preventScroll: true }); return; }
+            return navigate(mode, { ...options, featureNavigation: true });
           });
-          if (state.mode === mode) control.setAttribute('aria-current', 'page');
+          if (state.mode === mode && !options) control.setAttribute('aria-current', 'page');
           control.dataset.focusKey = (blog ? 'home:menu:' : 'records:menu:') + mode;
           if (id) control.id = id;
           if (mode === 'blog') { control.dataset.homeDestination = 'blog'; control.dataset.focusKey = 'home:action:blog'; }
+          if (blog && options) control.dataset.focusKey = 'home:action:profile';
           section.append(control);
         }
         panel.append(section);
         return section;
       };
-      if (blog) group('글·공개', [['글 공개·보관', 'edit', 'blog']]);
+      // 2026-11-08 S3: the list's former profile-row buttons (프로필 편집, 글 동기화 → 계정 보관 상태) live here.
+      if (blog) group('글 메뉴', [['글 공개·보관', 'edit', 'blog'], ['계정 보관 상태', 'cloud', 'account-blog', 'homeAccountBlog'],
+        ['프로필 편집', 'user', 'page', 'homeProfileEdit', { blogContext: true, pageProfileEdit: true }]]);
       else {
         group('모아 보기', [['컬렉션', 'bookmark', 'collection'], ['묶음', 'link', 'activities'], ['선택 자료 페이지', 'user', 'page']]);
         group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
@@ -5492,29 +5548,6 @@
       return result;
     }
 
-    function renderTime() {
-      main.append(title('연표'));
-      main.append(destinationRow('연표 목록', '보관한 연표를 열거나 새로 만듭니다.', 'workspace.html', 'chronology'));
-      const list = node('div', null, 'life-card-grid');
-      main.append(button('기존 연표 목록 확인', guarded(async () => {
-        const documents = await legacy.listDocuments();
-        list.replaceChildren();
-        documents.forEach(doc => {
-          const card = node('article', null, 'life-card');
-          card.append(node('h3', doc.name || '제목 없는 연표'));
-          const href = legacy.open(doc);
-          const parsed = new URL(href, global.location.href);
-          if (parsed.origin === global.location.origin && /\/timeline\.html$/.test(parsed.pathname)) {
-            const link = node('a', '기존 연표 열기', 'life-button');
-            link.href = parsed.href;
-            card.append(link);
-          }
-          list.append(card);
-        });
-        if (!documents.length) list.append(empty('현재 계정에 연결된 연표가 없습니다. 내 공간에서 연표를 만들거나 기존 연표의 사본을 가져오세요.'));
-      })), list);
-    }
-
     function syncHelp() {
       const details = node('details', null, 'life-details');
       details.id = 'lifeSyncHelp';
@@ -5973,7 +6006,6 @@
       else if (state.mode === 'source-trash') renderSourceTrash();
       else if (state.mode === 'sources') renderSources();
       else if (state.mode === 'transfer') renderTransfer();
-      else if (state.mode === 'time') renderTime();
       else if (state.mode === 'sync' && sync) renderSync();
       else renderTopics();
       if (state.mode === 'topics' || state.mode === 'sources') renderRestoreResult();
@@ -6006,6 +6038,11 @@
     signal?.addEventListener('abort', dispose, { once: true });
     await storage.open();
     if (disposed) return { dispose };
+    // An old `?view=time` address (any section) opens the 연표 목록 in its place (2026-11-08 S8).
+    if (new URLSearchParams(global.location.search).get('view') === 'time') {
+      global.location.replace(TIMELINE_LIST);
+      return { dispose };
+    }
     state.workspaces = await storage.listWorkspaces();
     if (disposed) return { dispose };
     let active = bootstrap?.workspaceId || await storage.getActive();
@@ -6020,6 +6057,7 @@
     }
     if (disposed) return { dispose };
     state.mode = routeMode();
+    if (state.mode === 'find') findSection = addressFindSection();
     syncHistoryPosition();
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
@@ -6150,6 +6188,7 @@
       };
       if (failedMount === true) disposed = true;
       cleanup(() => { delete document.body.dataset.writingFocus; });
+      cleanup(() => { document.title = pageTitle; });
       disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
       libraryRefresh++; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
