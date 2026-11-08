@@ -87,6 +87,8 @@ async function instrument(context, { holdStartup = false } = {}) {
       'result = await verifier.auth.getUser(context.accessToken);', 'result = await client.auth.getUser(context.accessToken);');
     if (process.env.RSS_REFLECTION_MUTATION === 'no-overlap') source = replaceOnce(source,
       'scanCursor = overlapCursor(progress.cursor);', 'scanCursor = progress.cursor;');
+    if (process.env.RSS_REFLECTION_MUTATION === 'no-wake-recheck') source = replaceOnce(source,
+      'const recheck = () => { syncNow(undefined, { recheck: true }); };', 'const recheck = wake;');
     if (process.env.RSS_REFLECTION_MUTATION === 'more-ahead') source = replaceOnce(source,
       "return run('list', { before: { fetched_at: before.fetched_at, id: before.id } }, onProgress);",
       "return run('list', { before: { fetched_at: before.fetched_at, id: before.id } }, onProgress).then(async page => { const progress = await storage.readRssInboxProgress(workspaceId), bundle = await storage.read(workspaceId); const receipts = page.items.filter(row => row.sourceVersionId).map(row => ({ kind: 'stored', cursor: { fetched_at: row.fetched_at, id: row.id }, itemId: row.id, sourceId: row.sourceId, sourceVersionId: row.sourceVersionId, contentHash: row.content_hash })); await storage.saveRssInboxProgress(workspaceId, { cursor: receipts.at(-1)?.cursor || null, receipts }, progress.revision, { expectedBundleRevision: bundle.revision }); return page; });");
@@ -224,18 +226,47 @@ async function main() {
       await page.clock.install(); await page.goto(base + '/index.html'); await ready(page); await settle(page); await completed(page, configured ? 0 : 1, 'stopped');
       await archive(page, server.items);
       assert.equal(server.calls.length, 1);
-      await tick(page); await page.evaluate(() => { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }); await settle(page);
-      assert.equal(server.calls.length, 1, 'no repeated list after empty/disabled discovery, even on wake events');
+      await tick(page); await tick(page);
+      assert.equal(server.calls.length, 1, 'the minute timer never polls an empty or disabled discovery');
+      // 2026-11-08 rule: a returning wake rechecks a parked discovery at most once per interval.
+      await page.evaluate(() => { for (let i = 0; i < 5; i++) { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); } });
+      await completed(page, configured ? 0 : 1, 'stopped', 2);
+      assert.equal(server.calls.length, 2, 'a burst of returning wakes rechecks exactly once');
+      await page.evaluate(() => { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }); await settle(page);
+      assert.equal(server.calls.length, 2, 'returning wakes inside one interval do not recheck again');
       if (configured) {
         await page.evaluate(async feed => {
           const s = HaedoLife.Shell.storage, service = HaedoLife.RssConnection.create({ storage: s, workspaceId: await s.getActive() });
           try { await service.register(feed); } finally { service.dispose(); }
         }, FEED);
-        await completed(page, 0, 'idle', 2);
+        await completed(page, 0, 'idle', 3);
         assert.equal(server.calls.filter(call => call.body.action === 'register').length, 1);
-        assert.equal(server.calls.filter(call => call.body.action === 'list').length, 2, 'the actual registration event resumes the stopped consumer');
+        assert.equal(server.calls.filter(call => call.body.action === 'list').length, 3, 'the actual registration event resumes the stopped consumer');
+      } else {
+        // Collection enabled elsewhere: the early wake above runs on the next due minute, once.
+        server.configured = true; await tick(page); await completed(page, 1, 'idle', 3);
+        assert.equal(server.calls.length, 3); await archive(page, server.items);
       }
     }, { count: configured ? 0 : 1, configured });
+
+    await check('a connection registered on another device reaches an open parked tab on its next returning wake', async ({ server, device }) => {
+      const parked = await (await device('parked-tab')).newPage(); observe(parked, report, 'parked-tab');
+      await parked.clock.install(); await parked.goto(base + '/index.html'); await ready(parked); await settle(parked); await completed(parked, 0, 'stopped');
+      const lists = () => server.calls.filter(call => call.device === 'parked-tab' && call.body.action === 'list').length;
+      assert.equal(lists(), 1);
+      const other = await app(await device('registering-device'), 'registering device'); await completed(other, 0, 'stopped');
+      assert.equal((await sources(other)).workspaceId, (await sources(parked)).workspaceId);
+      await other.evaluate(async feed => {
+        const s = HaedoLife.Shell.storage, service = HaedoLife.RssConnection.create({ storage: s, workspaceId: await s.getActive() });
+        try { await service.register(feed); } finally { service.dispose(); }
+      }, FEED);
+      server.add(accounts.a.id, server.connections.get(accounts.a.id), 1);
+      await tick(parked); assert.equal(lists(), 1, 'the parked tab does not poll; only a returning wake looks again');
+      await parked.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      await completed(parked, 1, 'idle', 2); await archive(parked, server.items);
+      assert.equal(lists(), 2); assert.equal(await parked.locator('#rssConnectionPanel').count(), 0);
+      report.evidence.push({ name: 'other-device-registration', parkedTabLists: lists(), timerOnlyLists: 0, reflectedItems: 1, reload: false });
+    }, { count: 0, accountLibrary: true });
 
     await check('an undeployed RSS function returns HTTP 404 once without app errors or retry', async ({ server, device }) => {
       const context = await device('missing-edge'), page = await context.newPage(); page.expectedRssHttpStatus = 404; observe(page, report, 'missing-edge');

@@ -1,10 +1,10 @@
-# RSS 자동 반영 인계 — 2026-11-06 C 완주로 병합, 운영 활성화 전 후속 3건
+# RSS 자동 반영 인계 — 2026-11-06 C 완주로 병합, 운영 활성화 전 후속 3건(11-08 브랜치에서 수정)
 
 > **현재 상태 (2026-11-06, 총괄):** 아래 보류 기록은 E의 11-05 인계 당시 상태다. C가 BLOCKER 2·MAJOR 2·MINOR를 고쳤고(head `b6aea87`, [완료 보고](https://github.com/wonchance-art/life-haedo/pull/227)), 총괄 독립 재검수 BLOCKER 0·MAJOR 0으로 병합했다. 운영 RSS는 아직 비활성(허용 피드 0)이다.
-> **운영 활성화 전에 고칠 후속(MINOR):**
-> 1. 연결이 살아 있고 화면이 보이는 동안 커서 앞 lease 구간(마지막 수집분 본문)을 매분 다시 받는다. 커서가 lease보다 오래되면 겹침을 한 번 읽은 뒤 정확한 커서만 쓰도록 바꾼다(`rss-connection.js` overlapCursor/reflectInbox).
-> 2. '연결 없음'·'runtime 꺼짐'으로 멈춘 반영이 page-ready·bfcache 복귀로 다시 확인하지 않아, 다른 기기에서 연결을 등록하면 열린 탭은 새로 열 때까지 반영하지 않는다(createReflection ready/wake).
-> 3. 응답 단위의 형식 오류(예: 프록시의 HTML 200)도 `rss_invalid_data`로 영구 정지된다. 항목 단위가 아닌 응답 단위 오류는 일시 오류로 분류한다.
+> **운영 활성화 전에 고칠 후속(MINOR) — 2026-11-08 `claude/rss-followups`에서 수정, 총괄 독립 검수·병합 전:**
+> 1. ~~커서 앞 lease 구간을 매분 다시 받는다.~~ **수정:** 열린 화면이 ACK 행을 처음 본 뒤 단조 시계로 lease(120초)를 넘긴 다음 겹침 구간을 한 번 더 읽고, 그 읽기가 오류 없이 같은 ACK로 끝나면 이후에는 정확한 커서(`>` ACK)만 쓴다. 기준은 기기 시계가 아니라 이 화면의 경과 시간이라 시계 차이에 영향받지 않는다. 새 ACK·복원 수리·화면 재시작 때는 다시 겹침부터 읽는다. 늦게 커밋된 앞선 행(MAJOR)은 그 마지막 겹침 읽기에서 받는다(`rss-connection.js` reflectInbox).
+> 2. ~~'연결 없음'·'runtime 꺼짐'에서 page-ready·bfcache 복귀로 다시 확인하지 않는다.~~ **수정:** 연결 없음·disconnected만 있음·runtime 꺼짐으로 멈춘 상태는 돌아오는 신호(page-ready — bfcache 복귀는 Auth 재검증 뒤 page-ready로 온다 —, 화면 보임, online)에서 다시 확인한다. 간격당 1회로 묶고, 간격 안의 신호는 다음 분 타이머가 한 번만 수행한다. 타이머만으로는 확인하지 않으며 숨김·오프라인·page-ready 전에는 요청하지 않는다. 막힌 항목과 미배포 함수(`rss_setup_required`)는 지금처럼 명시 등록·새로 열기까지 멈춘다(createReflection syncNow/ready).
+> 3. ~~응답 단위 형식 오류도 `rss_invalid_data`로 영구 정지된다.~~ **수정:** 응답 봉투(객체·configured·connections/items 배열·execution 상태·has_more/next_cursor·쪽 순서) 오류는 새 일시 코드 `rss_unexpected_response`로 기존 다음 주기 재시도를 따른다. 항목·연결 행 검증은 지금처럼 영구다.
 > 참고: 매분 경로의 bundle 전체 읽기는 1,000건 warm 약 106ms, 18,000건 약 1.85초(측정, 허용 범위).
 
 

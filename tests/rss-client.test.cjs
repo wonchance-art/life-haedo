@@ -17,7 +17,7 @@ function inbox(f, visible, pageSize = 100) {
       next_cursor: rows.length > pageSize ? { fetched_at: last.fetched_at, id: last.id } : null };
   };
 }
-function fixture() {
+function fixture({ now } = {}) {
   let bundle = Core.createWorkspace(), commits = 0, notify = () => {};
   const env = { current: true, held: null, conflict: false, requests: [], beforeCommit: null,
     accessToken: 'synthetic-rss-fixture-token', serverChecks: 0, manualChecks: 0, progressWrites: 0, verifierCreations: 0 };
@@ -65,7 +65,7 @@ function fixture() {
     isolated.removeItem('probe'); assert.equal(isolated.getItem('probe'), null);
     return { auth: { getUser: token => auth.client.auth.getUser(token) } };
   };
-  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current, clientFactory });
+  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current, clientFactory, ...(now ? { now } : {}) });
   function item(overrides = {}) {
     const body = '\ufeff피드 원문 🌱\r\n<img src="https://invalid.test/private">';
     return { id: Core.id(), owner_id: owner.userId, connection_id: conn.id, identity: 'guid:one', title: 'RSS 글', url: 'https://feed.example.test/one',
@@ -413,4 +413,62 @@ test('a permanently rejected validated row exposes only its item identity and ti
   assert.equal(result.receiveError, Rss.messages.rss_invalid_data);
   assert.equal(f.commits, 0); assert.equal(f.progress.cursor, null);
   assert.doesNotMatch(JSON.stringify(result), /피드 원문|diagnostic|content_text/);
+});
+
+test('a live page reads the lease overlap until one read after the lease, then only rows after the exact ACK', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const ack = f.item({ identity: 'ack', fetched_at: '2026-11-05T02:00:00.123456Z' });
+  const late = f.item({ identity: 'late-commit', fetched_at: '2026-11-05T01:59:30.000Z' });
+  const next = f.item({ identity: 'next', fetched_at: '2026-11-05T02:05:00.000Z' });
+  const overlap = { fetched_at: '2026-11-05T01:58:00.122Z', id: '00000000-0000-0000-0000-000000000000' };
+  const exact = { fetched_at: ack.fetched_at, id: ack.id };
+  let visible = [ack], returned = []; inbox(f, () => visible);
+  const pageFor = f.env.pageFor; f.env.pageFor = request => { const page = pageFor(request); returned.push(page.items.map(row => row.id)); return page; };
+  await f.service.reflect(); assert.deepEqual(f.progress.cursor, exact);
+  // Within the lease the earlier finish may still commit before the ACK row.
+  await f.service.reflect(); clock = 60000; await f.service.reflect();
+  // The late finish becomes visible on the first read after a full lease.
+  clock = 120001; visible = [late, ack]; const settling = await f.service.reflect();
+  assert.equal(settling.appliedItems, 1); assert.deepEqual(f.progress.cursor, exact);
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [late.id, ack.id], 'the late earlier row is received, never skipped');
+  clock = 180001; await f.service.reflect(); clock = 240001; await f.service.reflect();
+  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact]);
+  assert.deepEqual(returned.slice(4), [[], []], 'settled minutes fetch no already acknowledged body');
+  // A new ACK row restarts the overlap until its own lease has elapsed.
+  visible = [late, ack, next]; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, exact); assert.deepEqual(f.progress.cursor, { fetched_at: next.fetched_at, id: next.id });
+  await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, { fetched_at: '2026-11-05T02:02:59.999Z', id: '00000000-0000-0000-0000-000000000000' });
+  assert.equal(f.commits, 3); assert.equal(new Set(f.bundle.sourceVersions.map(row => row.id)).size, 3);
+});
+
+test('an overlap read that fails, or that starts before the lease has elapsed, does not settle the ACK', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const ack = f.item({ identity: 'ack', fetched_at: '2026-11-05T02:00:00.000Z' });
+  const next = f.item({ identity: 'next', fetched_at: '2026-11-05T02:01:00.000Z' });
+  const overlap = { fetched_at: '2026-11-05T01:57:59.999Z', id: '00000000-0000-0000-0000-000000000000' };
+  let visible = [ack]; inbox(f, () => visible); await f.service.reflect();
+  await f.service.reflect(); clock = 120000; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, overlap, 'exactly one lease is not more than the lease');
+  // The first read after the lease meets a transient receive failure after the ACK.
+  clock = 120001; visible = [ack, next]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
+  const failed = await f.service.reflect(); assert.equal(failed.receiveErrorCode, 'rss_receive_conflict');
+  assert.deepEqual(f.env.requests.at(-1).before, overlap); assert.equal(f.progress.cursor.id, ack.id);
+  f.env.beforeCommit = null; clock = 180001; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, overlap, 'an unfinished settling read is repeated with the overlap');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [ack.id, next.id]); assert.equal(f.commits, 2);
+});
+
+test('a whole response that is not the inbox envelope is a temporary error; item data stays permanent', async () => {
+  for (const data of ['<!doctype html><title>proxy</title>', null, { configured: true, connections: [], items: 'x' }, { configured: 'yes', connections: [], items: [] }]) {
+    const f = fixture(); f.env.pageFor = () => data;
+    await assert.rejects(f.service.list(), { code: 'rss_unexpected_response', message: Rss.messages.rss_unexpected_response });
+    await assert.rejects(f.service.reflect(), { code: 'rss_unexpected_response' });
+    assert.equal(f.commits, 0); assert.equal(f.env.progressWrites, 0);
+  }
+  const reordered = fixture(), a = reordered.item({ identity: 'a', fetched_at: '2026-11-05T02:00:00.000Z' }), b = reordered.item({ identity: 'b', fetched_at: '2026-11-05T01:00:00.000Z' });
+  reordered.env.pageFor = () => ({ ...reordered.page, items: [a, b] });
+  await assert.rejects(reordered.service.reflect(), { code: 'rss_unexpected_response' }); assert.equal(reordered.commits, 0);
+  const item = fixture(); item.page.items = [item.item({ content_hash: '0'.repeat(64) })];
+  await assert.rejects(item.service.reflect(), { code: 'rss_invalid_data' }); assert.equal(item.commits, 0);
 });
