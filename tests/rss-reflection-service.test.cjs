@@ -354,3 +354,45 @@ test('five consecutive temporary failures mark the status unavailable until one 
   assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
   failing = true; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).unavailable, false, 'the streak restarts after a success');
 });
+
+function itemFixture(onCommit, onSave, options = {}) {
+  let row;
+  const f = fixture(body => ({ data: connectedPage(body.workspaceId, { items: [row] }) }), options);
+  let bundle = Core.createWorkspace(), progress = { revision: 0, cursor: null, receipts: [], needsRepair: false };
+  bundle.workspaceId = f.workspaceId;
+  const text = '연속 실패 확인용 합성 원문';
+  row = { id: '20000000-0000-4000-8000-000000000002', owner_id: f.storage.account.userId, connection_id: '10000000-0000-4000-8000-000000000001',
+    identity: 'streak', title: '연속 실패 합성 글', url: null, content_text: text, content_hash: createHash('sha256').update(text).digest('hex'),
+    published_at: '2026-11-05T01:00:00.000Z', fetched_at: '2026-11-05T02:00:00.000Z', disposition: 'stored' };
+  f.storage.read = async () => structuredClone(bundle);
+  f.storage.readRssInboxProgress = async () => ({ ...structuredClone(progress), bundleRevision: bundle.revision });
+  f.storage.commitLocal = async request => {
+    const outcome = onCommit(); if (outcome) return outcome;
+    bundle = Core.applyChanges(bundle, request.changes); return { status: 'stored', revision: bundle.revision };
+  };
+  f.storage.saveRssInboxProgress = async (_id, input, revision) => {
+    const outcome = onSave(); if (outcome) return outcome;
+    progress = { ...structuredClone(input), revision: revision + 1, needsRepair: false }; return { status: 'stored', ...structuredClone(progress) };
+  };
+  return f;
+}
+
+test('temporary item receive failures in a completed check also count toward the unavailable notice', async t => {
+  let failing = true; const states = [];
+  const f = itemFixture(() => failing ? { status: 'conflict' } : null, () => null, { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 6; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true]);
+  failing = false; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+});
+
+test('another tab advancing the same ACK is retried each interval but never reported as an unavailable inbox', async t => {
+  const states = [];
+  const f = itemFixture(() => null, () => ({ status: 'conflict' }), { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 7; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert.equal(f.calls(), 7 * 3, 'one bounded attempt (three rescans) per interval');
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert(states.every(value => value.unavailable === false), 'contention with a progressing tab is not an outage');
+});

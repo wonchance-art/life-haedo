@@ -237,7 +237,9 @@ async function main() {
       const bounds = await notice.evaluate(node => ({ width: node.getBoundingClientRect().width, horizontalOverflow: document.documentElement.scrollWidth > innerWidth }));
       assert.equal(bounds.horizontalOverflow, false);
       const file = 'unavailable-inbox-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: false }); report.visual.push({ width, file, ...bounds });
+      await notice.evaluate(node => { window.__rssNoticeMutations = 0; window.__rssNoticeObserver = new MutationObserver(records => { window.__rssNoticeMutations += records.length; }); __rssNoticeObserver.observe(node, { childList: true, characterData: true, subtree: true }); });
       await tick(page); await until(page, () => globalThis.__rssReflectionCycles?.length === 6, 'sixth temporary failure'); assert.equal(await notice.count(), 1, 'the notice is shown once, not repeated');
+      assert.equal(await page.evaluate(() => { __rssNoticeObserver.disconnect(); return __rssNoticeMutations; }), 0, 'the same status is not rewritten or re-announced');
       assert.equal(server.calls.length, 6, 'one attempt per interval');
       server.failure = null; await tick(page); await completed(page, 1, 'idle', 7); await archive(page, server.items);
       assert.equal(await notice.count(), 0, 'a successful check clears the notice');

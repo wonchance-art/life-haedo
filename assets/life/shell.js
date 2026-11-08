@@ -73,11 +73,13 @@
         reflectionNotice.setAttribute('role', blocked ? 'alert' : 'status');
         main.before(reflectionNotice);
       }
-      if (!blocked) { reflectionNotice.textContent = 'RSS 수신함을 확인하지 못하고 있습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.'; return; }
-      const title = typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
+      const title = blocked && typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
       // The title goes after a colon so the sentence never depends on its final consonant.
       const named = title ? ': “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”' : '';
-      reflectionNotice.textContent = 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+      const text = blocked ? 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.'
+        : 'RSS 수신함을 확인하지 못하고 있습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+      // Each interval republishes the same state; rewrite (and re-announce) only a change.
+      if (reflectionNotice.textContent !== text) reflectionNotice.textContent = text;
     };
     // Keep module loading and private inbox requests off the first-screen path.
     const queue = () => root.requestAnimationFrame(() => {

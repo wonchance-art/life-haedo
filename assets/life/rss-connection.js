@@ -44,6 +44,9 @@
     rss_unexpected_response: '서버 응답 형식을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요. 받은 자료는 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.rss_network_error), { code });
+  // Another tab of this device is advancing the same ACK. That tab is making
+  // progress, so this retry is not counted as the inbox being unavailable.
+  const contended = () => Object.assign(fault('rss_receive_conflict'), { contended: true });
   function need(ok, code = 'rss_invalid_data') { if (!ok) throw fault(code); }
   // A whole response that is not the inbox envelope (an HTML 200 from a proxy,
   // an empty or reordered page) says nothing about one feed item: retry it
@@ -52,8 +55,9 @@
   // finish stamps fetched_at when it starts; its rows become visible at commit.
   // The worker lease is two minutes, but SQL sets no lock or statement timeout,
   // so a commit can lag its stamp longer. Reread each ACK's lease window every
-  // interval for one lease (concurrent finishes), then once after SETTLE_MS
-  // before trusting the exact cursor. A later commit than that is not covered.
+  // interval for one lease (concurrent finishes), then once, after SETTLE_MS,
+  // read from SETTLE_MS before the ACK before trusting the exact cursor. A row
+  // whose commit lags its stamp by more than SETTLE_MS is not covered.
   const LEASE_MS = 120000, SETTLE_MS = 600000, UNAVAILABLE_AFTER = 5;
   const keyOf = cursor => cursor ? cursor.fetched_at + '|' + cursor.id : null;
   function clean(error) {
@@ -91,11 +95,11 @@
     if (left !== right) return left < right ? -1 : 1;
     const x = a.id.toLowerCase(), y = b.id.toLowerCase(); return x === y ? 0 : x < y ? -1 : 1;
   }
-  function overlapCursor(cursor) {
+  function overlapCursor(cursor, span = LEASE_MS) {
     // finish records its start time, not its commit time. An earlier finish can
     // become visible after a later one: revisit at least the two-minute lease.
     // Round down and include the boundary millisecond regardless of UUID order.
-    return cursor ? { fetched_at: new Date(Number(cursorTime(cursor.fetched_at) / 1000n) - LEASE_MS - 1).toISOString(),
+    return cursor ? { fetched_at: new Date(Number(cursorTime(cursor.fetched_at) / 1000n) - span - 1).toISOString(),
       id: '00000000-0000-0000-0000-000000000000' } : null;
   }
   function mergeReceipts(before, received, failedCursor) {
@@ -137,15 +141,18 @@
       }
       if (!key) return { scanCursor: null, settling: [] };
       watch(progress.cursor);
-      const at = now(), settling = []; let anchor = progress.needsRepair ? progress.cursor : null;
+      const at = now(), settling = []; let start = progress.needsRepair ? overlapCursor(progress.cursor) : null;
       for (const [other, entry] of watched) {
         if (entry.final) continue;
         const age = at - entry.seenAt;
         if (age > LEASE_MS && age <= SETTLE_MS) continue;
+        // Inside the lease: concurrent finishes. After the margin: any stamp up
+        // to SETTLE_MS before the ACK that could still have been committing.
         if (age > SETTLE_MS) settling.push(other);
-        if (!anchor || compareCursor(entry.cursor, anchor) < 0) anchor = entry.cursor;
+        const from = overlapCursor(entry.cursor, age > SETTLE_MS ? SETTLE_MS : LEASE_MS);
+        if (!start || compareCursor(from, start) < 0) start = from;
       }
-      return { scanCursor: anchor ? overlapCursor(anchor) : { fetched_at: progress.cursor.fetched_at, id: progress.cursor.id }, settling };
+      return { scanCursor: start || { fetched_at: progress.cursor.fetched_at, id: progress.cursor.id }, settling };
     }
     const controllers = new Set();
     const cancel = () => { generation++; controllers.forEach(controller => controller.abort()); controllers.clear(); };
@@ -341,7 +348,7 @@
         // Another tab may truncate or a restore may invalidate the ACK between
         // pages. Continuing after it would merge later rows across the gap.
         if (scanCursor !== undefined && (progress.revision !== expected.revision || progress.needsRepair || keyOf(progress.cursor) !== expected.key)) {
-          if (++restarts > 3) throw fault('rss_receive_conflict');
+          if (++restarts > 3) throw contended();
           scanCursor = undefined;
         }
         if (scanCursor === undefined) ({ scanCursor, settling } = plan(progress));
@@ -398,7 +405,7 @@
           const saved = await step(context, () => storage.saveRssInboxProgress(workspaceId, { cursor, receipts }, progress.revision,
             { expectedBundleRevision: bundle.revision, isCurrent: () => { try { guard(context); return true; } catch (_) { return false; } } }));
           if (saved.status === 'conflict') {
-            if (++conflicts >= 3) throw fault('rss_receive_conflict');
+            if (++conflicts >= 3) throw contended();
             scanCursor = undefined;
             continue;
           }
@@ -525,13 +532,15 @@
             const blocked = permanentErrors.has(errorInfo.code);
             // An undeployed or misconfigured service, like a blocked item, waits
             // for an explicit registration or reload rather than returning wakes.
-            if (errorInfo.code === 'rss_setup_required' || blocked) { stopped = true; idleSince = null; failureStreak = 0; }
+            const temporary = !(errorInfo.code === 'rss_setup_required' || blocked);
+            if (!temporary) { stopped = true; idleSince = null; failureStreak = 0; }
             else {
-              nextRetryAt = startedAt + intervalMs; failureStreak++;
-              // A recheck that failed temporarily is repeated once on the next due tick.
+              nextRetryAt = startedAt + intervalMs; if (!error?.contended) failureStreak++;
+              // A recheck that failed temporarily is retried on each due tick (one
+              // per interval) until it completes; the wake stays requested.
               if (stopped && idleSince !== null) { idleSince = startedAt; recheckRequested = true; }
             }
-            status = { ...status, state: blocked ? 'blocked' : failureStreak ? 'error' : 'stopped', receiveError: errorInfo.message,
+            status = { ...status, state: blocked ? 'blocked' : temporary ? 'error' : 'stopped', receiveError: errorInfo.message,
               receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null, unavailable: failureStreak >= UNAVAILABLE_AFTER };
           } else publishable = false;
         }

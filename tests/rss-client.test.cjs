@@ -418,6 +418,7 @@ test('a permanently rejected validated row exposes only its item identity and ti
 const at = (minute, second = 0) => new Date(Date.UTC(2026, 10, 5, 2, minute, second)).toISOString();
 const windowBefore = row => ({ fetched_at: new Date(Date.parse(row.fetched_at) - 120001).toISOString(), id: '00000000-0000-0000-0000-000000000000' });
 const exactAfter = row => ({ fetched_at: row.fetched_at, id: row.id });
+const settleBefore = row => ({ fetched_at: new Date(Date.parse(row.fetched_at) - 600001).toISOString(), id: '00000000-0000-0000-0000-000000000000' });
 
 test('a live page rereads the lease window during the lease and once after the settle margin, then reads only after the exact ACK', async t => {
   let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
@@ -438,7 +439,8 @@ test('a live page rereads the lease window during the lease and once after the s
   assert.equal(settled.appliedItems, 1, 'the slow commit is received by the read after the settle margin');
   clock = 660001; await f.service.reflect(); clock = 720001; await f.service.reflect();
   const overlap = { fetched_at: '2026-11-05T01:58:00.122Z', id: '00000000-0000-0000-0000-000000000000' }, exact = exactAfter(ack);
-  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact, exact, exact, overlap, exact, exact]);
+  const settle = { fetched_at: '2026-11-05T01:50:00.122Z', id: '00000000-0000-0000-0000-000000000000' };
+  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact, exact, exact, settle, exact, exact]);
   assert.deepEqual(returned.slice(4, 8), [[], [], [], []], 'between the lease and the margin only rows after the ACK are fetched');
   assert.deepEqual(returned.slice(9), [[], []], 'a settled ACK never fetches an acknowledged body again');
   assert.deepEqual(f.progress.receipts.map(row => row.itemId), [slow.id, ack.id]); assert.deepEqual(f.progress.cursor, exact);
@@ -448,6 +450,20 @@ test('a live page rereads the lease window during the lease and once after the s
   assert.equal(f.commits, 3);
 });
 
+for (const [label, stampedBefore, visibleAtMinute] of [['inside the lease window, visible within the lease', 30, 1],
+  ['inside the lease window, visible after the lease', 30, 5], ['200 s before the ACK, visible after the lease', 200, 5], ['590 s before the ACK, visible at nine minutes', 590, 9]]) {
+  test('a slow commit stamped ' + label + ' is received by the settle read', async t => {
+    let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+    const ack = f.item({ identity: 'ack', fetched_at: at(10) });
+    const late = f.item({ identity: 'late', fetched_at: new Date(Date.parse(ack.fetched_at) - stampedBefore * 1000).toISOString() });
+    let visible = [ack]; inbox(f, () => visible); await f.service.reflect();
+    for (let minute = 1; minute <= 14; minute++) { clock = minute * 60000 + 1; if (minute === visibleAtMinute) visible = [late, ack]; await f.service.reflect(); }
+    assert.deepEqual(f.progress.receipts.map(row => row.itemId), [late.id, ack.id]);
+    assert.deepEqual(f.env.requests.at(-1).before, exactAfter(ack), 'the ACK settled after its one wide read');
+    assert.equal(f.env.requests.filter(row => row.before?.fetched_at === settleBefore(ack).fetched_at).length, 1, 'the wide read happens once');
+  });
+}
+
 test('the settle read happens only after more than the margin and repeats until it completes', async t => {
   let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
   const ack = f.item({ identity: 'ack', fetched_at: at(0) }), next = f.item({ identity: 'next', fetched_at: at(1) });
@@ -456,9 +472,9 @@ test('the settle read happens only after more than the margin and repeats until 
   assert.deepEqual(f.env.requests.at(-1).before, exactAfter(ack), 'exactly the margin is not more than the margin');
   clock = 600001; visible = [ack, next]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
   const failed = await f.service.reflect(); assert.equal(failed.receiveErrorCode, 'rss_receive_conflict');
-  assert.deepEqual(f.env.requests.at(-1).before, windowBefore(ack)); assert.deepEqual(f.progress.cursor, exactAfter(ack));
+  assert.deepEqual(f.env.requests.at(-1).before, settleBefore(ack)); assert.deepEqual(f.progress.cursor, exactAfter(ack));
   f.env.beforeCommit = null; clock = 660001; await f.service.reflect();
-  assert.deepEqual(f.env.requests.at(-1).before, windowBefore(ack), 'an unfinished settle read is repeated');
+  assert.deepEqual(f.env.requests.at(-1).before, settleBefore(ack), 'an unfinished settle read is repeated');
   assert.deepEqual(f.progress.receipts.map(row => row.itemId), [ack.id, next.id]); assert.equal(f.commits, 2);
 });
 

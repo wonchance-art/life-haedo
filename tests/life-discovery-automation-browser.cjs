@@ -188,8 +188,9 @@ async function main() {
       const stopped = control.count; await advance(page, 16 * MINUTE); assert.equal(control.count, stopped);
       // 2026-11-08 rule: after the shell's fresh check and page-ready, a parked
       // RSS reflection rechecks once with its own isolated Auth verification
-      // (C2 design) and one inbox list. Count the shell and that RSS pair apart,
-      // in order; the shell check stays exactly one and precedes everything.
+      // (C2 design: every automatic request verifies) and one inbox list. Count
+      // the shell and that RSS pair apart, in order; the shell check stays
+      // exactly one and precedes everything.
       let authEntered, releaseAuth; const arrived = new Promise(resolve => { authEntered = resolve; }), gate = new Promise(resolve => { releaseAuth = resolve; }); let authCalls = 0; const sequence = [];
       await page.evaluate(() => { window.__discoveryPageReady = false; document.addEventListener('haedo:page-ready', () => { window.__discoveryPageReady = true; }); });
       await context.route(cloud + '/auth/v1/user', async route => {
@@ -212,8 +213,8 @@ async function main() {
       for (const end = Date.now() + 10000; Date.now() < end && !sequence.some(row => row.request === 'rss-list');) await new Promise(resolve => setTimeout(resolve, 50));
       assert.equal(authCalls, 1, 'exactly one fresh shell Auth check'); assert.equal(control.count, stopped + 1, 'One refresh resumes after verified history return');
       const rss = sequence.slice(1);
-      assert.ok(rss.length === 1 && rss[0].request === 'rss-list' || rss.length === 2 && rss[0].request === 'rss-auth' && rss[1].request === 'rss-list', 'RSS rechecks with at most one isolated Auth check followed by one inbox list: ' + JSON.stringify(sequence));
-      assert.ok(rss.every(row => row.afterPageReady === true), 'RSS requests follow page-ready');
+      assert.deepEqual(rss, [{ request: 'rss-auth', afterPageReady: true }, { request: 'rss-list', afterPageReady: true }],
+        'after page-ready RSS rechecks with exactly one isolated Auth check followed by one inbox list');
       const resumedRequests = { freshAuthCalls: authCalls, rssAfterReady: rss.map(row => row.request) };
       const retained = await page.evaluate(() => ({ surface: __discoveryRetainedSurface === document.querySelector('#discoveryReview'), storage: __discoveryRetainedStorage === HaedoLife.Shell.storage })); assert.deepEqual(retained, { surface: true, storage: true }); assert.equal((await snapshot(page)).settings.autoRefresh, true); assert.ok(await page.locator('[data-discovery-id^="history-resumed-"]').count() > 0);
       await advance(page, 15 * MINUTE + 100); await idle(page); assert.equal(control.count, stopped + 2, 'Only one periodic refresh remains after resume'); await preserve(page, before);
