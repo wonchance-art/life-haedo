@@ -330,6 +330,68 @@ async function main() {
       } finally { await context.setOffline(false); page.__expectOffline = false; }
     }, { width: 1440, height: 960 }, { serviceWorkers: 'allow' });
 
+    // 2026-11-08 일정 통합 정리 S2·S6·S7 (rule change): the list shows no 오늘 / ‹ › (hidden, not disabled);
+    // 761–1100px is two rows (title + 검색 · ?, then the 보기 단위 bar with 오늘 and ‹ ›), the title on one line.
+    await check('the list hides 오늘 and ‹ ›; iPad portrait has a two-row heading with a one-line title; W titles are 44px; D is 체크 → 기록 → 다른 해', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      const heading = () => page.evaluate(() => {
+        const box = node => { const b = node.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), w: b.width, h: b.height }; };
+        const title = document.querySelector('#lifeApp .life-toolbar h1'), range = document.createRange(); range.selectNodeContents(title);
+        // Shown = rendered and visible (a wide list keeps 오늘 and ‹ › in place but unseen, so the bar does not move).
+        const shown = selector => [...document.querySelectorAll('#lifeApp .life-toolbar ' + selector)].filter(node => node.checkVisibility({ visibilityProperty: true }));
+        return { lines: new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size, title: box(title), find: box(document.querySelector('#lifeFindOpen')),
+          help: shown('.schedule-help').map(box), views: shown('.life-schedule-views').map(box), units: shown('.life-schedule-view').map(box),
+          today: shown('.schedule-today').length, steps: shown('[data-schedule-step]').length, disabled: shown('button:disabled').length };
+      });
+      for (const [width, height] of [[1440, 960], [1100, 900], [820, 1180], [761, 1000]]) {
+        await page.setViewportSize({ width, height });
+        for (const [address, expected] of [['/index.html', 'home'], ['/index.html?section=schedule&view=day&date=2026-10-28', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter']]) {
+          await page.goto(base + address); await ready(page); await shown(page, expected);
+          const head = await heading(), scene = expected + ' ' + width;
+          assert.equal(head.lines, 1, scene + ': the title is on one line');
+          assert.deepEqual(head.units.filter(unit => unit.w < 44 || unit.h < 44), [], scene + ': each unit is 44px');
+          assert.equal(head.disabled, 0, scene + ': no control is left disabled');
+          if (expected === 'home') {
+            assert.deepEqual([head.today, head.steps], [0, 0], scene + ': no 오늘 or ‹ › on the list');
+            // Not reachable either: Tab from the bar's last unit goes on to 검색.
+            await page.locator('[data-schedule-view="day"]').focus(); await page.keyboard.press('Tab');
+            assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFindOpen', scene + ': Tab skips the hidden controls');
+          }
+          else assert.deepEqual([head.today, head.steps], [1, 2], scene + ': 오늘 and ‹ › on a unit');
+          if (width <= 1100) {
+            // Title row: the title with 검색 and ? at its end; the bar on the next row.
+            assert.ok(head.views[0].top >= head.title.bottom - 2 && head.views[0].top >= head.find.bottom - 2, scene + ': the bar is on its own row');
+            assert.ok(Math.abs(head.find.top - head.help[0].top) <= 1 && head.find.top < head.title.bottom, scene + ': 검색 and ? share the title row');
+          } else assert.ok(head.views[0].top < head.title.bottom && head.find.top < head.title.bottom, scene + ': one row on a wide screen');
+        }
+      }
+      await overflow(page, 'two-row heading');
+      // W: a post title is a 44px target (also the phone width, where the rows stack).
+      for (const width of [1440, 820, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + '/index.html?section=schedule&view=week&date=2026-10-28'); await ready(page); await shown(page, 'week');
+        const titles = await page.locator('.schedule-week-day .schedule-post-open').evaluateAll(nodes => nodes.map(n => n.getBoundingClientRect().height));
+        assert.ok(titles.length >= 2 && titles.every(h => h >= 44), 'week ' + width + ': post titles are 44px (' + titles.join(', ') + ')');
+      }
+      // D: 체크 (습관 + 행복도) → 그날 기록 → 다른 해, and no goal.
+      await page.setViewportSize({ width: 1440, height: 960 });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day');
+      const order = await page.evaluate(() => {
+        const nodes = ['.schedule-entries-day', '.schedule-day-records', '.schedule-other-years'].map(sel => document.querySelector('#lifeSchedule ' + sel));
+        return { found: nodes.map(Boolean), ordered: nodes.every((node, i) => !i || nodes[i - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING),
+          goals: document.querySelectorAll('#lifeSchedule .schedule-goal').length };
+      });
+      assert.deepEqual(order, { found: [true, true, true], ordered: true, goals: 0 });
+      assert.match(await page.locator('.schedule-day-records').innerText(), /창가 자리에서 읽은 책/);
+      // Y (S4): the year's sentence under 올해 계획; a year without one links to the annual plan.
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
+      assert.deepEqual(await page.locator('.schedule-aside :is(.schedule-year-title, .schedule-year-text)').allTextContents(), ['올해 계획', '천천히 오래 걷기']);
+      await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('.schedule-year-title').textContent(), '2025년 계획');
+      await page.getByRole('link', { name: '연간 계획에 이 해 문장을 적을 수 있어요' }).click();
+      await shown(page, 'annual-plan'); await page.locator('#apGrid').waitFor();
+    });
+
     await check('every unit at 1440, 820 and 390 has no horizontal overflow and keeps accessible names', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const scenes = [['list', '/index.html', 'home'], ['year', '/index.html?section=tools', 'tools'], ['quarter', '/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter'],

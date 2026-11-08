@@ -127,7 +127,9 @@
   }
   global.document?.addEventListener('haedo:signed-out', () => { current?.stop(); current = null; });
   // Two-step save state (2026-11-02 owner decision).
-  const STATE_TEXT = { ok: '저장됨 · 계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 · 다시 시도' };
+  // The error state is followed by its own [다시 시도] button (2026-11-08 S9, the same line as platform-ui.js), so
+  // the words are not said twice.
+  const STATE_TEXT = { ok: '저장됨 · 계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 ·' };
   function saveState(items) {
     const states = items.map(item => item.state);
     if (states.includes('err') || states.includes('conflict')) return 'error';
@@ -191,7 +193,9 @@
     }).finally(() => { mirroring = null; });
   }
   // A panel host: kind 'day' | 'week' | 'month' | 'year'. isCurrent() is false once the screen changed.
-  function render(host, { kind, date, week = [], year, today, storageAccount, storage, isCurrent, go }) {
+  // leave(href), when given, opens another page of the app (habits.html) after the shell kept its drafts;
+  // without it a link opens the page itself.
+  function render(host, { kind, date, week = [], year, today, storageAccount, storage, isCurrent, go, leave }) {
     const s = open(storageAccount);
     if (!s) return () => {};
     mirrorRecovery(s, storage);
@@ -204,7 +208,7 @@
     // 행복도 notices apart from the goal/habit error line (a save failure there is not hidden by them).
     const moodNotice = el('p', null, 'life-error schedule-happiness-error'); moodNotice.setAttribute('role', 'alert'); moodNotice.hidden = true;
     host.replaceChildren(body, status, error, moodNotice);
-    let dirty = false, painted = false;
+    let dirty = false, painted = false, retrying = false;
     // 행복도 is shown in the day and week panels only (not in the year goals or the month habit tracker).
     const moodShown = kind === 'day' || kind === 'week';
     // 행복도 for this paint: the timelines are read once per paint, not once per day shown.
@@ -262,6 +266,25 @@
       if (day > today) field.append(el('p', '오지 않은 날은 기록할 수 없어요.', 'life-meta'));
       return field;
     }
+    // A link to the habit screen: a plain click goes through leave() (drafts kept first), others open as links.
+    function habitsLink(link, href) {
+      link.href = href;
+      if (leave) link.addEventListener('click', event => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault(); if (alive()) leave(href);
+      });
+      return link;
+    }
+    // No habit at all (2026-11-08 S7): D·W·M say so and link to the habit screen, where one is added.
+    function noHabits(section) {
+      if (s.items.some(item => item.kind === 'habit')) return false;
+      const line = el('p', null, 'life-meta schedule-empty schedule-no-habits');
+      const add = habitsLink(el('a', '습관 추가', 'life-text-button schedule-habit-add'), 'habits.html');
+      add.dataset.focusKey = 'schedule:habit-add';
+      line.append(el('span', '아직 습관이 없어요. '), add);
+      section.append(line);
+      return true;
+    }
     function goalRows(goals) {
       const list = el('div', null, 'schedule-goals');
       for (const goal of goals) {
@@ -285,15 +308,14 @@
       const due = model().dueHabits(s.items, date), parts = [];
       const habits = el('section', null, 'schedule-entry-section'); habits.setAttribute('aria-label', '습관');
       habits.append(el('h3', '습관', 'schedule-entry-title'));
-      if (!due.length) habits.append(el('p', '이 날 할 습관이 없어요.', 'life-meta schedule-empty'));
+      if (!noHabits(habits) && !due.length) habits.append(el('p', '이 날 할 습관이 없어요.', 'life-meta schedule-empty'));
       for (const row of due) {
         const line = el('label', null, 'schedule-habit');
         line.append(habitCheck(row, date, row.item.data.title), el('span', row.item.data.title));
         habits.append(line);
       }
+      // 2026-11-08 S7: the day is 체크 only (그날 습관 + 행복도); goals have nothing to do with one day and stay in Y.
       parts.push(habits, happinessField(date));
-      const goals = model().activeGoals(s.items, date);
-      if (goals.length) { const section = el('section', null, 'schedule-entry-section'); section.append(el('h3', '목표', 'schedule-entry-title'), goalRows(goals)); parts.push(section); }
       return parts;
     }
     function weekPanel() {
@@ -333,29 +355,25 @@
       tbody.append(moodRow); table.append(tbody);
       const scroll = el('div', null, 'schedule-habit-scroll'); scroll.append(table);
       section.append(el('h3', '습관 · 행복도', 'schedule-entry-title'));
-      if (!habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'life-meta schedule-empty'));
+      if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'life-meta schedule-empty'));
       section.append(scroll);
       return [section];
     }
-    // 일정 M: the habit tracker of this month (HaedoHabitTracker, the one habits.html shows). A tap goes
-    // through the same save path as the day/week checks: from the stored state, through s.change.
+    // 일정 M (2026-11-08 S5): one compact read-only tracker table of this month (HaedoHabitTracker.renderCompact).
+    // Nothing is checked here: each row is a link to the habit screen of that month (habits.html?month=YYYY-MM, read
+    // by platform-ui.js); D·W and the habit screen check.
     function monthPanel() {
       const month = String(date).slice(0, 7), [y, m] = month.split('-').map(Number);
       const habits = s.items.filter(item => item.kind === 'habit' && model().habitMonth(item.data, y, m, today).days.some(day => day.scheduled));
       // Named once, by the slot (이 달 습관); the section has its 습관 heading.
       const section = el('section', null, 'schedule-entry-section schedule-month-habits');
       section.append(el('h3', '습관', 'schedule-entry-title'));
+      if (noHabits(section)) return [section];
       if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'life-meta schedule-empty')); return [section]; }
-      const list = el('div');
-      global.HaedoHabitTracker.render(list, { habits, month, today, model: model(), focusScope: 'schedule:month-habit', heading: 'h4',
-        onToggle: (item, day, wasDone) => act(() => {
-          const latest = s.items.find(row => row.id === item.id);
-          if (!latest) throw new Error('습관을 찾지 못했습니다. 화면을 다시 열어 주세요.');
-          // Toggle from the stored state: a cell that no longer shows it (a repeated tap) changes nothing.
-          if (latest.data.checks.includes(day) !== wasDone) return;
-          s.change(latest.id, 'habit', model().toggleHabit(latest.data, day, today));
-        })() });
-      section.append(list);
+      const table = el('div');
+      global.HaedoHabitTracker.renderCompact(table, { habits, month, today, model: model(), focusScope: 'schedule:month-habit',
+        href: () => 'habits.html?month=' + month, onOpen: leave ? () => { if (alive()) leave('habits.html?month=' + month); } : null });
+      section.append(table);
       return [section];
     }
     function yearPanel() {
@@ -388,10 +406,13 @@
       status.dataset.state = state;
       if (state === 'error') {
         // Items left in conflict are settled by a pull first (newest wins), then everything unsent goes.
+        // aria-disabled, not disabled, while a retry runs: a focused button that turns disabled drops keyboard focus.
         const retry = el('button', '다시 시도', 'life-text-button'); retry.type = 'button'; retry.dataset.focusKey = 'schedule:entry:retry';
+        retry.setAttribute('aria-disabled', String(retrying));
         retry.addEventListener('click', () => {
-          if (!alive()) return;
-          Promise.allSettled([s.retry(), life.Shell?.accountDocsSync?.syncNow?.()]).then(() => days?.syncState()).finally(paint);
+          if (!alive() || retrying) return;
+          retrying = true; retry.setAttribute('aria-disabled', 'true');
+          Promise.allSettled([s.retry(), life.Shell?.accountDocsSync?.syncNow?.()]).then(() => days?.syncState()).finally(() => { retrying = false; paint(); });
         });
         status.append(' ', retry);
       }
@@ -408,7 +429,10 @@
       moodNotice.hidden = !(days?.refresh && moodShown) && !(days?.error && kind === 'day');
       if (days?.refresh && moodShown) { moodNotice.textContent = REFRESH; moodNotice.dataset.code = 'app_refresh_required'; }
       else if (days?.error && kind === 'day') { moodNotice.textContent = days.error; delete moodNotice.dataset.code; }
-      if (focusKey) [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
+      const again = focusKey ? [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === focusKey) : null;
+      if (again) again.focus({ preventScroll: true });
+      // A retry that succeeded removes its button: focus goes to the status line that now says so, not to the page.
+      else if (focusKey === 'schedule:entry:retry' && !status.hidden) { status.tabIndex = -1; status.focus({ preventScroll: true }); }
     }
     // Timelines or items changed here: repaint, mirror recovery copies, and absorb timeline days.
     const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); days?.absorb(); } };

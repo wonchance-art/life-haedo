@@ -1,4 +1,4 @@
-/* 습관 트래커(2026-11-07): one month per habit, shared by habits.html and 일정 M (habit-tracker.js).
+/* 습관 트래커(2026-11-07): one month per habit on habits.html (habit-tracker.js); 일정 M's compact table below.
  * Tokens come from haedo-shell.css (--ink, --paper, --line, --field-line, --color-primary). Done days use
  * the ink fill of the former week row (white on #182522); open days are outlined (#86968d, 3.11:1 on white);
  * days that take no tap are text only (#5d6b65, 5.59:1). Measured on the real #fff surface. Spacing uses multiples of 4. */
@@ -43,6 +43,39 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-tracker-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); column-gap: 0; }
   .habit-tracker-day { min-width: 0; }
 }
+/* 간단 트래커 표 of 일정 M (2026-11-08 S5, renderCompact): rows are habits, columns the days of the month.
+   Read only: the whole row is one 44px link to the habit screen; the dots are not targets. Done is the ink
+   fill of the month tracker, a day to do is a --field-line ring (#86968d, 3.11:1 on white), the rest is empty.
+   Today: the teal number above and the same short straight line under its dot. */
+.habit-compact { min-width: 0; }
+.habit-compact-head, .habit-compact-row { display: grid; grid-template-columns: minmax(0, 12em) 64px minmax(0, 1fr); column-gap: 16px; align-items: center; }
+.habit-compact-head { padding: 0 12px 4px; margin-inline: -12px; }
+.habit-compact-rows { margin: 0; padding: 0; list-style: none; }
+.habit-compact-item { margin: 0; }
+.habit-compact-row { min-height: 44px; margin-inline: -12px; padding: 8px 12px; border-radius: 12px; color: var(--ink); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .habit-compact-row:hover { background: var(--haedo-soft, var(--paper-2)); } .habit-compact-row:hover > .habit-compact-name { color: var(--color-primary); } }
+.habit-compact-name { min-width: 0; font-size: var(--haedo-text-control); font-weight: 600; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.habit-compact-count { color: var(--ink-soft); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.habit-compact-days { display: grid; grid-template-columns: repeat(var(--habit-compact-days, 31), minmax(0, 1fr)); align-items: center; justify-items: center; min-width: 0; max-width: calc(var(--habit-compact-days, 31) * 22px); }
+.habit-compact-number { color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.habit-compact-number[data-today] { color: var(--color-primary); font-weight: 750; }
+.habit-compact-dot { position: relative; display: block; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }
+.habit-compact-dot[data-state=done] { background: var(--ink); }
+.habit-compact-dot[data-state=kept] { background: var(--ink-soft); }
+.habit-compact-dot[data-state=planned] { border: 1.5px solid var(--field-line); }
+.habit-compact-dot[data-today]::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 2px; margin-left: -5px; border-radius: 1px; background: var(--color-primary); }
+/* Phone: the name has its own line (with n/m회 at its end) and the dots take the full width below. */
+@media (max-width: 760px) {
+  .habit-compact-head, .habit-compact-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name count" "days days"; row-gap: 8px; }
+  .habit-compact-head > .habit-compact-name, .habit-compact-head > .habit-compact-count { display: none; }
+  .habit-compact-head { padding-bottom: 0; }
+  .habit-compact-name { grid-area: name; }
+  .habit-compact-count { grid-area: count; }
+  .habit-compact-days { grid-area: days; max-width: none; }
+  .habit-compact-row { padding-block: 8px 12px; }
+  .habit-compact-dot { width: 8px; height: 8px; }
+  .habit-compact-dot[data-today]::after { width: 8px; margin-left: -4px; }
+}
 @media (prefers-reduced-motion: reduce) { .habit-tracker-day:not(:disabled) { transition: none; } }
 @media (forced-colors: active) {
   .habit-tracker-day[data-state=open] { border-color: ButtonText; }
@@ -50,4 +83,7 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-tracker-day:disabled { color: GrayText; }
   .habit-tracker-day[aria-current=date] > .habit-tracker-number::after { forced-color-adjust: none; background: CanvasText; }
   .habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: HighlightText; }
+  .habit-compact-dot:is([data-state=done], [data-state=kept]) { forced-color-adjust: none; background: CanvasText; }
+  .habit-compact-dot[data-state=planned] { border-color: CanvasText; }
+  .habit-compact-dot[data-today]::after { forced-color-adjust: none; background: CanvasText; }
 }

@@ -197,8 +197,17 @@ async function main() {
       const look = await page.locator('.schedule-entry-status').getByRole('button', { name: '다시 시도' }).evaluate(node => {
         const style = getComputedStyle(node), box = node.getBoundingClientRect(); return { h: box.height >= 44, border: style.borderTopStyle, bg: style.backgroundColor }; });
       assert.deepEqual(look, { h: true, border: 'none', bg: 'rgba(0, 0, 0, 0)' });
-      await page.locator('.schedule-entry-status').getByRole('button', { name: '다시 시도' }).click();
+      // 2026-11-08 S9: the state and its button say 다시 시도 once (계정에 올리지 못함 · [다시 시도]).
+      assert.equal((await statusOf(page).innerText()).match(/다시 시도/g).length, 1, '다시 시도 once');
+      // Keyboard retry: the button stays focused (aria-disabled, not disabled) while the retry runs, and a
+      // success leaves focus on the status line that says so, not on the page.
+      let release; tables.hold = new Promise(done => { release = done; });
+      const retry = page.locator('.schedule-entry-status').getByRole('button', { name: '다시 시도' });
+      await retry.focus(); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:entry:retry' && document.activeElement.getAttribute('aria-disabled') === 'true');
+      tables.hold = null; release();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('schedule-entry-status')), true, 'focus stays on the status line');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
     });
 
@@ -294,19 +303,71 @@ async function main() {
         !(await page.evaluate(id => localStorage.getItem('caeyeon_life_account_' + id + '_items'), accounts.b.id)).includes('A만의'), true);
     });
 
-    for (const width of [1440, 390]) await check('day and week panels fit ' + width + ' without horizontal scroll or errors', async ({ page, tables }) => {
+    // 2026-11-08 S7: when the entry slot cannot load, D offers the habit screen only; the timeline is not a
+    // second place for 행복도 (entered in D alone).
+    await check('a D slot that cannot load falls back to the habit screen only', async ({ page, context }) => {
+      page.__expectFailure = true;
+      await context.route('**/assets/life/schedule-entries.js', route => route.fulfill({ status: 500, body: '' }));
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day');
+      await page.waitForFunction(() => document.querySelector('.schedule-entries-day')?.getAttribute('aria-busy') === 'false');
+      const links = await page.locator('.schedule-entries-day a').evaluateAll(nodes => nodes.map(n => [n.textContent.trim(), n.getAttribute('href')]));
+      assert.deepEqual(links, [['습관 체크', 'habits.html']]);
+    });
+
+    // 2026-11-08 S7: with no habit at all, D·W·M link 습관 추가 to the habit screen (where one is added).
+    await check('no habit at all: D, W and M link 습관 추가 to the habit screen and write nothing', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'g1', kind: 'goal', name: '책 열두 권 읽기', data: goalData(40) });
+      for (const view of ['day', 'week', 'month']) {
+        await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
+        await page.waitForFunction(() => HaedoPlatformStore.items.length === 1);
+        const add = page.locator('.schedule-entries').getByRole('link', { name: '습관 추가' });
+        await add.waitFor();
+        assert.equal(await add.getAttribute('href'), 'habits.html', view);
+        assert.ok((await add.boundingBox()).height >= 44, view + ': 44px');
+        assert.match(await page.locator('.schedule-entries').innerText(), /아직 습관이 없어요\./, view);
+      }
+      await page.locator('.schedule-entries').getByRole('link', { name: '습관 추가' }).click();
+      await page.waitForURL(url => url.pathname.endsWith('/habits.html'));
+      await page.locator('#habitList').getByRole('button', { name: '습관 추가' }).waitFor();
+      assert.equal(tables.calls.filter(call => call.method !== 'GET').length, 0, 'viewing and following the link wrote nothing');
+    });
+
+    for (const width of [1440, 390, 360]) await check('day and week panels fit ' + width + ' without horizontal scroll or errors', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData(['2026-11-02']) });
       tables.seed('haedo_items', accounts.a.id, { id: 'h2', kind: 'habit', name: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', data: { ...habitData([]), title: '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기' } });
       tables.seed('haedo_items', accounts.a.id, { id: 'g1', kind: 'goal', name: '책 열두 권 읽기', data: goalData(40) });
       const longGoal = '올해 안에 동네 도서관의 한국 근현대 소설 서가를 처음부터 끝까지 한 권씩 읽어 보기';
       tables.seed('haedo_items', accounts.a.id, { id: 'g2', kind: 'goal', name: longGoal, data: { ...goalData(10), title: longGoal } });
+      // Goals are in Y only (2026-11-08 S7): a long goal title is shown whole there (wrapped), not cut.
+      await page.goto(base + '/index.html?section=schedule&view=tools&date=2026-11-03'); await ready(page); await shown(page, 'tools');
+      await page.waitForFunction(() => typeof HaedoPlatformStore === 'object' && HaedoPlatformStore.items.length === 4 && document.querySelectorAll('.schedule-entries-year .schedule-goal').length === 2);
+      // Found and measured in one evaluation (the slot repaints on store notices; a resolved node may be detached by then).
+      const title = await page.evaluate(text => { const n = [...document.querySelectorAll('.schedule-entries-year .schedule-goal-title')].find(node => node.textContent === text);
+        return { text: n.textContent, fits: n.scrollWidth <= n.clientWidth + 1, ellipsis: getComputedStyle(n).textOverflow }; }, longGoal);
+      assert.deepEqual(title, { text: longGoal, fits: true, ellipsis: 'clip' });
+      await overflow(page, 'year ' + width);
       for (const view of ['day', 'week']) {
         await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
         await page.waitForFunction(() => HaedoPlatformStore.items.length === 4);
         if (view === 'day') {
-          // A long goal title is shown whole (wrapped), not cut with an ellipsis.
-          const title = await page.locator('.schedule-goal-title', { hasText: longGoal }).evaluate(n => ({ text: n.textContent, fits: n.scrollWidth <= n.clientWidth + 1, ellipsis: getComputedStyle(n).textOverflow }));
-          assert.deepEqual(title, { text: longGoal, fits: true, ellipsis: 'clip' });
+          // 2026-11-08 S7: 체크 (습관 + 행복도) → 그날 기록 → 다른 해; no goal in the day.
+          const order = await page.evaluate(() => {
+            const parts = [['check', '.schedule-entries-day'], ['records', '.schedule-day-records'], ['others', '.schedule-other-years']].map(([name, sel]) => [name, document.querySelector('#lifeSchedule ' + sel)]).filter(([, n]) => n);
+            const sorted = [...parts].sort(([, a], [, b]) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1).map(([name]) => name);
+            const slot = document.querySelector('.schedule-entries-day');
+            return { sorted, inSlot: [...slot.querySelectorAll('h3, legend')].map(n => n.textContent), goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
+          });
+          assert.deepEqual(order, { sorted: ['check', 'records'], inSlot: ['습관', '행복도'], goals: 0 }, 'the day shows its checks, then its records, and no goal');
+          // An empty day says so at body size.
+          const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize,
+            body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));
+          assert.deepEqual([empty.text, empty.size], ['이 날 기록이 없어요.', empty.body], 'the empty day at body size');
+          // 행복도 0–10: one row on wide screens; on a phone two rows (0–5, 6–10), each choice 44 × 44.
+          const scale = await page.locator('.schedule-happiness-option').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
+          const rows = [...new Set(scale.map(o => o.top))].map(top => scale.filter(o => o.top === top).map(o => o.n));
+          if (width <= 760) assert.deepEqual(rows, [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']]);
+          else assert.equal(rows.length, 1, 'one row on a wide screen');
+          assert.deepEqual(scale.filter(o => o.w < 44 || o.h < 44).map(o => o.n), [], '행복도 choices are 44 × 44');
         }
         await overflow(page, view + ' ' + width);
         if (view === 'week') {

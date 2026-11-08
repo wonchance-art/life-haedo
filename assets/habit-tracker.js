@@ -1,8 +1,9 @@
 /* 습관 트래커(2026-11-07 소유자 요청 "습관은 트래커 처럼 볼 수 있도록"). 습관마다 한 달 달력을 그린다.
- * 습관 화면(habits.html)과 일정 M(schedule-entries.js)이 이 그리기 하나를 같이 쓴다. 저장은 하지 않는다:
+ * 습관 화면(habits.html)이 이 그리기(render)를 쓴다. 저장은 하지 않는다:
  * 누른 날은 onToggle(item, date, wasDone)으로 넘기고, 각 화면이 자기 저장 경로(store.change)로 저장한다.
  * 요일은 일정 달력과 같이 월요일부터 놓는다. 칸마다 data-focus-key가 있어 다시 그린 뒤 같은 칸으로
- * 초점을 되돌린다(화면 쪽에서). */
+ * 초점을 되돌린다(화면 쪽에서). 일정 M은 2026-11-08부터 보기 전용 간단 트래커 표(renderCompact) 하나를 쓰고,
+ * 체크는 일정 D·W와 습관 화면에서 한다. */
 (function (root) {
   "use strict";
   const WEEK = Object.freeze(["월", "화", "수", "목", "금", "토", "일"]);
@@ -87,13 +88,71 @@
     container.classList.add("habit-tracker");
     container.replaceChildren(...cards);
   }
+  // 간단 트래커 표 of 일정 M (2026-11-08 일정 통합 정리 S5): one read-only row per habit, one dot per day
+  // of the month. Done is filled, a scheduled day not done is outlined, the rest is blank; today's column
+  // is marked. Nothing here takes a tap but the row: the whole row is one link (href(item)) to the habit
+  // screen, where the month is checked. The dots are drawn for the eye only (aria-hidden): the link's name
+  // carries the habit and its n/m. options: habits, month, today, model, href(item), onOpen(item, event)
+  // (optional: a plain click goes through it, e.g. to flush drafts first), focusScope.
+  function renderCompact(container, { habits, month, today, model, href, onOpen, focusScope = "habit-row" }) {
+    const [year, monthNumber] = month.split("-").map(Number), current = month === monthOf(today);
+    const length = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    const todayDay = monthOf(today) === month ? Number(today.slice(8)) : 0;
+    // Day numbers over the dots: the 1st, 10th, 20th, the last day and today; a number next to today
+    // gives way so two numbers never share the space of one narrow column.
+    const marked = new Set([1, 10, 20, length].filter((day) => !todayDay || Math.abs(day - todayDay) !== 1));
+    if (todayDay) marked.add(todayDay);
+    const table = el("div", "habit-compact");
+    table.style.setProperty("--habit-compact-days", String(length));
+    const head = el("div", "habit-compact-head");
+    head.setAttribute("aria-hidden", "true");
+    const numbers = el("span", "habit-compact-days");
+    for (let day = 1; day <= length; day++) {
+      const cell = el("span", "habit-compact-number", marked.has(day) ? day : "");
+      if (day === todayDay) cell.dataset.today = "true";
+      numbers.append(cell);
+    }
+    head.append(el("span", "habit-compact-name"), el("span", "habit-compact-count"), numbers);
+    const list = el("ul", "habit-compact-rows");
+    for (const item of habits) {
+      const summary = model.habitMonth(item.data, year, monthNumber, today);
+      const count = summary.done + "/" + summary.scheduled + "회";
+      const row = el("li", "habit-compact-item");
+      const link = el("a", "habit-compact-row");
+      link.href = href(item);
+      link.dataset.habit = item.id;
+      link.dataset.focusKey = focusScope + ":" + item.id;
+      link.setAttribute("aria-label", item.data.title + ", " + (current ? "이번 달" : monthNumber + "월") + " " + count + ", 습관 화면에서 보기");
+      if (onOpen) link.addEventListener("click", (event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onOpen(item, event);
+      });
+      const dots = el("span", "habit-compact-days");
+      dots.setAttribute("aria-hidden", "true");
+      for (const day of summary.days) {
+        // Done on a day to do is filled, a day to do is outlined, the rest is empty. A check kept on a day that
+        // is no longer one to do (not counted in n/m) has the lighter fill of the month tracker.
+        const dot = el("span", "habit-compact-dot");
+        dot.dataset.state = day.done ? (day.scheduled ? "done" : "kept") : day.scheduled ? "planned" : "none";
+        dot.dataset.date = day.date;
+        if (day.date === today) dot.dataset.today = "true";
+        dots.append(dot);
+      }
+      link.append(el("span", "habit-compact-name", item.data.title), el("span", "habit-compact-count", count), dots);
+      row.append(link);
+      list.append(row);
+    }
+    table.append(head, list);
+    container.replaceChildren(table);
+  }
   // Focus the same control after a repaint (data-focus-key), without scrolling the page.
   function restoreFocus(container, key) {
     if (!key) return;
     const node = [...container.querySelectorAll("[data-focus-key]")].find((candidate) => candidate.dataset.focusKey === key);
     if (node && !node.disabled) node.focus({ preventScroll: true });
   }
-  const api = Object.freeze({ WEEK, render, restoreFocus, summaryText, dayList, monthOf, shiftMonth, monthLabel });
+  const api = Object.freeze({ WEEK, render, renderCompact, restoreFocus, summaryText, dayList, monthOf, shiftMonth, monthLabel });
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HaedoHabitTracker = api;
 })(globalThis);
