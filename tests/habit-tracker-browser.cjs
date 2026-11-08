@@ -201,14 +201,16 @@ async function main() {
       assert.equal(await focusKey(page), 'habitMonthLabel');
     });
 
-    await check('no habits: the empty state and its 습관 추가 stay; the back link keeps the legacy address', async ({ page }) => {
+    await check('no habits: the empty state and its 습관 추가 stay; the back link goes to 일정 Y', async ({ page }) => {
       await page.goto(base + '/habits.html');
       await page.waitForFunction(() => document.body.dataset.page === 'habits' && !document.querySelector('[data-private]').hidden && document.querySelector('#habitList .p-empty'));
       assert.match(await page.locator('#habitList').innerText(), /반복하고 싶은 일을 정해보세요\./);
       await page.locator('#habitList').getByRole('button', { name: '습관 추가' }).click();
       await page.locator('#itemDialog[open]').waitFor();
       assert.equal(await page.locator('#itemDialogTitle').textContent(), '습관 추가');
-      assert.equal(await page.locator('[data-section-back]').getAttribute('href'), 'index.html?section=tools');
+      // 일정 통합 정리 S1 (2026-11-08): ‹ 일정으로 돌아가기 → 일정 Y. The old `?section=tools` still opens Y (alias).
+      assert.equal(await page.locator('[data-section-back]').getAttribute('href'), 'index.html?section=schedule&view=tools');
+      assert.equal(await page.locator('[data-section-back]').getAttribute('aria-label'), '일정으로 돌아가기');
     });
 
     await check('a cell of a habit no longer in the list saves nothing, says so and repaints', async ({ page, tables }) => {
