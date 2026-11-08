@@ -53,6 +53,7 @@ class ReflectionCloud extends RssCloud {
     const owner = this.owner(request), body = request.postDataJSON();
     assert.ok(Object.values(accounts).some(account => account.id === owner));
     this.calls.push({ owner, device, body: clone(body) });
+    if (this.failure === 'html') return route.fulfill({ contentType: 'text/html', headers: { 'access-control-allow-origin': '*' }, body: '<!doctype html><title>Synthetic proxy page</title>' });
     if (this.failure === 'list') return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: 'network_error' }) });
     if (this.httpStatus !== 200) return route.fulfill({ status: this.httpStatus, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'NOT_FOUND', message: 'Requested function was not found' }) });
     this.seed(owner, body.workspaceId);
@@ -86,7 +87,7 @@ async function instrument(context, { holdStartup = false } = {}) {
     if (process.env.RSS_REFLECTION_MUTATION === 'shared-verifier') source = replaceOnce(source,
       'result = await verifier.auth.getUser(context.accessToken);', 'result = await client.auth.getUser(context.accessToken);');
     if (process.env.RSS_REFLECTION_MUTATION === 'no-overlap') source = replaceOnce(source,
-      'scanCursor = overlapCursor(progress.cursor);', 'scanCursor = progress.cursor;');
+      'scanCursor: anchor ? overlapCursor(anchor) :', 'scanCursor: false ? null :');
     if (process.env.RSS_REFLECTION_MUTATION === 'no-wake-recheck') source = replaceOnce(source,
       'const recheck = () => { syncNow(undefined, { recheck: true }); };', 'const recheck = wake;');
     if (process.env.RSS_REFLECTION_MUTATION === 'more-ahead') source = replaceOnce(source,
@@ -221,6 +222,28 @@ async function main() {
       assert.equal(server.calls.length, 2, 'the next period performs exactly one retry');
     });
 
+    for (const width of [1440, 390]) await check('repeated proxy HTML responses show one quiet status line after five minutes and clear on success ' + width, async ({ server, device }) => {
+      server.failure = 'html'; const context = await device('unavailable-' + width, { viewport: { width, height: 1000 } }), page = await context.newPage(); observe(page, report, 'unavailable-' + width);
+      await page.clock.install(); await page.goto(base + '/index.html'); await ready(page); await settle(page);
+      await until(page, () => globalThis.__rssReflectionCycles?.length === 1, 'first temporary failure');
+      await nav(page, 'records'); await page.locator('#lifeSearch').fill('응답 오류 중 입력'); await page.locator('#lifeSearch').focus();
+      for (let attempt = 2; attempt <= 4; attempt++) { await tick(page); await until(page, count => globalThis.__rssReflectionCycles?.length === count, 'temporary failure ' + attempt, attempt); }
+      const notice = page.locator('#rssReflectionStatus');
+      assert.equal(await notice.count(), 0, 'four temporary failures stay silent'); assert.equal(await page.locator('#rssReflectionError').count(), 0);
+      await tick(page); await until(page, () => globalThis.__rssReflectionCycles?.length === 5, 'fifth temporary failure'); await notice.waitFor();
+      assert.deepEqual(await notice.evaluate(node => ({ role: node.getAttribute('role'), className: node.className, text: node.textContent })),
+        { role: 'status', className: 'life-status', text: 'RSS 수신함을 확인하지 못하고 있습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.' });
+      assert.equal(await page.locator('#lifeSearch').inputValue(), '응답 오류 중 입력'); assert.equal(await page.locator('#lifeSearch').evaluate(node => node === document.activeElement), true);
+      const bounds = await notice.evaluate(node => ({ width: node.getBoundingClientRect().width, horizontalOverflow: document.documentElement.scrollWidth > innerWidth }));
+      assert.equal(bounds.horizontalOverflow, false);
+      const file = 'unavailable-inbox-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: false }); report.visual.push({ width, file, ...bounds });
+      await tick(page); await until(page, () => globalThis.__rssReflectionCycles?.length === 6, 'sixth temporary failure'); assert.equal(await notice.count(), 1, 'the notice is shown once, not repeated');
+      assert.equal(server.calls.length, 6, 'one attempt per interval');
+      server.failure = null; await tick(page); await completed(page, 1, 'idle', 7); await archive(page, server.items);
+      assert.equal(await notice.count(), 0, 'a successful check clears the notice');
+      report.evidence.push({ name: 'unavailable-notice', width, failuresBeforeNotice: 5, attempts: 6, cleared: true, inputPreserved: true });
+    });
+
     for (const configured of [true, false]) await check('empty or runtime-off startup stops polling ' + configured, async ({ server, device }) => {
       const context = await device('stopped'), page = await context.newPage(); observe(page, report, 'stopped');
       await page.clock.install(); await page.goto(base + '/index.html'); await ready(page); await settle(page); await completed(page, configured ? 0 : 1, 'stopped');
@@ -230,7 +253,8 @@ async function main() {
       assert.equal(server.calls.length, 1, 'the minute timer never polls an empty or disabled discovery');
       // 2026-11-08 rule: a returning wake rechecks a parked discovery at most once per interval.
       await page.evaluate(() => { for (let i = 0; i < 5; i++) { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); } });
-      await completed(page, configured ? 0 : 1, 'stopped', 2);
+      // Past the lease and before the settle margin, the drained ACK is read exactly: no row is revisited.
+      await completed(page, 0, 'stopped', 2);
       assert.equal(server.calls.length, 2, 'a burst of returning wakes rechecks exactly once');
       await page.evaluate(() => { dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }); await settle(page);
       assert.equal(server.calls.length, 2, 'returning wakes inside one interval do not recheck again');
@@ -244,7 +268,7 @@ async function main() {
         assert.equal(server.calls.filter(call => call.body.action === 'list').length, 3, 'the actual registration event resumes the stopped consumer');
       } else {
         // Collection enabled elsewhere: the early wake above runs on the next due minute, once.
-        server.configured = true; await tick(page); await completed(page, 1, 'idle', 3);
+        server.configured = true; await tick(page); await completed(page, 0, 'idle', 3);
         assert.equal(server.calls.length, 3); await archive(page, server.items);
       }
     }, { count: configured ? 0 : 1, configured });

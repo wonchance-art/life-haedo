@@ -186,16 +186,38 @@ async function main() {
       await visibility(page, true); await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
       assert.equal(await page.locator('#lifeApp').isHidden(), true); control.release(); control.value = fixture('history-resumed'); await page.waitForTimeout(100); assert.equal(await page.locator('[data-discovery-id^="history-late-"]').count(), 0);
       const stopped = control.count; await advance(page, 16 * MINUTE); assert.equal(control.count, stopped);
-      let authEntered, releaseAuth; const arrived = new Promise(resolve => { authEntered = resolve; }), gate = new Promise(resolve => { releaseAuth = resolve; }); let authCalls = 0;
-      await context.route(cloud + '/auth/v1/user', async route => { if (route.request().method() === 'OPTIONS') return route.fallback(); authCalls++; authEntered(); await gate; return route.fallback(); });
+      // 2026-11-08 rule: after the shell's fresh check and page-ready, a parked
+      // RSS reflection rechecks once with its own isolated Auth verification
+      // (C2 design) and one inbox list. Count the shell and that RSS pair apart,
+      // in order; the shell check stays exactly one and precedes everything.
+      let authEntered, releaseAuth; const arrived = new Promise(resolve => { authEntered = resolve; }), gate = new Promise(resolve => { releaseAuth = resolve; }); let authCalls = 0; const sequence = [];
+      await page.evaluate(() => { window.__discoveryPageReady = false; document.addEventListener('haedo:page-ready', () => { window.__discoveryPageReady = true; }); });
+      await context.route(cloud + '/auth/v1/user', async route => {
+        if (route.request().method() === 'OPTIONS') return route.fallback();
+        const platform = route.request().headers()['x-client-info'] === 'haedo-platform';
+        sequence.push({ request: platform ? 'shell-auth' : 'rss-auth', afterPageReady: await page.evaluate(() => window.__discoveryPageReady).catch(() => null) });
+        if (platform) { authCalls++; authEntered(); await gate; }
+        return route.fallback();
+      });
+      await context.route(cloud + '/functions/v1/haedo-rss', async route => {
+        if (route.request().method() !== 'OPTIONS') sequence.push({ request: 'rss-' + (route.request().postDataJSON()?.action || 'unknown'), afterPageReady: await page.evaluate(() => window.__discoveryPageReady).catch(() => null) });
+        return route.fallback();
+      });
       try {
         await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await arrived;
         await visibility(page, false); await advance(page, 100); assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.equal(control.count, stopped, 'No old timer or catalogue fetch may resume while fresh Auth is pending'); assert.equal(await page.locator('[data-discovery-id^="history-late-"]').count(), 0);
+        assert.deepEqual(sequence, [{ request: 'shell-auth', afterPageReady: false }], 'no RSS Auth or inbox request while the shell check is pending');
       } finally { releaseAuth(); }
-      await ready(page); await advance(page, 100); await idle(page); assert.equal(authCalls, 1); assert.equal(control.count, stopped + 1, 'One refresh resumes after verified history return');
+      await ready(page); await advance(page, 100); await idle(page);
+      for (const end = Date.now() + 10000; Date.now() < end && !sequence.some(row => row.request === 'rss-list');) await new Promise(resolve => setTimeout(resolve, 50));
+      assert.equal(authCalls, 1, 'exactly one fresh shell Auth check'); assert.equal(control.count, stopped + 1, 'One refresh resumes after verified history return');
+      const rss = sequence.slice(1);
+      assert.ok(rss.length === 1 && rss[0].request === 'rss-list' || rss.length === 2 && rss[0].request === 'rss-auth' && rss[1].request === 'rss-list', 'RSS rechecks with at most one isolated Auth check followed by one inbox list: ' + JSON.stringify(sequence));
+      assert.ok(rss.every(row => row.afterPageReady === true), 'RSS requests follow page-ready');
+      const resumedRequests = { freshAuthCalls: authCalls, rssAfterReady: rss.map(row => row.request) };
       const retained = await page.evaluate(() => ({ surface: __discoveryRetainedSurface === document.querySelector('#discoveryReview'), storage: __discoveryRetainedStorage === HaedoLife.Shell.storage })); assert.deepEqual(retained, { surface: true, storage: true }); assert.equal((await snapshot(page)).settings.autoRefresh, true); assert.ok(await page.locator('[data-discovery-id^="history-resumed-"]').count() > 0);
       await advance(page, 15 * MINUTE + 100); await idle(page); assert.equal(control.count, stopped + 2, 'Only one periodic refresh remains after resume'); await preserve(page, before);
-      report.historyLifecycle = { servedHashes, simulatedPersistedPagehidePageshow: true, actualBFCache: false, freshAuthCalls: authCalls, pendingAuthCatalogGETs: 0, resumedCatalogGETs: 1, followingPeriodCatalogGETs: 1, retained, savedAutomaticPreference: true };
+      report.historyLifecycle = { servedHashes, simulatedPersistedPagehidePageshow: true, actualBFCache: false, ...resumedRequests, pendingAuthCatalogGETs: 0, resumedCatalogGETs: 1, followingPeriodCatalogGETs: 1, retained, savedAutomaticPreference: true };
     });
     await check('workspace switch while response is pending keeps the new scope default and source data exact', async ({ page, control }) => {
       const before = await seed(page); const other = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), next = await s.createWorkspace('자동 갱신 합성 두 번째 공간'); await s.setActive(w); return next.workspaceId; });

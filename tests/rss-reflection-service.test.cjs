@@ -320,3 +320,37 @@ test('the real interval handler only performs a recheck an earlier returning wak
   f.advance(); tick(); await f.service.syncNow(); assert.equal(f.calls(), 3);
   f.service.dispose(); assert.equal(cleared, 1);
 });
+
+test('a recheck that fails temporarily is retried on the next due tick, at most once per interval', async t => {
+  let mode = 'empty';
+  const f = fixture(body => mode === 'empty' ? { data: emptyPage(body.workspaceId) } : mode === 'live' ? { data: connectedPage(body.workspaceId) }
+    : mode === 'network' ? { error: { message: 'synthetic offline request' } } : { data: '<!doctype html><title>Synthetic proxy page</title>' });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow(); assert.equal(f.service.getStatus().state, 'stopped');
+  for (const failure of ['network', 'html']) {
+    mode = failure; const before = f.calls(); f.advance(); f.host.document.dispatchEvent(new Event('visibilitychange'));
+    assert.equal((await f.service.syncNow()).state, 'error'); assert.equal(f.calls(), before + 1);
+    await f.service.syncNow(); f.advance(30000); f.host.dispatchEvent(new Event('online')); await f.service.syncNow(); f.advance(29999); await f.service.syncNow();
+    assert.equal(f.calls(), before + 1, 'no retry inside the interval');
+    f.advance(1); await f.service.syncNow(); assert.equal(f.calls(), before + 2, 'the failed recheck is repeated once');
+    for (let minute = 0; minute < 3; minute++) { f.advance(30000); await f.service.syncNow(); f.advance(30000); await f.service.syncNow(); }
+    assert.equal(f.calls(), before + 5, 'continued failure stays at one request per interval');
+    mode = 'empty'; f.advance(); assert.equal((await f.service.syncNow()).state, 'stopped');
+    const parked = f.calls(); for (let minute = 0; minute < 3; minute++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(f.calls(), parked, 'a successful recheck parks again');
+  }
+  mode = 'live'; f.advance(); f.host.document.dispatchEvent(new Event('visibilitychange')); assert.equal((await f.service.syncNow()).state, 'idle');
+});
+
+test('five consecutive temporary failures mark the status unavailable until one succeeds', async t => {
+  let failing = true; const states = [];
+  const f = fixture(body => failing ? { data: '<!doctype html><title>Synthetic proxy page</title>' } : { data: connectedPage(body.workspaceId) },
+    { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 7; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert.equal(states.length, 7); assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_unexpected_response'));
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true, true]);
+  failing = false; f.advance(); await f.service.syncNow();
+  assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+  failing = true; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).unavailable, false, 'the streak restarts after a success');
+});

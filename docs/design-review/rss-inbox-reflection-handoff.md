@@ -1,10 +1,18 @@
-# RSS 자동 반영 인계 — 2026-11-06 C 완주로 병합, 운영 활성화 전 후속 3건(11-08 브랜치에서 수정)
+# RSS 자동 반영 인계 — 2026-11-06 C 완주로 병합, 운영 활성화 전 후속(11-08 브랜치에서 수정)
 
 > **현재 상태 (2026-11-06, 총괄):** 아래 보류 기록은 E의 11-05 인계 당시 상태다. C가 BLOCKER 2·MAJOR 2·MINOR를 고쳤고(head `b6aea87`, [완료 보고](https://github.com/wonchance-art/life-haedo/pull/227)), 총괄 독립 재검수 BLOCKER 0·MAJOR 0으로 병합했다. 운영 RSS는 아직 비활성(허용 피드 0)이다.
 > **운영 활성화 전에 고칠 후속(MINOR) — 2026-11-08 `claude/rss-followups`에서 수정, 총괄 독립 검수·병합 전:**
-> 1. ~~커서 앞 lease 구간을 매분 다시 받는다.~~ **수정:** 열린 화면이 ACK 행을 처음 본 뒤 단조 시계로 lease(120초)를 넘긴 다음 겹침 구간을 한 번 더 읽고, 그 읽기가 오류 없이 같은 ACK로 끝나면 이후에는 정확한 커서(`>` ACK)만 쓴다. 기준은 기기 시계가 아니라 이 화면의 경과 시간이라 시계 차이에 영향받지 않는다. 새 ACK·복원 수리·화면 재시작 때는 다시 겹침부터 읽는다. 늦게 커밋된 앞선 행(MAJOR)은 그 마지막 겹침 읽기에서 받는다(`rss-connection.js` reflectInbox).
-> 2. ~~'연결 없음'·'runtime 꺼짐'에서 page-ready·bfcache 복귀로 다시 확인하지 않는다.~~ **수정:** 연결 없음·disconnected만 있음·runtime 꺼짐으로 멈춘 상태는 돌아오는 신호(page-ready — bfcache 복귀는 Auth 재검증 뒤 page-ready로 온다 —, 화면 보임, online)에서 다시 확인한다. 간격당 1회로 묶고, 간격 안의 신호는 다음 분 타이머가 한 번만 수행한다. 타이머만으로는 확인하지 않으며 숨김·오프라인·page-ready 전에는 요청하지 않는다. 막힌 항목과 미배포 함수(`rss_setup_required`)는 지금처럼 명시 등록·새로 열기까지 멈춘다(createReflection syncNow/ready).
-> 3. ~~응답 단위 형식 오류도 `rss_invalid_data`로 영구 정지된다.~~ **수정:** 응답 봉투(객체·configured·connections/items 배열·execution 상태·has_more/next_cursor·쪽 순서) 오류는 새 일시 코드 `rss_unexpected_response`로 기존 다음 주기 재시도를 따른다. 항목·연결 행 검증은 지금처럼 영구다.
+> 1. ~~커서 앞 lease 구간을 매분 다시 받는다.~~ **수정:** 열린 화면은 본 ACK마다 이 화면의 단조 시계(기기 시계 아님)로 나이를 잰다. 처음 2분(lease) 동안은 매 주기 겹침(ACK − 120초부터)을 읽어 동시 finish를 바로 받는다. 2~10분에는 ACK 뒤만 읽는다. 10분이 지난 뒤 겹침을 한 번 더 읽고, 그 읽기가 오류 없이 끝나면 그 ACK는 정착되어 이후 정확한 커서만 쓴다. 정착 전의 이전 ACK들은 가장 이른 것부터 겹침을 읽는다. 새 ACK·되돌림·복원 수리·화면 재시작은 다시 처음부터 잰다. 비용: ACK 하나당 겹침 읽기 약 3~4회(첫 2분)와 10분 뒤 1회. 기존에는 화면이 열려 있는 동안 매분이었다.
+>    - **남는 가정(검수 MINOR-1):** finish는 `stamp := clock_timestamp()`를 연결 행 락을 기다리기 전에 찍는다. SQL에 `lock_timeout`·`statement_timeout`이 없어 "커밋 − fetched_at"에 상한이 없다. 클라이언트는 ACK 근처 행이 약 10분 안에 커밋된다고 가정한다. 겹침 창 자체(120초)는 기존 설계 그대로이며, ACK가 120초 넘게 앞서간 뒤 커밋된 행도 기존처럼 다루지 못한다.
+>    - **운영 쪽 후속 후보(총괄 판단, 이번 브랜치에서 SQL 변경 없음):** `haedo_rss_private.finish`에 `set local lock_timeout`/`statement_timeout`(예: 60초)을 두어 커밋 지연을 lease 안으로 묶는다. 그러면 클라이언트 여유와 겹침 창의 가정이 SQL로 보장된다.
+> 2. ~~'연결 없음'·'runtime 꺼짐'에서 page-ready·bfcache 복귀로 다시 확인하지 않는다.~~ **수정:** 연결 없음·disconnected만 있음·runtime 꺼짐으로 멈춘 상태는 돌아오는 신호에서 다시 확인한다. 신호는 page-ready(bfcache 복귀는 셸 Auth 재검증 뒤 page-ready로 온다), 화면 보임, online이다.
+>    - 간격당 1회로 묶는다. 간격 안의 신호는 다음 분 타이머가 한 번만 수행한다. 타이머만으로는 확인하지 않는다. 숨김·오프라인·page-ready 전에는 요청하지 않는다.
+>    - 재확인이 일시 오류로 끝나면 다음 간격에 1회 다시 시도한다. 계속 실패해도 간격당 1회다(검수 MINOR-4).
+>    - 막힌 항목과 미배포 함수(`rss_setup_required`)는 지금처럼 명시 등록·새로 열기까지 멈춘다.
+>    - **운영 활성화 전 비용:** 멈춘 계정도 화면 복귀·online 때마다 최대 1분 1회, 격리 Auth 확인(`/auth/v1/user`) 1회와 haedo-rss list 1회를 보낸다. Auth는 C2 격리 설계대로 셸 검증을 재사용하지 않는다(총괄 결정, `life-discovery-automation-browser`는 셸 1회와 RSS 쌍을 순서대로 따로 센다).
+> 3. ~~응답 단위 형식 오류도 `rss_invalid_data`로 영구 정지된다.~~ **수정:** 응답 봉투 오류는 새 일시 코드 `rss_unexpected_response`로 기존 다음 주기 재시도를 따른다. 봉투는 객체·configured·connections/items 배열·execution 상태·has_more/next_cursor·쪽 순서다. 항목·연결 행 검증은 지금처럼 영구다.
+>    - 일시 오류가 연속 5회(약 5분) 이어지면 셸이 막지 않는 상태 줄을 한 번 보인다: "RSS 수신함을 확인하지 못하고 있습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요." 성공하면 지운다(검수 MINOR-5).
+> 4. **검수 MINOR-2(기존 결함) 수정:** 스캔 도중 다른 탭이 receipts를 잘라내거나 복원이 ACK를 무효화하면 빈틈을 건너뛰고 ACK를 이었다. 이제 쪽 사이에 읽은 진행 상태의 revision·ACK가 이 스캔이 마지막으로 본 값과 다르거나 needsRepair면 처음부터 다시 계획한다. 3회 넘게 반복되면 일시 오류(`rss_receive_conflict`)로 다음 주기에 맡긴다.
 > 참고: 매분 경로의 bundle 전체 읽기는 1,000건 warm 약 106ms, 18,000건 약 1.85초(측정, 허용 범위).
 
 

@@ -49,7 +49,13 @@
   // an empty or reordered page) says nothing about one feed item: retry it
   // with the ordinary backoff. Item and connection data stay permanent.
   const envelope = ok => need(ok, 'rss_unexpected_response');
-  const LEASE_MS = 120000;
+  // finish stamps fetched_at when it starts; its rows become visible at commit.
+  // The worker lease is two minutes, but SQL sets no lock or statement timeout,
+  // so a commit can lag its stamp longer. Reread each ACK's lease window every
+  // interval for one lease (concurrent finishes), then once after SETTLE_MS
+  // before trusting the exact cursor. A later commit than that is not covered.
+  const LEASE_MS = 120000, SETTLE_MS = 600000, UNAVAILABLE_AFTER = 5;
+  const keyOf = cursor => cursor ? cursor.fetched_at + '|' + cursor.id : null;
   function clean(error) {
     let code = error?.code || error?.error;
     if (typeof code === 'string' && code.startsWith('life_')) code = code.slice(5);
@@ -115,8 +121,32 @@
     need(storage?.isAccountScoped && storage.account && auth?.verify && auth?.client?.functions?.invoke && core && UUID.test(workspaceId || ''), 'rss_auth_required');
     const owner = { ...storage.account }, client = auth.client, openingEpoch = auth.epoch;
     let disposed = false, generation = 0, reflecting = null, verifier = null;
-    // Lease overlap bookkeeping for this open page (see reflectInbox).
-    let seenKey = null, seenAt = 0, settledKey = null;
+    // ACKs this open page has seen: key -> { cursor, seenAt, final }. seenAt is
+    // this page's monotonic time, never the device clock: server time had already
+    // passed the ACK row when the page saw it, so elapsed time bounds commits.
+    const watched = new Map();
+    function watch(cursor) {
+      const key = keyOf(cursor);
+      if (key && !watched.has(key)) watched.set(key, { cursor: { fetched_at: cursor.fetched_at, id: cursor.id }, seenAt: now(), final: false });
+    }
+    function plan(progress) {
+      const key = keyOf(progress.cursor);
+      for (const [other, entry] of watched) {
+        // A rolled-back or restored ACK no longer covers later rows: the exact scan rereads them.
+        if (other !== key && (entry.final || !key || compareCursor(entry.cursor, progress.cursor) > 0)) watched.delete(other);
+      }
+      if (!key) return { scanCursor: null, settling: [] };
+      watch(progress.cursor);
+      const at = now(), settling = []; let anchor = progress.needsRepair ? progress.cursor : null;
+      for (const [other, entry] of watched) {
+        if (entry.final) continue;
+        const age = at - entry.seenAt;
+        if (age > LEASE_MS && age <= SETTLE_MS) continue;
+        if (age > SETTLE_MS) settling.push(other);
+        if (!anchor || compareCursor(entry.cursor, anchor) < 0) anchor = entry.cursor;
+      }
+      return { scanCursor: anchor ? overlapCursor(anchor) : { fetched_at: progress.cursor.fetched_at, id: progress.cursor.id }, settling };
+    }
     const controllers = new Set();
     const cancel = () => { generation++; controllers.forEach(controller => controller.abort()); controllers.clear(); };
     const unlisten = auth.onAccountChange?.(() => {
@@ -305,23 +335,17 @@
       need(typeof storage.readRssInboxProgress === 'function' && typeof storage.saveRssInboxProgress === 'function', 'rss_receive_conflict');
       const context = { ...token(), automatic: true };
       await verify(context);
-      let checkedItems = 0, appliedItems = 0, conflicts = 0, pages = 0, scanCursor, settling = null;
+      let checkedItems = 0, appliedItems = 0, conflicts = 0, restarts = 0, pages = 0, scanCursor, settling = [], expected = null;
       while (true) {
         const progress = await step(context, () => storage.readRssInboxProgress(workspaceId));
-        if (scanCursor === undefined) {
-          // finish stamps its start time and may commit later, so a late row can
-          // appear just before the ACK. Server time had passed the ACK row when
-          // this page first saw it; once a full lease has elapsed on this
-          // page's monotonic clock, one more overlap read sees every such row.
-          // After that read completes on the same ACK, only rows after it remain.
-          const key = progress.cursor ? progress.cursor.fetched_at + '|' + progress.cursor.id : null;
-          if (key !== seenKey) { seenKey = key; seenAt = now(); }
-          if (key !== null && key === settledKey && !progress.needsRepair) {
-            scanCursor = { fetched_at: progress.cursor.fetched_at, id: progress.cursor.id }; settling = null;
-          } else {
-            scanCursor = overlapCursor(progress.cursor); settling = key !== null && now() - seenAt > LEASE_MS ? key : null;
-          }
+        // Another tab may truncate or a restore may invalidate the ACK between
+        // pages. Continuing after it would merge later rows across the gap.
+        if (scanCursor !== undefined && (progress.revision !== expected.revision || progress.needsRepair || keyOf(progress.cursor) !== expected.key)) {
+          if (++restarts > 3) throw fault('rss_receive_conflict');
+          scanCursor = undefined;
         }
+        if (scanCursor === undefined) ({ scanCursor, settling } = plan(progress));
+        expected = { revision: progress.revision, key: keyOf(progress.cursor) };
         const page = await request(context, 'list', scanCursor ? { before: scanCursor } : {});
         const summary = () => ({ configured: page.configured, connections: page.connections, otherConnections: page.otherConnections,
           checkedItems, appliedItems, receiveError: null });
@@ -379,9 +403,14 @@
             continue;
           }
           need(saved.status === 'stored', 'rss_receive_conflict'); conflicts = 0;
+          expected = { revision: Number.isSafeInteger(saved.revision) ? saved.revision : progress.revision + 1, key: keyOf(cursor) };
         }
         onProgress?.(checkedItems);
-        if (!receiveError && !page.hasMore && settling !== null && cursor && cursor.fetched_at + '|' + cursor.id === settling) settledKey = settling;
+        if (!receiveError && !page.hasMore) {
+          // This scan began after each settling ACK's margin and read past it.
+          for (const key of settling) { const entry = watched.get(key); if (entry) entry.final = true; }
+          watch(cursor);
+        }
         if (receiveError || !page.hasMore) return { ...summary(), receiveError, receiveErrorCode,
           blockedItemId: permanentErrors.has(receiveErrorCode) ? failedCursor?.id || null : null, blockedItemTitle };
         scanCursor = page.nextCursor;
@@ -422,6 +451,9 @@
     // found by a returning wake (page-ready, visible, online), at most once per
     // interval; the timer runs such a wake late but never starts a check itself.
     let idleSince = null, recheckRequested = false;
+    // Consecutive temporary failures; the shell shows a non-blocking notice
+    // after UNAVAILABLE_AFTER of them (about five minutes) until one succeeds.
+    let failureStreak = 0;
     const leaseClock = typeof host.performance?.now === 'function' ? () => host.performance.now() : now;
     function current() {
       const account = auth.getAccount?.();
@@ -484,17 +516,23 @@
           stopped = blocked || !configured || !connected && !receiveError;
           nextRetryAt = receiveError && !stopped ? startedAt + intervalMs : 0;
           idleSince = stopped && !blocked ? startedAt : null;
-          status = { state: blocked ? 'blocked' : stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError, receiveErrorCode, blockedItemId, blockedItemTitle };
+          failureStreak = receiveError && !blocked ? failureStreak + 1 : 0;
+          status = { state: blocked ? 'blocked' : stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError, receiveErrorCode, blockedItemId, blockedItemTitle,
+            unavailable: failureStreak >= UNAVAILABLE_AFTER };
         } catch (error) {
           if (current() && context === generation && error?.code !== 'rss_cancelled') {
             const errorInfo = clean(error);
             const blocked = permanentErrors.has(errorInfo.code);
             // An undeployed or misconfigured service, like a blocked item, waits
             // for an explicit registration or reload rather than returning wakes.
-            if (errorInfo.code === 'rss_setup_required' || blocked) { stopped = true; idleSince = null; }
-            else { nextRetryAt = startedAt + intervalMs; if (stopped && idleSince !== null) idleSince = startedAt; }
-            status = { ...status, state: blocked ? 'blocked' : stopped ? 'stopped' : 'error', receiveError: errorInfo.message,
-              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null };
+            if (errorInfo.code === 'rss_setup_required' || blocked) { stopped = true; idleSince = null; failureStreak = 0; }
+            else {
+              nextRetryAt = startedAt + intervalMs; failureStreak++;
+              // A recheck that failed temporarily is repeated once on the next due tick.
+              if (stopped && idleSince !== null) { idleSince = startedAt; recheckRequested = true; }
+            }
+            status = { ...status, state: blocked ? 'blocked' : failureStreak ? 'error' : 'stopped', receiveError: errorInfo.message,
+              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null, unavailable: failureStreak >= UNAVAILABLE_AFTER };
           } else publishable = false;
         }
         if (publishable) publish(context); return { ...status };

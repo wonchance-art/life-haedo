@@ -415,48 +415,116 @@ test('a permanently rejected validated row exposes only its item identity and ti
   assert.doesNotMatch(JSON.stringify(result), /피드 원문|diagnostic|content_text/);
 });
 
-test('a live page reads the lease overlap until one read after the lease, then only rows after the exact ACK', async t => {
+const at = (minute, second = 0) => new Date(Date.UTC(2026, 10, 5, 2, minute, second)).toISOString();
+const windowBefore = row => ({ fetched_at: new Date(Date.parse(row.fetched_at) - 120001).toISOString(), id: '00000000-0000-0000-0000-000000000000' });
+const exactAfter = row => ({ fetched_at: row.fetched_at, id: row.id });
+
+test('a live page rereads the lease window during the lease and once after the settle margin, then reads only after the exact ACK', async t => {
   let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
   const ack = f.item({ identity: 'ack', fetched_at: '2026-11-05T02:00:00.123456Z' });
-  const late = f.item({ identity: 'late-commit', fetched_at: '2026-11-05T01:59:30.000Z' });
-  const next = f.item({ identity: 'next', fetched_at: '2026-11-05T02:05:00.000Z' });
-  const overlap = { fetched_at: '2026-11-05T01:58:00.122Z', id: '00000000-0000-0000-0000-000000000000' };
-  const exact = { fetched_at: ack.fetched_at, id: ack.id };
+  const slow = f.item({ identity: 'slow-commit', fetched_at: '2026-11-05T01:59:55.000Z' });
+  const next = f.item({ identity: 'next', fetched_at: at(30) });
   let visible = [ack], returned = []; inbox(f, () => visible);
   const pageFor = f.env.pageFor; f.env.pageFor = request => { const page = pageFor(request); returned.push(page.items.map(row => row.id)); return page; };
-  await f.service.reflect(); assert.deepEqual(f.progress.cursor, exact);
-  // Within the lease the earlier finish may still commit before the ACK row.
-  await f.service.reflect(); clock = 60000; await f.service.reflect();
-  // The late finish becomes visible on the first read after a full lease.
-  clock = 120001; visible = [late, ack]; const settling = await f.service.reflect();
-  assert.equal(settling.appliedItems, 1); assert.deepEqual(f.progress.cursor, exact);
-  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [late.id, ack.id], 'the late earlier row is received, never skipped');
-  clock = 180001; await f.service.reflect(); clock = 240001; await f.service.reflect();
-  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact]);
-  assert.deepEqual(returned.slice(4), [[], []], 'settled minutes fetch no already acknowledged body');
-  // A new ACK row restarts the overlap until its own lease has elapsed.
-  visible = [late, ack, next]; await f.service.reflect();
-  assert.deepEqual(f.env.requests.at(-1).before, exact); assert.deepEqual(f.progress.cursor, { fetched_at: next.fetched_at, id: next.id });
-  await f.service.reflect();
-  assert.deepEqual(f.env.requests.at(-1).before, { fetched_at: '2026-11-05T02:02:59.999Z', id: '00000000-0000-0000-0000-000000000000' });
-  assert.equal(f.commits, 3); assert.equal(new Set(f.bundle.sourceVersions.map(row => row.id)).size, 3);
+  await f.service.reflect(); assert.deepEqual(f.progress.cursor, exactAfter(ack));
+  const minutes = [0, 1, 2, 3, 4, 9, 10];
+  for (const minute of minutes) {
+    clock = minute * 60000;
+    // finish stamped this row before the ACK row, then waited about four minutes to commit.
+    if (minute === 4) visible = [slow, ack];
+    await f.service.reflect();
+  }
+  clock = 600001; const settled = await f.service.reflect();
+  assert.equal(settled.appliedItems, 1, 'the slow commit is received by the read after the settle margin');
+  clock = 660001; await f.service.reflect(); clock = 720001; await f.service.reflect();
+  const overlap = { fetched_at: '2026-11-05T01:58:00.122Z', id: '00000000-0000-0000-0000-000000000000' }, exact = exactAfter(ack);
+  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact, exact, exact, overlap, exact, exact]);
+  assert.deepEqual(returned.slice(4, 8), [[], [], [], []], 'between the lease and the margin only rows after the ACK are fetched');
+  assert.deepEqual(returned.slice(9), [[], []], 'a settled ACK never fetches an acknowledged body again');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [slow.id, ack.id]); assert.deepEqual(f.progress.cursor, exact);
+  visible = [slow, ack, next]; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, exact); assert.deepEqual(f.progress.cursor, exactAfter(next));
+  await f.service.reflect(); assert.deepEqual(f.env.requests.at(-1).before, windowBefore(next), 'a new ACK starts its own lease window');
+  assert.equal(f.commits, 3);
 });
 
-test('an overlap read that fails, or that starts before the lease has elapsed, does not settle the ACK', async t => {
+test('the settle read happens only after more than the margin and repeats until it completes', async t => {
   let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
-  const ack = f.item({ identity: 'ack', fetched_at: '2026-11-05T02:00:00.000Z' });
-  const next = f.item({ identity: 'next', fetched_at: '2026-11-05T02:01:00.000Z' });
-  const overlap = { fetched_at: '2026-11-05T01:57:59.999Z', id: '00000000-0000-0000-0000-000000000000' };
+  const ack = f.item({ identity: 'ack', fetched_at: at(0) }), next = f.item({ identity: 'next', fetched_at: at(1) });
   let visible = [ack]; inbox(f, () => visible); await f.service.reflect();
-  await f.service.reflect(); clock = 120000; await f.service.reflect();
-  assert.deepEqual(f.env.requests.at(-1).before, overlap, 'exactly one lease is not more than the lease');
-  // The first read after the lease meets a transient receive failure after the ACK.
-  clock = 120001; visible = [ack, next]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
+  clock = 600000; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, exactAfter(ack), 'exactly the margin is not more than the margin');
+  clock = 600001; visible = [ack, next]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
   const failed = await f.service.reflect(); assert.equal(failed.receiveErrorCode, 'rss_receive_conflict');
-  assert.deepEqual(f.env.requests.at(-1).before, overlap); assert.equal(f.progress.cursor.id, ack.id);
-  f.env.beforeCommit = null; clock = 180001; await f.service.reflect();
-  assert.deepEqual(f.env.requests.at(-1).before, overlap, 'an unfinished settling read is repeated with the overlap');
+  assert.deepEqual(f.env.requests.at(-1).before, windowBefore(ack)); assert.deepEqual(f.progress.cursor, exactAfter(ack));
+  f.env.beforeCommit = null; clock = 660001; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, windowBefore(ack), 'an unfinished settle read is repeated');
   assert.deepEqual(f.progress.receipts.map(row => row.itemId), [ack.id, next.id]); assert.equal(f.commits, 2);
+});
+
+test('a new ACK restarts the lease clock even after an earlier ACK settled', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const first = f.item({ identity: 'first', fetched_at: at(0) }), second = f.item({ identity: 'second', fetched_at: at(20) });
+  const late = f.item({ identity: 'late-before-second', fetched_at: at(19, 55) });
+  let visible = [first]; inbox(f, () => visible); await f.service.reflect();
+  for (const time of [600001, 660001]) { clock = time; await f.service.reflect(); }
+  assert.deepEqual(f.env.requests.at(-1).before, exactAfter(first), 'the first ACK settled');
+  clock = 700000; visible = [first, second]; await f.service.reflect(); assert.deepEqual(f.progress.cursor, exactAfter(second));
+  clock = 701000; await f.service.reflect(); assert.deepEqual(f.env.requests.at(-1).before, windowBefore(second));
+  clock = 702000; visible = [first, late, second]; const caught = await f.service.reflect();
+  assert.equal(caught.appliedItems, 1, 'a concurrent earlier finish is received inside the new lease');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [first.id, late.id, second.id]);
+});
+
+test('another tab truncating the ACK between pages restarts the scan instead of merging across the gap', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const a1 = f.item({ identity: 'a1', fetched_at: at(0) }), late = f.item({ identity: 'late', fetched_at: at(0, 30) });
+  const a2 = f.item({ identity: 'a2', fetched_at: at(1) }), a3 = f.item({ identity: 'a3', fetched_at: at(10) }), a4 = f.item({ identity: 'a4', fetched_at: at(10, 30) });
+  let visible = [a1, a2, a3, a4]; inbox(f, () => visible, 2);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => {
+    if (++reads === 2) {
+      // Tab B saw the late row, failed on it and rolled the shared ACK back to a1.
+      visible = [a1, late, a2, a3, a4]; const progress = await read(...args), kept = progress.receipts.filter(row => row.itemId === a1.id);
+      assert.equal((await f.storage.saveRssInboxProgress(null, { cursor: kept.at(-1).cursor, receipts: kept }, progress.revision,
+        { expectedBundleRevision: f.bundle.revision, isCurrent: () => true })).status, 'stored');
+    }
+    return read(...args);
+  };
+  await f.service.reflect();
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [a1.id, late.id, a2.id, a3.id, a4.id]);
+  assert(f.bundle.sourceVersions.some(row => row.id === 'rssv_' + late.id));
+});
+
+test('a restore that invalidates the ACK between pages restarts from the repaired prefix', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const a1 = f.item({ identity: 'a1', fetched_at: at(0) }), a2 = f.item({ identity: 'a2', fetched_at: at(1) });
+  const a3 = f.item({ identity: 'a3', fetched_at: at(10) }), a4 = f.item({ identity: 'a4', fetched_at: at(10, 30) });
+  inbox(f, () => [a1, a2, a3, a4], 2);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => {
+    const progress = await read(...args);
+    if (++reads !== 2) return progress;
+    // An older backup without a2 was restored: storage reports the valid prefix and repair.
+    f.mutate(bundle => ({ ...bundle, revision: bundle.revision + 1,
+      sources: bundle.sources.filter(source => !bundle.sourceVersions.some(version => version.id === 'rssv_' + a2.id && version.sourceId === source.id)),
+      sourceVersions: bundle.sourceVersions.filter(version => version.id !== 'rssv_' + a2.id) }));
+    const kept = progress.receipts.filter(row => row.itemId === a1.id);
+    return { ...progress, receipts: kept, cursor: kept[0].cursor, needsRepair: true };
+  };
+  await f.service.reflect();
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [a1.id, a2.id, a3.id, a4.id]);
+  assert(f.bundle.sourceVersions.some(row => row.id === 'rssv_' + a2.id), 'the restored-away original is received again');
+});
+
+test('repeated cross-tab ACK changes stop after a bounded number of restarts', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const rows = [0, 1, 2].map(minute => f.item({ identity: 'r' + minute, fetched_at: at(minute) }));
+  inbox(f, () => rows, 1);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => { const progress = await read(...args); return ++reads > 1 ? { ...progress, revision: progress.revision + 1000 + reads } : progress; };
+  await assert.rejects(f.service.reflect(), { code: 'rss_receive_conflict' });
+  assert(reads <= 6, 'restarts are bounded');
 });
 
 test('a whole response that is not the inbox envelope is a temporary error; item data stays permanent', async () => {
