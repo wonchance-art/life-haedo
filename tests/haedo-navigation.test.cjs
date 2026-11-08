@@ -31,6 +31,11 @@ test('legacy feature links select their current section and unknown views cannot
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
   }
   assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'schedule');
+  // 통합 검색 keeps the area it was opened from (일정 통합 정리 S2); without a section it stays under 자료.
+  for (const [query, expected] of [['?section=schedule&view=find', 'schedule'], ['?section=news&view=find', 'news'], ['?section=manage&view=find', 'manage'],
+    ['?section=tools&view=find', 'schedule'], ['?view=find', 'records'], ['?section=unknown&view=find', 'records'], ['?section=__proto__&view=find', 'records']]) {
+    assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
+  }
   const { api } = fixture();
   for (const value of ['__proto__', 'constructor', 'toString', 'books-extra', null]) assert.equal(api.getSectionForView(value), null);
 });

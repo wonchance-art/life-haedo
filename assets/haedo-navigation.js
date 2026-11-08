@@ -261,6 +261,9 @@
     if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) {
       initialSection = 'schedule'; composing = query.get('compose') === '1' || query.get('blog') === 'new';
     }
+    // 통합 검색 opens over the area it was opened from (`?section=schedule&view=find`), so the menu keeps
+    // that area marked on reload. A find address without a section (older links) stays under 자료.
+    else if (query.get('view') === 'find' && normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
     else if (normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
   }
