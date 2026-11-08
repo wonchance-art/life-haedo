@@ -35,12 +35,14 @@
   const planningDestinations = [
     { id: 'annual-plan', label: '연간 계획', href: 'index.html?section=schedule&view=annual-plan' },
     { id: 'goals', label: '목표', href: 'goals.html' },
-    { id: 'habits', label: '습관', href: 'habits.html' }
+    { id: 'habits', label: '습관', href: 'habits.html' },
+    // 일정 통합 정리(2026-11-08): 연표 목록도 같은 탭 줄에 둔다. 연표 편집기는 목록에서 연다.
+    { id: 'workspace', label: '연표', href: 'workspace.html' }
   ];
   function createPlanningNavigation({ current, beforeNavigate, onError } = {}) {
     if (beforeNavigate && typeof onError !== 'function') throw new TypeError('A navigation error handler is required.');
     const nav = root.document.createElement('nav');
-    nav.className = 'haedo-planning-nav'; nav.setAttribute('aria-label', '계획과 실천');
+    nav.className = 'haedo-planning-nav'; nav.setAttribute('aria-label', '계획');
     let pending = false;
     for (const item of planningDestinations) {
       const link = root.document.createElement('a');
@@ -259,6 +261,9 @@
     if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) {
       initialSection = 'schedule'; composing = query.get('compose') === '1' || query.get('blog') === 'new';
     }
+    // 통합 검색 opens over the area it was opened from (`?section=schedule&view=find`), so the menu keeps
+    // that area marked on reload. A find address without a section (older links) stays under 자료.
+    else if (query.get('view') === 'find' && normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
     else if (normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
   }

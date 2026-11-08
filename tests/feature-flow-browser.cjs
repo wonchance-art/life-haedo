@@ -194,7 +194,7 @@ async function main() {
       await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       const input = page.locator('[data-ap-annual]').first(); await input.fill('한 해의 방향을 보관하고 실행 화면으로 이동');
       const year = await input.getAttribute('data-ap-annual');
-      await page.getByRole('navigation', { name: '계획과 실천', exact: true }).getByRole('link', { name: '목표', exact: true }).click();
+      await page.getByRole('navigation', { name: '계획', exact: true }).getByRole('link', { name: '목표', exact: true }).click();
       await page.waitForFunction(() => document.body.dataset.page === 'goals' && !document.querySelector('[data-private]').hidden);
       await page.getByRole('link', { name: '습관', exact: true }).click();
       await page.waitForFunction(() => document.body.dataset.page === 'habits' && !document.querySelector('[data-private]').hidden);
@@ -216,7 +216,7 @@ async function main() {
       const input = page.locator('[data-ap-annual]').first(), year = await input.getAttribute('data-ap-annual'), beforeURL = page.url();
       await input.fill('저장 중에도 보존할 계획');
       await page.evaluate(() => { window.__featureHoldLaterFlush = true; });
-      const planning = page.getByRole('navigation', { name: '계획과 실천', exact: true });
+      const planning = page.getByRole('navigation', { name: '계획', exact: true });
       await planning.getByRole('link', { name: '목표', exact: true }).click();
       await page.waitForFunction(() => window.__featureLaterFlushEntered);
       assert.equal(await page.locator('.life-app').getAttribute('aria-busy'), 'true');
