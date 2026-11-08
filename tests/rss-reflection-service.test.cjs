@@ -371,7 +371,7 @@ function itemFixture(onCommit, onSave, options = {}) {
     bundle = Core.applyChanges(bundle, request.changes); return { status: 'stored', revision: bundle.revision };
   };
   f.storage.saveRssInboxProgress = async (_id, input, revision) => {
-    const outcome = onSave(); if (outcome) return outcome;
+    const outcome = onSave({ otherTabSaved() { progress = { ...progress, revision: progress.revision + 1 }; } }); if (outcome) return outcome;
     progress = { ...structuredClone(input), revision: revision + 1, needsRepair: false }; return { status: 'stored', ...structuredClone(progress) };
   };
   return f;
@@ -387,12 +387,24 @@ test('temporary item receive failures in a completed check also count toward the
   failing = false; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
 });
 
-test('another tab advancing the same ACK is retried each interval but never reported as an unavailable inbox', async t => {
+test('another tab saving the same ACK is retried each interval and shown as unavailable only after thirty intervals', async t => {
+  let contending = true; const states = [];
+  // Each save loses to another tab that has just stored the shared ACK.
+  const f = itemFixture(() => null, tab => { if (!contending) return null; tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 30; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert.equal(f.calls(), 30 * 3, 'one bounded attempt (three rescans) per interval');
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert.deepEqual(states.map(value => value.unavailable), [...Array(29).fill(false), true], 'a progressing tab is not an outage until thirty intervals');
+  contending = false; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+});
+
+test('a save conflict from the bundle alone (same-tab sync or edits) counts as an ordinary temporary failure', async t => {
   const states = [];
   const f = itemFixture(() => null, () => ({ status: 'conflict' }), { onStatus: value => states.push(value) }); t.after(f.service.dispose);
   f.service.start(); await f.service.syncNow();
-  for (let attempt = 1; attempt < 7; attempt++) { f.advance(); await f.service.syncNow(); }
-  assert.equal(f.calls(), 7 * 3, 'one bounded attempt (three rescans) per interval');
+  for (let attempt = 1; attempt < 6; attempt++) { f.advance(); await f.service.syncNow(); }
   assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
-  assert(states.every(value => value.unavailable === false), 'contention with a progressing tab is not an outage');
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true]);
 });

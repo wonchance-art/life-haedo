@@ -539,8 +539,18 @@ test('repeated cross-tab ACK changes stop after a bounded number of restarts', a
   inbox(f, () => rows, 1);
   const read = f.storage.readRssInboxProgress; let reads = 0;
   f.storage.readRssInboxProgress = async (...args) => { const progress = await read(...args); return ++reads > 1 ? { ...progress, revision: progress.revision + 1000 + reads } : progress; };
-  await assert.rejects(f.service.reflect(), { code: 'rss_receive_conflict' });
+  await assert.rejects(f.service.reflect(), { code: 'rss_receive_conflict', contended: true });
   assert(reads <= 6, 'restarts are bounded');
+});
+
+test('repeated repair restarts without another tab saving give up as an ordinary failure', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const rows = [0, 1, 2].map(minute => f.item({ identity: 'r' + minute, fetched_at: at(minute) }));
+  inbox(f, () => rows, 1);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => { const progress = await read(...args); return ++reads > 1 ? { ...progress, needsRepair: true } : progress; };
+  await assert.rejects(f.service.reflect(), error => error.code === 'rss_receive_conflict' && error.contended !== true);
+  assert(reads <= 8, 'restarts are bounded');
 });
 
 test('a whole response that is not the inbox envelope is a temporary error; item data stays permanent', async () => {

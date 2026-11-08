@@ -58,7 +58,7 @@
   // interval for one lease (concurrent finishes), then once, after SETTLE_MS,
   // read from SETTLE_MS before the ACK before trusting the exact cursor. A row
   // whose commit lags its stamp by more than SETTLE_MS is not covered.
-  const LEASE_MS = 120000, SETTLE_MS = 600000, UNAVAILABLE_AFTER = 5;
+  const LEASE_MS = 120000, SETTLE_MS = 600000, UNAVAILABLE_AFTER = 5, CONTENDED_AFTER = 30;
   const keyOf = cursor => cursor ? cursor.fetched_at + '|' + cursor.id : null;
   function clean(error) {
     let code = error?.code || error?.error;
@@ -342,13 +342,17 @@
       need(typeof storage.readRssInboxProgress === 'function' && typeof storage.saveRssInboxProgress === 'function', 'rss_receive_conflict');
       const context = { ...token(), automatic: true };
       await verify(context);
-      let checkedItems = 0, appliedItems = 0, conflicts = 0, restarts = 0, pages = 0, scanCursor, settling = [], expected = null;
+      let checkedItems = 0, appliedItems = 0, conflicts = 0, restarts = 0, pages = 0, scanCursor, settling = [], expected = null, givingUp = false;
+      // Only a shared ACK that another tab actually saved is contention; a
+      // bundle-only save conflict or a repair restart is an ordinary failure.
+      const stop = progress => progress.revision !== expected.revision ? contended() : fault('rss_receive_conflict');
       while (true) {
         const progress = await step(context, () => storage.readRssInboxProgress(workspaceId));
+        if (givingUp) throw stop(progress);
         // Another tab may truncate or a restore may invalidate the ACK between
         // pages. Continuing after it would merge later rows across the gap.
         if (scanCursor !== undefined && (progress.revision !== expected.revision || progress.needsRepair || keyOf(progress.cursor) !== expected.key)) {
-          if (++restarts > 3) throw contended();
+          if (++restarts > 3) throw stop(progress);
           scanCursor = undefined;
         }
         if (scanCursor === undefined) ({ scanCursor, settling } = plan(progress));
@@ -405,7 +409,8 @@
           const saved = await step(context, () => storage.saveRssInboxProgress(workspaceId, { cursor, receipts }, progress.revision,
             { expectedBundleRevision: bundle.revision, isCurrent: () => { try { guard(context); return true; } catch (_) { return false; } } }));
           if (saved.status === 'conflict') {
-            if (++conflicts >= 3) throw contended();
+            // The next read shows whether the ACK moved; give up there.
+            if (++conflicts >= 3) givingUp = true;
             scanCursor = undefined;
             continue;
           }
@@ -460,7 +465,10 @@
     let idleSince = null, recheckRequested = false;
     // Consecutive temporary failures; the shell shows a non-blocking notice
     // after UNAVAILABLE_AFTER of them (about five minutes) until one succeeds.
-    let failureStreak = 0;
+    // Contention with another tab that is saving the ACK counts separately and
+    // shows the same notice only after CONTENDED_AFTER (about thirty minutes).
+    let failureStreak = 0, contendedStreak = 0;
+    const unavailable = () => failureStreak >= UNAVAILABLE_AFTER || contendedStreak >= CONTENDED_AFTER;
     const leaseClock = typeof host.performance?.now === 'function' ? () => host.performance.now() : now;
     function current() {
       const account = auth.getAccount?.();
@@ -523,9 +531,9 @@
           stopped = blocked || !configured || !connected && !receiveError;
           nextRetryAt = receiveError && !stopped ? startedAt + intervalMs : 0;
           idleSince = stopped && !blocked ? startedAt : null;
-          failureStreak = receiveError && !blocked ? failureStreak + 1 : 0;
+          failureStreak = receiveError && !blocked ? failureStreak + 1 : 0; if (!failureStreak) contendedStreak = 0;
           status = { state: blocked ? 'blocked' : stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError, receiveErrorCode, blockedItemId, blockedItemTitle,
-            unavailable: failureStreak >= UNAVAILABLE_AFTER };
+            unavailable: unavailable() };
         } catch (error) {
           if (current() && context === generation && error?.code !== 'rss_cancelled') {
             const errorInfo = clean(error);
@@ -533,15 +541,15 @@
             // An undeployed or misconfigured service, like a blocked item, waits
             // for an explicit registration or reload rather than returning wakes.
             const temporary = !(errorInfo.code === 'rss_setup_required' || blocked);
-            if (!temporary) { stopped = true; idleSince = null; failureStreak = 0; }
+            if (!temporary) { stopped = true; idleSince = null; failureStreak = contendedStreak = 0; }
             else {
-              nextRetryAt = startedAt + intervalMs; if (!error?.contended) failureStreak++;
+              nextRetryAt = startedAt + intervalMs; if (error?.contended) contendedStreak++; else failureStreak++;
               // A recheck that failed temporarily is retried on each due tick (one
               // per interval) until it completes; the wake stays requested.
               if (stopped && idleSince !== null) { idleSince = startedAt; recheckRequested = true; }
             }
             status = { ...status, state: blocked ? 'blocked' : temporary ? 'error' : 'stopped', receiveError: errorInfo.message,
-              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null, unavailable: failureStreak >= UNAVAILABLE_AFTER };
+              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null, unavailable: unavailable() };
           } else publishable = false;
         }
         if (publishable) publish(context); return { ...status };
