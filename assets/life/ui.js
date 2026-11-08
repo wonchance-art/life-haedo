@@ -463,7 +463,9 @@
       links: {
         plan: () => planDestinations(),
         habits: () => scheduleLinks([['습관 체크', 'habits.html', 'check']]),
-        day: () => scheduleLinks([['습관 체크', 'habits.html', 'check'], ['연표에서 행복도 보기', 'timeline.html', 'timeline']])
+        // Another page (the habits screen, a month of it): leave only after this screen's drafts are saved.
+        page: href => guarded(async () => { await persistDrafts(); if (!disposed) global.location.assign(href); })(),
+        annualPlan: () => guarded(() => navigate('annual-plan'))()
       }
     });
 

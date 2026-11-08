@@ -43,6 +43,10 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .life-toolbar[data-schedule] .schedule-step { grid-area: step; }
   .life-toolbar[data-schedule] #lifeFindOpen { grid-area: find; }
   .life-toolbar[data-schedule] .schedule-help { grid-area: help; }
+  /* The 글 메뉴 sits in the title row; anchored to the sticky toolbar it opens below the second row, so an
+   * open menu never covers the 보기 단위 bar (integration, 2026-11-08). */
+  .life-toolbar[data-schedule] > .haedo-heading-title > .life-feature-menu { position: static; }
+  .life-toolbar[data-schedule] > .haedo-heading-title > .life-feature-menu .life-feature-menu-panel { inset-inline-start: 24px; top: calc(100% + 6px); }
 }
 
 .life-schedule { min-width: 0; }
