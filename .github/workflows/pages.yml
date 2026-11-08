@@ -181,6 +181,9 @@ jobs:
       - name: Verify planning screens share one frame, tabs, header and two-stage save status
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/planning-frame-browser.cjs
+      - name: Verify schedule exits keep drafts without false leave prompts and integrated search returns to the schedule view
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-exits-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -697,6 +700,7 @@ jobs:
             .local/records-split-resize/
             .local/habit-tracker/
             .local/planning-frame-browser/
+            .local/schedule-exits-browser/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
