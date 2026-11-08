@@ -216,3 +216,219 @@ test('late success and failure cannot publish status after suspension, disposal,
     release(); await pending; assert.deepEqual(states, []);
   });
 });
+
+const emptyPage = (workspaceId, kind) => kind === 'only disconnected'
+  ? connectedPage(workspaceId, { connections: connectedPage(workspaceId).connections.map(connection => ({ ...connection, status: 'disconnected' })) })
+  : { configured: true, connections: [], items: [], has_more: false, next_cursor: null };
+const returning = f => {
+  f.host.dispatchEvent(new Event('online')); f.host.dispatchEvent(new Event('focus'));
+  f.host.document.dispatchEvent(new Event('visibilitychange')); f.host.document.dispatchEvent(new Event('haedo:page-ready'));
+};
+
+for (const kind of ['no connection', 'only disconnected']) {
+  test(`${kind}: the timer alone never rechecks; a burst of returning wakes after an interval rechecks once`, async t => {
+    const f = fixture(body => ({ data: emptyPage(body.workspaceId, kind) })); t.after(f.service.dispose);
+    f.service.start(); await f.service.syncNow(); assert.equal(f.calls(), 1); assert.equal(f.service.getStatus().state, 'stopped');
+    for (let minute = 0; minute < 5; minute++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(f.calls(), 1, 'an idle account without a live connection is not polled');
+    for (let index = 0; index < 10; index++) returning(f);
+    await f.service.syncNow(); assert.equal(f.calls(), 2); assert.equal(f.service.getStatus().state, 'stopped');
+    returning(f); await f.service.syncNow(); f.advance(30000); returning(f); await f.service.syncNow();
+    assert.equal(f.calls(), 2, 'returning wakes inside one interval do not recheck again');
+    f.advance(30000); await f.service.syncNow(); assert.equal(f.calls(), 3, 'the interval runs the earlier wake once it is due');
+    for (let minute = 0; minute < 5; minute++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(f.calls(), 3, 'a performed recheck is not repeated by the timer');
+  });
+}
+
+test('a connection registered on another device is reflected after the next returning wake without reload', async t => {
+  let registered = false;
+  const f = fixture(body => ({ data: registered ? connectedPage(body.workspaceId) : emptyPage(body.workspaceId) })); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow(); assert.equal(f.service.getStatus().state, 'stopped');
+  registered = true; f.advance(10000);
+  f.host.document.dispatchEvent(new Event('visibilitychange')); await f.service.syncNow(); assert.equal(f.calls(), 1, 'too early: deferred, not dropped');
+  f.advance(49999); await f.service.syncNow(); assert.equal(f.calls(), 1);
+  f.advance(1); await f.service.syncNow(); assert.equal(f.calls(), 2); assert.equal(f.service.getStatus().state, 'idle');
+  f.advance(); await f.service.syncNow(); assert.equal(f.calls(), 3, 'a live connection resumes ordinary minute polling');
+});
+
+test('runtime off parks and a returning page-ready after collection is enabled reflects it', async t => {
+  let configured = false;
+  const f = fixture(body => ({ data: connectedPage(body.workspaceId, { configured }) })); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow(); assert.equal(f.service.getStatus().state, 'stopped');
+  f.advance(); await f.service.syncNow(); assert.equal(f.calls(), 1);
+  configured = true; f.host.document.dispatchEvent(new Event('haedo:page-ready')); await f.service.syncNow();
+  assert.equal(f.calls(), 2); assert.equal(f.service.getStatus().state, 'idle');
+});
+
+test('hidden, offline and a parked back/forward-cache page send nothing; the verified page-ready rechecks', async t => {
+  let registered = false;
+  const f = fixture(body => ({ data: registered ? connectedPage(body.workspaceId) : emptyPage(body.workspaceId) })); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow(); registered = true; f.advance();
+  f.host.document.visibilityState = 'hidden'; f.host.document.dispatchEvent(new Event('visibilitychange')); f.host.dispatchEvent(new Event('online'));
+  await f.service.syncNow(); f.host.document.visibilityState = 'visible'; await f.service.syncNow();
+  assert.equal(f.calls(), 1, 'a hidden wake is not saved for a later timer');
+  f.host.navigator.onLine = false; f.host.document.dispatchEvent(new Event('visibilitychange')); await f.service.syncNow();
+  f.host.navigator.onLine = true; await f.service.syncNow(); assert.equal(f.calls(), 1, 'an offline wake sends nothing');
+  const pagehide = new Event('pagehide'); pagehide.persisted = true; f.host.dispatchEvent(pagehide); f.auth.epoch++;
+  const pageshow = new Event('pageshow'); pageshow.persisted = true; f.host.dispatchEvent(pageshow);
+  f.host.dispatchEvent(new Event('online')); f.host.document.dispatchEvent(new Event('visibilitychange')); await f.service.syncNow();
+  assert.equal(f.calls(), 1, 'no request before the shell has verified the restored page');
+  f.host.document.dispatchEvent(new Event('haedo:page-ready')); await f.service.syncNow();
+  assert.equal(f.calls(), 2); assert.equal(f.service.getStatus().state, 'idle');
+});
+
+for (const reason of ['blocked item', 'undeployed function']) {
+  test(`${reason} stays parked on returning wakes until an explicit registration`, async t => {
+    const f = fixture(() => reason === 'blocked item' ? { data: { error: 'rss_invalid_item' } }
+      : { error: { context: { status: 404, json: async () => ({ code: 'NOT_FOUND', message: 'Requested function was not found' }) } } });
+    t.after(f.service.dispose);
+    f.service.start(); await f.service.syncNow(); assert.equal(f.calls(), 1);
+    f.advance(); returning(f); await f.service.syncNow(); f.advance(); await f.service.syncNow();
+    assert.equal(f.calls(), 1);
+    await f.service.syncNow(f.workspaceId); assert.equal(f.calls(), 2);
+  });
+}
+
+test('an HTML 200 from a proxy is a temporary error retried next interval; a mismatched body hash still blocks', async t => {
+  let html = true;
+  const f = fixture(body => ({ data: html ? '<!doctype html><title>Synthetic proxy page</title>' : connectedPage(body.workspaceId) })); t.after(f.service.dispose);
+  f.service.start(); const failed = await f.service.syncNow();
+  assert.equal(failed.state, 'error'); assert.equal(failed.receiveErrorCode, 'rss_unexpected_response'); assert.equal(failed.blockedItemId, null);
+  await f.service.syncNow(); assert.equal(f.calls(), 1, 'the ordinary backoff applies');
+  html = false; f.advance(); assert.equal((await f.service.syncNow()).state, 'idle'); assert.equal(f.calls(), 2);
+  let g;
+  g = fixture(body => ({ data: connectedPage(body.workspaceId, { items: [{ id: '20000000-0000-4000-8000-000000000001', owner_id: g.storage.account.userId,
+    connection_id: '10000000-0000-4000-8000-000000000001', identity: 'bad-hash', title: '본문 검증 실패', url: null, content_text: '합성 본문',
+    content_hash: '0'.repeat(64), published_at: '2026-11-05T01:00:00.000Z', fetched_at: '2026-11-05T02:00:00.000Z', disposition: 'stored' }] }) }));
+  t.after(g.service.dispose);
+  const blocked = await g.service.syncNow(); assert.equal(blocked.state, 'blocked'); assert.equal(blocked.receiveErrorCode, 'rss_invalid_data');
+  g.advance(); await g.service.syncNow(); assert.equal(g.calls(), 1);
+});
+
+test('the real interval handler only performs a recheck an earlier returning wake requested', async t => {
+  const f = fixture(body => ({ data: emptyPage(body.workspaceId) }), { polling: true }); t.after(f.service.dispose);
+  let tick = null, cleared = 0;
+  f.host.setInterval = (handler, every) => { assert.equal(every, 60000); tick = handler; return 1; };
+  f.host.clearInterval = () => { cleared++; };
+  f.service.start(); await f.service.syncNow(); assert.equal(typeof tick, 'function'); assert.equal(f.calls(), 1);
+  for (let minute = 0; minute < 5; minute++) { f.advance(); tick(); await f.service.syncNow(); }
+  assert.equal(f.calls(), 1, 'the minute timer does not poll a parked account');
+  f.host.document.dispatchEvent(new Event('visibilitychange')); await f.service.syncNow(); assert.equal(f.calls(), 2);
+  f.advance(1000); f.host.dispatchEvent(new Event('online')); await f.service.syncNow(); assert.equal(f.calls(), 2);
+  f.advance(59000); tick(); await f.service.syncNow(); assert.equal(f.calls(), 3, 'the early wake runs once at the next due tick');
+  f.advance(); tick(); await f.service.syncNow(); assert.equal(f.calls(), 3);
+  f.service.dispose(); assert.equal(cleared, 1);
+});
+
+test('a recheck that fails temporarily is retried on the next due tick, at most once per interval', async t => {
+  let mode = 'empty';
+  const f = fixture(body => mode === 'empty' ? { data: emptyPage(body.workspaceId) } : mode === 'live' ? { data: connectedPage(body.workspaceId) }
+    : mode === 'network' ? { error: { message: 'synthetic offline request' } } : { data: '<!doctype html><title>Synthetic proxy page</title>' });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow(); assert.equal(f.service.getStatus().state, 'stopped');
+  for (const failure of ['network', 'html']) {
+    mode = failure; const before = f.calls(); f.advance(); f.host.document.dispatchEvent(new Event('visibilitychange'));
+    assert.equal((await f.service.syncNow()).state, 'error'); assert.equal(f.calls(), before + 1);
+    await f.service.syncNow(); f.advance(30000); f.host.dispatchEvent(new Event('online')); await f.service.syncNow(); f.advance(29999); await f.service.syncNow();
+    assert.equal(f.calls(), before + 1, 'no retry inside the interval');
+    f.advance(1); await f.service.syncNow(); assert.equal(f.calls(), before + 2, 'the failed recheck is repeated once');
+    for (let minute = 0; minute < 3; minute++) { f.advance(30000); await f.service.syncNow(); f.advance(30000); await f.service.syncNow(); }
+    assert.equal(f.calls(), before + 5, 'continued failure stays at one request per interval');
+    mode = 'empty'; f.advance(); assert.equal((await f.service.syncNow()).state, 'stopped');
+    const parked = f.calls(); for (let minute = 0; minute < 3; minute++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(f.calls(), parked, 'a successful recheck parks again');
+  }
+  mode = 'live'; f.advance(); f.host.document.dispatchEvent(new Event('visibilitychange')); assert.equal((await f.service.syncNow()).state, 'idle');
+});
+
+test('five consecutive temporary failures mark the status unavailable until one succeeds', async t => {
+  let failing = true; const states = [];
+  const f = fixture(body => failing ? { data: '<!doctype html><title>Synthetic proxy page</title>' } : { data: connectedPage(body.workspaceId) },
+    { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 7; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert.equal(states.length, 7); assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_unexpected_response'));
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true, true]);
+  failing = false; f.advance(); await f.service.syncNow();
+  assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+  failing = true; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).unavailable, false, 'the streak restarts after a success');
+});
+
+function itemFixture(onCommit, onSave, options = {}) {
+  let row, f;
+  f = fixture(body => f.override?.() || { data: connectedPage(body.workspaceId, { items: [row] }) }, options);
+  let bundle = Core.createWorkspace(), progress = { revision: 0, cursor: null, receipts: [], needsRepair: false };
+  bundle.workspaceId = f.workspaceId;
+  const text = '연속 실패 확인용 합성 원문';
+  row = { id: '20000000-0000-4000-8000-000000000002', owner_id: f.storage.account.userId, connection_id: '10000000-0000-4000-8000-000000000001',
+    identity: 'streak', title: '연속 실패 합성 글', url: null, content_text: text, content_hash: createHash('sha256').update(text).digest('hex'),
+    published_at: '2026-11-05T01:00:00.000Z', fetched_at: '2026-11-05T02:00:00.000Z', disposition: 'stored' };
+  f.storage.read = async () => structuredClone(bundle);
+  f.storage.readRssInboxProgress = async () => ({ ...structuredClone(progress), bundleRevision: bundle.revision });
+  f.storage.commitLocal = async request => {
+    const outcome = onCommit(); if (outcome) return outcome;
+    bundle = Core.applyChanges(bundle, request.changes); return { status: 'stored', revision: bundle.revision };
+  };
+  f.storage.saveRssInboxProgress = async (_id, input, revision) => {
+    const outcome = onSave({ otherTabSaved() { progress = { ...progress, revision: progress.revision + 1 }; } }); if (outcome) return outcome;
+    progress = { ...structuredClone(input), revision: revision + 1, needsRepair: false }; return { status: 'stored', ...structuredClone(progress) };
+  };
+  return f;
+}
+
+test('temporary item receive failures in a completed check also count toward the unavailable notice', async t => {
+  let failing = true; const states = [];
+  const f = itemFixture(() => failing ? { status: 'conflict' } : null, () => null, { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 6; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true]);
+  failing = false; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+});
+
+test('another tab saving the same ACK is retried each interval and shown as unavailable only after thirty intervals', async t => {
+  let contending = true; const states = [];
+  // Each save loses to another tab that has just stored the shared ACK.
+  const f = itemFixture(() => null, tab => { if (!contending) return null; tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 30; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert.equal(f.calls(), 30 * 3, 'one bounded attempt (three rescans) per interval');
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert.deepEqual(states.map(value => value.unavailable), [...Array(29).fill(false), true], 'a progressing tab is not an outage until thirty intervals');
+  contending = false; f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, 'idle'); assert.equal(states.at(-1).unavailable, false);
+});
+
+test('a save conflict from the bundle alone (same-tab sync or edits) counts as an ordinary temporary failure', async t => {
+  const states = [];
+  const f = itemFixture(() => null, () => ({ status: 'conflict' }), { onStatus: value => states.push(value) }); t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (let attempt = 1; attempt < 6; attempt++) { f.advance(); await f.service.syncNow(); }
+  assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true]);
+});
+
+test('contention between ordinary failures neither resets nor adds to the ordinary count', async t => {
+  let mode = 'bundle'; const states = [];
+  const f = itemFixture(() => null, tab => { if (mode === 'tab') tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (const next of ['bundle', 'bundle', 'bundle', 'tab', 'tab', 'bundle']) { mode = next; f.advance(); await f.service.syncNow(); }
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, false, false, true], 'the fifth ordinary failure shows the notice');
+});
+
+for (const stop of ['setup', 'blocked']) {
+  test(`a ${stop} stop clears the contention count`, async t => {
+    const states = [];
+    const f = itemFixture(() => null, tab => { tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+    t.after(f.service.dispose);
+    f.service.start(); await f.service.syncNow();
+    for (let attempt = 1; attempt < 29; attempt++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(states.length, 29); assert.equal(states.at(-1).unavailable, false);
+    f.override = () => stop === 'setup' ? { data: { error: 'setup_required' } } : { data: { error: 'rss_invalid_item' } };
+    f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, stop === 'setup' ? 'stopped' : 'blocked');
+    f.override = null; await f.service.syncNow(f.workspaceId);
+    assert.equal(states.at(-1).receiveErrorCode, 'rss_receive_conflict'); assert.equal(states.at(-1).unavailable, false, 'the thirtieth contention after a stop starts a new count');
+  });
+}

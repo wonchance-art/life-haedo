@@ -17,7 +17,7 @@ function inbox(f, visible, pageSize = 100) {
       next_cursor: rows.length > pageSize ? { fetched_at: last.fetched_at, id: last.id } : null };
   };
 }
-function fixture() {
+function fixture({ now } = {}) {
   let bundle = Core.createWorkspace(), commits = 0, notify = () => {};
   const env = { current: true, held: null, conflict: false, requests: [], beforeCommit: null,
     accessToken: 'synthetic-rss-fixture-token', serverChecks: 0, manualChecks: 0, progressWrites: 0, verifierCreations: 0 };
@@ -65,7 +65,7 @@ function fixture() {
     isolated.removeItem('probe'); assert.equal(isolated.getItem('probe'), null);
     return { auth: { getUser: token => auth.client.auth.getUser(token) } };
   };
-  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current, clientFactory });
+  const service = Rss.create({ storage, auth, core: Core, workspaceId: bundle.workspaceId, isCurrent: () => env.current, clientFactory, ...(now ? { now } : {}) });
   function item(overrides = {}) {
     const body = '\ufeff피드 원문 🌱\r\n<img src="https://invalid.test/private">';
     return { id: Core.id(), owner_id: owner.userId, connection_id: conn.id, identity: 'guid:one', title: 'RSS 글', url: 'https://feed.example.test/one',
@@ -413,4 +413,156 @@ test('a permanently rejected validated row exposes only its item identity and ti
   assert.equal(result.receiveError, Rss.messages.rss_invalid_data);
   assert.equal(f.commits, 0); assert.equal(f.progress.cursor, null);
   assert.doesNotMatch(JSON.stringify(result), /피드 원문|diagnostic|content_text/);
+});
+
+const at = (minute, second = 0) => new Date(Date.UTC(2026, 10, 5, 2, minute, second)).toISOString();
+const windowBefore = row => ({ fetched_at: new Date(Date.parse(row.fetched_at) - 120001).toISOString(), id: '00000000-0000-0000-0000-000000000000' });
+const exactAfter = row => ({ fetched_at: row.fetched_at, id: row.id });
+const settleBefore = row => ({ fetched_at: new Date(Date.parse(row.fetched_at) - 600001).toISOString(), id: '00000000-0000-0000-0000-000000000000' });
+
+test('a live page rereads the lease window during the lease and once after the settle margin, then reads only after the exact ACK', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const ack = f.item({ identity: 'ack', fetched_at: '2026-11-05T02:00:00.123456Z' });
+  const slow = f.item({ identity: 'slow-commit', fetched_at: '2026-11-05T01:59:55.000Z' });
+  const next = f.item({ identity: 'next', fetched_at: at(30) });
+  let visible = [ack], returned = []; inbox(f, () => visible);
+  const pageFor = f.env.pageFor; f.env.pageFor = request => { const page = pageFor(request); returned.push(page.items.map(row => row.id)); return page; };
+  await f.service.reflect(); assert.deepEqual(f.progress.cursor, exactAfter(ack));
+  const minutes = [0, 1, 2, 3, 4, 9, 10];
+  for (const minute of minutes) {
+    clock = minute * 60000;
+    // finish stamped this row before the ACK row, then waited about four minutes to commit.
+    if (minute === 4) visible = [slow, ack];
+    await f.service.reflect();
+  }
+  clock = 600001; const settled = await f.service.reflect();
+  assert.equal(settled.appliedItems, 1, 'the slow commit is received by the read after the settle margin');
+  clock = 660001; await f.service.reflect(); clock = 720001; await f.service.reflect();
+  const overlap = { fetched_at: '2026-11-05T01:58:00.122Z', id: '00000000-0000-0000-0000-000000000000' }, exact = exactAfter(ack);
+  const settle = { fetched_at: '2026-11-05T01:50:00.122Z', id: '00000000-0000-0000-0000-000000000000' };
+  assert.deepEqual(f.env.requests.map(row => row.before || null), [null, overlap, overlap, overlap, exact, exact, exact, exact, settle, exact, exact]);
+  assert.deepEqual(returned.slice(4, 8), [[], [], [], []], 'between the lease and the margin only rows after the ACK are fetched');
+  assert.deepEqual(returned.slice(9), [[], []], 'a settled ACK never fetches an acknowledged body again');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [slow.id, ack.id]); assert.deepEqual(f.progress.cursor, exact);
+  visible = [slow, ack, next]; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, exact); assert.deepEqual(f.progress.cursor, exactAfter(next));
+  await f.service.reflect(); assert.deepEqual(f.env.requests.at(-1).before, windowBefore(next), 'a new ACK starts its own lease window');
+  assert.equal(f.commits, 3);
+});
+
+for (const [label, stampedBefore, visibleAtMinute] of [['inside the lease window, visible within the lease', 30, 1],
+  ['inside the lease window, visible after the lease', 30, 5], ['200 s before the ACK, visible after the lease', 200, 5], ['590 s before the ACK, visible at nine minutes', 590, 9]]) {
+  test('a slow commit stamped ' + label + ' is received by the settle read', async t => {
+    let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+    const ack = f.item({ identity: 'ack', fetched_at: at(10) });
+    const late = f.item({ identity: 'late', fetched_at: new Date(Date.parse(ack.fetched_at) - stampedBefore * 1000).toISOString() });
+    let visible = [ack]; inbox(f, () => visible); await f.service.reflect();
+    for (let minute = 1; minute <= 14; minute++) { clock = minute * 60000 + 1; if (minute === visibleAtMinute) visible = [late, ack]; await f.service.reflect(); }
+    assert.deepEqual(f.progress.receipts.map(row => row.itemId), [late.id, ack.id]);
+    assert.deepEqual(f.env.requests.at(-1).before, exactAfter(ack), 'the ACK settled after its one wide read');
+    assert.equal(f.env.requests.filter(row => row.before?.fetched_at === settleBefore(ack).fetched_at).length, 1, 'the wide read happens once');
+  });
+}
+
+test('the settle read happens only after more than the margin and repeats until it completes', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const ack = f.item({ identity: 'ack', fetched_at: at(0) }), next = f.item({ identity: 'next', fetched_at: at(1) });
+  let visible = [ack]; inbox(f, () => visible); await f.service.reflect();
+  clock = 600000; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, exactAfter(ack), 'exactly the margin is not more than the margin');
+  clock = 600001; visible = [ack, next]; f.env.beforeCommit = () => { throw { code: 'rss_receive_conflict' }; };
+  const failed = await f.service.reflect(); assert.equal(failed.receiveErrorCode, 'rss_receive_conflict');
+  assert.deepEqual(f.env.requests.at(-1).before, settleBefore(ack)); assert.deepEqual(f.progress.cursor, exactAfter(ack));
+  f.env.beforeCommit = null; clock = 660001; await f.service.reflect();
+  assert.deepEqual(f.env.requests.at(-1).before, settleBefore(ack), 'an unfinished settle read is repeated');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [ack.id, next.id]); assert.equal(f.commits, 2);
+});
+
+test('a new ACK restarts the lease clock even after an earlier ACK settled', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const first = f.item({ identity: 'first', fetched_at: at(0) }), second = f.item({ identity: 'second', fetched_at: at(20) });
+  const late = f.item({ identity: 'late-before-second', fetched_at: at(19, 55) });
+  let visible = [first]; inbox(f, () => visible); await f.service.reflect();
+  for (const time of [600001, 660001]) { clock = time; await f.service.reflect(); }
+  assert.deepEqual(f.env.requests.at(-1).before, exactAfter(first), 'the first ACK settled');
+  clock = 700000; visible = [first, second]; await f.service.reflect(); assert.deepEqual(f.progress.cursor, exactAfter(second));
+  clock = 701000; await f.service.reflect(); assert.deepEqual(f.env.requests.at(-1).before, windowBefore(second));
+  clock = 702000; visible = [first, late, second]; const caught = await f.service.reflect();
+  assert.equal(caught.appliedItems, 1, 'a concurrent earlier finish is received inside the new lease');
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [first.id, late.id, second.id]);
+});
+
+test('another tab truncating the ACK between pages restarts the scan instead of merging across the gap', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const a1 = f.item({ identity: 'a1', fetched_at: at(0) }), late = f.item({ identity: 'late', fetched_at: at(0, 30) });
+  const a2 = f.item({ identity: 'a2', fetched_at: at(1) }), a3 = f.item({ identity: 'a3', fetched_at: at(10) }), a4 = f.item({ identity: 'a4', fetched_at: at(10, 30) });
+  let visible = [a1, a2, a3, a4]; inbox(f, () => visible, 2);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => {
+    if (++reads === 2) {
+      // Tab B saw the late row, failed on it and rolled the shared ACK back to a1.
+      visible = [a1, late, a2, a3, a4]; const progress = await read(...args), kept = progress.receipts.filter(row => row.itemId === a1.id);
+      assert.equal((await f.storage.saveRssInboxProgress(null, { cursor: kept.at(-1).cursor, receipts: kept }, progress.revision,
+        { expectedBundleRevision: f.bundle.revision, isCurrent: () => true })).status, 'stored');
+    }
+    return read(...args);
+  };
+  await f.service.reflect();
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [a1.id, late.id, a2.id, a3.id, a4.id]);
+  assert(f.bundle.sourceVersions.some(row => row.id === 'rssv_' + late.id));
+});
+
+test('a restore that invalidates the ACK between pages restarts from the repaired prefix', async t => {
+  let clock = 0; const f = fixture({ now: () => clock }); t.after(f.service.dispose);
+  const a1 = f.item({ identity: 'a1', fetched_at: at(0) }), a2 = f.item({ identity: 'a2', fetched_at: at(1) });
+  const a3 = f.item({ identity: 'a3', fetched_at: at(10) }), a4 = f.item({ identity: 'a4', fetched_at: at(10, 30) });
+  inbox(f, () => [a1, a2, a3, a4], 2);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => {
+    const progress = await read(...args);
+    if (++reads !== 2) return progress;
+    // An older backup without a2 was restored: storage reports the valid prefix and repair.
+    f.mutate(bundle => ({ ...bundle, revision: bundle.revision + 1,
+      sources: bundle.sources.filter(source => !bundle.sourceVersions.some(version => version.id === 'rssv_' + a2.id && version.sourceId === source.id)),
+      sourceVersions: bundle.sourceVersions.filter(version => version.id !== 'rssv_' + a2.id) }));
+    const kept = progress.receipts.filter(row => row.itemId === a1.id);
+    return { ...progress, receipts: kept, cursor: kept[0].cursor, needsRepair: true };
+  };
+  await f.service.reflect();
+  assert.deepEqual(f.progress.receipts.map(row => row.itemId), [a1.id, a2.id, a3.id, a4.id]);
+  assert(f.bundle.sourceVersions.some(row => row.id === 'rssv_' + a2.id), 'the restored-away original is received again');
+});
+
+test('repeated cross-tab ACK changes stop after a bounded number of restarts', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const rows = [0, 1, 2].map(minute => f.item({ identity: 'r' + minute, fetched_at: at(minute) }));
+  inbox(f, () => rows, 1);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => { const progress = await read(...args); return ++reads > 1 ? { ...progress, revision: progress.revision + 1000 + reads } : progress; };
+  await assert.rejects(f.service.reflect(), { code: 'rss_receive_conflict', contended: true });
+  assert(reads <= 6, 'restarts are bounded');
+});
+
+test('repeated repair restarts without another tab saving give up as an ordinary failure', async t => {
+  const f = fixture(); t.after(f.service.dispose);
+  const rows = [0, 1, 2].map(minute => f.item({ identity: 'r' + minute, fetched_at: at(minute) }));
+  inbox(f, () => rows, 1);
+  const read = f.storage.readRssInboxProgress; let reads = 0;
+  f.storage.readRssInboxProgress = async (...args) => { const progress = await read(...args); return ++reads > 1 ? { ...progress, needsRepair: true } : progress; };
+  await assert.rejects(f.service.reflect(), error => error.code === 'rss_receive_conflict' && error.contended !== true);
+  assert(reads <= 8, 'restarts are bounded');
+});
+
+test('a whole response that is not the inbox envelope is a temporary error; item data stays permanent', async () => {
+  for (const data of ['<!doctype html><title>proxy</title>', null, { configured: true, connections: [], items: 'x' }, { configured: 'yes', connections: [], items: [] }]) {
+    const f = fixture(); f.env.pageFor = () => data;
+    await assert.rejects(f.service.list(), { code: 'rss_unexpected_response', message: Rss.messages.rss_unexpected_response });
+    await assert.rejects(f.service.reflect(), { code: 'rss_unexpected_response' });
+    assert.equal(f.commits, 0); assert.equal(f.env.progressWrites, 0);
+  }
+  const reordered = fixture(), a = reordered.item({ identity: 'a', fetched_at: '2026-11-05T02:00:00.000Z' }), b = reordered.item({ identity: 'b', fetched_at: '2026-11-05T01:00:00.000Z' });
+  reordered.env.pageFor = () => ({ ...reordered.page, items: [a, b] });
+  await assert.rejects(reordered.service.reflect(), { code: 'rss_unexpected_response' }); assert.equal(reordered.commits, 0);
+  const item = fixture(); item.page.items = [item.item({ content_hash: '0'.repeat(64) })];
+  await assert.rejects(item.service.reflect(), { code: 'rss_invalid_data' }); assert.equal(item.commits, 0);
 });
