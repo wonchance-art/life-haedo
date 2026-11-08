@@ -344,6 +344,8 @@ async function main() {
       assert.deepEqual(shapes, { done: { ring: false, fill: true, inner: false }, kept: { ring: true, fill: false, inner: true }, planned: { ring: true, fill: false, inner: false }, todayMark: 'none' });
       const legend = slot.locator('.habit-compact-legend');
       assert.deepEqual(await legend.locator('.habit-compact-legend-item').allInnerTexts(), ['완료', '할 날', '정한 요일이 아닌 날의 체크'], 'one legend line in text');
+      // Read as three separate list items, not one run of words (a11y re-check M1).
+      assert.deepEqual(await legend.evaluate(node => [node.tagName, node.getAttribute('aria-label'), [...node.children].map(child => child.tagName)]), ['UL', '점 표시', ['LI', 'LI', 'LI']]);
       assert.equal(await legend.evaluate(n => !!n.closest('[aria-hidden="true"]') || getComputedStyle(n).display === 'none'), false, 'the legend is read');
       assert.deepEqual(await legend.locator('.habit-compact-dot').evaluateAll(nodes => nodes.map(n => n.dataset.state + ':' + n.getAttribute('aria-hidden'))), ['done:true', 'planned:true', 'kept:true'], 'the shapes beside the words are the dots themselves');
       // No target but the rows: no button or field in the table, each row at least 44px tall.

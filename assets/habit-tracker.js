@@ -151,9 +151,11 @@
       list.append(row);
     }
     // What the shapes are, in text (read in order after the rows); the shapes beside the words are drawn by CSS.
-    const legend = el("p", "habit-compact-legend");
+    // A list, so each entry is read as its own item (a run of spans read as "완료할 날…").
+    const legend = el("ul", "habit-compact-legend");
+    legend.setAttribute("aria-label", "점 표시");
     for (const [state, text] of [["done", "완료"], ["planned", "할 날"], ["kept", "정한 요일이 아닌 날의 체크"]]) {
-      const entry = el("span", "habit-compact-legend-item"), mark = el("span", "habit-compact-dot");
+      const entry = el("li", "habit-compact-legend-item"), mark = el("span", "habit-compact-dot");
       mark.dataset.state = state;
       mark.setAttribute("aria-hidden", "true");
       entry.append(mark, el("span", null, text));

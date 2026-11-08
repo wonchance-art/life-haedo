@@ -71,7 +71,7 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 .habit-compact-dot[data-state=planned] { border: 1.5px solid var(--field-line); }
 .habit-compact-dot[data-state=kept] { border: 1.5px solid var(--ink-soft); }
 .habit-compact-dot[data-state=kept]::before { content: ""; position: absolute; inset: 0; margin: auto; width: 4px; height: 4px; border-radius: 50%; background: var(--ink-soft); }
-.habit-compact-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 8px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-meta); line-height: 1.6; }
+.habit-compact-legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 8px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-meta); line-height: 1.6; }
 .habit-compact-legend-item { display: inline-flex; align-items: center; gap: 8px; }
 /* iPad portrait and phone (up to 1100px): the name has its own line (with n/m회 at its end) and the dots take
    the full width below, so they are not squeezed beside the name (review 2 m3, 820px). The › spans both lines. */

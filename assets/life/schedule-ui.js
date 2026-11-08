@@ -644,7 +644,7 @@
   function withRo(word) {
     const text = String(word), last = text.at(-1) || '', code = last.charCodeAt(0) - 0xAC00;
     if (code >= 0 && code < 11172) { const final = code % 28; return text + (final === 0 || final === 8 ? '로' : '으로'); }
-    return text + ('0136'.includes(last) ? '으로' : '로');
+    return text + ('036'.includes(last) ? '으로' : '로');
   }
   // Header parts for 일정 (ui.js arranges them in its heading row).
   function headerParts({ mode, date, onView, onToday, onStep, onUp, onHelp }) {

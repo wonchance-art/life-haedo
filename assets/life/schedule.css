@@ -62,6 +62,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-empty { margin: 8px 0; color: var(--ink-soft); font-size: var(--haedo-text-body); line-height: 1.6; overflow-wrap: anywhere; }
 .schedule-more { margin: 8px 0; }
 .schedule-empty-link, .schedule-year-empty { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-primary); font-size: var(--haedo-text-control); font-weight: 600; text-decoration: none; }
+/* Inside a sentence the link takes the sentence size, so it reads as one line (review #2 re-check NIT). */
+.schedule-empty .schedule-empty-link { font-size: inherit; }
 .schedule-empty-link:hover, .schedule-year-empty:hover { text-decoration: underline; text-underline-offset: 4px; }
 .schedule-empty-link:focus-visible, .schedule-year-empty:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
 /* D: the empty day at body size (2026-11-08 S7). */
