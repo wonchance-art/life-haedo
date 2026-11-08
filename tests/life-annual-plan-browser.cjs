@@ -143,7 +143,7 @@ async function main() {
     await check('tools entry, annual Enter and monthly edits persist across reopen without changing originals', async ({ page }) => {
       const before = await seed(page), year = before.plan.rows[0].year;
       assert.equal(before.plan.revision, 0, 'Opening the plan does not manufacture a saved revision');
-      await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(new URL(page.url()).searchParams.get('view'), 'annual-plan');
       await settings(page); await page.locator('#apBirthDate').fill('2000-02-29'); await stored(page, p => p.birthDate === '2000-02-29');
       await page.locator('#apAgeMode').selectOption('both'); await stored(page, p => p.ageMode === 'both');
@@ -157,7 +157,7 @@ async function main() {
       const saved = await preserve(page, before); await page.reload(); await ready(page); await page.locator('#apGrid').waitFor();
       assert.deepEqual((await state(page)).plan, saved.plan);
       assert.equal(await annual(page, year).inputValue(), PRIVATE + ' — 연간 계획');
-      await nav(page, 'home'); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await nav(page, 'home'); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(await month.inputValue(), '3월 계획\n두 번째 문장'); await preserve(page, before);
     });
 
@@ -223,9 +223,27 @@ async function main() {
       const before = await seed(page), year = before.plan.rows[0].year, draft = PRIVATE + ' 저장 실패 후에도 남는 계획 😀\n다음 문장';
       await page.evaluate(() => { window.__annualOriginalPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { const request = __annualOriginalPut.apply(this, args); if (this.name === 'meta' && args[0]?.key?.startsWith('annualPlan:')) this.transaction.abort(); return request; }; });
       await annual(page, year).fill(draft); await page.locator('#apRetry').waitFor({ state: 'visible' });
-      assert.deepEqual((await state(page)).plan, before.plan); assert.equal(await annual(page, year).inputValue(), draft); assert.notEqual(await page.locator('#apSaveStatus').textContent(), '저장됨');
+      assert.deepEqual((await state(page)).plan, before.plan); assert.equal(await annual(page, year).inputValue(), draft);
+      // This device did not keep it: 저장하지 못함 · [다시 시도], never an account step (review #1 m1–m3).
+      assert.equal((await page.locator('.ap-save-line').textContent()).replace(/\s+/g, ' ').trim(), '저장하지 못함 · 다시 시도');
+      assert.equal(await page.locator('.annual-plan').getAttribute('data-save-state'), 'error');
       await page.evaluate(() => { IDBObjectStore.prototype.put = __annualOriginalPut; }); await page.locator('#apRetry').click();
       await stored(page, (p, a) => p.rows.find(r => r.year === a.year)?.text === a.draft, { year, draft }); await preserve(page, before);
+    });
+
+    await check('an invalid birth date says 저장하지 못함; 다시 시도 returns to the date and nothing is called saved', async ({ page }) => {
+      const before = await seed(page);
+      await settings(page); await page.locator('#apBirthDate').fill('2000-02-29'); await stored(page, p => p.birthDate === '2000-02-29');
+      await page.evaluate(() => { const input = document.querySelector('#apBirthDate'); input.value = '1800-01-01'; input.dispatchEvent(new Event('change', { bubbles: true })); });
+      await page.locator('#apRetry').waitFor({ state: 'visible' });
+      assert.equal((await page.locator('.ap-save-line').textContent()).replace(/\s+/g, ' ').trim(), '저장하지 못함 · 다시 시도');
+      assert.match(await page.locator('#apError').textContent(), /생년월일/);
+      await page.locator('#apRetry').click();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'apBirthDate', 'the retry returns to the date to fix');
+      assert.equal(await page.locator('#apSaveStatus').textContent(), '저장하지 못함 ·', 'still not saved after the retry');
+      assert.equal((await state(page)).plan.birthDate, '2000-02-29');
+      await page.locator('#apBirthDate').fill('2001-03-01'); await stored(page, p => p.birthDate === '2001-03-01');
+      assert.notEqual(await page.locator('#apSaveStatus').textContent(), '저장하지 못함 ·'); await preserve(page, before);
     });
 
     await check('two-tab CAS leaves the exact draft until latest-read and explicit reapply', async ({ page, context }) => {
@@ -234,6 +252,8 @@ async function main() {
       await page.evaluate(() => { window.__holdAnnualSave = true; }); await annual(page, year).fill(draft); await wait(page, () => window.__annualSaveEntered);
       const remote = await update(second, { rows: [{ year, text: '다른 탭에 먼저 저장한 계획' }] }); await page.evaluate(() => __annualSaveRelease());
       await page.locator('#apReload').waitFor({ state: 'visible' }); assert.equal(await annual(page, year).inputValue(), draft); assert.deepEqual((await state(page)).plan, remote);
+      // The explicit recovery stays the way out: 저장하지 못함 without a second retry.
+      assert.equal(await page.locator('#apSaveStatus').textContent(), '저장하지 못함'); assert.equal(await page.locator('#apRetry').isHidden(), true);
       await page.locator('#apReload').click(); await page.locator('#apReapply').waitFor({ state: 'visible' });
       assert.equal(await annual(page, year).inputValue(), draft); assert.deepEqual((await state(page)).plan, remote, 'Reading latest does not silently overwrite the other tab');
       await page.locator('#apReapply').click(); await stored(page, (p, a) => p.rows.find(r => r.year === a.year)?.text === a.draft, { year, draft });
@@ -248,10 +268,10 @@ async function main() {
       // workspace picker reads its new inventory, as an app-created space would.
       await page.reload(); await ready(page); await page.locator('#apGrid').waitFor();
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other);
-      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, other); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, other); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.ok((await state(page)).plan.rows.every(r => r.text === '')); await writeYear(page, year, '두 번째 공간의 독립 계획');
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(first);
-      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, first); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, first); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(await annual(page, year).inputValue(), '첫 작업공간에만 저장할 계획');
       await page.evaluate(() => { window.__holdAnnualSave = true; window.__oldAnnualStorage = HaedoLife.Shell.storage; }); await annual(page, year).fill(PRIVATE + ' 이전 계정의 지연 입력'); await wait(page, () => window.__annualSaveEntered);
       await page.evaluate(value => HaedoAuth.client.auth.setSession(value), session(accounts.b)); await wait(page, () => !HaedoAuth.user && !HaedoLife.Shell.storage);

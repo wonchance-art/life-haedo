@@ -206,7 +206,7 @@ async function main() {
     await p.locator([].concat(state).map(value => '#photoServerStatus[data-post-id="' + id + '"][data-state="' + value + '"]').join(',')).waitFor();
   };
   const savedPost = async (p, title, images = [], { beforeSave, expectedServerState = 'synced' } = {}) => {
-    await nav(p, 'home'); await p.locator('[data-home-destination="write"]:visible').click(); await p.locator('#photoTitle').fill(title);
+    await nav(p, 'home'); await p.locator('[data-haedo-compose]:visible').click(); await p.locator('#photoTitle').fill(title);
     await p.locator('.ql-editor').fill('기억한 풍경을 내 말로 남깁니다. 🌱\n이 글만 직접 골라 공개합니다.');
     if (images.length) {
       await p.evaluate(() => { const q = Quill.find(document.querySelector('.ql-container')); q.setSelection(q.getLength() - 1, 0, 'silent'); });

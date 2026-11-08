@@ -95,7 +95,7 @@ async function flow(browser, hasTouch) {
   };
   try {
     await page.goto(base + '/index.html'); await ready(page); await settle(page);
-    await page.locator('[data-haedo-compose]:visible, [data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+    await page.locator('[data-haedo-compose]:visible').first().click();
     await page.locator('#photoTitle').fill('도구 막대 익명 확인');
     await page.locator('.ql-editor').fill(TEXT);
     await page.evaluate(range => {

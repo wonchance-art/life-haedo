@@ -14,12 +14,13 @@ const quote = '이어 읽을 옛 구절🌱';
 const raw = Array.from({ length: 44 }, (_, i) => `${i + 1}번째 문단. 책을 덮고 천천히 걸으며 남겨 둔 질문을 다시 읽었다. 문장 사이에서 생각이 조금씩 달라지는 것을 보았다. ${i === 23 ? quote : '서두르지 않고 읽은 자리를 기억한다.'}`).join('\r\n\r\n');
 const latest = '최신 버전은 다른 질문을 다룬다. 읽던 옛 구절을 최신 버전의 같은 숫자 위치로 바꾸면 안 된다.';
 const frames = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+// 2026-11-08 일정 통합 정리 S3: 읽던 위치 is shown in 자료 (the 일정 list's collapsed 자료 block is gone).
 async function openHomeLibrary(page) {
-  const library = page.locator('.home-library');
-  await library.waitFor();
-  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
+  await nav(page, 'records');
+  if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
+  await page.locator('#lifeMain[data-mode="sources"]').waitFor(); await settle(page);
 }
-async function home(page) { await nav(page, 'home'); await openHomeLibrary(page); }
+async function home(page) { await openHomeLibrary(page); }
 const current = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.read(await s.getActive()); });
 async function fixture(page) {
   await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
@@ -93,7 +94,7 @@ async function recordList(page) {
   await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
   await page.locator('#lifeSearch').waitFor(); await frames(page);
 }
-async function exactResume(page, ids, bookmark, button = '#homeReadingResumeOpen') {
+async function exactResume(page, ids, bookmark, button = '#lifeReadingResumeOpen') {
   await page.locator(button).focus(); await page.keyboard.press('Enter'); await page.locator('#lifeSourceText').waitFor(); await settle(page); await frames(page);
   assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
   assert.equal(await page.locator('#lifeVersion').inputValue(), ids.oldVersion);
@@ -153,9 +154,9 @@ async function main() {
         assert(!(previous >= 0xD800 && previous <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF), 'Bookmark must use a complete UTF16 character boundary');
         await nav(page, 'home'); await page.reload(); await ready(page); await settle(page); await frames(page);
         assert.equal(await page.locator('#lifeSourceText').count(), 0); assert(await page.evaluate(() => scrollY < 100), 'Home rendering must not auto-open or jump to a distant reading position');
-        await openHomeLibrary(page); await page.locator('#homeReadingResumeOpen').waitFor();
+        await openHomeLibrary(page); await page.locator('#lifeReadingResumeOpen').waitFor();
         // Reading position is an account document (11-01): the row names every device, not this browser.
-        assert.equal(await page.locator('#homeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
+        assert.equal(await page.locator('#lifeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
         await capture(page, report, 'home-position', size);
         const location = await exactResume(page, ids, position); report.observations.push({ width: size.width, savedOffset: position.position.offset, ...location });
         await capture(page, report, 'reader-resumed', size);
@@ -171,11 +172,11 @@ async function main() {
       // production capture deliberately ignores script-generated pointer events.
       await page.keyboard.press('Shift+ArrowRight');
       const position = await savedPosition(page, { sourceVersionId: ids.oldVersion, offset: raw.indexOf(quote) });
-      await home(page); await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#homeReadingResumeOpen').waitFor();
+      await home(page); await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#lifeReadingResumeOpen').waitFor();
       await page.setViewportSize({ width: 390, height: 844 }); await exactResume(page, ids, position);
       assert.deepEqual(await reading(page), position, 'Reflow and restoration must not revise the saved character offset');
-      await page.locator('#lifeSearchReturn').focus(); await page.keyboard.press('Enter'); await page.locator('#homeReadingResumeOpen').waitFor(); await frames(page);
-      assert.equal(await page.locator('#homeReadingResumeOpen').evaluate(el => el === document.activeElement), true, 'Reader back must wait for and focus its explicit resume button');
+      await page.locator('#lifeSearchReturn').focus(); await page.keyboard.press('Enter'); await page.locator('#lifeReadingResumeOpen').waitFor(); await frames(page);
+      assert.equal(await page.locator('#lifeReadingResumeOpen').evaluate(el => el === document.activeElement), true, 'Reader back must wait for and focus its explicit resume button');
     });
     await check('native Chromium touch gesture stores a visible reading character', async ({ page, context }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500);
@@ -186,7 +187,7 @@ async function main() {
       await page.waitForFunction(before => scrollY !== before, before);
       const position = await savedPosition(page, { sourceVersionId: ids.oldVersion });
       const location = await visiblePosition(page, position.position.offset); assert(location.bottom >= 60 && location.top < location.viewportHeight - 100);
-      await home(page); await page.locator('#homeReadingResumeOpen').waitFor(); await page.locator('#homeReadingResumeOpen').tap(); await page.locator('#lifeSourceText').waitFor(); await frames(page);
+      await home(page); await page.locator('#lifeReadingResumeOpen').waitFor(); await page.locator('#lifeReadingResumeOpen').tap(); await page.locator('#lifeSourceText').waitFor(); await frames(page);
       assert.equal(await page.locator('#lifeVersion').inputValue(), ids.oldVersion); assert.equal(await page.locator('#lifeSourceText').textContent(), raw); await client.detach();
     }, { width: 390, height: 844 });
     await check('search location wins and source/excerpt/arrangement panels do not become reading positions', async ({ page }) => {
@@ -205,15 +206,15 @@ async function main() {
     });
     await check('clear cancels delayed reading work and old-tab candidates cannot resurrect it', async ({ page, context }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500); await actualScroll(page);
-      await savedPosition(page, { sourceVersionId: ids.oldVersion }); await home(page); await page.locator('#homeReadingResumeClear').waitFor();
-      assert.equal(await page.locator('#homeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
+      await savedPosition(page, { sourceVersionId: ids.oldVersion }); await home(page); await page.locator('#lifeReadingResumeClear').waitFor();
+      assert.equal(await page.locator('#lifeReadingResume .life-meta').innerText(), '읽던 위치 · 모든 기기 · 이전 버전');
       const other = await context.newPage(); other.setDefaultTimeout(12000);
       await other.goto(base + '/index.html?section=records'); await ready(other); await openOld(other, ids); await other.waitForTimeout(500);
       // A reading event in a second tab proposes a debounced candidate. Clearing
       // from the visible home must leave a durable tombstone after that timer.
-      await actualScroll(other, 900); await page.locator('#homeReadingResumeClear').click(); await page.locator('#homeReadingResume').waitFor({ state: 'hidden' });
+      await actualScroll(other, 900); await page.locator('#lifeReadingResumeClear').click(); await page.locator('#lifeReadingResume').waitFor({ state: 'hidden' });
       await other.waitForTimeout(1100); const cleared = await reading(page); assert.equal(cleared.status, 'empty'); assert.equal(cleared.position, null);
-      await page.reload(); await ready(page); await settle(page); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
+      await page.reload(); await ready(page); await settle(page); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
       assert.equal((await current(page)).sourceVersions.length, 3); await other.close();
     });
     await check('workspace and account boundaries keep local reading points private', async ({ page, server, device }) => {
@@ -222,32 +223,32 @@ async function main() {
       await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await settle(page);
       await page.locator('#lifeNewWorkspaceName').fill('다른 익명 읽기 공간'); await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page);
       const otherWorkspace = (await current(page)).workspaceId; assert.notEqual(otherWorkspace, ids.workspaceId); assert.equal((await reading(page)).status, 'empty');
-      await home(page); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
-      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(ids.workspaceId); await settle(page); await home(page); await page.locator('#homeReadingResumeOpen').waitFor(); assert.deepEqual(await reading(page), position);
+      await home(page); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
+      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(ids.workspaceId); await settle(page); await home(page); await page.locator('#lifeReadingResumeOpen').waitFor(); assert.deepEqual(await reading(page), position);
       await page.evaluate(() => { window.__resumeLogout = HaedoAuth.client.auth.signOut({ scope: 'local' }); });
       await page.waitForFunction(() => document.querySelector('#lifeApp').hidden && !HaedoLife.Shell.storage);
       server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(u => u.pathname.endsWith('/index.html')); await ready(page); await home(page);
-      assert.equal((await reading(page)).status, 'empty'); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
+      assert.equal((await reading(page)).status, 'empty'); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
       const denied = await page.evaluate(async workspaceId => { try { await HaedoLife.Shell.storage.readReadingPosition(workspaceId); return false; } catch (_) { return true; } }, ids.workspaceId); assert.equal(denied, true);
     });
     await check('stale displayed point refreshes without jumping and link or missing exact versions never fall back', async ({ page, size }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500); await actualScroll(page);
-      const position = await savedPosition(page, { sourceVersionId: ids.oldVersion }); await home(page); await page.locator('#homeReadingResumeOpen').waitFor();
+      const position = await savedPosition(page, { sourceVersionId: ids.oldVersion }); await home(page); await page.locator('#lifeReadingResumeOpen').waitFor();
       const newerPoint = { ...position.position, offset: raw.indexOf(quote) };
       // Represent a changed row arriving before its advisory notification. Only
       // the persisted anonymous meta row is changed; all original data stays intact.
       await overwritePosition(page, ids.workspaceId, position.revision + 1, newerPoint);
-      await page.locator('#homeReadingResumeOpen').click(); await page.locator('#homeReadingResume .life-reading-resume-status').waitFor();
+      await page.locator('#lifeReadingResumeOpen').click(); await page.locator('#lifeReadingResume .life-reading-resume-status').waitFor();
       assert.equal(await page.locator('#lifeSourceText').count(), 0, 'A changed point must be reviewed before jumping');
       const updated = await reading(page); await exactResume(page, ids, updated);
-      await home(page); await page.locator('#homeReadingResumeOpen').waitFor();
+      await home(page); await page.locator('#lifeReadingResumeOpen').waitFor();
       await overwritePosition(page, ids.workspaceId, updated.revision + 1, { sourceId: ids.sourceId, sourceVersionId: 'missing-anonymous-version', offset: 0, updatedAt: new Date().toISOString() });
-      await page.locator('#homeReadingResumeOpen').click(); await page.locator('#homeReadingResume .life-reading-resume-status').waitFor(); assert.equal(await page.locator('#lifeSourceText').count(), 0); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
+      await page.locator('#lifeReadingResumeOpen').click(); await page.locator('#lifeReadingResume .life-reading-resume-status').waitFor(); assert.equal(await page.locator('#lifeSourceText').count(), 0); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
       const missing = await reading(page); assert.equal(missing.status, 'unavailable'); assert.equal((await current(page)).sourceVersions.length, 3);
       await capture(page, report, 'home-unavailable', size);
       await overwritePosition(page, ids.workspaceId, missing.revision + 1, { sourceId: ids.linkSource, sourceVersionId: ids.linkVersion, offset: 0, updatedAt: new Date().toISOString() });
-      await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#homeReadingResume .life-reading-resume-status').waitFor(); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
-      assert.equal((await reading(page)).status, 'unavailable'); await page.locator('#homeReadingResumeClear').click(); await page.locator('#homeReadingResume').waitFor({ state: 'hidden' });
+      await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#lifeReadingResume .life-reading-resume-status').waitFor(); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
+      assert.equal((await reading(page)).status, 'unavailable'); await page.locator('#lifeReadingResumeClear').click(); await page.locator('#lifeReadingResume').waitFor({ state: 'hidden' });
     });
     await check('native reading-position write failure preserves original reading and prior durable point', async ({ page }) => {
       const ids = await fixture(page); await openOld(page, ids); await page.waitForTimeout(500); await actualScroll(page);
@@ -271,12 +272,12 @@ async function main() {
           return __resumeGet.apply(this, args);
         };
       });
-      await home(page); await page.locator('#homeReadingResumeRetry').waitFor(); assert.equal(await page.locator('#homeRecent').isVisible(), true); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0);
+      await home(page); await page.locator('#lifeReadingResumeRetry').waitFor(); assert.equal(await page.locator('#lifeSearchResults').isVisible(), true); assert.equal(await page.locator('#lifeReadingResumeOpen').count(), 0);
       await capture(page, report, 'home-read-error', size);
-      await page.evaluate(() => { IDBObjectStore.prototype.get = __resumeGet; }); await page.locator('#homeReadingResumeRetry').click(); await page.locator('#homeReadingResumeOpen').waitFor(); assert.deepEqual(await reading(page), position);
+      await page.evaluate(() => { IDBObjectStore.prototype.get = __resumeGet; }); await page.locator('#lifeReadingResumeRetry').click(); await page.locator('#lifeReadingResumeOpen').waitFor(); assert.deepEqual(await reading(page), position);
       await overwritePosition(page, ids.workspaceId, position.revision + 1, { ...position.position, offset: -1 });
-      await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#homeReadingResumeRetry').waitFor(); assert.equal(await page.locator('#lifeSourceText').count(), 0); assert.equal(await page.locator('#homeRecent').isVisible(), true);
-      await overwritePosition(page, ids.workspaceId, position.revision + 2, position.position); await page.locator('#homeReadingResumeRetry').click(); await page.locator('#homeReadingResumeOpen').waitFor();
+      await page.reload(); await ready(page); await openHomeLibrary(page); await page.locator('#lifeReadingResumeRetry').waitFor(); assert.equal(await page.locator('#lifeSourceText').count(), 0); assert.equal(await page.locator('#lifeSearchResults').isVisible(), true);
+      await overwritePosition(page, ids.workspaceId, position.revision + 2, position.position); await page.locator('#lifeReadingResumeRetry').click(); await page.locator('#lifeReadingResumeOpen').waitFor();
       await exactResume(page, ids, await reading(page));
     });
     await check('reading position never leaks into original backup or uploads', async ({ page }) => {

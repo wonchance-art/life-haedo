@@ -55,7 +55,7 @@ async function main() {
   async function draft(f, title, { synced = true } = {}) {
     const { page } = f;
     const previousSaves = f.server.saves().length, previousAssets = f.server.assetCalls.length;
-    await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('.ql-editor').waitFor();
+    await page.locator('[data-haedo-compose]:visible').click(); await page.locator('.ql-editor').waitFor();
     await page.locator('#photoTitle').fill(title); await page.locator('.ql-editor').fill('익명 여행의 본문 🌱\n원본 사진을 유지합니다.');
     const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 257; canvas.height = 193; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#385941'; ctx.fillRect(0, 0, 257, 193); return canvas.toDataURL('image/png').split(',')[1]; });
     f.original = Buffer.from(png, 'base64');

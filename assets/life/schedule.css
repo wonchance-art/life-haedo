@@ -8,7 +8,11 @@
 .life-toolbar[data-schedule] .schedule-today { min-height: 44px; border: 0; padding: 0 12px; background: transparent; color: var(--ink); font-weight: 550; }
 .life-toolbar[data-schedule] .schedule-today:hover:not(:disabled) { background: var(--haedo-soft); }
 .schedule-step { display: inline-flex; }
-.schedule-step .life-icon-button:disabled { color: #c9d1cd; }
+/* The list has no period: 오늘 and ‹ › are hidden there, not left disabled (2026-11-08 S2). On wide screens
+ * they keep their place unseen (not shown, not focusable, not read), so the 보기 단위 bar does not move between
+ * the list and the units (review M1, unified-home-browser "switch x"). */
+.life-toolbar[data-schedule] [data-schedule-idle] { display: none; }
+@media (min-width: 1101px) { .life-toolbar[data-schedule] [data-schedule-idle] { display: inline-flex; visibility: hidden; } }
 .schedule-glyph-next { transform: rotate(180deg); }
 .schedule-help { font-size: 16px; font-weight: 650; color: var(--ink-soft); }
 .schedule-up { display: none; }
@@ -26,19 +30,51 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
     margin-left: calc(max(16px, (100vw - 1000px) / 2) + 224px - var(--haedo-nav-width)); margin-right: 24px;
   }
 }
+/* iPad portrait (761–1100px, 2026-11-08 S2): two rows. The title row holds the title alone (never wrapped;
+ * the list's 글 메뉴 follows it); the next row is the 보기 단위 bar, then 오늘, ‹ ›, 검색 and ? at its end.
+ * Seen left to right, top to bottom, the controls come in DOM order, so the visual and the Tab order are
+ * the same (review 3 m1). The title row is 44px tall below a 10px top space, as the 1440 heading row
+ * (review 2 m4: the title was glued to the top). */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .life-toolbar[data-schedule] { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto auto auto auto; grid-template-rows: minmax(44px, auto) auto; grid-template-areas: "title title title title title title" "views . today step find help"; align-items: center; column-gap: 4px; row-gap: 4px; }
+  .haedo-shell .life-toolbar.haedo-page-heading[data-schedule] { padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 8px; }
+  .life-toolbar[data-schedule] > .life-refresh { grid-column: 1 / -1; }
+  .life-toolbar[data-schedule] > .haedo-heading-title { grid-area: title; min-width: 0; }
+  .life-toolbar[data-schedule] > .haedo-heading-title > h1 { white-space: nowrap; }
+  .life-toolbar[data-schedule] > .haedo-heading-actions { display: contents; }
+  .life-toolbar[data-schedule] .life-schedule-views { grid-area: views; justify-self: start; }
+  .life-toolbar[data-schedule] .schedule-today { grid-area: today; }
+  .life-toolbar[data-schedule] .schedule-step { grid-area: step; }
+  .life-toolbar[data-schedule] #lifeFindOpen { grid-area: find; }
+  .life-toolbar[data-schedule] .schedule-help { grid-area: help; }
+  /* The 글 메뉴 sits in the title row; anchored to the sticky toolbar it opens below the second row, so an
+   * open menu never covers the 보기 단위 bar (integration, 2026-11-08). */
+  .life-toolbar[data-schedule] > .haedo-heading-title > .life-feature-menu { position: static; }
+  .life-toolbar[data-schedule] > .haedo-heading-title > .life-feature-menu .life-feature-menu-panel { inset-inline-start: 24px; top: calc(100% + 6px); }
+}
 
 .life-schedule { min-width: 0; }
 .life-schedule[aria-busy=true] .schedule-body { opacity: .72; transition: opacity 160ms ease-out; }
 .schedule-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 16px; }
 .schedule-notice > p { margin: 0; }
-.schedule-empty { margin: 8px 0; font-size: var(--haedo-text-meta); }
+/* Empty states are said at body size everywhere in 일정 (D, M, W, Y: review 2 m6); a link in one is the teal
+ * link of the plan link line (연간 계획 · 목표 · 습관 · 연표, home.css), not a grey underline. */
+.schedule-empty { margin: 8px 0; color: var(--ink-soft); font-size: var(--haedo-text-body); line-height: 1.6; overflow-wrap: anywhere; }
+.schedule-more { margin: 8px 0; }
+.schedule-empty-link, .schedule-year-empty { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-primary); font-size: var(--haedo-text-control); font-weight: 600; text-decoration: none; }
+/* Inside a sentence the link takes the sentence size, so it reads as one line (review #2 re-check NIT). */
+.schedule-empty .schedule-empty-link { font-size: inherit; }
+.schedule-empty-link:hover, .schedule-year-empty:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-empty-link:focus-visible, .schedule-year-empty:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
+/* D: the empty day at body size (2026-11-08 S7). */
+.schedule-day-empty { margin: 16px 0; }
+.schedule-no-habits, .schedule-no-goals { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin: 0; }
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; column-gap: 48px; align-items: start; }
 .schedule-primary { min-width: 0; }
 .schedule-aside { min-width: 0; }
 .schedule-aside-title { margin: 24px 0 4px; font-size: var(--haedo-text-body); font-weight: 750; line-height: 1.5; }
-.schedule-aside > .schedule-destinations + .schedule-aside-title, .schedule-aside > .schedule-year-text + .schedule-aside-title { margin-top: 24px; }
-.schedule-year-text { margin: 16px 0 0; color: var(--ink); font-size: var(--haedo-text-control); line-height: 1.8; white-space: pre-line; }
-.schedule-destinations > .life-destination { width: 100%; }
+.schedule-aside > :is(.schedule-year-text, .schedule-year-empty) + .schedule-aside-title { margin-top: 24px; }
+.schedule-year-text { margin: 0; color: var(--ink); font-size: var(--haedo-text-control); line-height: 1.8; white-space: pre-line; }
 
 /* Dots: one per day, colour steps by count; plans are dashed (예정에만 점선). */
 .schedule-dots { display: flex; gap: 3px; align-items: center; min-width: 0; cursor: pointer; }
@@ -140,9 +176,10 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-row-content { min-width: 0; }
 .schedule-plan-body { margin: 0; font-size: var(--haedo-text-body); line-height: 1.6; }
 .schedule-post-title { margin: 0; font-size: var(--haedo-text-title); font-weight: 750; line-height: 1.35; letter-spacing: -.03em; }
-h3.schedule-post-title { font-size: var(--haedo-text-control); font-weight: 650; letter-spacing: 0; }
+.schedule-post-title-compact { font-size: var(--haedo-text-control); font-weight: 650; letter-spacing: 0; }
 .schedule-post-open { display: block; width: 100%; min-height: 44px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; word-break: keep-all; }
-h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
+/* W and the phone month: a smaller title, still a 44px target (2026-11-08 S6). */
+.schedule-post-title-compact > .schedule-post-open { display: flex; align-items: center; min-height: 44px; }
 .schedule-post-open:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
 .schedule-post-media { margin-top: 12px; }
 .schedule-post-media > .schedule-thumb { width: 100%; height: 240px; border-radius: 14px; }
@@ -167,7 +204,8 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-entries { min-width: 0; margin: 8px 0 16px; }
 .schedule-entries[aria-busy=true] { min-height: 44px; }
 .schedule-entry-section { min-width: 0; margin: 0 0 16px; }
-.schedule-entry-title { margin: 16px 0 4px; font-size: var(--haedo-text-body); font-weight: 750; line-height: 1.5; }
+/* h2 since review 3 n2 (headings of one level); the letter spacing of the former h3 keeps the same look. */
+.schedule-entry-title { margin: 16px 0 4px; font-size: var(--haedo-text-body); font-weight: 750; line-height: 1.5; letter-spacing: -.02em; }
 .schedule-habit { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: var(--haedo-text-control); }
 .schedule-habit > input, .schedule-habit-grid input[type=checkbox] { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
 .schedule-goals { display: grid; gap: 8px; }
@@ -185,7 +223,15 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 .schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }
 .schedule-happiness { min-width: 0; margin: 8px 0 0; border: 0; padding: 0; }
 .schedule-happiness > legend { margin: 16px 0 4px; padding: 0; font-size: var(--haedo-text-body); font-weight: 750; }
-.schedule-happiness-scale { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; max-width: 528px; }
+.schedule-happiness-title { margin: 0; font: inherit; letter-spacing: inherit; }
+/* 행복도 0–10: one row of eleven while each choice is at least 44px wide (11 × 44 + 10 × 4 = 524px), else two
+ * rows, 0–5 and 6–10, at every width (2026-11-08 S7; review 3 m2: 1101–1300px is narrow too, beside the aside).
+ * The day slot's body is the container; under 284px the 4px column gap gives way before a choice would. */
+.schedule-entries-day > .schedule-entry-body { container: schedule-day-entry / inline-size; }
+.schedule-happiness-scale { display: grid; grid-template-columns: repeat(11, minmax(44px, 1fr)); gap: 4px; max-width: 528px; }
+@container schedule-day-entry (width < 524px) {
+  .schedule-happiness-scale { grid-template-columns: repeat(6, minmax(44px, 1fr)); column-gap: clamp(0px, calc((100% - 264px) / 5), 4px); }
+}
 .schedule-happiness-option { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; border-radius: 12px; background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; cursor: pointer; }
 .schedule-happiness-option > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .schedule-happiness-option:has(input:checked) { background: var(--color-primary); color: var(--haedo-on-accent); font-weight: 750; }
@@ -259,8 +305,7 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
   .life-toolbar[data-schedule=home] .life-schedule-view[data-schedule-view=tools] { padding: 0; border: 0; border-radius: 12px; color: var(--ink); }
   .life-toolbar[data-schedule=home] .schedule-view-letter { display: none; }
   .life-toolbar[data-schedule=home] .schedule-view-icon { display: block; }
-  /* ‹ › stay on every unit (another year, month or day); the list has no period to step. */
-  .life-toolbar[data-schedule=home] .schedule-today, .life-toolbar[data-schedule=home] .schedule-step { display: none; }
+  /* ‹ › stay on every unit (another year, month or day); the list hides them (hidden, above). */
   /* Up link and actions share the top row; the period title takes the full next row (iOS 캘린더). */
   .life-toolbar[data-schedule]:not([data-schedule=home]) { flex-wrap: wrap; row-gap: 0; }
   .life-toolbar[data-schedule]:not([data-schedule=home]) .haedo-heading-title { display: contents; }
@@ -312,4 +357,9 @@ h3.schedule-post-title > .schedule-post-open { min-height: 24px; }
 @media (forced-colors: active) {
   .schedule-dot { border: 1px solid CanvasText; }
   .schedule-day-cell[aria-current=date], .schedule-filter-tab[aria-selected=true] { outline: 2px solid Highlight; outline-offset: -2px; }
+  /* 행복도 (review 3 m6): the fill of a choice is dropped, so each choice keeps a 1px edge and the chosen one a
+   * 2px Highlight ring (after the focus ring, so a chosen choice with focus still shows which one it is). */
+  .schedule-happiness-option { border: 1px solid CanvasText; }
+  .schedule-happiness-option:has(input:focus-visible) { outline: 2px solid CanvasText; outline-offset: 2px; }
+  .schedule-happiness-option:has(input:checked) { outline: 2px solid Highlight; outline-offset: 2px; }
 }

@@ -39,6 +39,7 @@
     syncWarning = "",
     conflictId,
     syncing = false,
+    syncOffline = false,
     syncChecked = false;
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   function toast(message) {
@@ -193,33 +194,63 @@
     } else if (target) node.append(link(action, target, "p-button"));
     container.append(node);
   }
-  function status() {
+  // Two-step save state (2026-11-02 owner decision; 일정 통합 정리 S9). Items and timelines are
+  // stored on this device first (synchronously), so the line only says whether the account has them:
+  // 저장됨 · 계정에 올림 / 계정에 올리기 대기 / 계정에 올리지 못함 · [다시 시도]. The conflict and
+  // recovery-copy sentences stay as they were, after the state. 'unknown' says nothing: before the
+  // first account check (or offline with nothing to send) 저장됨 · 계정에 올림 is not yet known.
+  const STATE_TEXT = { ok: "저장됨 · 계정에 올림", pending: "계정에 올리기 대기", error: "계정에 올리지 못함 ·", unknown: "" };
+  function saveState() {
     const states = store.items.map((item) => item.state);
     const docs = model.registry(localStorage, uid).docs;
-    let text =
-      syncWarning ||
-      (syncChecked
-        ? "서버와 기기 사본을 확인했습니다."
-        : "서버 동기화를 확인하고 있습니다.");
-    if (
-      !syncWarning &&
-      (states.includes("conflict") ||
-        docs.some((d) => d.syncedAt && d.updated !== d.syncedAt))
-    )
-      text = "서버와 다른 변경 사항이 있습니다. 기기 사본을 보존했습니다.";
-    else if (!syncWarning && states.includes("err"))
-      text = "기기에 저장했습니다. 연결 후 동기화를 다시 시도해 주세요.";
-    else if (
-      !syncWarning &&
-      (states.includes("sync") || docs.some((d) => !d.syncedAt))
-    )
-      text = "기기에 저장했습니다. 서버와 동기화하고 있습니다.";
+    const unsent = states.includes("sync") || states.includes("err") || docs.some((d) => !d.syncedAt || d.updated !== d.syncedAt);
+    // Offline is not a failure: what is unsent waits (the online event sends it), and with nothing to
+    // send there is nothing to say. A failed upload or pass while online is.
+    const offline = navigator.onLine === false;
+    if (states.includes("conflict") || (states.includes("err") && !offline)) return "error";
+    if (syncWarning && !(syncOffline && offline)) return "error";
+    if (unsent) return "pending";
+    return syncChecked ? "ok" : "unknown";
+  }
+  function status() {
+    const state = saveState();
+    const conflict = store.items.some((item) => item.state === "conflict");
+    const message = byId("syncMessage");
+    const line = message.closest(".p-status-line");
+    let stateText = message.querySelector("[data-status-state]"),
+      retry = byId("syncRetry"),
+      detail = message.querySelector("[data-status-detail]");
+    if (!stateText || !retry || !detail) {
+      stateText = el("span");
+      stateText.dataset.statusState = "";
+      retry = el("button", "p-text-link p-status-retry", "다시 시도");
+      retry.type = "button";
+      retry.id = "syncRetry";
+      retry.onclick = sync;
+      detail = el("span", "p-status-detail");
+      detail.dataset.statusDetail = "";
+      message.replaceChildren(stateText, " ", retry, detail);
+    }
+    if (stateText.textContent !== STATE_TEXT[state]) stateText.textContent = STATE_TEXT[state];
+    // A retry that succeeded hides its button: keep keyboard focus on the screen, not the page.
+    const retryFocused = document.activeElement === retry;
+    retry.hidden = state !== "error";
+    if (retryFocused && retry.hidden) {
+      const title = document.querySelector(".haedo-page-heading h1");
+      if (title) { title.tabIndex = -1; title.focus({ preventScroll: true }); }
+    }
+    // Not `disabled`: a focused button that becomes disabled drops keyboard focus. sync() ignores
+    // presses while a pass runs; the line's data-sync says busy/idle.
+    retry.setAttribute("aria-disabled", String(syncing));
+    const notes = [];
+    if (state === "error" && conflict) notes.push("서버와 다른 변경 사항이 있습니다. 기기 사본을 보존했습니다.");
+    else if (state === "error" && syncWarning) notes.push(syncWarning);
     // Conflict losers are kept, not shown as items (newest edit wins, 2026-11-01). The sentence
     // shows until the owner acknowledges it; the copies themselves are never removed.
     const unseen = store.recoveryUnseen;
-    if (unseen) text += " 다른 기기와 겹친 변경 " + unseen + "개를 복구 사본으로 남겼습니다.";
-    byId("syncMessage").textContent = text;
-    const line = byId("syncMessage").closest(".p-status-line");
+    if (unseen) notes.push("다른 기기와 겹친 변경 " + unseen + "개를 복구 사본으로 남겼습니다.");
+    const detailText = notes.length ? " " + notes.join(" ") : "";
+    if (detail.textContent !== detailText) detail.textContent = detailText;
     let actions = byId("recoveryActions");
     if (!actions) {
       actions = el("span", "p-status-actions");
@@ -234,7 +265,9 @@
       line.append(actions);
     }
     actions.hidden = !unseen;
-    line.dataset.idle = String(text === "서버와 기기 사본을 확인했습니다.");
+    line.dataset.state = state;
+    line.dataset.sync = syncing || !syncChecked && !syncWarning ? "busy" : "idle";
+    line.dataset.idle = String((state === "ok" || state === "unknown") && !notes.length);
   }
   // The kept copies, newest first. Reviving adds a new item; the kept copy stays (and in backups).
   function openRecovery() {
@@ -456,7 +489,14 @@
       );
   }
   // 습관 트래커(2026-11-07): one month per habit (HaedoHabitTracker). Not past the current month.
-  let habitMonth = null;
+  // `habits.html?month=YYYY-MM` opens that month (일정 M's tracker rows link here); an invalid
+  // value is ignored and a future month is shown as the current month.
+  function requestedMonth() {
+    const value = new URLSearchParams(location.search).get("month");
+    const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value || "");
+    return match && Number(match[1]) >= 1900 && Number(match[1]) <= 2199 ? value : null;
+  }
+  let habitMonth = page === "habits" ? requestedMonth() : null;
   function renderHabits() {
     const today = HaedoData.localDate(),
       tracker = HaedoHabitTracker,
@@ -494,6 +534,13 @@
   function showHabitMonth(month) {
     habitMonth = month;
     render();
+    // The same screen in another month: replace the address, so a reload keeps the month shown.
+    try {
+      const url = new URL(location.href);
+      if (habitMonth === HaedoHabitTracker.monthOf(HaedoData.localDate())) url.searchParams.delete("month");
+      else url.searchParams.set("month", habitMonth);
+      if (url.href !== location.href) history.replaceState(history.state, "", url);
+    } catch (_) { /* The month on screen stays; only the address is not updated. */ }
     // A month button that is now disabled or hidden would drop focus to the page: keep it on the label.
     const active = document.activeElement;
     if (!active || active === document.body || active.disabled || active.hidden) byId("habitMonthLabel").focus();
@@ -562,8 +609,8 @@
       if (editing.kind === "habit" && !data.days.length)
         throw new Error("반복 요일을 하나 이상 선택해 주세요.");
       store.change(editing.item?.id, editing.kind, data);
+      // The status line says where it is (계정에 올리기 대기 → 저장됨 · 계정에 올림); no third phrase.
       byId("itemDialog").close();
-      toast("기기에 저장했습니다.");
     } catch (e) {
       byId("itemFormMessage").textContent = e.message;
     }
@@ -619,6 +666,9 @@
     };
   function showTimelineManagement() {
     globalThis.HaedoNavigation?.activate("manage");
+    // Opened from 설정 > 백업·복원: the 계획 tabs belong to 일정, not to this backup screen.
+    const planning = document.querySelector("[data-haedo-planning-navigation]");
+    if (planning) planning.hidden = true;
     document.querySelector(".haedo-page-heading h1").textContent = "백업·복원";
     document.title = "연표·목표·습관 관리 · 해도";
     const back = document.querySelector("[data-section-back]");
@@ -801,7 +851,7 @@
   async function sync() {
     if (syncing || auth.user?.id !== uid) return;
     syncing = true;
-    byId("syncRetry").disabled = true;
+    status();
     try {
       await Promise.all([store.pull(), store.syncDocuments()]);
       await store.uploadDocuments(
@@ -812,25 +862,27 @@
       );
       await store.flush();
       syncWarning = "";
+      syncOffline = false;
       syncChecked = true;
     } catch (e) {
+      syncOffline = navigator.onLine === false;
       syncWarning =
         e.message || "연결하지 못했습니다. 기기 사본은 보존했습니다.";
     } finally {
       syncing = false;
-      if (auth.user?.id === uid) {
-        byId("syncRetry").disabled = false;
-        render();
-      }
+      if (auth.user?.id === uid) render();
     }
   }
-  byId("syncRetry").onclick = sync;
   document.addEventListener("haedo:store", render);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && auth.user?.id === uid) sync();
   });
   addEventListener("online", () => {
     if (auth.user?.id === uid) sync();
+  });
+  // Going offline turns a failed upload into one that waits for the connection.
+  addEventListener("offline", () => {
+    if (auth.user?.id === uid) status();
   });
   render();
   // The 일정 screen's "보기" opens this list here (habits.html#recovery).

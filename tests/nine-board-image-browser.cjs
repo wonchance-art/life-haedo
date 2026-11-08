@@ -50,7 +50,7 @@ async function main(){
    const bounds=await page.locator('.nb-image-export select,.nb-image-export button').evaluateAll(nodes=>nodes.map(n=>({height:n.getBoundingClientRect().height,width:n.getBoundingClientRect().width})));for(const b of bounds){assert(b.height>=44);assert(b.width>=44);}
   }report.checks.push('1440,820,390px export controls have no horizontal page overflow and targets are at least 44px');console.log('PASS PNG export, restore, retry and viewport flows');
   await page.setViewportSize({width:820,height:1000});await page.goto(base+'/index.html');await ready(page);await page.locator('#homePosts[aria-busy="false"]').waitFor();
-  await page.locator('[data-home-destination="write"]:visible').first().click();await page.locator('#photoTitle').fill('아홉 칸에서 시작한 비공개 글');
+  await page.locator('[data-haedo-compose]:visible').first().click();await page.locator('#photoTitle').fill('아홉 칸에서 시작한 비공개 글');
   const description='선택한 영역의 책과 음악을 다시 읽으며 남긴 설명입니다. 전체 내용은 JSON으로 따로 보관했습니다.\n출처: https://example.org/source?edition=1&original=yes',alt='책과 음악 여섯 항목과 빈 칸 세 개를 담은 3×3 구성';
   await page.locator('.ql-editor').fill(description);await page.evaluate(()=>{const q=Quill.find(document.querySelector('.ql-container'));q.setSelection(q.getLength()-1,0,'silent');});await page.locator('#photoFiles').setInputFiles({name:'haedo-nine-board.png',mimeType:'image/png',buffer:png});await page.locator('.photo-block img').waitFor();
   await page.locator('.photo-block img').click();await page.getByRole('textbox',{name:'사진 설명',exact:true}).fill('직접 선택한 영역 · 제목과 출처');await page.locator('.photo-settings > summary').click();await page.getByRole('textbox',{name:'사진 대체 텍스트',exact:true}).fill(alt);

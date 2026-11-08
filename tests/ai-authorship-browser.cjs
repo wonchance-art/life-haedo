@@ -91,7 +91,7 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
   const shot = async name => { const file = label + '-' + name + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: false }); report.visual.push(file); };
   try {
     await page.goto(base + '/index.html'); await ready(page); await settle(page);
-    await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+    await page.locator('[data-haedo-compose]:visible').first().click();
     await page.locator('#photoTitle').waitFor(); await page.locator('.ql-editor').waitFor();
     // The control sits in the extra formats (서식) disclosure with italic, lists and quotes.
     const toggle = page.getByRole('button', { name: 'AI 글 표시', exact: true });

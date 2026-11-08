@@ -60,7 +60,7 @@ const panel = page => page.locator('.writing-ai-panel');
 const action = (page, name) => panel(page).getByRole('button', { name, exact: true });
 async function openWriter(page) {
   await page.goto(base + '/index.html'); await ready(page); await settle(page);
-  await page.locator('[data-haedo-compose]:visible, [data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+  await page.locator('[data-haedo-compose]:visible').first().click();
   await page.locator('#photoTitle').waitFor(); await page.locator('.ql-editor').waitFor();
 }
 async function typeFixture(page) {

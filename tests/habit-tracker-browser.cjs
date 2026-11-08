@@ -2,7 +2,8 @@
  * with the anonymous intercepted Auth and the owner-scoped in-memory haedo_items table of
  * schedule-entries-browser.cjs (server-stamped updated_at, conditional PATCH).
  * habits.html: a month per habit, toggles through the existing store, month steps, layout.
- * 일정 M: the same tracker through the 일정 save path with its two-step status.
+ * 일정 M (2026-11-08 일정 통합 정리 S5): one compact read-only table (renderCompact); each row links to
+ * habits.html, nothing is checked or written there.
  * npm run dev; node tests/habit-tracker-browser.cjs
  * Never uses real Google, production Supabase or Apple-device claims. */
 'use strict';
@@ -201,14 +202,16 @@ async function main() {
       assert.equal(await focusKey(page), 'habitMonthLabel');
     });
 
-    await check('no habits: the empty state and its 습관 추가 stay; the back link keeps the legacy address', async ({ page }) => {
+    await check('no habits: the empty state and its 습관 추가 stay; the back link goes to 일정 Y', async ({ page }) => {
       await page.goto(base + '/habits.html');
       await page.waitForFunction(() => document.body.dataset.page === 'habits' && !document.querySelector('[data-private]').hidden && document.querySelector('#habitList .p-empty'));
       assert.match(await page.locator('#habitList').innerText(), /반복하고 싶은 일을 정해보세요\./);
       await page.locator('#habitList').getByRole('button', { name: '습관 추가' }).click();
       await page.locator('#itemDialog[open]').waitFor();
       assert.equal(await page.locator('#itemDialogTitle').textContent(), '습관 추가');
-      assert.equal(await page.locator('[data-section-back]').getAttribute('href'), 'index.html?section=tools');
+      // 일정 통합 정리 S1 (2026-11-08): ‹ 일정으로 돌아가기 → 일정 Y. The old `?section=tools` still opens Y (alias).
+      assert.equal(await page.locator('[data-section-back]').getAttribute('href'), 'index.html?section=schedule&view=tools');
+      assert.equal(await page.locator('[data-section-back]').getAttribute('aria-label'), '일정으로 돌아가기');
     });
 
     await check('a cell of a habit no longer in the list saves nothing, says so and repaints', async ({ page, tables }) => {
@@ -242,17 +245,21 @@ async function main() {
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page);
       await page.waitForFunction(() => document.querySelector('.schedule-entries-month')?.getAttribute('aria-busy') === 'false');
       await page.locator('.schedule-entries-month').getByRole('link', { name: '습관 체크' }).waitFor();
-      assert.equal(await page.locator('.schedule-entries-month .habit-tracker-day').count(), 0, 'no unstyled or partial tracker');
+      assert.equal(await page.locator('.schedule-entries-month :is(.habit-compact, .habit-tracker-day)').count(), 0, 'no unstyled or partial tracker');
       assert.deepEqual([...new Set(asked)], ['month'], 'only the month slot asks for it');
     });
 
     // One file fails while the other is still on its way (re-review MINOR): the slot asks again (first
     // frame, refresh frame, a month step) and must reuse the pending file, not add a second tag.
-    for (const [failing, slow] of [['habit-tracker.css', 'habit-tracker.js'], ['habit-tracker.js', 'habit-tracker.css']]) await check('a failed ' + failing + ' while ' + slow + ' is slow adds each tag once and the month still shows', async ({ page, context, tables }) => {
+    // The failure lands before or after the 일정 redraws once its records are read (late: 700ms). Late, the
+    // redrawn slot was already waiting on the same load and shows the fallback link (the contract), so the
+    // retry is the person's month step below. Both orders are checked (2026-11-08: the late order hung the
+    // first wait, which assumed the tracker; reproduced on d229f81 with the failure held 700ms).
+    for (const late of [0, 700]) for (const [failing, slow] of [['habit-tracker.css', 'habit-tracker.js'], ['habit-tracker.js', 'habit-tracker.css']]) await check('a failed ' + failing + (late ? ' (late)' : '') + ' while ' + slow + ' is slow adds each tag once and the month still shows', async ({ page, context, tables }) => {
       seed(tables);
       page.__expectBlocked = [failing];
       let failed = 0, slowAsked = 0;
-      await context.route('**/assets/' + failing, route => { if (failed++ === 0) return route.abort(); return route.continue(); });
+      await context.route('**/assets/' + failing, async route => { if (failed++ === 0) { await new Promise(done => setTimeout(done, late)); return route.abort(); } return route.continue(); });
       await context.route('**/assets/' + slow, async route => {
         slowAsked++;
         const response = await route.fetch();
@@ -261,16 +268,18 @@ async function main() {
         const body = slow.endsWith('.js') ? (await response.text()) + '\n;window.__trackerRuns = (window.__trackerRuns || 0) + 1;' : undefined;
         return route.fulfill({ response, body });
       });
-      await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page); await scheduleMonth(page);
+      await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page);
+      // Settled either way: the table, or (the failure first) the fallback link.
+      await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries-month'); return slot?.getAttribute('aria-busy') === 'false' && slot.childElementCount > 0; });
       // Wait until the slow file is in, then step the month and back (a person retrying).
       await page.waitForTimeout(2600);
-      const stepped = !(await page.locator('.schedule-entries-month .habit-tracker-day').count());
+      const stepped = !(await page.locator('.schedule-entries-month .habit-compact-row').count());
       if (stepped) {
         await page.locator('[data-schedule-step="1"]').click(); await scheduleMonth(page);
         await page.locator('[data-schedule-step="-1"]').click(); await scheduleMonth(page);
       }
       console.log('  (' + failing + ' failed first; month shown ' + (stepped ? 'after a month step' : 'without a step') + ')');
-      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-tracker-day').length >= 30, null, { timeout: 10000 });
+      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-compact-row').length === 2, null, { timeout: 10000 });
       const tags = await page.evaluate(() => ({ scripts: document.querySelectorAll('script[src$="assets/habit-tracker.js"]').length, links: document.querySelectorAll('link[href$="assets/habit-tracker.css"]').length, runs: window.__trackerRuns ?? null }));
       assert.deepEqual({ scripts: tags.scripts, links: tags.links }, { scripts: 1, links: 1 }, 'one tag each');
       if (slow.endsWith('.js')) assert.equal(tags.runs, 1, 'the tracker script ran once');
@@ -296,39 +305,73 @@ async function main() {
       await page.screenshot({ path: path.join(output, 'habits-' + width + '.png'), fullPage: true });
     }, { width, height: width <= 390 ? 844 : 960 });
 
-    await check('일정 M shows the tracker; a tap goes through the 일정 save path with its two-step status', async ({ page, tables }) => {
+    // 2026-11-08 S5 (rule change): M no longer draws a 30-cell month per habit and takes no check. One
+    // compact table: rows are habits, one read-only dot per day, n/m회 at the row head, today marked, and the
+    // whole row is one 44px link to the habit screen of that month (habits.html?month=YYYY-MM). The checks stay in
+    // D·W and on habits.html.
+    const compactRows = page => page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => ({
+      id: row.dataset.habit, href: row.getAttribute('href'), name: row.getAttribute('aria-label'), count: row.querySelector('.habit-compact-count').textContent,
+      title: row.querySelector('.habit-compact-name').textContent,
+      dots: Object.fromEntries([...row.querySelectorAll('.habit-compact-dot')].map(dot => [dot.dataset.date.slice(8), dot.dataset.state + (dot.dataset.today ? '+today' : '')])),
+      hidden: row.querySelector('.habit-compact-days').getAttribute('aria-hidden') })));
+    await check('일정 M shows one compact read-only table: n/m회, dots, today, each row one link to habits.html; nothing is written', async ({ page, tables }) => {
       seed(tables);
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page); await scheduleMonth(page);
-      await page.waitForFunction(() => HaedoPlatformStore.items.length === 2 && document.querySelectorAll('.schedule-entries-month .habit-tracker-card').length === 2);
+      await page.waitForFunction(() => HaedoPlatformStore.items.length === 2 && document.querySelectorAll('.schedule-entries-month .habit-compact-row').length === 2);
+      await page.waitForFunction(() => HaedoPlatformStore.items.every(i => i.state === 'ok'));
       const slot = page.locator('.schedule-entries-month');
-      assert.equal(await slot.locator('.habit-tracker-card[data-habit="h1"] .habit-tracker-summary').textContent(), '이번 달 1/3회 · 연속 0회 · 월, 수, 금');
-      assert.equal(await slot.locator('.habit-tracker-card').first().locator('h4').textContent(), '아침 산책');
       assert.equal(await slot.getAttribute('aria-label'), '이 달 습관');
-      assert.equal(await slot.locator('[aria-label="이 달 습관"]').count(), 0, 'named once, by the slot');
-      const day = slot.locator(cell('schedule:month-habit', 'h1', '2026-11-04'));
-      await day.click();
-      await slot.locator('.schedule-entry-status').filter({ hasText: '계정에 올리기 대기' }).waitFor();
-      await slot.locator('.schedule-entry-status').filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
-      assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-10-30', '2026-11-02', '2026-11-04']);
-      assert.equal(await day.getAttribute('aria-pressed'), 'true');
-      assert.equal(await focusKey(page), 'schedule:month-habit:h1:2026-11-04', 'focus stays on the day');
-      // Two quick taps on the same day: each from the stored state, stored as shown.
-      await day.click(); await day.click();
-      await page.waitForFunction(() => document.querySelector('.schedule-entry-status')?.dataset.state === 'ok', null, { timeout: 10000 });
-      await page.waitForTimeout(300);
-      assert.equal(await day.getAttribute('aria-pressed'), 'true');
-      assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-10-30', '2026-11-02', '2026-11-04']);
-      assert.equal(await slot.locator(cell('schedule:month-habit', 'h1', '2026-11-09')).isDisabled(), true, 'future day');
-      assert.equal(await slot.locator(cell('schedule:month-habit', 'h1', '2026-11-05')).isDisabled(), true, 'not scheduled');
-      // A later month: nothing to tap. The calendar's own step changes the month (no tracker arrows here).
+      assert.equal(await slot.locator('.habit-compact').count(), 1, 'one table for all habits');
+      assert.equal(await slot.locator('.habit-tracker-card, .habit-tracker-grid, .habit-tracker-day').count(), 0, 'no month calendar per habit');
+      const [walkRow, dailyRow] = await compactRows(page);
+      assert.deepEqual([walkRow.id, walkRow.href, walkRow.title, walkRow.count, walkRow.name, walkRow.hidden],
+        ['h1', 'habits.html?month=2026-11', '아침 산책', '1/3회', '아침 산책, 이번 달 1/3회, 습관 화면에서 보기', 'true']);
+      assert.equal(Object.keys(walkRow.dots).length, 30, 'one dot per day of November');
+      // Done filled, a day to do (also after today) outlined, the rest empty; today marked.
+      assert.deepEqual([walkRow.dots['02'], walkRow.dots['04'], walkRow.dots['05'], walkRow.dots['07'], walkRow.dots['09']],
+        ['done', 'planned', 'none', 'none+today', 'planned']);
+      // A check kept from before the start is shown lighter and not counted.
+      assert.deepEqual([dailyRow.count, dailyRow.dots['03'], dailyRow.dots['05'], dailyRow.dots['07']], ['1/4회', 'kept', 'done', 'planned+today']);
+      assert.equal(await slot.locator('.habit-compact-number[data-today]').textContent(), '7', 'today\'s column is numbered');
+      // Review 2 m3: a kept check is another shape than done (a ring with a dot inside, not only a lighter fill); today is
+      // marked on its number only (no line under an empty cell); one legend line in text says what the shapes are.
+      const shapes = await page.evaluate(() => {
+        const look = selector => { const n = document.querySelector('.schedule-entries-month .habit-compact-rows ' + selector), c = getComputedStyle(n), inner = getComputedStyle(n, '::before');
+          return { ring: c.borderTopStyle !== 'none' && parseFloat(c.borderTopWidth) > 0, fill: c.backgroundColor !== 'rgba(0, 0, 0, 0)', inner: inner.content !== 'none' && parseFloat(inner.width) > 0 }; };
+        const today = document.querySelector('.schedule-entries-month .habit-compact-rows .habit-compact-dot[data-today]');
+        return { done: look('[data-state=done]'), kept: look('[data-state=kept]'), planned: look('[data-state=planned]'), todayMark: getComputedStyle(today, '::after').content };
+      });
+      assert.deepEqual(shapes, { done: { ring: false, fill: true, inner: false }, kept: { ring: true, fill: false, inner: true }, planned: { ring: true, fill: false, inner: false }, todayMark: 'none' });
+      const legend = slot.locator('.habit-compact-legend');
+      assert.deepEqual(await legend.locator('.habit-compact-legend-item').allInnerTexts(), ['완료', '할 날', '정한 요일이 아닌 날의 체크'], 'one legend line in text');
+      // Read as three separate list items, not one run of words (a11y re-check M1).
+      assert.deepEqual(await legend.evaluate(node => [node.tagName, node.getAttribute('aria-label'), [...node.children].map(child => child.tagName)]), ['UL', '점 표시', ['LI', 'LI', 'LI']]);
+      assert.equal(await legend.evaluate(n => !!n.closest('[aria-hidden="true"]') || getComputedStyle(n).display === 'none'), false, 'the legend is read');
+      assert.deepEqual(await legend.locator('.habit-compact-dot').evaluateAll(nodes => nodes.map(n => n.dataset.state + ':' + n.getAttribute('aria-hidden'))), ['done:true', 'planned:true', 'kept:true'], 'the shapes beside the words are the dots themselves');
+      // No target but the rows: no button or field in the table, each row at least 44px tall.
+      assert.equal(await slot.locator('.schedule-entry-body :is(button, input, [tabindex])').count(), 0, 'no per-cell target');
+      const heights = await slot.locator('.habit-compact-row').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height >= 44));
+      assert.deepEqual(heights, [true, true]);
+      // Keyboard: Tab goes row to row (one stop per habit).
+      await slot.locator('.habit-compact-row[data-habit="h1"]').focus(); await page.keyboard.press('Tab');
+      assert.equal(await focusKey(page), 'schedule:month-habit:h2');
+      const writes = () => tables.calls.filter(call => call.method !== 'GET').length;
+      assert.equal(writes(), 0, 'viewing M writes nothing');
+      // A click on the dots is the row's link: it opens the habit screen, and still nothing was written.
+      await slot.locator('.habit-compact-row[data-habit="h1"] .habit-compact-dot[data-date="2026-11-04"]').click();
+      await page.waitForURL(url => url.pathname.endsWith('/habits.html')); await habitsReady(page, 2);
+      assert.equal(writes(), 0, 'opening the row wrote nothing');
+      assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, walk.checks);
+      // A later month: n/m is 0/0, the days to do are outlined.
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-12-01'); await ready(page); await scheduleMonth(page);
-      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-tracker-card').length === 2);
-      assert.equal(await page.locator('.schedule-entries-month .habit-tracker-day:not(:disabled)').count(), 0);
-      assert.equal(await page.locator('.schedule-entries-month .habit-tracker-card[data-habit="h1"] .habit-tracker-summary').textContent(), '12월 0/0회 · 연속 0회 · 월, 수, 금');
+      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-compact-row').length === 2);
+      const [december] = await compactRows(page);
+      assert.deepEqual([december.href, december.count, december.name, december.dots['02'], Object.keys(december.dots).length], ['habits.html?month=2026-12', '0/0회', '아침 산책, 12월 0/0회, 습관 화면에서 보기', 'planned', 31]);
+      assert.equal(await page.locator('.schedule-entries-month .habit-compact-number[data-today]').count(), 0, 'no today column in another month');
       // The week panel stays as it was (checkbox grid).
       await page.goto(base + '/index.html?section=schedule&view=week&date=2026-11-07'); await ready(page);
       await page.locator('.schedule-habit-grid input[type=checkbox]').first().waitFor();
-      assert.equal(await page.locator('.schedule-entries .habit-tracker').count(), 0);
+      assert.equal(await page.locator('.schedule-entries :is(.habit-tracker, .habit-compact)').count(), 0);
     });
 
     await check('일정 M with no habit that month says so', async ({ page, tables }) => {
@@ -338,11 +381,38 @@ async function main() {
       await page.locator('.schedule-entries-month').getByText('이 달에 할 습관이 없어요.').waitFor();
     });
 
-    for (const width of [1440, 820, 390]) await check('일정 M fits ' + width + ' with the tracker', async ({ page, tables }) => {
+    // Review 2 m3 (2026-11-08, rule change): up to 1100px the name (with n/m회) has its own line and the dots the full
+    // width below, so they are not squeezed at 820; each row ends in a ›; review 3 n7: at 320 the last day number stays
+    // over the dots.
+    for (const width of [1440, 1101, 1100, 820, 390, 360, 320]) await check('일정 M fits ' + width + ' with the compact table', async ({ page, tables }) => {
       seed(tables);
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-07'); await ready(page); await scheduleMonth(page);
-      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-tracker-card').length === 2);
-      await layout(page, '.schedule-entries-month', 'schedule month ' + width);
+      await page.waitForFunction(() => document.querySelectorAll('.schedule-entries-month .habit-compact-row').length === 2);
+      await overflow(page, 'schedule month ' + width);
+      const rows = await page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => {
+        const box = row.getBoundingClientRect(), name = row.querySelector('.habit-compact-name').getBoundingClientRect(), days = row.querySelector('.habit-compact-days').getBoundingClientRect();
+        const dots = [...row.querySelectorAll('.habit-compact-dot')].map(dot => dot.getBoundingClientRect());
+        return { tall: box.height >= 44, inside: days.right <= box.right + 1 && box.right <= innerWidth + 1 && dots.every(dot => dot.right <= days.right + 1 && dot.width > 0),
+          nameAbove: name.bottom <= days.top + 1, nameWhole: row.querySelector('.habit-compact-name').scrollWidth <= row.querySelector('.habit-compact-name').clientWidth + 1,
+          ordered: dots.every((dot, i) => !i || dot.left > dots[i - 1].left) };
+      }));
+      for (const row of rows) {
+        assert.deepEqual([row.tall, row.inside, row.nameWhole, row.ordered], [true, true, true, true], width + ': rows are 44px, the 30 dots stay inside in day order, the name is whole');
+        // Phone: the name has its own line and the dots are under it.
+        if (width <= 1100) assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
+        else assert.equal(row.nameAbove, false, width + ': name and dots share the row');
+      }
+      // Each row ends in a › (drawn only), at its right end beside the dots.
+      const go = await page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => {
+        const mark = row.lastElementChild, box = mark.getBoundingClientRect(), days = row.querySelector('.habit-compact-days').getBoundingClientRect(), r = row.getBoundingClientRect();
+        return { go: mark.classList.contains('habit-compact-go'), hidden: mark.getAttribute('aria-hidden'), glyph: !!mark.querySelector('svg'), end: r.right - box.right <= 16, after: box.left >= days.right - 1 };
+      }));
+      assert.deepEqual(go, go.map(() => ({ go: true, hidden: 'true', glyph: true, end: true, after: true })), width + ': a › ends each row');
+      // The day numbers stay over the dot columns: the last one (30) does not reach past the last dot's column.
+      const numbers = await page.evaluate(() => { const head = document.querySelector('.schedule-entries-month .habit-compact-head .habit-compact-days'), box = head.getBoundingClientRect();
+        const range = document.createRange(), last = [...head.children].filter(n => n.textContent).at(-1); range.selectNodeContents(last); const text = range.getBoundingClientRect();
+        return { last: last.textContent, inside: text.right <= box.right + 0.5 && text.left >= box.left - 0.5 }; });
+      assert.deepEqual(numbers, { last: '30', inside: true }, width + ': the last day number stays over the dots');
       await page.screenshot({ path: path.join(output, 'schedule-month-' + width + '.png'), fullPage: true });
     }, { width, height: width <= 390 ? 844 : 960 });
   } finally { await browser.close(); }

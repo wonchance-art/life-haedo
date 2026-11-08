@@ -12,6 +12,7 @@ const path = require('node:path');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.JOURNEY_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
@@ -88,17 +89,18 @@ async function seedMixed(page) {
   });
 }
 async function documents(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(); return { workspaceId, docs: await Promise.all((await s.listPhotoPosts(workspaceId)).map(row => s.readPhotoPost(workspaceId, row.id))) }; }); }
-async function assertPostCommitLibraryReturn(page, destination = 'import') {
-  const library = page.locator('.home-library');
-  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
-  const entry = page.locator('[data-home-destination="' + destination + '"]');
-  await entry.scrollIntoViewIfNeeded(); await entry.focus();
+// 2026-11-08 S3: the list's own subviews open from the heading's 글 메뉴 (the collapsed 자료 block is gone).
+async function assertPostCommitLibraryReturn(page, destination = 'blog') {
+  const menu = page.locator('#lifeBlogMenu');
+  if (!await menu.evaluate(node => node.open)) await menu.locator(':scope > summary').click();
+  const entry = menu.locator(destination === 'blog' ? '[data-home-destination="blog"]' : '#homeAccountBlog');
+  await entry.focus();
   const origin = await entry.evaluate(node => ({ key: node.dataset.focusKey, scrollY }));
   await entry.click(); await settle(page); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), destination);
   await page.locator('#lifeSubviewReturn').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
   await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, origin.key);
   await page.waitForFunction(top => Math.abs(scrollY - top) < 2, origin.scrollY);
-  assert.equal(await page.locator('.home-library').evaluate(node => node.open), true);
+  assert.equal(await menu.evaluate(node => node.open), true);
   return { destination, focusKey: origin.key, scrollY: origin.scrollY, restoredScrollY: await page.evaluate(() => scrollY) };
 }
 async function main() {
@@ -171,7 +173,7 @@ async function main() {
         await page.locator('.pp-composer').getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('#ppBody').waitFor({ state: 'detached' });
         await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).last().click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색'); assert.match(await page.locator(`[data-post-id="${refs.legacy}"]`).innerText(), /실제 수정/);
-        await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
+        await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
         assert.equal(await page.locator('.wb-post-feed').count(), 0, 'Profile editing must not mount a second private post list');
         await page.locator('#wbPageTitle').fill('새 이름으로 이어 쓰는 블로그'); await page.locator('#wbPageIntro').fill('목록을 벗어나지 않고 소개를 정돈합니다.'); await snap(page, 'profile');
         await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
@@ -247,7 +249,7 @@ async function main() {
     }
     if (phase === 'before') await check('immutable before: home, profile, saved reading and writing at three widths', async ({ page }) => {
       await openHome(page); const sample = await seed(page); await page.reload(); await ready(page); await home(page); await snap(page, 'home');
-      await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('.wb-profile').waitFor(); await snap(page, 'profile');
+      await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('.wb-profile').waitFor(); await snap(page, 'profile');
       await home(page); await page.locator(`#homePosts [data-photo-post-id="${sample.ids[0]}"] .home-post-open`).click(); await page.locator('.photo-article').waitFor(); await snap(page, 'reading');
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('.ql-editor').waitFor(); await snap(page, 'writing');
     });

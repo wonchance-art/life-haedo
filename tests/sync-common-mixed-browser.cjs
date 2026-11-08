@@ -39,7 +39,7 @@ async function main() {
 
     await check('A saved post says the app needs a refresh to reach the account, with no retry button', async () => {
       await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click();
+      await page.locator('[data-haedo-compose]:visible').first().click();
       await page.locator('#photoTitle').fill('섞인 판에서 쓴 글'); await page.locator('.ql-editor').fill('새로고침 전까지 이 기기에만 있다.');
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
       const status = page.locator('#photoServerStatus');

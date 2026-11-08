@@ -21,7 +21,7 @@
     const model = () => root.HaedoLife.AnnualPlan;
     const sessions = new Map();
     let active = false, disposed = false, generation = 0, workspaceId = null, current = null, surface = null;
-    let timer = null, writing = null, unsubscribe = null, composing = new Set();
+    let timer = null, writing = null, unsubscribe = null, unsubscribeEngine = null, watchedEngine = null, engineTimer = null, engineLooks = 0, accountRead = 0, composing = new Set();
     const inScope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => token === generation && inScope();
     const changed = () => !!current?.saved && !equal(current.draft, current.saved);
@@ -54,13 +54,82 @@
       if (conflict || /conflict/.test(error?.code || '')) current.conflict = true;
       clearTimeout(timer); timer = null; status();
     }
+    // Two-step save state (2026-11-02 owner decision; 일정 통합 정리 S9). The plan is written on this
+    // device first (IndexedDB, CAS); the account step is the automatic account-document sync of the
+    // same row, so 계정에 올림 is said only when that row's last synced hash equals the stored one.
+    const engine = () => root.HaedoLife?.Shell?.accountDocsSync || null;
+    const accountDocKey = () => storage.account?.projectUrl && storage.account?.userId && workspaceId
+      ? 'annualPlan:' + JSON.stringify([storage.account.projectUrl, storage.account.userId]) + ':' + workspaceId : null;
+    // The shell creates (and on an account change replaces) the engine; follow the current one. A plan
+    // opened directly renders just before the shell starts the engine: look again a bounded number of
+    // times (250 ms … 8 s), then rely on the next save, storage notice, retry or return to the tab.
+    const ENGINE_LOOKS = [250, 1000, 2000, 4000, 8000];
+    function watchEngine() {
+      const next = engine();
+      if (next) engineLooks = ENGINE_LOOKS.length;
+      else if (!engineTimer && engineLooks < ENGINE_LOOKS.length) engineTimer = root.setTimeout(() => { engineTimer = null; if (inScope()) readAccountState(); }, ENGINE_LOOKS[engineLooks++]);
+      if (next === watchedEngine) return;
+      unsubscribeEngine?.(); unsubscribeEngine = null; watchedEngine = next;
+      if (next?.subscribe) unsubscribeEngine = next.subscribe(() => { if (inScope()) readAccountState(); });
+    }
+    function unwatchEngine() { unsubscribeEngine?.(); unsubscribeEngine = null; watchedEngine = null; clearTimeout(engineTimer); engineTimer = null; }
+    // Account step of the stored plan: 'none' (no plan stored yet: nothing to say), 'ok' only once the
+    // account confirmed this exact hash, 'error' for a real upload failure, else 'pending' (offline included).
+    async function readAccountState() {
+      if (!inScope() || !current) return;
+      watchEngine();
+      const token = generation, slot = current, sequence = ++accountRead, key = accountDocKey();
+      let next = 'pending';
+      try {
+        if (key && typeof storage.readAccountDocRecord === 'function') {
+          const record = await storage.readAccountDocRecord(key), state = engine()?.getStatus?.()?.state;
+          const offline = root.navigator?.onLine === false, failed = record.sync?.error && !(offline && record.sync.error.code === 'network_error');
+          next = !record.exists ? 'none' : record.sync && record.hash === record.sync.hash ? 'ok'
+            : failed || ['error', 'unavailable'].includes(state) ? 'error' : 'pending';
+        }
+      } catch (_) { return; /* The shown state stays; the next save or sync notice reads it again. */ }
+      if (!valid(token) || slot !== current || sequence !== accountRead) return;
+      slot.account = next; status();
+    }
+    // This device did not keep the input (IDB write failure, invalid birth date, another tab's newer
+    // plan): 저장하지 못함. A message about an input that changed nothing keeps the account state.
+    const localFailure = () => current.conflict || !!current.invalidBirth || (!!current.error && dirty());
+    function saveText() {
+      if (localFailure()) return '저장하지 못함';
+      if (writing || changed() || composing.size) return '저장 중…';
+      return { ok: '저장됨 · 계정에 올림', error: '계정에 올리지 못함', pending: '계정에 올리기 대기' }[current.account] || '';
+    }
+    async function retrySave() {
+      if (current.conflict || writing) return;
+      if (current.invalidBirth) {
+        fail(fault('생년월일을 1900–2199년의 날짜로 확인해 주세요.'));
+        const settings = surface.querySelector('#apSettings'); settings.open = true; current.settingsOpen = true;
+        surface.querySelector('#apBirthDate').focus(); return;
+      }
+      if (current.error && dirty()) { current.error = ''; status(); await save(); return; }
+      current.error = '';
+      const token = generation, slot = current;
+      slot.account = 'pending'; status();
+      try { await engine()?.syncNow?.(); } catch (_) { /* The state below says what happened. */ }
+      if (valid(token) && slot === current) await readAccountState();
+    }
     function status() {
       if (!inScope() || !surface) return;
-      const value = surface.querySelector('#apSaveStatus');
-      value.textContent = current.conflict ? '변경 확인 필요' : current.error ? '저장 실패' : writing ? '저장 중' : changed() ? '미저장' : '저장됨';
+      const value = surface.querySelector('#apSaveStatus'), text = saveText(), local = localFailure();
+      const retryable = !current.conflict && (local || text === '계정에 올리지 못함'), retry = surface.querySelector('#apRetry');
+      // Rewrite the live region only when its sentence changes, or it is read out again.
+      const shown = retryable ? text + ' ·' : text;
+      if (value.textContent !== shown) value.textContent = shown;
+      const state = local || text === '계정에 올리지 못함' ? 'error' : text === '저장 중…' ? 'saving' : text ? current.account : 'none';
+      surface.dataset.saveState = state;
+      // Like goals·habits·연표: a settled 저장됨 · 계정에 올림 (or nothing to say) stays for screen readers only.
+      value.parentElement.dataset.idle = String(state === 'ok' || state === 'none');
       surface.dataset.dirty = String(dirty()); surface.setAttribute('aria-busy', String(!!writing || !!current.reading));
       const error = surface.querySelector('#apError'); error.textContent = current.error || ''; error.hidden = !current.error;
-      surface.querySelector('#apRetry').hidden = !current.error || current.conflict;
+      // A retry that worked hides its button: keep keyboard focus on the screen title, not the page.
+      const retryFocused = root.document.activeElement === retry;
+      retry.hidden = !retryable; retry.setAttribute('aria-disabled', String(!!writing));
+      if (retryFocused && retry.hidden) root.document.querySelector('.life-page-title')?.focus({ preventScroll: true });
       surface.querySelector('#apReload').hidden = !current.conflict;
       surface.querySelector('#apReapply').hidden = !current.latest;
       surface.querySelector('#apReapply').disabled = !!writing || !!current.reading;
@@ -101,7 +170,8 @@
         const result = await storage.saveAnnualPlan(scope, next, slot.saved.revision);
         if (!valid(token) || slot !== current) return;
         if (result.status !== 'stored') { fail(null, true); throw fault('다른 탭의 계획을 확인해 주세요.'); }
-        slot.saved = result.profile; slot.error = ''; slot.latest = null;
+        slot.saved = result.profile; slot.error = ''; slot.latest = null; slot.account = 'pending';
+        readAccountState();
       })();
       writing = operation; status();
       try { await operation; }
@@ -314,10 +384,13 @@
       const mountedToken = generation, mountedSlot = current;
       const owns = target => valid(mountedToken) && mountedSlot === current && surface?.contains(target);
       surface = node('section', null, 'annual-plan'); surface.dataset.dirty = 'false';
-      const toolbar = node('div', null, 'ap-toolbar'), saveStatus = node('span', '', 'ap-meta'); saveStatus.id = 'apSaveStatus'; saveStatus.setAttribute('role', 'status'); saveStatus.setAttribute('aria-live', 'polite');
-      toolbar.append(button('다음 연도', 'apAddYear', () => addYear(nextYear())), saveStatus); surface.append(toolbar);
+      const toolbar = node('div', null, 'ap-toolbar'), saveLine = node('span', null, 'ap-meta ap-save-line'), saveStatus = node('span', ''); saveStatus.id = 'apSaveStatus'; saveStatus.setAttribute('role', 'status'); saveStatus.setAttribute('aria-live', 'polite');
+      // "계정에 올리지 못함 · [다시 시도]": one retry, in the save state (local write or account upload).
+      const retry = button('다시 시도', 'apRetry', retrySave, 'ap-button ap-retry'); retry.hidden = true;
+      saveLine.append(saveStatus, ' ', retry);
+      toolbar.append(button('다음 연도', 'apAddYear', () => addYear(nextYear())), saveLine); surface.append(toolbar);
       const recovery = node('div', null, 'ap-recovery'), error = node('p', '', 'ap-error'); error.id = 'apError'; error.setAttribute('role', 'alert'); error.hidden = true;
-      recovery.append(error, button('다시 저장', 'apRetry', async () => { current.error = ''; status(); await save(); }), button('최신 계획 확인', 'apReload', reload), button('내 입력 다시 적용', 'apReapply', reapply));
+      recovery.append(error, button('최신 계획 확인', 'apReload', reload), button('내 입력 다시 적용', 'apReapply', reapply));
       const latest = node('details', null, 'ap-latest'); latest.id = 'apLatest'; latest.hidden = true; latest.append(node('summary', '다른 탭의 계획'));
       const latestContent = node('pre', '', 'ap-copy-text'); latestContent.id = 'apLatestText'; latest.append(latestContent); recovery.append(latest); surface.append(recovery);
       const confirm = node('div', null, 'ap-confirm'); confirm.id = 'apConfirmation'; confirm.hidden = true; confirm.setAttribute('role', 'group'); confirm.setAttribute('aria-label', '계획 삭제 확인'); surface.append(confirm);
@@ -359,9 +432,9 @@
     async function render() {
       if (disposed || !isCurrent()) return;
       const nextWorkspace = getBundle()?.workspaceId; if (!nextWorkspace) return;
-      const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null;
+      const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); engineLooks = 0;
       current = sessions.get(workspaceId);
-      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', conflict: false, latest: null, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null }; sessions.set(workspaceId, current); }
+      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', conflict: false, latest: null, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
       const slot = current, version = slot.editRevision;
       if (!slot.saved) {
         const loading = node('p', '연간 계획을 불러옵니다.', 'ap-meta'); container.replaceChildren(loading);
@@ -370,6 +443,7 @@
       }
       if (!valid(token)) return;
       slot.reading = false; build();
+      readAccountState();
       unsubscribe = storage.subscribe(workspaceId, event => {
         if (event.type !== 'annual_plan_changed' || !inScope() || !current.saved || event.revision <= current.saved.revision || event.local && writing) return;
         // Account sync: adopt another tab's or device's plan only when nothing here is unsaved or focused.
@@ -379,7 +453,7 @@
           storage.readAnnualPlan(workspaceId).then(latest => {
             if (!valid(token) || slot !== current) return;
             if (writing || changed() || slot.conflict) { if (latest.revision !== slot.saved.revision) fail(null, true); return; }
-            slot.saved = latest; slot.draft = payload(latest); slot.error = ''; slot.latest = null; syncSettings(); drawGrid(); status();
+            slot.saved = latest; slot.draft = payload(latest); slot.error = ''; slot.latest = null; syncSettings(); drawGrid(); status(); readAccountState();
           }).catch(error => { if (valid(token)) fail(error); });
           return;
         }
@@ -395,8 +469,12 @@
       } catch (error) { if (valid(token)) fail(error); }
       if (valid(token) && !slot.error && changed()) schedule();
     }
-    function leave() { clearTimeout(timer); timer = null; active = false; generation++; composing.clear(); unsubscribe?.(); unsubscribe = null; }
-    function onHidden() { if (root.document.visibilityState === 'hidden' && inScope() && !composing.size) flush().catch(() => {}); }
+    function leave() { clearTimeout(timer); timer = null; active = false; generation++; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); }
+    function onHidden() {
+      if (!inScope()) return;
+      if (root.document.visibilityState === 'visible') { readAccountState(); return; }
+      if (root.document.visibilityState === 'hidden' && !composing.size) flush().catch(() => {});
+    }
     function pageHide() { if (inScope() && !composing.size) flush().catch(() => {}); }
     root.document.addEventListener('visibilitychange', onHidden); root.addEventListener('pagehide', pageHide);
     function dispose() { leave(); disposed = true; sessions.clear(); current = null; surface = null; root.document.removeEventListener('visibilitychange', onHidden); root.removeEventListener('pagehide', pageHide); }

@@ -337,6 +337,8 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-feature-menu > summary { list-style: none; cursor: pointer; }
 .life-feature-menu > summary::-webkit-details-marker { display: none; }
 .life-feature-menu[open] > summary { background: var(--soft); }
+/* An open menu's own name never covers its panel (2026-11-08 S3). */
+.life-feature-menu[open] > summary > .life-tooltip { display: none; }
 .life-feature-menu-panel { position: absolute; z-index: 45; inset-inline-end: 0; top: calc(100% + 6px); width: min(300px, calc(100vw - 32px)); max-height: min(34rem, calc(100dvh - 12rem)); overflow: auto; overscroll-behavior: contain; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
 .life-feature-menu-panel section + section { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
 .life-feature-menu-panel h2 { margin: 8px 12px 4px; font-size: var(--haedo-text-badge); font-weight: 600; line-height: 1.6; color: var(--ink-soft); }

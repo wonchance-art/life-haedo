@@ -109,8 +109,10 @@ async function main() {
       const cases = [
         ['/index.html', 'home', null], ['/index.html?section=home', 'home', null], ['/index.html?section=schedule', 'home', null],
         ['/index.html?section=tools', 'tools', 'tools'], ['/index.html?section=schedule&view=tools', 'tools', 'tools'],
-        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null], ['/index.html?view=time', 'time', null]
+        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null]
       ];
+      // 2026-11-08 S8: the former 연표 screen's address opens the 연표 목록 (workspace.html).
+      await page.goto(base + '/index.html?view=time'); await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
       for (const [address, expected, current] of cases) {
         await page.goto(base + address); await ready(page); await shown(page, expected);
         assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', address + ' is 일정');
@@ -122,7 +124,10 @@ async function main() {
           await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'tools:annual-plan');
         }
         if (expected === 'tools') {
-          assert.deepEqual(await page.locator('#lifeMain .life-destination strong').allTextContents(), ['연간 계획', '목표', '습관', '연표']);
+          // 2026-11-08 S4: one link line with the plan tabs' names; 연표 is the 연표 목록 itself (S8).
+          assert.deepEqual(await page.locator('#lifeMain .schedule-plan-links a').allTextContents(), ['연간 계획', '목표', '습관', '연표']);
+          assert.equal(await page.locator('#lifeMain .schedule-plan-links a[data-plan-destination="time"]').getAttribute('href'), 'workspace.html');
+          assert.equal(await page.locator('#lifeMain .life-destination').count(), 0);
           assert.match(await page.locator('.schedule-aside').innerText(), /제주 여행/);
           assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '2026년');
         }
@@ -150,7 +155,8 @@ async function main() {
       // Date headings group the posts; the newest post comes first.
       assert.equal(await page.locator('#homePostList .home-day-heading').first().innerText(), '11월 2일 월요일');
       assert.equal(await page.locator('#homePostList .home-post-open').first().innerText(), PRIVATE);
-      await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').fill('산책');
+      // From 761px the list search is an always-shown field (2026-11-08 S3).
+      assert.equal(await page.locator('.home-search-toggle').isVisible(), false); await page.locator('#homePostSearch').fill('산책');
       await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-post').length > 5);
       await page.evaluate(() => scrollTo({ top: 900, behavior: 'instant' })); const listScroll = await page.evaluate(() => scrollY);
       // A pointer press on the sticky heading does not scroll (Playwright's own click would scroll the control into view).
@@ -256,7 +262,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
       // Typing in the list search keeps the text and the screen.
-      await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').focus();
+      await page.locator('#homePostSearch').focus();
       await page.keyboard.type('ymdwqlt/');
       assert.equal(await page.locator('#homePostSearch').inputValue(), 'ymdwqlt/'); assert.equal(await mode(page), 'home');
       // An IME composition in the field (CDP) commits text and moves nowhere.
@@ -329,6 +335,154 @@ async function main() {
         }
       } finally { await context.setOffline(false); page.__expectOffline = false; }
     }, { width: 1440, height: 960 }, { serviceWorkers: 'allow' });
+
+    // 2026-11-08 일정 통합 정리 S2·S6·S7 (rule change): the list shows no 오늘 / ‹ › (hidden, not disabled);
+    // 761–1100px is two rows, the title on one line. Rule change (review 3 m1, lead decision): the title row holds
+    // the title alone; the next row is the 보기 단위 bar, 오늘, ‹ ›, 검색 and ?, so the visual order is the DOM (Tab)
+    // order; the title is not glued to the top (review 2 m4: at least 12px, as the 1440 row).
+    await check('the list hides 오늘 and ‹ ›; iPad portrait has a two-row heading with a one-line title; W titles are 44px; D is 체크 → 기록 → 다른 해', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      const heading = () => page.evaluate(() => {
+        const box = node => { const b = node.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), w: b.width, h: b.height }; };
+        const title = document.querySelector('#lifeApp .life-toolbar h1'), range = document.createRange(); range.selectNodeContents(title);
+        // Shown = rendered and visible (a wide list keeps 오늘 and ‹ › in place but unseen, so the bar does not move).
+        const shown = selector => [...document.querySelectorAll('#lifeApp .life-toolbar ' + selector)].filter(node => node.checkVisibility({ visibilityProperty: true }));
+        // Every shown control of the heading in DOM order, with where it is drawn (the 글 메뉴 panel aside).
+        const controls = shown(':is(a, button, summary)').filter(node => !node.closest('.life-feature-menu-panel')).map(node => ({ name: node.getAttribute('aria-label') || node.textContent.trim(), ...box(node), left: Math.round(node.getBoundingClientRect().left) }));
+        return { lines: new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size, title: box(title), find: box(document.querySelector('#lifeFindOpen')),
+          toolbarTop: Math.round(document.querySelector('#lifeApp .life-toolbar').getBoundingClientRect().top), controls,
+          help: shown('.schedule-help').map(box), views: shown('.life-schedule-views').map(box), units: shown('.life-schedule-view').map(box),
+          today: shown('.schedule-today').length, steps: shown('[data-schedule-step]').length, disabled: shown('button:disabled').length };
+      });
+      for (const [width, height] of [[1440, 960], [1100, 900], [820, 1180], [761, 1000]]) {
+        await page.setViewportSize({ width, height });
+        for (const [address, expected] of [['/index.html', 'home'], ['/index.html?section=schedule&view=day&date=2026-10-28', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter']]) {
+          await page.goto(base + address); await ready(page); await shown(page, expected);
+          const head = await heading(), scene = expected + ' ' + width;
+          assert.equal(head.lines, 1, scene + ': the title is on one line');
+          assert.deepEqual(head.units.filter(unit => unit.w < 44 || unit.h < 44), [], scene + ': each unit is 44px');
+          assert.equal(head.disabled, 0, scene + ': no control is left disabled');
+          if (expected === 'home') {
+            assert.deepEqual([head.today, head.steps], [0, 0], scene + ': no 오늘 or ‹ › on the list');
+            // Not reachable either: Tab from the bar's last unit goes on to 검색.
+            await page.locator('[data-schedule-view="day"]').focus(); await page.keyboard.press('Tab');
+            assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFindOpen', scene + ': Tab skips the hidden controls');
+          }
+          else assert.deepEqual([head.today, head.steps], [1, 2], scene + ': 오늘 and ‹ › on a unit');
+          if (width <= 1100) {
+            // Title row: the title alone (the list's 글 메뉴 follows it); the bar, 오늘, ‹ ›, 검색 and ? on the next row.
+            const second = head.controls.filter(control => control.top >= head.title.bottom - 2);
+            assert.deepEqual(head.controls.filter(control => control.top < head.title.bottom - 2).map(control => control.name), expected === 'home' ? ['글 메뉴'] : [], scene + ': the title row holds the title alone');
+            assert.ok(head.find.top >= head.title.bottom - 2 && head.help[0].top >= head.title.bottom - 2 && head.views[0].top >= head.title.bottom - 2, scene + ': 검색 and ? are on the bar row');
+            assert.equal(new Set(second.map(control => control.top)).size, 1, scene + ': one second row');
+            assert.ok(head.title.top - head.toolbarTop >= 12, scene + ': the title is not glued to the top (' + (head.title.top - head.toolbarTop) + 'px)');
+          } else assert.ok(head.views[0].top < head.title.bottom && head.find.top < head.title.bottom, scene + ': one row on a wide screen');
+          // Seen left to right, top to bottom, the controls come in DOM order (the Tab order).
+          const drawn = [...head.controls].sort((a, b) => Math.abs(a.top - b.top) > 2 ? a.top - b.top : a.left - b.left).map(control => control.name);
+          assert.deepEqual(drawn, head.controls.map(control => control.name), scene + ': the visual order is the DOM order');
+          if (expected === 'day') {
+            // Tab really goes that way: 일 → 오늘 → 이전 날 → 다음 날 → 통합 검색 → 단축키, each to the right of the last.
+            await page.locator('[data-schedule-view="day"]').focus();
+            const walk = [];
+            for (let i = 0; i < 5; i++) { await page.keyboard.press('Tab'); walk.push(await page.evaluate(() => { const node = document.activeElement, b = node.getBoundingClientRect(); return [node.getAttribute('aria-label') || node.textContent.trim(), Math.round(b.left), Math.round(b.top)]; })); }
+            assert.deepEqual(walk.map(step => step[0]), ['오늘', '이전 날', '다음 날', '통합 검색', '단축키 (?)'], scene + ': Tab order');
+            assert.ok(walk.every((step, i) => !i || step[2] === walk[i - 1][2] && step[1] > walk[i - 1][1]), scene + ': each Tab stop is right of the last on the same row ' + JSON.stringify(walk));
+          }
+        }
+      }
+      await overflow(page, 'two-row heading');
+      // W: a post title is a 44px target (also the phone width, where the rows stack).
+      for (const width of [1440, 820, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + '/index.html?section=schedule&view=week&date=2026-10-28'); await ready(page); await shown(page, 'week');
+        const titles = await page.locator('.schedule-week-day .schedule-post-open').evaluateAll(nodes => nodes.map(n => n.getBoundingClientRect().height));
+        assert.ok(titles.length >= 2 && titles.every(h => h >= 44), 'week ' + width + ': post titles are 44px (' + titles.join(', ') + ')');
+      }
+      // D: 체크 (습관 + 행복도) → 그날 기록 → 다른 해, and no goal.
+      await page.setViewportSize({ width: 1440, height: 960 });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day');
+      const order = await page.evaluate(() => {
+        const nodes = ['.schedule-entries-day', '.schedule-day-records', '.schedule-other-years'].map(sel => document.querySelector('#lifeSchedule ' + sel));
+        return { found: nodes.map(Boolean), ordered: nodes.every((node, i) => !i || nodes[i - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING),
+          goals: document.querySelectorAll('#lifeSchedule .schedule-goal').length };
+      });
+      assert.deepEqual(order, { found: [true, true, true], ordered: true, goals: 0 });
+      assert.match(await page.locator('.schedule-day-records').innerText(), /창가 자리에서 읽은 책/);
+      // Y (S4): the year's sentence under 올해 계획; a year without one links to the annual plan.
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
+      assert.deepEqual(await page.locator('.schedule-aside :is(.schedule-year-title, .schedule-year-text)').allTextContents(), ['올해 계획', '천천히 오래 걷기']);
+      await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('.schedule-year-title').textContent(), '2025년 계획');
+      await page.getByRole('link', { name: '연간 계획에 이 해 문장을 적을 수 있어요' }).click();
+      await shown(page, 'annual-plan'); await page.locator('#apGrid').waitFor();
+    });
+
+    // Review 2 m4·m6·NIT and review 3 n2·n3·m4 (2026-11-08): the 글 메뉴 opens under the second heading row; headings
+    // are h2 siblings (D: 습관 · 행복도 · 그날 기록; Y aside: 올해 계획 · 예정 · 목표; W: its habit table) at their former size;
+    // no two regions share a name (the Y/Q aside is named for its period, not 계획 like the link line inside it);
+    // empty states are at body size and their links are the teal plan links; the phone's up link says 으로/로 right.
+    await check('headings, region names, empty states and up labels follow review 2/3', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      const bodySize = () => page.evaluate(() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; document.querySelector('#lifeMain').append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; });
+      const planLinkColor = () => page.evaluate(() => getComputedStyle(document.querySelector('.schedule-plan-links > a')).color);
+      const regions = () => page.evaluate(() => [...document.querySelectorAll('#lifeApp :is(section[aria-label], section[aria-labelledby], aside, nav)')].map(node =>
+        node.getAttribute('aria-label') || document.getElementById(node.getAttribute('aria-labelledby') || '')?.textContent || ''));
+      const slotReady = kind => page.waitForFunction(k => { const slot = document.querySelector('.schedule-entries-' + k); return slot?.getAttribute('aria-busy') === 'false' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }, kind);
+      // 820: the list's 글 메뉴 opens below the second row (the 보기 단위 bar is never covered).
+      await page.setViewportSize({ width: 820, height: 1180 });
+      await page.goto(base + '/index.html'); await ready(page); await shown(page, 'home');
+      await page.locator('#lifeApp .life-toolbar .life-feature-menu > summary').click();
+      const menu = await page.evaluate(() => ({ panel: document.querySelector('#lifeApp .life-toolbar .life-feature-menu-panel').getBoundingClientRect().top,
+        bar: document.querySelector('#lifeApp .life-schedule-views').getBoundingClientRect().bottom }));
+      assert.ok(menu.panel >= menu.bar, '820: the 글 메뉴 opens below the 보기 단위 bar (' + JSON.stringify(menu) + ')');
+      await page.keyboard.press('Escape');
+      // D (1440): h2 습관 · 행복도 · 그날 기록, the post titles h3 at the former title size.
+      await page.setViewportSize({ width: 1440, height: 960 });
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day'); await slotReady('day');
+      const day = await page.evaluate(() => ({ h2: [...document.querySelectorAll('#lifeSchedule h2')].map(n => n.textContent),
+        posts: [...document.querySelectorAll('#lifeSchedule .schedule-day-records .schedule-post-title')].map(n => n.tagName + ' ' + getComputedStyle(n).fontSize),
+        title: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-title)'; document.body.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })(),
+        records: document.querySelector('.schedule-day-records').getAttribute('aria-labelledby') }));
+      assert.deepEqual(day.h2.slice(0, 3), ['습관', '행복도', '그날 기록'], 'D: 습관 · 행복도 · 그날 기록 are h2');
+      assert.ok(day.posts.length && day.posts.every(post => post === 'H3 ' + day.title), 'D: post titles are h3 at the title size (' + day.posts + ')');
+      assert.equal(await page.getByRole('group', { name: '행복도' }).count(), 1, 'the 행복도 fieldset keeps its name');
+      assert.equal(await page.getByRole('region', { name: '그날 기록' }).count(), 1);
+      let names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'D: no two regions share a name');
+      // W: the habit table has an h2; the slot alone carries 이번 주 습관과 행복도.
+      await page.goto(base + '/index.html?section=schedule&view=week&date=2026-10-28'); await ready(page); await shown(page, 'week'); await slotReady('week');
+      assert.equal(await page.locator('.schedule-entries-week h2').first().textContent(), '습관 · 행복도');
+      names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'W: no two regions share a name');
+      assert.equal(await page.getByRole('region', { name: '이번 주 습관과 행복도' }).count(), 1);
+      // Y: the aside is 올해 (its link line is the 계획 navigation); 올해 계획 · 예정 · 목표 are h2; no goal says so with 목표 추가.
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools'); await slotReady('year');
+      assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '올해');
+      assert.deepEqual(await page.locator('aside.schedule-aside h2, aside.schedule-aside h3').evaluateAll(nodes => nodes.map(n => n.tagName + ' ' + n.textContent)), ['H2 올해 계획', 'H2 예정', 'H2 목표']);
+      names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'Y: no two regions share a name (' + names + ')');
+      const size = await bodySize(), teal = await planLinkColor();
+      const goalEmpty = await page.locator('.schedule-entries-year .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize, link: n.querySelector('a')?.getAttribute('href'), color: getComputedStyle(n.querySelector('a')).color, line: getComputedStyle(n.querySelector('a')).textDecorationLine }));
+      assert.deepEqual(goalEmpty, { text: '진행 중인 목표가 없어요. 목표 추가', size, link: 'goals.html', color: teal, line: 'none' }, 'Y: no goal, at body size, with a teal 목표 추가 link');
+      // Another year: 이 해; its empty 올해 계획 link is the same teal link.
+      await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '이 해');
+      assert.deepEqual(await page.locator('.schedule-year-empty').evaluate(n => [getComputedStyle(n).color, getComputedStyle(n).textDecorationLine]), [teal, 'none']);
+      // Q: 이 분기.
+      await page.goto(base + '/index.html?section=schedule&view=quarter&date=2026-10-28'); await ready(page); await shown(page, 'quarter');
+      assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '이 분기');
+      // Phone: up labels without (으); the month's selected-day empty line at body size.
+      await page.setViewportSize({ width: 390, height: 844 });
+      const ups = [];
+      for (const [address, expected] of [['/index.html?section=tools', 'tools'], ['/index.html?section=schedule&view=month&date=2026-10-27', 'month'], ['/index.html?section=schedule&view=day&date=2026-10-27', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-27', 'quarter'], ['/index.html?section=schedule&view=week&date=2026-10-27', 'week']]) {
+        await page.goto(base + address); await ready(page); await shown(page, expected);
+        ups.push(await page.locator('.schedule-up').getAttribute('aria-label'));
+        if (expected === 'month') {
+          const empty = await page.locator('.schedule-month-chosen .schedule-empty').evaluate(n => [n.textContent, getComputedStyle(n).fontSize]);
+          assert.deepEqual(empty, ['이 날 기록이 없어요.', await bodySize()], 'M (phone): the selected day empty at body size');
+        }
+      }
+      assert.deepEqual(ups, ['목록으로 올라가기', '2026년으로 올라가기', '10월로 올라가기', '2026년으로 올라가기', '10월로 올라가기']);
+      assert.deepEqual(await page.evaluate(() => ['목록', '2026년', '10월', '11월', '3월', '분기', '2025'].map(HaedoLife.ScheduleUI.withRo)),
+        ['목록으로', '2026년으로', '10월로', '11월로', '3월로', '분기로', '2025로']);
+    });
 
     await check('every unit at 1440, 820 and 390 has no horizontal overflow and keeps accessible names', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);

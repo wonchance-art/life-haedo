@@ -131,7 +131,7 @@ async function main() {
     images = await page.evaluate(() => [[1600,1200,'#34685c'],[1200,1600,'#b88959']].map(([width,height,color],i) => {
       const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const g = canvas.getContext('2d'); g.fillStyle = color; g.fillRect(0,0,width,height); g.fillStyle = '#f5efdc'; g.fillRect(71,89,215,333); return { width, height, name: 'anonymous-travel-' + i + '.png', data: canvas.toDataURL('image/png').split(',')[1] };
     }));
-    await nav(page,'home');await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();await page.locator('#photoTitle').fill('복귀해서 이어 쓰는 여행'); await page.locator('.ql-editor').fill('여행 첫 장면과 보관한 문장\n');
+    await nav(page,'home');await page.locator('[data-haedo-compose]:visible').click();await page.locator('#photoTitle').fill('복귀해서 이어 쓰는 여행'); await page.locator('.ql-editor').fill('여행 첫 장면과 보관한 문장\n');
     await page.locator('#photoFiles').setInputFiles({ name: images[0].name, mimeType: 'image/png', buffer: Buffer.from(images[0].data, 'base64') }); await page.locator('.photo-block').waitFor(); await saved();
     const created = await read(); workspaceId = created.ws; postId = created.docs.find(value => value.title === '복귀해서 이어 쓰는 여행').id;
     await page.locator('.photo-block img').click(); await page.getByRole('textbox', { name: '사진 설명', exact: true }).fill('첫 사진의 보관한 설명'); await saved();

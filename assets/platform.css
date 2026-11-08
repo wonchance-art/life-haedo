@@ -81,6 +81,9 @@
 .p-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .p-dialog-actions .p-text-link { margin-right: auto; }
 .p-status-actions { display: inline-flex; gap: 12px; margin-left: 8px; }
+/* 일정 통합 정리 S9: "계정에 올리지 못함 · [다시 시도]" — the retry sits in the status sentence. */
+.p-status-line .p-status-retry { min-height: 44px; padding-block: 0; color: var(--ink); font-size: inherit; font-weight: 600; }
+.p-status-line .p-status-retry[aria-disabled=true] { cursor: progress; opacity: .55; }
 .p-recovery-list { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .p-recovery-row { display: grid; gap: 4px; justify-items: start; }
 .p-recovery-meta { color: var(--ink-soft); font-size: var(--haedo-text-meta); }

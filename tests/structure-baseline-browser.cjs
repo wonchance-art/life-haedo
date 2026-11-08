@@ -18,6 +18,8 @@ const { FakeCloud, accounts } = require('./life-sync-browser.cjs');
 const base = (process.env.BASE_URL || 'http://127.0.0.1:4173').replace(/\/$/, '');
 const PRINT = process.env.STRUCTURE_BASELINE_PRINT === '1';
 // [label, file, signed in]
+// Modules a signed-in shell loads after page-ready (not at the load event).
+const DEFERRED_SIGNED_IN = ['RssConnection'];
 const SCENES = [['index.html signed out', 'index.html', false], ['index.html signed in', 'index.html', true], ['life.html signed in', 'life.html', true]];
 
 async function registered(context, file, signedIn) {
@@ -32,6 +34,10 @@ async function registered(context, file, signedIn) {
   // account, so it is not awaited.)
   await page.goto(base + '/' + file, { waitUntil: 'load' });
   if (signedIn) await shellReady(page);
+  // Signed in, the shell loads the RSS module in an idle callback after page-ready (assets/life/shell.js
+  // scheduleRssReflection). Wait for it so the snapshot never races that deferred load; the deferred
+  // names are held to their own pin below.
+  if (signedIn) await page.waitForFunction(names => names.every(name => !!globalThis.HaedoLife?.[name]), DEFERRED_SIGNED_IN, { timeout: 15000 });
   assert.equal(new URL(page.url()).pathname.split('/').pop(), file, file + ' stayed on its own page');
   const names = await page.evaluate(empty => ({
     haedoLife: Object.keys(globalThis.HaedoLife).sort(),
@@ -57,7 +63,9 @@ async function main() {
     if (PRINT) { console.log(JSON.stringify(current, null, 2)); return; }
     // All three scenes register the same set today; each is held to the one pinned list.
     for (const [label] of SCENES) {
-      assert.deepEqual(current[label].haedoLife, PINNED.haedoLife, label + ': HaedoLife.* names');
+      const signedIn = SCENES.find(scene => scene[0] === label)[2];
+      const expected = signedIn ? [...PINNED.haedoLife, ...DEFERRED_SIGNED_IN].sort() : PINNED.haedoLife;
+      assert.deepEqual(current[label].haedoLife, expected, label + ': HaedoLife.* names');
       console.log('PASS ' + label + ' registers the pinned HaedoLife.* names (' + PINNED.haedoLife.length + ')');
       assert.deepEqual(current[label].globals, PINNED.globals, label + ': top-level globals');
       console.log('PASS ' + label + ' adds the pinned top-level globals (' + PINNED.globals.length + ')');

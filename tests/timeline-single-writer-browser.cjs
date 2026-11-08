@@ -98,7 +98,8 @@ async function main() {
       // A clean document on the goals and habits pages: a tab return sends nothing.
       for (const name of ['habits', 'goals', 'workspace']) {
         const other = await open(); await other.goto(base + '/' + name + '.html');
-        await other.locator('#syncMessage').filter({ hasText: '서버와 기기 사본을 확인했습니다.' }).waitFor({ timeout: 15000 });
+        // The page's first account pass has ended and found nothing to send (S9 two-step state).
+        await other.locator('.p-status-line[data-sync=idle][data-state=ok] #syncMessage').filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ state: 'attached', timeout: 15000 });
         const seen = patches(); await tabReturn(other); await other.waitForTimeout(1500);
         assert.equal(patches(), seen, name + ': no PATCH for a clean document');
         await other.close();

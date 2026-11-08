@@ -31,6 +31,11 @@ test('legacy feature links select their current section and unknown views cannot
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
   }
   assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'schedule');
+  // 통합 검색 keeps the area it was opened from (일정 통합 정리 S2); without a section it stays under 자료.
+  for (const [query, expected] of [['?section=schedule&view=find', 'schedule'], ['?section=news&view=find', 'news'], ['?section=manage&view=find', 'manage'],
+    ['?section=tools&view=find', 'schedule'], ['?view=find', 'records'], ['?section=unknown&view=find', 'records'], ['?section=__proto__&view=find', 'records']]) {
+    assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
+  }
   const { api } = fixture();
   for (const value of ['__proto__', 'constructor', 'toString', 'books-extra', null]) assert.equal(api.getSectionForView(value), null);
 });
@@ -80,7 +85,7 @@ test('planning navigation preserves native new-tab actions and never reloads the
   const { api, moves } = fixture(); let calls = 0;
   const nav = api.createPlanningNavigation({ current: 'annual-plan', beforeNavigate: async () => { calls++; }, onError: assert.fail });
   const active = event(); await click(nav.children[0], active);
-  assert.equal(active.defaultPrevented, true); assert.equal(nav.children[0].attributes['aria-current'], 'page');
+  assert.equal(active.defaultPrevented, true); assert.equal(nav.children[0].attributes['aria-current'], 'true');
   for (const override of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
     const native = event(override); await click(nav.children[1], native); assert.equal(native.defaultPrevented, false);
   }
