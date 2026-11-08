@@ -39,6 +39,7 @@
     syncWarning = "",
     conflictId,
     syncing = false,
+    syncOffline = false,
     syncChecked = false;
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   function toast(message) {
@@ -196,14 +197,20 @@
   // Two-step save state (2026-11-02 owner decision; 일정 통합 정리 S9). Items and timelines are
   // stored on this device first (synchronously), so the line only says whether the account has them:
   // 저장됨 · 계정에 올림 / 계정에 올리기 대기 / 계정에 올리지 못함 · [다시 시도]. The conflict and
-  // recovery-copy sentences stay as they were, after the state.
-  const STATE_TEXT = { ok: "저장됨 · 계정에 올림", pending: "계정에 올리기 대기", error: "계정에 올리지 못함 ·" };
+  // recovery-copy sentences stay as they were, after the state. 'unknown' says nothing: before the
+  // first account check (or offline with nothing to send) 저장됨 · 계정에 올림 is not yet known.
+  const STATE_TEXT = { ok: "저장됨 · 계정에 올림", pending: "계정에 올리기 대기", error: "계정에 올리지 못함 ·", unknown: "" };
   function saveState() {
     const states = store.items.map((item) => item.state);
     const docs = model.registry(localStorage, uid).docs;
-    if (syncWarning || states.includes("err") || states.includes("conflict")) return "error";
-    if (states.includes("sync") || docs.some((d) => !d.syncedAt || d.updated !== d.syncedAt)) return "pending";
-    return "ok";
+    const unsent = states.includes("sync") || states.includes("err") || docs.some((d) => !d.syncedAt || d.updated !== d.syncedAt);
+    // Offline is not a failure: what is unsent waits (the online event sends it), and with nothing to
+    // send there is nothing to say. A failed upload or pass while online is.
+    const offline = navigator.onLine === false;
+    if (states.includes("conflict") || (states.includes("err") && !offline)) return "error";
+    if (syncWarning && !(syncOffline && offline)) return "error";
+    if (unsent) return "pending";
+    return syncChecked ? "ok" : "unknown";
   }
   function status() {
     const state = saveState();
@@ -224,7 +231,7 @@
       detail.dataset.statusDetail = "";
       message.replaceChildren(stateText, " ", retry, detail);
     }
-    stateText.textContent = STATE_TEXT[state];
+    if (stateText.textContent !== STATE_TEXT[state]) stateText.textContent = STATE_TEXT[state];
     // A retry that succeeded hides its button: keep keyboard focus on the screen, not the page.
     const retryFocused = document.activeElement === retry;
     retry.hidden = state !== "error";
@@ -242,7 +249,8 @@
     // shows until the owner acknowledges it; the copies themselves are never removed.
     const unseen = store.recoveryUnseen;
     if (unseen) notes.push("다른 기기와 겹친 변경 " + unseen + "개를 복구 사본으로 남겼습니다.");
-    detail.textContent = notes.length ? " " + notes.join(" ") : "";
+    const detailText = notes.length ? " " + notes.join(" ") : "";
+    if (detail.textContent !== detailText) detail.textContent = detailText;
     let actions = byId("recoveryActions");
     if (!actions) {
       actions = el("span", "p-status-actions");
@@ -259,7 +267,7 @@
     actions.hidden = !unseen;
     line.dataset.state = state;
     line.dataset.sync = syncing || !syncChecked && !syncWarning ? "busy" : "idle";
-    line.dataset.idle = String(state === "ok" && !notes.length);
+    line.dataset.idle = String((state === "ok" || state === "unknown") && !notes.length);
   }
   // The kept copies, newest first. Reviving adds a new item; the kept copy stays (and in backups).
   function openRecovery() {
@@ -601,8 +609,8 @@
       if (editing.kind === "habit" && !data.days.length)
         throw new Error("반복 요일을 하나 이상 선택해 주세요.");
       store.change(editing.item?.id, editing.kind, data);
+      // The status line says where it is (계정에 올리기 대기 → 저장됨 · 계정에 올림); no third phrase.
       byId("itemDialog").close();
-      toast("기기에 저장했습니다.");
     } catch (e) {
       byId("itemFormMessage").textContent = e.message;
     }
@@ -854,8 +862,10 @@
       );
       await store.flush();
       syncWarning = "";
+      syncOffline = false;
       syncChecked = true;
     } catch (e) {
+      syncOffline = navigator.onLine === false;
       syncWarning =
         e.message || "연결하지 못했습니다. 기기 사본은 보존했습니다.";
     } finally {
@@ -869,6 +879,10 @@
   });
   addEventListener("online", () => {
     if (auth.user?.id === uid) sync();
+  });
+  // Going offline turns a failed upload into one that waits for the connection.
+  addEventListener("offline", () => {
+    if (auth.user?.id === uid) status();
   });
   render();
   // The 일정 screen's "보기" opens this list here (habits.html#recovery).

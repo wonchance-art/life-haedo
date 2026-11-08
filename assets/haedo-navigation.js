@@ -47,7 +47,8 @@
     for (const item of planningDestinations) {
       const link = root.document.createElement('a');
       link.href = item.href; link.textContent = item.label; link.dataset.planningDestination = item.id;
-      if (current === item.id) link.setAttribute('aria-current', 'page');
+      // The global menu holds the document's one aria-current="page"; a 계획 tab is the current item of its set.
+      if (current === item.id) link.setAttribute('aria-current', 'true');
       link.addEventListener('click', async event => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         if (current === item.id) { event.preventDefault(); return; }
