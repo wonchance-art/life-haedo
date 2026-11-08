@@ -648,6 +648,55 @@ async function main() {
       await page.goBack(); await mode(page, 'source');
       assert.equal((await historyRecord(page)).key, reader.key);
     }, 390);
+    // 2026-11-08: a new post left through 자료 kept its photo editor attached on the
+    // selected page and the app in writing focus (toolbar hidden). Wide screens keep the
+    // label menu during 글쓰기, so the move is a real path there (a phone closes first).
+    for (const width of [1440, 820]) await check('global 글쓰기 left for 자료 → 선택 자료 페이지 ends writing focus and keeps the draft ' + width, async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      await page.locator('[data-haedo-navigation] a.haedo-nav-compose').click(); await mode(page, 'page'); await photoEditorReady(page);
+      assert.equal(await page.evaluate(() => document.body.dataset.writingFocus), 'true');
+      const compose = await historyRecord(page);
+      await page.locator('.ql-editor').fill('저장 버튼을 누르지 않은 한글 본문');
+      // A move while the title is still being composed (Korean IME) is refused: the
+      // screen, the editor and the composing input stay as they are.
+      const title = page.locator('#photoTitle');
+      await title.evaluate(node => { window.__leaveComposing = node; node.focus(); node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '한' })); node.value = '자료로 옮기기 전 조합 한'; node.dispatchEvent(new InputEvent('input', { bubbles: true, data: '한', isComposing: true })); });
+      await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click();
+      await page.locator('#lifeApp .life-error:not([hidden])', { hasText: '한글 입력을 마친 뒤' }).waitFor();
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page');
+      assert.equal((await historyRecord(page)).key, compose.key);
+      assert.equal(await title.evaluate(node => node === window.__leaveComposing), true, 'The composing field is not replaced');
+      assert.equal(await title.inputValue(), '자료로 옮기기 전 조합 한');
+      await title.evaluate(node => { node.value = '자료로 옮기기 전 조합 한글'; node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '글' })); node.dispatchEvent(new Event('input', { bubbles: true })); });
+      const menu = await openRecordsMenu(page);
+      const draft = await durablePhoto(page, '자료로 옮기기 전 조합 한글', 'draft');
+      assert.equal(await page.evaluate(() => document.body.dataset.writingFocus), undefined);
+      await menu.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
+      await page.waitForFunction(() => document.querySelector('.life-workbench[data-mode="page"]')?.getAttribute('aria-busy') === 'false');
+      await page.locator('#wbPageShare').waitFor({ state: 'attached' });
+      await settle(page); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('.photo-editor').count(), 0, 'The ended post editor is not attached to the selected page');
+      assert.equal(await page.evaluate(() => document.body.dataset.writingFocus), undefined, 'The selected page is not writing focus');
+      assert.equal(await page.locator('.life-app > .life-toolbar').isVisible(), true, 'Header controls are shown');
+      assert.equal(await page.locator('#lifeFindOpen').isVisible(), true);
+      assert.equal(await page.locator('#wbPageShare').isVisible(), true);
+      assert.equal(await page.locator('#lifeSubviewReturn').isVisible(), true);
+      assert.equal(await page.locator('#lifeSubviewReturn').getAttribute('aria-label'), '자료로 돌아가기');
+      assert.equal(await page.locator('[data-haedo-navigation] a.haedo-nav-compose').getAttribute('aria-current'), null, '글쓰기 is no longer the current screen');
+      assert.equal(new URL(page.url()).searchParams.get('blog'), null);
+      assert.equal(await page.locator('.wb-page-compatibility').evaluate(node => node.open), false);
+      const rows = await photoPosts(page);
+      assert.deepEqual(rows, [{ id: draft.id, status: 'draft', title: '자료로 옮기기 전 조합 한글' }], 'The move neither drops nor duplicates the draft');
+      // Browser back still reopens the same 글쓰기 with the kept input.
+      await page.goBack(); await mode(page, 'sources');
+      await page.goBack(); await mode(page, 'page');
+      assert.equal((await historyRecord(page)).key, compose.key);
+      await page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '자료로 옮기기 전 조합 한글');
+      assert.equal((await page.locator('.ql-editor').innerText()).trim(), '저장 버튼을 누르지 않은 한글 본문');
+      assert.equal(await page.evaluate(() => document.body.dataset.writingFocus), 'true');
+      assert.equal((await photoPosts(page)).length, 1);
+    }, width);
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
   } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(JSON.stringify({ passed: report.checks.filter(x => x.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length }));

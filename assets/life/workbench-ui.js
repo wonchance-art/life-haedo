@@ -1574,7 +1574,8 @@
         beforeOpen: async () => { await session.composer?.flush(); } });
       const nineReadBack = !!(session.ninePostReturn || (session.nineComposeReturn && session.nineComposeReturn.postId === session.searchTarget?.photoPostId));
       const materialReadBack = !!session.materialReturn && !!session.searchTarget?.photoPostId && session.materialReturn.postId === session.searchTarget.photoPostId;
-      const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
+      const endedBlogTask = !!session.resetPhotoPosts; session.resetPhotoPosts = false;
+      const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || endedBlogTask || !!session.searchTarget && !session.searchTarget.photoPostId,
         onReadBack:materialReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.materialPlanId=session.materialReturn.planId;session.searchTarget=null;session.materialOpen=true;redraw();}:nineReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.searchTarget=null;session.nineOpen=true;redraw();}:null,
         readBackLabel:materialReadBack?'작성 준비로 돌아가기':nineReadBack?'9칸 구성으로 돌아가기':undefined,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
@@ -3268,6 +3269,8 @@
           current.materialSeed = null;
           if (!targetPost || !current.materialReturn || ![current.materialReturn.postId, current.materialReturn.targetPostId].includes(targetPost)) current.materialReturn = null;
         }
+        // The blog task ended (자료 메뉴, browser history, a new address): its post editor is not this page's.
+        if (current.blogContext && options.blogContext !== true && options.pageBlogTask === false) current.resetPhotoPosts = true;
         current.blogContext = options.blogContext === true;
         current.blogProfile = options.blogContext === true && options.pageProfileEdit === true;
         current.blogKind = options.pageCompose || options.searchTarget?.photoPostId ? 'photo' : 'legacy';

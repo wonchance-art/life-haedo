@@ -1450,6 +1450,8 @@
         materialReaderOrigin = !materialWritingTask ? null : readerOrigin || (Object.hasOwn(options, 'materialReader') ? options.materialReader || null : materialReaderOrigin);
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; blogComposing = !!(options.pageCompose || options.composingPost); }
+        // The page states the task it resolved; the post editor of an ended blog task is not carried into the selected page.
+        options = { ...options, pageBlogTask: blogPageTask && !materialWritingTask };
       }
       if (mode === 'home') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
       // A previous excerpt/record save does not describe the draft being opened.
@@ -1459,7 +1461,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, pageBlogTask, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = externalImport.article.privateReader === true
@@ -2198,8 +2200,10 @@
 
     function syncWritingFocus() {
       if (disposed) return;
+      // An editor inside a closed <details> still has client rects; only one the person can see is writing.
+      const shown = element => typeof element.checkVisibility === 'function' ? element.checkVisibility() : element.getClientRects().length > 0;
       const editing = state.mode === 'write' || state.mode === 'source-edit' || state.mode === 'page' && (blogPageTask && blogMode === 'edit' ||
-        [...main.querySelectorAll('.photo-editor,.pp-composer')].some(element => element.getClientRects().length > 0));
+        [...main.querySelectorAll('.photo-editor,.pp-composer')].some(shown));
       if (editing) document.body.dataset.writingFocus = 'true';
       else delete document.body.dataset.writingFocus;
     }
