@@ -147,8 +147,12 @@ async function main() {
         await page.locator(`#homePosts [data-source-id="${refs.source}"][data-version-id="${refs.version}"] .home-post-open`).click(); await settle(page);
         assert.equal(await page.locator('#lifeSourceText').textContent(), refs.sourceText);
         await page.locator('#lifeSearchReturn').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        // The return restores focus to the opened row one frame after the list renders.
+        // Typing before that lands the fill's Delete key on the row (CI run 42480364603).
+        await page.waitForFunction(ref => document.activeElement?.matches(`#homePosts [data-source-id="${ref.source}"][data-version-id="${ref.version}"] .home-post-open`), refs);
         assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색');
-        await fillSearch(page, ''); await page.locator('#homeTab-drafts').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await fillSearch(page, ''); assert.equal(await page.locator('#homePostSearch').inputValue(), '');
+        await page.locator('#homeTab-drafts').click(); await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePosts .home-draft').count(), 3);
         for (const kind of ['photo-draft', 'plain-draft', 'source-draft']) assert.equal(await page.locator(`#homePosts [data-draft-kind="${kind}"]`).count(), 1);
         await snap(page, 'drafts'); await page.locator(`[data-draft-id="${refs.photoDraft}"] .home-draft-open`).click(); await page.locator('.ql-editor').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '이어 쓸 실제 사진 초안');

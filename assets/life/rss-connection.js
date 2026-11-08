@@ -40,10 +40,26 @@
     baseline_page_limit: '기준 목록이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 피드 범위를 확인해 주세요.',
     catchup_page_limit: '남은 새 글 확인이 50쪽 한도에 도달해 자동 확인을 멈췄습니다. 받은 자료는 유지됩니다. 피드 범위를 확인해 주세요.',
     baseline_stalled: '새 항목이 없는 빈 쪽이나 반복되는 쪽을 만나 기준 목록 확인을 멈췄습니다. 다시 시도하면 첫 쪽부터 확인합니다. 이미 받은 기준 목록과 자료는 유지됩니다.',
-    rss_receive_conflict: '자료 보관을 마치지 못했습니다. 기존 자료는 유지되며 다시 시도할 수 있습니다.'
+    rss_receive_conflict: '자료 보관을 마치지 못했습니다. 기존 자료는 유지되며 다시 시도할 수 있습니다.',
+    rss_unexpected_response: '서버 응답 형식을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요. 받은 자료는 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.rss_network_error), { code });
+  // Another tab of this device is advancing the same ACK. That tab is making
+  // progress, so this retry is not counted as the inbox being unavailable.
+  const contended = () => Object.assign(fault('rss_receive_conflict'), { contended: true });
   function need(ok, code = 'rss_invalid_data') { if (!ok) throw fault(code); }
+  // A whole response that is not the inbox envelope (an HTML 200 from a proxy,
+  // an empty or reordered page) says nothing about one feed item: retry it
+  // with the ordinary backoff. Item and connection data stay permanent.
+  const envelope = ok => need(ok, 'rss_unexpected_response');
+  // finish stamps fetched_at when it starts; its rows become visible at commit.
+  // The worker lease is two minutes, but SQL sets no lock or statement timeout,
+  // so a commit can lag its stamp longer. Reread each ACK's lease window every
+  // interval for one lease (concurrent finishes), then once, after SETTLE_MS,
+  // read from SETTLE_MS before the ACK before trusting the exact cursor. A row
+  // whose commit lags its stamp by more than SETTLE_MS is not covered.
+  const LEASE_MS = 120000, SETTLE_MS = 600000, UNAVAILABLE_AFTER = 5, CONTENDED_AFTER = 30;
+  const keyOf = cursor => cursor ? cursor.fetched_at + '|' + cursor.id : null;
   function clean(error) {
     let code = error?.code || error?.error;
     if (typeof code === 'string' && code.startsWith('life_')) code = code.slice(5);
@@ -79,11 +95,11 @@
     if (left !== right) return left < right ? -1 : 1;
     const x = a.id.toLowerCase(), y = b.id.toLowerCase(); return x === y ? 0 : x < y ? -1 : 1;
   }
-  function overlapCursor(cursor) {
+  function overlapCursor(cursor, span = LEASE_MS) {
     // finish records its start time, not its commit time. An earlier finish can
     // become visible after a later one: revisit at least the two-minute lease.
     // Round down and include the boundary millisecond regardless of UUID order.
-    return cursor ? { fetched_at: new Date(Number(cursorTime(cursor.fetched_at) / 1000n) - 120001).toISOString(),
+    return cursor ? { fetched_at: new Date(Number(cursorTime(cursor.fetched_at) / 1000n) - span - 1).toISOString(),
       id: '00000000-0000-0000-0000-000000000000' } : null;
   }
   function mergeReceipts(before, received, failedCursor) {
@@ -103,11 +119,41 @@
       detail: { workspaceId, projectUrl: account.projectUrl, userId: account.userId }
     }));
   }
+  const monotonic = typeof root.performance?.now === 'function' ? () => root.performance.now() : () => Date.now();
   function create({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core, workspaceId, isCurrent = () => true,
-    clientFactory = root.supabase?.createClient } = {}) {
+    clientFactory = root.supabase?.createClient, now = monotonic } = {}) {
     need(storage?.isAccountScoped && storage.account && auth?.verify && auth?.client?.functions?.invoke && core && UUID.test(workspaceId || ''), 'rss_auth_required');
     const owner = { ...storage.account }, client = auth.client, openingEpoch = auth.epoch;
     let disposed = false, generation = 0, reflecting = null, verifier = null;
+    // ACKs this open page has seen: key -> { cursor, seenAt, final }. seenAt is
+    // this page's monotonic time, never the device clock: server time had already
+    // passed the ACK row when the page saw it, so elapsed time bounds commits.
+    const watched = new Map();
+    function watch(cursor) {
+      const key = keyOf(cursor);
+      if (key && !watched.has(key)) watched.set(key, { cursor: { fetched_at: cursor.fetched_at, id: cursor.id }, seenAt: now(), final: false });
+    }
+    function plan(progress) {
+      const key = keyOf(progress.cursor);
+      for (const [other, entry] of watched) {
+        // A rolled-back or restored ACK no longer covers later rows: the exact scan rereads them.
+        if (other !== key && (entry.final || !key || compareCursor(entry.cursor, progress.cursor) > 0)) watched.delete(other);
+      }
+      if (!key) return { scanCursor: null, settling: [] };
+      watch(progress.cursor);
+      const at = now(), settling = []; let start = progress.needsRepair ? overlapCursor(progress.cursor) : null;
+      for (const [other, entry] of watched) {
+        if (entry.final) continue;
+        const age = at - entry.seenAt;
+        if (age > LEASE_MS && age <= SETTLE_MS) continue;
+        // Inside the lease: concurrent finishes. After the margin: any stamp up
+        // to SETTLE_MS before the ACK that could still have been committing.
+        if (age > SETTLE_MS) settling.push(other);
+        const from = overlapCursor(entry.cursor, age > SETTLE_MS ? SETTLE_MS : LEASE_MS);
+        if (!start || compareCursor(from, start) < 0) start = from;
+      }
+      return { scanCursor: start || { fetched_at: progress.cursor.fetched_at, id: progress.cursor.id }, settling };
+    }
     const controllers = new Set();
     const cancel = () => { generation++; controllers.forEach(controller => controller.abort()); controllers.clear(); };
     const unlisten = auth.onAccountChange?.(() => {
@@ -183,15 +229,15 @@
       url(value.feed_url); return { ...value };
     }
     async function snapshot(context, value) {
-      need(value && typeof value.configured === 'boolean' && Array.isArray(value.connections) && value.connections.length <= 1000 &&
+      envelope(value && typeof value === 'object' && typeof value.configured === 'boolean' && Array.isArray(value.connections) && value.connections.length <= 1000 &&
         Array.isArray(value.items) && value.items.length <= 100);
       const connections = value.connections.map(conn => connection(conn));
-      need(value.other_connections === undefined || Array.isArray(value.other_connections) && value.other_connections.length <= 1);
+      envelope(value.other_connections === undefined || Array.isArray(value.other_connections) && value.other_connections.length <= 1);
       const otherConnections = (value.other_connections || []).map(conn => connection(conn, true));
       let execution = null;
       if (value.execution !== undefined && value.execution !== null) {
         const executionStatus = value.execution.status;
-        need(['stored', 'partial', 'error', 'stale', 'not_due', 'already_finished', 'busy'].includes(executionStatus));
+        envelope(['stored', 'partial', 'error', 'stale', 'not_due', 'already_finished', 'busy'].includes(executionStatus));
         execution = { status: executionStatus, ...(value.execution.error ? { error: clean({ error: value.execution.error }).code } : {}) };
       }
       const ids = new Set();
@@ -209,7 +255,7 @@
         }
         items.push({ ...row });
       }
-      if (value.has_more === true) need(value.next_cursor && timestamp(value.next_cursor.fetched_at) && UUID.test(value.next_cursor.id || ''));
+      if (value.has_more === true) envelope(value.next_cursor && timestamp(value.next_cursor.fetched_at) && UUID.test(value.next_cursor.id || ''));
       return { configured: value.configured, connections, otherConnections, execution, items, hasMore: value.has_more === true,
         nextCursor: value.has_more === true ? { fetched_at: value.next_cursor.fetched_at, id: value.next_cursor.id } : null };
     }
@@ -296,10 +342,21 @@
       need(typeof storage.readRssInboxProgress === 'function' && typeof storage.saveRssInboxProgress === 'function', 'rss_receive_conflict');
       const context = { ...token(), automatic: true };
       await verify(context);
-      let checkedItems = 0, appliedItems = 0, conflicts = 0, pages = 0, scanCursor;
+      let checkedItems = 0, appliedItems = 0, conflicts = 0, restarts = 0, pages = 0, scanCursor, settling = [], expected = null, givingUp = false;
+      // Only a shared ACK that another tab actually saved is contention; a
+      // bundle-only save conflict or a repair restart is an ordinary failure.
+      const stop = progress => progress.revision !== expected.revision ? contended() : fault('rss_receive_conflict');
       while (true) {
         const progress = await step(context, () => storage.readRssInboxProgress(workspaceId));
-        if (scanCursor === undefined) scanCursor = overlapCursor(progress.cursor);
+        if (givingUp) throw stop(progress);
+        // Another tab may truncate or a restore may invalidate the ACK between
+        // pages. Continuing after it would merge later rows across the gap.
+        if (scanCursor !== undefined && (progress.revision !== expected.revision || progress.needsRepair || keyOf(progress.cursor) !== expected.key)) {
+          if (++restarts > 3) throw stop(progress);
+          scanCursor = undefined;
+        }
+        if (scanCursor === undefined) ({ scanCursor, settling } = plan(progress));
+        expected = { revision: progress.revision, key: keyOf(progress.cursor) };
         const page = await request(context, 'list', scanCursor ? { before: scanCursor } : {});
         const summary = () => ({ configured: page.configured, connections: page.connections, otherConnections: page.otherConnections,
           checkedItems, appliedItems, receiveError: null });
@@ -311,10 +368,10 @@
         let previous = scanCursor;
         for (const row of page.items) {
           const cursor = cursorFor(row); cursorTime(cursor.fetched_at);
-          if (previous) need(compareCursor(previous, cursor) < 0);
+          if (previous) envelope(compareCursor(previous, cursor) < 0);
           previous = cursor;
         }
-        if (page.hasMore) need(previous && page.items.length > 0 && compareCursor(previous, page.nextCursor) === 0);
+        if (page.hasMore) envelope(previous && page.items.length > 0 && compareCursor(previous, page.nextCursor) === 0);
         const known = new Map(progress.receipts.map(receipt => [receipt.itemId, receipt]));
         const received = []; let receiveError = null, receiveErrorCode = null, failedCursor = null, blockedItemTitle = null;
         for (const row of page.items) {
@@ -352,13 +409,20 @@
           const saved = await step(context, () => storage.saveRssInboxProgress(workspaceId, { cursor, receipts }, progress.revision,
             { expectedBundleRevision: bundle.revision, isCurrent: () => { try { guard(context); return true; } catch (_) { return false; } } }));
           if (saved.status === 'conflict') {
-            if (++conflicts >= 3) throw fault('rss_receive_conflict');
+            // The next read shows whether the ACK moved; give up there.
+            if (++conflicts >= 3) givingUp = true;
             scanCursor = undefined;
             continue;
           }
           need(saved.status === 'stored', 'rss_receive_conflict'); conflicts = 0;
+          expected = { revision: Number.isSafeInteger(saved.revision) ? saved.revision : progress.revision + 1, key: keyOf(cursor) };
         }
         onProgress?.(checkedItems);
+        if (!receiveError && !page.hasMore) {
+          // This scan began after each settling ACK's margin and read past it.
+          for (const key of settling) { const entry = watched.get(key); if (entry) entry.final = true; }
+          watch(cursor);
+        }
         if (receiveError || !page.hasMore) return { ...summary(), receiveError, receiveErrorCode,
           blockedItemId: permanentErrors.has(receiveErrorCode) ? failedCursor?.id || null : null, blockedItemTitle };
         scanCursor = page.nextCursor;
@@ -394,6 +458,18 @@
     const services = new Map(), targets = new Set();
     let disposed = false, started = false, suspended = false, parked = false, stopped = false, resumePending = false, generation = 0, running = null, wiring = null;
     let nextRetryAt = 0, status = { state: 'idle', checkedItems: 0, receiveError: null };
+    // No connection (or only disconnected ones) or collection turned off parks
+    // the timer. A connection registered or collection enabled elsewhere is
+    // found by a returning wake (page-ready, visible, online), at most once per
+    // interval; the timer runs such a wake late but never starts a check itself.
+    let idleSince = null, recheckRequested = false;
+    // Consecutive temporary failures; the shell shows a non-blocking notice
+    // after UNAVAILABLE_AFTER of them (about five minutes) until one succeeds.
+    // Contention with another tab that is saving the ACK counts separately and
+    // shows the same notice only after CONTENDED_AFTER (about thirty minutes).
+    let failureStreak = 0, contendedStreak = 0;
+    const unavailable = () => failureStreak >= UNAVAILABLE_AFTER || contendedStreak >= CONTENDED_AFTER;
+    const leaseClock = typeof host.performance?.now === 'function' ? () => host.performance.now() : now;
     function current() {
       const account = auth.getAccount?.();
       return !disposed && !suspended && !parked && isCurrent() && auth.epoch === openingEpoch && auth.user?.id === owner.userId &&
@@ -407,14 +483,18 @@
     function cancel() { generation++; for (const service of services.values()) service.dispose(); services.clear(); }
     const unlisten = auth.onAccountChange?.(() => { if (!current()) cancel(); });
     function serviceFor(workspaceId) {
-      if (!services.has(workspaceId)) services.set(workspaceId, create({ storage, auth, core, workspaceId, isCurrent: current, clientFactory }));
+      if (!services.has(workspaceId)) services.set(workspaceId, create({ storage, auth, core, workspaceId, isCurrent: current, clientFactory, now: leaseClock }));
       return services.get(workspaceId);
     }
-    function syncNow(workspaceId) {
+    function syncNow(workspaceId, { recheck = false } = {}) {
       if (workspaceId !== undefined) { need(UUID.test(workspaceId || '')); targets.add(workspaceId); }
-      if (targets.size) { stopped = false; nextRetryAt = 0; }
+      if (targets.size) { stopped = false; nextRetryAt = 0; idleSince = null; recheckRequested = false; }
       if (running) return running;
-      if (!current() || stopped || now() < nextRetryAt || host.navigator?.onLine === false || host.document?.visibilityState === 'hidden') return Promise.resolve({ ...status });
+      if (!current() || host.navigator?.onLine === false || host.document?.visibilityState === 'hidden') return Promise.resolve({ ...status });
+      if (recheck && stopped && idleSince !== null) recheckRequested = true;
+      const due = stopped && idleSince !== null && recheckRequested && now() >= idleSince + intervalMs;
+      if (stopped && !due || now() < nextRetryAt) return Promise.resolve({ ...status });
+      if (due) recheckRequested = false;
       const context = generation, startedAt = now();
       const pending = (async () => {
         let publishable = true;
@@ -450,15 +530,26 @@
           const blocked = permanentErrors.has(receiveErrorCode);
           stopped = blocked || !configured || !connected && !receiveError;
           nextRetryAt = receiveError && !stopped ? startedAt + intervalMs : 0;
-          status = { state: blocked ? 'blocked' : stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError, receiveErrorCode, blockedItemId, blockedItemTitle };
+          idleSince = stopped && !blocked ? startedAt : null;
+          failureStreak = receiveError && !blocked ? failureStreak + 1 : 0; if (!failureStreak) contendedStreak = 0;
+          status = { state: blocked ? 'blocked' : stopped ? 'stopped' : receiveError ? 'error' : 'idle', checkedItems, receiveError, receiveErrorCode, blockedItemId, blockedItemTitle,
+            unavailable: unavailable() };
         } catch (error) {
           if (current() && context === generation && error?.code !== 'rss_cancelled') {
             const errorInfo = clean(error);
             const blocked = permanentErrors.has(errorInfo.code);
-            if (errorInfo.code === 'rss_setup_required' || blocked) stopped = true;
-            else nextRetryAt = startedAt + intervalMs;
-            status = { ...status, state: blocked ? 'blocked' : stopped ? 'stopped' : 'error', receiveError: errorInfo.message,
-              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null };
+            // An undeployed or misconfigured service, like a blocked item, waits
+            // for an explicit registration or reload rather than returning wakes.
+            const temporary = !(errorInfo.code === 'rss_setup_required' || blocked);
+            if (!temporary) { stopped = true; idleSince = null; failureStreak = contendedStreak = 0; }
+            else {
+              nextRetryAt = startedAt + intervalMs; if (error?.contended) contendedStreak++; else failureStreak++;
+              // A recheck that failed temporarily is retried on each due tick (one
+              // per interval) until it completes; the wake stays requested.
+              if (stopped && idleSince !== null) { idleSince = startedAt; recheckRequested = true; }
+            }
+            status = { ...status, state: blocked ? 'blocked' : temporary ? 'error' : 'stopped', receiveError: errorInfo.message,
+              receiveErrorCode: errorInfo.code, blockedItemId: null, blockedItemTitle: null, unavailable: unavailable() };
           } else publishable = false;
         }
         if (publishable) publish(context); return { ...status };
@@ -466,11 +557,15 @@
       running = pending;
       pending.finally(() => {
         if (running === pending) running = null;
-        if ((targets.size || resumePending) && current()) { resumePending = false; syncNow(); }
+        if ((targets.size || resumePending) && current()) { const recheck = resumePending; resumePending = false; syncNow(undefined, { recheck }); }
       });
       return pending;
     }
     const wake = () => { if (!stopped) syncNow(); };
+    // Returning to the page may follow a registration on another device.
+    const recheck = () => { syncNow(undefined, { recheck: true }); };
+    // The interval only performs a recheck an earlier returning wake asked for.
+    const tick = () => { syncNow(); };
     const suspend = () => { suspended = true; cancel(); status = { ...status, state: 'paused' }; };
     const ready = () => {
       const account = auth.getAccount?.();
@@ -479,7 +574,7 @@
       // here, never from an arbitrary account-change notification.
       if (disposed || !isCurrent() || auth.user?.id !== owner.userId || account?.userId !== owner.userId || account?.projectUrl !== owner.projectUrl) return;
       openingEpoch = auth.epoch; suspended = false; parked = false;
-      if (running) resumePending = true; else wake();
+      if (running) resumePending = true; else recheck();
     };
     const pagehide = event => { if (event?.persisted) { parked = true; cancel(); } };
     const onRegistered = event => {
@@ -490,10 +585,10 @@
     function start() {
       if (disposed || started) return; started = true;
       wiring = lifecycle?.attach(host, {
-        listen: [['window', 'online', wake], ['window', 'focus', wake], ['document', 'visibilitychange', wake],
+        listen: [['window', 'online', recheck], ['window', 'focus', wake], ['document', 'visibilitychange', recheck],
           ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', ready],
           ['document', 'haedo:rss-registered', onRegistered], ['window', 'pagehide', pagehide]],
-        poll: polling ? [intervalMs, wake] : null,
+        poll: polling ? [intervalMs, tick] : null,
       }) || null;
       syncNow();
     }

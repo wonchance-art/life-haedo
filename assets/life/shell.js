@@ -58,20 +58,28 @@
     signal.addEventListener('abort', clearNotice, { once: true });
     const onStatus = status => {
       if (!current()) return;
-      if (status.state !== 'blocked') { clearNotice(); return; }
+      const blocked = status.state === 'blocked';
+      // Temporary failures retry by themselves; after several in a row a quiet,
+      // non-blocking status line says so until one check succeeds again.
+      if (!blocked && !(status.state === 'error' && status.unavailable === true)) { clearNotice(); return; }
       const main = root.document.querySelector('#lifeApp #lifeMain');
       if (!main) return;
+      const id = blocked ? 'rssReflectionError' : 'rssReflectionStatus';
+      if (reflectionNotice?.id !== id) clearNotice();
       if (!reflectionNotice?.isConnected) {
         reflectionNotice = root.document.createElement('p');
-        reflectionNotice.id = 'rssReflectionError';
-        reflectionNotice.className = 'life-error';
-        reflectionNotice.setAttribute('role', 'alert');
+        reflectionNotice.id = id;
+        reflectionNotice.className = blocked ? 'life-error' : 'life-status';
+        reflectionNotice.setAttribute('role', blocked ? 'alert' : 'status');
         main.before(reflectionNotice);
       }
-      const title = typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
+      const title = blocked && typeof status.blockedItemTitle === 'string' ? status.blockedItemTitle.trim() : '';
       // The title goes after a colon so the sentence never depends on its final consonant.
       const named = title ? ': “' + (title.length > 80 ? title.slice(0, 80) + '…' : title) + '”' : '';
-      reflectionNotice.textContent = 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+      const text = blocked ? 'RSS 글을 보관하지 못했습니다' + named + '. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.'
+        : 'RSS 수신함을 확인하지 못하고 있습니다. 설정의 RSS/Atom 연결에서 상태를 확인해 주세요.';
+      // Each interval republishes the same state; rewrite (and re-announce) only a change.
+      if (reflectionNotice.textContent !== text) reflectionNotice.textContent = text;
     };
     // Keep module loading and private inbox requests off the first-screen path.
     const queue = () => root.requestAnimationFrame(() => {
