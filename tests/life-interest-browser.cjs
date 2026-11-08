@@ -152,7 +152,7 @@ async function main() {
       const data = await fixture(page);
       const otherId = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, other = await s.createWorkspace('선택 보호 확인용 공간'); await s.setActive(id); return other.workspaceId; }, data.workspaceId);
       await open(page); await analyze(page); const before = await stored(page); await page.locator('[data-interest-candidate]').first().check();
-      await nav(page, 'tools'); await page.getByRole('link', { name: '목표', exact: false }).click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
+      await nav(page, 'tools'); await page.locator('#lifeMain .schedule-plan-links').getByRole('link', { name: '목표', exact: true }).click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal(new URL(page.url()).pathname, '/index.html'); assert.match(await page.locator('#lifeError').textContent(), /후보 선택|보관되지/);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal((await stored(page)).bundle.workspaceId, data.workspaceId); assert.deepEqual((await stored(page)).profile.confirmedIds, []);
@@ -160,7 +160,7 @@ async function main() {
       assert.match(await page.locator('#lifeStartup').textContent(), /로그아웃을 완료하지 않았습니다/); assert.equal(await page.locator('#lifeApp').isVisible(), true); assert.equal(await page.evaluate(() => HaedoAuth.user.id), accounts.a.id);
       await page.locator('#lifeAccountToggle').click(); await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
       await page.locator('#interestConfirm').click(); await idle(page); assert.equal((await stored(page)).profile.confirmedIds.length, 1);
-      await nav(page, 'tools'); await page.getByRole('link', { name: '목표', exact: false }).click(); await page.waitForURL(url => url.pathname.endsWith('/goals.html'));
+      await nav(page, 'tools'); await page.locator('#lifeMain .schedule-plan-links').getByRole('link', { name: '목표', exact: true }).click(); await page.waitForURL(url => url.pathname.endsWith('/goals.html'));
       await open(page); await page.locator('[data-interest-candidate]').first().uncheck(); await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert.equal((await stored(page)).bundle.workspaceId, data.workspaceId);
       await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); await page.locator('#interestRevertManual').click(); await idle(page); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), otherId, { timeout: 12000, label: 'life-interest storage condition' });

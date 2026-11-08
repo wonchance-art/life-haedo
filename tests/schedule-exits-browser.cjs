@@ -6,7 +6,7 @@
  * - 통합 검색 opened from Q·M·W·D is named back as 일정으로 돌아가기 and returns to the same view and date.
  * - The list's 글 메뉴 closes when keyboard focus leaves it, so at 390 its panel never covers the next
  *   focus target; returning from one of its items still reopens it on that item.
- * npm run dev; node tests/schedule-exits-browser.cjs
+ * npm run dev; node tests/schedule-exits-browser.cjs (SCHEDULE_EXITS_CPU=4 for a 4x slower CPU)
  * Never uses real Google, production Supabase or Apple-device claims. */
 'use strict';
 const assert = require('node:assert/strict');
@@ -62,6 +62,8 @@ async function main() {
     const context = await makeContext(browser, server, device, accounts.a, { viewport, timezoneId: 'Asia/Seoul', locale: 'ko-KR' });
     await tables.attach(context);
     const page = await context.newPage(); page.setDefaultTimeout(15000);
+    // SCHEDULE_EXITS_CPU=4 runs the checks on a 4x slower CPU (timing races show up here first).
+    if (Number(process.env.SCHEDULE_EXITS_CPU) > 1) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.SCHEDULE_EXITS_CPU) });
     await page.clock.setFixedTime(new Date(TODAY));
     const dialogs = [];
     page.on('dialog', dialog => { dialogs.push(dialog.type() + ':' + dialog.message()); report.dialogs.push({ check: name, type: dialog.type() }); dialog.accept().catch(() => {}); });
@@ -147,7 +149,9 @@ async function main() {
       await summary.click();
       await menu.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await mode(page, 'blog');
       await page.locator('[data-subview-return]:visible').click(); await mode(page, 'home');
-      await page.waitForFunction(() => document.activeElement?.textContent?.includes('글 공개·보관'));
+      // The return restores focus in a frame after the list renders; until then focus is on <body>, whose
+      // text also contains the item's name. Wait for the item itself, then check its menu.
+      await page.waitForFunction(() => document.activeElement?.matches('#lifeBlogMenu [data-focus-key="home:action:blog"]'));
       assert.equal(await isOpen(), true, 'the menu reopens on the item used');
       assert.equal(await uncovered(), true);
       await page.keyboard.press('Shift+Tab'); assert.equal(await isOpen(), true, 'moving within the menu keeps it');

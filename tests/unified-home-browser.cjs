@@ -240,7 +240,8 @@ async function main() {
     await check('tools lead to existing goal/habit editors and account timeline list with the same five-way navigation', async ({ page }) => {
       await page.goto(base + '/index.html?section=tools'); await ready(page);
       for (const target of ['goals', 'habits']) {
-        await page.locator('#lifeMain a[href="' + target + '.html"]').click();
+        // Y's 계획 link line (an empty 목표 칸 also links to goals.html as 목표 추가).
+        await page.locator('#lifeMain .schedule-plan-links a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
         await assertCommonNavigation(page);
         assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
