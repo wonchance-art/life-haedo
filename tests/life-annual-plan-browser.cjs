@@ -143,7 +143,7 @@ async function main() {
     await check('tools entry, annual Enter and monthly edits persist across reopen without changing originals', async ({ page }) => {
       const before = await seed(page), year = before.plan.rows[0].year;
       assert.equal(before.plan.revision, 0, 'Opening the plan does not manufacture a saved revision');
-      await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(new URL(page.url()).searchParams.get('view'), 'annual-plan');
       await settings(page); await page.locator('#apBirthDate').fill('2000-02-29'); await stored(page, p => p.birthDate === '2000-02-29');
       await page.locator('#apAgeMode').selectOption('both'); await stored(page, p => p.ageMode === 'both');
@@ -157,7 +157,7 @@ async function main() {
       const saved = await preserve(page, before); await page.reload(); await ready(page); await page.locator('#apGrid').waitFor();
       assert.deepEqual((await state(page)).plan, saved.plan);
       assert.equal(await annual(page, year).inputValue(), PRIVATE + ' — 연간 계획');
-      await nav(page, 'home'); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await nav(page, 'home'); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(await month.inputValue(), '3월 계획\n두 번째 문장'); await preserve(page, before);
     });
 
@@ -248,10 +248,10 @@ async function main() {
       // workspace picker reads its new inventory, as an app-created space would.
       await page.reload(); await ready(page); await page.locator('#apGrid').waitFor();
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other);
-      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, other); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, other); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.ok((await state(page)).plan.rows.every(r => r.text === '')); await writeYear(page, year, '두 번째 공간의 독립 계획');
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(first);
-      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, first); await nav(page, 'tools'); await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await wait(page, async w => (await HaedoLife.Shell.storage.getActive()) === w, first); await nav(page, 'tools'); await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       assert.equal(await annual(page, year).inputValue(), '첫 작업공간에만 저장할 계획');
       await page.evaluate(() => { window.__holdAnnualSave = true; window.__oldAnnualStorage = HaedoLife.Shell.storage; }); await annual(page, year).fill(PRIVATE + ' 이전 계정의 지연 입력'); await wait(page, () => window.__annualSaveEntered);
       await page.evaluate(value => HaedoAuth.client.auth.setSession(value), session(accounts.b)); await wait(page, () => !HaedoAuth.user && !HaedoLife.Shell.storage);

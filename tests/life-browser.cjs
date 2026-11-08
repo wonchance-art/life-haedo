@@ -380,7 +380,8 @@ async function applicationChecks(browser, observe) {
     await check('UI: explicit legacy lookup excludes unscoped documents and preserves them', async () => {
       assert.equal(await page.evaluate(() => __legacyAccess.some(x => x.kind !== 'read')),false);
       assert.equal(await page.evaluate(() => __legacyAccess.length),0);
-      await click('연표'); await click('기존 연표 목록 확인');
+      // 2026-11-08 S8: the former 연표 screen and its lookup button are gone; the 연표 목록 (workspace.html) lists account timelines.
+      assert.equal(await page.getByRole('button',{name:'기존 연표 목록 확인',exact:true}).count(),0);
       assert.doesNotMatch(await page.locator('#lifeMain').textContent(),/익명 기존 연표/);
       assert.equal(await page.evaluate(() => __legacyAccess.length),0);
       const actual = await page.evaluate(keys => Object.fromEntries(keys.map(key => [key,localStorage.getItem(key)])),Object.keys(legacySeed));
