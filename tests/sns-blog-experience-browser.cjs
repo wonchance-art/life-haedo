@@ -13,6 +13,7 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const phase = process.env.SNS_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
 const out = process.env.SNS_OUT_DIR ? path.resolve(process.env.SNS_OUT_DIR) : path.resolve('.local/sns-blog', phase);
@@ -29,13 +30,16 @@ async function home(page) {
   await page.locator('#homeComposition[aria-busy="false"]').waitFor();
   if (phase === 'after' && await page.locator('#homeTab-posts').getAttribute('aria-selected') !== 'true') await page.locator('#homeTab-posts').click();
 }
+// 2026-11-08 일정 통합 정리 S3: 자료 opens from the global 자료 (the list's 자료 block is gone) and
+// 프로필 편집 from the heading's 글 메뉴.
 async function library(page) {
-  const node = page.locator('.home-library');
-  if (!await node.evaluate(element => element.open)) await node.locator(':scope > summary').click();
+  await nav(page, 'records');
+  if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
+  await page.locator('#lifeMain[data-mode="sources"]').waitFor();
 }
 async function profile(page) {
   if (phase === 'after') {
-    await page.locator('[data-home-destination="page"]').click();
+    await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click();
     await page.locator('#wbPageTitle').waitFor();
     assert.equal(await page.locator('#wbPageTitle').inputValue(), '느린 오후의 기록');
     assert.equal(await page.locator('#wbProfileSettings').isVisible(), true);
@@ -195,14 +199,14 @@ async function main() {
       await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
       const edited = (await docs(page)).docs.find(doc => doc.title.endsWith('다시 쓴 생각') && doc.status === 'saved');
       assert(edited); assert.equal(edited.photos[0].digest, sample.digest); assert.equal(edited.photos[0].width, 1800);
-      await home(page); await library(page); await page.locator('[data-home-destination="sources"]').click(); await settle(page); await snap(page, 'library');
+      await home(page); await library(page); await settle(page); await snap(page, 'library');
       await page.locator(`.life-source-card[data-source-id="${sample.sourceId}"] .life-source-open`).first().click(); await settle(page);
       assert.match(await page.locator('#lifeSourceText').innerText(), /다른 곳에서 가져온 원문/); await snap(page, 'source');
       await home(page); await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor();
       await page.locator('#lifeFindQuery').fill('오후'); await page.locator(`[data-focus-key="find:photo-post:${edited.id}"]`).click(); await page.locator('.photo-article').waitFor();
       assert.match(await page.locator('.photo-article').innerText(), /다시 쓴 생각/);
       await nav(page, 'manage'); await snap(page, 'settings'); await nav(page, 'tools'); await snap(page, 'tools'); await home(page);
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
+      await page.locator('[data-haedo-compose]:visible').click(); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('새로 남기는 한글 사진 글');
       const body = page.locator('.ql-editor'); await body.evaluate(node => { window.__snsEditor = node; node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); });
       await body.fill('오늘의 생각을 한글로 천천히 씁니다.\n사진 앞뒤의 순서를 그대로 남깁니다.'); await body.dispatchEvent('compositionend', { data: '씁니다' });

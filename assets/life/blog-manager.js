@@ -317,7 +317,7 @@
       detail = el('div'); evidenceHost = el('div'); list = el('div', null, 'blog-manager-list'); list.setAttribute('aria-label', '내 글 목록');
       surface.append(header, status);
       if (!focusedPostId && typeof onOpenAccountBlog === 'function') {
-        const account = button('글 동기화 상태', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
+        const account = button('계정 보관 상태', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
         account.dataset.focusKey = 'blog:account-list'; account.id = 'blogAccountList'; surface.append(account);
       }
       if (!focusedPostId) surface.append(button('자료 인용으로 새 글 쓰기', () => chooseEvidence()));

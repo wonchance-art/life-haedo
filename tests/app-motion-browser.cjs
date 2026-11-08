@@ -59,7 +59,7 @@ async function enterFrames(page, kind) {
   assert(frames.some(record => new Set(record.frames.map(frame => frame.transform + '/' + frame.opacity)).size > 1), 'Native animation must paint distinct intermediate frames');
   report.frames.push({ kind, animations: frames });
 }
-async function compose(page) { await page.locator('[data-home-destination="write"]:visible,#homeFirstWrite:visible').first().click(); await page.locator('.ql-editor').waitFor(); }
+async function compose(page) { await page.locator('[data-haedo-compose]:visible').first().click(); await page.locator('.ql-editor').waitFor(); }
 async function search(page, text) {
   if (!await page.locator('#homePostSearch').isVisible()) await page.locator('.home-search-toggle').click();
   await page.locator('#homePostSearch').fill(text);
@@ -140,7 +140,7 @@ async function main() {
     }, { reducedMotion: 'reduce' });
     await check('changing reduced motion during a running entrance cancels its effects without blocking another action', async ({ page }) => {
       await open(page); await idle(page); await cleanTrace(page);
-      await page.evaluate(() => [...document.querySelectorAll('[data-home-destination="write"],#homeFirstWrite')].find(element => element.checkVisibility()).click());
+      await page.evaluate(() => [...document.querySelectorAll('[data-haedo-compose]')].find(element => element.checkVisibility()).click());
       await page.waitForFunction(() => __nativeMotion.animations.some(record => record.animation.playState === 'running'));
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.waitForFunction(() => __nativeMotion.animations.every(record => record.animation.playState !== 'running'));

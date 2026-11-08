@@ -63,7 +63,8 @@ const postState = (page, fixture) => page.evaluate(async f => {
 }, fixture);
 async function openReader(page, f, search = false) {
   await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
-  if (search) { await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').fill('정확한 글'); }
+  // From 761px the list search is an always-shown field (2026-11-08 S3); below it opens from its icon.
+  if (search) { if (!await page.locator('#homePostSearch').isVisible()) await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').fill('정확한 글'); }
   await page.getByRole('button', { name: f.title, exact: true }).click(); await page.locator('.photo-article').waitFor();
   await page.locator('#photoServerStatus:not([data-state="checking"])').waitFor();
 }

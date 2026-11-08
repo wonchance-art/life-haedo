@@ -11,6 +11,7 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4252';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { LocalSQLBlogCloud } = require('./blog-completion-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const output = path.resolve(__dirname, '../.local/account-wide-home');
 const migrations = ['supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'];
@@ -33,7 +34,7 @@ const homeIds = page => page.locator('#homePosts [data-photo-post-id]').evaluate
 async function home(page) { await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor(); }
 const kick = page => page.evaluate(() => dispatchEvent(new Event('online')));
 async function write(page, title, body) {
-  await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').first().click();
+  await page.locator('[data-haedo-compose]:visible').first().click();
   await page.locator('#photoTitle').fill(title); await page.locator('.ql-editor').fill(body + '\n');
   await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
   const status = page.locator('#photoServerStatus[data-state="synced"]'); await status.waitFor({ timeout: 45000 });
@@ -126,7 +127,8 @@ async function main() {
     });
     await check('A post from another library opens there and returns to the same home tab and search', async () => {
       active = b.page;
-      await b.page.getByRole('button', { name: '내 글 검색 열기', exact: true }).click();
+      // From 761px the list search is an always-shown field (2026-11-08 S3).
+      if (!await b.page.locator('#homePostSearch').isVisible()) await b.page.getByRole('button', { name: '내 글 검색 열기', exact: true }).click();
       await b.page.locator('#homePostSearch').fill('A 기기');
       await until(() => homeIds(b.page), ids => ids.length === 1 && ids[0] === onA, 'search matches the other library\'s post');
       const before = await libraryPosts(b.page), holder = before.rows.find(row => row.id === onA).workspaceId;
@@ -160,7 +162,8 @@ async function main() {
     await check('The sync view shows version, account post count, waiting/failed and last sync; sync now works', async () => {
       for (const device of [a, b]) {
         active = device.page; await home(device.page);
-        await device.page.locator('#homeAccountBlog').click();
+        // 계정 보관 상태 is in the heading's 글 메뉴 (2026-11-08 S3).
+        await openBlogMenu(device.page); await device.page.locator('#homeAccountBlog').click();
         const facts = device.page.locator('#accountBlogFacts');
         await until(() => facts.innerText(), text => /글 2개/.test(text) && /대기 0 · 실패 0/.test(text) && /마지막 동기화 /.test(text), device.name + ' facts');
         const text = await facts.innerText();

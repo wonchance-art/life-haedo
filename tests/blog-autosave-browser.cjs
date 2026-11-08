@@ -13,7 +13,7 @@ const output = path.resolve('.local/blog-autosave');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const records = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(); return { workspaceId, docs: await Promise.all((await s.listPhotoPosts(workspaceId)).map(p => s.readPhotoPost(workspaceId, p.id))) }; });
 async function home(page) { await page.goto(base + '/index.html'); await ready(page); await settle(page); await page.locator('#homeComposition[aria-busy="false"]').waitFor(); }
-async function writer(page) { await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite:visible').first().click(); await page.locator('#photoTitle').waitFor(); await page.locator('.ql-editor').waitFor(); }
+async function writer(page) { await page.locator('[data-haedo-compose]:visible').first().click(); await page.locator('#photoTitle').waitFor(); await page.locator('.ql-editor').waitFor(); }
 async function accepted(page, title, body) {
   return page.evaluate(({ title, body }) => {
     const input = document.querySelector('#photoTitle'); input.value = title; input.dispatchEvent(new Event('input', { bubbles: true }));

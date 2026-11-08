@@ -129,7 +129,7 @@
     async function mount(target) {
       if (disposed) throw fault('disposed');
       host = target; epoch++; busy = null; navigating = false; composing = false; rows = []; loaded = false;
-      surface = el('section', null, 'account-blog'); surface.id = 'lifeAccountBlog'; surface.setAttribute('aria-label', '글 동기화');
+      surface = el('section', null, 'account-blog'); surface.id = 'lifeAccountBlog'; surface.setAttribute('aria-label', '계정 보관 상태');
       const hint = el('p', '저장한 글과 초안은 사진과 함께 로그인한 모든 기기에 자동으로 저장됩니다. 공개는 글마다 따로 선택합니다.', 'life-help');
       const head = el('div', null, 'ab-tools');
       status = el('p', '', 'life-meta ab-status'); status.id = 'accountBlogStatus'; status.setAttribute('role', 'status');

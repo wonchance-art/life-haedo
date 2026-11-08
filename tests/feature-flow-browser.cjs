@@ -96,13 +96,19 @@ async function main() {
       assert.equal(await blogMenu.getByRole('button', { name: '글 공개·보관', exact: true }).isVisible(), true);
       for (const label of ['공개 표지', '공개한 페이지']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).count(), 0, 'The blog menu no longer lists ' + label);
       assert.equal(await page.getByRole('button', { name: '글 공개·보관', exact: true }).count(), 1, 'Home exposes one manager entry');
+      // 2026-11-08 S3: 글 메뉴 holds the list's three entries; the profile row keeps no buttons.
+      assert.equal(await blogMenu.locator(':scope > summary').getAttribute('aria-label'), '글 메뉴');
+      for (const label of ['계정 보관 상태', '프로필 편집']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      assert.equal(await page.locator('.home-profile-bar button').count(), 0);
       await capture(page, 'blog-menu', size);
       await blogMenu.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await mode(page, 'blog'); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       await back(page, 'home'); await expectFocus(page, '글 공개·보관');
       assert.equal(await page.locator('#lifeBlogMenu').evaluate(node => node.open), true);
 
       await nav(page, 'tools'); await mode(page, 'tools');
-      assert.deepEqual(await page.locator('#lifeMain .life-destination').evaluateAll(nodes => nodes.map(node => node.querySelector('strong')?.textContent)), ['연간 계획', '목표', '습관', '연표']);
+      // 2026-11-08 S4: Y's 계획 칸 is one link line with the plan tabs' names (no large icon rows).
+      assert.deepEqual(await page.locator('#lifeMain .schedule-plan-links a').allTextContents(), ['연간 계획', '목표', '습관', '연표']);
+      assert.equal(await page.locator('#lifeMain .life-destination').count(), 0);
       await capture(page, 'tools', size);
       await nav(page, 'manage'); await mode(page, 'manage');
       for (const label of ['글 공개·보관', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
@@ -185,7 +191,7 @@ async function main() {
 
     await check('planning links keep annual input while moving through goals and habits', async ({ page }) => {
       await page.goto(base + '/index.html?section=tools'); await ready(page);
-      await page.getByRole('button', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
+      await page.getByRole('link', { name: '연간 계획', exact: true }).click(); await page.locator('#apGrid').waitFor();
       const input = page.locator('[data-ap-annual]').first(); await input.fill('한 해의 방향을 보관하고 실행 화면으로 이동');
       const year = await input.getAttribute('data-ap-annual');
       await page.getByRole('navigation', { name: '계획과 실천', exact: true }).getByRole('link', { name: '목표', exact: true }).click();

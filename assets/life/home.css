@@ -9,11 +9,6 @@
 .home-profile-open > .home-author-name { display: -webkit-box; grid-column: 2; grid-row: 1; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; min-width: 0; margin: 0; color: var(--ink); font-size: 28px; font-weight: 750; line-height: 1.3; letter-spacing: -.03em; }
 .home-blog-description { display: -webkit-box; grid-column: 2; grid-row: 2; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
 .home-blog-description[hidden] { display: none; }
-.home-profile-bar > .home-blog-action { flex: none; min-height: 44px; border-color: var(--line); border-radius: 12px; padding-inline: 14px; background: var(--paper); color: var(--ink-soft); font-size: 13px; font-weight: 550; }
-.home-profile-bar > .home-blog-action:hover:not(:disabled) { border-color: var(--field-line); background: var(--soft); color: var(--color-primary); }
-.home-blog-action > .life-glyph { width: 16px; height: 16px; flex: none; }
-.home-blog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.home-blog-actions > .home-blog-write { flex: none; min-height: 44px; border-radius: 10px; padding-inline: 18px; font-size: 14px; font-weight: 700; }
 #homePosts { margin-top: 0; }
 #homePosts > .home-section-heading { min-height: 52px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 #homePosts > .home-section-heading > h2 { position: relative; padding: 14px 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
@@ -39,94 +34,30 @@
 .home-first-post > h3 { color: var(--ink); font-size: 26px; font-weight: 750; line-height: 1.4; letter-spacing: -.03em; }
 .home-first-post > .home-text { max-width: 34ch; margin: 12px 0 0; color: var(--ink-soft); font-size: 16px; line-height: 1.8; }
 .home-first-post > .life-button { min-height: 44px; margin-top: 20px; border-radius: 12px; padding-inline: 20px; font-weight: 650; }
-.home-library { margin-top: 24px; border-top: 1px solid var(--line); }
-.home-library > summary { min-height: 64px; padding: 18px 0; cursor: pointer; color: var(--ink); font-size: 15px; font-weight: 600; }
-.home-library > summary::marker { color: var(--ink-soft); }
-.home-library > summary > .life-meta { margin-left: 12px; font-size: 12px; font-weight: 400; }
-.home-library[open] > summary { border-bottom: 1px solid var(--line); }
-.home-library-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-.home-library-actions > .life-button { min-height: 44px; color: var(--ink-soft); font-size: 14px; }
-.home-library-preview-note { margin-top: 10px; font-size: 12px; line-height: 1.8; }
-.home-library .home-section { margin-top: 22px; }
 .home-section { min-width: 0; margin-top: 28px; }
 .home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .home-section-heading > h2 { font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
-.home-section-heading > .life-icon-button { color: var(--ink-soft); }
-.home-section-heading > .life-actions { gap: 4px; }
-.home-section-heading .life-actions > .life-button { border-color: transparent; border-radius: 10px; padding-inline: 11px; color: var(--ink-soft); }
-.home-section-heading .life-actions > .life-button:hover { color: var(--color-primary); background: var(--soft); }
-.home-record { min-width: 0; padding: 18px 0 20px; border-bottom: 1px solid var(--line); }
-.home-record-open { width: 100%; max-width: 100%; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-size: 18px; font-weight: 600; line-height: 1.7; text-align: left; }
-.home-record-open:hover { background: transparent; color: var(--color-primary); }
-.home-record-open:active { color: var(--color-primary); background: transparent; }
 .home-text { margin-top: 7px; color: var(--ink); font-size: 16px; line-height: 1.85; }
-.home-clamp,.home-record-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.home-record-meta { margin-top: 9px; font-size: 12px; }
-.home-date { display: block; margin-top: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.home-empty { padding: 18px 0 26px; border-bottom: 1px solid var(--line); }
-.home-empty > .life-button { margin-top: 16px; }
-.home-empty-note { padding: 16px 0 24px; border-bottom: 1px solid var(--line); }
-.home-group { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; padding: 17px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; transition: background-color 160ms ease-out, color 160ms ease-out; }
-.home-group:hover:not(:disabled) { background: var(--canvas, #f7f7fb); }
-.home-group:active:not(:disabled) { background: var(--soft); }
-.home-group-copy { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
-.home-group-copy > strong { color: var(--ink); font-size: 16px; font-weight: 550; line-height: 1.75; }
-.home-group > .life-glyph { color: var(--ink-soft); }
-.home-group > .life-glyph:first-child { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; background: var(--soft); color: var(--color-primary); }
-.home-group > .life-glyph:last-child { transform: rotate(-90deg); }
-.home-page-scope { display: inline-block; margin: 4px 0 12px; padding: 3px 0; color: var(--ink-soft); font-size: 12px; font-weight: 500; }
-.home-page-title { font-size: 19px; margin-top: 16px; }
-.home-intro { margin-bottom: 18px; }
-.home-page-entry { min-width: 0; padding: 16px 0 20px; border-bottom: 1px solid var(--line); }
-.home-entry-heading { display: flex; align-items: flex-start; gap: 10px; }
-.home-entry-heading > h3 { flex: 1; min-width: 0; font-size: 18px; }
-.home-entry-heading > .life-glyph { margin-top: 5px; color: var(--color-primary); }
-.home-record-compact { padding-block: 12px; border: 0; }
-.home-record-compact .home-record-open { min-height: 44px; font-size: 15px; font-weight: 550; }
-.home-record-compact .home-text { font-size: 15px; margin-top: 0; }
-.home-record-compact .home-record-meta { margin-top: 6px; }
-.home-comment { margin-top: 14px; }
-.home-comment > .home-text { margin-top: 4px; }
-.home-more-note,.home-missing { margin-top: 14px; }
 .home-loading,.home-load-error { padding-block: 28px; }
 .home-load-error > .life-button { margin-top: 12px; }
 .home-error { margin-top: 0; }
-@container personal-home (min-width: 560px) {
-  /* The date shares the metadata row only when this reading column has room. */
-  #homeRecent > .home-record { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 20px; }
-  #homeRecent > .home-record > :is(h3,.home-text) { grid-column: 1 / -1; }
-  #homeRecent > .home-record > .home-date { margin-top: 9px; white-space: nowrap; }
-}
 @media (max-width: 760px) {
-  .home-profile-bar > .home-blog-action { width: 44px; height: 44px; min-width: 44px; padding: 10px; }
-  .home-profile-edit-label { display: none; }
   .home-blog-lead { padding-top: 4px; padding-bottom: 12px; }
-  .home-blog-actions { gap: 4px; margin-top: 16px; }
-  .home-blog-actions > .home-blog-write { padding-inline: 14px; }
   .home-profile-bar { gap: 8px; }
   .home-profile-open { gap: 10px; }
   .home-profile-open > .home-author-name { font-size: 24px; font-weight: 700; }
   .home-blog-description { margin-left: 0; }
-  .home-profile-bar > .home-blog-action { padding-inline: 12px; font-size: 12px; }
   .home-post { margin-inline: -20px; padding: 28px 20px; }
   .home-post-open { font-size: 24px; }
   .home-post-prose { font-size: 16px; }
   .home-post-excerpt { font-size: 16px; line-height: 1.85; }
-  .home-library > summary > .life-meta { display: block; margin: 6px 0 0 17px; }
   .home-section { margin-top: 24px; }
-  .home-record-open { font-size: 17px; }
   .home-section-heading { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .life-home :is(.home-blog-actions > .life-button,.home-group,.home-record-open,.home-post-open) { transition: none; }
+  .life-home .home-post-open { transition: none; }
 }
 
-.home-book { border-bottom: 1px solid var(--line); }
-.home-book > .home-group { border-bottom: 0; }
-.home-book-outline { padding-bottom: 8px; }
-.home-book-outline > summary { display: list-item; min-height: 44px; padding: 11px 12px; margin-left: 34px; cursor: pointer; color: var(--ink-soft); font-size: 14px; }
-.home-book-outline > .home-chapter { display: block; width: 100%; padding: 12px; border: 0; background: transparent; text-align: left; line-height: 1.75; }
-.home-book-outline > .home-chapter:hover { background: var(--soft); }
 
 /* One personal list; work-in-progress stays compact while saved writing gets room. */
 .home-list-controls { padding-top: 0; }
@@ -147,7 +78,6 @@
 .home-search-scope { margin-top: 8px; margin-bottom: 8px; font-size: 12px; line-height: 1.75; }
 .home-search-clear { flex: none; min-height: 44px; margin: 0; border: 0; padding: 8px 0 8px 8px; color: var(--ink-soft); background: transparent; font-size: 12px; }
 .home-search-clear[hidden] { display: none; }
-.home-list-order { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.75; }
 .home-profile-status:not([hidden]) { margin-top: 12px; padding-block: 0; }
 .home-profile-status > .life-button { min-height: 44px; margin-top: 4px; }
 .home-post-list { min-height: 220px; }
@@ -172,7 +102,6 @@
 .home-resume:hover:not(:disabled) { background: var(--canvas); }
 .home-resume > .life-meta { flex: none; font-size: 12px; }
 .home-resume-title { flex: 1; overflow: hidden; min-width: 0; color: var(--ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.home-blog-actions[hidden] { display: none; }
 
 .account-blog { min-width: 0; }
 .ab-tools { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-block: 24px 12px; }
@@ -220,3 +149,26 @@
   .home-draft-open { padding-block: 12px; }
   .home-profile-copy { grid-template-columns: 72px minmax(0, 1fr); column-gap: 8px; }
 }
+
+/* 2026-11-08 일정 통합 정리 S3: from 761px the posts search is a field in the tab row
+ * (내 글 찾기). It has no magnifier of its own: the heading's 통합 검색 is the one on screen. */
+.home-search-scope[hidden] { display: none; }
+@media (min-width: 761px) {
+  .home-list-controls[data-search-mode=field] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: center; column-gap: 12px; }
+  .home-list-controls[data-search-mode=field] > .home-list-toolbar { grid-column: 1; }
+  .home-list-controls[data-search-mode=field] > .home-search-panel { grid-column: 2; }
+  .home-list-controls[data-search-mode=field] > .home-search-scope { grid-column: 1 / -1; }
+  .home-list-controls[data-search-mode=field] .home-search { min-height: 46px; margin-top: 0; padding-inline: 12px; }
+  .home-list-controls[data-search-mode=field] .home-search > .life-glyph { display: none; }
+  .home-list-controls[data-search-mode=field] .home-search > input { min-height: 44px; padding-block: 8px; }
+  .home-list-controls[data-search-mode=field] .home-search-toggle { display: none; }
+}
+
+/* 2026-11-08 S4: Y·Q 오른쪽 칸 — one line of links to the plan screens (same names as the plan tabs). */
+.schedule-plan-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2px; margin: 0; }
+.schedule-plan-links > a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 6px; border-radius: 8px; color: var(--color-primary); font-size: var(--haedo-text-control, 15px); font-weight: 600; text-decoration: none; }
+.schedule-plan-links > a:first-child { margin-inline-start: -6px; }
+.schedule-plan-links > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-plan-links > a[aria-busy=true] { opacity: .6; }
+.schedule-plan-links > .schedule-plan-sep { color: var(--ink-soft); }
+.schedule-aside > .schedule-plan-links + * { margin-top: 16px; }

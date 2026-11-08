@@ -109,8 +109,10 @@ async function main() {
       const cases = [
         ['/index.html', 'home', null], ['/index.html?section=home', 'home', null], ['/index.html?section=schedule', 'home', null],
         ['/index.html?section=tools', 'tools', 'tools'], ['/index.html?section=schedule&view=tools', 'tools', 'tools'],
-        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null], ['/index.html?view=time', 'time', null]
+        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null]
       ];
+      // 2026-11-08 S8: the former 연표 screen's address opens the 연표 목록 (workspace.html).
+      await page.goto(base + '/index.html?view=time'); await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
       for (const [address, expected, current] of cases) {
         await page.goto(base + address); await ready(page); await shown(page, expected);
         assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', address + ' is 일정');
@@ -122,7 +124,10 @@ async function main() {
           await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'tools:annual-plan');
         }
         if (expected === 'tools') {
-          assert.deepEqual(await page.locator('#lifeMain .life-destination strong').allTextContents(), ['연간 계획', '목표', '습관', '연표']);
+          // 2026-11-08 S4: one link line with the plan tabs' names; 연표 is the 연표 목록 itself (S8).
+          assert.deepEqual(await page.locator('#lifeMain .schedule-plan-links a').allTextContents(), ['연간 계획', '목표', '습관', '연표']);
+          assert.equal(await page.locator('#lifeMain .schedule-plan-links a[data-plan-destination="time"]').getAttribute('href'), 'workspace.html');
+          assert.equal(await page.locator('#lifeMain .life-destination').count(), 0);
           assert.match(await page.locator('.schedule-aside').innerText(), /제주 여행/);
           assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '2026년');
         }
@@ -150,7 +155,8 @@ async function main() {
       // Date headings group the posts; the newest post comes first.
       assert.equal(await page.locator('#homePostList .home-day-heading').first().innerText(), '11월 2일 월요일');
       assert.equal(await page.locator('#homePostList .home-post-open').first().innerText(), PRIVATE);
-      await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').fill('산책');
+      // From 761px the list search is an always-shown field (2026-11-08 S3).
+      assert.equal(await page.locator('.home-search-toggle').isVisible(), false); await page.locator('#homePostSearch').fill('산책');
       await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-post').length > 5);
       await page.evaluate(() => scrollTo({ top: 900, behavior: 'instant' })); const listScroll = await page.evaluate(() => scrollY);
       // A pointer press on the sticky heading does not scroll (Playwright's own click would scroll the control into view).
@@ -256,7 +262,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
       // Typing in the list search keeps the text and the screen.
-      await page.locator('.home-search-toggle').click(); await page.locator('#homePostSearch').focus();
+      await page.locator('#homePostSearch').focus();
       await page.keyboard.type('ymdwqlt/');
       assert.equal(await page.locator('#homePostSearch').inputValue(), 'ymdwqlt/'); assert.equal(await mode(page), 'home');
       // An IME composition in the field (CDP) commits text and moves nowhere.

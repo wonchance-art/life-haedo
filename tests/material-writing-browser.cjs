@@ -189,7 +189,7 @@ async function main() {
       await page.getByRole('button', { name: '작성 준비로 돌아가기', exact: true }).click(); await page.locator('#mwContinue').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /다시 다듬은 여행글/);
       await page.getByRole('button', { name: '작성 준비로 돌아가기', exact: true }).click(); await capture(page, 'finished-return');
       const beforeOrdinary = (await snapshot(page)).posts;
-      await nav(page, 'home'); await page.locator('[data-home-destination="write"]:visible').click(); await page.locator('#photoTitle').waitFor();
+      await nav(page, 'home'); await page.locator('[data-haedo-compose]:visible').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), ''); assert.equal((await page.locator('.ql-editor').innerText()).trim(), '');
       assert.equal(await page.getByRole('button', { name: '작성 준비로 돌아가기', exact: true }).count(), 0, 'A fresh ordinary writer must not inherit the previous material-preparation destination');
       await page.locator('.photo-editor').getByRole('button', { name: '닫기', exact: true }).click(); await settle(page); assert.deepEqual((await snapshot(page)).posts, beforeOrdinary);

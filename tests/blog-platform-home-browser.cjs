@@ -79,7 +79,7 @@ async function preserved(page) {
   });
 }
 async function writePost(page, title = '산책 끝에 남긴 생각') {
-  if (!await page.locator('.photo-editor').isVisible()) await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();
+  if (!await page.locator('.photo-editor').isVisible()) await page.locator('[data-haedo-compose]:visible').click();
   await page.locator('#photoTitle').waitFor();
   assert.equal(await page.locator('#lifeWritingBody').count(), 0, 'Home must use the established blog editor');
   await page.locator('#photoTitle').fill(title);
@@ -183,14 +183,14 @@ async function main() {
     });
     await check('new home writing preserves an existing draft and exits preview nine-grid and share states', async ({ page }) => {
       await openHome(page);
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
+      await page.locator('[data-haedo-compose]:visible').click(); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('계속 보관할 이전 블로그 초안');
       await page.locator('.ql-editor').fill('새 글을 시작해도 이 입력을 덮어쓰지 않습니다.');
       await home(page);
       const previous = (await documents(page)).docs.find(doc => doc.title === '계속 보관할 이전 블로그 초안');
       assert(previous && previous.status === 'draft');
       assert.equal(await page.locator('#homePosts .home-post').count(), 0, 'Unfinished drafts must not appear as saved posts');
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
+      await page.locator('[data-haedo-compose]:visible').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), '');
       assert.equal(await page.locator('.ql-editor').innerText(), '\n');
       assert.deepEqual((await documents(page)).docs.find(doc => doc.id === previous.id), previous);
@@ -201,9 +201,13 @@ async function main() {
       await home(page);
       for (const mode of ['preview', 'nine', 'share']) {
         if (mode === 'preview') {
-          const library = page.locator('.home-library');
-          if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
-          await page.locator('[data-home-destination="preview"]').click();
+          // 2026-11-08 S3: the list's 자료 block (and its preview entry) is gone; the selected page and
+          // its visitor preview are 자료's. Use the page's preserved address, as for nine/share below.
+          await page.goto(base + '/index.html?view=page'); await ready(page);
+          if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+          if (await page.locator('.photo-article').isVisible()) await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();
+          const toggle = page.locator('#wbPagePreview'); await toggle.waitFor();
+          if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
         }
         else {
           // The home profile action now opens profile settings; use the preserved
@@ -214,7 +218,7 @@ async function main() {
           await page.locator(mode === 'nine' ? '#wbPageNine' : '#wbPageShare').click();
         }
         await page.locator(mode === 'preview' ? '#wbVisitor' : mode === 'nine' ? '.nb-workspace' : '#wbSharePanel').waitFor();
-        await home(page); await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
+        await home(page); await page.locator('[data-haedo-compose]:visible').click(); await page.locator('#photoTitle').waitFor();
         assert.equal(await page.locator('#photoTitle').isVisible(), true, mode + ' must not trap the new-post action');
         assert.equal(await page.locator('#photoTitle').inputValue(), '');
         assert.deepEqual((await documents(page)).docs.find(doc => doc.id === previous.id), previous);
@@ -224,7 +228,7 @@ async function main() {
     await check('a delayed editor mount cannot start a post after leaving the page', async ({ page }) => {
       await openHome(page); const before = await documents(page);
       await page.evaluate(() => { window.__blogHoldDrafts = true; window.__blogHeldDrafts = false; });
-      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.waitForFunction(() => __blogHeldDrafts);
+      await page.locator('[data-haedo-compose]:visible').click(); await page.waitForFunction(() => __blogHeldDrafts);
       await nav(page, 'tools'); const finished = await page.evaluate(() => window.__blogDraftReads || 0);
       await page.evaluate(() => __blogReleaseDrafts()); await page.waitForFunction(n => __blogDraftReads > n, finished);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
