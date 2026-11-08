@@ -85,7 +85,7 @@ test('planning navigation preserves native new-tab actions and never reloads the
   const { api, moves } = fixture(); let calls = 0;
   const nav = api.createPlanningNavigation({ current: 'annual-plan', beforeNavigate: async () => { calls++; }, onError: assert.fail });
   const active = event(); await click(nav.children[0], active);
-  assert.equal(active.defaultPrevented, true); assert.equal(nav.children[0].attributes['aria-current'], 'page');
+  assert.equal(active.defaultPrevented, true); assert.equal(nav.children[0].attributes['aria-current'], 'true');
   for (const override of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
     const native = event(override); await click(nav.children[1], native); assert.equal(native.defaultPrevented, false);
   }

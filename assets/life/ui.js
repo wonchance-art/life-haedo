@@ -106,7 +106,7 @@
     }
   }
 
-  async function mountView(container, { storage, core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal }, onFailure) {
+  async function mountView(container, { storage, core, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal }, onFailure) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
     // A constructor may throw before the later resources/listeners exist.
@@ -2347,7 +2347,7 @@
           if (!state.stage || state.stage.state !== 'draft') newDraft();
           await navigate('import');
         }));
-        if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
+        if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'true');
         // 자료: a labelled 가져오기 on wide screens; the same control keeps only its icon on a phone.
         if (section === 'records') { add.classList.add('life-records-import'); add.querySelector('.life-tooltip')?.remove(); add.append(node('span', '가져오기', 'life-records-import-label')); }
         // Home exposes these actions with labels in its shortcut row.
@@ -2496,7 +2496,8 @@
             if (state.mode === mode && !options) { menu.open = false; summary.focus({ preventScroll: true }); return; }
             return navigate(mode, { ...options, featureNavigation: true });
           });
-          if (state.mode === mode && !options) control.setAttribute('aria-current', 'page');
+          // The global menu holds the document's one aria-current="page".
+          if (state.mode === mode && !options) control.setAttribute('aria-current', 'true');
           control.dataset.focusKey = (blog ? 'home:menu:' : 'records:menu:') + mode;
           if (id) control.id = id;
           if (mode === 'blog') { control.dataset.homeDestination = 'blog'; control.dataset.focusKey = 'home:action:blog'; }
@@ -2540,6 +2541,14 @@
       root.querySelectorAll('.life-feature-menu[open]').forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
     }
     document.addEventListener('pointerdown', closeFeatureMenusOutside);
+    // Keyboard focus that lands outside an open menu closes it (2026-11-08 S3), so its panel never
+    // covers the next focus target. Focus moving into a dialog the menu opened keeps the menu, so
+    // closing that dialog can return focus to its item; window or app switches move no focus here.
+    function closeFeatureMenusOnFocus(event) {
+      if (!(event.target instanceof Element) || event.target.closest('dialog')) return;
+      root.querySelectorAll('.life-feature-menu[open]').forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+    }
+    document.addEventListener('focusin', closeFeatureMenusOnFocus);
 
     async function openManagedSource(workspaceId, target, context = {}, reference = null) {
       const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, postId = blogManagerPostId;
@@ -3343,7 +3352,7 @@
             return;
           }
           draw(result.state);
-          main.querySelector(mode === 'home' ? '#homeRecentTitle' : '#lifeSearch')?.focus({ preventScroll: true });
+          main.querySelector('#lifeSearch')?.focus({ preventScroll: true });
         }, '읽기 위치를 지우지 못했습니다. 다시 시도해 주세요.'));
         if (focusId) (row.querySelector('#' + focusId) || clear).focus({ preventScroll: true });
       };
@@ -6240,6 +6249,7 @@
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
+      cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));
       cleanup(() => root?.removeEventListener('focusin', keepFocusVisible));
       cleanup(() => main?.removeEventListener('input', editingInput));
       cleanup(() => main?.removeEventListener('compositionstart', editingInput));

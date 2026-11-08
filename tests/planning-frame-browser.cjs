@@ -2,9 +2,13 @@
  * app, SDK and IDB with the anonymous intercepted Auth. haedo_items / haedo_documents are the
  * owner-scoped in-memory tables of schedule-entries-browser; account documents use FakeCloud.
  * - The label menu does not move between 일정 Y and the four 계획 screens (1440, 820).
- * - The 계획 tabs are the same four links in the same place, the current one marked.
- * - Goals·habits·연표 headings hold only ‹ 일정으로 돌아가기, the title and that screen's add button.
- * - Save state uses the two-step wording; a failed upload is retried from the status line.
+ * - The 계획 tabs are the same four links in the same place, the current one marked aria-current="true"
+ *   (the global menu keeps the document's one aria-current="page").
+ * - Goals·habits·연표 headings hold only ‹ 일정으로 돌아가기, the title and that screen's add button; ‹
+ *   and the title sit at the same x on all four screens (1440, 820, 390).
+ * - Save state uses the two-step wording; a failed upload is retried from the status line. Nothing is
+ *   said before the first account confirmation or offline with nothing to send; this device's own
+ *   failure says 저장하지 못함; a settled state is for screen readers only on all four screens.
  * - habits.html?month=YYYY-MM opens that month (validated, never past the current month).
  * npm run dev; node tests/planning-frame-browser.cjs
  * Never uses real Google, production Supabase or Apple-device claims. */
@@ -45,11 +49,14 @@ async function frame(page) {
     const planning = [...document.querySelectorAll('.haedo-planning-nav')].filter(shown);
     const heading = [...document.querySelectorAll('.haedo-page-heading')].find(shown);
     const tabs = planning.map(group => ({ name: group.getAttribute('aria-label'), box: [Math.round(group.getBoundingClientRect().left), Math.round(group.getBoundingClientRect().top + scrollY)],
-      links: [...group.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href')]), current: [...group.querySelectorAll('a[aria-current=page]')].map(link => link.textContent),
+      links: [...group.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href')]), current: [...group.querySelectorAll('a[aria-current=true]')].map(link => link.textContent),
+      currentAny: group.querySelectorAll('a[aria-current]').length,
       heights: [...group.querySelectorAll('a')].map(link => Math.round(link.getBoundingClientRect().height)) }));
     const controls = heading ? [...heading.querySelectorAll('a,button,summary')].filter(shown).map(node => node.getAttribute('aria-label') || node.textContent.trim()) : [];
-    const back = heading?.querySelector('[data-section-back]');
+    const back = heading?.querySelector('[data-section-back]'), backControl = heading?.querySelector('[aria-label="일정으로 돌아가기"]'), title = heading?.querySelector('h1');
     return { nav: [Math.round(nav.left), Math.round(nav.top), Math.round(nav.width)], tabs, controls, back: back && [back.getAttribute('aria-label'), back.getAttribute('href')],
+      x: backControl && title ? { back: backControl.getBoundingClientRect().left, title: title.getBoundingClientRect().left } : null,
+      pages: [...document.querySelectorAll('[aria-current=page]')].map(node => node.dataset.haedoSection || node.textContent.trim()),
       cloud: heading ? heading.querySelectorAll('#syncRetry, [data-haedo-icon=cloud], [data-account-menu], [data-login-link]').length : 0,
       overflow: document.documentElement.scrollWidth - innerWidth };
   });
@@ -70,6 +77,7 @@ async function main() {
     page.on('console', event => {
       if (event.type() !== 'error') return;
       if (page.__expectFailure && /Failed to load resource:.*(500|503)/.test(event.text())) { report.expectedErrors++; return; }
+      if (page.__expectOffline && /ERR_INTERNET_DISCONNECTED/.test(event.text())) { report.expectedErrors++; return; }
       report.consoleErrors.push({ check: name, message: event.text() });
     });
     try { await run({ page, context, server, tables }); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
@@ -77,7 +85,7 @@ async function main() {
     finally { await context.close(); }
   }
   try {
-    for (const width of [1440, 820]) {
+    for (const width of [1440, 820, 390]) {
       await check('the label menu stays put and the 계획 tabs match from 일정 Y through the four 계획 screens at ' + width, async ({ page }) => {
         await open(page, '/index.html'); // the first open sets up the account's local workspace
         const screens = [['year', '/index.html?section=schedule&view=tools', null], ['annual-plan', '/index.html?section=schedule&view=annual-plan', '연간 계획'],
@@ -86,21 +94,28 @@ async function main() {
         for (const [name, url, current] of screens) {
           await open(page, url); seen[name] = await frame(page);
           assert.equal(seen[name].overflow, 0, name + ': no horizontal page scroll');
+          if (current) await page.screenshot({ path: path.join(output, 'header-' + name + '-' + width + '.png'), clip: { x: 0, y: 0, width, height: 240 } });
           if (!current) continue;
           assert.equal(seen[name].tabs.length, 1, name + ': one 계획 tab group');
           const [tabs] = seen[name].tabs;
           assert.equal(tabs.name, '계획', name + ': the tab group is named 계획');
           assert.deepEqual(tabs.links, TABS, name + ': the same four tabs in the same order');
-          assert.deepEqual(tabs.current, [current], name + ': only this screen is marked');
+          assert.deepEqual(tabs.current, [current], name + ': only this screen is marked, as the current item of the set');
+          assert.equal(tabs.currentAny, 1, name + ': no other tab carries aria-current');
+          assert.deepEqual(seen[name].pages, ['schedule'], name + ': the global menu holds the one aria-current=page');
           assert(tabs.heights.every(height => height >= 44), name + ': tabs are 44px targets');
         }
         for (const name of ['annual-plan', 'goals', 'habits', 'workspace']) {
           assert.deepEqual(seen[name].nav, seen.year.nav, name + ': the label menu is where 일정 Y puts it');
           assert.deepEqual(seen[name].tabs[0].box, seen['annual-plan'].tabs[0].box, name + ': the tabs are in the same place');
+          // ‹ and the title line up across the four screens (review #2 m1: 연간 계획 sat 12px to the right).
+          assert(Math.abs(seen[name].x.back - seen.goals.x.back) <= 1, name + ': ‹ at the x of 목표 (' + seen[name].x.back + ' vs ' + seen.goals.x.back + ')');
+          assert(Math.abs(seen[name].x.title - seen.goals.x.title) <= 1, name + ': the title at the x of 목표 (' + seen[name].x.title + ' vs ' + seen.goals.x.title + ')');
         }
         for (const [name, add] of [['goals', '목표 추가'], ['habits', '습관 추가'], ['workspace', '새 연표']]) {
           assert.deepEqual(seen[name].back, BACK, name + ': ‹ goes back to 일정 Y');
-          assert.deepEqual(seen[name].controls, [BACK[0], add], name + ': the heading holds only ‹, the title and its add button');
+          // On a phone the global 글쓰기 takes its fixed place at the heading's right end (2026-11-02).
+          assert.deepEqual(seen[name].controls, width === 390 ? [BACK[0], add, '글쓰기'] : [BACK[0], add], name + ': the heading holds only ‹, the title and its add button');
           assert.equal(seen[name].cloud, 0, name + ': no sync or account icon in the heading');
         }
         await page.screenshot({ path: path.join(output, 'workspace-' + width + '.png') });
@@ -113,11 +128,15 @@ async function main() {
       const line = page.locator('.p-status-line');
       assert.equal(await statusText(page), '저장됨 · 계정에 올림');
       assert.equal(await line.getAttribute('data-state'), 'ok'); assert.equal(await page.locator('#syncRetry').isHidden(), true);
+      assert.equal(await line.getAttribute('data-idle'), 'true', 'a settled state is for screen readers only');
       // Held upload: stored on this device, not yet in the account.
       let release; tables.hold = new Promise(resolve => { release = resolve; });
       await page.locator('#addItem').click(); await page.locator('#itemTitle').fill('긴 산책 열 번'); await page.locator('#itemForm [type=submit]').click();
       await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'pending');
       assert.equal(await statusText(page), '계정에 올리기 대기');
+      // The status line is the one save sentence; no third phrase (review #1: 기기에 저장했습니다).
+      assert.equal(await page.locator('#platformToast').isHidden(), true, 'no save toast');
+      assert.doesNotMatch(await page.locator('body').innerText(), /기기에 저장했습니다/);
       tables.hold = null; release();
       await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'ok');
       assert.equal(await statusText(page), '저장됨 · 계정에 올림');
@@ -168,6 +187,62 @@ async function main() {
       await open(page, '/habits.html?month=2026-10#recovery'); await page.locator('#recoveryDialog[open]').waitFor(); assert.equal(await label(), '2026년 10월');
     });
 
+    await check('goals: nothing is said during the first account check; 저장됨 · 계정에 올림 only after it', async ({ page, context, tables }) => {
+      // Every text the line shows from the first paint, with the line's data-sync at that moment.
+      await context.addInitScript(() => {
+        window.__statusSeen = [];
+        const record = () => { const line = document.querySelector('.p-status-line'), text = document.querySelector('#syncMessage [data-status-state]')?.textContent;
+          if (line && text !== undefined) window.__statusSeen.push([line.dataset.sync, line.dataset.state, text]); };
+        document.addEventListener('DOMContentLoaded', () => new MutationObserver(record).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-sync', 'data-state'] }));
+      });
+      let release; tables.hold = new Promise(resolve => { release = resolve; });
+      await page.goto(base + '/goals.html');
+      await page.waitForFunction(() => document.querySelector('[data-private]')?.hidden === false && document.querySelector('#syncMessage [data-status-state]'));
+      const line = page.locator('.p-status-line');
+      assert.equal(await line.getAttribute('data-sync'), 'busy'); assert.equal(await line.getAttribute('data-state'), 'unknown');
+      assert.equal(await statusText(page), '', 'nothing is known yet'); assert.equal(await line.getAttribute('data-idle'), 'true');
+      tables.hold = null; release();
+      await platformReady(page);
+      assert.equal(await statusText(page), '저장됨 · 계정에 올림');
+      const seen = await page.evaluate(() => window.__statusSeen);
+      assert(seen.length, 'the line was observed');
+      assert.deepEqual(seen.filter(([sync, , text]) => sync === 'busy' && text), [], 'no state sentence before the first account check finished');
+    });
+
+    await check('goals offline: nothing to send says nothing; an unsent item waits (계정에 올리기 대기) and goes up when online', async ({ page, context, tables }) => {
+      await context.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => window.__online === true }); });
+      let offline = true;
+      await context.route(new RegExp('^' + cloud.replace(/[.]/g, '\\.') + '/rest/v1/haedo_'), route => offline ? route.abort('internetdisconnected') : route.fallback());
+      page.__expectOffline = true;
+      await page.goto(base + '/goals.html');
+      await page.waitForFunction(() => document.querySelector('[data-private]')?.hidden === false && document.querySelector('.p-status-line')?.dataset.sync === 'idle');
+      const line = page.locator('.p-status-line');
+      assert.equal(await line.getAttribute('data-state'), 'unknown', 'offline with nothing to send is not a failure');
+      assert.equal(await statusText(page), ''); assert.equal(await page.locator('#syncRetry').isHidden(), true); assert.equal(await line.getAttribute('data-idle'), 'true');
+      await page.locator('#addItem').click(); await page.locator('#itemTitle').fill('오프라인 산책'); await page.locator('#itemForm [type=submit]').click();
+      await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'pending');
+      await page.waitForTimeout(400);
+      assert.equal(await line.getAttribute('data-state'), 'pending', 'the failed upload offline waits, it is not 계정에 올리지 못함');
+      assert.equal(await statusText(page), '계정에 올리기 대기'); assert.equal(await page.locator('#syncRetry').isHidden(), true);
+      offline = false;
+      await page.evaluate(() => { window.__online = true; dispatchEvent(new Event('online')); });
+      await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'ok');
+      assert.equal(await statusText(page), '저장됨 · 계정에 올림');
+      assert(tables.owned('haedo_items', accounts.a.id).some(row => row.data.title === '오프라인 산책'), 'the waiting item reached the account');
+    });
+
+    await check('goals: an account pass that changes nothing does not rewrite the status sentence', async ({ page, tables }) => {
+      await open(page, '/goals.html');
+      await page.evaluate(() => { window.__statusWrites = 0; new MutationObserver(list => { window.__statusWrites += list.length; }).observe(document.querySelector('#syncMessage'), { subtree: true, childList: true, characterData: true }); });
+      const calls = tables.calls.length;
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      await page.waitForFunction(calls => document.querySelector('.p-status-line').dataset.sync === 'idle', calls);
+      await page.waitForTimeout(400);
+      assert(tables.calls.length > calls, 'a pass ran');
+      assert.equal(await statusText(page), '저장됨 · 계정에 올림');
+      assert.equal(await page.evaluate(() => window.__statusWrites), 0, 'the live region is not rewritten with the same sentence');
+    });
+
     await check('annual plan: 저장 중… then 저장됨 · 계정에 올림 only after the account row is synced; a failed upload is retried', async ({ page, context }) => {
       page.__expectFailure = true;
       let failing = false;
@@ -175,8 +250,19 @@ async function main() {
         ? route.fulfill({ status: 500, headers: { 'access-control-allow-origin': '*' }, body: '{"message":"anonymous failure"}' }) : route.fallback());
       await open(page, '/index.html?section=schedule&view=annual-plan');
       const state = () => page.locator('.annual-plan').getAttribute('data-save-state'), text = () => page.locator('#apSaveStatus').textContent();
+      const hidden = () => page.locator('.ap-save-line').evaluate(node => node.dataset.idle === 'true' && node.getBoundingClientRect().width <= 1);
+      // No plan stored yet: nothing to say (review #1 m1: it said 저장됨 · 계정에 올림 before any record).
+      await page.waitForTimeout(400);
+      assert.equal(await state(), 'none'); assert.equal(await text(), ''); assert.equal(await hidden(), true);
+      await page.locator('[data-ap-annual]').first().fill('처음 적는 계획');
       await page.waitForFunction(() => document.querySelector('.annual-plan')?.dataset.saveState === 'ok');
       assert.equal(await text(), '저장됨 · 계정에 올림');
+      assert.equal(await hidden(), true, 'a settled state is for screen readers only, like goals·habits·연표');
+      // An account pass that changes nothing does not rewrite the live region (review #3 n1).
+      await page.evaluate(() => { window.__apWrites = 0; new MutationObserver(list => { window.__apWrites += list.length; }).observe(document.querySelector('#apSaveStatus'), { subtree: true, childList: true, characterData: true }); });
+      await page.evaluate(async () => { for (let i = 0; i < 3; i++) await HaedoLife.Shell.accountDocsSync.syncNow(); });
+      await page.waitForTimeout(300);
+      assert.equal(await page.evaluate(() => window.__apWrites), 0, 'the same sentence is not written again'); assert.equal(await text(), '저장됨 · 계정에 올림');
       failing = true;
       const input = page.locator('[data-ap-annual]').first();
       await input.fill('천천히 오래 걷기');
@@ -192,6 +278,46 @@ async function main() {
       await page.waitForFunction(() => document.querySelector('.annual-plan').dataset.saveState === 'ok');
       assert.equal(await text(), '저장됨 · 계정에 올림'); assert.equal(await state(), 'ok');
       assert.equal(await page.evaluate(() => document.activeElement?.matches('.life-page-title')), true, 'focus stays on the screen after the retry button goes');
+    });
+
+    await check('annual plan offline: an edit waits (계정에 올리기 대기), never 계정에 올리지 못함, and goes up when online', async ({ page, context }) => {
+      await context.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => window.__online !== false }); });
+      page.__expectOffline = true;
+      await open(page, '/index.html?section=schedule&view=annual-plan');
+      const input = page.locator('[data-ap-annual]').first();
+      await input.fill('연결 전 계획'); await page.waitForFunction(() => document.querySelector('.annual-plan')?.dataset.saveState === 'ok');
+      let offline = true;
+      await context.route(new RegExp('^' + cloud.replace(/[.]/g, '\\.') + '/rest/v1/rpc/life_account_document'), route => offline ? route.abort('internetdisconnected') : route.fallback());
+      await page.evaluate(() => { window.__online = false; dispatchEvent(new Event('offline')); });
+      await input.fill('연결 없이 고친 계획');
+      await page.waitForFunction(() => document.querySelector('.annual-plan').dataset.saveState === 'pending');
+      await page.waitForTimeout(600);
+      assert.equal(await page.locator('.annual-plan').getAttribute('data-save-state'), 'pending');
+      assert.equal(await page.locator('#apSaveStatus').textContent(), '계정에 올리기 대기'); assert.equal(await page.locator('#apRetry').isHidden(), true);
+      offline = false;
+      await page.evaluate(() => { window.__online = true; dispatchEvent(new Event('online')); });
+      await page.waitForFunction(() => document.querySelector('.annual-plan').dataset.saveState === 'ok');
+      assert.equal(await page.locator('#apSaveStatus').textContent(), '저장됨 · 계정에 올림');
+    });
+
+    await check('annual plan without an account-document engine looks for it a bounded number of times', async ({ page, context }) => {
+      // The shell's engine never appears (e.g. a failed start): the plan stops looking instead of
+      // reading IndexedDB every second for as long as it is open (review #1 NIT).
+      await context.addInitScript(() => {
+        window.__engineLooks = 0; let shell;
+        const life = window.HaedoLife = window.HaedoLife || {};
+        Object.defineProperty(life, 'Shell', { configurable: true, get: () => shell, set(value) {
+          shell = value; Object.defineProperty(value, 'accountDocsSync', { configurable: true, get: () => { window.__engineLooks++; return null; } });
+        } });
+      });
+      await page.goto(base + '/index.html?section=schedule&view=annual-plan');
+      await ready(page); await page.locator('#apGrid').waitFor();
+      const start = await page.evaluate(() => window.__engineLooks);
+      await page.clock.runFor(60000);
+      const looks = await page.evaluate(() => window.__engineLooks) - start;
+      assert(looks <= 12, 'bounded looks in a minute, not one a second (' + looks + ')');
+      await page.clock.runFor(60000);
+      assert.equal(await page.evaluate(() => window.__engineLooks) - start, looks, 'no more looks after the bound');
     });
 
     await check('연표 from 설정 > 백업·복원 keeps its own back link and no 계획 tabs; the timeline editor goes back to 연표 목록', async ({ page }) => {

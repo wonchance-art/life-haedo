@@ -21,7 +21,7 @@
     const model = () => root.HaedoLife.AnnualPlan;
     const sessions = new Map();
     let active = false, disposed = false, generation = 0, workspaceId = null, current = null, surface = null;
-    let timer = null, writing = null, unsubscribe = null, unsubscribeEngine = null, watchedEngine = null, engineTimer = null, accountRead = 0, composing = new Set();
+    let timer = null, writing = null, unsubscribe = null, unsubscribeEngine = null, watchedEngine = null, engineTimer = null, engineLooks = 0, accountRead = 0, composing = new Set();
     const inScope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => token === generation && inScope();
     const changed = () => !!current?.saved && !equal(current.draft, current.saved);
@@ -61,15 +61,20 @@
     const accountDocKey = () => storage.account?.projectUrl && storage.account?.userId && workspaceId
       ? 'annualPlan:' + JSON.stringify([storage.account.projectUrl, storage.account.userId]) + ':' + workspaceId : null;
     // The shell creates (and on an account change replaces) the engine; follow the current one. A plan
-    // opened directly renders before the shell starts the engine: look again until it is there.
+    // opened directly renders just before the shell starts the engine: look again a bounded number of
+    // times (250 ms … 8 s), then rely on the next save, storage notice, retry or return to the tab.
+    const ENGINE_LOOKS = [250, 1000, 2000, 4000, 8000];
     function watchEngine() {
       const next = engine();
-      if (!next && !engineTimer) engineTimer = root.setTimeout(() => { engineTimer = null; if (inScope()) readAccountState(); }, 1000);
+      if (next) engineLooks = ENGINE_LOOKS.length;
+      else if (!engineTimer && engineLooks < ENGINE_LOOKS.length) engineTimer = root.setTimeout(() => { engineTimer = null; if (inScope()) readAccountState(); }, ENGINE_LOOKS[engineLooks++]);
       if (next === watchedEngine) return;
       unsubscribeEngine?.(); unsubscribeEngine = null; watchedEngine = next;
       if (next?.subscribe) unsubscribeEngine = next.subscribe(() => { if (inScope()) readAccountState(); });
     }
     function unwatchEngine() { unsubscribeEngine?.(); unsubscribeEngine = null; watchedEngine = null; clearTimeout(engineTimer); engineTimer = null; }
+    // Account step of the stored plan: 'none' (no plan stored yet: nothing to say), 'ok' only once the
+    // account confirmed this exact hash, 'error' for a real upload failure, else 'pending' (offline included).
     async function readAccountState() {
       if (!inScope() || !current) return;
       watchEngine();
@@ -78,21 +83,31 @@
       try {
         if (key && typeof storage.readAccountDocRecord === 'function') {
           const record = await storage.readAccountDocRecord(key), state = engine()?.getStatus?.()?.state;
-          next = !record.exists || (record.sync && record.hash === record.sync.hash) ? 'ok'
-            : record.sync?.error || ['error', 'unavailable'].includes(state) ? 'error' : 'pending';
+          const offline = root.navigator?.onLine === false, failed = record.sync?.error && !(offline && record.sync.error.code === 'network_error');
+          next = !record.exists ? 'none' : record.sync && record.hash === record.sync.hash ? 'ok'
+            : failed || ['error', 'unavailable'].includes(state) ? 'error' : 'pending';
         }
       } catch (_) { return; /* The shown state stays; the next save or sync notice reads it again. */ }
       if (!valid(token) || slot !== current || sequence !== accountRead) return;
       slot.account = next; status();
     }
+    // This device did not keep the input (IDB write failure, invalid birth date, another tab's newer
+    // plan): 저장하지 못함. A message about an input that changed nothing keeps the account state.
+    const localFailure = () => current.conflict || !!current.invalidBirth || (!!current.error && dirty());
     function saveText() {
-      if (current.conflict || current.error) return '계정에 올리지 못함';
+      if (localFailure()) return '저장하지 못함';
       if (writing || changed() || composing.size) return '저장 중…';
-      return { ok: '저장됨 · 계정에 올림', error: '계정에 올리지 못함', pending: '계정에 올리기 대기' }[current.account || 'pending'];
+      return { ok: '저장됨 · 계정에 올림', error: '계정에 올리지 못함', pending: '계정에 올리기 대기' }[current.account] || '';
     }
     async function retrySave() {
       if (current.conflict || writing) return;
-      if (current.error) { current.error = ''; status(); await save(); return; }
+      if (current.invalidBirth) {
+        fail(fault('생년월일을 1900–2199년의 날짜로 확인해 주세요.'));
+        const settings = surface.querySelector('#apSettings'); settings.open = true; current.settingsOpen = true;
+        surface.querySelector('#apBirthDate').focus(); return;
+      }
+      if (current.error && dirty()) { current.error = ''; status(); await save(); return; }
+      current.error = '';
       const token = generation, slot = current;
       slot.account = 'pending'; status();
       try { await engine()?.syncNow?.(); } catch (_) { /* The state below says what happened. */ }
@@ -100,10 +115,15 @@
     }
     function status() {
       if (!inScope() || !surface) return;
-      const value = surface.querySelector('#apSaveStatus'), text = saveText();
-      const retryable = !current.conflict && text === '계정에 올리지 못함', retry = surface.querySelector('#apRetry');
-      value.textContent = retryable ? text + ' ·' : text;
-      surface.dataset.saveState = current.conflict || current.error || text === '계정에 올리지 못함' ? 'error' : text === '저장 중…' ? 'saving' : current.account === 'ok' ? 'ok' : 'pending';
+      const value = surface.querySelector('#apSaveStatus'), text = saveText(), local = localFailure();
+      const retryable = !current.conflict && (local || text === '계정에 올리지 못함'), retry = surface.querySelector('#apRetry');
+      // Rewrite the live region only when its sentence changes, or it is read out again.
+      const shown = retryable ? text + ' ·' : text;
+      if (value.textContent !== shown) value.textContent = shown;
+      const state = local || text === '계정에 올리지 못함' ? 'error' : text === '저장 중…' ? 'saving' : text ? current.account : 'none';
+      surface.dataset.saveState = state;
+      // Like goals·habits·연표: a settled 저장됨 · 계정에 올림 (or nothing to say) stays for screen readers only.
+      value.parentElement.dataset.idle = String(state === 'ok' || state === 'none');
       surface.dataset.dirty = String(dirty()); surface.setAttribute('aria-busy', String(!!writing || !!current.reading));
       const error = surface.querySelector('#apError'); error.textContent = current.error || ''; error.hidden = !current.error;
       // A retry that worked hides its button: keep keyboard focus on the screen title, not the page.
@@ -412,9 +432,9 @@
     async function render() {
       if (disposed || !isCurrent()) return;
       const nextWorkspace = getBundle()?.workspaceId; if (!nextWorkspace) return;
-      const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine();
+      const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); engineLooks = 0;
       current = sessions.get(workspaceId);
-      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', conflict: false, latest: null, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: 'pending' }; sessions.set(workspaceId, current); }
+      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', conflict: false, latest: null, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
       const slot = current, version = slot.editRevision;
       if (!slot.saved) {
         const loading = node('p', '연간 계획을 불러옵니다.', 'ap-meta'); container.replaceChildren(loading);
@@ -450,7 +470,11 @@
       if (valid(token) && !slot.error && changed()) schedule();
     }
     function leave() { clearTimeout(timer); timer = null; active = false; generation++; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); }
-    function onHidden() { if (root.document.visibilityState === 'hidden' && inScope() && !composing.size) flush().catch(() => {}); }
+    function onHidden() {
+      if (!inScope()) return;
+      if (root.document.visibilityState === 'visible') { readAccountState(); return; }
+      if (root.document.visibilityState === 'hidden' && !composing.size) flush().catch(() => {});
+    }
     function pageHide() { if (inScope() && !composing.size) flush().catch(() => {}); }
     root.document.addEventListener('visibilitychange', onHidden); root.addEventListener('pagehide', pageHide);
     function dispose() { leave(); disposed = true; sessions.clear(); current = null; surface = null; root.document.removeEventListener('visibilitychange', onHidden); root.removeEventListener('pagehide', pageHide); }
