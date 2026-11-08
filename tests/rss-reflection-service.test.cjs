@@ -356,8 +356,8 @@ test('five consecutive temporary failures mark the status unavailable until one 
 });
 
 function itemFixture(onCommit, onSave, options = {}) {
-  let row;
-  const f = fixture(body => ({ data: connectedPage(body.workspaceId, { items: [row] }) }), options);
+  let row, f;
+  f = fixture(body => f.override?.() || { data: connectedPage(body.workspaceId, { items: [row] }) }, options);
   let bundle = Core.createWorkspace(), progress = { revision: 0, cursor: null, receipts: [], needsRepair: false };
   bundle.workspaceId = f.workspaceId;
   const text = '연속 실패 확인용 합성 원문';
@@ -408,3 +408,27 @@ test('a save conflict from the bundle alone (same-tab sync or edits) counts as a
   assert(states.every(value => value.state === 'error' && value.receiveErrorCode === 'rss_receive_conflict'));
   assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, true, true]);
 });
+
+test('contention between ordinary failures neither resets nor adds to the ordinary count', async t => {
+  let mode = 'bundle'; const states = [];
+  const f = itemFixture(() => null, tab => { if (mode === 'tab') tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+  t.after(f.service.dispose);
+  f.service.start(); await f.service.syncNow();
+  for (const next of ['bundle', 'bundle', 'bundle', 'tab', 'tab', 'bundle']) { mode = next; f.advance(); await f.service.syncNow(); }
+  assert.deepEqual(states.map(value => value.unavailable), [false, false, false, false, false, false, true], 'the fifth ordinary failure shows the notice');
+});
+
+for (const stop of ['setup', 'blocked']) {
+  test(`a ${stop} stop clears the contention count`, async t => {
+    const states = [];
+    const f = itemFixture(() => null, tab => { tab.otherTabSaved(); return { status: 'conflict' }; }, { onStatus: value => states.push(value) });
+    t.after(f.service.dispose);
+    f.service.start(); await f.service.syncNow();
+    for (let attempt = 1; attempt < 29; attempt++) { f.advance(); await f.service.syncNow(); }
+    assert.equal(states.length, 29); assert.equal(states.at(-1).unavailable, false);
+    f.override = () => stop === 'setup' ? { data: { error: 'setup_required' } } : { data: { error: 'rss_invalid_item' } };
+    f.advance(); await f.service.syncNow(); assert.equal(states.at(-1).state, stop === 'setup' ? 'stopped' : 'blocked');
+    f.override = null; await f.service.syncNow(f.workspaceId);
+    assert.equal(states.at(-1).receiveErrorCode, 'rss_receive_conflict'); assert.equal(states.at(-1).unavailable, false, 'the thirtieth contention after a stop starts a new count');
+  });
+}
