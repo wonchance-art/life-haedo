@@ -28,6 +28,7 @@
   - 761–1100px 머리줄이 111px(이전 93px). W의 글 제목이 h2 `습관 · 행복도` 아래 h3로 읽힌다. 행복도 묶음 이름이 group·heading으로 두 번 들릴 수 있다. 자료 메뉴 `원본 첨부 보관` 대화상자를 Escape로 닫으면 초점이 body로 간다(기존).
   - 저장 안 한 새 글 편집기에서 선택 자료 페이지를 열면 글쓰기 집중 모드가 남는 기존 결함(별도 작업 카드).
   - RSS: 넓은 정착 읽기를 아직 정착하지 않은 ACK와 묶는 최적화(인계서 후속).
+- **주간 기술 동향 점검 2회차(11-09):** 적용 필요 없음. 관찰은 undici lock 7.30.2(다음 Edge 배포 때)·prosemirror-model 1.25.13(B2 vendor 갱신 때)·Safari 27.3 `interactive-widget`(정식 출시 뒤 실기기 글쓰기 실험)·운영 Storage S3 프로토콜 상태 확인. 소유자 대기는 Vault `sb_secret_` 교체·레거시 키 끄기 승인. [기록](weekly-tech-review.md)
 - **미검증:** 실제 Mac·iPad·iPhone(iPad 세로 머리줄, 트래커 행 터치, 글 메뉴 Safari 초점, VoiceOver 범례·상태 낭독), 실제 RSS 피드, 운영 계정 Markdown 공개 왕복.
 
 ### 다음 큰 작업 묶음 (우선순위 순)

@@ -2,6 +2,82 @@
 
 매주 월요일 09:37 KST에 총괄 세션이 공식 출처를 확인하고, 이 앱(빌드 없는 GitHub Pages, Mac·iPad·iPhone) 기준으로 "적용 필요 / 관찰 / 무관"을 판정해 회차별로 기록한다. 적용 필요 항목은 작업 지시서 → 독립 검수 → CI → 병합·배포 관문을 따른다. 새 기능·외부 전송·삭제·권한 완화는 소유자 승인 뒤에만 한다.
 
+## 주간 기술 동향 점검 — 2026-11-09 (2회차)
+
+기준: 저장소 `main` 078159e(`haedo-v217`), 작업 브랜치 dfbf377. 읽기 전용 조사(편집·운영 DB 조회 없음), 확인일은 모두 2026-11-09. 11-04 이후 새로 생기거나 바뀐 것만 적는다.
+
+**네트워크 제약:** `gh api` 권고 경로(`/advisories`, 저장소 security-advisories)는 이번에도 HTTP 403이었다. OSV `api.osv.dev/v1/querybatch`(74개 패키지)·npm registry·github.com 웹 페이지로 대신 확인했다. **OSV에는 undici의 새 GHSA가 아직 GHSA ID로 올라오지 않아 CVE alias로만 조회된다.** OSV 일괄 조회 0건을 안전 근거로 쓰지 않는다.
+
+### 1. 동봉 라이브러리·Edge 의존성
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| undici 7.30.1(deno.lock, `haedo-naver-blog`·`haedo-discovery-private`) | 7.30.2(11-05) 보안 수정 6건, 그중 GHSA-mqg3-3v4r-cm32 High(캐시+리다이렉트 오염, 7.30.1만), GHSA-r4pc-4jcp-7pqc(SRI 공백 우회) 등 | 두 함수는 `npm:cheerio@1.2.0/slim`만 불러오고(`haedo-naver-blog/index.ts:5`, `haedo-discovery-private/index.ts:4`), slim은 htmlparser2·dom-serializer만 쓴다. undici·`fromURL` 사용 0건, 네트워크는 Deno 내장 fetch. lock에만 잡힌 전이 의존성 | 관찰(다음 Edge 배포 때 lock 7.30.2 갱신) | https://github.com/nodejs/undici/releases/tag/v7.30.2 |
+| @tiptap/* 3.32.2(14개) | 3.32.3·3.33.0(11-05): link defaultProtocol, bubble/floating-menu IME, collaboration. 보안 수정 없음 | 동봉본에 해당 확장 없음. 링크는 자체 mark·`safeLink`(`assets/life/post-markdown-editor.js:108`) | 무관 | https://github.com/ueberdosis/tiptap/releases |
+| prosemirror-model 1.25.12 | 1.25.13(11-08): V8의 텍스트 노드 부분 문자열 메모리 누수 회피 | Chrome에서 긴 글 편집 때만 해당, Safari 무관 | 관찰(B2 편집기 연결 때 vendor 갱신 후보) | https://prosemirror.net/docs/changelog/ |
+| supabase-js 2.117.2 | 2.119.0(11-04): global 로그아웃 실패 시 로컬 세션 유지 등. 보안 표시 없음 | 앱은 `signOut({scope:'local'})`만 사용(`assets/platform-auth.js:252,258,272`) | 관찰 | https://github.com/supabase/supabase-js/releases/tag/v2.119.0 |
+| idb 8.0.3 | 8.0.4 공식 CHANGELOG 여전히 없음. tarball 비교로 내부 정리뿐(보안 아님) | — | 관찰(유지) | npm tarball 비교 |
+| Quill 2.0.3 GHSA-v3m3-f69x-jf25 | 변동 없음(패치 판 없음) | HTML 내보내기 미사용(1회차 판정 유지) | 무관(감시) | https://api.osv.dev/v1/vulns/GHSA-v3m3-f69x-jf25 |
+| `haedo-rss` 동봉 fast-xml-parser 5.12.0 외 7개(새 확인) | 5.12.0 최신, OSV 0건 | — | 무관 | https://registry.npmjs.org/fast-xml-parser |
+| markdown-it·DOMPurify·js-yaml·fflate·Pretendard·cheerio·daisyUI·lucide | 새 보안 판 없음(lucide는 아이콘 추가만) | — | 무관 | npm registry |
+
+### 2. Safari·WebKit·Apple
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Apple 보안 릴리스 | 10-29 이후 새 항목 없음 | — | 무관 | https://support.apple.com/en-us/100100 |
+| Adaptive Dark Mode | 아직 Safari 27.3 **beta**. `color-scheme: light only` 지원 공지 없음 | 앱은 `color-scheme: light`(`assets/app.css:3`, `assets/life/ui.css:4`) | 관찰(정식 출시 때 결정, 1회차 유지) | https://developer.apple.com/documentation/safari-release-notes/safari-27_3-release-notes |
+| Safari 27.3 beta: viewport `interactive-widget` 지원 | 화상 키보드 때 페이지 반응 방식 지정 | 로드맵의 "모바일 편집기 머리 영역이 키보드를 열면 편집 영역을 가림" 항목과 직결. 지금은 `visualViewport`로 처리(`assets/life/photo-post-ui.js:374`) | 관찰(정식 출시 뒤 실기기 글쓰기 묶음에서 `resizes-content`와 비교 실험) | 같은 출처 |
+| Safari 27.3 beta: IME 조합 확정 시 요소 삭제·dead key `compositionend` 수정, IndexedDB `getAllRecords()`, SW URLPattern·CSP 수정, line-clamp % 값 폐기 | — | 한글 입력에 유리. API·CSS 변경 불필요(line-clamp는 정수만 사용) | 관찰/무관 | 같은 출처, https://webkit.org/blog/18602/release-notes-for-safari-technology-preview-256/ |
+
+### 3. Chromium
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Chrome 157 stable(11-03, 보안 213건), 158 early stable(11-04) | 158: Web Install API, Permissions-Policy `focus-without-user-activation`, XSLT 단계 제거. IndexedDB·bfcache·SW 변경 없음 | XSLT 사용 0건, 설치 API 도입하지 않음 | 무관 | https://chromereleases.googleblog.com/2026/11/ , https://chromestatus.com/api/v0/features?milestone=158 |
+
+### 4. Supabase
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Storage 권고 3건: GHSA-fgvp-cqg6-q8h2(Critical, JWT role `none` RLS 우회, 호스팅 이미 패치), GHSA-3m3f-pjv4-x2fp(High, S3 SigV4 presigned PUT), GHSA-2p28-q2vx-mw6w(Moderate, S3 서명 재전송) | 1은 `none` role JWT를 발급하는 신뢰 발급자(custom access token hook 등)가 있어야, 2·3은 S3 프로토콜을 써야 해당 | 앱은 표준 Storage REST만 사용(`assets/life/blog-remote.js:216,228`, `library-originals-remote.js:86,93`). S3·`x-amz`·signed upload URL·resumable·custom access token hook 사용 0건 | 관찰(운영 Storage S3 프로토콜이 꺼져 있는지 총괄이 대시보드로 확인) | https://github.com/supabase/storage/security |
+| JWT 검증 방침이 문서마다 다름 | Functions Auth 문서는 사용자 대상 함수에 verify_jwt=true·`withSupabase` 권고, Signing keys 문서는 회전 전 Verify JWT를 끄라고 함 | `haedo-discovery-private`만 verify_jwt=true로 운영(#214 결정), 나머지 5개는 false | 관찰(서명 키 회전 전 이 함수만 따로 결정) | https://supabase.com/docs/guides/auth/signing-keys , https://supabase.com/docs/guides/functions/auth |
+| 새 키 Edge 읽기 방식 | `SUPABASE_JWKS` 문서화, `@supabase/server` 권고. 직접 읽기(`SUPABASE_SECRET_KEYS`의 `default`)도 여전히 문서에 있음 | `_shared/supabase-keys.mjs`는 문서의 직접 방식과 같아 변경 불필요 | 관찰 | https://supabase.com/docs/guides/functions/secrets |
+| 레거시 키 폐지 일정, CLI v3 기본값 변경 | 일정은 여전히 "by the end of 2026". CLI는 저장소 CI에서 쓰지 않음 | — | 변동 없음/무관 | https://supabase.com/changelog |
+
+### 5. Anthropic API
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| 요금·보존·모델 수명 | 변동 없음. `claude-haiku-5-5`는 2027-10-07, `claude-sonnet-5-5`는 2027-09-28 전 퇴역 없음 | `haedo-ai` 단가·모델 ID 일치 | 무관 | https://platform.claude.com/docs/en/about-claude/pricing , https://platform.claude.com/docs/en/about-claude/model-deprecations |
+| IP allowlisting(beta, 11-05) | 조직 단위 API 호출 IP 제한 | 키 유출 피해를 줄일 수 있으나 Supabase Edge 송신 IP가 고정인지 미확인 | 관찰 | https://platform.claude.com/docs/en/release-notes/overview |
+| Message threads·텍스트 워터마크·요청 128MB | — | 단일 턴·64KiB 요청이라 해당 없음 | 무관 | 같은 출처 |
+
+### 6. 접근성·보안 표준
+
+- W3C WAI 뉴스는 09-25 이후 새 항목 없음. Web App Manifest(11-06)·AccName 1.2(11-04)·Core-AAM 1.2 CR(11-05) 개정, CSP·Trusted Types·WCAG 문서는 11월 갱신 없음. OWASP 신규 발표 없음. 분류: 관찰/무관. 출처: https://www.w3.org/TR/ , https://www.w3.org/WAI/news/
+
+### 1회차 미결 항목 현황
+
+1. **Supabase 새 키 이전:** 코드 완료(Edge 6개 함수가 새 키를 먼저 읽고 naver cron은 `apikey` 헤더). 남은 일은 소유자 몫인 Vault `haedo_naver_service_role_key`를 `sb_secret_`로 교체하는 것과 레거시 키 끄기 승인.
+2. **iOS 27 HEIC 경로:** 실기기 확인 전 그대로(27.3 beta에도 HEIC 변경 없음).
+3. **haedo-ai verify_jwt:** false로 배포 완료. 서명 키 회전 전에는 `haedo-discovery-private`(true)만 따로 결정.
+4. **개인 화면 CSP:** 여전히 미적용(로드맵 "다른 사용자를 전제로 한 작업은 뒤로").
+5. **idb·supabase-js:** 보안 사유가 없어 유지(최신 8.0.4·2.119.0).
+6. **Adaptive Dark Mode:** 아직 beta, 결정 보류.
+
+### 총괄 판정 (2026-11-09)
+
+- **적용 필요:** 이번 회차에는 없다. 영향이 확인된 보안 권고가 없고 플랫폼 변경도 앱 코드 수정을 요구하지 않는다.
+- **관찰(다음 작업에 묶음):** undici lock 7.30.2 갱신은 다음 Edge 배포 때, prosemirror-model 1.25.13은 B2 편집기 연결의 vendor 갱신 때 함께. `interactive-widget`은 Safari 27.3 정식 출시 뒤 실기기 글쓰기 묶음에서 비교 실험. 운영 Storage S3 프로토콜 상태는 총괄이 대시보드 조회 권한이 생기면 확인(이번 세션 도구로는 설정을 읽을 수 없음).
+- **소유자 승인·조치 필요:** Vault 비밀값 `sb_secret_` 교체와 레거시 키 끄기(1회차부터 대기). 서명 키 회전을 할 계획이 생기면 그 전에 `haedo-discovery-private` verify_jwt 방침 결정.
+
+### 자가개선 (지난 주 작업)
+
+- **검사 판정 실수:** 11-08 통합에서 `$(node … | tail -1)` 뒤에 `${PIPESTATUS[0]}`를 읽어 실패한 검사(feature-flow 11/12)를 통과로 기록했다가 다시 돌려 찾았다. → 실제 종료 코드로만 판정한다(AGENTS.md 운영에서 배운 점에 추가).
+- **병렬 작업 통합 회귀:** 작업자 셋이 각자 통과했지만 합치자 820px 글 메뉴 패널이 단계 막대를 가렸고, 새 `목표 추가` 링크가 기존 검사 선택자 3곳을 모호하게 만들었다. 총괄이 새로 짠 연결 코드는 같은 일을 하는 기존 도우미를 쓰지 않아 거짓 떠남 확인창을 만들었다(검수 MAJOR). → 통합본 전체 재검사, 기존 도우미 재사용(AGENTS.md에 추가).
+- **CI 실패 처리:** 이번 주 CI·통합 검사 실패는 모두 재현해 원인을 확정한 뒤 고쳤다. 검사 경합(홈 복귀 초점과 입력, 메뉴 초점 대기, 늦게 불러오는 RSS 모듈), 제품 동작 변화에 따른 규칙 변경(RSS 격리 Auth 호출 수, 새 링크로 모호해진 선택자), 실제 통합 결함(820px 메뉴 패널)이었다. 재현이 안 된 11-07 `nine-public` 1건은 미해결 기록을 유지한다. 타이밍을 고정하는 재현 장치(rAF 지연 주입, 프레임 붙잡기)가 "간헐"을 결정적으로 만드는 데 효과적이었다.
+
 ## 주간 기술 동향 점검 — 2026-11-04 (1회차)
 
 기준: 저장소 `main` 작업 트리 f99a344, AI 제안 브랜치 `origin/claude/relaxed-mayer-7e42wi`(ed0e539). 읽기 전용으로 조사했다(편집·커밋·운영 DB 조회 없음). 확인일은 모두 2026-11-04.
