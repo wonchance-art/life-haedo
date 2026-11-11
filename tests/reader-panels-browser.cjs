@@ -80,6 +80,12 @@ async function main() {
       await page.keyboard.press('Escape'); await frames(page);
       state = await layout(page, '#lifeSourceDetails');
       assert.equal(state.hidden, true); assert.equal(state.expanded, 'false'); assert.equal(state.focus, 'lifeSourceInfoToggle'); await unmoved(page, before, 'Escape');
+      // Escape also closes it when focus is nowhere near the panel (the page body).
+      await R.pressAt(page, '#lifeSourceInfoToggle'); assert.equal((await layout(page, '#lifeSourceDetails')).hidden, false);
+      await page.evaluate(() => document.activeElement.blur()); assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
+      await page.keyboard.press('Escape'); await frames(page);
+      state = await layout(page, '#lifeSourceDetails');
+      assert.equal(state.hidden, true, 'Escape with focus on the page closes the panel'); assert.equal(state.focus, 'lifeSourceInfoToggle'); await unmoved(page, before, 'Escape from the page');
       // The same button closes it.
       await R.pressAt(page, '#lifeSourceInfoToggle'); assert.equal((await layout(page, '#lifeSourceDetails')).hidden, false);
       await R.pressAt(page, '#lifeSourceInfoToggle'); state = await layout(page, '#lifeSourceDetails');
@@ -111,8 +117,22 @@ async function main() {
       const first = order.findIndex(item => item === 'panel');
       assert(first >= 0 && order.slice(0, first).every(item => item.startsWith('tools:')) && order.slice(first).every(item => item === 'panel'), 'Tab goes from the tool row into the open panel: ' + order.join(' → '));
       await unmoved(page, before, 'Tab into the panel');
-      for (let step = 0; step < 6; step++) { await page.keyboard.press('Shift+Tab'); await frames(page); await unmoved(page, before, 'Shift+Tab step ' + (step + 1)); }
-      for (let step = 0; step < 6; step++) { await page.keyboard.press('Tab'); await frames(page); await unmoved(page, before, 'Tab step ' + (step + 1)); }
+      // By keyboard alone, opening the other panel closes this one (no press outside is involved).
+      for (let step = 0; step < 8 && await page.evaluate(() => document.activeElement.id) !== 'lifeReaderArrange'; step++) await page.keyboard.press('Shift+Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'lifeReaderArrange'); await unmoved(page, before, 'Shift+Tab to 이 원문 담기');
+      await page.keyboard.press('Enter'); await frames(page);
+      assert.equal((await layout(page, '#lifeReaderArrangePanel')).hidden, false); assert.equal((await layout(page, '#lifeSourceDetails')).hidden, true, 'keyboard: one panel at a time');
+      await page.keyboard.press('Tab'); await page.keyboard.press('Enter'); await frames(page);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'lifeSourceInfoToggle');
+      assert.equal((await layout(page, '#lifeSourceDetails')).hidden, false); assert.equal((await layout(page, '#lifeReaderArrangePanel')).hidden, true, 'keyboard: and back');
+      for (let step = 0; step < 3; step++) await page.keyboard.press('Tab');
+      // Back to the first control of the tool row and forward again, one stop at a time. (Not past it: leaving the
+      // reader for the list or the menu is the browser's own focus move.)
+      const atFirst = () => page.evaluate(() => document.activeElement === document.querySelector('.life-reader-tools > button'));
+      let back = 0;
+      while (!await atFirst() && back < 12) { await page.keyboard.press('Shift+Tab'); back++; await frames(page); await unmoved(page, before, 'Shift+Tab step ' + back); }
+      assert(await atFirst() && back >= 4, 'reached the first tool by Shift+Tab in ' + back + ' steps');
+      for (let step = 1; step <= back; step++) { await page.keyboard.press('Tab'); await frames(page); await unmoved(page, before, 'Tab step ' + step); }
       assert.equal(await page.evaluate(() => !!document.activeElement.closest('#lifeSourceDetails')), true, 'focus is back inside the panel');
       await page.keyboard.press('Escape'); await frames(page);
       state = await layout(page, '#lifeSourceDetails'); assert.equal(state.hidden, true); assert.equal(state.focus, 'lifeSourceInfoToggle'); await unmoved(page, before, 'Escape inside the panel');
