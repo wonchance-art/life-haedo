@@ -417,6 +417,24 @@ async function main() {
     sheet = await openInfo(page); assert.match(await sheet.locator('.photo-public-log').innerText(), /받지 못했던 철회 요청을 이 기기가 다시 보내 공개를 철회했습니다/); await closeInfo(page);
     pass('a publish request is never sent again by itself; an unanswered withdrawal is, with its own operation id, and the device says that it did');
 
+    // An unanswered withdrawal is sent again only against the publication it was made for: a
+    // publication another device makes afterwards stays (review probe 5).
+    const y = await savedPost(page, '철회 대기 뒤 다른 기기 재게시 글');
+    await manager(page); await openReview(page, y.doc.id); await preview(page, { name: '익명 검수' }); await publish(page); await publishedLink(page).waitFor();
+    const staleWithdrawal = await neverArrives(owner.context, 'life_blog_unpublish');
+    await click(page, '공개 철회', panel(page)); await staleWithdrawal.stop(); await click(page, '공개 검토 닫기');
+    assert.equal(staleWithdrawal.count, 1); assert.equal(await publicStatus(page, y.doc.id), 'unknown');
+    const headY = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: y.remoteId });
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', { p_post_id: y.remoteId, p_expected_revision: headY.revision, p_operation_id: require('node:crypto').randomUUID(), p_photo_ids: [],
+      p_author: { name: '다른 기기에서 다시 공개', intro: '' }, p_expected_publication_revision: headY.publication.revision }).status, 'stored');
+    const newerY = publication(y.remoteId); assert.deepEqual({ active: newerY.active, revision: newerY.revision }, { active: true, revision: 2 });
+    await kick(page); await until(() => publicStatus(page, y.doc.id), value => value === 'public', 'the cycle settles the old withdrawal against the newer publication');
+    await new Promise(done => setTimeout(done, 1500));
+    assert.deepEqual(publication(y.remoteId), newerY, 'the newer publication is not withdrawn'); assert.equal(sentUnpublish(y.remoteId).length, 0, 'the old withdrawal is not sent against it');
+    assert.equal((await state(page, y.doc.id)).unpublishPending, null); assert.equal(await mark(page, y.doc.id), '공개 중');
+    await openReview(page, y.doc.id); await click(page, '공개 철회', panel(page)); assert.equal(publication(y.remoteId).active, false); await click(page, '공개 검토 닫기');
+    pass('an unanswered withdrawal does not withdraw a publication another device made afterwards');
+
     // ---- M1: two tabs; a request still being sent is not judged by the other tab ----------------------
     const tabB = await owner.context.newPage(); watch(tabB, 'recovery-owner-tab-b'); await tabB.goto(base + '/index.html'); await ready(tabB); await settle(tabB);
     const t2 = await savedPost(page, '두 탭 게시 글');
