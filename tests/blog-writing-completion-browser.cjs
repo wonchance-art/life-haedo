@@ -192,8 +192,14 @@ async function main() {
     await check('Empty drafts are reused and unfinished posts live in the explicit draft area rather than the normal saved feed', async () => {
       await click('사진 글 목록'); await click('글쓰기'); await page.locator('.ql-editor').fill('잠시 썼다 지울 문장'); await stored(); await page.locator('.ql-editor').fill(''); await stored();
       const before = await read(), empty = before.docs.find(v => v.status === 'draft' && !v.title.trim() && !v.photos.length && !v.attachments.length && !v.ops.some(op => typeof op.insert === 'string' && op.insert.trim()));
-      assert(empty); await click('닫기'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-draft-list [data-photo-post-id="' + empty.id + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + empty.id + '"]').count(), 0);
-      await click('글쓰기'); await page.locator('.ql-editor').waitFor(); await page.locator('#photoTitle').fill('같은 초안에서 이어 쓴 글'); await stored(); const after = await read(); assert.equal(after.index.length, before.index.length); assert.equal(after.docs.find(v => v.title === '같은 초안에서 이어 쓴 글').id, empty.id);
+      assert(empty); await click('닫기');
+      // 2026-11-11 (글쓰기 M2 2c): a draft emptied before closing is removed, not kept in the draft area.
+      await page.waitForFunction(id => !document.querySelector('[data-photo-post-id="' + id + '"]'), empty.id);
+      const closed = await read(); assert.equal(closed.index.some(v => v.id === empty.id), false); assert.equal(closed.index.length, before.index.length - 1);
+      // An empty draft left by another device or an earlier version still lives in the draft area and is reused by 글쓰기.
+      const leftover = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return (await s.savePhotoPost(w, HaedoLife.PhotoPost.create(HaedoLife.Core.id), 0)).id; });
+      await click('사진 글 목록 다시 읽기'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-draft-list [data-photo-post-id="' + leftover + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + leftover + '"]').count(), 0);
+      await click('글쓰기'); await page.locator('.ql-editor').waitFor(); await page.locator('#photoTitle').fill('같은 초안에서 이어 쓴 글'); await stored(); const after = await read(); assert.equal(after.index.length, before.index.length); assert.equal(after.docs.find(v => v.title === '같은 초안에서 이어 쓴 글').id, leftover);
       // Closing re-reads the list; until that read lands, the feed still shows the rows from before the editor opened
       // (their object URLs already retired) and then replaces them. Check the covers of the list the close produced.
       const previous = await page.evaluateHandle(() => [...document.querySelectorAll('.photo-entry-cover')]);

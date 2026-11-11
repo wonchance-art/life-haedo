@@ -407,7 +407,10 @@
       });
       read('photo', '글·초안·숨긴 글', value => {
         if (!Array.isArray(value?.posts)) throw new Error('invalid_posts');
-        rows.push(...value.posts.map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
+        // A draft with nothing in it is not something to resume: it is neither the 작성하던 글
+        // strip nor a row of the 초안 tab (the editor removes it on closing; 글쓰기 reuses one left over).
+        const blank = post => post.status === 'draft' && !post.archived && !String(post.title || '').trim() && !String(post.body || '').trim() && !post.photos && !post.attachments;
+        rows.push(...value.posts.filter(post => !blank(post)).map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
           tab: post.archived ? 'archive' : post.status === 'draft' ? 'drafts' : 'posts', editing: context.photoDrafts.get(post.workspaceId + ':' + post.id) })));
         if (value.failed) errors.push({ key: 'photo', label: '일부 자료공간의 글' });
       });

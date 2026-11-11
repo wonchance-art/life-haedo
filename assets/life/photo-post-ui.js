@@ -186,7 +186,13 @@
     let keptTick = -1,
       unstored = null,
       offer = null,
-      titleInput = null;
+      noteHold = 0,
+      titleInput = null,
+      // A revision of a saved post is that post's editing buffer (2026-11-11):
+      // nothing is stored until the first real change, and a buffer that holds
+      // what the post holds is removed on leaving. `baseline` is the saved
+      // post's content when the revision was opened.
+      baseline = null;
     const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
     const recoveryStore = M.recovery(localStore);
     const settled = () => dirtyTick === storedTick || dirtyTick === keptTick;
@@ -306,7 +312,9 @@
               ? "비공개 글을 저장했어요"
               : doc?.revision
                 ? "자동 저장됨"
-                : "사진 없이도 바로 쓸 수 있어요");
+                : doc?.replaces
+                  ? "바꾼 내용 없음"
+                  : "사진 없이도 바로 쓸 수 있어요");
         const state = e instanceof Error ? "error" : e || authorText ? "notice" :
           composing || dirtyTick !== storedTick ? "pending" :
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
@@ -743,7 +751,8 @@
       showStatus(error);
     }
     function mark() {
-      authorNote = ""; authorNoteKept = false;
+      // A note about what storing changed stays readable for a few seconds of typing.
+      if (Date.now() >= noteHold) { authorNote = ""; authorNoteKept = false; }
       dirtyTick++;
       doc.updatedAt = new Date().toISOString();
       showStatus();
@@ -782,6 +791,7 @@
         .savePhotoPost(workspaceId, payload, doc.revision)
         .then((saved) => {
           if (!valid() || doc !== target) return;
+          const first = target.revision === 0 && !!target.replaces;
           target.revision = saved.revision;
           storedTick = tick;
           keptTick = -1;
@@ -789,6 +799,7 @@
           // The stored draft now holds everything: the device copy is done.
           if (storedTick === dirtyTick) recoveryStore.clear(workspaceId, target.id);
           if (normal.changed) alignEditor(normal, tick);
+          if (first && current(token) && mode === "edit") onModeChange({ mode, id: target.id });
           // A short AI-mark note gives way to the save state once saved.
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
@@ -838,7 +849,7 @@
       }
       doc.title = normal.doc.title;
       const note = M.describeChanges(normal.changes);
-      if (note) { authorNote = note; authorNoteKept = true; }
+      if (note) { authorNote = note; authorNoteKept = true; noteHold = Date.now() + 6000; }
     }
     // The page is being hidden or closed before autosave ran: what the editor
     // holds goes to the device copy synchronously (async stores may not finish).
@@ -908,9 +919,89 @@
         setBusy(false);
       }
     }
-    async function list() {
+    // A stored draft leaves this device and, by the same deletion record as
+    // 삭제, the account's other devices.
+    async function removeDraft(target) {
+      if (target.revision > 0) {
+        if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, target.id, { expectedRevision: target.revision });
+        else await storage.deletePhotoPost(workspaceId, target.id, target.revision);
+      }
+      recoveryStore.clear(workspaceId, target.id);
+    }
+    // Leaving the editor: a revision that holds exactly what the saved post
+    // holds, and a draft with nothing in it, are not kept. Cleaning up never
+    // blocks leaving; whatever could not be removed simply stays.
+    async function settleDraft() {
+      if (mode !== "edit" || !doc || doc.status !== "draft" || offer || busy || composing || dirtyTick !== storedTick) return false;
+      const target = doc;
+      if (!(M.isEmpty(target) || (target.replaces && baseline !== null && M.contentKey(target) === baseline))) return false;
+      if (target.revision > 0 && staleApp()) return false;
+      try { await removeDraft(target); }
+      catch (_) { return false; }
+      if (doc === target) {
+        target.revision = 0;
+        resetTicks();
+        // If the editor stays open, other screens name the saved post again.
+        if (target.replaces && current(epoch) && mode === "edit") onModeChange({ mode, id: shownId() });
+      }
+      return true;
+    }
+    // What other screens ask before moving on: store the input, then settle.
+    async function leave() {
       await flush();
-      if (onReturn && (await onReturn({ id: doc?.id || null, committed })) !== false)
+      return settleDraft();
+    }
+    // 수정 취소 / 초안 삭제: asked first; if the removal fails the input stays in the editor.
+    async function discardDraft() {
+      if (mode !== "edit" || !doc || doc.status !== "draft") return;
+      guard(true);
+      const target = doc, token = epoch, original = target.replaces?.id || null;
+      if (target.revision > 0 && staleApp())
+        throw new Error("앱을 새로고침한 뒤 다시 시도해 주세요. 입력은 이 기기에 그대로 있습니다.");
+      if (typeof root.confirm === "function" && !root.confirm(original
+        ? "수정한 내용을 버릴까요? 저장한 글은 그대로 남습니다."
+        : "이 초안을 삭제할까요? 로그인한 모든 기기에서 함께 삭제됩니다.")) return;
+      if (!current(token) || doc !== target) return;
+      cancelAutosave();
+      if (saving) await saving.catch(() => {});
+      if (!current(token) || doc !== target) return;
+      setBusy(true);
+      try {
+        await removeDraft(target);
+      } catch (e) {
+        if (e?.code === "photo_post_conflict")
+          throw Object.assign(new Error("다른 탭이나 기기에서 초안이 바뀌어 지우지 않았습니다. 입력은 그대로 있습니다."), { code: e.code });
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+      if (!current(token)) return;
+      doc = null;
+      mode = "list";
+      resetTicks();
+      error = null;
+      committed = false;
+      onSaved();
+      if (original) {
+        // Back to the saved post the revision belonged to.
+        try {
+          await open(original);
+          if (current(epoch)) host.querySelector(".photo-read-heading")?.focus({ preventScroll: true });
+          return;
+        } catch (_) {
+          if (!valid() || !host?.isConnected) return;
+        }
+      }
+      if (onReturn && (await onReturn({ id: null, deletedId: target.id, committed: false })) !== false) return;
+      if (!valid() || !host?.isConnected) return;
+      render();
+    }
+    // The id other screens use for the open post: an unstored revision is
+    // still the saved post it revises (its own id names nothing yet).
+    const shownId = () => (mode === "edit" && doc?.replaces && doc.revision === 0 ? doc.replaces.id : doc?.id || null);
+    async function list() {
+      const removed = await leave();
+      if (onReturn && (await onReturn({ id: removed ? doc?.replaces?.id || null : doc?.id || null, committed })) !== false)
         return;
       doc = null;
       mode = "list";
@@ -921,9 +1012,10 @@
     async function begin() {
       try {
         const token = epoch;
-        await flush();
+        await leave();
         await beforeOpen();
         if (!current(token)) return;
+        baseline = null;
         setBusy(true); loading = true;
         try {
           const rows = await storage.listPhotoPosts(workspaceId);
@@ -975,12 +1067,15 @@
     }
     async function open(id, editing = false, expectedRevision = null) {
       const token = epoch, wasReading = mode === "read";
-      await flush();
+      // Reopening the post that is open must not settle it away first.
+      if (doc?.id === id) await flush(); else await leave();
       await beforeOpen();
       if (!current(token)) return;
       setBusy(true); loading = true;
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
+        let orphan = null;
+        baseline = null;
         if (!current(token)) return;
         if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || next.revision !== expectedRevision))
           throw Object.assign(new Error('글이 바뀌었습니다. 목록을 다시 확인해 최신 글을 직접 열어 주세요.'), { code: 'photo_post_changed' });
@@ -1018,17 +1113,30 @@
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          resetTicks(retained ? 0 : 1);
+          // Nothing is stored for a revision until something is changed.
+          resetTicks();
+          baseline = M.contentKey(next);
+          // Input of an earlier, never stored revision of this post.
+          if (!retained) {
+            const stored = new Set(rows.map((item) => item.id));
+            orphan = recoveryStore.list(workspaceId).find((copy) => copy.replaces?.id === next.id && !stored.has(copy.id)) || null;
+          }
         } else {
           doc = next;
           resetTicks();
+          if (next.status === "draft" && next.replaces && !next.archived) {
+            // A stored revision opened from the drafts: compare with its post on leaving.
+            const original = await storage.readPhotoPost(workspaceId, next.replaces.id).catch(() => null);
+            if (!current(token)) return;
+            if (original?.status === "saved" && original.revision === next.replaces.revision) baseline = M.contentKey(original);
+          }
         }
         mode =
           !next.archived && (editing || next.status === "draft")
             ? "edit"
             : "read";
         if (mode === "edit") doc = M.upgrade(doc);
-        offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id)) : null;
+        offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id) || orphan) : null;
         error = null;
         committed = false;
         render();
@@ -1879,10 +1987,16 @@
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
         button("사본으로 이어 쓰기", duplicate),
-        button("목록에서 숨기기", () => archive(true)),
-        button("초안 다시 저장", persist),
       );
+      // Hiding belongs to the saved post (its read view has it). In a revision
+      // it used to hide the editing copy and leave the post in the list.
+      if (!doc.replaces) menu.append(button("목록에서 숨기기", () => archive(true)));
+      menu.append(button("초안 다시 저장", persist));
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
+      const discard = button(doc.replaces ? "수정 취소" : "초안 삭제", discardDraft);
+      discard.dataset.postAction = "discard";
+      discard.classList.add("photo-delete");
+      menu.append(discard);
       // D1 (soft redesign): one quiet line — close, the privacy pill that
       // opens 글 정보, the autosave state, then more and the one save action.
       const commandState = el("div", null, "photo-command-state"),
@@ -2437,7 +2551,7 @@
       serverStatus = serverActions = null;
       host.replaceChildren();
       host.dataset.mode = mode;
-      onModeChange({ mode, id: doc?.id || null });
+      onModeChange({ mode, id: shownId() });
       status = el("p", "", "life-help photo-status");
       status.setAttribute("role", "status");
       status.setAttribute("aria-atomic", "true");
@@ -2762,7 +2876,7 @@
       target,
       { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록", standalone: isolated = false } = {},
     ) {
-      if ((reset || postId) && doc) await flush();
+      if ((reset || postId) && doc) { if (postId && postId === doc.id) await flush(); else await leave(); }
       host = target;
       standalone = isolated;
       feedListener = onFeed;
@@ -2846,7 +2960,8 @@
     return {
       mount,
       begin,
-      flush,
+      // Other screens call this before moving away from the post.
+      flush: leave,
       checkpoint,
       dirty: () =>
         (busy && !loading) || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),

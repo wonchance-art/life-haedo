@@ -514,12 +514,7 @@
     const known = new Set(all.map((p) => p?.id)),
       used = new Set(),
       out = [];
-    const push = (insert, attributes) => {
-      const last = out.at(-1);
-      if (last && typeof insert === "string" && typeof last.insert === "string" &&
-          sameAttributes(last.attributes, attributes)) last.insert += insert;
-      else out.push(attributes ? { insert, attributes } : { insert });
-    };
+    const push = (insert, attributes) => out.push(attributes ? { insert, attributes } : { insert });
     for (const op of input.ops) {
       if (!plain(op) || !Object.hasOwn(op, "insert")) {
         note("format");
@@ -552,8 +547,21 @@
     }
     const title = cleanText(typeof input.title === "string" ? input.title : "", false);
     if (title !== input.title) note("chars");
+    // A body that needed nothing keeps its exact ops (a copy or a backup of a
+    // stored post is the same document). Only a mapped body is compacted, the
+    // way the editor itself joins text that now carries the same formats.
+    let body = input.ops;
+    if (changed) {
+      body = [];
+      for (const op of out) {
+        const last = body.at(-1);
+        if (last && typeof op.insert === "string" && typeof last.insert === "string" && sameAttributes(last.attributes, op.attributes))
+          last.insert += op.insert;
+        else body.push(op);
+      }
+    }
     return {
-      doc: { ...input, title, ops: out, photos: all.filter((p) => used.has(p?.id)) },
+      doc: { ...input, title, ops: body, photos: all.filter((p) => used.has(p?.id)) },
       changes: [...changes],
       changed,
     };

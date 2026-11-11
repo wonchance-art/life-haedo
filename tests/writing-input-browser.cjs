@@ -109,7 +109,7 @@ H.run(__filename, {
     const rows = await draftWith(page, PARAGRAPH);
     assert(rows[0].text.includes('끼어\n든 글자'), 'stored clean');
     await H.until(() => H.bodyText(page), text => text.includes('끼어\n든 글자') && !UNSAFE.test(text.replace(/\n/g, '')), 'the screen shows what was stored');
-    assert.equal((await H.status(page)).text, '쓸 수 없는 문자를 뺐어요');
+    await H.until(() => H.status(page), value => value.text === '쓸 수 없는 문자를 뺐어요', 'the change is said in one line');
   },
   // C: the link box takes "naver.com" as https and refuses what is not an http(s) address.
   async 'links'({ open }) {
