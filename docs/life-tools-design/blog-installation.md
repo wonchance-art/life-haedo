@@ -130,3 +130,157 @@ commit;
 - `create or replace`는 기존 권한을 유지한다. `public_media`는 service_role, `life_blog_publish`는 authenticated 그대로다.
 - Edge는 1에서 기록한 이전 버전 소스로 다시 배포한다.
 - 되돌린 뒤 확인: `select prosrc from pg_proc where proname='public_media'`에 `'copy'`가 없고, 트리거 행이 0인지.
+
+## 2026-11-11 공개 전 철회 (저장소 작성, 운영 미적용)
+
+마이그레이션 `supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql`. 작업자는 운영에 적용하지 않았다. 적용은 총괄 담당이다.
+
+### 왜 바꿨나
+
+- 첫 공개 게시 요청의 응답을 받지 못하면, 그 요청이 서버에 반영됐는지 이 기기는 알 수 없다. 사용자가 그 상태에서 `공개 철회`를 눌러도 서버에는 공개 행이 없어 `unpublish`가 `missing`만 답하고 아무것도 바꾸지 않았다. 그래서 늦게 도착한 게시 요청(expected 공개 revision 0)이 철회 뒤에 그대로 반영될 수 있었다.
+- 앞 단계에서는 기기가 표지를 남겨 두고, 늦게 반영된 공개본의 이름·사진이 자기 요청과 같으면 철회했다. 같은 이름·사진 없는 글을 다른 기기가 일부러 공개한 경우와 구분할 수 없어, 그 공개를 내릴 수 있었다(재검수 R2-M1).
+- 이제 내용으로 판단하지 않는다. 서버에서 닫는다: 공개 행이 없을 때 expected revision 0으로 철회하면 **비공개 행을 revision 1로 기록**하고 영수증을 남긴다. 모든 게시 경로가 공개 revision을 대조하므로, 먼저 보낸 첫 게시 요청은 도착해도 `conflict`로 끝난다.
+
+### 바뀐 함수
+
+`haedo_blog_private.unpublish(uuid,bigint,uuid)` 하나다. 서명·`security definer`·`search_path=pg_catalog`·소유자·권한(`authenticated`만 실행)은 그대로다. 공개 래퍼 `public.life_blog_unpublish`는 건드리지 않는다. 이전 정의는 `20261017144744_life_blog_originals.sql` 310–327행이다.
+
+| 호출 | 이전 | 지금 |
+| --- | --- | --- |
+| expected 0, 공개 행 없음, 내 글 | `22023 life_invalid_request` | 비공개 행(revision 1) 기록, `{"status":"stored","revision":1}` |
+| expected 0, 공개 행 있음 | `22023 life_invalid_request` | `{"status":"conflict","revision":<현재>}` |
+| expected 0, 글 없음·남의 글 | `22023 life_invalid_request` | `{"status":"missing"}` (행 만들지 않음) |
+| expected ≥1, 공개 행 없음 | `missing` | `missing` (그대로) |
+| expected = 현재 revision | revision+1, 비공개 | 그대로 |
+| expected ≠ 현재 revision | `conflict` | 그대로 |
+| 같은 작업 ID 재요청 | 영수증 그대로 반환 | 그대로 (새 경로도 영수증을 남긴다) |
+
+- 새 행의 `token`은 열이 `NOT NULL UNIQUE`라서 채운 자리값이다. 공개 주소가 아니다. 익명 읽기는 `active` 행만 보고, 첫 실제 게시가 자기 토큰을 새로 만든다.
+- 소유자가 자기 글의 공개 상태를 읽는 경로(`owner_publication`)는 `profiles`와 조인한다. 프로필 행이 없는 계정은 빈 이름의 프로필 행을 하나 만든다. 이미 있는 이름·소개는 건드리지 않는다. 공개 중인 글이 없는 프로필은 누구에게도 보이지 않는다.
+- 설치는 기존 행을 바꾸지 않는다. 파일 전체가 한 문장이고, 그 안에서 posts·assets·receipts·publications·profiles의 행 수와 해시를 전후 비교해 달라지면 예외로 되돌린다.
+
+### 새 비공개 행이 다른 경로에 미치는 영향
+
+| 경로 | 결과 | 근거 |
+| --- | --- | --- |
+| `publish`(사진 없는 v2 글), expected 0 | `conflict`(revision 1) | SQL 검사 |
+| `publish_copies`(사진 사본), expected 0 | `conflict` | SQL 검사 |
+| `markdown_publish_prepare`·`markdown_publish_commit`, expected 0 | `conflict` | SQL 검사 |
+| 그다음 실제 게시(expected 1) | `stored`, revision 2, 새 토큰 | SQL·브라우저 검사 |
+| `life_blog_read`·`list`·`sync_list`(소유자) | `{active:false, revision:1}` — 다음 게시가 보낼 expected 값 | SQL 검사 |
+| `public_read`(행의 토큰)·`public_media` | `null` | SQL·브라우저 검사 |
+| `public_list` | 글 수에 넣지 않고 이름도 비움 | SQL 검사 |
+| 공개 표지·모음 | 앱이 `sync_list`의 `publication.active`인 글만 고른다(`public-cover-remote.js` 70행, `blog-series-remote.js` 24행). 비공개 행은 일반 철회 글과 같게 빠진다 | 코드 확인, 기존 브라우저 검사 |
+| 공개 9칸 | 블로그 공개 행을 쓰지 않는다 | 코드 확인 |
+| 글 삭제(`delete_post`) | `active` 행만 거절한다. 비공개 행은 글과 함께 지워지고 영수증도 지워진다 | SQL 검사 |
+| 다른 계정의 글 | `missing`, 행 없음 | SQL 검사 |
+| 익명 호출 | `42501` | SQL 검사 |
+| 다시 설치 | 행·다른 함수·권한 변화 없음 | SQL 검사 |
+
+검사: `node tests/run-blog-unpublish-postgres.cjs`(56개 확인, 변이 6종 `--mutation=no-row|active-row|no-revision|missing-as-before|blank-profile|any-owner`은 실패해야 함). CI에서는 `npm run test:sql-replay`의 4.8 단계가 모든 마이그레이션을 재생한 사본에서 같은 계약을 돌린다. `tests/integrated-release-installation.cjs`의 고정 목록·해시에 이 파일을 더했다.
+
+### 앱이 하는 일
+
+- **공개 철회:** 결과를 모르는 게시 요청이 있으면 항상 철회 RPC를 보낸다. 공개 중이면 그 revision을, 공개 행이 비공개면 그 revision을, 행이 없으면 0을 보낸다. `stored`면 대기 표시를 지우고 `비공개`로 확정한다.
+- **선택을 바꿔 다시 게시:** 공개 중이 아닌 글은 철회 RPC로 revision을 먼저 올리고 새 revision으로 보낸다. 공개 중인 글의 갱신만 주소를 지키려고 같은 revision으로 보내며(둘 중 하나만 반영), 앞 요청이 먼저 반영되면 새 선택을 한 번 더 보낸다.
+- **게시 요청 취소:** `비공개 · 앞서 보낸 게시 미반영` 안내 옆 버튼. 같은 철회 RPC로 요청을 끝낸다. 공개 중인 글의 미반영 갱신에는 없다.
+- **내용 비교로 철회하지 않는다.** 철회를 요청한 뒤 다른 revision으로 공개된 글은 그대로 두고 `철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다`라고 알린다.
+- **서버가 아직 이전 정의일 때:** expected 0 철회가 거부된다(`missing`을 답해도 같게 다룬다). `확인 못 함`을 유지하고 주기(30초)마다 같은 작업 ID로 철회를 한 번씩 다시 보낸다. 선택을 바꾼 게시는 앞 요청과 같은 revision으로 보낸다(둘 중 하나만 반영).
+- **제한시간:** 게시·철회·공개 head 읽기 30초, Markdown 게시(Edge) 60초. 넘기면 실패가 아니라 "결과 모름"이다. 다른 탭이 처리 중이면 10초 기다린 뒤 `다른 탭에서 처리 중입니다`를 보인다.
+
+### 중간 실패 상태표
+
+X는 결과를 모르는 앞 요청, Y는 새 선택이다. "주기"는 30초 자동 확인이다. 모든 줄은 `tests/blog-publication-settle.test.cjs`에 검사가 있다.
+
+| 흐름 | 실패 지점 | 기기에 남는 것 | 화면 | 다음에 일어나는 일 |
+| --- | --- | --- | --- | --- |
+| 철회(공개 중 아님) | head 읽기 실패 | 그대로 | 확인 못 함 | 다시 누르거나 주기 |
+| 철회(공개 중 아님) | 철회 RPC 미도착 | X + 철회 대기(끝내기) | 확인 못 함 | 주기가 같은 작업 ID로 다시 보냄 → 비공개. X는 conflict |
+| 철회(공개 중 아님) | 철회 반영, 응답 유실 | X + 철회 대기 | 확인 못 함 | 주기가 revision이 오른 것을 보고 다시 보내지 않음 → 비공개 |
+| 철회(공개 중 아님) | X가 철회 직전에 반영 | 공개 기록 | (같은 호출 안에서 이어짐) | 그 공개본의 revision으로 철회 → 비공개 |
+| 철회(공개 중 아님) | 철회 대기 중 X가 반영 | 공개 기록, 대기 없음 | 공개 중 + 알림 | 철회하지 않는다. 사용자가 다시 철회 |
+| 철회(공개 중 아님) | 서버가 이전 정의 | X + 철회 대기 | 확인 못 함 | 주기마다 한 번 다시 보냄. 서버가 받으면 비공개 |
+| 철회(공개 중) | 철회 RPC 미도착·응답 유실 | 철회 대기 | 확인 못 함 | 주기가 같은 revision에만 다시 보냄. 다른 revision으로 공개돼 있으면 보내지 않고 알림 |
+| 새 선택(공개 중 아님) | 끝내는 철회 미도착 | X + 철회 대기 | 확인 못 함 | Y는 보내지 않았다. 주기가 X를 끝냄 → 비공개. 다시 게시하면 바로 이어짐 |
+| 새 선택(공개 중 아님) | 철회 완료, Y 응답 유실 | Y | 확인 못 함 | 주기 → 공개 중(Y) |
+| 새 선택(공개 중 아님) | 철회 완료, Y 미도착 | Y | 확인 못 함 | 주기 → 비공개 + 미반영 안내. 다시 게시하거나 게시 요청 취소 |
+| 새 선택(공개 중 아님) | X가 철회 직전에 반영 | 공개 기록 | 공개 중 | 검토 기준이 바뀌어 Y는 보내지 않음(`미리보기 갱신`). 갱신 뒤 게시하면 같은 주소의 갱신 |
+| 새 선택(공개 중 아님) | 서버가 이전 정의 | Y(경합 표시) | 확인 못 함 | X와 같은 revision. 하나만 반영. X가 먼저면 Y를 한 번 더 보냄 |
+| 갱신(공개 중) | X가 먼저 반영 | Y | — | Y conflict → 공개본이 X와 같으면 Y를 새 revision으로 한 번 더 → 공개 중(Y), 같은 주소 |
+| 갱신(공개 중) | 다시 보낸 Y 응답 유실·미도착 | Y | 확인 못 함 | 주기 → 공개 중(Y) 또는 공개 중 + 갱신 미반영 안내 |
+| 게시(모든 경우) | 다른 기기의 요청이 먼저 반영 | 공개 기록 | 공개 중 | 다시 보내지 않고 지금 공개 중인 사본을 알림 |
+| 게시 요청 취소 | 철회 미도착 | X + 철회 대기 | 확인 못 함 | 주기가 끝냄 → 비공개 |
+| 게시 요청 취소 | X가 이미 반영돼 있었음 | 공개 기록 | 공개 중 | 철회하지 않는다 |
+
+남는 한계: 공개 중인 글을 갱신할 때, 같은 순간 다른 기기가 같은 이름·같은 사진으로 갱신했다면 그 공개본을 이 기기의 앞 요청으로 보고 새 선택을 한 번 더 보낸다(r2-m2). 사용자가 방금 검토한 선택으로 갱신되는 것이고 철회는 아니다.
+
+### 운영 적용 순서 (총괄)
+
+SQL을 먼저 적용하고 앱(Pages)을 나중에 내보낸다. 순서가 뒤바뀌어도 데이터는 바뀌지 않는다: 앱이 먼저 나가면 위 "서버가 이전 정의" 줄대로 동작한다. 지금 배포된 앱은 expected 0을 보내지 않으므로 SQL만 먼저 있어도 달라지는 것이 없다.
+
+1. **적용 전 읽기(기록).** 개수·상태만 읽는다. 본문·토큰·키는 꺼내지 않는다.
+
+   ```sql
+   -- 현재 정의: 해시, definer, search_path, 권한
+   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl
+   from pg_proc p where p.oid='haedo_blog_private.unpublish(uuid,bigint,uuid)'::regprocedure;
+   -- 행 수
+   select (select count(*) from haedo_blog_private.posts) posts, (select count(*) from haedo_blog_private.assets) assets,
+          (select count(*) from haedo_blog_private.receipts) receipts, (select count(*) from haedo_blog_private.publications) publications,
+          (select count(*) from haedo_blog_private.profiles) profiles;
+   -- 공개 행: 활성 수와 revision 분포
+   select active, revision, count(*) from haedo_blog_private.publications group by 1,2 order by 1,2;
+   ```
+
+   - 격리 PostgreSQL에서 이전 정의의 `md5(prosrc)`는 `ec59cc1e58b1f5db02093ec138116744`였다. 운영 값이 다르면(줄바꿈 차이 포함) 적용하지 않고 `pg_get_functiondef`로 본문을 저장소 310–327행과 대조한다.
+   - definer `true`, config `{search_path=pg_catalog}`, 실행 권한은 `authenticated`.
+2. **적용.** `supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql` 파일 전체(한 문장)를 그대로 적용한다. 다른 SQL은 없다. Edge 함수 배포도 없다.
+3. **적용 후 확인.**
+
+   ```sql
+   -- 정의가 바뀌었고 나머지는 그대로
+   select md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl,
+          position('p_expected_revision not between 0 and' in p.prosrc) > 0 as accepts_zero
+   from pg_proc p where p.oid='haedo_blog_private.unpublish(uuid,bigint,uuid)'::regprocedure;
+   -- 1의 행 수·분포 쿼리를 다시 실행해 같은지 본다
+   ```
+
+   - 격리 PostgreSQL에서 새 정의의 `md5(prosrc)`는 `bf1f63852836b998dd57a7104349aa95`였다. `accepts_zero`는 `true`, definer·config·acl은 1과 같아야 한다.
+   - 행 수와 분포는 1과 같아야 한다(설치 자체가 다르면 예외로 되돌린다).
+   - 운영에서 실제 철회를 시험 호출하지 않는다. 호출하면 행이 생긴다.
+4. **앱 배포** 뒤, 소유자 기기에서 사진 없는 시험 글로 확인할 것(에이전트 검사로 대신하지 않음): 게시 응답이 끊긴 상황은 만들기 어렵다. 평소 게시 → 철회 → 다시 게시가 그대로 되는지, 철회한 글의 주소가 열리지 않는지만 본다.
+
+### 되돌리기 (소유자 승인 뒤에만)
+
+이전 정의로 바꾸는 문장 하나다. 사용자 데이터를 지우지 않는다. 그동안 생긴 비공개 행(공개된 적 없는 글의 revision 1 행)과 빈 프로필 행은 남긴다. 이전 정의는 이 행을 일반 철회 글의 행처럼 다룬다. 되돌리면 앱은 위 "서버가 이전 정의" 줄대로 동작한다.
+
+```sql
+create or replace function haedo_blog_private.unpublish(p_post_id uuid,p_expected_revision bigint,p_operation_id uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare who uuid:=auth.uid(); h bytea; prior haedo_blog_private.receipts%rowtype; p haedo_blog_private.publications%rowtype; r jsonb;
+begin
+ if who is null then raise exception using errcode='42501',message='life_auth_required'; end if;
+ if p_post_id is null or p_operation_id is null or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740990 then raise exception using errcode='22023',message='life_invalid_request'; end if;
+ h:=sha256(convert_to(jsonb_build_array('unpublish',p_expected_revision)::text,'UTF8'));
+ perform pg_advisory_xact_lock(hashtextextended('blog:'||who::text||':'||p_post_id::text,0));
+ select * into prior from haedo_blog_private.receipts where owner_id=who and post_id=p_post_id and operation_id=p_operation_id;
+ if found then if prior.request_hash<>h then raise exception using errcode='22023',message='life_operation_mismatch'; end if; return prior.result; end if;
+ select * into p from haedo_blog_private.publications where owner_id=who and post_id=p_post_id for update;
+ if not found then return '{"status":"missing"}'::jsonb; end if;
+ if p.revision<>p_expected_revision then return jsonb_build_object('status','conflict','revision',p.revision); end if;
+ update haedo_blog_private.publications set active=false,snapshot=null,media=null,revision=revision+1,updated_at=clock_timestamp() where owner_id=who and post_id=p_post_id;
+ r:=jsonb_build_object('status','stored','revision',p.revision+1);
+ insert into haedo_blog_private.receipts(owner_id,post_id,operation_id,request_hash,result) values(who,p_post_id,p_operation_id,h,r);
+ return r;
+end $$;
+notify pgrst,'reload schema';
+```
+
+- `create or replace`는 권한을 유지한다. 되돌린 뒤 `md5(prosrc)`가 `ec59cc1e58b1f5db02093ec138116744`인지 본다.
+- 이 문장은 `20261017144744_life_blog_originals.sql` 310–327행과 같다(격리 PostgreSQL에서 다시 적용해 같은 해시를 확인했다).
+
+### 확인하지 못한 것
+
+- 이 환경에는 PostgreSQL 16만 있다. SQL 검사는 16.15에서 돌렸다. CI는 17이다.
+- Docker가 없어 `scripts/check-blog-backend.mjs`와 `tests/integrated-release-installation.cjs`는 실행하지 못했다. 뒤의 것은 고정 목록·해시 부분만 따로 계산해 맞췄다.
+- 실제 기기와 실제 끊긴 연결에서의 동작은 확인하지 않았다. 브라우저 검사는 요청을 가로채 끊김을 만들었다.

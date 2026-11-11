@@ -717,6 +717,7 @@ test('an unanswered withdrawal never withdraws a publication another device made
     assert.equal(f.row().publication.active, true, 'the newer publication stays'); assert.equal(f.row().publication.revision, revision);
     assert.equal(f.net.tried('unpublish').length, before, 'the old withdrawal is not sent against the newer publication');
     const state = await f.state(); assert.equal(state.unpublishPending, null); assert.equal(await f.status(), 'public');
+    assert.equal(state.publicationLog.code, 'withdrawal_overtaken', 'the owner asked for a withdrawal and the post is public: said on the post');
   });
 });
 
@@ -946,6 +947,13 @@ test('r2-m3: a publish, withdrawal or publication head read that gets no answer 
     assert.equal(failure.code, 'network_error', 'the same as a lost answer: BlogSync keeps the request as unanswered'); assert.equal(failure.timedOut, true);
     assert.equal(signals.at(-1).aborted, true, 'the request is cancelled where the client allows it');
   }
+  // The Markdown route (Edge function) has its own, longer limit.
+  auth.client.functions = { invoke(name, options) { calls.push({ name }); signals.push(options.signal); return new Promise(() => {}); } };
+  let done = false; const markdown = remote.publish(POST, 1, Core.id(), { documentFormat: 'life-post-md-v1', photoIds: [], author: { name: '', intro: '' }, copies: [] }).catch(error => error).finally(() => { done = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.at(-1).name, 'haedo-blog-publish'); assert.equal(timers.fire(Remote.PUBLICATION_TIMEOUT), 0); assert.equal(done, false);
+  assert.equal(timers.fire(Remote.MARKDOWN_PUBLICATION_TIMEOUT), 1);
+  assert.deepEqual({ code: (await markdown).code, timedOut: (await markdown).timedOut, aborted: signals.at(-1).aborted }, { code: 'network_error', timedOut: true, aborted: true });
   // A document read (sync) is not bounded: a large post on a slow connection is not cut off.
   const before = timers.pending.size; remote.read(POST).catch(() => {}); await new Promise(resolve => setImmediate(resolve));
   assert.equal(timers.pending.size, before);
