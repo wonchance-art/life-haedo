@@ -250,6 +250,22 @@ async function m4() {
     await session.send('Input.imeSetComposition', { text: '가', selectionStart: 1, selectionEnd: 1 }); await frames(page);
     await session.send('Input.insertText', { text: '가' }); await unchanged('an IME composition');
     await area.evaluate(element => { element.setRangeText('X', 0, 3); element.dispatchEvent(new Event('input', { bubbles: true })); }); await unchanged('a script edit');
+    // 2026-11-11 독립 검수: a script that changes the field without any event leaves nothing to undo it at. The next
+    // selection must not be read as offsets into the original while the field holds other text.
+    await area.evaluate(element => { element.setRangeText('스크립트가 끼워 넣은 글 ', 0, 0); element.setSelectionRange(2, 2); });
+    assert.notEqual((await text()).value, display, 'the field really holds other text now');
+    for (let step = 0; step < 4; step++) await page.keyboard.press('Shift+ArrowRight');
+    await unchanged('a script edit without an event, at the next selection');
+    let after = await page.evaluate(() => ({ picked: document.querySelector('#lifeSelectedQuote').textContent, save: !document.querySelector('#lifeSourceExcerptSave').disabled, selection: [document.querySelector('#lifeSourceSelectionText').selectionStart, document.querySelector('#lifeSourceSelectionText').selectionEnd] }));
+    // Whatever is offered now is exactly what the field shows selected in the original (or nothing at all).
+    if (after.save) assert.equal(after.picked, display.slice(after.selection[0], after.selection[1]).replace(/\n/g, '\r\n'), 'the offered passage is the one selected in the original: ' + JSON.stringify(after));
+    else assert.equal(after.selection[0], after.selection[1], 'the selection made in the changed text was dropped: ' + JSON.stringify(after));
+    // The same when the buttons of this panel are used right after such a change.
+    await area.evaluate(element => { element.setRangeText('또 끼워 넣은 글\n', 0, 0); });
+    await page.getByRole('button', { name: '첫 줄 선택', exact: true }).click(); await unchanged('첫 줄 선택 after a script edit');
+    after = await page.evaluate(() => ({ picked: document.querySelector('#lifeSelectedQuote').textContent, selection: [document.querySelector('#lifeSourceSelectionText').selectionStart, document.querySelector('#lifeSourceSelectionText').selectionEnd] }));
+    // (첫 줄 선택 takes the line with its line break, as before.)
+    assert.equal(after.picked, '첫 줄 😀 문장입니다.\r\n', 'the first line of the original, not of the changed text'); assert.deepEqual(after.selection, [0, display.indexOf('\n') + 1]);
     assert.equal(await page.locator('#lifeSourceText').textContent(), raw, 'the original on screen is unchanged');
     // The selection still works after all that, and the saved excerpt is the exact raw range.
     await page.keyboard.press('Control+Home'); for (let step = 0; step < 3; step++) await page.keyboard.press('Shift+ArrowRight');
