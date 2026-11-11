@@ -397,7 +397,9 @@
     // { id, unsettled }: this device sent a publish or withdrawal whose result it does not
     // know (BlogSync publicationStatus "unknown"); the server may differ from what is
     // recorded here, so neither 공개 nor 비공개 is shown until 공개 상태 확인 settles it.
-    // `unapplied`: a publish request the server did not apply is still kept for a retry.
+    // `notice`: what BlogSync says is still unanswered (publicationNotice). `log`: what the
+    // settlement did by itself. A newly opened post starts unread (mount), never from a value
+    // read before it was left: its publication may have changed meanwhile.
     let publicState = null, publicBusy = false, publicError = "";
     const publicTarget = () =>
       mode === "read" ? (doc?.status === "saved" ? doc.id : null) : doc?.replaces?.id || null;
@@ -494,9 +496,20 @@
           : !known ? "공개 여부를 아직 확인하지 못했습니다. 글 공개·보관에서 확인할 수 있습니다."
           : saved ? "공개는 미리보기를 확인한 뒤 따로 선택합니다. 사진은 고른 것만, 촬영·위치 정보를 뺀 사본으로 공개합니다."
             : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
-        // A publish request the server did not apply: nothing became public, and nothing is sent again by itself.
-        if (state === "private" && saved && publicState?.unapplied)
-          visibility.append(el("p", "앞서 보낸 공개 게시 요청은 서버에 반영되지 않았습니다. 공개하려면 다시 게시해 주세요.", "photo-info-note photo-public-unapplied"));
+        // A request of this device that is still unanswered is said for as long as it is kept, next
+        // to either state (never as failed for good: it can still arrive), and so is what the
+        // settlement did by itself (an old withdrawal sent again, a late publication withdrawn).
+        const notes = life.BlogRemote?.publicationNotes || {};
+        if (known && saved && notes[publicState?.notice]) {
+          const said = el("p", notes[publicState.notice], "photo-info-note photo-public-unapplied");
+          said.dataset.notice = publicState.notice;
+          visibility.append(said);
+        }
+        if (known && saved && notes[publicState?.log?.code]) {
+          const done = el("p", notes[publicState.log.code], "photo-info-note photo-public-log");
+          if (Number.isFinite(Date.parse(publicState.log.at))) done.append(" (" + when(publicState.log.at) + ")");
+          visibility.append(done);
+        }
         if (publicError && !known) {
           const failed = el("p", publicError, "photo-info-note photo-public-error");
           failed.setAttribute("role", "alert");
@@ -1195,7 +1208,10 @@
       // An unacknowledged publish or withdrawal: the recorded value may not be the server's.
       if (state.publicationStatus === "unknown") publicState = { id, unsettled: true };
       else if (Object.hasOwn(state, "publication")) {
-        publicState = { id, published: state.publication?.active === true, unapplied: !!state.publishPending };
+        // Older engines report no notice: an unanswered publish request is then named from the request itself.
+        const published = state.publication?.active === true,
+          notice = Object.hasOwn(state, "publicationNotice") ? state.publicationNotice : state.publishPending ? (published ? "update_unapplied" : "publish_unapplied") : null;
+        publicState = { id, published, notice, log: state.publicationLog || null };
         publicError = "";
       }
     }
@@ -2604,6 +2620,8 @@
       { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록", standalone: isolated = false } = {},
     ) {
       if ((reset || postId) && doc) await flush();
+      // The publication shown before this view was left may be out of date: read it again first.
+      publicState = null; publicError = "";
       host = target;
       standalone = isolated;
       feedListener = onFeed;

@@ -43,11 +43,31 @@
   // withdrawal this device sent has no known result, the server may differ from the recorded
   // publication: the post is then neither "public" nor "private" but "unknown" until a server
   // head settles it (settleLocked). A publish request that an exact head showed as not applied
-  // (publishChecked names it) no longer hides the recorded state.
-  function publicationStatus(state) {
+  // yet (publishChecked names it) no longer hides the recorded state; it is still kept and
+  // named by publicationNotice, because a request can arrive after such a check.
+  // publishRevoked: a withdrawal met an unanswered first publication that the server offers no
+  // way to cancel (no publication row to move). For LATE_WINDOW after that withdrawal the
+  // request may plausibly still be on its way, so the post stays "unknown"; the guard itself
+  // stays for as long as that request could be applied and withdraws it when it arrives.
+  const LATE_WINDOW = 2 * 60 * 1000;
+  function publicationStatus(state, at = Date.now()) {
     if (state?.unpublishPending) return 'unknown';
     if (state?.publishPending && state.publishChecked !== state.publishPending.operationId) return 'unknown';
+    if (state?.publishRevoked) { const age = at - Date.parse(state.publishRevoked.at); if (Number.isFinite(age) && age < LATE_WINDOW) return 'unknown'; }
     return state?.publication?.active === true ? 'public' : 'private';
+  }
+  // What a screen says next to a known status, so an unanswered request is never silent:
+  // 'publish_unapplied' (not public; a publish request is not applied yet),
+  // 'update_unapplied' (public; an update is not applied yet, the earlier copy is what is public),
+  // 'late_publish_guarded' (withdrawn; an unanswered publish request is withdrawn if it arrives),
+  // 'copy_unverified' (public; whether the copy is the last reviewed choice could not be told).
+  function publicationNotice(state, at = Date.now()) {
+    const status = publicationStatus(state, at);
+    if (status === 'unknown') return null;
+    if (state?.publishPending) return status === 'public' ? 'update_unapplied' : 'publish_unapplied';
+    if (state?.publishRevoked) return 'late_publish_guarded';
+    if (status === 'public' && state?.publicationDoubt === true) return 'copy_unverified';
+    return null;
   }
   function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
     photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
@@ -99,7 +119,8 @@
     }
     async function getState(ws, id) {
       const c = context(ws, id); guard(c); const state = await readState(c), post = await readPost(c);
-      return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: true, status: statusOf(ws, post, state), publicationStatus: publicationStatus(state) };
+      return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: true, status: statusOf(ws, post, state),
+        publicationStatus: publicationStatus(state, now()), publicationNotice: publicationNotice(state, now()) };
     }
     // ---- documents ----------------------------------------------------------
     function viewMeta(view) { const { type, size, digest, width, height } = view; return { type, size, digest, width, height }; }
@@ -475,63 +496,159 @@
     }
     // ---- publication settlement (2026-11-11) -----------------------------------------------
     // The exact server head decides what this device records about a post's public copy and
-    // about its own unacknowledged publish and withdraw requests. It runs in the post's queue,
-    // so the head it reads is never older than a result this device already recorded.
+    // about its own unanswered publish and withdraw requests. It runs in the post's queue and
+    // under the post's Web Lock (postLock), so the head it reads is never older than a result
+    // this device recorded and no other tab of this browser judges a request that is still
+    // being sent. Rules, with the SQL they rest on (publish/publish_copies, unpublish and the
+    // Markdown commit all check receipts first, then the publication revision):
     // - A head beyond a publish request's publication revision ends that request: it was
-    //   applied (the head is its result) or another publication took its place. A request
-    //   whose post revision moved is kept like any other unapplied one: its explicit retry is
-    //   answered by the server (conflict), as before.
+    //   applied (the head is its result) or can no longer be applied.
     // - A publish request the head shows as not applied is never sent again from here: nothing
     //   becomes public without the owner's action. It stays for an explicit retry of the same
-    //   choice and is marked checked (publishChecked). `replace` drops it for a new explicit
-    //   choice or a withdrawal; the server's publication-revision CAS then refuses whichever
-    //   of the two requests arrives second.
-    // - A withdrawal the head shows as not applied is sent again with its own operation id:
-    //   withdrawing is the safe direction and the server receipt makes it idempotent.
-    // A failed read or resend leaves the state as it was (still "unknown") and throws.
-    async function settleLocked(c, { replace = false } = {}) {
+    //   choice and is marked checked (publishChecked). It may still arrive later, so it is
+    //   never recorded as "not applied" for good.
+    // - `replace` (a new explicit choice or a withdrawal) ends an unanswered publish request
+    //   when the server can make that certain: with a publication row that is not active, one
+    //   withdrawal request moves the publication revision and the old request can only end in
+    //   conflict. With an active publication the row is left alone (withdrawing it would change
+    //   the public address) and with no row at all nothing can be moved: the request is then
+    //   returned as `replaced`, still able to arrive, for the caller to guard against.
+    // - A withdrawal the head shows as not applied is sent again with its own operation id, only
+    //   against the exact publication revision it was made for: withdrawing is the safe
+    //   direction and the server receipt makes it idempotent.
+    // - publishRevoked (see publicationStatus): when exactly that request's copy appears, it is
+    //   withdrawn; any other publication or a newer post revision ends the guard.
+    // A failed read or request leaves the state as it was (still "unknown") and throws.
+    const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
+      selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}) });
+    // The author and photo copies of a public copy, read the way a visitor reads it (no private
+    // session). null: not readable as public now. undefined: this page has no public reader.
+    async function publicFacts(c, publication) {
+      const reader = publicReader || root.HaedoLife?.BlogPublic?.createReader?.({ config: auth.config });
+      if (typeof reader?.read !== 'function') return undefined;
+      try {
+        const post = await reader.read(publication.token); guard(c);
+        return post ? { author: { name: post.snapshot.author.name, intro: post.snapshot.author.intro }, photos: post.snapshot.photos.map(photo => photo.digest) } : null;
+      } catch (error) { guard(c); throw fault(['schema_missing', 'invalid_remote_data', 'request_cancelled'].includes(error?.code) ? error.code : 'network_error'); }
+      finally { if (!publicReader) reader.dispose?.(); }
+    }
+    // Whether a public copy is what one publish request of this device asked for: the same name
+    // and intro and exactly its photo copies. Without a public reader the request's revision is
+    // the only evidence (the caller already matched it).
+    const sameRequest = (facts, request) => facts === undefined || !!facts && canonical(facts.author) === canonical(request.selection.author) &&
+      canonical([...facts.photos].sort()) === canonical((request.copies || []).map(copy => copy.digest).sort()) && facts.photos.length === request.selection.photoIds.length;
+    // A state write that follows a server answer must not be lost to another tab's write of the
+    // same binding (a document upload, a status): read again and apply the same fields.
+    async function patch(c, change) {
+      for (let attempt = 0; ; attempt++) {
+        const latest = await readState(c), changes = typeof change === 'function' ? change(latest) : change;
+        if (!latest || !changes || !Object.keys(changes).length) return latest;
+        try { return await writeState(c, latest, changes); }
+        catch (error) { if (error?.code !== 'blog_state_conflict' || attempt >= 5) throw error; }
+      }
+    }
+    // One post's publish, withdrawal and settlement run one at a time across the tabs of this
+    // browser. Without Web Locks (an older browser, tests) only this page's own queue applies.
+    function postLock(ws, id, task, { ifAvailable = false } = {}) {
+      if (typeof locks?.request !== 'function') return task();
+      let ran = false;
+      return Promise.resolve(locks.request('haedo-blog-publication:' + owner.projectUrl + ':' + owner.userId + ':' + ws + '/' + id, ifAvailable ? { ifAvailable: true } : {}, async lock => {
+        if (!lock) return undefined; ran = true; return task();
+      })).then(result => ran ? result : undefined);
+    }
+    // What the settlement did by itself, kept with the post so it is said on its screens
+    // (publicationLog) and reported to the screen that is open (publication_notice).
+    function logged(code) { return { publicationLog: { code, at: new Date(now()).toISOString() } }; }
+    async function settleLocked(c, { replace = false, sent = null } = {}) {
       let state = await readState(c);
-      if (!state?.remoteId) return state;
-      const changes = {};
+      if (!state?.remoteId) return { state, replaced: null, notes: [], moved: null };
+      const changes = {}, notes = []; let replaced = null, moved = null;
       const differs = (name, value) => { if (canonical(state[name] ?? null) !== canonical(value ?? null)) changes[name] = value ?? null; };
+      // A withdrawal request against the exact revision; a conflict means the head moved meanwhile.
+      const withdraw = async (operationId, expectedRevision) => {
+        if (sent) sent.value = true;
+        try { await remote.unpublish(state.remoteId, expectedRevision, operationId); guard(c); }
+        catch (error) { guard(c); if (error?.code !== 'blog_conflict') throw error; }
+        return remote.read(state.remoteId);
+      };
       let publication = null;
       // Nothing was stored on the server under this identity yet: nothing can be public.
-      if (!(state.remoteRevision > 0)) { differs('publishPending', null); differs('unpublishPending', null); publication = state.publication ?? null; }
+      if (!(state.remoteRevision > 0)) { differs('publishPending', null); differs('unpublishPending', null); differs('publishRevoked', null); publication = state.publication ?? null; }
       else {
         let row = await remote.read(state.remoteId); guard(c);
-        const publishing = state.publishPending, withdrawing = state.unpublishPending;
-        if (publishing) {
-          if (replace || !row || publicRevision(row.publication) > (publishing.expectedPublicRevision || 0)) changes.publishPending = null;
-          else if (state.publishChecked !== publishing.operationId) changes.publishChecked = publishing.operationId;
-        }
+        const publishing = state.publishPending, withdrawing = state.unpublishPending, revoked = state.publishRevoked;
         if (withdrawing) {
-          if (row?.publication?.active && row.publication.revision === withdrawing.expectedRevision) {
-            try { await remote.unpublish(state.remoteId, withdrawing.expectedRevision, withdrawing.operationId); guard(c); }
-            catch (error) { guard(c); if (error?.code !== 'blog_conflict') throw error; }
-            row = await remote.read(state.remoteId); guard(c);
+          // `ending`: this request only moves the revision of a publication that is not active, to
+          // end an unanswered publish request; it is repeated until the revision has moved.
+          const live = !!row?.publication?.active;
+          if (row?.publication && row.publication.revision === withdrawing.expectedRevision && (live || withdrawing.ending)) {
+            row = await withdraw(withdrawing.operationId, withdrawing.expectedRevision); guard(c);
+            // Not silent: a withdrawal sent again long after it was asked is said on the post.
+            if (live && !row?.publication?.active) { notes.push('withdrawal_resent'); Object.assign(changes, logged('withdrawal_resent')); }
           }
           changes.unpublishPending = null;
         }
+        if (publishing) {
+          if (!row || publicRevision(row.publication) > (publishing.expectedPublicRevision || 0)) {
+            changes.publishPending = null;
+            // Two unanswered requests shared this revision: say when the copy is not provably the last choice.
+            if (publishing.contested && row?.publication?.active) changes.publicationDoubt = !sameRequest(await publicFacts(c, row.publication), publishing) || undefined;
+          } else if (replace) { changes.publishPending = null; replaced = descriptor(publishing); }
+          else if (state.publishChecked !== publishing.operationId) changes.publishChecked = publishing.operationId;
+        }
+        if (revoked) {
+          const first = (revoked.expectedPublicRevision || 0) + 1;
+          if (!row || row.revision !== revoked.expectedRevision || state.remoteRevision !== revoked.expectedRevision) changes.publishRevoked = null; // a newer post revision: it can no longer apply
+          else if (!row.publication) { if (replace) { changes.publishRevoked = null; replaced ||= descriptor(revoked); } } // still able to arrive
+          else if (row.publication.active && row.publication.revision === first && sameRequest(await publicFacts(c, row.publication), revoked)) {
+            // The request the owner withdrew arrived afterwards: the withdrawal still stands.
+            const operationId = makeId();
+            state = await writeState(c, state, { ...changes, publishRevoked: null, unpublishPending: { operationId, expectedRevision: first } });
+            for (const name of Object.keys(changes)) delete changes[name];
+            row = await withdraw(operationId, first); guard(c);
+            changes.unpublishPending = null;
+            if (!row?.publication?.active) { notes.push('late_publication_withdrawn'); Object.assign(changes, logged('late_publication_withdrawn')); }
+          } else changes.publishRevoked = null; // a publication row exists now: its revision check refuses that request
+        }
+        // A replaced request that the server can end for certain: the publication is not active,
+        // so moving its revision costs no public address and no visitor anything.
+        if (replaced && row?.publication && !row.publication.active) {
+          const operationId = makeId(), expectedRevision = row.publication.revision;
+          // The replaced request stays recorded until the revision has really moved: if this
+          // request gets no answer, the next settlement repeats it (`ending`) before anything
+          // forgets the request it is meant to end.
+          const keep = {}; for (const name of ['publishPending', 'publishRevoked']) if (Object.hasOwn(changes, name)) { keep[name] = changes[name]; delete changes[name]; }
+          state = await writeState(c, state, { ...changes, unpublishPending: { operationId, expectedRevision, ending: true } });
+          for (const name of Object.keys(changes)) delete changes[name];
+          row = await withdraw(operationId, expectedRevision); guard(c);
+          Object.assign(changes, keep); changes.unpublishPending = null;
+          // `moved`: the revision this request moved, with nothing public before or after.
+          if (row?.publication && publicRevision(row.publication) > expectedRevision) { replaced = null; if (!row.publication.active && row.publication.revision === expectedRevision + 1) moved = { from: expectedRevision, to: row.publication.revision }; }
+        }
         publication = row?.publication ?? null;
+        if (!publication?.active && state.publicationDoubt) changes.publicationDoubt = null;
       }
       differs('publication', publication);
+      if (changes.publicationDoubt === undefined) delete changes.publicationDoubt;
       if (Object.keys(changes).length) state = await writeState(c, state, changes);
-      return state;
+      for (const code of notes) publish$({ type: 'publication_notice', code, workspaceId: c.ws, localPostId: c.id });
+      return { state, replaced, notes, moved };
     }
     // One exact check for a screen's "공개 상태 확인" and before a review compares its preview.
     async function settlePublication(ws, id) {
       try {
-        return await serial(ws, id, async () => {
+        return await postLock(ws, id, () => serial(ws, id, async () => {
           const c = context(ws, id); await verified(c); await settleLocked(c);
           return getState(ws, id);
-        });
+        }));
       } catch (error) { const failure = explain(error); throw failure?.code === 'network_error' ? publicationFault('settle_failed') : failure; }
     }
-    // The cycle's own check: a failure keeps the post "unknown" and the next cycle asks again.
+    // The cycle's own check. It does not wait for another tab that is sending this post's request
+    // (that tab records the result), and a failure keeps the post "unknown" until the next cycle.
     function settleQuiet(ws, id) {
-      return serial(ws, id, async () => { try { await settleLocked(context(ws, id)); } catch (_) { /* Still unsettled. */ } });
+      return postLock(ws, id, () => serial(ws, id, async () => { try { await settleLocked(context(ws, id)); } catch (_) { /* Still unsettled. */ } }), { ifAvailable: true });
     }
-    const unsettled = state => !!state?.unpublishPending || !!state?.publishPending;
+    const unsettled = state => !!state?.unpublishPending || !!state?.publishPending || !!state?.publishRevoked;
     // The server no longer has a post this device received or stored: it was
     // deleted on another device. A clean copy is removed; local changes recreate it.
     async function vanish(ws, id, remoteId) {
@@ -612,13 +729,13 @@
     }
     // ---- explicit deletion -----------------------------------------------------
     async function deletePost(ws, id, { expectedRevision } = {}) {
-      return serial(ws, id, async () => {
+      return postLock(ws, id, () => serial(ws, id, async () => {
         const c = context(ws, id); guard(c);
         const post = await readPost(c);
         if (expectedRevision !== undefined && post.revision !== expectedRevision) throw Object.assign(new Error('글이 바뀌었습니다. 목록을 다시 확인한 뒤 삭제해 주세요.'), { code: 'photo_post_conflict' });
         // A publish or withdrawal without a known result: the server may hold a public copy.
         // Ask it before deleting, so a public post is refused here instead of coming back later.
-        if (publicationStatus(await readState(c)) === 'unknown') {
+        if (publicationStatus(await readState(c), now()) === 'unknown') {
           try { await verified(c); await settleLocked(c); }
           catch (error) {
             if (explain(error)?.code === 'request_cancelled') throw explain(error);
@@ -628,7 +745,7 @@
         const result = await storage.deletePhotoPost(ws, id, post.revision);
         generations.set(key(ws, id), (generations.get(key(ws, id)) || 0) + 1);
         emit(ws, id); kick(0); return result;
-      });
+      }));
     }
     // ---- cycle -------------------------------------------------------------------
     async function snapshot(c, owned = null) {
@@ -755,7 +872,7 @@
               } else if (moved && !unsettled(entry.state)) tasks.push(() => refreshPublication(entry.ws, entry.localPostId, row));
               // An unacknowledged publish or withdrawal is settled against the exact head, once per
               // cycle while its result is unknown and again whenever the listed publication moves.
-              if (unsettled(entry.state) && (moved || publicationStatus(entry.state) === 'unknown')) tasks.push(() => settleQuiet(entry.ws, entry.localPostId));
+              if (unsettled(entry.state) && (moved || publicationStatus(entry.state, now()) === 'unknown')) tasks.push(() => settleQuiet(entry.ws, entry.localPostId));
             }
           }
           for (const [remoteId, entry] of local.byRemote) {
@@ -922,7 +1039,12 @@
     // Per-post publication status ('public' | 'private' | 'unknown') for lists, computed locally.
     async function publicationStatuses(ws) {
       const value = await storage.listBlogSyncStates(ws), states = new Map(value.states.map(entry => [entry.localPostId, entry.state]));
-      return Object.fromEntries(value.posts.map(post => [post.id, publicationStatus(states.get(post.id))]));
+      return Object.fromEntries(value.posts.map(post => [post.id, publicationStatus(states.get(post.id), now())]));
+    }
+    // The same for what a list says next to the status (publicationNotice); posts without one are left out.
+    async function publicationNotices(ws) {
+      const value = await storage.listBlogSyncStates(ws), states = new Map(value.states.map(entry => [entry.localPostId, entry.state]));
+      return Object.fromEntries(value.posts.map(post => [post.id, publicationNotice(states.get(post.id), now())]).filter(([, notice]) => notice));
     }
     // An open editor holds its post: remote changes wait until it is released.
     function holdPost(ws, id) {
@@ -930,22 +1052,45 @@
       return () => { if (released) return; released = true; const count = (holds.get(k) || 1) - 1; if (count > 0) holds.set(k, count); else { holds.delete(k); kick(500); } };
     }
     // ---- publication (explicit only) --------------------------------------------
-    async function finishPublication(c, state, { preservePendingOnConflict = false } = {}) {
+    // `sent` is set once this call hands a request to the network (unconfirmed()).
+    // `contested`: an unanswered earlier request of this device shares this request's publication
+    // revision, so the server applies at most one of the two. When the earlier one arrives first
+    // this explicit choice ends in conflict; it is then sent once more as an update of that copy
+    // (the same public address), so the last reviewed choice is what stays public.
+    async function finishPublication(c, state, { preservePendingOnConflict = false, sent = null, contested = null, again = false } = {}) {
       let result;
-      const copies = state.publishPending.copies?.length ? { copies: state.publishPending.copies } : {};
+      const pending = state.publishPending;
+      const copies = pending.copies?.length ? { copies: pending.copies } : {};
       // Route is part of the durable request, never inferred again from a later
       // local/remote document. Old pending operations retain their RPC receipt.
-      const format = Object.hasOwn(state.publishPending, 'documentFormat') ? { documentFormat: state.publishPending.documentFormat } : {};
-      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, ...copies, ...format, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
+      const format = Object.hasOwn(pending, 'documentFormat') ? { documentFormat: pending.documentFormat } : {};
+      const mine = latest => latest?.publishPending?.operationId === pending.operationId;
+      if (sent) sent.value = true;
+      try { result = await remote.publish(state.remoteId, pending.expectedRevision, pending.operationId, { ...pending.selection, ...copies, ...format, expectedPublicRevision: pending.expectedPublicRevision }); guard(c); }
       catch (error) {
         if (error.code === 'blog_conflict' && !preservePendingOnConflict) {
           const row = await remote.read(state.remoteId); guard(c);
-          await writeState(c, state, { publication: row?.publication || null, publishPending: null });
+          const moved = !!row?.publication?.active && row.revision === pending.expectedRevision && publicRevision(row.publication) === (pending.expectedPublicRevision || 0) + 1;
+          let facts = null;
+          try { if (row?.publication?.active) facts = await publicFacts(c, row.publication); } catch (failure) { if (explain(failure)?.code === 'request_cancelled') throw failure; }
+          const own = !!contested && moved && sameRequest(facts ?? null, contested);
+          if (own && !again) {
+            const next = { ...pending, operationId: makeId(), expectedPublicRevision: publicRevision(row.publication) }; delete next.contested;
+            const renewed = await patch(c, latest => mine(latest) ? { publication: row.publication, publishPending: next, publishChecked: null } : null);
+            if (renewed?.publishPending?.operationId === next.operationId) return finishPublication(c, renewed, { sent, again: true });
+          }
+          await patch(c, latest => ({ publication: row?.publication || null, ...(mine(latest) ? { publishPending: null } : {}) }));
+          // What is public now, so the screen can say it instead of guessing the cause.
+          throw Object.assign(error, { ownRequest: own, publicCopy: row?.publication?.active ? { photos: facts ? facts.photos.length : null } : null });
         }
         throw error;
       }
       const latest = await remote.read(state.remoteId); guard(c);
-      await writeState(c, state, { publication: latest?.publication || { token: result.token, blogToken: result.blogToken, revision: result.revision, active: true }, publishPending: null });
+      const publication = latest?.publication || { token: result.token, blogToken: result.blogToken, revision: result.revision, active: true };
+      // The name and intro this request set for the whole public list, kept with the post on this
+      // device (publicProfile reads it back while nothing is public and the server shows none).
+      const publishedAuthor = { name: pending.selection.author.name, intro: pending.selection.author.intro, at: new Date(now()).toISOString() };
+      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { publishPending: null } : {}) }));
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
@@ -966,20 +1111,25 @@
       return copies;
     }
     // A connection failure while publishing or withdrawing: say what is known instead of the
-    // document-save message. With the request recorded, its result is unknown ("unconfirmed");
-    // without it nothing was sent and the public state did not change ("unsent").
-    async function unconfirmed(ws, id, error, kind) {
+    // document-save message. `sent`: this call handed its request to the network, so its result
+    // is unknown ("unconfirmed"). Otherwise nothing was sent by this call ("unsent"); an earlier
+    // request that is still unanswered is then named separately ("unsent_prior").
+    async function unconfirmed(ws, id, error, kind, sent) {
       const failure = explain(error);
+      // What a conflict found on the server stays with the error across normalization.
+      if (failure && error && Object.hasOwn(error, 'publicCopy')) Object.assign(failure, { ownRequest: error.ownRequest === true, publicCopy: error.publicCopy });
       if (failure?.code !== 'network_error') return failure;
-      let recorded = false;
-      try { const state = await storage.readBlogSyncState(ws, id); recorded = !!(kind === 'publish' ? state?.publishPending : state?.unpublishPending); } catch (_) { /* Unknown: treated as not recorded. */ }
-      return publicationFault(kind + (recorded ? '_unconfirmed' : '_unsent'));
+      if (sent.value) return publicationFault(kind + '_unconfirmed');
+      let prior = false;
+      try { prior = publicationStatus(await storage.readBlogSyncState(ws, id), now()) === 'unknown'; } catch (_) { /* Unknown: treated as none. */ }
+      return publicationFault(kind + (prior ? '_unsent_prior' : '_unsent'));
     }
     async function publish(ws, id, options = {}) {
-      try { return await publishNow(ws, id, options); }
-      catch (error) { throw await unconfirmed(ws, id, error, 'publish'); }
+      const sent = { value: false };
+      try { return await postLock(ws, id, () => publishNow(ws, id, options, sent)); }
+      catch (error) { throw await unconfirmed(ws, id, error, 'publish', sent); }
     }
-    async function publishNow(ws, id, options) {
+    async function publishNow(ws, id, options, sent) {
       const choices = structuredClone(options), c = context(ws, id); await verified(c);
       const initial = await readPost(c);
       if (initial.revision !== choices.expectedLocalRevision) throw fault('local_changed');
@@ -1000,7 +1150,7 @@
         return serial(ws, id, async () => {
           let state = await readState(c); const latest = await readPost(c);
           if (latest.revision !== initial.revision || canonical(state?.publishPending) !== canonical(before.publishPending)) throw fault('local_changed');
-          try { return await finishPublication(c, state, { preservePendingOnConflict: legacyMarkdown(state.publishPending) }); }
+          try { return await finishPublication(c, state, { preservePendingOnConflict: legacyMarkdown(state.publishPending), sent }); }
           catch (error) {
             // Only BlogRemote's exact legacy RPC rejection proves that receipt
             // replay found no completed operation and the transaction rolled back.
@@ -1014,16 +1164,24 @@
             // order and immutable copies; only the durable transport is repaired.
             state = await writeState(c, state, { publishPending: { ...pending, documentFormat: 'life-post-md-v1' } },
               { expectedLocalRevision: initial.revision, isCurrent: () => current(c) });
-            return finishPublication(c, state);
+            return finishPublication(c, state, { sent });
           }
         });
       }
       // A different choice (other photos or name, or a newer saved revision) than the
-      // unacknowledged request, or a withdrawal without a known result (2026-11-11): the exact
-      // server head settles them first. An applied request becomes the recorded publication,
-      // which the reviewed revision below is then compared with; one not applied is replaced by
-      // this new explicit choice instead of blocking it.
-      if (before?.publishPending || before?.unpublishPending) before = await serial(ws, id, () => settleLocked(c, { replace: true }));
+      // unanswered request, a withdrawal without a known result, or a guarded request
+      // (2026-11-11): the exact server head settles them first. An applied request becomes the
+      // recorded publication, which the reviewed revision below is then compared with. One the
+      // server could end for certain is gone. One that can still arrive (`contested`) shares the
+      // publication revision of the new request, so the server applies at most one of the two;
+      // finishPublication handles the case that the old one wins.
+      let contested = null;
+      if (unsettled(before)) {
+        const settled = await serial(ws, id, () => settleLocked(c, { replace: true })); before = settled.state; contested = settled.replaced;
+        // Ending the old request moved the publication revision without changing what is public
+        // (nothing was, nothing is): the preview reviewed against the earlier revision still holds.
+        if (settled.moved && choices.expectedPublicRevision === settled.moved.from) choices.expectedPublicRevision = settled.moved.to;
+      }
       if (choices.expectedRemoteRevision !== undefined && choices.expectedRemoteRevision !== (before?.remoteRevision || 0) || choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (before?.publication?.revision || 0)) throw fault('local_changed');
       const copies = await publicCopies(c, initial, selection.photoIds, choices.copies);
       await blog.publicSnapshot(initial, { ...selection, copies: copies.map(copyMeta) }); guard(c);
@@ -1043,39 +1201,55 @@
         }
         if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
         if (usable(state.publishPending) && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
+        // The earlier request can only contest a request for the same post and publication revision.
+        if (contested && (contested.expectedRevision !== state.remoteRevision || contested.expectedPublicRevision !== (state.publication?.revision || 0))) contested = null;
         if (!usable(state.publishPending)) {
           for (const copy of copies) { await remote.uploadPublicCopy(state.remoteId, copyMeta(copy), copy.blob); guard(c); }
           state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection,
             ...(latest.format === 'life-post-md-v1' ? { documentFormat: latest.format } : {}),
-            ...(copies.length ? { copies: copies.map(copyMeta) } : {}) } });
+            ...(copies.length ? { copies: copies.map(copyMeta) } : {}), ...(contested ? { contested: true } : {}) } });
         }
-        return finishPublication(c, state);
+        return finishPublication(c, state, { sent, contested });
       });
     }
     async function unpublish(ws, id, options = {}) {
-      try { return await unpublishNow(ws, id, options); }
-      catch (error) { throw await unconfirmed(ws, id, error, 'unpublish'); }
+      const sent = { value: false };
+      try { return await postLock(ws, id, () => unpublishNow(ws, id, options, sent)); }
+      catch (error) { throw await unconfirmed(ws, id, error, 'unpublish', sent); }
     }
-    async function unpublishNow(ws, id, options) {
+    async function unpublishNow(ws, id, options, sent) {
       const expected = options.expectedPublicRevision;
       return serial(ws, id, async () => {
         const c = context(ws, id); await verified(c);
         // The server head says what there is to withdraw (2026-11-11): this device may not know a
-        // publication made by its own unacknowledged request or by another device. An earlier
-        // withdrawal without a known result is finished here; a publish request not yet applied
-        // is dropped, since withdrawing is the owner's later choice.
-        let state = await settleLocked(c, { replace: true });
-        if (!state?.publication?.active) return { status: state?.publication ? 'unpublished' : 'not_published', revision: publicRevision(state?.publication) };
+        // publication made by its own unanswered request or by another device. An earlier
+        // withdrawal without a known result is finished here. A publish request without a known
+        // result must not publish after this withdrawal: settleLocked ends it where the server
+        // can (moving the publication revision); what is still able to arrive is withdrawn below
+        // together with the public copy, or guarded when there is nothing on the server to move.
+        const settled = await settleLocked(c, { replace: true, sent }); let state = settled.state;
+        if (!state?.publication?.active) {
+          if (settled.replaced && state) {
+            // No publication row exists, so no request can end the unanswered one. The withdrawal
+            // is kept as a guard: if that request arrives, its copy is withdrawn (settleLocked).
+            await patch(c, { publishRevoked: { ...settled.replaced, at: new Date(now()).toISOString() }, publicationLog: null });
+            return { status: 'not_published', revision: 0, guarded: true };
+          }
+          return { status: state?.publication ? 'unpublished' : 'not_published', revision: publicRevision(state?.publication) };
+        }
         if (expected !== undefined && state.publication.revision !== expected) throw fault('local_changed');
-        state = await writeState(c, state, { unpublishPending: { operationId: makeId(), expectedRevision: state.publication.revision } });
+        const pending = { operationId: makeId(), expectedRevision: state.publication.revision };
+        state = await writeState(c, state, { unpublishPending: pending });
+        const mine = latest => latest?.unpublishPending?.operationId === pending.operationId;
         let result;
-        try { result = await remote.unpublish(state.remoteId, state.unpublishPending.expectedRevision, state.unpublishPending.operationId); guard(c); }
+        sent.value = true;
+        try { result = await remote.unpublish(state.remoteId, pending.expectedRevision, pending.operationId); guard(c); }
         catch (error) {
-          if (error.code === 'blog_conflict') { const row = await remote.read(state.remoteId); guard(c); await writeState(c, state, { publication: row?.publication || null, unpublishPending: null }); }
+          if (error.code === 'blog_conflict') { const row = await remote.read(state.remoteId); guard(c); await patch(c, latest => ({ publication: row?.publication || null, ...(mine(latest) ? { unpublishPending: null } : {}) })); }
           throw error;
         }
         const latest = await remote.read(state.remoteId); guard(c);
-        await writeState(c, state, { publication: latest?.publication || { ...state.publication, active: false, revision: result.revision }, unpublishPending: null });
+        await patch(c, stored => ({ publication: latest?.publication || { ...state.publication, active: false, revision: result.revision }, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { unpublishPending: null } : {}) }));
         if (latest?.publication?.active || latest?.publication?.revision !== result.revision) throw fault('blog_conflict');
         return result;
       });
@@ -1092,7 +1266,7 @@
         const entry = local.byRemote.get(row.id);
         if (!entry || entry.state.remoteRevision !== row.revision) continue;
         const moved = canonical(entry.state.publication ?? null) !== canonical(row.publication ?? null);
-        if (unsettled(entry.state)) { if (moved || publicationStatus(entry.state) === 'unknown') tasks.push(() => settleQuiet(entry.ws, entry.localPostId)); }
+        if (unsettled(entry.state)) { if (moved || publicationStatus(entry.state, now()) === 'unknown') tasks.push(() => settleQuiet(entry.ws, entry.localPostId)); }
         else if (moved) tasks.push(() => refreshPublication(entry.ws, entry.localPostId, row));
       }
       if (tasks.length) { await pool(tasks, receiveConcurrency); guard(c); local = await snapshot(c); }
@@ -1114,7 +1288,18 @@
       const c = context(ws, 'profile'); await verified(c);
       const rows = await remote.syncList(); guard(c);
       const shown = rows.filter(row => row.publication?.active);
-      if (!shown.length) return { visible: false, author: { name: '', intro: '' }, posts: 0 };
+      if (!shown.length) {
+        // Nothing is public, so the server returns no name or intro. The last values this device
+        // published (account-scoped local bindings, never another account's) are offered instead
+        // and marked as such; without them the review starts blank as before.
+        let last = null;
+        for (const entry of (await snapshot(c)).byRemote.values()) {
+          const value = entry.state.publishedAuthor;
+          if (value && typeof value.name === 'string' && typeof value.intro === 'string' && (!last || String(value.at) > String(last.at))) last = value;
+        }
+        guard(c);
+        return { visible: false, author: { name: last?.name || '', intro: last?.intro || '' }, posts: 0, ...(last && (last.name || last.intro) ? { remembered: true } : {}) };
+      }
       // The same anonymous reading a visitor uses: the private session is never attached to it.
       const reader = publicReader || root.HaedoLife?.BlogPublic?.createReader?.({ config: auth.config });
       if (typeof reader?.list !== 'function') throw fault('schema_missing');
@@ -1124,12 +1309,12 @@
       } catch (error) { guard(c); throw fault(['schema_missing', 'invalid_remote_data', 'request_cancelled'].includes(error?.code) ? error.code : 'network_error'); }
       finally { if (!publicReader) reader.dispose?.(); }
     }
-    const api = Object.freeze({ getState, statuses, publicationStatuses, settlePublication, publicProfile, getStatus, saveDefault, save, connect: save, sync: save, publish, unpublish, deletePost, catalog,
+    const api = Object.freeze({ getState, statuses, publicationStatuses, publicationNotices, settlePublication, publicProfile, getStatus, saveDefault, save, connect: save, sync: save, publish, unpublish, deletePost, catalog,
       syncNow, start, stop, noteLocalDraftSaved, holdPost,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; stop(); disposed = true; live.delete(api); listeners.clear(); remote.dispose?.(); } });
     if (autoSync) { live.add(api); liveStorage.set(api, storage); start(); }
     return api;
   }
-  return Object.freeze({ create, noteLocalDraftSaved, forStorage, publicationStatus, CONFLICT_PREFIX });
+  return Object.freeze({ create, noteLocalDraftSaved, forStorage, publicationStatus, publicationNotice, LATE_WINDOW, CONFLICT_PREFIX });
 });

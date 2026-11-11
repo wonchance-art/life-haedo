@@ -25,16 +25,31 @@
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   // Connection failures of publishing, withdrawing and the publication check (2026-11-11). The
   // code stays network_error; the text does not borrow the document-save message, because a
-  // publish request is never sent again automatically. "unsent": nothing was recorded or sent.
-  // "unconfirmed": the request is recorded and its result is unknown. Only a recorded
+  // publish request is never sent again automatically. "unsent": this attempt sent nothing.
+  // "unconfirmed": this attempt's request went out and its result is unknown. "unsent_prior":
+  // this attempt sent nothing while an earlier request is still unanswered. Only a recorded
   // withdrawal is sent again by itself (BlogSync settles it on the next cycle).
   const publicationMessages = {
     publish_unsent: '공개 게시 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 게시해 주세요.',
     publish_unconfirmed: '공개 게시 결과를 받지 못했습니다. 서버에는 반영됐을 수 있습니다. 공개 상태를 확인하거나 같은 내용으로 다시 게시해 주세요.',
     unpublish_unsent: '공개 철회 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 철회해 주세요.',
     unpublish_unconfirmed: '공개 철회 결과를 받지 못했습니다. 연결되면 철회 요청을 다시 보냅니다. 그때까지 공개 상태일 수 있습니다.',
+    // This attempt sent nothing; an earlier request of this device is still unanswered.
+    publish_unsent_prior: '이번 공개 게시 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
+    unpublish_unsent_prior: '이번 공개 철회 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
     settle_failed: '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.'
   };
+  // What a screen says next to a known public state while a request of this device is still
+  // unanswered (BlogSync publicationNotice), and what the settlement did by itself
+  // (publicationLog). None says a request failed for good: it can still arrive.
+  const publicationNotes = Object.freeze({
+    update_unapplied: '앞서 보낸 공개 갱신은 아직 반영되지 않았습니다. 이전 공개본이 그대로 공개 중입니다. 늦게 반영될 수 있으니, 바꾸려면 미리보기를 갱신해 다시 게시해 주세요.',
+    publish_unapplied: '앞서 보낸 공개 게시 요청은 아직 반영되지 않았습니다. 늦게 반영될 수 있습니다. 공개하려면 다시 게시해 주세요.',
+    late_publish_guarded: '앞서 보낸 공개 게시 요청의 결과를 받지 못한 채 철회했습니다. 그 요청이 늦게 반영되면 이 기기가 바로 철회합니다.',
+    copy_unverified: '공개 중인 사본이 마지막으로 검토한 내용인지 확인하지 못했습니다. 미리보기를 갱신해 다시 게시하면 그 내용으로 바뀝니다.',
+    withdrawal_resent: '받지 못했던 철회 요청을 이 기기가 다시 보내 공개를 철회했습니다.',
+    late_publication_withdrawn: '철회한 뒤 늦게 반영된 공개 게시를 이 기기가 철회했습니다.'
+  });
   const publicationFault = kind => Object.assign(new Error(publicationMessages[kind] || publicationMessages.settle_failed), { code: 'network_error' });
   const id = value => typeof value === 'string' && UUID.test(value);
   const rev = value => Number.isSafeInteger(value) && value >= 0;
@@ -321,11 +336,12 @@
     async function unpublish(postId, expectedRevision, operationId) {
       identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1) throw fault('invalid_request');
       const result = await rpc('life_blog_unpublish', { p_post_id: postId, p_expected_revision: expectedRevision, p_operation_id: operationId }, { commit: true });
-      if (!['unpublished', 'stored'].includes(result?.status) || !rev(result.revision)) { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
+      // 'missing': the post has no publication row (never published). Like a conflict, the caller reads the head again.
+      if (!['unpublished', 'stored'].includes(result?.status) || !rev(result.revision)) { if (['conflict', 'missing'].includes(result?.status)) throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       return result;
     }
     return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
-  return Object.freeze({ create, clean, fault, publicationFault, checkViews });
+  return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, checkViews });
 });

@@ -11,7 +11,12 @@
     let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null, expectedInitialRevision = null, syncStates = {};
     // Publication of each post as this device knows it ('public' | 'private' | 'unknown'), read
     // locally from BlogSync. `panelPublic` redraws an open review's own status line.
-    let publicStates = {}, panelPublic = null, refusedDelete = false, openDialog = null;
+    let publicStates = {}, publicNotices = {}, panelPublic = null, refusedDelete = false, openDialog = null;
+    const readPublic = async () => {
+      const states = blogSync?.publicationStatuses ? await blogSync.publicationStatuses(workspaceId) : {};
+      const notices = blogSync?.publicationNotices ? await blogSync.publicationNotices(workspaceId) : {};
+      publicStates = states; publicNotices = notices;
+    };
     const valid = token => !disposed && isCurrent() && (token == null || token === epoch) && !!host?.isConnected;
     const announce = message => { if (valid()) status.textContent = message; };
     async function navigate(fn) { navigating = true; try { return await fn(); } finally { navigating = false; } }
@@ -71,7 +76,7 @@
       }
       rows.sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0) || (a.kind + a.id).localeCompare(b.kind + b.id));
       try { syncStates = blogSync?.statuses ? await blogSync.statuses(workspaceId) : {}; } catch (_) { syncStates = {}; }
-      try { publicStates = blogSync?.publicationStatuses ? await blogSync.publicationStatuses(workspaceId) : {}; } catch (_) { publicStates = {}; }
+      try { await readPublic(); } catch (_) { publicStates = {}; publicNotices = {}; }
       if (!valid(token)) return;
       list.dataset.state = failed.length ? 'partial' : 'ready'; await renderRows();
       if (!valid(token)) return;
@@ -124,13 +129,21 @@
     }
     // ---- publication in the list (2026-11-11) ------------------------------------------
     const publicLabels = { public: '공개 중', unknown: '공개 확인 못 함' };
+    // An unanswered request is named next to the status for as long as it is kept (never
+    // silently): short in the list, in full in the review and 글 정보. None of these says the
+    // request failed for good, because it can still arrive.
+    const noticeLabels = { update_unapplied: '앞서 보낸 갱신 미반영', publish_unapplied: '앞서 보낸 게시 미반영', late_publish_guarded: '늦게 반영되는 게시는 철회', copy_unverified: '공개본 확인 필요' };
+    const noticeTexts = life.BlogRemote?.publicationNotes || {};
+    const logTexts = { withdrawal_resent: noticeTexts.withdrawal_resent, late_publication_withdrawn: noticeTexts.late_publication_withdrawn };
+    const logText = log => logTexts[log?.code] ? logTexts[log.code] + (Number.isFinite(Date.parse(log.at)) ? ' (' + new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.at)) + ')' : '') : '';
     const postLabel = row => row.title?.trim() || '제목 없는 글';
     function showPublicStates() {
       if (!list) return;
       list.querySelectorAll('[data-public-label]').forEach(node => {
-        const value = publicStates[node.dataset.publicLabel] || 'private';
-        if (node.dataset.state === value) return;
-        node.dataset.state = value; node.textContent = publicLabels[value] ? ' · ' + publicLabels[value] : '';
+        const value = publicStates[node.dataset.publicLabel] || 'private', notice = publicNotices[node.dataset.publicLabel] || '';
+        if (node.dataset.state === value && (node.dataset.notice || '') === notice) return;
+        node.dataset.state = value; node.dataset.notice = notice;
+        node.textContent = [publicLabels[value], noticeLabels[notice]].filter(Boolean).map(text => ' · ' + text).join('');
       });
       list.querySelectorAll('[data-public-actions]').forEach(node => {
         const id = node.dataset.publicActions, value = publicStates[id] || 'private';
@@ -149,7 +162,7 @@
     }
     async function refreshPublic() {
       const token = epoch;
-      try { publicStates = blogSync?.publicationStatuses ? await blogSync.publicationStatuses(workspaceId) : {}; } catch (_) { return; }
+      try { await readPublic(); } catch (_) { return; }
       if (valid(token)) showPublicStates();
     }
     // Focus after an action redrew the list: the same post if it is still listed, else the list's own controls.
@@ -206,7 +219,7 @@
       if (!valid()) return;
       if (preview?.doc.id === row.id) clearPreview();
       await refreshPublic(); if (!valid()) return; focusPost(row.id);
-      announce(outcome?.status === 'not_published' ? '이 글은 공개 중이 아닙니다.' : '공개 철회를 확인했습니다. 글은 그대로 있습니다.');
+      announce(outcome?.guarded ? '지금 공개 중이 아닙니다. ' + noticeTexts.late_publish_guarded : outcome?.status === 'not_published' ? '이 글은 공개 중이 아닙니다.' : '공개 철회를 확인했습니다. 글은 그대로 있습니다.');
     }
     // Hiding only removes a post from the lists. A public post stays public, so the owner is
     // told and chooses; nothing is withdrawn or kept public silently.
@@ -359,7 +372,11 @@
             panelState = state; showCurrent(); await refreshPublic();
             announce(state?.publicationStatus === 'public' ? '이 글은 공개 중입니다. 공개 미리보기를 갱신하면 현재 공개본을 기준으로 다시 게시할 수 있습니다.' : state?.publicationStatus === 'unknown' ? '공개 상태를 확인하지 못했습니다.' : '이 글은 공개 중이 아닙니다.');
           }));
-        } else if (value === 'private' && panelState?.publishPending) currentLine.append(document.createTextNode(' · 앞서 보낸 게시 요청은 서버에 반영되지 않았습니다.'));
+        }
+        const notice = panelState?.publicationNotice || (value === 'private' && panelState?.publishPending ? 'publish_unapplied' : value === 'public' && panelState?.publishPending ? 'update_unapplied' : '');
+        currentLine.dataset.notice = notice || '';
+        if (noticeTexts[notice]) currentLine.append(el('span', ' · ' + noticeTexts[notice], 'blog-manager-current-notice'));
+        if (logText(panelState?.publicationLog)) currentLine.append(el('span', ' · ' + logText(panelState.publicationLog), 'blog-manager-current-log'));
         if (had) (currentLine.querySelector('button,a') || panel.querySelector('input'))?.focus({ preventScroll: true });
       };
       const syncPanel = async () => {
@@ -373,17 +390,24 @@
       const introLabel = el('label', '공개 소개'), intro = el('textarea'); intro.maxLength = 500; intro.rows = 2; intro.setAttribute('aria-label', '공개 소개'); introLabel.append(intro); panel.append(introLabel);
       // The review starts from the current values, so an update does not blank them.
       const profileNote = el('p', '', 'life-meta blog-manager-profile'); panel.append(profileNote);
+      // A value the owner typed in this review is never replaced by a later read.
+      const typed = new Set();
+      author.addEventListener('input', () => typed.add(author)); intro.addEventListener('input', () => typed.add(intro));
       const showProfile = fill => {
-        if (fill && profile) { author.value = profile.author.name; intro.value = profile.author.intro; }
-        profileNote.dataset.state = profileFailed ? 'failed' : profile ? 'ready' : 'unavailable';
+        if (fill && profile) { if (!typed.has(author)) author.value = profile.author.name; if (!typed.has(intro)) intro.value = profile.author.intro; }
+        profileNote.dataset.state = profileFailed ? 'failed' : profile?.remembered ? 'remembered' : profile ? 'ready' : 'unavailable';
         profileNote.replaceChildren(document.createTextNode('공개 이름과 소개는 이 글에만 쓰이지 않습니다. 공개 글 목록 맨 위에 표시되며, 여기서 바꾸면 공개한 모든 글의 목록에서 함께 바뀝니다.' +
-          (profile?.visible ? ` 지금 공개 글 ${profile.posts}개의 목록에 표시 중인 값을 채웠습니다.` : '')));
+          (profile?.visible ? ` 지금 공개 글 ${profile.posts}개의 목록에 표시 중인 값을 채웠습니다.`
+            // Nothing is public, so the server shows no name or intro to read back.
+            : profile?.remembered ? ' 지금 공개 중인 글이 없어 서버의 값을 읽을 수 없습니다. 이 기기에서 마지막으로 게시한 이름과 소개를 채웠으니 확인해 주세요.' : '')));
         if (profileFailed) {
           const failed = el('span', ' 현재 공개 이름과 소개를 읽지 못했습니다. 읽기 전에는 게시하지 않습니다(빈칸으로 게시하면 목록의 이름과 소개가 지워집니다). ', 'blog-manager-profile-error'); failed.setAttribute('role', 'alert');
           profileNote.append(failed, button('공개 이름·소개 다시 읽기', async () => {
             await readProfile(); if (!valid() || preview?.doc.id !== doc.id) return;
+            const kept = typed.size > 0;
             showProfile(!!profile); if (profile) invalidate();
-            announce(profile ? '현재 공개 이름과 소개를 읽었습니다. 미리보기를 갱신해 확인해 주세요.' : '공개 이름과 소개를 읽지 못했습니다. 연결을 확인한 뒤 다시 읽어 주세요.');
+            announce(!profile ? '공개 이름과 소개를 읽지 못했습니다. 연결을 확인한 뒤 다시 읽어 주세요.'
+              : kept ? '현재 공개 이름과 소개를 읽었습니다. 직접 입력한 칸은 그대로 두었습니다. 미리보기를 갱신해 확인해 주세요.' : '현재 공개 이름과 소개를 읽었습니다. 미리보기를 갱신해 확인해 주세요.');
           }));
         }
       };
@@ -465,6 +489,15 @@
             preview.snapshot = null; changed = true; consent.checked = false;
             throw new Error('글이나 공개 상태가 이 미리보기와 달라졌습니다. 공개 미리보기를 갱신해 현재 상태를 확인한 뒤 다시 게시해 주세요.');
           }
+          if (failure?.code === 'blog_conflict') {
+            // This request was not applied: what is public is not this preview. The preview and the
+            // consent end here, and the cause and the public copy are said as the server shows them.
+            preview.snapshot = null; changed = true; consent.checked = false;
+            result.replaceChildren(meta('이 미리보기는 게시되지 않았습니다. 미리보기를 갱신해 현재 공개 상태를 확인해 주세요.'));
+            const copy = failure.publicCopy, photos = copy && Number.isSafeInteger(copy.photos) ? ` 지금 공개 중인 사본에는 사진이 ${copy.photos}장 있습니다.` : copy ? ' 다른 내용이 공개 중입니다.' : ' 지금 공개 중인 사본은 없습니다.';
+            throw new Error((failure.ownRequest ? '이 기기에서 앞서 보낸 게시 요청이 먼저 반영되어 이 게시는 적용하지 못했습니다.' : '공개 내용이 그사이 다른 요청으로 바뀌어 이 게시는 적용하지 못했습니다.') + photos +
+              ' 미리보기를 갱신한 뒤 다시 게시하거나 철회해 주세요.');
+          }
           throw failure;
         }
         if (!valid()) return;
@@ -503,6 +536,7 @@
           preview.remoteRevision = remoteRevision; preview.publicRevision = publicRevision; panelState = state; showCurrent();
         } catch (_) { if (!valid()) return; }
         await refreshPublic(); if (!valid()) return;
+        if (outcome?.guarded) { result.replaceChildren(meta('지금 공개 중이 아닙니다. ' + noticeTexts.late_publish_guarded)); announce('지금 공개 중이 아닙니다. 앞서 보낸 게시 요청이 늦게 반영되면 이 기기가 바로 철회합니다.'); return; }
         if (outcome?.status === 'not_published') { result.replaceChildren(meta('이 글은 공개 중이 아닙니다. 철회할 공개본이 없습니다.')); announce('이 글은 공개 중이 아닙니다.'); return; }
         result.replaceChildren(meta('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.')); announce('공개 철회를 확인했습니다.');
       }));
@@ -566,6 +600,12 @@
         if (!valid()) return;
         if (event?.type === 'status') { if (!event.status?.running) void refreshSync(); }
         else if (event?.type === 'delete_refused') { if (event.workspaceId === workspaceId) refusedDelete = true; }
+        else if (event?.type === 'publication_notice') {
+          if (event.workspaceId !== workspaceId || !logTexts[event.code]) return;
+          const row = rows.find(item => item.kind === 'photo' && item.id === event.localPostId);
+          if (!busy) announce((row ? `“${postLabel(row)}”: ` : '') + logTexts[event.code]);
+          void refreshPublic();
+        }
         // One post's connection state changed (a settled publication included).
         else if (event?.workspaceId === workspaceId && event.localPostId) void refreshPublic();
       }));
