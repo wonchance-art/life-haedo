@@ -389,6 +389,20 @@ async function main() {
       bundle = (await preserved(f.page, f, 3)).bundle;
       assert.equal(bundle.sources.find(source => source.id === f.sourceId).title, '내가 바꾼 제목');
       await f.context.close();
+      // The save on top of the latest version cannot finish (the body is blank): back in the editor the title field
+      // holds the title as it is now, so fixing the body and saving does not put the earlier title back either.
+      f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, '   ');
+      await R.addVersion(f.page, f.sourceId, remote, elsewhere);
+      await f.page.locator('#lifeSourceEditSave').click(); await f.page.locator('#lifeSourceEditBase').waitFor();
+      await f.page.locator('#lifeSourceEditRebase').click(); await f.page.locator('#lifeSourceEditText').waitFor(); await f.page.locator('#lifeSourceEditError:not([hidden])').waitFor();
+      assert.match((await editorState(f.page)).error, /보관할 본문을 입력해 주세요/);
+      assert.equal(await f.page.locator('#lifeSourceEditTitle').inputValue(), elsewhere, 'the editor shows the title as it is now');
+      await f.page.locator('#lifeSourceEditText').fill(typed);
+      await f.page.locator('#lifeSourceEditSave').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      bundle = (await preserved(f.page, f, 3)).bundle;
+      assert.equal(bundle.sources.find(source => source.id === f.sourceId).title, elsewhere);
+      await f.context.close();
     });
 
     await S.check('이 버전으로 복원 still saves without any typing, and an unchanged 저장 makes no version', async () => {

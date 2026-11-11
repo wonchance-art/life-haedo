@@ -179,6 +179,24 @@ async function main() {
       await f.context.close();
     });
 
+    // A touch tap in Chromium keeps the page selection through the click (measured). Some browsers drop it when a
+    // button is pressed; that is simulated here by clearing it between the press and the click. Not a real iOS check.
+    await S.check('touch tap, also when the selection is gone by the time of the click (simulated): no jump to the panel, the same notice', async () => {
+      for (const cleared of [false, true]) {
+        const item = cases[8], f = await fixture(item.raw, { width: 390, height: 844, touch: true });
+        const box = await showBlock(f.page, item.block);
+        await dragSelect(f.page, await phraseEnds(f.page, item.block, item.pick));
+        if (cleared) await f.page.evaluate(() => document.querySelector('#lifeExcerptToggle').addEventListener('mousedown', () => getSelection().removeAllRanges(), { once: true }));
+        const button = await R.rect(f.page, '#lifeExcerptToggle');
+        await f.page.touchscreen.tap(button.left + button.width / 2, button.top + button.height / 2); await frames(f.page);
+        const state = await view(f.page);
+        assert.equal(state.panel, false, 'cleared=' + cleared + ': the excerpt panel does not open'); assert.equal(state.mode, 'raw'); assert.equal(state.notice, NOTICE); assert.equal(state.save, false);
+        assert(Math.abs((await rawTop(f.page, item.rawStart)).top - box.top) <= 12, 'cleared=' + cleared + ': the paragraph stays at its height');
+        assert.deepEqual(await records(f.page), []);
+        await f.context.close();
+      }
+    });
+
     await S.check('with nothing picked the button behaves as before: original text and the panel', async () => {
       const f = await fixture(cases[8].raw);
       await showBlock(f.page, cases[8].block);
