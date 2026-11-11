@@ -4965,7 +4965,21 @@
       keyboard.id = 'lifeKeyboardSelection';
       keyboard.hidden = true;
       const keyboardReader = field('키보드로 원문 구절 선택', 'textarea', 'lifeSourceSelectionText', version.contentText);
-      keyboardReader.input.readOnly = true;
+      // Not readonly: a readonly textarea has no caret, so Shift + arrows had nothing to start a selection from.
+      // Its text must never change instead. Every edit is refused before it happens (typing, Enter, delete, paste,
+      // cut, drop); what cannot be refused (an IME composition, text set by a script) is put back at once.
+      const keyboardText = keyboardReader.input.value;
+      keyboardReader.input.setAttribute('aria-readonly', 'true');
+      keyboardReader.input.setAttribute('inputmode', 'none'); // selecting needs no on-screen keyboard
+      keyboardReader.input.autocomplete = 'off'; keyboardReader.input.setAttribute('autocorrect', 'off'); keyboardReader.input.setAttribute('autocapitalize', 'off');
+      const keepKeyboardText = () => {
+        const input = keyboardReader.input;
+        if (input.value === keyboardText) return;
+        const caret = Math.min(input.selectionStart ?? 0, keyboardText.length);
+        input.value = keyboardText; input.setSelectionRange(caret, caret);
+      };
+      for (const name of ['beforeinput', 'paste', 'cut', 'drop']) keyboardReader.input.addEventListener(name, event => event.preventDefault());
+      for (const name of ['input', 'compositionend', 'change']) keyboardReader.input.addEventListener(name, keepKeyboardText);
       keyboardReader.input.spellcheck = false;
       keyboardReader.input.className = 'life-keyboard-text';
       const captureKeyboard = () => {

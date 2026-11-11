@@ -214,12 +214,59 @@ async function m3() {
   });
 }
 
+async function m4() {
+  await S.check('m4 키보드로 구절 선택: Shift + arrows select an exact passage, and nothing can change the text', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const raw = '첫 줄 😀 문장입니다.\r\n둘째 줄입니다.\r\n\r\n셋째 문단.';
+    const ids = await R.seed(page, [{ title: '키보드 선택', text: raw }]);
+    await R.openSource(page, ids[0].versionId);
+    await R.pressAt(page, '#lifeExcerptToggle'); await page.locator('#lifeExcerptPanel').waitFor();
+    await page.getByRole('button', { name: '키보드로 구절 선택', exact: true }).click();
+    const area = page.locator('#lifeSourceSelectionText'), display = raw.replace(/\r\n/g, '\n');
+    const text = () => area.evaluate(element => ({ value: element.value, readOnly: element.readOnly, aria: element.getAttribute('aria-readonly'), focused: document.activeElement === element, selection: [element.selectionStart, element.selectionEnd] }));
+    assert.deepEqual(await text(), { value: display, readOnly: false, aria: 'true', focused: true, selection: [0, 0] });
+    // Shift + arrows, as the help line says: six characters (the emoji is two UTF-16 units, one arrow press).
+    for (let step = 0; step < 6; step++) await page.keyboard.press('Shift+ArrowRight');
+    assert.deepEqual((await text()).selection, [0, 7]);
+    assert.equal(await page.locator('#lifeSelectedQuote').textContent(), '첫 줄 😀 ');
+    // Across the CRLF line break with Shift+ArrowDown and End: display offsets map back to the exact raw range.
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('Shift+ArrowDown'); await page.keyboard.press('Shift+End');
+    const picked = await page.locator('#lifeSelectedQuote').textContent(), selection = (await text()).selection;
+    assert.equal(picked, display.slice(selection[0], selection[1]).replace(/\n/g, '\r\n')); assert(picked.includes('\r\n둘째 줄입니다.'), JSON.stringify(picked));
+    // Nothing changes the text: typing, Enter, deleting, cutting, pasted or inserted text, an IME composition, a script.
+    const session = await context.newCDPSession(page);
+    const unchanged = async label => { await frames(page); assert.equal((await text()).value, display, label + ': the text is unchanged'); };
+    await page.keyboard.type('abc'); await unchanged('typing');
+    await page.keyboard.press('Enter'); await unchanged('Enter');
+    await page.keyboard.press('Backspace'); await page.keyboard.press('Delete'); await unchanged('Backspace and Delete');
+    await page.keyboard.press('Control+A'); await page.keyboard.press('Control+X'); await unchanged('cut');
+    await page.keyboard.press('Control+A'); await page.keyboard.press('Delete'); await unchanged('select all and delete');
+    await session.send('Input.insertText', { text: '붙여 넣은 글' }); await unchanged('inserted text (paste, dictation)');
+    await area.evaluate(element => { const data = new DataTransfer(); data.setData('text/plain', '붙여넣기'); return element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); }).then(allowed => assert.equal(allowed, false, 'paste is refused'));
+    await area.evaluate(element => { const data = new DataTransfer(); data.setData('text/plain', '끌어 놓기'); return element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })); }).then(allowed => assert.equal(allowed, false, 'drop is refused'));
+    await unchanged('paste and drop events');
+    await session.send('Input.imeSetComposition', { text: '가', selectionStart: 1, selectionEnd: 1 }); await frames(page);
+    await session.send('Input.insertText', { text: '가' }); await unchanged('an IME composition');
+    await area.evaluate(element => { element.setRangeText('X', 0, 3); element.dispatchEvent(new Event('input', { bubbles: true })); }); await unchanged('a script edit');
+    assert.equal(await page.locator('#lifeSourceText').textContent(), raw, 'the original on screen is unchanged');
+    // The selection still works after all that, and the saved excerpt is the exact raw range.
+    await page.keyboard.press('Control+Home'); for (let step = 0; step < 3; step++) await page.keyboard.press('Shift+ArrowRight');
+    assert.equal(await page.locator('#lifeSelectedQuote').textContent(), '첫 줄');
+    await page.locator('#lifeSourceTopic').fill('키보드'); await page.locator('#lifeSourceExcerptSave').click(); await settle(page);
+    const bundle = await R.bundle(page), record = bundle.records.find(item => item.topic === '키보드');
+    assert.deepEqual(record.sourceRefs[0].locator, { start: 0, end: 3 }); assert.equal(record.text, '첫 줄');
+    assert.equal(bundle.sourceVersions.find(version => version.id === ids[0].versionId).contentText, raw); assert.equal(bundle.sourceVersions.length, 1);
+    await context.close();
+  });
+}
+
 async function main() {
   await S.start();
   try {
     await group('m1', m1);
     await group('m2', m2);
     await group('m3', m3);
+    await group('m4', m4);
   } finally { await S.finish(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
