@@ -182,4 +182,78 @@ H.run(__filename, {
     assert.equal(await page.locator('.photo-recovered').count(), 0, 'no offer for another account\'s input');
     assert.equal(await H.bodyText(page), '\n');
   },
+  // m4: the read view follows a change made in another tab (the saved revision takes a new id there).
+  async 'read-view-follows-another-tab'({ open, problems, name }) {
+    const { page: a, context } = await open();
+    await H.home(a);
+    const post = await savedPost(a, '두 탭에서 연 글', '원래 본문.');
+    const b = await H.newPage(context, problems, name);
+    await b.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await b.locator('.photo-article').waitFor();
+    await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
+    await b.locator('.ql-editor').click(); await b.keyboard.press('Control+End'); await b.keyboard.type(' 다른 탭에서 고친 문장.');
+    await b.getByRole('button', { name: '글 저장', exact: true }).click(); await b.locator('.photo-article').waitFor();
+    const next = (await H.stored(b, list => list.length === 1 && list[0].text.includes('다른 탭에서 고친 문장.'), 'saved in the other tab'))[0];
+    assert.notEqual(next.id, post.id);
+    await H.until(() => a.locator('.photo-article').innerText(), text => text.includes('다른 탭에서 고친 문장.'), 'the first tab shows the new content without a reload');
+    await H.until(async () => a.url(), url => url.includes('blog=photo.' + next.id), 'and names the post that took its place');
+    assert.equal(await H.mode(a), 'read');
+    // An open editor is never replaced: unsaved input stays when the post changes elsewhere.
+    await a.getByRole('button', { name: '글 수정', exact: true }).click(); await a.locator('#photoTitle').waitFor();
+    await a.locator('.ql-editor').click(); await a.keyboard.press('Control+End'); await a.keyboard.type(' 첫 탭의 미저장 입력');
+    await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
+    await b.locator('.ql-editor').click(); await b.keyboard.press('Control+End'); await b.keyboard.type(' 또 고침.');
+    await b.getByRole('button', { name: '글 저장', exact: true }).click(); await b.locator('.photo-article').waitFor();
+    await H.stored(b, list => list.some(row => row.status === 'saved' && row.text.includes('또 고침.')), 'saved again in the other tab');
+    await H.sleep(1500);
+    assert.equal(await H.mode(a), 'edit', 'the editor stays');
+    assert((await H.bodyText(a)).endsWith('첫 탭의 미저장 입력\n') && !(await H.bodyText(a)).includes('또 고침.'), 'with its own input, not the other tab\'s');
+  },
+  // m4: the read view follows a change that arrives from another device.
+  async 'read-view-follows-another-device'({ open }) {
+    const server = new H.FakeCloud();
+    const { page: a } = await open({ server, device: 'wi-device-a' });
+    const { page: b } = await open({ server, device: 'wi-device-b', viewport: { width: 820, height: 1180 } });
+    await H.home(a); await H.home(b);
+    await savedPost(a, '두 기기 저장 글', '원래 본문.');
+    await a.locator('#photoServerStatus[data-state="synced"]').waitFor({ timeout: 20000 });
+    await b.bringToFront(); await focusWindow(b);
+    await H.until(() => b.locator('.home-post').count(), count => count === 1, 'the post arrives on the other device', 45000);
+    await b.locator('.home-post .home-post-open').first().click(); await b.locator('.photo-article').waitFor();
+    await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
+    await b.locator('.ql-editor').click(); await b.keyboard.press('Control+End'); await b.keyboard.type(' 다른 기기에서 고친 문장.');
+    await b.getByRole('button', { name: '글 저장', exact: true }).click(); await b.locator('.photo-article').waitFor();
+    await b.locator('#photoServerStatus[data-state="synced"]').waitFor({ timeout: 20000 });
+    await a.bringToFront(); await focusWindow(a);
+    await H.until(() => a.locator('.photo-article').innerText(), text => text.includes('다른 기기에서 고친 문장.'), 'the reading device shows the new content without a reload', 45000);
+    await H.until(() => a.locator('#photoServerStatus').innerText(), text => text === '저장됨 · 계정에 올림', 'with the state of what is shown', 20000);
+    assert.equal(await H.mode(a), 'read');
+  },
+  // m4: an address kept from before an edit opens the post that took its place; an unknown one opens the list with a notice, never an empty editor.
+  async 'stale-post-address'({ open }) {
+    const { page } = await open();
+    await H.home(page);
+    const post = await savedPost(page, '주소가 남은 글', '원래 본문.');
+    await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor();
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 고침.');
+    await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+    const next = (await H.stored(page, list => list.length === 1 && list[0].text.includes('고침.'), 'saved'))[0];
+    assert.notEqual(next.id, post.id);
+    await page.goto(H.base + '/index.html?view=page&blog=photo.' + post.id);
+    await page.locator('.photo-article').waitFor();
+    assert((await page.locator('.photo-article').innerText()).includes('원래 본문. 고침.'), 'the old address opens the revised post');
+    assert.equal(await page.locator('#photoTitle').count(), 0);
+    await H.until(async () => page.url(), url => url.includes('blog=photo.' + next.id), 'the address is corrected');
+    // An address that names nothing.
+    await page.goto(H.base + '/index.html?view=page&blog=photo.no-such-post-0001');
+    await ready(page); await settle(page);
+    await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    assert.equal(await page.locator('#photoTitle').count(), 0, 'no empty editor for an address that names nothing');
+    assert.equal((await H.records(page)).length, 1, 'and no new draft');
+    await H.until(() => page.evaluate(() => document.body.innerText), text => text.includes('글을 찾지 못했습니다'), 'one line says why the list is shown');
+    assert(!page.url().includes('no-such-post'), 'the address no longer names the missing post: ' + page.url());
+    // 글쓰기 reloaded before its first save is still the new post.
+    await H.writer(page);
+    await page.reload(); await page.locator('#photoTitle').waitFor();
+    assert.equal(await H.bodyText(page), '\n');
+  },
 });

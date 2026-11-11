@@ -201,6 +201,8 @@
     const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
     // Device copies belong to the signed-in account (and its workspace and draft).
     const recoveryStore = M.recovery(localStore, storage.account?.userId || "local");
+    // Which id took a saved post's place when its revision was saved (ids only).
+    const movedStore = M.moved(localStore, storage.account?.userId || "local");
     // What an open IME composition holds: the model does not have it yet.
     let composingRange = null,
       composingText = "",
@@ -1331,6 +1333,8 @@
         );
         if (!current(token)) return;
         recoveryStore.clear(workspaceId, draftId);
+        // An address or another tab that still names the replaced post finds this one.
+        if (previousId !== saved.id) movedStore.record(workspaceId, previousId, saved.id);
         keptTick = -1;
         unstored = null;
         doc = saved;
@@ -1487,6 +1491,40 @@
           node.focus({ preventScroll: true });
           if (document.activeElement === node) break;
         }
+    }
+    // The read view shows what is stored now. When the open post changes in
+    // another tab or arrives changed from another device, it is read again;
+    // a post replaced by its saved revision is followed to the post that took
+    // its place. Only the read view: an editor's input is never replaced.
+    let refreshingRead = false;
+    async function refreshRead() {
+      if (refreshingRead || mode !== "read" || !doc || busy || navigating || closeViewer || !current(epoch)) return;
+      const token = epoch, shownDoc = doc;
+      refreshingRead = true;
+      try {
+        const read = (id) => storage.readPhotoPost(workspaceId, id).catch((e) => {
+          if (e?.code !== "photo_post_missing") throw e;
+          return null;
+        });
+        let next = await read(shownDoc.id);
+        if (!next) {
+          const successor = movedStore.resolve(workspaceId, shownDoc.id);
+          next = successor ? await read(successor) : null;
+        }
+        // Deleted elsewhere: the view stays and its actions say so, as before.
+        if (!next || !current(token) || doc !== shownDoc || mode !== "read" || busy || navigating || closeViewer) return;
+        if (next.id === shownDoc.id && next.revision === shownDoc.revision) return;
+        const focused = host.contains(document.activeElement);
+        doc = next;
+        committed = false;
+        error = null;
+        render();
+        if (focused) host.querySelector(".photo-read-heading")?.focus({ preventScroll: true });
+      } catch (_) {
+        // A failed read leaves what is shown.
+      } finally {
+        refreshingRead = false;
+      }
     }
     function serverCurrent(token, id, revision, sequence) {
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
@@ -3050,6 +3088,7 @@
         else if (!serverBusy) readServerState();
       });
       unsubscribe = storage.subscribe(workspaceId, (event) => {
+        if (event.type === "photo_posts_changed" && mode === "read" && doc && host?.isConnected) refreshRead();
         if (
           event.type === "photo_posts_changed" &&
           !busy &&
