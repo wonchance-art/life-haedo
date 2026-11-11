@@ -186,6 +186,15 @@ H.run(__filename, {
   // m4: the read view follows a change made in another tab (the saved revision takes a new id there).
   async 'read-view-follows-another-tab'({ open, problems, name }) {
     const { page: a, context } = await open();
+    // What this device has recorded about replaced posts at the moment a saved post is written.
+    await context.addInitScript(() => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (value, ...rest) {
+        if (this.name === 'meta' && String(value?.key).startsWith('photo-post:') && value.value?.status === 'saved')
+          (window.__movedAtSave ||= []).push(Object.keys(localStorage).filter(key => key.startsWith('haedo_life_post_moved_v1:')).map(key => localStorage.getItem(key)).join('|'));
+        return put.call(this, value, ...rest);
+      };
+    });
     await H.home(a);
     const post = await savedPost(a, '두 탭에서 연 글', '원래 본문.');
     const b = await H.newPage(context, problems, name);
@@ -195,6 +204,8 @@ H.run(__filename, {
     await b.getByRole('button', { name: '글 저장', exact: true }).click(); await b.locator('.photo-article').waitFor();
     const next = (await H.stored(b, list => list.length === 1 && list[0].text.includes('다른 탭에서 고친 문장.'), 'saved in the other tab'))[0];
     assert.notEqual(next.id, post.id);
+    // The other tab hears of the change the moment it commits, so where the post went is recorded before that.
+    assert((await b.evaluate(() => window.__movedAtSave || [])).some(text => text.includes('"' + post.id + '":"' + next.id + '"')), 'the replacement is recorded before the save is written');
     await H.until(() => a.locator('.photo-article').innerText(), text => text.includes('다른 탭에서 고친 문장.'), 'the first tab shows the new content without a reload');
     await H.until(async () => a.url(), url => url.includes('blog=photo.' + next.id), 'and names the post that took its place');
     assert.equal(await H.mode(a), 'read');

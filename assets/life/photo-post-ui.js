@@ -1346,16 +1346,22 @@
         throw Object.assign(new Error("저장하지 못했습니다"), { code: cause.code, detail: cause.message });
       }
       setBusy(true);
+      // An address or another tab that still names the replaced post finds this
+      // one. Recorded before the save: another tab reading the post learns of
+      // the change the moment it commits and must already find where it went.
+      const replaced = previousId !== payload.id;
+      if (replaced) movedStore.record(workspaceId, previousId, payload.id);
       try {
         const saved = await storage.savePhotoPost(
           workspaceId,
           payload,
           doc.revision,
-        );
+        ).catch((cause) => {
+          if (replaced) movedStore.forget(workspaceId, previousId, payload.id);
+          throw cause;
+        });
         if (!current(token)) return;
         recoveryStore.clear(workspaceId, draftId);
-        // An address or another tab that still names the replaced post finds this one.
-        if (previousId !== saved.id) movedStore.record(workspaceId, previousId, saved.id);
         keptTick = -1;
         unstored = null;
         doc = saved;

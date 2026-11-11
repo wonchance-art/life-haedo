@@ -182,6 +182,9 @@ test('moved posts: an id replaced by a saved revision resolves to the post that 
   assert.equal(moved.resolve('ws-a', 'c'), null);
   assert.equal(moved.resolve('ws-b', 'a'), 'z');
   assert.equal(moved.resolve('ws-c', 'a'), null);
+  // A record whose save did not happen is taken back, and only that record.
+  moved.record('ws-a', 'c', 'd'); moved.forget('ws-a', 'c', 'other'); assert.equal(moved.resolve('ws-a', 'a'), 'd');
+  moved.forget('ws-a', 'c', 'd'); assert.equal(moved.resolve('ws-a', 'a'), 'c');
   moved.record('ws-a', 'c', 'a');
   assert.doesNotThrow(() => moved.resolve('ws-a', 'a'), 'a cycle ends');
   assert(!/[가-힣]/.test(JSON.stringify([...store.map.entries()])), 'identifiers only');

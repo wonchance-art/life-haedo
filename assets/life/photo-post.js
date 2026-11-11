@@ -690,6 +690,16 @@
           store.setItem(name(ws), JSON.stringify(Object.fromEntries(entries.slice(-300))));
         } catch (_) {}
       },
+      // Takes back a record whose save did not happen.
+      forget(ws, from, to) {
+        if (!store || !KEY_PART.test(ws || "")) return;
+        try {
+          const map = read(ws);
+          if (map[from] !== to) return;
+          delete map[from];
+          store.setItem(name(ws), JSON.stringify(map));
+        } catch (_) {}
+      },
       // The id that now stands for `postId`, or null when none is recorded.
       resolve(ws, postId) {
         if (!store || !KEY_PART.test(ws || "") || !KEY_PART.test(postId || "")) return null;
