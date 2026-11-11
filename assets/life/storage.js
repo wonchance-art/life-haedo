@@ -1793,7 +1793,7 @@
         // exists on another device, a sync conflict's recovery copy, or saving a post that is already
         // here: a device that refused those kept a different list from the account for good, and with
         // a list above the cap (two devices' posts together) could not save its own posts either.
-        if (!received && index.length > 200 && index.length > countBefore) throw fault('photo_post_limit', '글과 초안은 합계 200개까지 만들 수 있습니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
+        if (!received && index.length > 200 && index.length > countBefore) throw fault('photo_post_limit', '글과 초안은 합계 200개까지입니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
         if (naver) naver.assertCurrent();
