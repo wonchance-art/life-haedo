@@ -177,13 +177,28 @@ test('new v2 pending and pre-B3 Markdown pending stay on the unflagged legacy re
   }
 });
 
-test('a durable Markdown retry refuses a changed selection or local revision without publishing', async t => {
-  const { a, value } = await saved(t); let attempts = 0;
-  a.remote.publish = async () => { attempts++; throw fault('network_error'); };
+// 2026-11-11 owner rule (publication recovery): a request whose result is unknown no longer
+// blocks a different explicit choice. The exact server head shows whether it was applied; one
+// that was not is replaced by the new choice (tests/blog-publication-settle.test.cjs covers the
+// applied case and the late arrival). The earlier assertion here (local_changed for a changed
+// selection or a newer saved revision) was the reviewed defect "글이 변경됐습니다".
+test('a durable Markdown request the server did not apply is replaced by a changed selection or a newer saved revision, never sent twice', async t => {
+  const { cloud, a, value } = await saved(t), sent = [];
+  a.remote.publish = async (...args) => { sent.push(clone(args)); throw fault('network_error'); };
   await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: value.revision }), { code: 'network_error' });
   const pending = (await a.storage.readBlogSyncState(a.ws, value.id)).publishPending;
-  await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: value.revision, author: { name: 'changed', intro: '' } }), { code: 'local_changed' });
+  await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: value.revision, author: { name: 'changed', intro: '' } }), { code: 'network_error' });
+  const replaced = (await a.storage.readBlogSyncState(a.ws, value.id)).publishPending;
+  assert.notEqual(replaced.operationId, pending.operationId); assert.deepEqual(replaced.selection.author, { name: 'changed', intro: '' });
+  assert.equal(replaced.documentFormat, MD); assert.equal(replaced.expectedPublicRevision, 0);
+  assert.equal(sent.length, 2); assert.equal(sent[1][2], replaced.operationId); assert.deepEqual(sent[1][3].author, { name: 'changed', intro: '' });
   const updated = await a.storage.savePhotoPost(a.ws, { ...value, title: '바뀐 제목' }, value.revision);
-  await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: updated.revision }), { code: 'local_changed' });
-  assert.equal(attempts, 1); assert.deepEqual((await a.storage.readBlogSyncState(a.ws, value.id)).publishPending, pending);
+  await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: updated.revision }), { code: 'network_error' });
+  const latest = (await a.storage.readBlogSyncState(a.ws, value.id)).publishPending;
+  assert.equal(latest.localRevision, updated.revision); assert.notEqual(latest.operationId, replaced.operationId);
+  assert.equal(sent.length, 3); assert.equal(sent[2][1], latest.expectedRevision);
+  // A revision that is no longer the saved one is still refused before any request.
+  await assert.rejects(a.sync.publish(a.ws, value.id, { expectedLocalRevision: value.revision }), { code: 'local_changed' });
+  assert.equal(sent.length, 3); assert.deepEqual((await a.storage.readBlogSyncState(a.ws, value.id)).publishPending, latest);
+  assert.equal(cloud.rows.get(value.id).publication, null, 'nothing was published');
 });

@@ -99,6 +99,20 @@
   // listed post is listed once (see restoredDuplicates); this changes only the
   // list, never sync, backup or the copy itself. A library that cannot be read
   // is reported as `failed`; the readable ones are still listed.
+  // Publication of every listed post as this device knows it (BlogSync's local record, no
+  // request): ws/id -> 'public' | 'unknown'; a post not named is not public. A library whose
+  // record cannot be read names nothing, and its posts keep the label they had before.
+  async function publicationOf(storage, ids) {
+    const known = new Map();
+    if (typeof storage.listBlogSyncStates !== 'function') return known;
+    const status = life.BlogSync?.publicationStatus || (state => state?.publication?.active === true ? 'public' : 'private');
+    const lists = await Promise.allSettled(ids.map(id => Promise.resolve().then(() => storage.listBlogSyncStates(id))));
+    lists.forEach((result, index) => {
+      if (result.status !== 'fulfilled' || !Array.isArray(result.value?.states)) return;
+      for (const entry of result.value.states) { const value = status(entry.state); if (value !== 'private') known.set(ids[index] + '/' + entry.localPostId, value); }
+    });
+    return known;
+  }
   async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
     let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
@@ -120,8 +134,8 @@
       try { hidden = await restoredDuplicates(libraries, read, workspaceId, readDocs, contentCache); }
       catch (_) { hidden = new Set(); }
     }
-    const posts = [];
-    for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws })));
+    const posts = [], publication = await publicationOf(storage, [...read.keys()]);
+    for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws, publication: publication.get(ws + '/' + post.id) || 'private' })));
     return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
   }
   // A row's date and its full form. Formatters are made once (2026-11-04: two new
@@ -154,7 +168,7 @@
     // Post contents compared for restore copies, by ID/revision/update time; this view's storage only.
     const contentCache = new Map();
     const mediaUrls = new Set();
-    let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null;
+    let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null, stopPublic = null, publicTimer = null;
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
@@ -337,7 +351,12 @@
       const meta = el('p', null, 'life-meta home-post-meta');
       const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
-      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 원본' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
+      // A post's original always stays private; a public copy, when there is one, is named
+      // next to it. An unanswered publish or withdrawal is said as not confirmed, never as private.
+      const visibility = row.kind !== 'photo' ? (row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개')
+        : row.publication === 'public' ? '공개 중 · 원본은 비공개' : row.publication === 'unknown' ? '공개 확인 못 함 · 원본은 비공개' : '비공개 원본';
+      const shownVisibility = el('span', visibility, 'home-post-visibility'); if (row.kind === 'photo') shownVisibility.dataset.publication = row.publication || 'private';
+      meta.append(shownVisibility);
       const content = el('div', null, 'home-post-content'), heading = el('h3');
       const label = String(row.title || '').trim() || (snippet(row.body) || row.attachments?.[0]?.title || '사진이 있는 글');
       const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' || !String(row.title || '').trim() ? ' home-post-prose' : ''));
@@ -661,7 +680,26 @@
         }
       }
     }
-    function unwatch() { stopWatch?.(); stopWatch = null; if (watchTimer) clearTimeout(watchTimer); watchTimer = null; }
+    function unwatch() { stopWatch?.(); stopWatch = null; stopPublic?.(); stopPublic = null; if (watchTimer) clearTimeout(watchTimer); watchTimer = null; if (publicTimer) clearTimeout(publicTimer); publicTimer = null; }
+    // Publishing, withdrawing and settling change no post document, so no storage event follows
+    // them. BlogSync reports the post; the list is read again only when a shown label differs.
+    function watchPublication(context) {
+      let sync = null;
+      try { sync = life.BlogSync?.forStorage?.(storage) || null; } catch (_) { sync = null; }
+      if (typeof sync?.subscribe !== 'function') return;
+      stopPublic = sync.subscribe(event => {
+        if (!event?.localPostId || !showing(context)) return;
+        if (publicTimer) clearTimeout(publicTimer);
+        publicTimer = setTimeout(async () => {
+          publicTimer = null;
+          const value = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
+          if (!showing(context) || !Array.isArray(value?.posts)) return;
+          let fresh; try { fresh = await publicationOf(storage, value.workspaces || [context.workspaceId]); } catch (_) { return; }
+          if (!showing(context) || context.results.photo?.value !== value) return;
+          if (value.posts.some(post => (fresh.get(post.workspaceId + '/' + post.id) || 'private') !== (post.publication || 'private'))) void load(context, ['photo']);
+        }, 250);
+      });
+    }
     function watch(context) {
       unwatch();
       const listener = event => {
@@ -673,6 +711,7 @@
       };
       // Posts arrive in any library of the account; without an account only
       // the open library is listed and watched.
+      watchPublication(context);
       try { if (typeof storage.subscribeAll === 'function') { stopWatch = storage.subscribeAll(listener); return; } }
       catch (error) { if (error?.code !== 'auth_scope_required') { stopWatch = null; return; } }
       if (typeof storage.subscribe !== 'function') return;

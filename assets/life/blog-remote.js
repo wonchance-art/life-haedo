@@ -23,6 +23,19 @@
     blog_public_copies_required: '공개할 사진 사본을 먼저 준비해야 합니다. 저장한 글과 공개 요청은 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
+  // Connection failures of publishing, withdrawing and the publication check (2026-11-11). The
+  // code stays network_error; the text does not borrow the document-save message, because a
+  // publish request is never sent again automatically. "unsent": nothing was recorded or sent.
+  // "unconfirmed": the request is recorded and its result is unknown. Only a recorded
+  // withdrawal is sent again by itself (BlogSync settles it on the next cycle).
+  const publicationMessages = {
+    publish_unsent: '공개 게시 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 게시해 주세요.',
+    publish_unconfirmed: '공개 게시 결과를 받지 못했습니다. 서버에는 반영됐을 수 있습니다. 공개 상태를 확인하거나 같은 내용으로 다시 게시해 주세요.',
+    unpublish_unsent: '공개 철회 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 철회해 주세요.',
+    unpublish_unconfirmed: '공개 철회 결과를 받지 못했습니다. 연결되면 철회 요청을 다시 보냅니다. 그때까지 공개 상태일 수 있습니다.',
+    settle_failed: '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.'
+  };
+  const publicationFault = kind => Object.assign(new Error(publicationMessages[kind] || publicationMessages.settle_failed), { code: 'network_error' });
   const id = value => typeof value === 'string' && UUID.test(value);
   const rev = value => Number.isSafeInteger(value) && value >= 0;
   const clone = value => structuredClone(value);
@@ -314,5 +327,5 @@
     return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
-  return Object.freeze({ create, clean, fault, checkViews });
+  return Object.freeze({ create, clean, fault, publicationFault, checkViews });
 });

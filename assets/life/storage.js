@@ -3297,6 +3297,11 @@
         if (current.revision !== baseRevision) throw fault('photo_post_conflict', '다른 탭이나 기기에서 글이 바뀌었습니다. 삭제하지 않았습니다.');
         const bindingKey = `blog-sync:${workspaceId}:${postId}`, binding = (await meta.get(bindingKey))?.value;
         if (binding?.publication?.active) throw fault('blog_post_published', '공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.');
+        // A publish or withdrawal this device sent has no known result (BlogSync publicationStatus
+        // "unknown"): the server may hold a public copy, and it refuses to delete a public post.
+        // Deleting here would only bring the post back with the next sync.
+        if (binding?.unpublishPending || binding?.publishPending && binding.publishChecked !== binding.publishPending.operationId)
+          throw fault('blog_post_unsettled', '공개 상태를 확인하지 못한 글입니다. 공개 상태를 확인한 뒤 삭제해 주세요.');
         materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId, effects);
         await meta.delete(key); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
         if (binding) {
