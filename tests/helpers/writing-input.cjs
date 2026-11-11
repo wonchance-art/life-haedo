@@ -59,18 +59,20 @@ async function until(read, accept, label, timeout = 15000) {
   assert.fail(label + ' · last value: ' + JSON.stringify(value)?.slice(0, 1200));
 }
 const stored = (page, accept, label) => until(() => records(page), accept, label);
-// `html` adds the rich form a document app puts beside the text; `image` adds a picture file (its name is `image` when a string).
-const pasteBody = (page, { text, image = false, html = null }) => page.evaluate(async ({ text, image, html }) => {
+// `html` adds the rich form a document app puts beside the text; `image` adds a picture file (its name is `image` when a string);
+// `data` adds other clipboard types (text/uri-list, text/rtf).
+const pasteBody = (page, { text, image = false, html = null, data: more = {} }) => page.evaluate(async ({ text, image, html, more }) => {
   const root = document.querySelector('.ql-editor'); root.focus();
   const data = new DataTransfer();
   if (text != null) data.setData('text/plain', text);
   if (html != null) data.setData('text/html', html);
+  for (const [type, value] of Object.entries(more)) data.setData(type, value);
   if (image) {
     const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 80; canvas.getContext('2d').fillRect(0, 0, 300, 80);
     data.items.add(new File([await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))], typeof image === 'string' ? image : 'image.png', { type: 'image/png' }));
   }
   root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-}, { text, image, html });
+}, { text, image, html, more });
 async function jpeg(page, width = 320, height = 240, color = '#88aacc') {
   const encoded = await page.evaluate(async ({ width, height, color }) => {
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;

@@ -2870,8 +2870,18 @@
           // copied. Any other clipboard with a file is that file: a screen
           // capture, a copied photo, or a file copied in a file manager, whose
           // only text is its name.
+          // A picture copied in a browser also carries its address as text (and
+          // as text/uri-list) or markup that is nothing but the <img>: that is
+          // the picture, not text from a document.
           const types = [...(e.clipboardData?.types || [])],
-            fromDocument = !!text.trim() && (types.includes("text/html") || types.includes("text/rtf"));
+            html = types.includes("text/html") ? e.clipboardData.getData("text/html") : "",
+            address = types.includes("text/uri-list") ? e.clipboardData.getData("text/uri-list").trim() : "";
+          let onlyPicture = !!address && address === text.trim();
+          if (!onlyPicture && html) {
+            const body = new DOMParser().parseFromString(html, "text/html").body;
+            onlyPicture = body.querySelectorAll("img").length === 1 && !body.textContent.trim();
+          }
+          const fromDocument = !!text.trim() && !onlyPicture && (!!html || types.includes("text/rtf"));
           const files = fromDocument ? [] : [...(e.clipboardData?.files || [])];
           if (files.length) {
             run(() => insertFiles(files));

@@ -82,29 +82,40 @@ H.run(__filename, {
     await H.until(() => H.status(page), value => value.state === 'error' && value.text.startsWith('JPEG·PNG·WebP·HEIC 사진을 골라 주세요'), 'single failure keeps its reason');
     assert.equal(await blocks(page), 2);
   },
-  // m6: a clipboard with text, its rich form and a picture of it (Word, slides) pastes the text;
-  // a file copied in a file manager, whose only text is its name, is still the photo.
+  // m6: what a clipboard that carries a file means. Text copied in a document app (with its rich form and a picture of
+  // it) is the text; a picture copied in a browser or a file copied in a file manager is the picture, even when the
+  // clipboard also carries its address or its name as text.
   async 'paste-text-with-image'({ open }) {
     const { page } = await open();
     await H.home(page); await H.writer(page);
-    await page.locator('.ql-editor').click();
-    await H.pasteBody(page, { text: '워드에서 복사한 문단입니다.', html: '<p>워드에서 복사한 <b>문단</b>입니다.</p>', image: true });
-    await H.until(() => H.bodyText(page), text => text === '워드에서 복사한 문단입니다.\n', 'the text is pasted');
-    assert.equal(await blocks(page), 0, 'not its picture');
-    await draftWith(page, '워드에서 복사한 문단입니다.');
-    // A file and its name (what a file manager puts on the clipboard): the photo, not the name.
-    await H.pasteBody(page, { text: 'IMG_1234.png', image: 'IMG_1234.png' });
-    await H.until(() => blocks(page), count => count === 1, 'a copied file is a photo');
-    assert(!(await H.bodyText(page)).includes('IMG_1234'), 'its name is not pasted as text: ' + JSON.stringify(await H.bodyText(page)));
-    await H.stored(page, rows => rows[0]?.photos === 1, 'stored');
-    // A picture alone (a screen capture) is a photo; so is one beside rich markup without text (an image copied on a web page).
-    await H.pasteBody(page, { text: ' \n', html: '<img src="https://example.org/a.png">', image: true });
-    await H.until(() => blocks(page), count => count === 2, 'a picture with no text is a photo');
-    await H.stored(page, rows => rows[0]?.photos === 2, 'stored');
-    // Text alone is text, as always.
-    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End');
-    await H.pasteBody(page, { text: '글자만 있는 붙여넣기.' });
-    await draftWith(page, '글자만 있는 붙여넣기.');
+    const kinds = [
+      ['a picture copied in Chrome (markup that is only the <img>, no text)', { html: '<meta charset="utf-8"><img src="https://example.org/a.png" alt="그림">', image: true }, 'photo'],
+      ['a picture copied in Safari (its address as text and uri-list, <img> markup)', { text: 'https://example.org/a.png', html: '<img src="https://example.org/a.png">', data: { 'text/uri-list': 'https://example.org/a.png' }, image: 'a.png' }, 'photo'],
+      ['a file copied in a file manager (its name as text)', { text: 'IMG_1234.png', image: 'IMG_1234.png' }, 'photo'],
+      ['a paragraph copied in Word (text, HTML, RTF and a picture of it)', { text: '워드에서 복사한 문단입니다.', html: '<p>워드에서 복사한 <b>문단</b>입니다.</p>', data: { 'text/rtf': '{\\rtf1 x}' }, image: true }, '워드에서 복사한 문단입니다.'],
+      ['a screen capture (a picture only)', { image: true }, 'photo'],
+      ['a selection on a web page that includes a picture (text and markup with more than the <img>)', { text: '사진 설명 글', html: '<figure><img src="https://example.org/a.png"><figcaption>사진 설명 글</figcaption></figure>', image: true }, '사진 설명 글'],
+      ['markup that is only an <img> beside blank text', { text: ' \n', html: '<img src="x">', image: true }, 'photo'],
+      ['an address copied as text beside other markup (a link, not a picture)', { text: 'https://example.org/page', html: '<a href="https://example.org/page">https://example.org/page</a>', image: true }, 'https://example.org/page'],
+      ['a picture whose address is the text and the uri-list, beside markup that repeats the address', { text: 'https://example.org/a.png', html: '<a href="https://example.org/a.png">https://example.org/a.png</a>', data: { 'text/uri-list': 'https://example.org/a.png' }, image: 'a.png' }, 'photo'],
+      ['a picture with its address as text and markup that is only the <img> (no uri-list)', { text: 'https://example.org/a.png', html: '<img src="https://example.org/a.png">', image: 'a.png' }, 'photo'],
+      ['text alone', { text: '글자만 있는 붙여넣기.' }, '글자만 있는 붙여넣기.'],
+    ];
+    for (const [label, clipboard, expected] of kinds) {
+      await page.locator('.ql-editor').click(); await page.keyboard.press('Control+a'); await page.keyboard.press('Delete');
+      await H.until(() => blocks(page), count => count === 0, 'cleared before: ' + label);
+      await H.pasteBody(page, clipboard);
+      if (expected === 'photo') {
+        await H.until(() => blocks(page), count => count === 1, label + ' is a photo');
+        assert.equal((await H.bodyText(page)).trim(), '', label + ': no text is pasted with it: ' + JSON.stringify(await H.bodyText(page)));
+        await H.stored(page, rows => rows[0]?.photos === 1, label + ' stored');
+      } else {
+        await H.until(() => H.bodyText(page), text => text === expected + '\n', label + ' is the text');
+        assert.equal(await blocks(page), 0, label + ': not its picture');
+        await draftWith(page, expected);
+      }
+      assert.notEqual((await H.status(page)).state, 'error', label);
+    }
   },
   // m7: a draft says whether it reached the account, in the same words as a saved post.
   async 'draft-account-state'({ open }) {
