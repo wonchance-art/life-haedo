@@ -131,6 +131,8 @@ async function main() {
       const place = await rawTop(f.page, item.rawStart);
       assert(Math.abs(place.top - box.top) <= 12, 'the paragraph stays at its height (' + box.top + ' → ' + place.top + ')');
       assert(place.notice.top >= place.toolsBottom - 1 && place.notice.bottom < place.height / 2, 'the notice shows under the tool row, where the person is reading');
+      // The pointer is still on the button: its hover label must not sit on the notice.
+      assert.equal(await f.page.evaluate(() => getComputedStyle(document.querySelector('#lifeExcerptToggle > .life-tooltip')).display), 'none', 'the button\'s hover label does not cover the notice');
       if (index < 3) await S.capture(f.page, 'formatted-pick-' + width);
       // Opening the panel now (nothing selected in the original text) still offers nothing to save.
       await R.pressAt(f.page, '#lifeExcerptToggle');
