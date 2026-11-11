@@ -4471,7 +4471,7 @@
       article.addEventListener('keydown', event => {
         if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
         const stops = [...article.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]')]
-          .filter(item => item.tabIndex >= 0 && !item.disabled && item.checkVisibility());
+          .filter(item => item.tabIndex >= 0 && !item.disabled && (item.checkVisibility ? item.checkVisibility() : item.getClientRects().length > 0));
         const next = stops[stops.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1)];
         if (!stops.includes(document.activeElement) || !next || !dock.contains(next)) return;
         event.preventDefault(); next.focus({ preventScroll: true });
