@@ -9,7 +9,10 @@
  * exact-phrase search):
  *   - quotes of any kind and brackets            ("..." phrase, grouping)
  *   - the colon                                   (site: when: intitle: inurl: source: after: before:)
- *   - a word that starts with - or +              (exclude / require)
+ *   - a word that starts with +                   (require)
+ *   - a hyphen that is not between two letters or digits (exclude: "-b",
+ *     also "a,-b" "a/-b" "a.-b"); K-pop and 3-1 pass
+ *   - two dots in a row                           (number range: 1..10)
  *   - * | ~ < > = and the other symbols, emoji    (wildcard, OR, ranges)
  *   - the upper-case words OR, AND, NOT between two other words (boolean
  *     operators). As the first or the last word they are ordinary words
@@ -32,6 +35,8 @@ const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}\u034f\u115f\u1160\u17b4
 const WORD_CHAR = /[\p{L}\p{N}]/u;
 const ALLOWED = /^[\p{L}\p{N}\p{M} .&+#'’·/,%!?-]+$/u;
 const OPERATOR_WORDS = new Set(['OR', 'AND', 'NOT']);
+// Allowed only between two letters or digits (O'Reilly, O’Reilly, K-pop, 3-1).
+const JOINERS = new Set(["'", '’', '-']);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
   Object.getPrototypeOf(value) === Object.prototype;
 
@@ -43,14 +48,16 @@ export function normalizeTopic(raw) {
   const length = [...topic].length;
   if (length < 1 || length > LIMITS.topicLength || !ALLOWED.test(topic) || !WORD_CHAR.test(topic)) throw failure('invalid_topic');
   const words = topic.split(' ');
-  if (words.some(word => word.startsWith('-') || word.startsWith('+'))) throw failure('invalid_topic');
+  if (words.some(word => word.startsWith('+'))) throw failure('invalid_topic');
   // A boolean operator needs a word on both sides; alone, first or last it is a plain word.
   if (words.slice(1, -1).some(word => OPERATOR_WORDS.has(word))) throw failure('invalid_topic');
-  // An apostrophe is part of a word (O'Reilly), never an opening or closing quote.
+  // An apostrophe is part of a word (O'Reilly), never an opening or closing quote. A hyphen
+  // joins two parts of a word (K-pop); after a space or a mark it reads as "exclude".
   const chars = [...topic];
   chars.forEach((char, at) => {
-    if ((char === "'" || char === '’') && !(WORD_CHAR.test(chars[at - 1] || '') && WORD_CHAR.test(chars[at + 1] || ''))) throw failure('invalid_topic');
+    if (JOINERS.has(char) && !(WORD_CHAR.test(chars[at - 1] || '') && WORD_CHAR.test(chars[at + 1] || ''))) throw failure('invalid_topic');
   });
+  if (topic.includes('..')) throw failure('invalid_topic'); // 1..10 is a number range
   return topic;
 }
 

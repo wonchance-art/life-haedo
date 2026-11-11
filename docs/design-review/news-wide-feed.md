@@ -137,14 +137,16 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 | 구분 | 예 | 결과 |
 | --- | --- | --- |
 | 낱말 | `기후`, `climate change`, `日本 経済`, `São Paulo` | 허용 |
-| 낱말 안의 기호 | `K-pop`, `C++`, `C#`, `.NET`, `R&D`, `AI/ML`, `3·1 운동`, `Node.js 22` | 허용 |
+| 낱말 안의 기호 | `K-pop`, `3-1`, `COVID-19`, `C++`, `C#`, `.NET`, `3.5`, `R&D`, `AI/ML`, `3·1 운동`, `Node.js 22` | 허용 |
 | 일반 문장 부호 | `10%`, `10,000`, `1,000원`, `Yahoo!`, `왜?` | 허용(검색 연산자가 아니고 `q` 안에서 인코딩된다) |
-| 글자 사이의 작은따옴표 | `O'Reilly`, `O’Reilly` | 허용 |
+| 글자 사이의 작은따옴표 | `O'Reilly`, `O’Reilly` | 허용(`’기후’`, `기후’`처럼 낱말 밖에 있으면 거절) |
 | 맨 앞·맨 끝의 `OR` `AND` `NOT` | `Portland OR`, `Oregon OR`, `OR 연산`, `NOT 기후` | 허용(양쪽에 낱말이 있어야 연산자다) |
 | 낱말 사이의 `OR` `AND` `NOT` | `기후 OR 날씨`, `a NOT b` | 거절 |
 | 따옴표·괄호 | `"기후"`, `“기후”`, `'기후'`, `(기후)`, `[기후]`, `「기후」` | 거절 |
 | 쌍점 | `site:example.com`, `when:1d`, `intitle:기후`, `50:50` | 거절 |
 | `-`·`+`로 시작하는 낱말 | `-기후`, `기후 -날씨`, `+기후` | 거절 |
+| 글자·숫자 사이가 아닌 `-` | `a,-b`, `a/-b`, `a.-b`, `a&-b`, `a!-b`, `a?-b`, `기후-`, `a--b` | 거절(기호 뒤의 `-b`가 제외 연산자로 읽힐 수 있다. `-`는 앞뒤가 모두 글자·숫자일 때만 받는다) |
+| 이어진 점 | `1..10`, `a..b`, `..NET` | 거절(숫자 범위로 읽힐 수 있다. 점 하나는 허용) |
 | 그 밖의 기호 | `기후*`, `a|b`, `기후~`, `a<b`, `a=b`, `a;b`, `@handle`, `$100`, `a_b` | 거절 |
 | 이모지·그림 기호 | `🌿`, `❤`, `→` | 거절 |
 | 보이지 않는 문자 | 줄바꿈, 탭, 제어 문자, 폭 없는 공백, 방향 전환 문자, 한글 채움 문자 | 거절 |
@@ -154,7 +156,8 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 알려진 한계:
 
 - 전각 글자는 글자다. 전각 `ＯＲ`은 낱말 사이에 있어도 통과한다(Google이 연산자로 읽는지는 확인하지 않았다).
-- SQL은 유니코드 글자 분류를 쓸 수 없어, "글자·숫자·결합 부호만"은 Edge가 최종으로 본다. SQL은 위 표의 거절 항목과 알려진 기호·이모지 구간을 막고, Edge가 받는 주제는 모두 받는다(무작위 2만 개 대조).
+- SQL은 유니코드 글자 분류를 쓸 수 없어, "글자·숫자·결합 부호만"은 Edge가 최종으로 본다. SQL은 위 표의 거절 항목과 알려진 기호·이모지 구간을 막고, Edge가 받는 주제는 모두 받는다(무작위 2만 개 대조). `-`와 작은따옴표도 SQL은 "앞뒤가 공백·허용 기호·처음·끝이 아닐 것"으로만 본다. 결합 부호 바로 옆의 `-`는 Edge만 거절한다.
+- SQL 규칙은 호출한 세션의 `standard_conforming_strings`와 무관하다. 이스케이프가 든 리터럴은 모두 `E''`이고, 정규식에 백슬래시를 넘기지 않으며, 백슬래시 문자는 `chr(92)`로 찾는다(검사가 on·off 두 세션에서 같은 답을 단언한다).
 - 발행 시각의 시간대 표기는 `+9999`처럼 실제로 없는 값도 형식만 맞으면 계산에 쓴다. 하루 넘게 앞선 시각은 버리므로 화면 순서를 크게 흔들지는 못한다.
 
 ### 응답
@@ -230,7 +233,7 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 7. 결과와 주제를 공개 정적 파일, 서비스워커 캐시, 공개 페이지에 넣지 않는다.
 8. 설정을 끄면 `life_news_wide_clear`를 부른다. 실패하면 다음에 다시 시도한다.
 9. 계정이 바뀐 뒤 도착한 응답은 버린다.
-10. 주제 입력란에서 위 「주제 규칙」을 먼저 검사해 어느 주제가 안 되는지 알려 준다. 서버의 `invalid_topic`은 최종 확인이다. 안내에 쓸 거절 예: `"기후"`(따옴표), `site:example.com`·`50:50`(쌍점), `-날씨`(빼기로 시작), `기후 OR 날씨`(낱말 사이의 대문자 `OR`), `기후*`, `🌿`. 허용 예: `10%`, `1,000원`, `Yahoo!`, `왜?`, `Portland OR`.
+10. 주제 입력란에서 위 「주제 규칙」을 먼저 검사해 어느 주제가 안 되는지 알려 준다. 서버의 `invalid_topic`은 최종 확인이다. 안내에 쓸 거절 예: `"기후"`(따옴표), `site:example.com`·`50:50`(쌍점), `-날씨`(빼기로 시작), `a,-b`(기호 뒤의 빼기. `-`는 글자·숫자 사이에만), `1..10`(이어진 점), `기후 OR 날씨`(낱말 사이의 대문자 `OR`), `기후*`, `🌿`. 허용 예: `K-pop`, `3-1`, `.NET`, `10%`, `1,000원`, `Yahoo!`, `왜?`, `Portland OR`. 화면 검사는 `supabase/functions/haedo-news-wide/topics.mjs`의 `normalizeTopic`과 같은 결과를 내야 한다.
 11. `topics[].status`가 `stale`·`limited`·`failed`일 때 목록의 시각(`fetchedAt`)과 함께 짧게 알린다. `limited`에 재시도 버튼을 반복해서 누르게 만들지 않는다.
 12. 고정 출처 목록과 한 화면에 섞어 보여 줄 수 있지만 넓게 찾은 글임을 구분할 수 있어야 한다(매체 이름, 받은 서비스).
 13. **403 `not_enabled_for_account`:** "이 계정에서는 넓게 찾기를 쓸 수 없습니다"라는 뜻으로 알리고 설정을 끈 상태로 둔다. 다시 시도하지 않는다. 로그아웃시키지 않는다.
@@ -241,7 +244,7 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 실행한 것(로컬, 2026-11-11, 최종 head 기준):
 
 - `node --test tests/news-wide-edge.test.cjs tests/news-wide-handler.test.cjs` — 입력 검증, 주제 규칙, 주소 조립, 어댑터 계약, 리다이렉트·크기·형식 거절, 파싱·정규화·상한, 인증 거절과 Auth 일시 장애 구분, 허용 계정 거절, 캐시 상태별 응답, 공급원 거절 뒤 중단, 로그 필드, 허용 출처, 키 형식, 배포 파일의 보이지 않는 문자 없음과 SHA-256 표 대조.
-- `node tests/run-news-wide-postgres.cjs` — 격리 PostgreSQL 16에서 기존 객체 불변, 권한, 허용 계정과 설치 SQL(계정 0·익명만·1·3개, 미리 채워진 목록, 재실행, 출력에 개수만), 소유자 격리, 입력 검증, Edge·SQL 주제 규칙 대조(목록과 무작위 2만 개), TTL·대기·한도·보존, 동시 요청, 실제 handler와 실제 SQL의 연결, `md5(prosrc)` 표 대조. `--mutation=<이름>` 28가지(마이그레이션 24, 설치 SQL 4)는 각각 검사를 실패시킨다.
+- `node tests/run-news-wide-postgres.cjs` — 격리 PostgreSQL 16에서 기존 객체 불변, 권한, 허용 계정과 설치 SQL(계정 0·익명만·1·3개, 미리 채워진 목록, 재실행, 출력에 개수만), 소유자 격리, 입력 검증, Edge·SQL 주제 규칙 대조(목록과 무작위 2만 개), `standard_conforming_strings` on·off 두 세션의 같은 답, 설치 SQL 실행 중 다른 표·`auth.users` 행 수가 바뀌면 되돌림(다른 연결에서 행 추가), TTL·대기·한도·보존, 동시 요청, 실제 handler와 실제 SQL의 연결, `md5(prosrc)` 표 대조. `--mutation=<이름>` 35가지(마이그레이션 29, 설치 SQL 6)는 각각 검사를 실패시킨다.
 - `SQL_REPLAY_REQUIRED=1 npm run test:sql-replay` — 새 파일을 포함한 37개 마이그레이션 재생.
 - `node scripts/check-news-wide-live.mjs`(수동) — 일반 검색어 "기후"·"climate" 각 1회. 두 응답 모두 fixture가 가정한 모양이었다.
 
@@ -296,9 +299,9 @@ select p.proname, md5(p.prosrc) from pg_proc p join pg_namespace n on n.oid=p.pr
 | `claim` | `e42b29a2e6d080487604deb709a3d284` |
 | `clear` | `f312782a6d5cb30082053d5c6ee4171d` |
 | `finish` | `4e2e2498651a0a92d1193ad6fa89f182` |
-| `items_valid` | `f78edd992fcd35702a60bb8edad72381` |
+| `items_valid` | `1ad4bc2cb3df561cf18e2a6a4e2f2955` |
 | `owner` | `90c93fee513b5ad6e7084b208bed74de` |
-| `topic_valid` | `2280fff073a4b4b643776fb98d239e77` |
+| `topic_valid` | `bc1ca5640a7befb592317ce2b024ee8f` |
 <!-- news-wide-function-hashes:end -->
 
 하나라도 다르면 **허용 계정 설치와 함수 배포를 하지 않는다.** 저장소 파일을 바이트 그대로 다시 적용한다(마이그레이션은 `create or replace`라 다시 적용하면 함수 본문이 바뀐다). 그래도 다르면 멈추고 보고한다.
@@ -310,7 +313,7 @@ select haedo_news_wide_private.topic_valid('test') as plain_word,
   haedo_news_wide_private.topic_valid('a:b') as colon,
   haedo_news_wide_private.topic_valid('a OR b') as operator_between_words,
   haedo_news_wide_private.items_valid('google-news-rss', '[]'::jsonb) as empty_items;
--- 기대: true, false, false, true. "invalid regular expression" 오류가 나면 옮기는 중에 글자가 바뀐 것이다.
+-- 기대: true, false, false, true. "invalid regular expression"이나 "invalid Unicode escape" 오류가 나면 옮기는 중에 글자가 바뀐 것이다.
 ```
 
 (다) 권한과 빈 표:
@@ -358,14 +361,14 @@ select (select count(*) from haedo_news_wide_private.feeds) as feeds,
 | --- | --- |
 | `supabase/functions/haedo-news-wide/index.ts` | `55db3462860592c49780e4a5e958b671eaefd885adb628cb285bf7b455a91814` |
 | `supabase/functions/haedo-news-wide/handler.mjs` | `1585a99c63c22b16c693b23e58d370643763968f1c902cfa31a66d2599583608` |
-| `supabase/functions/haedo-news-wide/topics.mjs` | `cc070ab468a4228ab4d65fcd6232ef41a9d2318fc800e96c4cd08d8be7da8c46` |
+| `supabase/functions/haedo-news-wide/topics.mjs` | `cf290574d7d60a33286577609ff9fd2752276a238d477c1cc8e580da979600a4` |
 | `supabase/functions/haedo-news-wide/upstream.mjs` | `103a0a4db3230a2a69bc978bd5f2f39930f803e38d546c11aa10ec95f9c60d7c` |
 | `supabase/functions/haedo-news-wide/items.mjs` | `438e125e69074af3eeea9d75fc64780d1d84451a677214118db4eecfe60c2955` |
 | `supabase/functions/haedo-news-wide/xml.mjs` | `1f6424e765f4ae8fbfd27acdc59b82908da4ecc95d9ba92b5bb6a713596c1477` |
 | `supabase/functions/haedo-news-wide/suppliers/google-news.mjs` | `0be7fa9825f54565eea0d74793d6586a87f627497e90a374f526d865a7d26bc3` |
 | `supabase/functions/_shared/supabase-keys.mjs` | `21c146952d2b4d1b58fe54ae571facd8447c4b7cb21ddd48f20919a9859f3707` |
 | `supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs` | `438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55` |
-| `supabase/migrations/20261111130000_news_wide_feed.sql` | `47443806bcc56779538b5fa594bd60a4274d3ddfea825027e6c5023d1b91604f` |
+| `supabase/migrations/20261111130000_news_wide_feed.sql` | `7825f9fb5ae538a3254f6d9fde7f7dffecd17d212c79fd6c77ce841886fe84ed` |
 | `supabase/operations/20261111-news-wide-allow-first-account.sql` | `407be756008f2bc62e758ac9728448da397d135c99bfbd02ed37e42c8a572cfb` |
 <!-- news-wide-file-hashes:end -->
 

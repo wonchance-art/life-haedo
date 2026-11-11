@@ -42,7 +42,9 @@ test('topics: words pass and are normalized; nothing a search service reads as a
   const [{ normalizeTopic }] = await modules;
   for (const topic of ['기후', 'climate change', 'K-pop', 'C++', 'C#', '.NET', 'R&D', 'AI/ML', "O'Reilly", 'O’Reilly', '3·1 운동', 'Node.js 22', '日本 経済', 'São Paulo',
     // Ordinary punctuation is not a search instruction and is sent encoded inside q.
-    '10%', '10,000', '1,000원', 'Yahoo!', '왜?', '기후, 날씨', 'a,b', '50% 할인!',
+    '10%', '10,000', '1,000원', 'Yahoo!', '왜?', '기후, 날씨', 'a,b', '50% 할인!', 'a%26b', '100%25',
+    // A hyphen between two letters or digits, a single dot.
+    '3-1', 'e-mail', 'COVID-19', '서울-부산', '3.5', 'v1.2.3',
     // OR, AND, NOT are operators only between two other words.
     'Oregon OR', 'Portland OR', 'OR 연산', 'OR', 'AND', 'NOT', 'NOT 기후', 'Rock AND', 'or', '기후 or 날씨', 'ORegon', 'a ORb c'])
     assert.equal(normalizeTopic(topic), topic, topic);
@@ -52,7 +54,9 @@ test('topics: words pass and are normalized; nothing a search service reads as a
   const refused = {
     'over 40 code points': ['𠀀'.repeat(41), '가'.repeat(41)],
     'empty': ['', '   ', '\u3000'],
-    'quotes': ['"기후"', '“기후”', '기후"', "'기후'", "기후'", '‘기후’', '«기후»', '＂기후＂', '`기후`'],
+    'quotes': ['"기후"', '“기후”', '기후"', "'기후'", "기후'", '‘기후’', '’기후’', '기후’', '’a', 'a’ b', 'a ’b', 'a’', '«기후»', '＂기후＂', '`기후`'],
+    'hyphen not between two letters or digits, number range': ['a,-b', 'a/-b', 'a.-b', 'a&-b', 'a!-b', 'a?-b', 'a%-b', 'a#-b', 'a+-b', 'a·-b', "a'-b", 'a’-b',
+      'a-', '기후-', 'a- b', 'a--b', '1..10', 'a..b', '..NET', 'a...b'],
     'field operators': ['site:example.com', 'site:example.com 기후', 'when:1d', '기후 when:7d', 'intitle:기후', 'allintitle:기후', 'inurl:x', 'source:x', 'after:2026-01-01', 'before:2026-01-01', '기후：변화'],
     'exclude, require, boolean, wildcard, grouping': ['-기후', '기후 -날씨', '+기후', '기후 +날씨', '기후 OR 날씨', '기후 AND 날씨', 'a NOT b', 'x OR OR y', 'OR OR OR', 'a AND b OR', '기후|날씨', '기후*', '(기후)', '기후~', '기후<1', 'a=b', '[기후]', '{기후}', '기후;날씨', '50:50', '@handle', '$100', 'a\\b', 'a_b', 'a^b', '-', 'a - b', '+ a'],
     'invisible letters and selectors': [0x115f, 0x1160, 0x3164, 0xffa0, 0x034f, 0x17b4, 0x180b, 0xfe0f, 0xe0101, 0xe0001, 0x061c, 0xfff9].flatMap(point => [String.fromCodePoint(point), '기' + String.fromCodePoint(point) + '후']),
@@ -87,9 +91,12 @@ test('supplier address: host and path are fixed, the topic is one encoded q valu
   const [, { upstreamURL }, , { googleNews }] = await modules;
   assert.equal(upstreamURL(googleNews, '기후', 'ko'), 'https://news.google.com/rss/search?q=%EA%B8%B0%ED%9B%84&hl=ko&gl=KR&ceid=KR:ko');
   assert.equal(upstreamURL(googleNews, 'climate change', 'en'), 'https://news.google.com/rss/search?q=climate%20change&hl=en-US&gl=US&ceid=US:en');
-  for (const topic of ['기후', 'climate change', 'R&D', 'C++', 'C#', 'AI/ML', "O'Reilly", 'O’Reilly', '.NET', '3·1 운동', 'a&hl=xx', 'a#b', 'a/../b']) {
+  for (const topic of ['기후', 'climate change', 'R&D', 'C++', 'C#', 'AI/ML', "O'Reilly", 'O’Reilly', '.NET', '3·1 운동', 'a&hl=xx', 'a#b', 'a/../b',
+    // % is sent as %25, so a topic that looks like an escape reaches the supplier as typed.
+    '10%', 'a%26b', '100%25', 'a%2Fb', '%41', '50% 할인!', 'a,b', 'Yahoo!', '왜?', 'K-pop']) {
     for (const language of ['ko', 'en']) {
       const address = upstreamURL(googleNews, topic, language), url = new URL(address);
+      assert.equal(decodeURIComponent(/^[^?]+\?q=([^&]*)&/.exec(address)[1]), topic, 'the raw q value decodes to the topic: ' + topic);
       assert.equal(url.origin, 'https://news.google.com'); assert.equal(url.pathname, '/rss/search');
       assert.deepEqual([...url.searchParams.keys()], ['q', 'hl', 'gl', 'ceid'], topic);
       assert.equal(url.searchParams.get('q'), topic, 'the topic arrives as typed: ' + topic);

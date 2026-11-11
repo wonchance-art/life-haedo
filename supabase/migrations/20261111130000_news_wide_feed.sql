@@ -29,23 +29,30 @@ grant usage on schema haedo_news_wide_private to authenticated,service_role;
 --     symbols and emoji
 --   * a word that starts with - or +
 --   * OR, AND, NOT between two other words
---   * an apostrophe that is not inside a word
+--   * an apostrophe or a hyphen next to a space, an allowed mark or the start or end
+--     (only between two letters or digits: O'Reilly, K-pop, 3-1)
+--   * two dots in a row (1..10)
 -- and at least one character that is not one of the allowed marks  . & + # ' / - , % ! ?
 -- (plus U+00B7 and U+2019). Every topic the Edge function accepts passes here; the Edge
 -- function additionally requires every other character to be a letter, digit or mark.
 -- Every non-ASCII character below is written as an escape on purpose: this file is ASCII,
 -- so no invisible character can be lost when the text is copied.
+-- The result does not depend on the caller's standard_conforming_strings: every literal with
+-- an escape is an E'' string (read the same way under either setting), no literal holds a
+-- backslash for the regular expression itself, and the backslash character is found with
+-- chr(92).
 create or replace function haedo_news_wide_private.topic_valid(p_topic text)
 returns boolean language sql immutable set search_path=pg_catalog as $$
  select coalesce(char_length(p_topic) between 1 and 40 and p_topic is nfc normalized
   and p_topic = btrim(p_topic, ' ') and position('  ' in p_topic) = 0
-  and p_topic !~ '[\u0001-\u001f\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180b-\u180f\u2000-\u2018\u201a-\u206f\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffd\U000E0000-\U000E01EF]'
-  and p_topic !~ '["$()*:;<=>@^_`{|}~\[\]\\]'
-  and p_topic !~ '[\u00a1-\u00a9\u00ab\u00ac\u00ae-\u00b1\u00b4\u00b6\u00b8\u00bb\u00bf\u00d7\u00f7\u2190-\u23ff\u2600-\u2775\u2794-\u27bf\u3001-\u3003\u3008-\u3020\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65\U0001F300-\U0001FAFF]'
+  and p_topic !~ E'[\u0001-\u001f\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180b-\u180f\u2000-\u2018\u201a-\u206f\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffd\U000E0000-\U000E01EF]'
+  and p_topic !~ '[]["$()*:;<=>@^_`{|}~]' and position(chr(92) in p_topic) = 0
+  and p_topic !~ E'[\u00a1-\u00a9\u00ab\u00ac\u00ae-\u00b1\u00b4\u00b6\u00b8\u00bb\u00bf\u00d7\u00f7\u2190-\u23ff\u2600-\u2775\u2794-\u27bf\u3001-\u3003\u3008-\u3020\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65\U0001F300-\U0001FAFF]'
   and p_topic !~ '(^| )[-+]'
   and p_topic !~ ' (OR|AND|NOT) '
-  and p_topic !~ '(^|[ .&+#/,%!?\u00b7\u2019''-])[''\u2019]|[''\u2019]($|[ .&+#/,%!?\u00b7\u2019''-])'
-  and p_topic ~ '[^ .&+#/,%!?\u00b7\u2019''-]', false)
+  and p_topic !~ E'(^|[ .&+#/,%!?\u00b7\u2019''-])[''\u2019-]|[''\u2019-]($|[ .&+#/,%!?\u00b7\u2019''-])'
+  and position('..' in p_topic) = 0
+  and p_topic ~ E'[^ .&+#/,%!?\u00b7\u2019''-]', false)
 $$;
 
 -- Link-only items. Each one is exactly {id,title,link,publishedAt,sourceName,sourceUrl}; the
@@ -62,13 +69,13 @@ begin
    or not i ?& array['id','title','link','publishedAt','sourceName','sourceUrl'] then return false; end if;
   if not coalesce(jsonb_typeof(i->'id') = 'string' and i->>'id' ~ '^[a-f0-9]{32}$', false) then return false; end if;
   if not coalesce(jsonb_typeof(i->'title') = 'string' and char_length(i->>'title') between 1 and 300
-   and i->>'title' !~ '[\u0001-\u001f\u007f-\u009f]', false) then return false; end if;
+   and i->>'title' !~ E'[\u0001-\u001f\u007f-\u009f]', false) then return false; end if;
   if not coalesce(jsonb_typeof(i->'link') = 'string' and char_length(i->>'link') <= 2048
    and i->>'link' ~ '^https://news[.]google[.]com/[!-~]*$' and position(E'\\' in i->>'link') = 0, false) then return false; end if;
   if not coalesce(jsonb_typeof(i->'publishedAt') = 'null' or (jsonb_typeof(i->'publishedAt') = 'string'
    and i->>'publishedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$'), false) then return false; end if;
   if not coalesce(jsonb_typeof(i->'sourceName') = 'null' or (jsonb_typeof(i->'sourceName') = 'string'
-   and char_length(i->>'sourceName') between 1 and 100 and i->>'sourceName' !~ '[\u0001-\u001f\u007f-\u009f]'), false) then return false; end if;
+   and char_length(i->>'sourceName') between 1 and 100 and i->>'sourceName' !~ E'[\u0001-\u001f\u007f-\u009f]'), false) then return false; end if;
   if not coalesce(jsonb_typeof(i->'sourceUrl') = 'null' or (jsonb_typeof(i->'sourceUrl') = 'string'
    and char_length(i->>'sourceUrl') <= 2048 and i->>'sourceUrl' ~ '^https://[!-~]+$'
    and position(E'\\' in i->>'sourceUrl') = 0), false) then return false; end if;
