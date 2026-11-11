@@ -85,6 +85,9 @@ async function main() {
         // 높이가 달라져도 줄은 그대로여야 하므로, 본문이 읽는 줄(화면 높이 1/3)에 걸쳐 있었으면 scrollY 값이 아니라 고른 구절이
         // 화면에 놓인 높이를 비교한다. 본문 시작보다 위(문서 맨 위)에서는 잡을 줄이 없으므로 이전처럼 scrollY를 비교한다.
         // (Playwright의 click은 누르기 전에 스스로 스크롤할 수 있어, 그때의 실제 상태를 pointerdown에서 기록한다.)
+        // 위의 scrollTo는 html{scroll-behavior:smooth} 때문에 애니메이션으로 진행된다. 멎기 전에 누르면 구절이 아직 읽는 줄에
+        // 오지 않아 아래의 "읽는 줄" 분기가 한 번도 돌지 않았다(2026-11-11 독립 검수). 멎은 뒤에 누른다.
+        await page.evaluate(() => new Promise(resolve => { let last = scrollY, still = 0; const tick = () => { if (scrollY === last) still++; else { still = 0; last = scrollY; } if (still >= 12) resolve(); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
         await page.locator('#lifeExcerptToggle').evaluate(el => el.addEventListener('pointerdown', () => {
           const body = document.querySelector('#lifeSourceText').getBoundingClientRect();
           window.__readingSelectedY = scrollY; window.__readingSelectedTop = getSelection().getRangeAt(0).getBoundingClientRect().top;
@@ -96,6 +99,7 @@ async function main() {
         await save.click(); await settle(page); await page.locator('#lifeSourceText').waitFor();
         await page.waitForFunction(() => getSelection().rangeCount === 1 && (__readingOnLine ? Math.abs(getSelection().getRangeAt(0).getBoundingClientRect().top - __readingSelectedTop) <= 2 : Math.abs(scrollY - __readingSelectedY) <= 2)).catch(() => {});
         const saved = report.observations.at(-1).savedPosition = await page.evaluate(() => ({ onLine: __readingOnLine, expectedTop: __readingSelectedTop, actualTop: getSelection().rangeCount ? getSelection().getRangeAt(0).getBoundingClientRect().top : null, scrollBefore: __readingSelectedY, scrollAfter: scrollY }));
+        if (!baseline) assert.equal(saved.onLine, true, 'the passage was on the reading line when the button was pressed: ' + JSON.stringify(saved));
         if (saved.onLine) assert(Math.abs(saved.actualTop - saved.expectedTop) <= 2, 'the selected passage is back at the same height on screen: ' + JSON.stringify(saved));
         else assert(Math.abs(saved.scrollAfter - saved.scrollBefore) <= 2, 'the page is back at the same scroll position: ' + JSON.stringify(saved));
         assert.equal(await page.evaluate(() => getSelection().toString()), quote);
