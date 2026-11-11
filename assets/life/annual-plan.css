@@ -57,7 +57,7 @@ body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-toolbar > .haedo-he
 .ap-entry::after { content: ''; display: block; clear: both; }
 .ap-add-month { display: block; width: 100%; padding: 8px 0; text-align: left; color: var(--ap-muted) !important; font-size: 12px; }
 .ap-settings { margin-top: 28px; border-top: 1px solid var(--ap-line); }
-.ap-settings > summary, .ap-latest > summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ap-muted); font-size: 14px; }
+.ap-settings > summary, .ap-kept > summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ap-muted); font-size: 14px; }
 .ap-options { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 24px; margin: 12px 0 20px; }
 .ap-options label { display: flex; flex-direction: column; gap: 6px; color: var(--ap-muted); font-size: 13px; }
 .ap-options :is(input:not([type=checkbox]), select) { min-height: 44px; padding: 6px 2px; border: 0; border-bottom: 1px solid var(--field-line); border-radius: 0; background: var(--paper); color: var(--ap-ink); font-size: 16px; }
@@ -69,7 +69,7 @@ body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-toolbar > .haedo-he
 .ap-file-label input::file-selector-button { min-height: 44px; padding: 8px 12px; margin-right: 8px; border: 1px solid var(--field-line); border-radius: var(--haedo-control-radius, 12px); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
 .ap-error { color: var(--color-error, #a3243d); font-size: 14px; }
 .ap-recovery:has(> .ap-error:not([hidden])), .ap-confirm { margin: 12px 0 20px; }
-.ap-recovery > .ap-button, .ap-confirm > .ap-button, .ap-settings > .ap-button { margin-right: 20px; }
+.ap-confirm > .ap-button, .ap-settings > .ap-button { margin-right: 20px; }
 .ap-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
 .ap-confirm > .ap-button { margin-right: 0; }
 .ap-copy-text { max-height: 260px; overflow: auto; margin: 12px 0; padding: 12px 0; border-top: 1px solid var(--ap-line); border-bottom: 1px solid var(--ap-line); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ap-ink); font: inherit; font-size: 14px; }
