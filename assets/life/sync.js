@@ -19,6 +19,8 @@
     remote_exists: '같은 ID의 서버 작업공간이 있습니다. 서버 목록에서 열어 주세요.',
     remote_missing: '연결된 서버 작업공간을 찾을 수 없습니다. 자동으로 다시 만들지 않았습니다.',
     workspace_conflict: '이 브라우저의 변경이 있습니다. 양쪽 내용을 먼저 비교해 주세요.',
+    merge_invalid: '양쪽 자료를 자동으로 합치지 못했습니다. 양쪽 자료는 보존했습니다.',
+    merge_unavailable: '자료를 자동으로 합치는 모듈을 불러오지 못했습니다. 새로고침해 주세요.',
     stale_conflict: '비교 후 내용이나 버전이 바뀌었습니다. 다시 비교한 뒤 선택해 주세요.',
     remote_invalid: '서버 자료의 형식 또는 버전이 맞지 않아 적용하지 않았습니다.',
     remote_revision_regressed: '서버 버전이 이전보다 낮아 적용하지 않았습니다.',
@@ -169,7 +171,8 @@
         if (disposed || generation !== epoch || !account) return;
         if (state?.enabled && sameBinding(state.binding, { projectUrl: account.projectUrl, userId: account.userId, remoteId: workspace.workspaceId })) {
           watch(workspace.workspaceId);
-          if (run && !state.conflict) schedule(workspace.workspaceId, 0);
+          // A recorded difference is merged by the next run; only a deleted server copy waits.
+          if (run && !state.conflict?.missing) schedule(workspace.workspaceId, 0);
         }
       }
     }
@@ -414,6 +417,39 @@
       emit('state', context.workspaceId);
       return getState(context.workspaceId);
     }
+    // Both sides changed. The storage joins them item by item in one transaction (both sides'
+    // exact source versions stay; SyncCommon.mergeWorkspace) and the run then sends the result
+    // with the usual CAS, merging again if the server moved meanwhile. The difference is
+    // recorded for the manual comparison only when it cannot be merged: the merged snapshot is
+    // not a valid workspace or exceeds the size limit, or this page lacks the merge module.
+    // Returns true when the run may continue.
+    const UNMERGEABLE = new Set(['merge_invalid', 'merge_unavailable', 'snapshot_too_large']);
+    async function reconcile(context, expected, row, recorded = null) {
+      guard(context);
+      if (typeof storage.mergeSyncRemote === 'function') {
+        try {
+          await storage.mergeSyncRemote(context.workspaceId, expected, row); guard(context);
+          emit('state', context.workspaceId); return true;
+        } catch (error) {
+          guard(context);
+          if (!UNMERGEABLE.has(error?.code)) throw error;
+        }
+      }
+      // Every later run tries the merge again. A difference that is already recorded for this
+      // server revision is not announced again: an open comparison is not redrawn by each attempt
+      // (the storage announces it itself when the record really changes).
+      if (!recorded || recorded.missing || recorded.remoteRevision !== row.revision) { await observeConflict(context, expected, row); return false; }
+      await storage.setSyncConflict(context.workspaceId, expected, row); guard(context);
+      return false;
+    }
+    // A device that synced before the merge base existed stores it once per acknowledged revision.
+    const based = new Set();
+    async function rememberBase(context, expected, state) {
+      const key = context.workspaceId + ':' + state.remoteRevision;
+      if (based.has(key) || typeof storage.captureSyncBase !== 'function') return;
+      try { if (await storage.captureSyncBase(context.workspaceId, expected)) based.add(key); } catch (_) { /* The next clean check stores it. */ }
+      guard(context);
+    }
     async function upload(context, expected, outbox) {
       await verified(context);
       const reply = await remote(context).write({ workspaceId: expected.remoteId, expectedRevision: outbox.expectedRevision, operationId: outbox.operationId, data: clone(outbox.data) });
@@ -425,7 +461,9 @@
       }
       if (reply?.status === 'conflict' || reply?.status === 'missing') {
         const row = reply.status === 'missing' ? null : await readRemote(context, expected.remoteId);
-        await observeConflict(context, expected, row); return false;
+        if (!row) { await observeConflict(context, expected, null); return false; }
+        await verified(context);
+        return reconcile(context, expected, row);
       }
       throw fault('remote_invalid');
     }
@@ -435,7 +473,13 @@
         for (let pass = 0; pass < 8; pass++) {
           const state = await storage.getSyncState(context.workspaceId); guard(context);
           const expected = checkedBinding(context, state);
-          if (state.conflict) return observeConflict(context, expected, await readRemote(context, expected.remoteId));
+          if (state.conflict) {
+            // A difference recorded earlier (by an older version, or one that could not be merged then).
+            const row = await readRemote(context, expected.remoteId); await verified(context);
+            if (!row) return observeConflict(context, expected, null);
+            if (await reconcile(context, expected, row, state.conflict)) continue;
+            return getState(context.workspaceId);
+          }
           // A saved request always precedes remote reads: a lost success is recovered from its receipt.
           if (state.outbox) { if (await upload(context, expected, state.outbox)) continue; return getState(context.workspaceId); }
           if (state.remoteRevision === 0 && state.syncedLocalRevision === -1) {
@@ -453,7 +497,7 @@
               if (head.revision < state.remoteRevision) throw fault('remote_revision_regressed');
               // Only dependency/poll callers opt into trusting the unchanged CAS
               // revision. Explicit sync retains the full equal-revision body check.
-              if (head.revision === state.remoteRevision) return getState(context.workspaceId);
+              if (head.revision === state.remoteRevision) { await rememberBase(context, expected, state); return getState(context.workspaceId); }
             }
           }
           const row = await readRemote(context, expected.remoteId);
@@ -463,14 +507,16 @@
           const local = await storage.read(context.workspaceId); guard(context);
           const dirty = local.revision !== state.syncedLocalRevision;
           if (row.revision > state.remoteRevision) {
-            if (dirty) return observeConflict(context, expected, row);
+            if (dirty) { if (await reconcile(context, expected, row)) continue; return getState(context.workspaceId); }
             const applied = await storage.applySyncRemote(context.workspaceId, expected, row); guard(context);
-            if (applied.status !== 'stored') return observeConflict(context, expected, row);
+            // A local save landed between the read and the apply: merge it with this row.
+            if (applied.status !== 'stored') { if (await reconcile(context, expected, row)) continue; return getState(context.workspaceId); }
             emit('state', context.workspaceId); continue;
           }
           if (!dirty) {
             const applied = await storage.applySyncRemote(context.workspaceId, expected, row); guard(context);
-            if (applied.status !== 'stored') return observeConflict(context, expected, row);
+            // The server did not move; a local save that landed meanwhile is sent by the next pass.
+            if (applied.status !== 'stored') continue;
             if (state.error) { await storage.setSyncError(context.workspaceId, expected, null); guard(context); }
             return getState(context.workspaceId);
           }

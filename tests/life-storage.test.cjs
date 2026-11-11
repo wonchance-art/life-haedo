@@ -2039,3 +2039,120 @@ test('a corrupted workspace keeps post and list operations working while content
   row.value.title = 42; meta.set(postKey, row);
   await assert.rejects(storage.readPhotoPost(ws, received.id), { code: 'invalid_photo_post' });
 });
+
+// ---- Originals merge in one storage transaction (2026-11-11) -----------------------------------
+// Both devices changed the workspace. The rules themselves are in tests/source-merge.test.cjs and
+// two real devices in tests/source-merge-browser.cjs; here: what the transaction writes.
+async function addSource(storage, bundle, title, text = title + ' 본문') {
+  const prepared = await Core.prepareImport({ origin: 'other', title, text, forceSeparate: true }, bundle);
+  assert.equal((await storage.commitLocal({ workspaceId: bundle.workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared, []) })).status, 'stored');
+  return storage.read(bundle.workspaceId);
+}
+async function withSource(bundle, title, text = title + ' 본문') {
+  const prepared = await Core.prepareImport({ origin: 'other', title, text, forceSeparate: true }, bundle);
+  return Core.applyChanges(bundle, Core.buildImportChanges(bundle, prepared, []));
+}
+const sourceTitles = bundle => bundle.sources.map(source => source.title).sort();
+
+test('mergeSyncRemote joins both sides, replaces the refused request and keeps the server snapshot as the next base', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  let local = await addSource(storage, base, '이 기기 자료');
+  const refused = await storage.prepareSyncUpload(id, binding); assert.equal(refused.expectedRevision, 1);
+  const server = await withSource(base, '다른 기기 자료');
+  const events = []; storage.subscribe(id, event => events.push(event.type));
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.deepEqual([result.status, result.pending, result.notice], ['merged', true, false]);
+  local = await storage.read(id);
+  assert.deepEqual(sourceTitles(local), ['다른 기기 자료', '이 기기 자료', '익명 자료']); assert.equal(local.revision, result.revision);
+  const state = await storage.getSyncState(id);
+  assert.deepEqual([state.status, state.outbox, state.conflict, state.remoteRevision, state.syncedLocalRevision], ['pending', null, null, 2, -1]);
+  assert.deepEqual(events, ['changed', 'sync_changed']);
+  // The merged snapshot is the next request, against the revision it was merged with.
+  const next = await storage.prepareSyncUpload(id, binding);
+  assert.notEqual(next.operationId, refused.operationId); assert.equal(next.expectedRevision, 2); assert.deepEqual(sourceTitles(next.data), sourceTitles(local));
+  assert.equal((await storage.ackSync(id, binding, next.operationId, 3)).status, 'synced');
+  // The stored snapshot is the base of the next merge: a deletion made elsewhere of an excerpt this device left alone applies.
+  local = await addSource(storage, local, '이 기기 두 번째 자료');
+  const deleted = Core.applyChanges(next.data, { remove: { records: [base.records[0].id] } });
+  await storage.mergeSyncRemote(id, binding, serverRow(deleted, 4));
+  local = await storage.read(id);
+  assert.deepEqual(local.records, []); assert.deepEqual(local.tombstones.map(mark => mark.entityId), [base.records[0].id]);
+  assert.ok(sourceTitles(local).includes('이 기기 두 번째 자료'));
+});
+
+test('a recorded difference whose local side did not change is taken exactly as the server snapshot and is synced', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  const server = await withSource(base, '다른 기기 자료'), row = serverRow(server, 2);
+  await storage.setSyncConflict(id, binding, row); assert.equal((await storage.getSyncState(id)).status, 'conflict');
+  // Recording the same difference again writes and announces nothing.
+  const events = []; storage.subscribe(id, event => events.push(event.type));
+  await storage.setSyncConflict(id, binding, row); assert.deepEqual(events, []);
+  const result = await storage.mergeSyncRemote(id, binding, row);
+  assert.equal(result.pending, false);
+  const state = await storage.getSyncState(id), local = await storage.read(id);
+  assert.deepEqual([state.status, state.conflict, state.remoteRevision, state.syncedLocalRevision], ['synced', null, 2, local.revision]);
+  assert.deepEqual({ ...local, revision: 0 }, { ...server, revision: 0 });
+  assert.equal(await storage.prepareSyncUpload(id, binding), null, 'nothing to send');
+  assert.equal((await storage.applySyncRemote(id, binding, row)).status, 'stored', 'the equal-revision check of a later run passes');
+});
+
+test('a merge that cannot be made leaves the workspace, the pending request and the state as they were', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  await addSource(storage, base, '이 기기 자료');
+  await storage.prepareSyncUpload(id, binding);
+  const before = { bundle: await storage.read(id), state: await storage.getSyncState(id) };
+  // The same exact version with other text is damage: an error, never a merge.
+  const damaged = structuredClone(await withSource(base, '다른 기기 자료'));
+  damaged.sourceVersions[0].contentText = '같은 식별자의 다른 본문'; damaged.records = [];
+  await assert.rejects(storage.mergeSyncRemote(id, binding, serverRow(damaged, 2)), { code: 'immutable_source_version' });
+  assert.deepEqual({ bundle: await storage.read(id), state: await storage.getSyncState(id) }, before);
+  // Two edited-copy marks for one exact version cannot be one valid workspace: left for the comparison.
+  const versionId = base.sourceVersions[0].id, at = base.sourceVersions[0].importedAt;
+  const mark = () => ({ id: Core.id(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: versionId }], revision: 1, createdAt: at, updatedAt: at });
+  const marked = structuredClone(before.bundle); marked.links.push(mark()); Core.validateWorkspace(marked);
+  const other = structuredClone(base); other.links.push(mark()); Core.validateWorkspace(other);
+  const second = syncFixture(); t.after(() => second.storage.close());
+  await second.storage.installWorkspaces([marked]);
+  const bindingB = bindingFor(marked); await second.storage.bindSync(marked.workspaceId, bindingB);
+  const local = await second.storage.read(marked.workspaceId);
+  await assert.rejects(second.storage.mergeSyncRemote(marked.workspaceId, bindingB, serverRow(other, 1)), { code: 'merge_invalid' });
+  assert.deepEqual(await second.storage.read(marked.workspaceId), local);
+  assert.equal((await second.storage.getSyncState(marked.workspaceId)).conflict, null);
+});
+
+test('the notice of a merged same-item edit stays until acknowledged; a device without a base deletes nothing', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  assert.equal(await storage.getSyncNotice(id), null);
+  let local = await editNote(storage, base, '이 기기 메모');
+  const server = Core.applyChanges(base, { put: { records: [{ ...base.records[0], note: '다른 기기의 나중 메모', revision: 2, updatedAt: new Date(Date.now() + 60000).toISOString() }] } });
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.equal(result.notice, true);
+  local = await storage.read(id);
+  assert.deepEqual(local.records.map(record => [record.note, record.topic]), [['다른 기기의 나중 메모', '검증'], ['이 기기 메모', '복구 사본 · 검증']]);
+  const notice = await storage.getSyncNotice(id);
+  assert.deepEqual([notice.sourceIds, notice.recordIds], [[], [local.records[1].id]]);
+  const upload = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, upload.operationId, 3);
+  assert.deepEqual((await storage.getSyncNotice(id)).recordIds, notice.recordIds, 'kept across the upload');
+  await storage.dismissSyncNotice(id); assert.equal(await storage.getSyncNotice(id), null);
+  // A device that diverged before it stored a base (the record is absent): nothing is deleted.
+  const baseKey = JSON.stringify('syncBase:' + id);
+  assert.ok(rows.get('meta').has(baseKey)); rows.get('meta').delete(baseKey);
+  local = await addSource(storage, local, '기준 없이 가져온 자료');
+  const deleted = Core.applyChanges(upload.data, { remove: { records: [base.records[0].id] } });
+  await storage.mergeSyncRemote(id, binding, serverRow(deleted, 4));
+  local = await storage.read(id);
+  assert.ok(local.records.some(record => record.id === base.records[0].id)); assert.equal(local.tombstones.some(mark => mark.entityId === base.records[0].id), false);
+  // Seen clean once, the base is stored without a network exchange.
+  const sent = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, sent.operationId, 5);
+  rows.get('meta').delete(baseKey);
+  assert.equal(await storage.captureSyncBase(id, binding), true);
+  assert.equal(rows.get('meta').get(baseKey).value.remoteRevision, 5);
+  await addSource(storage, await storage.read(id), '저장 대기 자료');
+  rows.get('meta').delete(baseKey);
+  assert.equal(await storage.captureSyncBase(id, binding), false, 'never from a snapshot with unsent changes');
+  assert.equal(rows.get('meta').has(baseKey), false);
+});

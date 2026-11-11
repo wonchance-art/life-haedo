@@ -383,6 +383,36 @@ async function main() {
         assert.equal((await state(a.page,id)).status,'synced');
       } finally { server.offline.delete('a'); }
     });
+    // Rule change (2026-11-11, originals merge): two devices that each changed the workspace while
+    // apart are joined item by item, without a choice and without a copy workspace. Before this,
+    // the device read `conflict` and waited for the manual comparison (the two checks below).
+    await check('both devices changed the workspace while apart: merged without a choice on both devices and the server',async () => {
+      server.offline.add('b'); await b.context.setOffline(true);
+      await append(b.page,id,'B 떨어져 있는 동안 가져온 자료'); await syncNow(b.page,id);
+      await append(a.page,id,'A 떨어져 있는 동안 가져온 자료'); await syncNow(a.page,id);
+      const beforeIds = await b.page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w=>w.workspaceId));
+      server.offline.delete('b'); await b.context.setOffline(false); await syncNow(b.page,id);
+      const merged = await state(b.page,id);
+      assert.equal(merged.status,'synced'); assert.equal(merged.conflict,null); assert.equal(merged.outbox,null);
+      await syncNow(a.page,id);
+      const first = await bundle(a.page,id), second = await bundle(b.page,id);
+      for (const title of ['A 떨어져 있는 동안 가져온 자료','B 떨어져 있는 동안 가져온 자료']) {
+        assert.ok(first.sources.some(s => s.title === title) && second.sources.some(s => s.title === title),title);
+        assert.ok(server.row(accounts.a.id,id).data.sources.some(s => s.title === title),title);
+      }
+      assert.deepEqual({...first,revision:0},{...second,revision:0},'both devices hold the same snapshot');
+      assert.deepEqual(await b.page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w=>w.workspaceId)),beforeIds,'no copy workspace: nothing was chosen');
+    });
+    // The manual comparison stays for what cannot be merged. The two checks below keep their
+    // assertions and run on a page that still has an older shared module without the merge
+    // (mixed versions during an update): there the difference is recorded as before.
+    const olderModule = async route => {
+      const response = await route.fetch(), body = await response.text(), changed = body.replace('canonical, mergeWorkspace, mergeBase,','canonical, mergeBase,');
+      assert.notEqual(changed,body,'the served module exports the merge'); return route.fulfill({response,body:changed});
+    };
+    const reopen = async page => { await page.reload(); await ready(page); await page.waitForFunction(() => HaedoLife.Shell.sync.getAccount()?.userId === '11111111-1111-4111-8111-111111111111'); };
+    await b.context.route(`${base}/assets/life/sync-common.js`,olderModule); await reopen(b.page);
+    assert.equal(await b.page.evaluate(() => typeof HaedoLife.SyncCommon.mergeWorkspace),'undefined');
     await check('conflict remote choice preserves unselected local content in a separate unbound copy',async () => {
       server.offline.add('b'); await b.context.setOffline(true);
       await append(b.page,id,'B 충돌 전용 자료'); await syncNow(b.page,id);
@@ -421,6 +451,8 @@ async function main() {
       assert.deepEqual((await bundle(b.page,copies[0].workspaceId)).sourceVersions.map(v=>v.contentText).sort(),remoteBefore.data.sourceVersions.map(v=>v.contentText).sort());
       assert.equal(await state(b.page,copies[0].workspaceId),null);
     });
+    await b.context.unroute(`${base}/assets/life/sync-common.js`,olderModule); await reopen(b.page);
+    assert.equal(await b.page.evaluate(() => typeof HaedoLife.SyncCommon.mergeWorkspace),'function');
     await check('pause and logout keep local work/outbox; another account cannot upload the old binding',async () => {
       await click(b.page,'동기화'); await click(b.page,'연결 중지');
       const requests = server.writes().length;

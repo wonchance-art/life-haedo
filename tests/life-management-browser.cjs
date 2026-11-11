@@ -56,7 +56,24 @@ async function enable(page) {
   await page.evaluate(async () => HaedoLife.Shell.sync.syncNow(await HaedoLife.Shell.storage.getActive()));
   await waitSyncState(page, state => state?.status === 'synced');
 }
+// Rule change (2026-11-11, originals merge): a difference between this device and the server is
+// merged by the next sync run, so a recorded conflict no longer waits for the person. The manual
+// comparison is reached only when the merge is unavailable. These journeys keep exercising that
+// screen on a page that still runs an older shared module without the merge (mixed versions
+// during an update); their assertions are unchanged.
+const olderPages = new WeakSet();
+async function withoutMerge(page) {
+  const context = page.context();
+  if (olderPages.has(context)) return; olderPages.add(context);
+  await context.route(base + '/assets/life/sync-common.js', async route => {
+    const response = await route.fetch(), body = await response.text(), changed = body.replace('canonical, mergeWorkspace, mergeBase,', 'canonical, mergeBase,');
+    assert.notEqual(changed, body, 'the served module exports the merge'); return route.fulfill({ response, body: changed });
+  });
+  await page.reload(); await ready(page); await syncing(page);
+  assert.equal(await page.evaluate(() => typeof HaedoLife.SyncCommon.mergeWorkspace), 'undefined');
+}
 async function conflict(page, server) {
+  await withoutMerge(page);
   const value = await bundle(page), row = structuredClone(server.row(accounts.a.id, value.workspaceId));
   row.revision++; row.updated_at = '2026-10-04T01:00:00.000Z'; row.data.revision++;
   row.data.records[0].note = '서버에서 다시 읽고 덧붙인 생각을 보존합니다.'; row.data.records[0].revision++;

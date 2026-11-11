@@ -488,8 +488,36 @@
           }
         }
       } else if (!partial && typeof core().assertSourceLinkPreservation === 'function') {
-        core().assertSourceLinkPreservation(local, incoming);
+        // Two devices that each moved the same never-trashed source to the trash made two rows;
+        // the merged workspace keeps one (SyncCommon.mergeWorkspace). The row it replaced is
+        // then not missing history: the kept row is a later state of the same source.
+        const replaced = syncCommon()?.replacedSourceLinks?.(local, incoming);
+        core().assertSourceLinkPreservation(replaced?.size ? { ...local, links: local.links.filter(link => !replaced.has(link.id)) } : local, incoming);
       }
+    }
+    // The last server snapshot this device agreed on (after an upload was stored or a server
+    // snapshot was applied), in its own key: the sync record keeps its format for older pages.
+    // It is the common ancestor of a later merge and is used only while it still describes the
+    // acknowledged server revision; an older page that moves the revision leaves it unused.
+    const syncBaseKey = workspaceId => `syncBase:${workspaceId}`;
+    async function readSyncBase(meta, workspaceId) {
+      const value = (await meta.get(syncBaseKey(workspaceId)))?.value;
+      if (!plain(value) || value.format !== 'life-sync-base-v1' || !Number.isSafeInteger(value.remoteRevision) || !plain(value.base)) return null;
+      return value;
+    }
+    function syncNoticeValue(value) {
+      const ids = list => Array.isArray(list) ? list.filter(id => typeof id === 'string' && id) : [];
+      if (!plain(value) || typeof value.at !== 'string' || !Number.isFinite(Date.parse(value.at))) return null;
+      const notice = { at: value.at, sourceIds: ids(value.sourceIds), recordIds: ids(value.recordIds) };
+      return notice.sourceIds.length || notice.recordIds.length ? notice : null;
+    }
+    async function writeSyncBase(meta, workspaceId, remoteRevision, data, added = null) {
+      const merge = syncCommon();
+      if (typeof merge?.mergeBase !== 'function') return;
+      const previous = syncNoticeValue((await readSyncBase(meta, workspaceId))?.notice);
+      const notice = !added ? previous : { at: new Date().toISOString(),
+        sourceIds: [...new Set([...(previous?.sourceIds || []), ...added.sourceIds])], recordIds: [...new Set([...(previous?.recordIds || []), ...added.recordIds])] };
+      await meta.put({ key: syncBaseKey(workspaceId), value: { format: 'life-sync-base-v1', remoteRevision, base: merge.mergeBase(data), notice } });
     }
     function validateSyncState(state, workspaceId) {
       try {
@@ -3965,6 +3993,7 @@
           syncedLocalRevision: exact ? bundle.revision : -1, outbox: null,
           conflict: !exact && !pristine ? { missing: false, row, remoteRevision: row.revision, localRevision: bundle.revision } : null,
           status: exact ? 'synced' : pristine ? 'pending' : 'conflict', error: null };
+        if (exact || pristine) await writeSyncBase(meta, workspaceId, row.revision, row.data);
         return writeSyncState(meta, sync);
       });
       syncChanged(state); return state;
@@ -4009,6 +4038,7 @@
             remoteRevision !== sync.outbox.expectedRevision + 1 || remoteRevision < revisionFloor(sync)) {
           throw fault('stale_sync_result', '현재 전송 작업과 다른 응답입니다. 최신 동기화 상태를 확인하세요.');
         }
+        await writeSyncBase(tx.objectStore('meta'), workspaceId, remoteRevision, sync.outbox.data);
         sync.remoteRevision = remoteRevision; sync.syncedLocalRevision = sync.outbox.localRevision;
         sync.outbox = null; sync.error = null; sync.status = syncStatus(sync, bundle);
         return writeSyncState(tx.objectStore('meta'), sync);
@@ -4030,11 +4060,13 @@
           if (stablePayload({ ...row.data, revision: bundle.revision }) !== stablePayload(bundle)) {
             throw fault('remote_revision_mismatch', '같은 서버 버전의 내용이 달라졌습니다. 로컬 자료를 보존했습니다.');
           }
+          if ((await readSyncBase(tx.objectStore('meta'), workspaceId))?.remoteRevision !== row.revision) await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
           return { status: 'stored', revision: bundle.revision };
         }
         const updated = nextLocalSnapshot(bundle, row);
         sync.remoteRevision = row.revision; sync.syncedLocalRevision = updated.revision;
         sync.status = 'synced'; sync.error = null;
+        await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
         await tx.objectStore('bundles').put(updated);
         event = await writeSyncState(tx.objectStore('meta'), sync);
         return { status: 'stored', revision: updated.revision };
@@ -4057,10 +4089,93 @@
         await tx.objectStore('bundles').add(bundle);
         await saveOwner(tx.objectStore('meta'), bundle.workspaceId);
         await writeSyncState(tx.objectStore('meta'), state);
+        await writeSyncBase(tx.objectStore('meta'), bundle.workspaceId, row.revision, row.data);
         if (activate) await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
       });
       changed(bundle.workspaceId, bundle.revision); syncChanged(state);
       return clone(bundle);
+    }
+    // Both sides changed the originals. One transaction joins this device's snapshot with the
+    // server row item by item (SyncCommon.mergeWorkspace): both sides' exact source versions stay,
+    // and the next upload sends the result with the usual CAS. The pending request, which the
+    // server refused, is replaced by that upload. Nothing here chooses a side or needs the person.
+    async function mergeSyncRemote(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = remoteRow(inputRow, workspaceId);
+      const merge = syncCommon();
+      if (typeof merge?.mergeWorkspace !== 'function') throw fault('merge_unavailable', '자료를 자동으로 합치는 모듈을 불러오지 못했습니다. 새로고침해 주세요. 양쪽 자료는 보존했습니다.');
+      let wrote = false;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const sync = authorizedSync(await readSyncState(meta, workspaceId, bundle), binding);
+        if (row.revision < revisionFloor(sync)) throw fault('stale_sync_result', '더 최신 서버 상태를 이미 확인했습니다. 다시 동기화하세요.');
+        const stored = await readSyncBase(meta, workspaceId);
+        const base = stored && sync.remoteRevision > 0 && stored.remoteRevision === sync.remoteRevision ? stored.base : null;
+        const exact = stablePayload({ ...row.data, revision: bundle.revision }) === stablePayload(bundle);
+        let merged, updated;
+        try {
+          merged = merge.mergeWorkspace({ base, local: bundle, remote: row.data });
+          // The server content, unchanged: taken exactly (its own timestamps), as a plain receive does.
+          updated = exact || (merged.equalsLocal && !merged.equalsRemote) ? bundle
+            : { ...(merged.equalsRemote ? clone(row.data) : merged.bundle), revision: bundle.revision + 1 };
+          core().validateWorkspace(updated);
+          // Every device must be able to take the result over what it holds: both sides' exact
+          // versions, sources and edit history are in it.
+          for (const side of [bundle, row.data]) {
+            for (const name of ['sources', 'sourceVersions']) {
+              const ids = new Set(updated[name].map(item => item.id));
+              if (side[name].some(item => !ids.has(item.id))) throw fault('merge_invalid', '합친 자료에 빠진 원문이 있습니다.');
+            }
+            immutableVersions(side, updated);
+          }
+        } catch (error) {
+          if (['immutable_source_version', 'immutable_source_link'].includes(error?.code)) throw error;
+          throw fault('merge_invalid', '양쪽 자료를 자동으로 합치지 못했습니다. 양쪽 자료는 보존했습니다.');
+        }
+        const clean = exact || merged.equalsRemote;
+        if (!clean && new TextEncoder().encode(JSON.stringify(updated)).length > SYNC_MAX_BYTES) {
+          throw fault('snapshot_too_large', '합친 자료가 동기화 크기 제한(16 MiB)을 넘습니다. 양쪽 자료는 보존했습니다.');
+        }
+        wrote = updated !== bundle;
+        if (wrote) await tx.objectStore('bundles').put(updated);
+        sync.outbox = null; sync.conflict = null; sync.error = null; sync.remoteRevision = row.revision;
+        sync.syncedLocalRevision = clean ? updated.revision : -1; sync.status = clean ? 'synced' : 'pending';
+        await writeSyncBase(meta, workspaceId, row.revision, row.data, merged.notice);
+        return { status: 'merged', revision: updated.revision, pending: !clean, notice: !!merged.notice, metadata: await writeSyncState(meta, sync) };
+      });
+      if (wrote) changed(workspaceId, result.revision);
+      syncChanged(result.metadata);
+      return result;
+    }
+    // A device that synced before this record existed stores it the first time it is seen clean.
+    async function captureSyncBase(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const sync = authorizedSync(await readSyncState(meta, workspaceId, bundle), binding);
+        if (sync.remoteRevision < 1 || sync.outbox || sync.conflict || bundle.revision !== sync.syncedLocalRevision) return false;
+        if ((await readSyncBase(meta, workspaceId))?.remoteRevision !== sync.remoteRevision) await writeSyncBase(meta, workspaceId, sync.remoteRevision, bundle);
+        return true;
+      });
+    }
+    // Set when a merge kept the later of two edits of the same item; stays until acknowledged.
+    async function getSyncNotice(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await assertOwner(meta, workspaceId);
+        return syncNoticeValue((await readSyncBase(meta, workspaceId))?.notice);
+      });
+    }
+    async function dismissSyncNotice(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      const state = await transaction(['meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await assertOwner(meta, workspaceId);
+        const stored = await readSyncBase(meta, workspaceId);
+        if (!stored?.notice) return null;
+        await meta.put({ key: syncBaseKey(workspaceId), value: { ...stored, notice: null } });
+        return (await meta.get(`sync:${workspaceId}`))?.value || null;
+      });
+      if (state) syncChanged(state);
+      return null;
     }
     async function setSyncConflict(workspaceId, input, inputRow) {
       const binding = bindingValue(input, workspaceId), row = inputRow === null ? null : remoteRow(inputRow, workspaceId);
@@ -4075,6 +4190,8 @@
               stablePayload(row.data) !== stablePayload(sync.conflict.row.data)) {
             throw fault('remote_revision_mismatch', '같은 서버 버전의 충돌 내용이 달라졌습니다.');
           }
+          // Recorded already for this server revision and this local revision: nothing to write or announce.
+          if (sync.conflict?.row && !sync.error && row.revision === sync.conflict.remoteRevision && sync.conflict.localRevision === bundle.revision) return clone(sync);
         }
         sync.conflict = { missing: row === null, row, remoteRevision: row?.revision ?? revisionFloor(sync), localRevision: bundle.revision };
         sync.status = 'conflict'; sync.error = null;
@@ -4166,6 +4283,7 @@
           copyWorkspaceId: request.copy.workspaceId, choice: request.choice, localRevision: bundle.revision,
           remoteRevision: row.revision, createdAt: new Date().toISOString() });
         if (request.choice === 'remote') await tx.objectStore('bundles').put(updated);
+        await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
         const metadata = await writeSyncState(tx.objectStore('meta'), sync);
         return { bundle: clone(updated), metadata, copyWorkspaceId: request.copy.workspaceId };
       });
@@ -5260,6 +5378,7 @@
         throw fault('invalid_stage_result', '보관 결과가 이 작업공간의 원문과 일치하지 않습니다. 입력은 유지됩니다.');
       }
     }
+    const syncCommon = () => options.syncCommon || root.HaedoLife?.SyncCommon || (typeof require === 'function' ? require('./sync-common.js') : null);
     const sourceEdit = () => {
       const value = options.sourceEdit || root.HaedoLife?.SourceEdit || (typeof require === 'function' && require('./source-edit.js'));
       if (!value?.validate || !value?.checkPrepared) throw fault('dependency_unavailable', '자료 수정 모듈을 불러오지 못했습니다.');
@@ -6039,7 +6158,7 @@
       listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
-      setSyncConflict, setSyncError, resolveSync,
+      setSyncConflict, setSyncError, resolveSync, mergeSyncRemote, captureSyncBase, getSyncNotice, dismissSyncNotice,
       getCompositionState, dismissCompositionNotice, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
       applyCompositionRemote, adoptCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
       listCompositionRecoveries, readCompositionRecovery,

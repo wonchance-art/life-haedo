@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const Core = require('../assets/life/core.js');
+const SyncCommon = require('../assets/life/sync-common.js');
 const source = fs.readFileSync(require.resolve('../assets/life/sync.js'), 'utf8');
 // The page loads sync-lifecycle.js before sync.js (S2); the engine binds its events through it.
 const lifecycleSource = fs.readFileSync(require.resolve('../assets/life/sync-lifecycle.js'), 'utf8');
@@ -55,6 +56,27 @@ function fixture(t, options = {}) {
       return { bundle: copy(state.local), metadata: copy(state.meta), copyWorkspaceId: resolution.copy.workspaceId };
     }
   };
+  // options.merge: the storage joins both sides as storage.js does (the real merge function);
+  // prepareSyncUpload then hands out the merged snapshot as the next request.
+  if (options.merge) Object.assign(storage, {
+    async mergeSyncRemote(_id, _binding, row) {
+      (state.merges ||= []).push(copy(row));
+      if (state.mergeError) throw error(state.mergeError);
+      const result = SyncCommon.mergeWorkspace({ base: state.base || null, local: state.local, remote: row.data });
+      if (!result.equalsLocal) state.local = { ...copy(result.bundle), revision: state.local.revision + 1 };
+      state.base = SyncCommon.mergeBase(row.data);
+      Object.assign(state.meta, { outbox: null, conflict: null, error: null, remoteRevision: row.revision,
+        syncedLocalRevision: result.equalsRemote ? state.local.revision : -1, status: result.equalsRemote ? 'synced' : 'pending' });
+      return { status: 'merged' };
+    },
+    async prepareSyncUpload() {
+      if (state.meta.outbox) return copy(state.meta.outbox);
+      if (state.local.revision === state.meta.syncedLocalRevision) return null;
+      state.meta.outbox = { operationId: Core.id(), expectedRevision: state.meta.remoteRevision, localRevision: state.local.revision, data: copy(state.local) };
+      return copy(state.meta.outbox);
+    },
+    async captureSyncBase() { state.captures = (state.captures || 0) + 1; return true; }
+  });
   const factory = settings => {
     const adapter = {
       disposed: false,
@@ -84,6 +106,9 @@ function fixture(t, options = {}) {
       async write(request) {
         state.writes++; state.sent.push(copy(request));
         if (!options.successfulWrites) throw error('unexpected_write');
+        // options.cas: the server refuses a request written against another revision.
+        state.beforeWrite?.(request);
+        if (options.cas && state.row && state.row.revision !== request.expectedRevision) return { status: 'conflict', revision: state.row.revision };
         state.row = { id: request.workspaceId, title: request.data.title, revision: request.expectedRevision + 1,
           data: copy(request.data), updated_at: '2026-10-03T00:00:00Z' };
         return { status: 'stored', revision: state.row.revision };
@@ -218,7 +243,10 @@ test('explicit download validates equal-revision snapshots through storage and p
   assert.equal(f.state.applied.length, 2); assert.equal(f.state.writes, 0);
 });
 
-test('automatic sync checks equal-revision snapshots before clearing errors and observes concurrent local edits as conflict', async t => {
+// Rule change (2026-11-11, originals merge): a local save that lands while an unchanged server
+// snapshot is being checked is not a conflict. The server did not move, so there is nothing to
+// compare: the run goes on and sends the save. (Before: recorded as a conflict for the person.)
+test('automatic sync checks equal-revision snapshots before clearing errors; a concurrent local edit on an unchanged server is sent, not a conflict', async t => {
   const f = await acknowledgedFixture(t), before = copy(f.state.local);
   f.state.applyError = 'remote_revision_mismatch';
   await assert.rejects(f.manager.syncNow(before.workspaceId), value => {
@@ -230,10 +258,96 @@ test('automatic sync checks equal-revision snapshots before clearing errors and 
   f.state.applyError = null;
   assert.equal((await f.manager.syncNow(before.workspaceId)).error, null);
   assert.equal(f.state.applied.length, 2); assert.equal(f.state.errors.at(-1), null);
+  // The save lands between the engine's read and the storage's atomic check.
   f.state.applyConflict = true;
-  assert.equal((await f.manager.syncNow(before.workspaceId)).status, 'conflict');
-  assert.deepEqual(f.state.meta.conflict.row, f.state.row);
-  assert.deepEqual(f.state.local, before); assert.equal(f.state.writes, 0);
+  const apply = f.storage.applySyncRemote, prepared = [];
+  f.storage.applySyncRemote = async (...args) => { const result = await apply(...args); if (f.state.applyConflict) { f.state.applyConflict = false; f.state.local.revision++; } return result; };
+  f.storage.prepareSyncUpload = async () => { prepared.push(f.state.local.revision); f.state.meta.syncedLocalRevision = f.state.local.revision; return null; };
+  const result = await f.manager.syncNow(before.workspaceId);
+  assert.notEqual(result.status, 'conflict'); assert.equal(result.conflict, null); assert.equal(f.state.meta.conflict, null);
+  assert.deepEqual(prepared, [before.revision + 1], 'the next pass prepares the concurrent save for upload');
+  assert.deepEqual({ ...f.state.local, revision: before.revision }, before);
+});
+
+// ---- Originals merge: both sides changed -----------------------------------------------------
+async function divergedFixture(t, options = {}) {
+  const f = fixture(t, { merge: true, cas: true, successfulWrites: true, ...options }); await f.login('a');
+  const base = await append(f.state.local, '공통 원문'); f.state.base = SyncCommon.mergeBase(base);
+  f.state.local = await append(base, '폰에서 가져온 원문'); f.bind();
+  f.state.meta.remoteRevision = 1; f.state.meta.syncedLocalRevision = base.revision;
+  const server = await append(base, '맥에서 가져온 원문');
+  f.state.row = { id: base.workspaceId, title: server.title, revision: 2, data: server, updated_at: '2026-11-11T00:00:00Z' };
+  return { f, base, server, id: base.workspaceId };
+}
+const texts = bundle => bundle.sourceVersions.map(version => version.contentText).sort();
+const ALL = ['공통 원문', '맥에서 가져온 원문', '폰에서 가져온 원문'];
+
+test('both sides changed: the run merges them and sends the result; nothing is recorded for the person', async t => {
+  const { f, id } = await divergedFixture(t);
+  const result = await f.manager.syncNow(id);
+  assert.equal(result.conflict, null); assert.equal(result.error, null); assert.equal(f.state.meta.status, 'synced');
+  assert.equal(f.state.merges.length, 1); assert.equal(f.state.merges[0].revision, 2);
+  assert.deepEqual(f.state.sent.map(request => request.expectedRevision), [2], 'one upload against the merged-with revision');
+  assert.deepEqual(texts(f.state.row.data), ALL); assert.equal(f.state.row.revision, 3);
+  assert.deepEqual(texts(f.state.local), ALL); assert.deepEqual(f.state.copies, [], 'no copy workspace: nothing was chosen');
+});
+
+test('a refused upload reads the row, merges and sends again; a server that keeps moving ends the run without a conflict', async t => {
+  const { f, base, id } = await divergedFixture(t);
+  // This device believes the server is where it last agreed; another device stores first.
+  const moved = copy(f.state.row); f.state.row = { ...moved, revision: 1, data: copy(base), title: base.title };
+  let moves = 1;
+  f.state.beforeWrite = () => { if (moves-- > 0) f.state.row = copy(moved); };
+  const result = await f.manager.syncNow(id);
+  assert.equal(result.conflict, null); assert.equal(f.state.meta.status, 'synced');
+  assert.deepEqual(f.state.sent.map(request => request.expectedRevision), [1, 2], 'refused, merged, sent again');
+  assert.equal(f.state.merges.length, 1); assert.deepEqual(texts(f.state.row.data), ALL);
+  // Every upload is refused (another device stores each time): bounded passes, then the next wake-up.
+  const busy = await divergedFixture(t, { automatic: false });
+  busy.f.state.beforeWrite = () => { busy.f.state.row = { ...busy.f.state.row, revision: busy.f.state.row.revision + 1 }; };
+  const pending = await busy.f.manager.syncNow(busy.id);
+  assert.equal(pending.conflict, null); assert.equal(pending.error, null); assert.notEqual(busy.f.state.meta.status, 'conflict');
+  assert.ok(busy.f.state.writes >= 2 && busy.f.state.writes <= 8, 'bounded: ' + busy.f.state.writes);
+  assert.deepEqual(texts(busy.f.state.local), ALL, 'the merged snapshot stays on the device for the next run');
+});
+
+test('what cannot be merged is recorded for the manual comparison and tried again by the next run; damage is an error', async t => {
+  for (const reason of ['merge_invalid', 'snapshot_too_large', 'merge_unavailable']) {
+    const { f, id } = await divergedFixture(t); f.state.mergeError = reason;
+    const before = copy(f.state.local);
+    const result = await f.manager.syncNow(id);
+    assert.equal(result.status, 'conflict', reason); assert.deepEqual(f.state.meta.conflict.row, f.state.row);
+    assert.deepEqual(f.state.local, before); assert.equal(f.state.writes, 0);
+    // Later runs try again; the same recorded difference is not announced again (an open comparison is not redrawn).
+    const events = []; f.manager.subscribe(event => events.push(event.type));
+    assert.equal((await f.manager.syncNow(id)).status, 'conflict'); assert.equal(f.state.merges.length, 2);
+    assert.deepEqual(events, [], reason);
+    f.state.mergeError = null;
+    assert.equal((await f.manager.syncNow(id)).conflict, null, 'a recorded difference is merged once it can be');
+    assert.deepEqual(texts(f.state.row.data), ALL);
+  }
+  const { f, id } = await divergedFixture(t); f.state.mergeError = 'immutable_source_version';
+  await assert.rejects(f.manager.syncNow(id), code('immutable_source_version'));
+  assert.equal(f.state.meta.conflict, null); assert.equal(f.state.errors.at(-1).code, 'immutable_source_version'); assert.equal(f.state.writes, 0);
+});
+
+test('a difference recorded by an older version is merged by the next run; a deleted server copy is never merged or recreated', async t => {
+  const { f, id } = await divergedFixture(t);
+  await f.storage.setSyncConflict(id, f.state.meta.binding, f.state.row); assert.equal(f.state.meta.status, 'conflict');
+  const result = await f.manager.syncNow(id);
+  assert.equal(result.conflict, null); assert.equal(f.state.meta.status, 'synced'); assert.deepEqual(texts(f.state.row.data), ALL);
+  const gone = await divergedFixture(t); gone.f.state.row = null;
+  const missing = await gone.f.manager.syncNow(gone.id);
+  assert.equal(missing.conflict.missing, true); assert.equal(gone.f.state.merges, undefined); assert.equal(gone.f.state.writes, 0);
+  assert.equal((await gone.f.manager.syncNow(gone.id)).conflict.missing, true);
+});
+
+test('a clean head check stores the merge base once per acknowledged revision', async t => {
+  const f = fixture(t, { shared: true, automatic: false, head: true, merge: true }); await f.manager.start(); f.bind();
+  f.state.meta.remoteRevision = 2; f.state.meta.syncedLocalRevision = 0; f.state.meta.status = 'synced';
+  f.state.row = { id: f.state.local.workspaceId, revision: 2, data: copy(f.state.local) };
+  for (let n = 0; n < 3; n++) await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true });
+  assert.equal(f.state.captures, 1); assert.equal(f.state.headCalls, 3); assert.equal(f.state.readCalls, 0);
 });
 
 test('equal-revision downloads preserve dirty and pending local work; lower and missing server heads remain rejected', async t => {

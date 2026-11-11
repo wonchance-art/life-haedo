@@ -211,7 +211,7 @@
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], sourceEditStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(), readerModes: new Map(),
-      syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
+      syncAccount: null, syncState: null, syncNotice: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
       sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
@@ -1236,6 +1236,10 @@
         state.syncAccount = account;
         const info = await sync.getState(workspaceId);
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
+        const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
+        if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        state.syncNotice = notice;
         state.syncState = info;
         state.syncWorkspaceId = workspaceId;
         state.syncReadError = null;
@@ -1318,6 +1322,8 @@
         }
       });
       if (sync) {
+        // state.syncNotice stays: it is shown only for the workspace it was read for (mergeNotice),
+        // so a re-mount of the same workspace does not blink it away until the next read.
         state.syncState = null;
         state.syncReadError = null;
         state.syncLoading = true;
@@ -5575,12 +5581,42 @@
       return details;
     }
 
+    // Both devices' changes were merged by themselves. Only when both had changed the same item is
+    // there something to find: the earlier body is a previous version of that source, the earlier
+    // excerpt a separate 복구 사본 excerpt.
+    function mergeNotice(panel) {
+      const notice = state.syncNotice, workspaceId = state.bundle?.workspaceId;
+      if (!notice || state.syncWorkspaceId !== workspaceId) return false;
+      const titles = notice.sourceIds.map(id => state.bundle.sources.find(source => source.id === id)?.title).filter(Boolean);
+      const parts = ['다른 기기와 같은 자료를 함께 고쳐 나중에 고친 쪽을 남겼습니다.'];
+      if (titles.length) parts.push('먼저 고친 본문은 그 자료의 이전 버전에 있습니다: ' + titles.slice(0, 3).join(', ') + (titles.length > 3 ? ' 외 ' + (titles.length - 3) + '개' : '') + '.');
+      if (notice.recordIds.length) parts.push('먼저 고친 발췌 ' + notice.recordIds.length + '개는 ‘복구 사본’ 주제에 있습니다.');
+      const message = node('p', parts.join(' '), 'life-help'); message.id = 'lifeSyncMergeNotice';
+      const done = button('확인', guarded(async () => {
+        await storage.dismissSyncNotice(workspaceId);
+        if (state.bundle?.workspaceId === workspaceId) state.syncNotice = null;
+        await refreshSync();
+      })); done.id = 'lifeSyncMergeNoticeDone';
+      panel.append(message, done);
+      return true;
+    }
+
     function fillSyncState(panel) {
       if (disposed) return;
       if (managedLibrary) {
-        panel.hidden = false;
+        // Account and sync events arrive several times a second while engines verify. The panel is
+        // redrawn only when what it shows changed: a control replaced between press and release
+        // would lose the click (the comparison button and the notice's 확인).
+        const noticed = state.syncNotice && state.syncWorkspaceId === state.bundle?.workspaceId ? state.syncNotice : null;
+        const shows = JSON.stringify([state.bundle?.workspaceId, !!state.syncReadError, state.syncState?.conflict ? [state.syncState.conflict.remoteRevision, state.syncState.conflict.missing] : null,
+          noticed && [noticed.at, noticed.sourceIds.map(id => state.bundle.sources.find(source => source.id === id)?.title || ''), noticed.recordIds.length]]);
+        if (panel.dataset.shows === shows) return;
+        panel.dataset.shows = shows;
+        const focused = panel.contains(document.activeElement) ? document.activeElement.id : '';
         panel.replaceChildren(node('h3', '자료'));
+        let shown = true;
         if (state.syncReadError) panel.append(node('p', '자료의 보관 상태를 확인하지 못했습니다.', 'life-error'));
+        // Only what could not be merged automatically is compared by hand.
         else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
           await persistDrafts(); await refreshData(); await refreshSync();
           if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
@@ -5588,7 +5624,10 @@
             remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
           renderConflict();
         }), 'life-primary'));
-        else panel.hidden = true;
+        else shown = false;
+        if (mergeNotice(panel)) shown = true;
+        panel.hidden = !shown;
+        if (focused) panel.querySelector('#' + focused)?.focus({ preventScroll: true });
         return;
       }
       const active = panel.contains(document.activeElement) ? document.activeElement : null;
@@ -5652,6 +5691,7 @@
       if (presentation.key === 'auth_required') actions.append(button('계정 확인', guarded(() => navigate('manage'))));
       if (presentation.key === 'mismatch' || info?.conflict?.missing) actions.append(button('자료 백업·복원', guarded(() => navigate('transfer'))));
       panel.append(actions);
+      mergeNotice(panel);
       if (state.conflictCopyId) {
         const copy = state.workspaces.find(item => item.workspaceId === state.conflictCopyId);
         panel.append(node('p', '선택하지 않은 쪽의 사본: ' + (copy ? copy.title : '작업공간 목록에서 확인'), 'life-help'));

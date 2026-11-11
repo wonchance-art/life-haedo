@@ -113,14 +113,17 @@
         state = await step(() => sync.getState(workspaceId));
       }
       if (!state.enabled) { await step(() => sync.enable(workspaceId)); state = await step(() => sync.getState(workspaceId)); }
-      if (state.conflict || state.status === 'conflict') return state;
+      // The originals merge by themselves (both sides' items stay), so a recorded difference
+      // still runs: the run merges it and sends the result. Only a deleted server copy waits.
+      if (state.conflict?.missing) return state;
       return step(() => sync.syncNow(workspaceId, { headIfClean: true }));
     }
     async function domain(manager, workspaceId) {
       const state = await step(() => manager.getState(workspaceId));
       if (!state.enabled) return step(() => manager.enable(workspaceId));
       // Both domains resolve conflicts automatically (latest wins, the other side kept as a
-      // recovery copy), so a recorded conflict still runs. Only a deleted server copy waits.
+      // recovery copy), like the originals above, so a recorded conflict still runs. Only a
+      // deleted server copy waits.
       if (state.conflict?.missing) return state;
       return step(() => manager.syncNow(workspaceId));
     }
@@ -365,7 +368,11 @@
       const states = [domains.sources, domains.composition, domains.metadata].filter(Boolean);
       let status = booting ? 'checking' : working || catalogPending ? 'syncing' : 'synced';
       let error = globalError || domainErrors.get(id) || states.find(state => state.error)?.error || null;
-      if (!booting && states.some(state => state.conflict || state.status === 'conflict')) status = 'conflict';
+      // Every domain settles its differences itself. While a pass runs, a recorded difference is
+      // one it is about to settle; what is still recorded afterwards (or a deleted server copy)
+      // is what needs the person.
+      const recorded = state => !!state.conflict || state.status === 'conflict';
+      if (!booting && states.some(state => state.conflict?.missing || recorded(state) && !working)) status = 'conflict';
       else if (!booting && (error || states.some(state => state.status === 'error'))) status = 'error';
       else if (!booting && !working && !catalogPending && (mode !== 'account' || !states.length || states.some(state => state.status !== 'synced'))) status = 'pending';
       const fileState = domains.originals;
