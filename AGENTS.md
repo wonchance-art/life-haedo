@@ -135,6 +135,7 @@
 - SNS형 시각 체계: `DESIGN.md`와 `.impeccable/design.json`이 현행 규칙이다. 흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작·Pretendard, 본문·실제 사진 피드, 데스크톱 라벨 탐색·760px 이하 화면 끝 하단 탭을 사용한다. 이전 흰색/차콜 주 행동·라벤더·민트·떠 있는 탐색띠는 비교 이력이다. 아바타는 실제 제목에서 얻은 이니셜이며 가짜 반응·팔로워·동작 없는 사회적 조작을 추가하지 않는다. 원본·공개·저장 경계는 시각 변경과 독립적으로 유지한다.
 - 화면 추가·수정·시각 검토: `.agents/skills/life-haedo-design/SKILL.md`(공통 토큰 재사용, 한글 자료 화면의 브라우저 검토, 기능 회귀와 시각 검토 구분). 제품 사실은 `PRODUCT.md`, 시각 기준은 `DESIGN.md`. 여러 에이전트가 작업할 때 디자인 책임자 한 명이 공통 스타일을 통합한다.
 - 공식 Impeccable 4.5.0: `.agents/skills/impeccable/SKILL.md`. 프로젝트 지침 배포본이며 자동 엔진·launcher·hook은 비활성이다. 도입 범위와 출처는 `docs/design-review/impeccable.md`에 기록한다.
+- unslop(2026-11-11 소유자 지시로 도입): `.agents/skills/unslop/SKILL.md`. 화면에서 AI가 만든 듯한 티를 찾아 걷어 내는 점검·다듬기 지침이다. 먼저 `.agents/skills/unslop/INSTALLATION.md`의 해도 적용 범위를 읽는다. 지침 파일만 설치했고 스크립트·참고 이미지·이미지 생성 연결은 없다. 출처와 고정 커밋은 `docs/design-review/unslop.md`에 기록한다.
 - 앱 수정·실행·브라우저 검증: `.agents/skills/life-haedo-dev/SKILL.md`.
 - Codex/GPT 설정 조사: 사용 가능한 `openai-docs`. DB 동기화·스키마 작업: 사용 가능한 `supabase`.
 - 브라우저는 사용 가능한 `agent-browser` 또는 Codex 브라우저 도구를 사용한다. 외부 스킬이 없으면 해당 파일이 있는지 먼저 확인하고 가능한 로컬 검증을 계속한다.

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-11-11T04:12:08+00:00",
+  "scope": "project",
+  "install_mode": "instruction_payload_only",
+  "upstream": "https://github.com/heydamir/unslop",
+  "skill_version": null,
+  "release_tag": null,
+  "release_note": "No GitHub release or git tag existed at check time; pinned to the main branch commit below.",
+  "pinned_commit": "97daa3eb365670ea3f87ed85356cbfcee18105a5",
+  "pinned_commit_date": "2026-11-09T02:16:22+05:00",
+  "upstream_first_commit_date": "2026-10-28T04:02:19+03:00",
+  "acquired_by": "git clone over HTTPS of the public repository; files compared byte-for-byte with the checkout",
+  "license": "CC-BY-4.0",
+  "attribution": "unslop by Damir Sokolovsky (@heydamir), https://github.com/heydamir/unslop, CC BY 4.0",
+  "upstream_payload_unmodified": true,
+  "published_security_advisories_at_check": 0,
+  "not_installed": [
+    "skills/unslop/scripts/snapshot.mjs (saves a live page with Playwright; fetches remote stylesheets and images)",
+    "skills/unslop/scripts/story.mjs (renders the story video with Playwright and ffmpeg)",
+    "skills/unslop/references/refs/*.webp (five reference images, about 1.3 MB)",
+    "examples/, test/, README.md, CITATION.cff"
+  ],
+  "not_installed_hashes": [
+    {
+      "upstream_path": "skills/unslop/scripts/snapshot.mjs",
+      "bytes": 8271,
+      "sha256": "4b0c3639bd1c052fa1968c4bbe1b17acb5b108fd22ec70518628d9a4dbd5d6fa"
+    },
+    {
+      "upstream_path": "skills/unslop/scripts/story.mjs",
+      "bytes": 25382,
+      "sha256": "daef4d8eceb267535ef8db9964519154183234715a86bc2aa888ede0bd82ee72"
+    },
+    {
+      "upstream_path": "skills/unslop/references/refs/beacon-engraving.webp",
+      "bytes": 569124,
+      "sha256": "44e7680e9c944f03c8fe45df999bdf74077a106925a8189eebf89e751e306e5b"
+    },
+    {
+      "upstream_path": "skills/unslop/references/refs/meadow-3d.webp",
+      "bytes": 286608,
+      "sha256": "84f526b68021a06fc6d32f162406fab6cc8074da1ef76d2ae4530e1b58219b14"
+    },
+    {
+      "upstream_path": "skills/unslop/references/refs/story-dashboard-frames.webp",
+      "bytes": 187334,
+      "sha256": "cfbf837e40b7626d5a5789dbce54f5c197aab303aa350d13a042048310717137"
+    },
+    {
+      "upstream_path": "skills/unslop/references/refs/unslop-dashboard-after.webp",
+      "bytes": 74724,
+      "sha256": "48067794f86b43dab20515b3810f245d67bff05d10bfa83c0f5885bee93cea52"
+    },
+    {
+      "upstream_path": "skills/unslop/references/refs/unslop-hero-after.webp",
+      "bytes": 223664,
+      "sha256": "92b2d796c5b6116a2039f5ca2b0f3edf700c92b41846b11b9501a4e32f72af6e"
+    }
+  ],
+  "scripts_executed": false,
+  "image_generation_connected": false,
+  "files": [
+    {
+      "path": "LICENSE",
+      "upstream_path": "LICENSE",
+      "bytes": 18657,
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+      "git_blob": "da6ab6cc8f333d7e89a99812866df8f24374d47c"
+    },
+    {
+      "path": "SKILL.md",
+      "upstream_path": "skills/unslop/SKILL.md",
+      "bytes": 31658,
+      "sha256": "19afd7f1841316ddff3f854ea8ead675c738e08b30c41e51a8f1822fa0111947",
+      "git_blob": "e743184011b0fbde978d88d04340ae12dc355997"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "upstream_path": "skills/unslop/agents/openai.yaml",
+      "bytes": 196,
+      "sha256": "170d0b33a418d9d82beb7d15f8a91e314adef2edf53a81c37155b6f40dd52f06",
+      "git_blob": "cfecf69e9d784ae3b2edee8efc4a20eb4eb89370"
+    },
+    {
+      "path": "references/effects.md",
+      "upstream_path": "skills/unslop/references/effects.md",
+      "bytes": 4864,
+      "sha256": "ded4f679e22843a8f68860e6cda0396fa8b8fa27202400e08337143b485c86a4",
+      "git_blob": "621f8ec43153d396d7e2cd7c4309a00d4aa27d32"
+    },
+    {
+      "path": "references/refs.md",
+      "upstream_path": "skills/unslop/references/refs.md",
+      "bytes": 2458,
+      "sha256": "12a70ce17d574914ea69eb0809e5a9605de044df1b66619159c6d0b38d6b8353",
+      "git_blob": "e6c23aa433b9ef191a75f16a65ce1b4b1a2a8505"
+    },
+    {
+      "path": "references/signs.md",
+      "upstream_path": "skills/unslop/references/signs.md",
+      "bytes": 7038,
+      "sha256": "6250d3c222c2aaa4ef4f31557d99d249e5be86d8720cd1157df14798caf1c8c4",
+      "git_blob": "e9bae0369394d56ed080ef8a7e3d15bd4ec70a7f"
+    },
+    {
+      "path": "references/tokens.md",
+      "upstream_path": "skills/unslop/references/tokens.md",
+      "bytes": 6494,
+      "sha256": "988b754612b3e2d42d87b1bbaca0b4a61f3e07a2b2eef782d3614e8fdb6db5b0",
+      "git_blob": "431cdc3f68650819274b22b91df9764d8f0a64d6"
+    },
+    {
+      "path": "references/visuals.md",
+      "upstream_path": "skills/unslop/references/visuals.md",
+      "bytes": 8306,
+      "sha256": "7247da579d2d95ace1e051b867c757bd1e05aa02f3ab8dea0ead4cd4bf14d7d7",
+      "git_blob": "d7e89c14ddc675def22a46435ef1f2053d8d9362"
+    }
+  ]
+}
