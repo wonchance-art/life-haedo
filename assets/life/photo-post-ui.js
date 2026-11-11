@@ -652,6 +652,7 @@
         }
       }
       editor?.enable(!value && !offer);
+      if (!value && readStale) refreshRead();
       if (!value) scheduleSettle();
       onDirty();
       if (
@@ -1516,9 +1517,19 @@
     // another tab or arrives changed from another device, it is read again;
     // a post replaced by its saved revision is followed to the post that took
     // its place. Only the read view: an editor's input is never replaced.
-    let refreshingRead = false;
+    let refreshingRead = false,
+      readStale = false;
     async function refreshRead() {
-      if (refreshingRead || mode !== "read" || !doc || busy || navigating || closeViewer || !current(epoch)) return;
+      if (mode !== "read" || !doc || !current(epoch)) {
+        readStale = false;
+        return;
+      }
+      // Not under a running action, an open photo or another read: right after it.
+      if (refreshingRead || busy || navigating || closeViewer) {
+        readStale = true;
+        return;
+      }
+      readStale = false;
       const token = epoch, shownDoc = doc;
       refreshingRead = true;
       try {
@@ -1532,18 +1543,24 @@
           next = successor ? await read(successor) : null;
         }
         // Deleted elsewhere: the view stays and its actions say so, as before.
-        if (!next || !current(token) || doc !== shownDoc || mode !== "read" || busy || navigating || closeViewer) return;
+        if (!next || !current(token) || doc !== shownDoc || mode !== "read") return;
+        if (busy || navigating || closeViewer) {
+          readStale = true;
+          return;
+        }
         if (next.id === shownDoc.id && next.revision === shownDoc.revision) return;
         const focused = host.contains(document.activeElement);
         doc = next;
         committed = false;
-        error = null;
+        // The reason of an action that was just refused (the post had changed)
+        // stays on the refreshed view.
         render();
         if (focused) host.querySelector(".photo-read-heading")?.focus({ preventScroll: true });
       } catch (_) {
         // A failed read leaves what is shown.
       } finally {
         refreshingRead = false;
+        if (readStale) refreshRead();
       }
     }
     function serverCurrent(token, id, revision, sequence) {
@@ -1560,7 +1577,10 @@
         if (!current(token) || mode !== "read" || doc?.id !== id || doc.revision !== revision || doc.status !== "saved") return;
         await callback(id, { expectedRevision: revision, originFocusKey });
       }
-      finally { navigating = false; }
+      finally {
+        navigating = false;
+        if (readStale) refreshRead();
+      }
     }
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
@@ -1741,6 +1761,7 @@
         dialog.remove();
         document.body.style.overflow = overflow;
         closeViewer = null;
+        if (readStale) refreshRead();
         if (valid() && mode === "read" && doc?.id === documentId) {
           const target =
             host.querySelector(
