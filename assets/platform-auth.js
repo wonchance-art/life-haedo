@@ -5,20 +5,59 @@
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   // Longest life of a page opening's shared account check (see beginStartup): about the first-screen budget.
   const STARTUP_LIMIT_MS = 10000;
+  // Longest wait for one account check (2026-11-11 m2). A request that never answers (a connection that
+  // accepts and then stalls) used to leave the first screen on "로그인을 확인하고 있습니다." with no way out.
+  // The same 10 seconds as the opening above: past it the opening's result is not reused anyway, and a
+  // normal check answers in well under 2 seconds even on a throttled phone (first screen 1.1–1.5 s).
+  // The check then fails as network_error, like an unreachable server, and the caller's retry applies.
+  const VERIFY_LIMIT_MS = 10000;
+  // A check given up at the limit does not mean the account cannot be checked: the connection may only be
+  // slow (2026-11-11 review: where every check answered after 12 s the app never opened any more, though it
+  // used to open when one waited). Each lapse in a row lengthens the next check: 10 → 20 → 30 s. An answer
+  // sets the level to what its own duration needed (a quick answer back to 10 s). A check the owner asked
+  // for (다시 확인) waits the longest at once. The level is kept for the tab, so a plan page that opens again
+  // after a lapse (it reloads) waits longer as well.
+  const VERIFY_PATIENCE = 3;
+  const LAPSE_KEY = 'caeyeon_life_platform_verify_lapses';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
   const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
+  // 일정's calendar units and 백업·복원 are screens of their own with an address (2026-11-11 m1).
+  const calendarViews = new Set(['tools', 'quarter', 'month', 'week', 'day']);
+  const homeViews = new Set([...materialViews, ...calendarViews, 'backup']);
+  // The values below are the only ones a return address may carry besides the names above; each has one exact shape.
+  function civilDate(value) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value : '');
+    if (!m) return false;
+    const year = +m[1], month = +m[2], day = +m[3];
+    return year >= 1900 && year <= 2199 && month >= 1 && month <= 12 && day >= 1 && day <= new Date(year, month, 0).getDate();
+  }
+  const civilMonth = value => { const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(typeof value === 'string' ? value : ''); return !!m && +m[1] >= 1900 && +m[1] <= 2199; };
+  // The open blog task as the app writes it (ui.js blogRoutePattern): new, profile, photo.<id>, plain.<id>, draft.<id>.
+  const blogRoute = /^(?:new|profile|(?:photo|plain|draft)\.[A-Za-z0-9_-]{1,128})$/;
+  // Allow-list only: a page of this app by exact name, and for each page the parameters it reads, each
+  // checked against its exact shape. Anything else (another origin or scheme, an unknown key or value,
+  // OAuth callback values, the fragment) is left out.
   function safeNext(value) {
     try {
       const url = new URL(value || 'index.html', 'https://haedo.invalid/');
       if (url.origin !== 'https://haedo.invalid' || !(url.pathname === '/index.html' || privatePages.has(url.pathname.slice(1)))) return 'index.html';
       const params = new URLSearchParams();
       if (url.pathname === '/index.html' || url.pathname === '/life.html') {
-        if (homeSections.has(url.searchParams.get('section'))) params.set('section', url.searchParams.get('section'));
-        if (materialViews.has(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
+        const section = url.searchParams.get('section'), view = url.searchParams.get('view'), blog = url.searchParams.get('blog'), date = url.searchParams.get('date');
+        if (homeSections.has(section)) params.set('section', section);
+        if (view === 'page') {
+          // The blog editor or reader is `page` with its post named. Without one `page` is only 자료's own
+          // 선택 자료 페이지; under another section it would open that unrelated screen, so it is left out.
+          if (typeof blog === 'string' && blogRoute.test(blog)) { params.set('view', 'page'); params.set('blog', blog); }
+          else if (section === 'records') params.set('view', 'page');
+        } else if (homeViews.has(view)) params.set('view', view);
+        // 일정 reads `date` for its calendar units (and for the old section=tools address).
+        if ((calendarViews.has(view) || section === 'tools') && civilDate(date)) params.set('date', date);
       }
       if (url.pathname === '/index.html' && url.searchParams.get('compose') === '1') params.set('compose', '1');
       if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');
+      if (url.pathname === '/habits.html' && civilMonth(url.searchParams.get('month'))) params.set('month', url.searchParams.get('month'));
       if (url.pathname === '/timeline.html') {
         if (['records', 'map'].includes(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
         const doc = url.searchParams.get('doc');
@@ -69,6 +108,23 @@
     // The page's opening (see beginStartup); null outside it.
     let startupScope = null;
     const now = typeof options.now === 'function' ? options.now : () => Date.now();
+    // The page's timers; a host without any (an isolated script context) simply has no limit.
+    const timers = typeof env.setTimeout === 'function' && typeof env.clearTimeout === 'function' ? env
+      : typeof setTimeout === 'function' && typeof clearTimeout === 'function' ? { setTimeout, clearTimeout } : null;
+    const setTimer = options.setTimeout || (timers ? (run, ms) => timers.setTimeout(run, ms) : () => null);
+    const clearTimer = options.clearTimeout || (timers ? id => timers.clearTimeout(id) : () => {});
+    const verifyLimit = Number.isFinite(options.verifyLimit) ? options.verifyLimit : VERIFY_LIMIT_MS;
+    // Lapses in a row, 0 … VERIFY_PATIENCE - 1 (see VERIFY_PATIENCE).
+    let lapses = 0;
+    try { const kept = Number(env.sessionStorage?.getItem(LAPSE_KEY)); if (Number.isInteger(kept) && kept > 0) lapses = Math.min(kept, VERIFY_PATIENCE - 1); } catch (_) {}
+    function setLapses(value) {
+      lapses = Math.max(0, Math.min(value, VERIFY_PATIENCE - 1));
+      try { if (lapses) env.sessionStorage?.setItem(LAPSE_KEY, String(lapses)); else env.sessionStorage?.removeItem(LAPSE_KEY); } catch (_) {}
+    }
+    // The limits of the checks that are out now; the user check request is cut at the longest of them.
+    const limitsOut = [];
+    // The user check requests that are out, and how many times the checks before were abandoned (다시 확인).
+    const userChecks = new Set(); let abandoned = 0;
     // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
     // A verification scope never reuses a result from an earlier generation.
     let authGeneration = 0;
@@ -110,9 +166,30 @@
     function alive(expected, uid) {
       if (closed || expected !== epoch || (uid && user?.id !== uid)) throw fault('request_cancelled');
     }
+    // The account check itself (GET /auth/v1/user) is given up after the limit, so a stalled request does
+    // not keep the SDK's session lock and every later check behind it. Reading the user is safe to abandon
+    // and repeat. Nothing else is limited here: a token refresh in particular is never cut short (its
+    // answer may already have replaced the refresh token on the server).
+    const userCheck = ready ? config.url + '/auth/v1/user' : null;
+    function sdkFetch(input, init) {
+      const url = typeof input === 'string' ? input : input?.url, method = String(init?.method || input?.method || 'GET').toUpperCase();
+      if (url !== userCheck || method !== 'GET' || typeof env.AbortController !== 'function') return env.fetch(input, init);
+      const controller = new env.AbortController(), outer = init?.signal;
+      if (outer?.aborted) controller.abort(); else outer?.addEventListener?.('abort', () => controller.abort(), { once: true });
+      const timer = setTimer(() => controller.abort(), Math.max(verifyLimit, ...limitsOut));
+      userChecks.add(controller);
+      return env.fetch(input, { ...init, signal: controller.signal }).finally(() => { clearTimer(timer); userChecks.delete(controller); });
+    }
+    // 다시 확인 while an earlier check has not been answered: that check is given up, so the new one is a new
+    // request and does not wait behind it (the SDK runs one session operation at a time). Its answer, should
+    // one still arrive, is not used (see checkWithServer).
+    function abandonUserChecks() {
+      abandoned += 1; pendingUser = null;
+      for (const controller of [...userChecks]) controller.abort();
+    }
     const client = ready ? sdkFactory(config.url, config.key, {
       auth: { flowType: 'pkce', storageKey: SESSION_KEY, detectSessionInUrl: true, ...(storage ? { storage } : {}) },
-      global: { headers: { 'X-Client-Info': 'haedo-platform' } }
+      global: { headers: { 'X-Client-Info': 'haedo-platform' }, ...(typeof env.fetch === 'function' ? { fetch: sdkFetch } : {}) }
     }) : null;
     const subscription = client?.auth.onAuthStateChange((name, next) => {
       // SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, SIGNED_IN and any other event.
@@ -140,25 +217,60 @@
     // verify({ startup: true }) may reuse a server check finished during the
     // page's opening (beginStartup), under the same conditions as a W4 scope.
     // Without that option, or outside the opening, it always contacts Auth.
+    // patient: true — the owner pressed 다시 확인: the longest limit at once, and an earlier unanswered check is given up.
     async function verify(options) {
-      if (options?.startup === true && startupScope && !startupScope.ended) return startupScope.verify();
-      return serverVerify();
+      const patient = options?.patient === true;
+      if (options?.startup === true && startupScope && !startupScope.ended) return startupScope.verify(patient ? { patient: true } : undefined);
+      return serverVerify(patient);
     }
-    async function serverVerify() {
+    // One account check, given up after its limit (see VERIFY_PATIENCE) as network_error. The limit covers the whole attempt
+    // (reading the stored session, a token refresh it may need, the server check), so no stalled step keeps
+    // the caller waiting. An answer that still arrives later is applied under the same guards as before
+    // (same epoch, same session user): it never switches accounts and never reveals a screen by itself.
+    async function serverVerify(patient = false) {
       if (!client || blocked()) return null;
       // A page in the back/forward cache starts no account check. The document
       // becomes visible before pageshow; a check begun then would be shared by
       // the resumed page's own verification and reveal it early.
       if (parked) throw fault('request_cancelled');
-      const expected = epoch;
+      if (patient) abandonUserChecks();
+      const kept = abandoned;
+      const limit = patient ? verifyLimit * VERIFY_PATIENCE : verifyLimit * Math.min(1 + lapses, VERIFY_PATIENCE);
+      let timer = null, check = null;
+      const startedAt = now();
+      limitsOut.push(limit);
+      const attempt = checkWithServer(value => { check = value; });
+      // An answer (signed in or signed out) sets the level its own duration needed; a quick one resets it.
+      attempt.then(() => setLapses(Math.ceil(Math.max(0, now() - startedAt) / verifyLimit) - 1), () => {});
+      const lapse = new Promise((_, reject) => {
+        timer = setTimer(() => {
+          // A later attempt asks the server again instead of joining the request that stalled.
+          if (check && pendingUser?.promise === check) pendingUser = null;
+          // (A check given up for a newer one says nothing about the connection.)
+          if (kept === abandoned) setLapses(lapses + 1);
+          reject(fault('network_error'));
+        }, limit);
+        // The timer is never unref'd: whoever awaits this check must get its answer at the limit. In Node an
+        // unref'd timer let the process finish with the check still pending (node:test then cancelled the
+        // tests that wait for the limit). It also holds no process open needlessly: a check that settles
+        // clears it below, and no unit file leaves one behind (measured 2026-11-11 with and without unref).
+      });
+      try { return await Promise.race([attempt, lapse]); }
+      finally { clearTimer(timer); limitsOut.splice(limitsOut.indexOf(limit), 1); }
+    }
+    async function checkWithServer(began) {
+      const expected = epoch, kept = abandoned;
+      // A check given up for a newer one (다시 확인) never applies its late answer.
+      const wanted = () => { alive(expected); if (kept !== abandoned) throw fault('request_cancelled'); };
       try {
-        const current = await client.auth.getSession(); alive(expected);
+        const current = await client.auth.getSession(); wanted();
         if (current.error) throw current.error;
         if (!current.data.session) { if (user) invalidate(); return null; }
         const uid = current.data.session.user.id;
         if (observedId === undefined) observedId = uid;
-        const verified = await verifiedUser(current.data.session, expected); alive(expected);
-        const latest = await client.auth.getSession(); alive(expected);
+        const pending = verifiedUser(current.data.session, expected); began(pending);
+        const verified = await pending; wanted();
+        const latest = await client.auth.getSession(); wanted();
         if (latest.data?.session && latest.data.session.user.id !== uid) { invalidate(); throw fault('request_cancelled'); }
         if (verified.error) throw verified.error;
         if (latest.error) throw latest.error;
@@ -187,11 +299,16 @@
     // check under the W4 conditions above; writes, BlogSync and fresh: true checks
     // keep contacting Auth. The shell ends it once the screen is shown or the
     // opening fails, it lapses after STARTUP_LIMIT_MS, and a new opening starts empty.
-    function beginStartup() {
+    function beginStartup(options) {
       startupScope?.end();
       // A stalled bootstrap or mount cannot keep the opening's result alive: past the
-      // first-screen budget every opt-in call checks with Auth again.
-      const scope = makeScope(() => serverVerify(), now() + STARTUP_LIMIT_MS);
+      // first-screen budget every opt-in call checks with Auth again. On a slow connection the budget
+      // grows with the check's own limit (see VERIFY_PATIENCE): a check that took longer than a fixed budget
+      // is too old the moment it is answered, and everything that follows in the opening asks again.
+      // Measured 2026-11-11 on a connection that answers in 12 s (tests/daily-entry-browser.cjs): after the
+      // check that was given up, two answered checks before the screen (as an ordinary opening) with this, five with a fixed 10 s.
+      const patience = options?.patient === true ? VERIFY_PATIENCE : Math.min(1 + lapses, VERIFY_PATIENCE);
+      const scope = makeScope(scoped => serverVerify(scoped?.patient === true), now() + STARTUP_LIMIT_MS * patience);
       startupScope = scope;
       return Object.freeze({ end() { scope.end(); if (startupScope === scope) startupScope = null; } });
     }
@@ -235,6 +352,10 @@
       function carry(from, to) { carried = { from, to }; if (record?.generation === from) record.generation = to; }
       return Object.freeze({ verify: check, carry, end() { ended = true; record = null; running = null; }, get ended() { return ended; } });
     }
+    // A page about to reload for 다시 확인 (the plan pages): its next check waits the longest.
+    function expectSlow() { setLapses(VERIFY_PATIENCE - 1); }
+    // How long the next check of a newly opened screen may take (ms), for the screen that waits for it.
+    function verifyWait() { return verifyLimit * Math.min(1 + lapses, VERIFY_PATIENCE); }
     async function requireUser(options) {
       const verified = await verify(options);
       if (!verified) location.replace?.('login.html?next=' + encodeURIComponent(safeNext(location.pathname?.split('/').pop() + (location.search || ''))));
@@ -355,13 +476,13 @@
     env.addEventListener?.('pagehide', pagehide); env.addEventListener?.('pageshow', pageshow); env.addEventListener?.('storage', storageChange);
     // Let SDK PKCE initialization read the callback first, then scrub success and failure URLs.
     if (client) client.auth.getSession().then(scrubCallback, scrubCallback); else scrubCallback();
-    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, beginStartup, requireUser, login, signOut, request,
+    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, beginStartup, requireUser, expectSlow, verifyWait, login, signOut, request,
       get user() { return blocked() ? null : user; }, get session() { return blocked() ? null : session; }, get epoch() { return epoch; },
       getAccount: account, getClient: () => client,
       onAccountChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (closed) return; closed = true; invalidate(); subscription?.unsubscribe(); listeners.clear(); env.removeEventListener?.('pagehide', pagehide); env.removeEventListener?.('pageshow', pageshow); env.removeEventListener?.('storage', storageChange); Promise.resolve(client?.auth.dispose?.()).catch(() => {}); }
     });
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS }; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS, VERIFY_LIMIT_MS, VERIFY_PATIENCE }; return; }
   root.HaedoAuth = createAuth(root);
 })(globalThis);

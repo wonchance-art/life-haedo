@@ -457,7 +457,12 @@ async function main() {
       await page.getByRole('button', { name: '원문 텍스트 보기', exact: true }).click();
       await page.waitForFunction(() => document.querySelector('#lifeSourceText')?.dataset.readingMode === 'raw');
       assert.equal(await page.locator('#lifeSourceText').textContent(), fullText);
-      await page.getByRole('button', { name: '출처 정보 닫기', exact: true }).click();
+      // 2026-11-11 records-reader M2 rule: the reader panel is a layer over the text and closes when focus leaves the
+      // tool row and its panel. Switching to the original text moves focus into the text, so the panel is closed here
+      // and the info toggle reports it; nothing else has to be pressed before reading the photos below.
+      await page.waitForFunction(() => document.querySelector('#lifeSourceDetails')?.hidden === true);
+      assert.equal(await page.locator('#lifeSourceInfoToggle').getAttribute('aria-expanded'), 'false');
+      assert.equal(await page.evaluate(() => document.querySelector('#lifeSourceText')?.contains(document.activeElement) || document.activeElement?.id === 'lifeSourceText'), true);
       await page.locator('.nv-capture-photo img').first().waitFor();
       const download = page.waitForEvent('download'); await page.getByRole('button', { name: '글·사진 ZIP 저장', exact: true }).click();
       archive = await fs.readFile(await (await download).path());

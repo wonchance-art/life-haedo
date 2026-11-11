@@ -95,6 +95,11 @@
 .pp-legacy-writing[open] {
   flex-basis: 100%;
 }
+/* When the sticky tools grow (an error line, a recovery band) the browser's
+ * scroll anchoring would scroll the page by the same amount to hold the text
+ * still, which slides the title and the lines under the tools behind them. The
+ * editor's content is not an anchor: it keeps its place under the tools. */
+.photo-editor-tools ~ * { overflow-anchor: none; }
 .photo-editor-tools {
   position: sticky;
   top: 0;
@@ -152,6 +157,51 @@
 .photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .photo-recovery-actions[hidden] { display: none; }
 .photo-recovery-actions > button { font-size: 13px; padding: 8px 12px; }
+/* Input this device kept when the draft could not be stored: one quiet row
+ * with the two choices, above the title. */
+.photo-recovered {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d9e2dd);
+  border-radius: 12px;
+  background: var(--soft, #eaf1ed);
+}
+.photo-recovered-text {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.5;
+  color: var(--ink, #1f2a26);
+  overflow-wrap: anywhere;
+}
+.photo-recovered-actions { display: flex; flex: none; gap: 8px; }
+.photo-recovered-actions > button { min-height: 44px; font-size: 13px; padding: 8px 14px; }
+/* The reason of an error too long for the one-line status: its own line above the recovery actions. */
+.photo-recovery-reason {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.6;
+  color: #a52b3b;
+  overflow-wrap: anywhere;
+}
+.photo-recovery-reason[hidden] { display: none; }
+/* What storing changed in the input (a format mapped, a character removed): its own quiet line,
+ * so the save state beside the pill stays the real one. */
+.photo-edit-note {
+  margin: 0;
+  padding: 0 4px 8px;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.5;
+  color: var(--ink-soft, #5d6b65);
+  overflow-wrap: anywhere;
+}
+.photo-edit-note[hidden] { display: none; }
+.ql-tooltip input[aria-invalid="true"] { border-color: var(--color-error, #a3243d); outline-color: var(--color-error, #a3243d); }
 .photo-commandbar .photo-status {
   flex: 1;
   margin: 0;
@@ -746,12 +796,23 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
      (the button's name still says both), so the one-line save status keeps its room. */
   .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
   .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
+  /* The same in the editor when a draft could not be uploaded: the icon keeps the visibility and
+     the problem takes the word's place, so the save status beside it is not squeezed out. */
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-problem) > .photo-privacy-label { display: none; }
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child) > .photo-privacy-problem::before { content: none; }
   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
+  /* A long error (a storage limit, a refused save) does not fit the one-line status slot of about
+     110px: it takes its own full-width line under the command row instead of a five-line column. */
+  .photo-commandbar:has(.photo-status[data-state="error"][data-long="true"]) { flex-wrap: wrap; }
+  .photo-commandbar:has(.photo-status[data-state="error"][data-long="true"]) > .photo-command-state { display: contents; }
+  .photo-commandbar:has(.photo-status[data-state="error"][data-long="true"]) .photo-privacy { margin-right: auto; }
+  .photo-commandbar .photo-status[data-state="error"][data-long="true"] { order: 9; flex: 1 0 100%; padding: 2px 4px 4px; }
   .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
   /* Keep the caret and the block being typed between the sticky bar and the floating tools. */
+  /* The tools' real height (set by the editor): 72px while they are one row. */
   .photo-posts .ql-editor,
-  .photo-posts .ql-editor > * { scroll-margin-block: 72px 88px; }
-  html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: 72px; }
+  .photo-posts .ql-editor > * { scroll-margin-block: max(72px, calc(var(--photo-tools-height, 0px) + 12px)) 88px; }
+  html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: max(72px, calc(var(--photo-tools-height, 0px) + 12px)); }
 }
 @media (max-width: 600px) {
   .photo-entry > strong { font-size: 19px; }

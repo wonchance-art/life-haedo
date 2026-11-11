@@ -38,7 +38,7 @@
   function create({ storage, sourceSync, auth = root.HaedoAuth,
     remote = root.HaedoLife?.CompositionRemote?.create({ auth }), errorCleaner = null,
     resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true,
-    initialReceive = null, autoResolve = undefined } = {}) {
+    initialReceive = null, autoResolve = undefined, sourceOptional = null } = {}) {
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
     // Compositions (whose storage records local edit times) default to latest-wins.
     // Other domains on this engine keep their own explicit choice unless they pass one.
@@ -86,10 +86,26 @@
     // source is not required here, only one at least as new as the row's. compare() and
     // resolve() themselves still check every time.
     const ready = (state, minimum) => state.enabled && state.status === 'synced' && sameAccount(state.binding) && state.remoteRevision >= minimum;
+    // sourceOptional (writing drafts): an item that points at no original does not wait for the
+    // originals to finish syncing. It only needs their connection and a server revision the
+    // originals already acknowledged (the server has at least that one), so a pending, failing or
+    // unmergeable originals sync does not hold it back. The storage decides again, atomically,
+    // for every item and server row that does point at an original.
+    const known = (state, minimum) => state.enabled && sameAccount(state.binding) && state.remoteRevision >= Math.max(1, minimum);
     async function sources(ctx, minimum = 1) {
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
+      const optional = sourceOptional ? await sourceOptional(ctx.workspaceId) === true : false; guard(ctx);
+      if (optional && !ready(initial, minimum)) {
+        if (known(initial, minimum)) return initial;
+        // The row needs a newer originals revision: one attempt to receive it.
+        try { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); } catch (_) { /* Decided by the state below. */ }
+        guard(ctx);
+        const next = await sourceSync.getState(ctx.workspaceId); guard(ctx);
+        if (!known(next, minimum)) throw fault('composition_source_pending');
+        return next;
+      }
       // A skipped check reuses the state just read (2026-11-04: one status read less per skipped check).
       // Nothing is awaited between that read and here. The old second read was a new transaction and
       // could see a write another tab committed in between; that gap only adds a race that the storage's

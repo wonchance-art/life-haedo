@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v217';
+const CACHE='haedo-v218';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -10,7 +10,7 @@ const SHELL=[
   './vendor/js-yaml/js-yaml.umd.min.js',
   './assets/life/naver-blog.js','./assets/life/naver-capture.js','./assets/life/naver-media.js','./assets/life/naver-media-receipt.js','./assets/life/naver-capture-sync.js','./assets/life/naver-capture-ui.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
-  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-private-remote.js','./assets/life/discovery-reader-ui.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
+  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-private-remote.js','./assets/life/discovery-wide-remote.js','./assets/life/discovery-reader-ui.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
   './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
   './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
@@ -49,8 +49,9 @@ const DISCOVERY_CACHE='haedo-discovery-feed-v1';
 const discoveryURL=new URL('./assets/life/discovery-feed.json',self.registration.scope).href;
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
 // `blog` reopens the blog editor/reader after a reload; `compose` starts a new post;
-// `date` names 일정's period (Y·Q·M·W·D). The app validates every value; the shell is the same page.
-const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose','date']);
+// `date` names 일정's period (Y·Q·M·W·D); `month` the habit page's month (habits.html?month=YYYY-MM).
+// The app validates every value; the shell is the same page.
+const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose','date','month']);
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))

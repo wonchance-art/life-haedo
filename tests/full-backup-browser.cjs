@@ -309,7 +309,7 @@ async function main() {
       await target.locator('#fbRestoreFile').setInputFiles({ name: 'haedo-backup.zip', mimeType: 'application/zip', buffer: archive });
       await target.locator('#fbRestoreHeading').waitFor();
       const preview = await target.locator('#fbRestorePreview').innerText();
-      assert.match(preview, /해도 백업 ZIP \(목록 v2\)/); assert.match(preview, /SHA-256 확인 완료/); assert.match(preview, /haedo-full-backup-v1|파일 \d+개/);
+      assert.match(preview, /해도 백업 ZIP \(목록 v3\)/); assert.match(preview, /SHA-256 확인 완료/); assert.match(preview, /haedo-full-backup-v1|파일 \d+개/);
       const choices = await target.locator('#fbRestorePreview input[type=checkbox]').evaluateAll(inputs => inputs.map(input => [input.value, input.checked]));
       assert.deepEqual(choices, [['library', true], ['collection', true], ['photoPosts', true], ['nineBoards', true], ['materialWriting', true], ['accountDocuments', true]]);
       assert.equal(await target.locator('#fbRestoreNotIncluded [data-not-included]').count(), 5);

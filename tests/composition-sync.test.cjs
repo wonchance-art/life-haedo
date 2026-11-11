@@ -110,6 +110,8 @@ function fixture(t, options = {}) {
     async syncNow() {
       state.calls.push('sources');
       if (state.sourceSyncOverride) await state.sourceSyncOverride();
+      // stuck: the originals cannot finish (an upload that keeps failing, a difference waiting for the person).
+      if (state.source.stuck) return;
       state.source.local = Math.max(state.source.local, state.source.server); state.source.pending = false;
       if (state.emitSourceSync) notifySources();
     },
@@ -141,6 +143,7 @@ function fixture(t, options = {}) {
   // resolver is exercised by omitting the option (defaultResolver: true).
   const manager = context.module.exports.create({ storage, sourceSync, remote, auth, polling: options.polling ?? true,
     initialReceive: options.initialReceive ? (...args) => options.initialReceive(state, ...args) : null,
+    ...(options.sourceOptional ? { sourceOptional: () => options.sourceOptional(state) } : {}),
     ...(options.defaultResolver ? {} : { autoResolve: Object.hasOwn(options, 'autoResolve') ? options.autoResolve : null }) });
   t.after(() => manager.dispose());
   return { manager, state, timers, timerScheduled, context, notifySources,
@@ -539,6 +542,29 @@ test('noninitial CAS conflicts and missing first-write replies never invoke init
 
 // 2026-11-04 startup latency: one originals head check per engine task. A later need inside
 // the same task asks the server again only when the local originals cannot satisfy it.
+// 2026-11-11 (originals merge, cascade): an item that points at no original (sourceOptional) does not
+// wait for the originals to finish syncing. It needs their connection and a server revision they
+// already acknowledged; an item that does point at one waits as before.
+test('an item that needs no original is synced while the originals cannot finish; one that needs them waits; a row from newer originals asks once', async t => {
+  const stuck = optional => {
+    const f = fixture(t, { sourceOptional: async () => optional });
+    f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };
+    f.state.source.pending = true; f.state.source.stuck = true; return f;
+  };
+  const waits = stuck(false);
+  await assert.rejects(waits.manager.syncNow(WORKSPACE), { code: 'composition_source_pending' });
+  assert.ok(!waits.state.mutations.includes('apply'));
+  const free = stuck(true);
+  assert.equal((await free.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.ok(free.state.mutations.includes('apply'), 'the row was received although the originals are still pending');
+  assert.equal(free.state.calls.filter(x => x === 'sources').length, 0, 'the originals were not asked to sync for it');
+  // The server row was written on newer originals than this device has acknowledged: one attempt to receive them, then it waits.
+  free.state.row = { ...free.state.row, revision: 3, source_revision: 2, data: { ...copy(free.state.local), revision: 3 } };
+  await assert.rejects(free.manager.syncNow(WORKSPACE), { code: 'composition_source_pending' });
+  assert.equal(free.state.calls.filter(x => x === 'sources').length, 1);
+  assert.equal(free.state.mutations.filter(x => x === 'apply').length, 1, 'that row was not applied');
+});
+
 test('one engine task asks the originals server once when this device already holds the row\'s source revision', async t => {
   const f = fixture(t);
   f.state.row = { ...f.state.row, revision: 2, data: { ...copy(f.state.local), revision: 2 } };

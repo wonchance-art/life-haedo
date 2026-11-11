@@ -25,7 +25,9 @@ async function poll(page, predicate) {
   for (let i = 0; i < 100; i++) { state = await snapshot(page); if (predicate(state)) return state; await page.waitForTimeout(80); }
   throw new Error('Expected persisted UI result did not arrive');
 }
-async function records(page) { await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
+// 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+// 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
 async function filter(page) { if (await page.locator('#lifeFilterToggle').getAttribute('aria-expanded') !== 'true') await page.locator('#lifeFilterToggle').click(); }
 async function importUI(page, sample, index, capture) {
   await page.getByRole('button', { name: '가져오기', exact: true }).click(); await page.locator('#lifeImportTitle').waitFor();

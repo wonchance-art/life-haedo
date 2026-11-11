@@ -5,6 +5,158 @@
 
 확인일: 2026-10-18 UTC / 2026-10-19 한국 시각. 현재 정적 카탈로그는 **성공한 한국어 공식 피드 4개의 50개 글**이다. 등록 피드는 5개이며 NAVER D2는 robots의 HTTPS→HTTP 이동 차단으로 실패·이전 성공 없음이다. [후속 공급·비교 검수](discovery-expansion.md)를 현재 실행 기록으로 삼는다.
 
+## 2026-11-11 출처 확대 — 19곳 추가, 이미지 주소, 두 구간 형식
+
+소유자 요청("지금은 지정된 곳에서만 나와서 지나치게 제한적")의 1단계다. 관심 주제를 밖으로 보내지 않고 할 수 있는 범위에서 고정 출처를 9곳에서 28곳으로 늘렸다. 화면과 설정은 [카드 피드 1단계](news-card-feed.md)에 있다. 선정 기준은 이 문서의 기존 기준과 같다.
+
+1. 매체가 공식 RSS/Atom을 제공한다.
+2. robots가 피드 수집을 막지 않는다(수집기의 실제 User-Agent 이름으로 판정).
+3. 피드·사이트 약관이 제목·링크·날짜의 표시를 금지하지 않는다. 기준은 "공개 정적 파일에 메타데이터만 싣는다"는 점이다. 금지하거나 뜻이 불확실하면 넣지 않는다.
+4. 기사 링크가 고정 HTTPS 호스트에 있다.
+5. 수집기의 기존 파서(UTF-8 RSS 2.0/Atom, DTD 없음)로 읽힌다.
+
+확인일은 2026-11-11(UTC)이다. 약관·RSS 안내 페이지는 그 주소를 직접 받아 해당 문장을 확인했다. robots와 피드 응답은 익명의 일반 클라이언트 이름으로 받았고, 계정·관심사·프로젝트 이름을 어떤 요청에도 넣지 않았다. robots 판정에는 수집기의 실제 User-Agent 문자열을 로컬에서 대입했다(전송하지 않음).
+
+### 추가한 출처
+
+| 출처 / 고정 ID | 언어·분야 | 공식 피드 | 이미지 주소 | 판정 근거 |
+| --- | --- | --- | --- | --- |
+| 연합뉴스 / `yna-news` — **조건부 · 소유자 판단 대기** | 한국어 · 종합 | [RSS](https://www.yna.co.kr/rss/news.xml) | 제공(`img.yna.co.kr`) | [RSS 안내](https://www.yna.co.kr/rss/index): "비상업적 블로그와 개인적인 용도로만 연합뉴스 RSS 피드를 사용하는 것을 허용", 사전 서면 허가 없는 상업적 이용 금지. robots 허용. |
+| 연합뉴스 문화 / `yna-culture` — **조건부** | 한국어 · 문화 | [RSS](https://www.yna.co.kr/rss/culture.xml) | 제공 | 위와 같은 안내·호스트. |
+| 연합뉴스 세계 / `yna-international` — **조건부** | 한국어 · 국제 | [RSS](https://www.yna.co.kr/rss/international.xml) | 제공 | 위와 같은 안내·호스트. |
+| SBS 뉴스 / `sbs-news` — **조건부 · 소유자 판단 대기** | 한국어 · 종합 | [RSS](https://news.sbs.co.kr/news/newsflashRssFeed.do?plink=RSSREADER) | 제공(`img.sbs.co.kr`) | [RSS 안내](https://news.sbs.co.kr/news/rss.do): "RSS 서비스는 개인 이용자의 비상업적 사용에만 허가", 상업적 사용은 사전 문의. robots 허용. |
+| SBS 뉴스 생활·문화 / `sbs-culture` — **조건부** | 한국어 · 생활·문화 | [RSS](https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07&plink=RSSREADER) | 제공 | 위와 같은 안내·호스트. |
+| 노컷뉴스 / `nocut-news` — **조건부 · 소유자 판단 대기** | 한국어 · 종합 | [RSS](https://rss.nocutnews.co.kr/nocutnews.xml) | 없음 | [RSS 안내](https://www.nocutnews.co.kr/rss/): "RSS 서비스는 개인 이용자의 비상업적 사용에만 허용", 상업적 활용 금지. 피드 호스트의 robots는 404(제공하지 않음). 피드가 한국 시각에 `GMT`를 붙여 적는다(아래 날짜 보정). |
+| 서울시 경제·복지·교통·안전 / `seoul-economy` `seoul-welfare` `seoul-traffic` `seoul-safe` | 한국어 · 공공 | `https://news.seoul.go.kr/{economy,welfare,traffic,safe}/feed` | 없음 | 기존 서울시 문화·환경과 같은 호스트·robots·[저작권 정책](https://www.seoul.go.kr/helper/copyright.do). 본문·설명은 복사하지 않는다. |
+| 카카오 기술블로그 / `kakao-tech` — **조건부 · 소유자 판단 대기** | 한국어 · 기술 | [RSS](https://tech.kakao.com/feed/) | 없음 | 공식 블로그의 피드. 하단 "All Rights Reserved". 피드 사용을 금지하는 문구를 찾지 못했다. 기존 우아한형제들 기술블로그와 같은 판정(제목·링크만). robots 허용. |
+| 토스 기술블로그 / `toss-tech` — **조건부 · 소유자 판단 대기** | 한국어 · 기술 | [RSS](https://toss.tech/rss.xml) | 없음 | 위와 같은 판정. robots는 404(제공하지 않음). |
+| LY Corporation 기술블로그 / `line-tech` — **조건부 · 소유자 판단 대기** | 한국어 · 기술 | [RSS](https://techblog.lycorp.co.jp/ko/feed/index.xml) | 없음 | 위와 같은 판정. robots 허용. |
+| The Conversation / `conversation-global` | 영어 · 연구자가 쓰는 해설 | [Atom](https://theconversation.com/global/articles.atom) | 없음 | [재게시 안내](https://theconversation.com/global/republishing-guidelines): 글 전체가 CC BY-ND. 제목·링크만 싣는다. robots 허용. |
+| NASA / `nasa-news` | 영어 · 과학 | [RSS](https://www.nasa.gov/feed/) | 없음 | [이용 안내](https://www.nasa.gov/nasa-brand-center/images-and-media/): NASA 자료는 대체로 미국 저작권 대상이 아니며 개인 웹페이지 사용을 허용한다(표장 제외). 기사 링크는 `www.nasa.gov`·`science.nasa.gov`. robots 허용. |
+| MIT News / `mit-news` | 영어 · 과학기술·대학 | [RSS](https://news.mit.edu/rss/feed) | 제공(`news.mit.edu`) | [이용 약관](https://news.mit.edu/terms-of-use): "offers RSS feeds for syndication purposes". 이미지는 CC BY-NC-ND이고 출처 표시가 필요하다(카드는 출처 이름을 함께 보인다). 기존 MIT News 언어학과 같은 호스트. |
+| Our World in Data / `owid` | 영어 · 통계·세계 | [Atom](https://ourworldindata.org/atom.xml) | 없음 | [FAQ](https://ourworldindata.org/faqs): 글·차트·데이터는 CC BY. robots 파일에 규칙 없음. |
+| Global Voices / `global-voices` | 영어 · 국제·시민 미디어 | [RSS](https://globalvoices.org/feed/) | 제공(`globalvoices.org`) | [재게시 안내](https://globalvoices.org/about/global-voices-attribution-policy/): 별도 표시가 없으면 CC BY. 이미지별 권리는 원문에서 확인한다. robots 허용. |
+| EFF / `eff-updates` | 영어 · 디지털 권리·정책 | [RSS](https://www.eff.org/rss/updates.xml) | 제공(`www.eff.org`) | [저작권 안내](https://www.eff.org/copyright): EFF 원작은 CC BY 4.0. 여러 글에 반복되는 기본 이미지는 수집기가 뺀다. robots 허용. |
+
+기존 MIT News 언어학(`mit-linguistics`)도 같은 약관으로 이미지 주소를 싣는다. 나머지 기존 8곳의 피드에는 이미지 요소가 없다.
+
+조건이 붙은 출처(연합뉴스·SBS·노컷뉴스)는 "개인·비상업 용도"가 전제다. 해도가 상업 서비스가 되거나 여러 사람에게 목록을 제공하게 되면 이 출처들은 다시 검토해야 한다.
+
+### 조건부 출처 — 소유자 판단 대기 (2026-11-11 총괄 지시)
+
+아래 6곳(피드 8개)은 지금 동작 그대로 목록에 있다. 다만 허용 조건이 해도의 쓰임(공개 정적 파일에 제목·링크를 싣는 개인 사이트)과 맞는지 소유자가 판단하기 전까지 **조건부**다. 총괄이 소유자에게 묻는다.
+
+| 출처 | 조건(원문 인용, 확인일 2026-11-11) | 해도 쪽 사실 | 이미지 주소 |
+| --- | --- | --- | --- |
+| 연합뉴스 종합·문화·세계 | [RSS 안내](https://www.yna.co.kr/rss/index): "비상업적 블로그와 개인적인 용도로만 연합뉴스 RSS 피드를 사용하는 것을 허용" | 목록 파일은 누구나 받을 수 있는 공개 정적 파일이다. 광고·유료 기능은 없다. | 수집함(`img.yna.co.kr`) |
+| SBS 뉴스·생활·문화 | [RSS 안내](https://news.sbs.co.kr/news/rss.do): "RSS 서비스는 개인 이용자의 비상업적 사용에만 허가" | 위와 같다. | 수집함(`img.sbs.co.kr`) |
+| 노컷뉴스 | [RSS 안내](https://www.nocutnews.co.kr/rss/): "RSS 서비스는 개인 이용자의 비상업적 사용에만 허용" | 위와 같다. | 피드에 없음 |
+| 카카오·토스·LY Corporation 기술블로그 | 명시적인 허용 문구가 없다. 사이트 아래의 권리 표기("All Rights Reserved")뿐이고 피드 이용을 금지하는 문구도 찾지 못했다. 기존 우아한형제들 기술블로그(2026-10-19)와 같은 선례로 넣었다. | 제목·링크·날짜만 싣는다. | 피드에 없음 |
+
+**이미지 주소 수집을 끄는 자리:** 출처마다 두 줄을 함께 지운다. 수집기 등록부 `scripts/update-discovery-feed.py`의 그 출처 항목에 있는 `'images': {...}`(연합뉴스 3개·SBS 2개 피드에 있음)와 브라우저 등록부 `assets/life/discovery.js`의 `IMAGE_HOSTS`에서 같은 출처 ID 줄이다. 둘이 같아야 한다는 검사(`tests/discovery-card-feed.test.cjs`의 등록부 일치)가 한쪽만 지운 것을 잡는다. 그러면 다음 수집부터 그 출처의 글에 `imageUrl`이 실리지 않고, 브라우저는 그 출처의 이미지 주소를 받아도 버린다. 노컷뉴스·기술블로그 3곳은 지금도 이미지 주소를 싣지 않는다. 출처를 목록에서 아예 빼려면 두 등록부(수집기 `SOURCES`, 브라우저 `EXTENDED_SOURCES`·`PUBLISHERS`)를 함께 고친다. 배포 관문(`scripts/refresh-discovery-artifact.cjs`)은 브라우저 등록부를 그대로 따른다. 사용자는 지금도 뉴스 설정의 `목록에 표시할 출처`에서 끌 수 있다.
+
+NPR은 넣지 않는다(아래 보류 유지).
+
+### 탈락·보류한 후보
+
+| 후보 | 결과 | 이유 |
+| --- | --- | --- |
+| BBC News·BBC 코리아 | 탈락 | [이용 약관 15절](https://www.bbc.co.uk/usingthebbc/terms-of-use/): "You're not allowed to pluck metadata from our content or RSS feeds". 메타데이터(텍스트·이미지·링크) 사용에는 별도 라이선스가 필요하다. |
+| 경향신문 | 탈락 | [RSS 안내](https://www.khan.co.kr/help/help_rss.html): 개인 구독 목적이며 홈페이지 등으로 다수와 공유하려면 사전 허락이 필요하다고 적었다. 공개 정적 파일과 맞지 않는다. |
+| WIRED·Ars Technica(Condé Nast) | 탈락 | [이용 약관](https://www.condenast.com/user-agreement): RSS로 받은 콘텐츠도 서면 허락 없이 aggregate·publish·display 금지. |
+| UN News, WHO, 동아사이언스, 미디어오늘 | 탈락 | robots가 수집기 이름의 피드 요청을 허용하지 않는다. |
+| The Guardian | 보류 | [피드 안내](https://www.theguardian.com/help/feeds): 개인·비상업 목적. 서비스 약관은 뉴스 모음 서비스에 별도 라이선스를 언급한다. 공개 파일 게시가 그 범위인지 불확실하다. |
+| NPR | 보류 | [이용 약관](https://www.npr.org/about-npr/179876898/terms-of-use): 개인 사이트·앱에서 피드의 표시·링크를 허용하고 "NPR" 표기와 원문 링크를 요구한다. 다만 피드 전체를 보일 때 "may not redistribute the Content Feed"라고 적어, 공개 JSON에 싣는 것이 재배포인지 불확실하다. 소유자가 이 해석을 받아들이면 가장 먼저 추가할 후보다(피드 응답·robots는 정상). |
+| ScienceDaily | 보류 | [RSS 약관](https://www.sciencedaily.com/terms.htm): 사이트·블로그에서 피드를 쓰도록 권장하지만 "failure to display content"를 위반으로 적었다. 제목만 보이고 요약을 빼는 지금의 공급 방식이 이에 해당하는지 불확실하다. 요약 표시 권한(`summary_allowed`)을 여는 작업에서 다시 검토한다. |
+| ProPublica | 보류 | [재게시 안내](https://www.propublica.org/steal-our-stories): CC이지만 "wholesale, or automatically" 재게시 금지. 제목 목록의 자동 게시가 포함되는지 불확실하다. |
+| Voice of America | 보류 | [저작권 안내](https://www.voanews.com/p/5338.html): VOA 자체 제작물은 공공 영역이지만 통신사(AP·AFP·Reuters) 자료는 재배포 금지이고, 피드에서 둘을 구분할 수 없다. |
+| 한겨레, 조선일보, 매일경제, 한국경제, 전자신문, JTBC, 프레시안, 오마이뉴스, 블로터, AI타임스, ZDNet Korea, 슬로우뉴스, The Verge, MIT Technology Review, Al Jazeera, Smithsonian, Quanta, Aeon, Atlantic, Harvard Gazette | 보류 | 피드와 robots는 통과했지만 피드 이용 조건을 적은 공식 페이지를 이번 확인에서 찾지 못했다(일반 약관만 있거나 안내 페이지 주소 미확인). 불확실하면 넣지 않는다는 기준을 따랐다. |
+| GeekNews | 보류 | 피드 주소가 등록 호스트 밖(feedburner)으로 이동한다. 수집기는 등록 호스트 밖 이동을 따르지 않는다. 이용 조건의 명시도 찾지 못했다. |
+| 동아일보, Phys.org, 뉴스타파, ESA, CERN, 시사IN, 헬로디디, 요즘IT, NIH, Nature, DW | 탈락 | 기술 조건 미달: 응답 실패(시간 초과·403·404·429), 기사 링크가 HTTP 또는 다른 호스트, 발행일이 없거나 파서가 읽지 못하는 날짜, RDF(RSS 1.0) 형식. |
+| Hacker News | 탈락 | 기사 링크가 임의의 외부 호스트라 고정 호스트 조건을 만족하지 못한다. |
+| eLife, PLOS ONE, arXiv cs.AI | 넣지 않음 | 조건은 통과한다(CC BY·CC0 메타데이터). 하루 수십 편의 논문 제목이 목록을 채우게 되어 이번 확대(일반 언론·넓은 분야)의 목적과 맞지 않는다. |
+
+영어권 일반 종합 언론은 이번 기준으로 한 곳도 통과하지 못했다. 약관이 개인 구독만 허용하거나 메타데이터 사용에 라이선스를 요구한다. 이 공백은 2단계(권리를 정리해 둔 집계 공급원)에서 다룰 일이다.
+
+### 이미지 주소의 범위
+
+- 출처 피드가 스스로 적은 대표 이미지 주소만 쓴다: `media:content`(image), `media:thumbnail`, 이미지 `enclosure`(Atom은 `link rel="enclosure"`). 본문·description 안의 이미지와 원문 페이지의 `og:image`는 읽지 않는다.
+- 주소는 HTTPS, 기본 포트, 자격 증명 없음, 2,048자 이하여야 하고, 호스트는 그 출처에 등록한 이미지 호스트여야 한다. data URL, 다른 호스트, 이미지 조건을 확인하지 않은 출처의 이미지는 버린다.
+- 한 피드 안에서 같은 주소가 두 글 이상에 나오면 로고나 기본 이미지로 보고 모두 뺀다.
+- 이미지 파일은 수집하지 않는다. 공개 목록에는 주소(`imageUrl`)와 출처별 안내(`images.label`·`images.url`)만 실린다. 표시는 계정의 `기사 이미지 보기`(기본 꺼짐)를 켠 브라우저가 그 매체 서버에서 직접 받는다.
+- 출처별로 켜고 끈다. 수집기 등록부(`scripts/update-discovery-feed.py`의 `images`)와 브라우저 등록부(`assets/life/discovery.js`의 `IMAGE_HOSTS`)가 같아야 하며 검사가 이를 고정한다.
+
+### 두 구간 형식
+
+```text
+catalog {schemaVersion:1, generatedAt, sources:[첫 등록부 9곳], articles:[그 글],
+         extended:{sources:[그 뒤에 더한 출처], articles:[그 글]}}
+source  {…기존 필드, images?:{label,url}}
+article {…기존 필드, imageUrl?}
+```
+
+2026-11-11 이전에 배포한 화면의 검증기는 `sources`에 모르는 출처 ID가 하나라도 있으면 목록 전체를 거절한다. 서비스워커가 새 셸을 받기 전까지 열려 있는 화면은 그 검증기로 새 목록을 읽는다. 그래서 첫 등록부 9곳은 `sources`·`articles`에 그대로 두고, 그 뒤의 출처는 이전 판이 읽지 않는 `extended`에 싣는다. 이전 판 화면은 9곳의 글을 그대로 보이고, 새 판은 두 구간을 하나로 합쳐 읽는다. 이전 판은 `imageUrl`·`images`를 읽지 않고 버린다.
+
+배포 관문(`scripts/refresh-discovery-artifact.cjs`)은 두 구간의 출처 집합이 각각 정확히 맞는지, 글이 제 구간에 있는지, 이미지 주소가 등록 호스트인지 확인한다. 9곳만 있는 직전 게시본은 다음 수집의 기준(seed)으로만 받는다. 이전 판 파일은 `tests/fixtures/discovery-old-client/`에 고정해 두고 검사한다.
+
+같은 호스트의 피드(서울시 6개, 연합뉴스 3개, SBS 2개, MIT 2개)는 차례로, 2초 간격으로 받는다. 다른 호스트는 계속 병렬이다. 출처별 실패 격리(마지막 성공 글·시각 유지)는 그대로다.
+
+### 로컬 수집 결과 (익명, 2026-11-11T12:54Z)
+
+실제 수집기를 로컬에서 돌렸다. 요청의 클라이언트 이름만 일반 이름으로 바꿨다. 저장소에 고정한 사본(`assets/life/discovery-feed.json`)은 기존 관례([자동 갱신](discovery-automation.md))대로 바꾸지 않았다.
+
+| 출처 | 글 | 이미지 주소 | robots | 비고 |
+| --- | --- | --- | --- | --- |
+| 연합뉴스 | 20 | 14 | 허용 | |
+| 연합뉴스 문화 | 20 | 20 | 허용 | |
+| 연합뉴스 세계 | 20 | 18 | 허용 | |
+| SBS 뉴스 | 20 | 20 | 허용 | |
+| SBS 뉴스 생활·문화 | 20 | 19 | 허용 | |
+| 노컷뉴스 | 20 | 0 | 제공 안 함 | |
+| 서울시 경제 / 복지 / 교통 / 안전 | 10 / 10 / 10 / 10 | 0 | 허용 | 첫 실행에서 복지가 연결 실패(같은 호스트를 연달아 요청). 2초 간격을 넣은 두 번째 실행에서 모두 성공. |
+| 카카오 기술블로그 | 10 | 0 | 허용 | 첫 실행 성공(10건), 두 번째 실행은 연결 실패. 원인은 확인하지 못했다. |
+| 토스 기술블로그 | 20 | 0 | 제공 안 함 | |
+| LY Corporation 기술블로그 | 20 | 0 | 허용 | |
+| The Conversation | 20 | 0 | 허용 | |
+| NASA | 10 | 0 | 허용 | |
+| MIT News | 20 | 20 | 허용 | |
+| Our World in Data | 10 | 0 | 규칙 없음 | |
+| Global Voices | 15 | 15 | 허용 | |
+| EFF | 20 | 16 | 허용 | 반복되는 기본 이미지 4건 제외 |
+| (기존) MIT News 언어학 | 20 | 20 | 허용 | |
+| (기존) 독서신문 20, 서울시 문화 10, 서울시 환경 10, arXiv cs.CL 20, LLT 10, Frontiers 20 | 90 | 0 | | |
+| (기존) NAVER D2, 우아한형제들 기술블로그 | 0 | 0 | | D2는 알려진 robots 이동 실패. 우아한형제들은 이 환경에서 HTTP 403이었다. 운영 수집에서 확인해야 한다. |
+
+두 번째 실행 합계: 28곳 중 25곳 성공, 글 405건, 이미지 주소 162건(40%). 브라우저 검증기와 배포 관문 검증기가 이 결과를 그대로 통과했다(거절 0건).
+
+**최신순 상위 20건의 출처 분포:** SBS 뉴스 19건, 연합뉴스 1건(모두 2분 안에 올라온 글). 상위 40건은 SBS 뉴스 20·연합뉴스 20이고, 상위 100건 중 94건이 연합뉴스·SBS의 다섯 피드다. 분 단위로 글을 올리는 통신·방송 피드가 최신순을 차지한다. 기존 순위 규칙에는 최신순에서 출처를 섞는 장치가 없다(개인 추천에만 출처 다양성 보정이 있다).
+
+같은 결과로 계산한 단순 규칙의 효과다. 2026-11-11 후속 지시로 **쪽마다 같은 매체 3건까지**를 최신순에 넣었다(아래).
+
+| 규칙 | 상위 20건의 매체 수 | 분포 | 상위 20건 중 가장 오래된 글 |
+| --- | --- | --- | --- |
+| 지금(순수 최신순) | 2 | SBS 19, 연합 1 | 2분 전 |
+| 같은 출처 연속 2건까지 | 2 | SBS 14, 연합 6 | 2분 전 |
+| 쪽(20건)마다 같은 매체 4건까지 | 8 | SBS 4, 연합 4, 서울시 4, arXiv 3, NASA 2, 노컷뉴스·Global Voices·독서신문 1 | 8시간 전 |
+| 쪽마다 같은 매체 3건까지 | 8 | SBS 3, 연합 3, 서울시 3, 독서신문 3, arXiv 3, NASA 2, Global Voices 2, 노컷뉴스 1 | 12시간 전 |
+| 쪽마다 같은 매체 2건까지 | 11 | 11개 매체가 1~2건씩 | 23시간 전 |
+
+"연속 노출 제한"만으로는 두 매체가 번갈아 나올 뿐이라 효과가 없다. 쪽 단위 상한이 섞임을 만든다. 여기서 매체는 같은 사이트의 피드를 하나로 센 것이다(연합뉴스 3개, SBS 2개, 서울시 6개, MIT 2개).
+
+**적용한 규칙과 재측정 (2026-11-11T15:01:58Z 로컬 수집, 28곳 중 25곳 성공, 글 405건, 이미지 주소 166건):** 매체는 등록부의 발행처 키(`assets/life/discovery.js`의 `PUBLISHERS`와 수집기 `SOURCES`의 `publisher`, 검사로 일치 고정)로 센다. 최신순으로 늘어놓고 20건 쪽마다 같은 매체 3건까지 담으며, 넘친 글은 버리지 않고 다음 쪽으로 넘긴다. 남은 매체가 적어 3건 상한으로 20건을 못 채우는 쪽만 상한을 풀어 채운다. 쪽 안은 최신순이다. 같은 목록이면 어느 기기에서도 같은 순서다. 관심순·개인 추천에는 적용하지 않는다(관심순은 사용자가 고른 주제 일치가 먼저다).
+
+| 쪽 | 매체 수 | 분포 |
+| --- | --- | --- |
+| 규칙 없음 첫 쪽 | 2 | 연합뉴스 10, SBS 10 |
+| 첫 쪽 | 8 | 연합뉴스 3, SBS 3, 노컷뉴스 3, 서울시 3, arXiv 3, 독서신문 2, NASA 2, Global Voices 1(가장 오래된 글 05:00Z, 이미지 6건) |
+| 둘째·셋째 쪽 | 각 8 | 같은 방식 |
+
+391건 후보가 쪽을 나눈 뒤에도 391건 그대로다(중복·누락 0). 이 측정은 노컷뉴스 날짜 보정 뒤다(보정 전에는 노컷뉴스 글이 미래 시각이라 시간이 없는 글로 맨 뒤에 있었다).
+
+### 노컷뉴스 날짜 보정
+
+노컷뉴스 RSS는 한국 시각을 적고 `GMT`를 붙인다. 2026-11-11 12:20Z와 15:01Z 두 번 받았을 때 최신 글이 지금보다 7~9시간 앞섰다(+9시간에서 최신 글의 나이를 뺀 값). 수집기는 등록부에 `gmtLabelIsKoreanTime`이 있는 출처(노컷뉴스만)의 ` GMT` 표기를 **언제나** +09:00으로 읽는다. `+0900`·`+0000`처럼 오프셋을 직접 적은 시각은 적힌 대로 읽는다. 보정한 뒤에도 미래인 글은 예약 글이므로 다른 출처와 같은 `future` 상태(새 글로 보이지 않음)다. 2026-11-11 검수 지적으로 바꾼 규칙이다: 처음 판은 "그 실행에서 미래 시각이 나오는 글이 있을 때만" 보정해, 9시간 넘게 새 글이 없는 시간에는 보정이 꺼져 글이 최대 9시간 새것으로 보였고, 표기가 바르게 바뀐 뒤 예약 글 하나만 있어도 모든 글이 9시간 앞당겨졌다. 피드가 ` GMT` 표기를 그대로 둔 채 실제 GMT로 바꾸면 이 규칙은 글을 9시간 오래된 것으로 읽는다. 그때는 등록부의 `gmtLabelIsKoreanTime`을 지운다. 다른 출처의 같은 표기는 고치지 않는다(검사: `tests/discovery-card-feed.test.cjs`의 노컷뉴스 날짜 사례).
+
 ## 출처 결정
 
 | 출처 / 고정 ID | 공식 피드 | 현재 공급 / 공식 날짜 | 권리·robots 확인 |
@@ -23,7 +175,7 @@
 
 ## 데이터 계약과 날짜
 
-파일은 `assets/life/discovery-feed.json` 하나다. 브라우저는 같은 출처의 고정 경로만 GET하고, 개인 본문·관심·검색어를 이 갱신 스크립트나 원천 사이트에 보내지 않는다. 갱신기는 미리 고정한 공개 피드를 받으며 개인 입력 인자가 없다.
+파일은 `assets/life/discovery-feed.json` 하나다. 브라우저는 같은 출처의 고정 경로만 GET하고, 개인 본문·관심·검색어를 이 갱신 스크립트나 원천 사이트에 보내지 않는다. (공개 수집기에 한함. 계정 전용 넓게 찾기는 2026-11-11 소유자 승인으로 별도 경로다 — [넓게 찾기 서버](news-wide-feed.md).) 갱신기는 미리 고정한 공개 피드를 받으며 개인 입력 인자가 없다.
 
 ```text
 catalog {schemaVersion:1, generatedAt, sources:[], articles:[]}

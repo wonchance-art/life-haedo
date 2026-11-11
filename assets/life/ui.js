@@ -74,6 +74,21 @@
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
   }
 
+  // When an original was written. An ISO date or timestamp (a kept news article, a re-import) reads as a date;
+  // anything a person typed ("2024년 가을", "오래전 봄") stays exactly as typed.
+  function writtenLabel(value) {
+    if (!value) return '';
+    const text = String(value).trim(), day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (day) return Number(day[1]) + '. ' + Number(day[2]) + '. ' + Number(day[3]) + '.';
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.test(text)) return String(value);
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
+  }
+  function timeLabel(value) {
+    const date = new Date(value);
+    return !value || Number.isNaN(date.getTime()) ? String(value || '모름') : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
   // Textareas normalize CRLF (and lone CR) to LF; source locators use unchanged input.
   function displayToRaw(text, offset) {
     let raw = 0;
@@ -118,7 +133,7 @@
     let beforeUnload = null, visibility = null, pagehideReading = null;
     let unsubscribe = null;
     let unsubscribeSync = null;
-    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, unlinkedAdoption = null;
+    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, libraryReading = null, libraryAgain = false, unlinkedAdoption = null;
     let workspaceListRefresh = 0, workspaceListApplied = 0;
     const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
@@ -130,6 +145,10 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    // The open reader's keeper of the reading line across width changes (SplitResize.keepLine), or null.
+    let readerLineKeeper = null;
+    // The open reader's view, selection and reading line as numbers for its history entry (a reload reopens there), or null.
+    let readerHistoryState = null;
     let splitCleanup = null;
     let readerMatchRefresh = null;
     let readerWatch = null;
@@ -197,7 +216,27 @@
     const findSections = new Set(['news', 'schedule', 'records', 'manage']);
     // 일정's calendar units (2026-11-02): Y is the former tools (계획) view; Q·M·W·D are new.
     const calendarModes = new Set(['tools', 'quarter', 'month', 'week', 'day']);
-    const scheduleDate = () => { const sd = global.HaedoLife.ScheduleData; return !sd ? null : sd.valid(state.scheduleDate) ? state.scheduleDate : sd.today(); };
+    // The date 일정 shows (2026-11-11 M1). `scheduleDay` is the today the shown schedule was drawn with: a
+    // date never chosen means that day, not the clock at each call, so the title, the address, 오늘, ‹ › and
+    // the day's checks all use the one date on screen. scheduleRollover() moves it when the day changes.
+    let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null, scheduleDayMoving = false, scheduleDayFocus = null;
+    const scheduleDate = () => {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return null;
+      if (!scheduleDay) scheduleDay = sd.today();
+      return sd.valid(state.scheduleDate) ? state.scheduleDate : scheduleDay;
+    };
+    // The day changed since the schedule was drawn: a screen that showed today follows the new today, a
+    // chosen past or future date stays. True when the day moved.
+    function scheduleRollover() {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return false;
+      const now = sd.today();
+      if (scheduleDay === now) return false;
+      if (scheduleDay && state.scheduleDate === scheduleDay) state.scheduleDate = now;
+      scheduleDay = now;
+      return true;
+    }
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
@@ -207,11 +246,11 @@
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', recordKind: 'all', originFilter: '', folderFilter: 'all', returnContext: null, suppressReaderResume: false, sourceId: null,
-      sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicFilterSearch: '',
+      sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicRecovery: false, topicFilterSearch: '',
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], sourceEditStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(), readerModes: new Map(),
-      syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
+      syncAccount: null, syncState: null, syncNotice: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
       sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
@@ -492,15 +531,68 @@
       host: main, storage, core, getBundle: () => state.bundle, getAccountKey: () => state.syncAccountKey,
       isDisposed: () => disposed, announce,
       onClose: closeSourceEditor,
+      onDraftsChanged: refreshSourceEditStages,
+      // The draft is gone; the list of drafts must not keep offering it.
+      onDiscarded: async ({ sourceId, sourceVersionId, missing }) => {
+        const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
+        await refreshData();
+        if (disposed || state.mode !== 'source-edit' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        if (missing || !sourceFor(sourceId)) return navigate('sources');
+        return closeSourceEditor({ sourceId, sourceVersionId });
+      },
       onSaved: async ({ sourceId, sourceVersionId }) => {
         const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
         await refreshData();
         if (disposed || state.mode !== 'source-edit' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        // This screen made the change and has just read it back; it is not a change from elsewhere (as 글쓰기 does).
+        state.remoteChanged = false;
         const origin = sourceEditOrigin?.workspaceId === workspaceId ? sourceEditOrigin : null;
         await navigate('source', { sourceId, sourceVersionId, locator: null, returnContext: origin?.returnContext || null });
       }
     });
+    // Excerpt notes still being typed (not yet in the collection) are kept for this tab, so a reload gives them
+    // back. One entry, for one account and one space: another account or space never reads it and removes it.
+    const SOURCE_DRAFTS_KEY = 'caeyeon_life_reader_drafts';
+    const sourceDraftOwner = () => storage.account?.userId || 'local';
+    function storeSourceDrafts() {
+      try {
+        const drafts = {};
+        for (const [versionId, draft] of state.sourceDrafts) {
+          if (!draft.topic && !draft.note) continue;
+          drafts[versionId] = { topic: draft.topic, note: draft.note,
+            ...(draft.range ? { range: { start: draft.range.start, end: draft.range.end } } : {}),
+            ...(draft.stageId ? { stageId: draft.stageId, stageRevision: draft.stageRevision } : {}) };
+        }
+        if (!state.bundle || !Object.keys(drafts).length) global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY);
+        else global.sessionStorage.setItem(SOURCE_DRAFTS_KEY, JSON.stringify({ owner: sourceDraftOwner(), workspaceId: state.bundle.workspaceId, drafts }));
+      } catch (_) { /* Blocked or full session storage: the note stays in memory, as before. */ }
+    }
+    function restoreSourceDrafts() {
+      try {
+        const raw = global.sessionStorage.getItem(SOURCE_DRAFTS_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (!saved || saved.owner !== sourceDraftOwner() || saved.workspaceId !== state.bundle?.workspaceId || !saved.drafts || typeof saved.drafts !== 'object') { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); return; }
+        for (const [versionId, draft] of Object.entries(saved.drafts)) {
+          const version = state.bundle.sourceVersions.find(item => item.id === versionId);
+          if (!version || state.sourceDrafts.has(versionId) || typeof draft?.topic !== 'string' || typeof draft.note !== 'string' || draft.topic.length > 500 || draft.note.length > 100000) continue;
+          const length = typeof version.contentText === 'string' ? version.contentText.length : 0, range = draft.range;
+          const valid = range && Number.isSafeInteger(range.start) && Number.isSafeInteger(range.end) && range.start >= 0 && range.start <= range.end && range.end <= length;
+          state.sourceDrafts.set(versionId, { topic: draft.topic, note: draft.note, ...(valid ? { range: { start: range.start, end: range.end } } : {}),
+            ...(typeof draft.stageId === 'string' && Number.isSafeInteger(draft.stageRevision) ? { stageId: draft.stageId, stageRevision: draft.stageRevision } : {}), recovered: true });
+        }
+      } catch (_) { try { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); } catch (__) { /* unavailable */ } }
+    }
+    // The list of drafts (검토 중) follows drafts made or removed in this session without a full data refresh.
+    async function refreshSourceEditStages() {
+      const workspaceId = state.bundle?.workspaceId, token = workspaceGeneration;
+      if (disposed || !workspaceId) return;
+      const stages = await storage.listStages(workspaceId);
+      if (disposed || token !== workspaceGeneration || state.bundle?.workspaceId !== workspaceId) return;
+      state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
+    }
     async function closeSourceEditor(fallback = {}) {
+      await refreshSourceEditStages().catch(() => {});
       const origin = sourceEditOrigin?.workspaceId === state.bundle?.workspaceId ? sourceEditOrigin : null;
       const sourceId = origin?.sourceId || fallback.sourceId || sourceEditOpenOptions?.sourceId;
       if (!sourceId) return navigate('sources');
@@ -699,6 +791,38 @@
       panel.addEventListener('keydown', escape);
       return setOpen;
     }
+    // A reader panel that opens as a layer under the sticky tool row (출처 정보, 이 원문 담기). It shows where the
+    // person is reading and takes no room in the document, so the reading line does not move. It closes on
+    // Escape from anywhere, a press outside it, or its own button; one layer is open at a time.
+    function readerSheet(tools, trigger, panel, options = {}) {
+      panel.classList.add('life-reader-sheet');
+      const fit = () => {
+        // From under the tool row down to the bottom tab (narrow screens) or the screen edge; longer content scrolls inside.
+        const nav = document.querySelector('.haedo-nav')?.getBoundingClientRect();
+        const floor = nav && nav.height && nav.top > global.innerHeight / 2 && nav.width >= global.innerWidth - 1 ? nav.top : global.innerHeight;
+        panel.style.maxHeight = Math.max(120, Math.floor(floor - tools.getBoundingClientRect().bottom)) + 'px';
+      };
+      const disarm = () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape); global.removeEventListener('resize', resized); };
+      const gone = () => { if (panel.isConnected) return false; disarm(); return true; };
+      const outside = event => { if (!gone() && !panel.hidden && !panel.contains(event.target) && !trigger.contains(event.target)) setOpen(false); };
+      const escape = event => {
+        if (gone() || event.key !== 'Escape' || panel.hidden || event.defaultPrevented) return;
+        event.preventDefault(); setOpen(false); trigger.focus({ preventScroll: true });
+      };
+      const resized = () => { if (!gone() && !panel.hidden) fit(); };
+      const arm = () => { disarm(); fit(); document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape); global.addEventListener('resize', resized); };
+      const setOpen = disclosure(trigger, panel, { onChange: open => {
+        if (open) {
+          for (const other of panel.parentNode?.querySelectorAll(':scope > .life-reader-sheet:not([hidden])') || []) if (other !== panel) other.closeSheet?.();
+          panel.scrollTop = 0; arm();
+        } else disarm();
+        options.onChange?.(open);
+      } });
+      panel.closeSheet = () => setOpen(false);
+      // Rendered already open (the panel stays open across a re-render after 담기).
+      if (!panel.hidden) requestAnimationFrame(() => { if (panel.isConnected && !panel.hidden) arm(); });
+      return setOpen;
+    }
 
     function originName(value) { return value === 'writing' ? '내 글' : (ORIGINS.find(pair => pair[0] === value) || [value, value])[1]; }
     function isOwnWriting(source) { return !!global.HaedoLife.Writing?.isOwnSource(source, state.bundle); }
@@ -711,6 +835,10 @@
     function sourceFor(sourceId) { return state.bundle.sources.find(s => s.id === sourceId); }
     function activeSource(sourceId) { return core.isSourceActive(state.bundle, sourceId); }
     function activeRecord(record) { return !record.sourceRefs.length || record.sourceRefs.some(ref => activeSource(ref.sourceId)); }
+    // Kept by a merge of two devices' edits (SyncCommon.mergeWorkspace): an excerpt whose topic
+    // starts with 복구 사본, and the rows that hold a source's losing title or file path.
+    function recoveryCopy(record) { return typeof record.topic === 'string' && record.topic.startsWith('복구 사본'); }
+    function previousKind(link) { return link.kind === 'source_previous_title' || link.kind === 'source_previous_key'; }
 
     function dirty() { return !!state.stage && state.editTick !== state.savedTick; }
 
@@ -1150,18 +1278,29 @@
       if (syncStatus) syncStatus.textContent = presentation.label;
     }
 
-    async function refreshLibrary() {
-      if (!managedLibrary || disposed) return;
-      const sequence = ++libraryRefresh, workspaceId = state.bundle?.workspaceId;
-      try {
-        const next = await accountLibrary.getState(workspaceId);
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = next;
-      } catch (cause) {
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } };
-      }
-      updateLibraryStatus();
+    // One state read at a time. Events that arrive while it runs ask for one more read after it;
+    // the finished read is shown meanwhile. (Before, every event started its own read and
+    // discarded the ones before it: with a library of megabytes a read takes longer than the
+    // events are apart while a pass runs, so the band kept an old state — "확인 필요" from a
+    // connection error long gone — and never offered the comparison that was waiting.)
+    function refreshLibrary() {
+      if (!managedLibrary || disposed) return Promise.resolve();
+      if (libraryReading) { libraryAgain = true; return libraryReading; }
+      const scope = libraryRefresh;
+      const reading = libraryReading = (async () => {
+        do {
+          libraryAgain = false;
+          const workspaceId = state.bundle?.workspaceId;
+          let next;
+          try { next = await accountLibrary.getState(workspaceId); }
+          catch (cause) { next = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } }; }
+          if (disposed || scope !== libraryRefresh) return;
+          // Another workspace was opened meanwhile: this state is not its state; read again.
+          if (workspaceId !== state.bundle?.workspaceId) { libraryAgain = true; continue; }
+          libraryState = next; updateLibraryStatus();
+        } while (libraryAgain);
+      })().finally(() => { if (libraryReading === reading) libraryReading = null; });
+      return reading;
     }
 
     async function refreshWorkspaceList() {
@@ -1236,6 +1375,10 @@
         state.syncAccount = account;
         const info = await sync.getState(workspaceId);
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
+        const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
+        if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        state.syncNotice = notice;
         state.syncState = info;
         state.syncWorkspaceId = workspaceId;
         state.syncReadError = null;
@@ -1299,7 +1442,8 @@
         if (event.type === 'error') { failure(event.error); return; }
         if (event.type === 'sync_changed') { refreshSync().catch(failure); return; }
         if (event.type !== 'changed') return;
-        if (event.revision <= state.bundle.revision || state.busy) return;
+        // The material editor's own save is read back by its onSaved; it is not "changed elsewhere".
+        if (event.revision <= state.bundle.revision || state.busy || sourceEditor?.isSaving()) return;
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();
@@ -1318,6 +1462,8 @@
         }
       });
       if (sync) {
+        // state.syncNotice stays: it is shown only for the workspace it was read for (mergeNotice),
+        // so a re-mount of the same workspace does not blink it away until the next read.
         state.syncState = null;
         state.syncReadError = null;
         state.syncLoading = true;
@@ -1521,6 +1667,8 @@
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
+      // A navigation is drawn with the current day (the date an option names is applied after it).
+      scheduleRollover();
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1728,21 +1876,32 @@
         typeof options.searchTarget?.postId === 'string' ? 'plain.' + options.searchTarget.postId : null;
       return value && blogRoutePattern.test(value) ? value : null;
     }
+    const missingPostNotice = '글을 찾지 못했습니다. 수정했거나 삭제한 글일 수 있어 목록을 열었습니다.';
     // `recordedCompose` is the history entry's own 글쓰기 flag; without an entry (an address
     // only) a post that replaces no saved post and was never saved counts as a new post.
     async function openBlogRoute(workspaceId, value, recordedCompose) {
       if (typeof value !== 'string' || !blogRoutePattern.test(value)) return null;
       if (value === 'new') return { pageCompose: true };
       if (value === 'profile') return { pageProfileEdit: true };
-      const [kind, id] = value.split('.');
+      const [kind, named] = value.split('.');
+      let id = named;
       if (kind === 'draft') return { pageDraftId: id, ...(recordedCompose === true ? { composingPost: true } : {}) };
       if (kind === 'plain') return { pagePreview: false, searchTarget: { postId: id } };
-      let post;
-      try { post = await storage.readPhotoPost(workspaceId, id); }
-      catch (cause) {
-        // A new editor that was left before its first save has nothing stored.
-        if (cause?.code === 'photo_post_missing') return { pageCompose: true };
-        throw cause;
+      const read = async postId => {
+        try { return await storage.readPhotoPost(workspaceId, postId); }
+        catch (cause) { if (cause?.code === 'photo_post_missing') return null; throw cause; }
+      };
+      let post = await read(id);
+      if (!post) {
+        // Saving a revision gives the post a new id: an address kept from before the edit opens the post that took its place.
+        let successor = null;
+        try { successor = global.HaedoLife.PhotoPost.moved(global.localStorage, storage.account?.userId || 'local').resolve(workspaceId, id); } catch (_) {}
+        if (successor) { post = await read(successor); if (post) id = successor; }
+      }
+      if (!post) {
+        // 글쓰기 left before its first save has nothing stored; its own history entry says it was 글쓰기.
+        // Any other address that names no post opens the list with a notice, never an empty editor.
+        return recordedCompose === true ? { pageCompose: true } : { blogMissing: true };
       }
       const composing = composingPost(typeof recordedCompose === 'boolean' ? recordedCompose : true, post);
       return { pagePreview: false, searchTarget: { photoPostId: id }, ...(composing ? { composingPost: true } : {}) };
@@ -1759,17 +1918,39 @@
     function historyClone(value) {
       try { return value == null ? null : JSON.parse(JSON.stringify(value)); } catch (_) { return null; }
     }
+    // 글쓰기 opened by the link of another page of the app (목표·습관·연표 목록·연표, 2026-11-11 m3): that page
+    // is where 닫기 returns. Only these page names with the parameters their own return address may carry
+    // (HaedoAuth.safeNext) are kept; anything else means the 일정 list as before.
+    const returnPagePattern = /^(?:goals|habits|workspace|timeline)\.html(?:\?[A-Za-z0-9_=&-]{1,200})?$/;
+    function composeOriginPage() {
+      try {
+        // A reload or a history move is not an arrival from that page (the entry itself records it, see mount).
+        const arrival = global.performance?.getEntriesByType?.('navigation')[0]?.type;
+        if (!document.referrer || arrival && arrival !== 'navigate') return null;
+        const from = new URL(document.referrer), here = global.location;
+        const page = from.pathname.split('/').pop();
+        // The same folder of the same origin only.
+        if (from.origin !== here.origin || from.pathname.slice(0, -page.length) !== here.pathname.slice(0, here.pathname.lastIndexOf('/') + 1)) return null;
+        const safe = global.HaedoAuth?.safeNext?.(page + from.search);
+        return typeof safe === 'string' && returnPagePattern.test(safe) && safe.split('?')[0] === page ? safe : null;
+      } catch (_) { return null; }
+    }
     // What reopens a screen: its mode, exact reader version or blog task and
     // the in-app return origin. The full entry stays in memory (historyDetails);
     // history.state receives only historyPublic(entry).
     function historyEntry(mode = state.mode) {
       const entry = { mode, workspaceId: state.bundle?.workspaceId || null };
-      if (mode === 'source') Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+      if (mode === 'source') {
+        Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+        const reading = readerHistoryState?.();
+        if (reading) entry.reading = reading;
+      }
       // A news article read in place of the list (below 1101px) is its own entry, so the browser's back closes it.
       if (mode === 'external-discovery' && state.newsArticle) entry.newsArticle = state.newsArticle;
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
-      if (calendarModes.has(mode) && scheduleDate()) entry.scheduleDate = scheduleDate();
+      // scheduleToday: the entry showed today. A tab reopened on a later day (reload) opens that day's today.
+      if (calendarModes.has(mode) && scheduleDate()) { entry.scheduleDate = scheduleDate(); if (entry.scheduleDate === scheduleDay) entry.scheduleToday = true; }
       if (mode === 'find' && findSection) entry.findSection = findSection;
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
@@ -1792,7 +1973,17 @@
       if (findSections.has(value.findSection)) out.findSection = value.findSection;
       if (global.HaedoLife.ScheduleData?.valid(value.scheduleDate)) out.scheduleDate = value.scheduleDate;
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
-      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      // Where the reader was: view, selection offsets and the reading line. Numbers only, no text.
+      if (value.reading && typeof value.reading === 'object') {
+        const reading = value.reading, whole = key => Number.isSafeInteger(reading[key]) && reading[key] >= 0, position = { view: reading.view === 'formatted' ? 'formatted' : 'raw' };
+        if (whole('start') && whole('end') && reading.start <= reading.end) Object.assign(position, { start: reading.start, end: reading.end });
+        if (whole('y')) position.y = reading.y;
+        if (whole('offset') && Number.isFinite(reading.top) && whole('viewport') && reading.viewport > 0)
+          Object.assign(position, { offset: reading.offset, top: Math.round(reading.top), viewport: reading.viewport, ...(Number.isFinite(reading.ratio) ? { ratio: Math.min(1, Math.max(0, Math.round(reading.ratio * 1000) / 1000)) } : {}) });
+        out.reading = position;
+      }
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      if (returnPagePattern.test(value.returnPage || '')) out.returnPage = value.returnPage;
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
       if (value.homeState && typeof value.homeState === 'object') {
@@ -1882,6 +2073,8 @@
       if (recorded) syncHistoryPosition();
       else if (historyKey && lastRouteBase === global.location.pathname + global.location.search) { historyIndex += 1; historyKey = null; }
       const entry = historyEntry(mode);
+      // Between a reader's renders nothing can measure its line; keep what the entry already holds for this exact version.
+      if (mode === 'source' && !entry.reading && recorded?.entry?.reading && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.reading = recorded.entry.reading;
       try {
         if (push && !(destination === here && recorded && sameHistoryScreen(recorded.entry, historyPublic(entry)))) {
           const leftKey = historyKey || core.id();
@@ -1997,8 +2190,9 @@
       return switchScheduleView(mode, { date, motion: 'push' });
     }
     // ‹ › and 오늘 update the same screen: the entry is replaced, not added.
+    // The same date is drawn again only when the day changed after this screen was drawn (its 오늘 marks are old).
     async function scheduleMove(date) {
-      if (!calendarModes.has(state.mode) || date === scheduleDate()) return;
+      if (!calendarModes.has(state.mode) || date === scheduleDate() && scheduleDay === global.HaedoLife.ScheduleData.today()) return;
       const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
       if (await navigate(state.mode, { preserveContext: true, scheduleDate: date, historyAction: 'replace', navigationMotion: 'tab', sectionPosition: { scrollY: global.scrollY } }) === false) return;
       if (disposed || !focusKey) return;
@@ -2011,6 +2205,67 @@
     function scheduleToday() {
       if (state.mode === 'home') { global.scrollTo({ top: 0, behavior: 'instant' }); return; }
       return scheduleMove(global.HaedoLife.ScheduleData.today());
+    }
+    // The app stayed open over midnight (2026-11-11 M1). Checked when the page is shown again, on focus and
+    // right after midnight: a calendar screen is drawn again with the new day (scheduleRollover in navigate).
+    // While a control is in use it waits, so nothing typed or chosen is lost.
+    function scheduleInUse() {
+      if (state.busy || navigationRender !== null || historyWait || historyPending || document.querySelector('dialog[open]')) return true;
+      const active = document.activeElement;
+      return !!active && root.contains(active) && (active.isContentEditable || active.matches('textarea,select,input:not([type=checkbox]):not([type=radio]):not([type=button])') && (active.type !== 'range' || active.matches(':active')));
+    }
+    // Keyboard focus after the day moved under it: the same control when it is still there, else the same kind
+    // of control of the new day (the same habit's box, the same 행복도 choice), else the title that names the new day.
+    // Focus that was nowhere stays nowhere.
+    function scheduleRefocus(focusKey, from) {
+      if (!focusKey) return;
+      const find = key => [...root.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === key && item.checkVisibility?.());
+      const to = scheduleDate(), moved = from && to && from !== to && focusKey.includes(from) ? focusKey.split(from).join(to) : null;
+      const target = find(focusKey) || (moved && find(moved)) ||
+        // 지우기 exists only on a day with a value; a habit not due on the new day has no box.
+        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || toolbar.querySelector('h1');
+      target?.focus({ preventScroll: true });
+    }
+    function scheduleDayCheck() {
+      const sd = global.HaedoLife.ScheduleData, entries = global.HaedoLife.ScheduleEntries;
+      if (disposed || !sd || !state.bundle || document.hidden || !scheduleDay || scheduleDay === sd.today() || scheduleDayMoving) return;
+      // Another screen shows no schedule date: only the kept date follows, for the next schedule screen.
+      if (!calendarModes.has(state.mode)) { scheduleRollover(); return; }
+      // The held day's 다시 저장 / 선택 취소 go away with their notice before the screen moves: their focus is
+      // remembered here, so it ends on the new day's title and not on the page.
+      const heldFocus = root.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+      if (heldFocus?.startsWith('schedule:held:')) scheduleDayFocus = heldFocus;
+      // A 행복도 choice on its way to the store: its end is announced (haedo:happiness) and this runs again. No timer.
+      if (entries?.saving?.()) return;
+      // The day on screen is the one that was today, and its 행복도 choice failed: the screen stays, says that the
+      // date changed and takes no other input for that day, until the owner stores the choice again or drops it
+      // (ScheduleEntries.holdDay). Nothing is polled meanwhile.
+      const shown = scheduleDate();
+      if (state.mode === 'day' && shown === scheduleDay && entries?.failed?.().includes(shown)) { entries.holdDay(shown); return; }
+      if (scheduleInUse()) {
+        if (!scheduleDayRetry) scheduleDayRetry = global.setTimeout(() => { scheduleDayRetry = null; scheduleDayCheck(); }, 1000);
+        return;
+      }
+      // One move at a time: the return fires several events at once (shown, focus), and releasing the held day announces itself.
+      scheduleDayMoving = true;
+      // Read before guarded(): it disables the fields while it runs, which drops their focus.
+      const focusKey = (root.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null) || scheduleDayFocus;
+      scheduleDayFocus = null;
+      entries?.holdDay?.(null);
+      Promise.resolve(guarded(async () => {
+        if (await navigate(state.mode, { preserveContext: true, historyAction: 'replace', navigationMotion: 'tab', restoresFocus: true, sectionPosition: { scrollY: global.scrollY } }) === false) return;
+        // The new day's controls are drawn when its records are read.
+        const drawn = renderGeneration;
+        await Promise.resolve(mainRenderPromise).catch(() => {});
+        if (!disposed && drawn === renderGeneration) scheduleRefocus(focusKey, shown);
+      })()).finally(() => { scheduleDayMoving = false; });
+    }
+    // One timer to the next local midnight (a hidden page is checked when it is shown again).
+    function armScheduleDayTimer() {
+      if (scheduleDayTimer) global.clearTimeout(scheduleDayTimer);
+      if (disposed) return;
+      const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      scheduleDayTimer = global.setTimeout(() => { scheduleDayTimer = null; scheduleDayCheck(); armScheduleDayTimer(); }, Math.max(1000, next - now + 250));
     }
     // Links to the existing editors that own goals, habits and happiness (B1 shows no copy of their data).
     function scheduleLinks(items) {
@@ -2073,15 +2328,28 @@
       return state.mode === 'page' && blogPageTask && !materialWritingTask && blogMode === 'edit' && blogComposing;
     }
 
+    // A recorded reader entry (after a reload only history.state has it) becomes this session's position for that version.
+    function seedReaderPosition(entry) {
+      const reading = entry?.reading, versionId = entry?.sourceVersionId;
+      if (!reading || !versionId || state.readerPositions.has(versionId)) return;
+      const anchor = Number.isSafeInteger(reading.offset) ? { mode: reading.view, offset: reading.offset, ratio: reading.ratio || 0, top: reading.top, viewport: reading.viewport } : null;
+      const selection = Number.isSafeInteger(reading.start) ? { start: reading.start, end: reading.end } : { start: 0, end: 0 };
+      state.readerPositions.set(versionId, { ...(reading.view === 'formatted' ? { start: anchor?.offset || 0, end: anchor?.offset || 0 } : selection), mode: reading.view, scrollY: reading.y || 0, anchor });
+      state.readerModes.set(versionId, reading.view);
+    }
     async function historyOptions(entry, backward) {
       const options = { preserveContext: true, historyAction: 'replace', navigationMotion: backward ? 'back' : 'push',
         restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
       if (entry.homeState) options.homeState = entry.homeState;
-      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate)) options.scheduleDate = entry.scheduleDate;
-      if (entry.mode === 'source' && entry.sourceId) Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null });
+      // An entry that showed today reopens on today, as a reload of it does (mount): back to "today's" screen on a
+      // later day is not yesterday's screen.
+      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate))
+        options.scheduleDate = entry.scheduleToday === true ? global.HaedoLife.ScheduleData.today() : entry.scheduleDate;
+      if (entry.mode === 'source' && entry.sourceId) { seedReaderPosition(entry); Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null }); }
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
-        if (blog) Object.assign(options, blog, { blogContext: true });
+        if (blog?.blogMissing) Object.assign(options, { historyTask: null, missingPost: true });
+        else if (blog) Object.assign(options, blog, { blogContext: true });
         else options.historyTask = null;
       } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
       if (entry.mode === 'external-discovery' && entry.newsArticle) options.newsArticle = entry.newsArticle;
@@ -2123,7 +2391,12 @@
       historyPending = { idx: record.idx, key: record.key };
       let opened;
       const restoresFocus = !view.blog && !view.material;
-      try { opened = await navigate(view.mode, { ...await historyOptions(view, record.idx < from), restoresFocus }); }
+      try {
+        // An entry whose post is gone (deleted, or replaced with no record on this device) opens the list instead.
+        const { missingPost, ...restored } = await historyOptions(view, record.idx < from);
+        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus });
+        if (missingPost) announce(missingPostNotice);
+      }
       catch (cause) {
         // Saving failed or input is still composing: stay, and move the
         // browser back to the entry of the screen that is still shown.
@@ -2170,12 +2443,31 @@
       if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
+      // A post saved here is shown in the list (below); otherwise 글쓰기 from another page returns to that page.
+      if (state.mode === 'page' && blogPageTask && !blogCommitted && returnPagePattern.test(origin.returnPage || '')) return returnToPage(origin);
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget,
         ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
       if (origin.postTarget) return;
       restoreOriginView(origin, anchor);
+    }
+
+    // 닫기 of a 글쓰기 opened from another page of the app (2026-11-11 m3). This entry first becomes the 일정
+    // list through the ordinary navigation (the same flush as any exit: a failed save stays here with the
+    // input), so neither it nor a later Forward reopens an empty editor. Then the browser goes back to the
+    // page the link was on; when this entry is not the one right after it, that page is opened instead.
+    async function returnToPage(origin) {
+      const direct = historyIndex === 0 && global.history.length > 1;
+      // The list is not flashed on the way out. It is shown again if this page is still (or again) in front.
+      const show = () => { root.style.visibility = ''; };
+      root.style.visibility = 'hidden';
+      try {
+        if (await navigate('home', { preserveContext: true, homeState: origin.homeState, navigationMotion: 'back', historyAction: 'replace', restoresFocus: true }) === false) { show(); return; }
+      } catch (cause) { show(); throw cause; }
+      global.addEventListener('pageshow', show, { once: true });
+      global.setTimeout(show, 1500);
+      if (direct) global.history.back(); else global.location.assign(origin.returnPage);
     }
 
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
@@ -3105,10 +3397,14 @@
     }
 
     function renderStages(parent) {
-      if (!state.stages.length && !state.sourceEditStages.length) return;
+      // A stage that holds nothing the person typed is not something to review (the editor removes it when opened).
+      const editDrafts = state.sourceEditStages.filter(stage => {
+        try { return !global.HaedoLife.SourceEdit.baseState(state.bundle, stage).untouched; } catch (_) { return true; }
+      });
+      if (!state.stages.length && !editDrafts.length) return;
       const details = node('details', null, 'life-details');
       details.id = 'lifeImportDrafts';
-      details.append(node('summary', '검토 중 ' + (state.stages.length + state.sourceEditStages.length) + '개 · 이어서 확인'));
+      details.append(node('summary', '검토 중 ' + (state.stages.length + editDrafts.length) + '개 · 이어서 확인'));
       const listedBatches = new Set();
       state.stages.forEach(stage => {
         if (validBatchStage(stage)) {
@@ -3122,15 +3418,28 @@
         row.append(button(stage.input.title || stage.input.fileName || '제목 없는 검토 항목', guarded(() => openStage(stage.stageId))), node('span', originName(stage.input.origin), 'life-meta'));
         details.append(row);
       });
-      state.sourceEditStages.forEach(stage => {
+      editDrafts.forEach(stage => {
         const row = node('div', null, 'life-row');
         const open = button(stage.input.title || '제목 없는 수정 초안', guarded(() => {
+          // No version here: the editor says which version to return to (the latest one after a choice).
           sourceEditOrigin = { workspaceId: state.bundle.workspaceId, sourceId: stage.baseSourceId,
-            sourceVersionId: stage.baseSourceVersionId, scrollY: 0, returnContext: { mode: 'sources', workspaceId: state.bundle.workspaceId } };
+            sourceVersionId: null, scrollY: 0, returnContext: { mode: 'sources', workspaceId: state.bundle.workspaceId } };
           return navigate('source-edit', { sourceEdit: { stageId: stage.stageId } });
         }));
         open.dataset.sourceEditStageId = stage.stageId;
-        row.append(open, node('span', '자료 수정', 'life-meta')); details.append(row);
+        const discard = button('초안 버리기', guarded(async () => {
+          if (!global.confirm('수정 초안을 버릴까요? 보관한 자료와 이전 판은 그대로입니다.')) return;
+          const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
+          if (sourceEditor) await sourceEditor.discard(stage.stageId); else await storage.deleteStage(stage.stageId);
+          await refreshData();
+          if (disposed || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId || state.mode !== 'sources') return;
+          render();
+          (main.querySelector('#lifeImportDrafts summary') || main.querySelector('#lifeSearch'))?.focus({ preventScroll: true });
+          announce('수정 초안을 버렸습니다. 보관한 자료는 그대로입니다.');
+        }));
+        discard.dataset.sourceEditDiscard = stage.stageId;
+        discard.setAttribute('aria-label', '초안 버리기: ' + (stage.input.title || '제목 없는 수정 초안'));
+        row.append(open, node('span', '자료 수정', 'life-meta'), discard); details.append(row);
       });
       parent.append(details);
     }
@@ -3149,7 +3458,7 @@
       relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
-      state.topicUnassigned = false;
+      state.topicUnassigned = state.topicRecovery = false;
       state.topicFilterSearch = '';
       state.returnContext = null;
       state.suppressReaderResume = false;
@@ -3209,18 +3518,26 @@
       search.label.firstChild.className = 'life-sr-only';
       search.input.placeholder = placeholder;
       search.input.maxLength = 500;
-      let composing = false;
+      let composing = false, composingFrame = 0;
       let lastValue = state[key];
       const finish = () => {
+        if (composingFrame) { global.cancelAnimationFrame(composingFrame); composingFrame = 0; }
         const value = search.input.value;
         state[key] = value;
         if (value !== lastValue) { lastValue = value; update(); }
       };
+      // The syllable still being composed (한글) is part of what is searched: the list follows every input. Only the
+      // list below is redrawn; this field, its focus and caret are not touched, so the composition goes on. While
+      // composing, several key presses within one frame search once, with the latest text.
       search.input.addEventListener('compositionstart', () => { composing = true; });
-      search.input.addEventListener('input', event => { if (!composing && !event.isComposing) finish(); });
+      search.input.addEventListener('input', event => {
+        if (!composing && !event.isComposing) { finish(); return; }
+        if (!composingFrame) composingFrame = requestAnimationFrame(() => { composingFrame = 0; if (search.input.isConnected) finish(); });
+      });
       search.input.addEventListener('compositionend', () => { composing = false; finish(); });
       const clear = iconButton('검색어 지우기', 'close', () => {
         composing = false;
+        if (composingFrame) { global.cancelAnimationFrame(composingFrame); composingFrame = 0; }
         search.input.value = state[key] = lastValue = '';
         update();
         search.input.focus({ preventScroll: true });
@@ -3536,7 +3853,7 @@
       topicSearch.input.maxLength = 500;
       topicSearch.label.hidden = topicNames.length < 9 && !state.topicFilterSearch;
       const clearFilter = button('필터 해제', () => {
-        state.topic = ''; state.topicUnassigned = false; state.topicFilterSearch = '';
+        state.topic = ''; state.topicUnassigned = state.topicRecovery = false; state.topicFilterSearch = '';
         topicSearch.input.value = '';
         update();
         topics.querySelector('[data-topic-kind="all"]')?.focus({ preventScroll: true });
@@ -3544,7 +3861,7 @@
       clearFilter.id = 'lifeTopicFilterClear';
       const reset = () => {
         state.topic = state.topicsSearch = state.topicFilterSearch = '';
-        state.topicUnassigned = false;
+        state.topicUnassigned = state.topicRecovery = false;
         render();
         main.querySelector('#lifeSearch')?.focus({ preventScroll: true });
       };
@@ -3557,7 +3874,7 @@
         const makeFilter = (label, kind, name, total, selected) => {
           const item = button(null, () => {
             state.topic = kind === 'named' ? name : '';
-            state.topicUnassigned = kind === 'unassigned';
+            state.topicUnassigned = kind === 'unassigned'; state.topicRecovery = kind === 'recovery';
             update();
           });
           Object.assign(item.dataset, { topicKind: kind, topicName: name || '' });
@@ -3569,17 +3886,21 @@
           item.append(node('span', label), badge);
           topics.append(item);
         };
-        makeFilter('모든 주제', 'all', '', searched.length, !state.topic && !state.topicUnassigned);
+        makeFilter('모든 주제', 'all', '', searched.length, !state.topic && !state.topicUnassigned && !state.topicRecovery);
         makeFilter('주제 없음', 'unassigned', '', counts.get('') || 0, state.topicUnassigned);
+        // Excerpts a merge kept because another device's later edit won (topic 복구 사본 · …): one
+        // filter for all of them, on every device, shown while there are any.
+        const recovered = searched.filter(recoveryCopy).length;
+        if (recovered || state.topicRecovery) makeFilter('복구 사본', 'recovery', '', recovered, state.topicRecovery);
         const matchedNames = topicNames.filter(name => matchingText(name, state.topicFilterSearch));
-        matchedNames.forEach(name => makeFilter(['모든 주제', '주제 없음'].includes(name) ? '주제 이름: ' + name : name, 'named', name, counts.get(name) || 0, !state.topicUnassigned && state.topic === name));
+        matchedNames.forEach(name => makeFilter(['모든 주제', '주제 없음', '복구 사본'].includes(name) ? '주제 이름: ' + name : name, 'named', name, counts.get(name) || 0, !state.topicUnassigned && !state.topicRecovery && state.topic === name));
         if (state.topicFilterSearch.trim() && !matchedNames.length) topics.append(node('p', '일치하는 주제 이름이 없습니다. 이름 검색을 지우거나 모든 주제를 선택하세요.', 'life-help'));
-        clearFilter.hidden = !state.topic && !state.topicUnassigned && !state.topicFilterSearch;
-        const records = searched.filter(record => state.topicUnassigned ? !record.topic : !state.topic || record.topic === state.topic);
-        count.textContent = '발췌 ' + records.length + '개' + (state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
+        clearFilter.hidden = !state.topic && !state.topicUnassigned && !state.topicRecovery && !state.topicFilterSearch;
+        const records = searched.filter(record => state.topicRecovery ? recoveryCopy(record) : state.topicUnassigned ? !record.topic : !state.topic || record.topic === state.topic);
+        count.textContent = '발췌 ' + records.length + '개' + (state.topicRecovery ? ' · 복구 사본' : state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
         results.replaceChildren();
         records.forEach(record => results.append(excerptCard(record)));
-        if (!records.length && !state.bundle.records.some(activeRecord) && state.bundle.sources.some(source => activeSource(source.id)) && !state.topic && !state.topicUnassigned) {
+        if (!records.length && !state.bundle.records.some(activeRecord) && state.bundle.sources.some(source => activeSource(source.id)) && !state.topic && !state.topicUnassigned && !state.topicRecovery) {
           const sources = state.bundle.sources.filter(source => activeSource(source.id)).slice().reverse().map(source => ({ source, version: state.bundle.sourceVersions.filter(version => version.sourceId === source.id).at(-1) }))
             .filter(({ source, version }) => version && matchingText(sourceLabel(source) + ' ' + (version.contentText || ''), state.topicsSearch));
           count.textContent = '자료 ' + sources.length + '개';
@@ -3587,7 +3908,7 @@
           if (!sources.length) results.append(empty('조건에 맞는 자료가 없습니다.'), button('검색·필터 초기화', reset));
         } else if (!records.length) {
           const box = node('div', null, 'life-empty-state');
-          if (state.topicsSearch || state.topic || state.topicUnassigned) {
+          if (state.topicsSearch || state.topic || state.topicUnassigned || state.topicRecovery) {
             box.append(empty('조건에 맞는 발췌가 없습니다. 검색과 주제 조건을 지워 다시 찾아보세요.'), button('검색·필터 초기화', reset));
           } else {
             box.append(empty('아직 모아 둔 발췌가 없습니다. 보관한 원문에서 필요한 구절을 선택해 모아보세요.'));
@@ -3765,7 +4086,10 @@
         const key = resultFocusKey('sources', version.id);
         const control = button(null, guarded(() => open(hit, key)), 'records-row-open');
         control.dataset.paneKey = key;
-        if (version.id === state.sourceVersionId) { control.setAttribute('aria-current', 'true'); item.dataset.current = 'true'; }
+        // The row of what is being read. While an earlier version is open the list has no row for that exact
+        // version (it lists each material's latest), so the material's own row is marked and says so.
+        const reading = version.id === state.sourceVersionId || earlierOpen && source.id === state.sourceId;
+        if (reading) { control.setAttribute('aria-current', 'true'); item.dataset.current = 'true'; }
         control.append(node('span', sourceLabel(source), 'records-row-title'));
         if (hit.locator) {
           const before = hit.snippet?.before || '', after = hit.snippet?.after || '', context = node('span', null, 'records-row-context');
@@ -3777,9 +4101,12 @@
         if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
         if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
         if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
+        if (reading && version.id !== state.sourceVersionId) facts.push('이전 버전 읽는 중');
         item.append(RecordsList.when(document, version.importedAt), control, RecordsList.badges(document, facts));
         return item;
       };
+      // True while the open version has no row of its own in the list just drawn.
+      let earlierOpen = false;
       const more = button('자료 더 보기', () => {
         const start = list.children.length; limit += SEARCH_PAGE_SIZE; draw();
         list.children[start]?.querySelector('button')?.focus({ preventScroll: true });
@@ -3790,6 +4117,7 @@
         const kind = state.recordKind = RecordsList.validKind(state.recordKind), query = state.sourcesSearch.trim();
         const { matchingRecords, matches, sourcePasses } = sourceListMatches(foldersController());
         const rows = kind === 'excerpt' ? excerptMatches(matchingRecords, sourcePasses) : matches.filter(hit => RecordsList.kindAllows(kind, sourceFor(hit.sourceId)));
+        earlierOpen = kind !== 'excerpt' && !rows.some(hit => hit.sourceVersionId === state.sourceVersionId);
         list.replaceChildren(...rows.slice(0, limit).map(value => kind === 'excerpt'
           ? excerptRow(value.record, value.ref, query, { open, current: value.ref.sourceVersionId === state.sourceVersionId }) : row(value, query)));
         if (!rows.length) list.append(empty(query ? '조건에 맞는 자료가 없습니다.' : '목록에 표시할 자료가 없습니다.'));
@@ -3808,7 +4136,8 @@
       main.dataset.split = 'records';
       // The list width is chosen by dragging the line between the columns (this device only).
       splitCleanup = global.HaedoLife.SplitResize?.attach(main, { key: 'caeyeon_life_split_records', before: readerColumn, controls: pane.id,
-        min: 280, readerMin: 420, defaultWidth: 400, keepVisible: () => readerColumn.querySelector('#lifeSourceText') || readerColumn.querySelector('.life-reader') }) || null;
+        min: 280, readerMin: 420, defaultWidth: 400, keepVisible: () => readerColumn.querySelector('#lifeSourceText') || readerColumn.querySelector('.life-reader'),
+        lineKept: () => !!readerLineKeeper }) || null;
       const saved = state.recordsPaneScroll?.workspaceId === workspaceId ? state.recordsPaneScroll.top : 0;
       requestAnimationFrame(() => {
         if (!pane.isConnected) return;
@@ -4094,7 +4423,7 @@
       const details = node(expanded ? 'section' : 'details', null, expanded ? 'life-source-details' : 'life-details');
       if (!expanded) details.append(node('summary', '출처와 포함 범위'));
       const authorRelation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' };
-      const lines = [sourceOrigin(source), '원문 작성: ' + (version.originalCreatedAt || '모름'), (isOwnWriting(source) ? '이 버전 저장: ' : '가져온 시각: ') + version.importedAt,
+      const lines = [sourceOrigin(source), '원문 작성: ' + (writtenLabel(version.originalCreatedAt) || '모름'), (isOwnWriting(source) ? '이 버전 저장: ' : '가져온 시각: ') + timeLabel(version.importedAt),
         '작성자: ' + (version.originalAuthor.label || '모름') + ' · ' + (authorRelation[version.originalAuthor.relation] || authorRelation.unknown),
         COVERAGE[version.coverage.status] || COVERAGE.unknown,
         '누락/미확인: ' + (version.coverage.omissions.length ? version.coverage.omissions.join(', ') : (isOwnWriting(source) ? '없음' : '별도 표시 없음 · 사진은 자동 수집하지 않음'))];
@@ -4274,7 +4603,9 @@
       arrangePanel.setAttribute('aria-label', '읽던 원문 정리');
       arrangePanel.hidden = !state.readerArrangeOpen;
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
-      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
+      // The tool row and its two panels stick to the top of the screen as one unit (assets/life/ui.css).
+      const dock = node('div', null, 'life-reader-dock');
+      readerSheet(tools, arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
       arrange.disabled = !sourceActive;
       const useQuote = button('선택 구절로 글 쓰기', guarded(() => {
@@ -4299,9 +4630,44 @@
       const heading = node('h1', sourceLabel(source), 'life-heading life-reader-heading');
       heading.tabIndex = -1;
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
-      article.append(tools, arrangePanel, heading,
-        node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
+      dock.append(tools, arrangePanel);
+      // Tab into or within the tool row and its open panel must not scroll the document. They are already on screen;
+      // the browser would scroll the page to clear the shell's scroll padding (meant for content under a fixed
+      // header) and push the text being read. Focus moves in the same order, without that scroll; a control
+      // hidden inside the panel's own scroll is brought into the panel's view only.
+      article.addEventListener('keydown', event => {
+        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+        const stops = [...article.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]')]
+          .filter(item => item.tabIndex >= 0 && !item.disabled && (item.checkVisibility ? item.checkVisibility() : item.getClientRects().length > 0));
+        const next = stops[stops.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1)];
+        // Tab past the last control of an open panel: what follows it in the document is the top of the text, far
+        // above the line being read, and the open panel would cover it. The panel closes, which returns focus to
+        // its button (disclosure does that when focus was inside); from there Tab goes on along the tool row.
+        const openSheet = dock.querySelector(':scope > .life-reader-sheet:not([hidden])');
+        if (!event.shiftKey && openSheet?.contains(document.activeElement) && (!next || !dock.contains(next))) { event.preventDefault(); openSheet.closeSheet?.(); return; }
+        if (!stops.includes(document.activeElement) || !next || !dock.contains(next)) return;
+        event.preventDefault(); next.focus({ preventScroll: true });
+        const sheet = next.closest('.life-reader-sheet');
+        if (!sheet) return;
+        const frame = sheet.getBoundingClientRect(), box = next.getBoundingClientRect();
+        if (box.top < frame.top + 8) sheet.scrollTop -= frame.top + 8 - box.top;
+        else if (box.bottom > frame.bottom - 8) sheet.scrollTop += box.bottom - frame.bottom + 8;
+      });
+      // Focus that leaves the tool row and its panel some other way (Shift+Tab before the first tool, a script)
+      // closes an open panel, so it never covers what is focused next.
+      dock.addEventListener('focusout', event => {
+        if (!event.relatedTarget || dock.contains(event.relatedTarget)) return;
+        for (const sheet of dock.querySelectorAll(':scope > .life-reader-sheet:not([hidden])')) sheet.closeSheet?.();
+      });
+      article.append(dock, heading,
+        node('p', sourceOrigin(source) + ' · 원문 작성 ' + (writtenLabel(version.originalCreatedAt) || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
+      // Both devices changed this source and the other edit won: what this device called it then.
+      for (const kept of state.bundle.links) {
+        if (!previousKind(kept) || kept.sourceRefs?.[0]?.sourceVersionId !== version.id || !kept.note) continue;
+        const line = node('p', (kept.kind === 'source_previous_title' ? '이 버전을 보관한 기기에서의 제목: ' : '이 버전을 보관한 기기에서의 파일 경로: ') + kept.note, 'life-reader-meta');
+        line.dataset.previous = kept.kind; article.append(line);
+      }
       // One row for the exact version (and when it was kept) and moving between list matches.
       const versionRow = node('div', null, 'life-reader-version-row'); versionRow.id = 'lifeReaderVersionRow';
       article.append(versionRow);
@@ -4336,7 +4702,7 @@
       const folders = sourceActive && foldersController();
       if (folders) details.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '이 자료를 폴더로 이동' }));
       info.addEventListener('click', () => { if (details.hidden) optionOffset = currentReaderOffset(); }, { capture: true });
-      const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
+      const setDetails = readerSheet(tools, info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
@@ -4363,7 +4729,12 @@
       if (sourceActive) {
         const confirmPanel = node('section', null, 'life-source-trash-confirm'); confirmPanel.id = 'lifeSourceTrashConfirmation'; confirmPanel.hidden = true;
         confirmPanel.setAttribute('aria-label', '자료 휴지통 이동 확인');
-        const trash = button('휴지통으로 이동', () => { confirmPanel.hidden = false; confirmPanel.querySelector('#lifeSourceTrashConfirm').focus({ preventScroll: true }); }); trash.id = 'lifeSourceTrash';
+        const trash = button('휴지통으로 이동', () => {
+          confirmPanel.hidden = false; confirmPanel.querySelector('#lifeSourceTrashConfirm').focus({ preventScroll: true });
+          // The confirmation appears at the end of the panel; show it inside the panel's own scroll.
+          const frame = details.getBoundingClientRect(), box = confirmPanel.getBoundingClientRect();
+          if (box.bottom > frame.bottom) details.scrollTop += box.bottom - frame.bottom + 12;
+        }); trash.id = 'lifeSourceTrash';
         const confirm = button('휴지통으로 이동', guarded(async () => {
           if (!await changeSourceState(source.id, 'trash', lifecycle.revision, { expectedSourceRevision: source.revision, expectedStatus: 'active' })) return;
           if (state.returnContext?.mode === 'source-trash') await navigate('source-trash');
@@ -4381,7 +4752,7 @@
         details.append(restore);
         article.append(node('p', '휴지통의 자료입니다.', 'life-meta life-source-trash-status'));
       }
-      article.append(details);
+      dock.append(details);
       const connections = obsidianConnections(version.id);
       if (connections) article.append(connections);
       const candidates = obsidianCandidates(source, version, article);
@@ -4577,6 +4948,8 @@
       quote.id = 'lifeExcerptToggle';
       tools.append(quote);
       const sourceDraft = state.sourceDrafts.get(version.id) || { topic: '', note: '' };
+      // Given back after a reload (this tab only): say so once, where the person is reading.
+      let recoveredDraft = sourceDraft.recovered === true; delete sourceDraft.recovered;
       const instruction = '원문에서 발췌할 구절을 선택하세요.';
       const picked = node('blockquote', instruction, 'life-selection');
       picked.id = 'lifeSelectedQuote';
@@ -4590,7 +4963,7 @@
         const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
         state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
         await commit(changes);
-        state.sourceDrafts.delete(version.id);
+        state.sourceDrafts.delete(version.id); storeSourceDrafts();
         render();
       announceSourceSaved('모음에 반영됨');
       }), 'life-primary');
@@ -4599,14 +4972,67 @@
       let readingScrollY = global.scrollY;
       let readerInteracted = false;
       let selectionOrigin = 'dom';
-      const savePosition = () => {
+      // The point on the reading line (a third down the screen) and where it is on screen. Raw text: one exact
+      // character. Formatted Markdown: a parser-mapped block and how far down it (block level; never a raw locator).
+      // window.scrollY alone names a different paragraph as soon as the reading column's width changes.
+      const charTop = offset => {
+        if (!Number.isInteger(offset) || offset < 0 || offset >= version.contentText.length) return null;
+        const range = document.createRange();
+        range.setStart(originalText, offset); range.setEnd(originalText, Math.min(version.contentText.length, offset + (version.contentText.codePointAt(offset) > 0xFFFF ? 2 : 1)));
+        const rect = range.getBoundingClientRect();
+        return rect.height ? rect.top : null;
+      };
+      const readingLine = {
+        capture() {
+          if (!reader.isConnected) return null;
+          const box = reader.getBoundingClientRect(), y = global.innerHeight / 3;
+          // Above the text or past its end there is no line to keep; the plain scroll position is used.
+          if (box.top >= y || box.bottom <= y) return null;
+          if (formattedView) {
+            const blocks = markdown.blocks; let low = 0, high = blocks.length;
+            while (low < high) { const mid = (low + high) >>> 1; if (blocks[mid].element.getBoundingClientRect().bottom <= y) low = mid + 1; else high = mid; }
+            if (!blocks[low]) return null;
+            const rect = blocks[low].element.getBoundingClientRect(), ratio = rect.height ? Math.min(1, Math.max(0, (y - rect.top) / rect.height)) : 0;
+            return { mode: 'formatted', offset: blocks[low].start, ratio, top: rect.top + ratio * rect.height, viewport: global.innerHeight };
+          }
+          const offset = rawVisibleOffset(), top = charTop(offset);
+          return top === null ? null : { mode: 'raw', offset, top, viewport: global.innerHeight };
+        },
+        top(anchor) {
+          if (!reader.isConnected || !anchor) return null;
+          if (!formattedView) return charTop(anchor.offset);
+          const block = markdown.blocks.find(item => anchor.mode === 'formatted' ? item.start === anchor.offset : anchor.offset >= item.start && anchor.offset < item.end);
+          if (!block) return null;
+          const rect = block.element.getBoundingClientRect();
+          return rect.top + (anchor.mode === 'formatted' ? anchor.ratio : 0) * rect.height;
+        }
+      };
+      // Scroll so that the remembered point is back at its height (the same share of the screen after a rotation).
+      const placeLine = anchor => {
+        const now = readingLine.top(anchor);
+        if (!Number.isFinite(now)) return false;
+        const want = anchor.viewport && anchor.viewport !== global.innerHeight ? anchor.top * global.innerHeight / anchor.viewport : anchor.top;
+        global.scrollTo({ top: Math.max(0, global.scrollY + now - want), behavior: 'instant' });
+        return true;
+      };
+      const lineKeeper = readerLineKeeper = global.HaedoLife.SplitResize?.keepLine?.(readerHost, readingLine) || null;
+      // The line read before the excerpt panel took the screen (the page then shows the panel at the end).
+      let readingAnchor = null;
+      // False until this render has put the remembered position back (next frame). A render replaced before
+      // that has nothing of its own to remember and must not overwrite the position it was about to restore.
+      let positionRestored = false;
+      const savePosition = final => {
+        if (!positionRestored) return;
         const previous = state.readerPositions.get(version.id), offset = formattedView ? markdown.adapter?.visibleOffset() ?? previous?.start ?? 0 : null;
+        // Scroll events keep this cheap; the reading line is taken once when the reader closes. It is the line last
+        // measured while reading (peek): by then the page may already be scrolling for the next screen.
+        const anchor = final === true ? (panel.hidden ? lineKeeper?.peek() || null : readingAnchor) : previous?.anchor || null;
         state.readerPositions.set(version.id, { ...(formattedView ? { start: offset, end: offset } : state.sourceSelection || { start: 0, end: 0 }),
-          mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY });
+          mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY, anchor });
       };
       const remember = (start, end) => {
         state.sourceSelection = { start, end };
-        if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
+        if (state.sourceDrafts.has(version.id)) { state.sourceDrafts.get(version.id).range = { start, end }; storeSourceDrafts(); }
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
         saveExcerpt.disabled = !sourceActive || formattedView || start >= end;
@@ -4660,26 +5086,95 @@
       }
       document.addEventListener('selectionchange', capture);
       global.addEventListener('scroll', savePosition, { passive: true });
+      // For this reader's history entry: where it is now. Until the first restore has run it is the position being restored.
+      let historyTimer = null;
+      const historyState = () => {
+        if (state.sourceVersionId !== version.id || state.mode !== 'source' || !reader.isConnected) return null;
+        const saved = state.readerPositions.get(version.id);
+        const anchor = !positionRestored ? saved?.anchor || null : panel.hidden ? lineKeeper?.peek() || null : readingAnchor;
+        const selection = !positionRestored && saved && saved.mode !== 'formatted' ? saved : state.sourceSelection;
+        return { view: formattedView ? 'formatted' : 'raw', y: Math.round(!positionRestored ? saved?.scrollY || 0 : panel.hidden ? global.scrollY : readingScrollY),
+          ...(!formattedView && selection && Number.isSafeInteger(selection.start) ? { start: selection.start, end: selection.end } : {}),
+          ...(anchor ? { offset: anchor.offset, top: anchor.top, viewport: anchor.viewport, ratio: anchor.ratio } : {}) };
+      };
+      readerHistoryState = historyState;
+      // Written a little after the reading stops (browsers limit how often an entry may be replaced), and on pagehide.
+      const recordHistory = () => { historyTimer = null; if (!disposed && readerHistoryState === historyState && state.mode === 'source' && reader.isConnected) writeRoute('source', 'replace'); };
+      const scheduleHistory = () => { global.clearTimeout(historyTimer); historyTimer = global.setTimeout(recordHistory, 500); };
+      global.addEventListener('scroll', scheduleHistory, { passive: true });
       readerCleanup = () => {
-        savePosition();
+        savePosition(true);
+        global.clearTimeout(historyTimer); global.removeEventListener('scroll', scheduleHistory); if (readerHistoryState === historyState) readerHistoryState = null;
+        lineKeeper?.dispose(); if (readerLineKeeper === lineKeeper) readerLineKeeper = null;
+        hideNotice();
         readerWatch?.close();
         readerWatch = null;
         document.removeEventListener('selectionchange', capture);
         global.removeEventListener('scroll', savePosition);
       };
       quote.disabled = !sourceActive;
-      quote.addEventListener('click', () => { if (formattedView) changeReaderMode?.('raw', false); }, { capture: true });
+      // A short message under the sticky tool row, where the person is reading (the page status line is at the top of the document).
+      const readerNotice = node('p', null, 'life-reader-notice'); readerNotice.id = 'lifeReaderNotice'; readerNotice.setAttribute('role', 'status'); readerNotice.hidden = true;
+      dock.append(readerNotice);
+      let noticeTimer = null;
+      const hideNotice = () => { clearTimeout(noticeTimer); noticeTimer = null; document.removeEventListener('pointerdown', hideNotice, true); document.removeEventListener('keydown', hideNotice, true); if (readerNotice.isConnected) { readerNotice.hidden = true; readerNotice.textContent = ''; } };
+      const showNotice = text => {
+        hideNotice(); readerNotice.hidden = false; readerNotice.textContent = text;
+        noticeTimer = global.setTimeout(hideNotice, 8000);
+        // The next press or key (starting the new selection) takes it away; not the press that produced it.
+        global.setTimeout(() => { if (noticeTimer !== null) { document.addEventListener('pointerdown', hideNotice, true); document.addEventListener('keydown', hideNotice, true); } }, 0);
+      };
+      // A passage picked in the formatted view is not a place in the original: the rendered text has no raw
+      // offsets, and the same words can stand elsewhere in the raw text (inside a link address, after formatting
+      // marks, in another list item). An excerpt is therefore picked in the original text only
+      // (docs/design-review/material-markdown-edit-delete.md). Pressing the excerpt button with something picked in
+      // the formatted view shows that paragraph as original text at the same height and asks for the passage
+      // there. Nothing is selected for the person and no locator is made from the formatted selection.
+      const pickedPlace = () => {
+        if (!formattedView || !markdown?.formatted) return null;
+        const selection = global.getSelection();
+        if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+        const range = selection.getRangeAt(0);
+        if (!reader.contains(range.startContainer) || !reader.contains(range.endContainer)) return null;
+        const element = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement)?.closest('[data-source-block]');
+        const block = element && reader.contains(element) ? markdown.blocks.find(item => item.element === element) : null;
+        // Where that block starts in the original (the parser's block map) and where it is on screen now.
+        return block ? { start: block.start, top: block.element.getBoundingClientRect().top } : {};
+      };
+      // A touch on the button can clear the page selection before the click arrives; note at the press that there was one.
+      let pressedPlace = null;
+      quote.addEventListener('pointerdown', () => { pressedPlace = pickedPlace(); }, { capture: true });
+      quote.addEventListener('click', event => {
+        const place = formattedView && panel.hidden ? pickedPlace() || pressedPlace : null; pressedPlace = null;
+        if (!formattedView) return;
+        changeReaderMode?.('raw', false);
+        // Nothing picked (or the panel is closing): the original text and the panel, as before.
+        if (!place) return;
+        event.stopImmediatePropagation();
+        global.getSelection()?.removeAllRanges(); state.sourceSelection = null;
+        picked.textContent = instruction; quote.dataset.hasSelection = 'false'; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
+        const top = Number.isInteger(place.start) ? charTop(place.start) : null;
+        if (top !== null) global.scrollTo({ top: Math.max(0, global.scrollY + top - place.top), behavior: 'instant' });
+        reader.focus({ preventScroll: true });
+        showNotice('발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.');
+        // The button's own hover label would sit on the notice it just produced; it returns when the pointer leaves.
+        quote.dataset.tooltipDismissed = 'true';
+      }, { capture: true });
       const setPanel = disclosure(quote, panel, { onChange: open => {
         flushReadingPosition();
         readerWatch?.suppress();
         if (open) {
           capture();
           readingScrollY = global.scrollY;
+          readingAnchor = lineKeeper?.get() || null; lineKeeper?.pause();
           topic.input.focus({ preventScroll: true });
           panel.scrollIntoView({ block: 'start', behavior: 'instant' });
         } else {
           quote.focus({ preventScroll: true });
           global.scrollTo({ top: readingScrollY, behavior: 'instant' });
+          // The column may have been resized while the panel was open: return to the line, not only the offset.
+          if (readingAnchor) placeLine(readingAnchor);
+          lineKeeper?.resume(); lineKeeper?.set(readingAnchor);
         }
       } });
       const panelHeading = node('div', null, 'life-panel-heading');
@@ -4688,7 +5183,7 @@
         sourceDraft.topic = topic.input.value;
         sourceDraft.note = note.input.value;
         sourceDraft.range = state.sourceSelection && { ...state.sourceSelection };
-        state.sourceDrafts.set(version.id, sourceDraft);
+        state.sourceDrafts.set(version.id, sourceDraft); storeSourceDrafts();
         announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.');
       };
       topic.input.addEventListener('input', editDraft);
@@ -4697,18 +5192,36 @@
       keyboard.id = 'lifeKeyboardSelection';
       keyboard.hidden = true;
       const keyboardReader = field('키보드로 원문 구절 선택', 'textarea', 'lifeSourceSelectionText', version.contentText);
-      keyboardReader.input.readOnly = true;
+      // Not readonly: a readonly textarea has no caret, so Shift + arrows had nothing to start a selection from.
+      // Its text must never change instead. Every edit is refused before it happens (typing, Enter, delete, paste,
+      // cut, drop); what cannot be refused (an IME composition, text set by a script) is put back at once.
+      const keyboardText = keyboardReader.input.value;
+      keyboardReader.input.setAttribute('aria-readonly', 'true');
+      keyboardReader.input.setAttribute('inputmode', 'none'); // selecting needs no on-screen keyboard
+      keyboardReader.input.autocomplete = 'off'; keyboardReader.input.setAttribute('autocorrect', 'off'); keyboardReader.input.setAttribute('autocapitalize', 'off');
+      const keepKeyboardText = () => {
+        const input = keyboardReader.input;
+        if (input.value === keyboardText) return;
+        const caret = Math.min(input.selectionStart ?? 0, keyboardText.length);
+        input.value = keyboardText; input.setSelectionRange(caret, caret);
+      };
+      for (const name of ['beforeinput', 'paste', 'cut', 'drop']) keyboardReader.input.addEventListener(name, event => event.preventDefault());
+      for (const name of ['input', 'compositionend', 'change']) keyboardReader.input.addEventListener(name, keepKeyboardText);
       keyboardReader.input.spellcheck = false;
       keyboardReader.input.className = 'life-keyboard-text';
       const captureKeyboard = () => {
         if (!keyboardReader.input.isConnected) return;
         selectionOrigin = 'keyboard';
+        // The offsets below are offsets into the original only while the field holds exactly the original. Text put
+        // in by a script fires no event to undo it at; check here first. Putting the original back leaves only a
+        // caret, so a selection that was made in other text is dropped.
+        keepKeyboardText();
         remember(displayToRaw(version.contentText, keyboardReader.input.selectionStart), displayToRaw(version.contentText, keyboardReader.input.selectionEnd));
       };
       ['select', 'keyup', 'pointerup'].forEach(name => keyboardReader.input.addEventListener(name, captureKeyboard));
       keyboard.append(node('p', 'Shift + 화살표로 구절을 선택하세요. 원문 내용은 바뀌지 않습니다.', 'life-help'),
         button('첫 줄 선택', () => {
-          keyboardReader.input.focus({ preventScroll: true });
+          keepKeyboardText(); keyboardReader.input.focus({ preventScroll: true });
           const lineEnd = keyboardReader.input.value.indexOf('\n');
           keyboardReader.input.setSelectionRange(0, lineEnd < 0 ? keyboardReader.input.value.length : lineEnd + 1);
           captureKeyboard();
@@ -4717,7 +5230,7 @@
       disclosure(keyboardToggle, keyboard, { onChange: open => {
         if (!open) return;
         const range = state.sourceSelection || { start: 0, end: 0 };
-        keyboardReader.input.focus({ preventScroll: true });
+        keepKeyboardText(); keyboardReader.input.focus({ preventScroll: true });
         keyboardReader.input.setSelectionRange(rawToDisplay(version.contentText, range.start), rawToDisplay(version.contentText, range.end));
       } });
       panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label, saveExcerpt);
@@ -4726,7 +5239,7 @@
       positionStatus.id = 'lifeReadingPositionStatus';
       positionStatus.hidden = true;
       positionStatus.setAttribute('role', 'status');
-      tools.after(positionStatus);
+      dock.after(positionStatus);
       function watchReading() {
         readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           reader, ...(formattedView ? { positionAdapter: markdown.adapter } : {}),
@@ -4804,20 +5317,43 @@
       const readerBaseCleanup = readerCleanup;
       readerCleanup = () => { readerBaseCleanup(); clearExcerptPaint(); clearMatchPaint(); if (readerMatchRefresh === refreshMatches) readerMatchRefresh = null; };
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
-      if (locator) requestAnimationFrame(() => {
+      let restoreWaits = 0;
+      const restorePosition = () => {
         // A fresh user choice takes priority over a navigation restore queued before it.
-        if (!reader.isConnected || readerInteracted) return;
+        if (!reader.isConnected || readerInteracted) { positionRestored = true; return; }
+        // On a reload the app is still hidden while it starts: nothing can be measured or scrolled until it shows.
+        if (!reader.getClientRects().length && restoreWaits++ < 900) { requestAnimationFrame(restorePosition); return; }
+        // This session's own position returns to the line that was being read (locator.anchor); the column may be
+        // a different width now. Without one (the top of the text, an exact match or excerpt) the earlier rules apply.
+        let placed = false;
         if (formattedView) {
           readerWatch?.suppress(); markdown.adapter.scrollToOffset(locator.start);
-          if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+          if (locator.anchor && placeLine(locator.anchor)) placed = true;
+          else if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
         } else {
           const range = restoreSelection(locator);
           matchIndex = found.findIndex(item => item.start === locator.start && item.end === locator.end); showMatchCount();
-          if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+          if (locator.anchor && placeLine(locator.anchor)) placed = true;
+          else if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
           else { const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         }
         readingScrollY = global.scrollY;
-      });
+        // The point that was put back stays the remembered one. Taking the line again here would name the first
+        // character of whichever line holds it at this width, and reopening at another width would then move a line
+        // each time.
+        const top = placed ? readingLine.top(locator.anchor) : null;
+        lineKeeper?.set(Number.isFinite(top) ? { ...locator.anchor, top, viewport: global.innerHeight } : readingLine.capture());
+        positionRestored = true; scheduleHistory(); tellRecoveredDraft();
+      };
+      const tellRecoveredDraft = () => {
+        if (!recoveredDraft || !reader.isConnected) return;
+        recoveredDraft = false;
+        showNotice('저장하지 않은 발췌 메모가 있습니다. 발췌와 주제 연결에서 이어서 쓸 수 있습니다.');
+      };
+      let shownWaits = 0;
+      const whenShown = task => requestAnimationFrame(() => { if (!reader.isConnected) return; if (!reader.getClientRects().length && shownWaits++ < 900) whenShown(task); else task(); });
+      if (locator) requestAnimationFrame(restorePosition);
+      else { positionRestored = true; if (recoveredDraft) whenShown(tellRecoveredDraft); }
       refreshMatches();
       state.locator = null;
     }
@@ -5450,7 +5986,8 @@
         node('p', '네이버 원문 사진 사본도 이 JSON에는 들어가지 않습니다. 사진 사본이 있는 원문에서는 글·사진 ZIP을 따로 보관할 수 있습니다.', 'life-help'));
       main.append(scope, actionRow('폴더·묶음·내 페이지도 함께 백업', '분류와 구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
-      const stamp = new Date().toISOString().slice(0, 10);
+      // This device's civil day, not the UTC day (2026-11-11 m5).
+      const stamp = global.HaedoData.localDate();
       const includeTrash = field('Markdown에 휴지통 자료 포함', 'checkbox', 'lifeMarkdownIncludeTrash', '');
       includeTrash.input.checked = false;
       actions.append(includeTrash.label);
@@ -5575,12 +6112,69 @@
       return details;
     }
 
+    // Both devices' changes were merged by themselves. Only when both had changed the same item is
+    // there something to find, and each line leads to it: the earlier body is a previous version
+    // of that source, the earlier excerpt a separate excerpt whose topic starts with 복구 사본.
+    // The version of a source that the other device last saved before the later edit won.
+    function earlierVersion(sourceId) {
+      const versions = state.bundle.sourceVersions.filter(version => version.sourceId === sourceId);
+      const kept = state.bundle.links.filter(link => previousKind(link) && link.sourceRefs?.[0]?.sourceId === sourceId).at(-1);
+      return versions.find(version => version.id === kept?.sourceRefs[0].sourceVersionId) || versions.at(-2) || null;
+    }
+    function mergeNotice(panel) {
+      const notice = state.syncNotice, workspaceId = state.bundle?.workspaceId;
+      if (!notice || state.syncWorkspaceId !== workspaceId) return false;
+      const host = node('div', null, 'life-sync-merge-notice'); host.id = 'lifeSyncMergeNotice';
+      const sources = notice.sourceIds.map(id => state.bundle.sources.find(source => source.id === id)).filter(Boolean);
+      if (sources.length) {
+        host.append(node('p', '다른 기기와 같은 자료를 함께 고쳤습니다. 나중에 고친 쪽이 현재 버전이고, 먼저 고친 본문은 이전 버전으로 남았습니다.', 'life-help'));
+        const list = node('div', null, 'life-actions');
+        sources.slice(0, 5).forEach(source => {
+          const version = earlierVersion(source.id);
+          if (!version) return;
+          const open = button(sourceLabel(source) + ' · 이전 버전 열기', guarded(() => navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null })));
+          open.dataset.mergeSource = source.id; list.append(open);
+        });
+        if (list.childElementCount) host.append(list);
+        if (sources.length > 5) host.append(node('p', '그 밖의 자료 ' + (sources.length - 5) + '개도 각 자료의 이전 버전에 있습니다.', 'life-help'));
+      }
+      const copies = state.bundle.records.filter(record => notice.recordIds.includes(record.id));
+      if (copies.length) {
+        host.append(node('p', '같은 발췌를 함께 고쳐 나중에 고친 쪽을 남겼습니다. 먼저 고친 발췌 ' + copies.length + '개는 주제 이름 앞에 ‘복구 사본’이 붙어 있습니다(예: ' + copies[0].topic + ').', 'life-help'));
+        // The filter panel opens with it: the person sees which filter is on and can clear it.
+        const open = button('복구 사본 발췌 보기', guarded(() => navigate('topics', { topicRecovery: true, topic: '', topicUnassigned: false, topicsFiltersOpen: true })));
+        open.id = 'lifeSyncMergeCopies'; host.append(open);
+      }
+      const restored = state.bundle.records.filter(record => notice.restoredIds.includes(record.id));
+      if (restored.length) host.append(node('p', '한 기기에서 지운 발췌 ' + restored.length + '개는 다른 기기에서 고쳤거나 그대로인지 확인할 수 없어 남겼습니다(예: ' + restored[0].text.slice(0, 30) + '). 필요 없으면 다시 지워 주세요.', 'life-help'));
+      if (notice.uncertain) host.append(node('p', '이 기기에 마지막으로 맞춘 기록이 없어 무엇이 바뀌었는지 확인하지 못했습니다. 지운 것은 지우지 않았고, 복구 사본 중에는 고치기 전 내용도 있습니다.', 'life-help'));
+      if (!host.childElementCount) host.append(node('p', '다른 기기의 변경과 이 기기의 변경을 합쳤습니다.', 'life-help'));
+      const done = button('확인', guarded(async () => {
+        await storage.dismissSyncNotice(workspaceId);
+        if (state.bundle?.workspaceId === workspaceId) state.syncNotice = null;
+        await refreshSync();
+      })); done.id = 'lifeSyncMergeNoticeDone';
+      panel.append(host, done);
+      return true;
+    }
+
     function fillSyncState(panel) {
       if (disposed) return;
       if (managedLibrary) {
-        panel.hidden = false;
+        // Account and sync events arrive several times a second while engines verify. The panel is
+        // redrawn only when what it shows changed: a control replaced between press and release
+        // would lose the click (the comparison button and the notice's 확인).
+        const noticed = state.syncNotice && state.syncWorkspaceId === state.bundle?.workspaceId ? state.syncNotice : null;
+        const shows = JSON.stringify([state.bundle?.workspaceId, !!state.syncReadError, state.syncState?.conflict ? [state.syncState.conflict.remoteRevision, state.syncState.conflict.missing] : null,
+          noticed && [noticed.at, noticed.uncertain, noticed.sourceIds.map(id => [state.bundle.sources.find(source => source.id === id)?.title || '', earlierVersion(id)?.id || '']),
+            state.bundle.records.filter(record => noticed.recordIds.includes(record.id) || noticed.restoredIds.includes(record.id)).map(record => record.id + record.topic)]]);
+        if (panel.dataset.shows === shows) return;
+        panel.dataset.shows = shows;
+        const focused = panel.contains(document.activeElement) ? document.activeElement.id : '';
         panel.replaceChildren(node('h3', '자료'));
+        let shown = true;
         if (state.syncReadError) panel.append(node('p', '자료의 보관 상태를 확인하지 못했습니다.', 'life-error'));
+        // Only what could not be merged automatically is compared by hand.
         else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
           await persistDrafts(); await refreshData(); await refreshSync();
           if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
@@ -5588,7 +6182,10 @@
             remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
           renderConflict();
         }), 'life-primary'));
-        else panel.hidden = true;
+        else shown = false;
+        if (mergeNotice(panel)) shown = true;
+        panel.hidden = !shown;
+        if (focused) panel.querySelector('#' + focused)?.focus({ preventScroll: true });
         return;
       }
       const active = panel.contains(document.activeElement) ? document.activeElement : null;
@@ -5652,6 +6249,7 @@
       if (presentation.key === 'auth_required') actions.append(button('계정 확인', guarded(() => navigate('manage'))));
       if (presentation.key === 'mismatch' || info?.conflict?.missing) actions.append(button('자료 백업·복원', guarded(() => navigate('transfer'))));
       panel.append(actions);
+      mergeNotice(panel);
       if (state.conflictCopyId) {
         const copy = state.workspaces.find(item => item.workspaceId === state.conflictCopyId);
         panel.append(node('p', '선택하지 않은 쪽의 사본: ' + (copy ? copy.title : '작업공간 목록에서 확인'), 'life-help'));
@@ -6027,11 +6625,18 @@
       main.append(scope);
     }
 
+    // The reader's line goes into its history entry so a reload returns to it. Before the page starts to unload
+    // (an entry can no longer be rewritten while it does), when the tab is hidden, and on pagehide.
+    const recordReaderHistory = () => { if (!disposed && state.mode === 'source' && state.bundle && readerHistoryState) writeRoute('source', 'replace'); };
     beforeUnload = event => {
+      // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
+      if (stageTimer && dirty()) persistStage().catch(failure);
+      recordReaderHistory();
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     visibility = () => {
       if (!document.hidden) return;
+      recordReaderHistory();
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
@@ -6039,10 +6644,21 @@
       if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       flushReadingPosition();
     };
-    pagehideReading = () => { flushReadingPosition(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
+    pagehideReading = () => {
+      flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
+      // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
+      if (stageTimer && dirty()) persistStage().catch(failure);
+    };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
+    scheduleDayWatch = () => scheduleDayCheck();
+    document.addEventListener('visibilitychange', scheduleDayWatch);
+    global.addEventListener('pageshow', scheduleDayWatch);
+    global.addEventListener('focus', scheduleDayWatch);
+    // A 행복도 write that ended, or a failed choice the owner stored again or dropped.
+    document.addEventListener('haedo:happiness', scheduleDayWatch);
+    armScheduleDayTimer();
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
       if (event && event.type === 'error' && event.error) failure(event.error);
@@ -6072,11 +6688,19 @@
     state.mode = routeMode();
     if (state.mode === 'find') findSection = addressFindSection();
     syncHistoryPosition();
+    // An entry that showed today reopens on today (a tab the browser reloads on a later day), not on the day it was written.
+    if (calendarModes.has(state.mode)) {
+      const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
+      if (recorded?.mode === state.mode && recorded.scheduleToday === true && recorded.scheduleDate === state.scheduleDate) state.scheduleDate = null;
+    }
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
+    let startMissingPost = false;
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit'; blogRoute = 'new'; blogComposing = true;
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
-      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+      // 닫기 returns to the app page whose 글쓰기 link opened this document (m3); otherwise to the list.
+      const returnPage = composeOriginPage();
+      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
       global.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
@@ -6095,18 +6719,35 @@
         const recorded = global.history.state?.haedo?.v === 1 && global.history.state.haedo.entry?.blog === startBlogRoute ? global.history.state.haedo.entry : null;
         const opened = await openBlogRoute(active, startBlogRoute, recorded ? recorded.compose === true : undefined).catch(() => null);
         if (disposed || signal?.aborted) return { dispose };
-        if (opened) {
+        if (opened?.blogMissing) { state.mode = 'home'; startMissingPost = true; }
+        else if (opened) {
           blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);
           blogRoute = blogRouteFrom(opened);
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
-          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+          // A reload of a 글쓰기 opened from another page keeps that page as its return (the entry recorded it).
+          const returnPage = recorded?.viewOrigin?.workspaceId === active && returnPagePattern.test(recorded.viewOrigin.returnPage || '') ? recorded.viewOrigin.returnPage : null;
+          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
         } else state.mode = 'home';
       }
+      // A reload while reading reopens the same material, exact version and line. The address stays the records
+      // address; the entry in history.state names the reader. Another account or space, or a material that is
+      // gone, opens the list as before.
+      if (state.mode === 'sources') {
+        const entry = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
+        if (entry?.mode === 'source' && entry.workspaceId === active && state.bundle.sources.some(source => source.id === entry.sourceId) &&
+            state.bundle.sourceVersions.some(version => version.id === entry.sourceVersionId && version.sourceId === entry.sourceId)) {
+          Object.assign(state, { mode: 'source', sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId,
+            returnContext: entry.returnContext?.workspaceId === active ? entry.returnContext : null });
+          seedReaderPosition(entry);
+        }
+      }
+      restoreSourceDrafts();
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();
       render();
       announce(managedLibrary ? '자료를 열었습니다.' : '이 브라우저에 보관한 자료를 열었습니다.', { quiet: true });
+      if (startMissingPost) { writeRoute('home', 'replace'); announce(missingPostNotice); }
       if (accountMaterialsFailure?.workspaceId === active) announce(accountMaterialsFailure.partial ? accountMaterialsPartialNotice : accountMaterialsNotice);
       if (sync) await refreshSync();
       if (managedLibrary) {
@@ -6147,6 +6788,10 @@
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.busy) throw new Error('자료를 처리 중입니다. 작업이 끝난 뒤 로그아웃을 다시 선택해 주세요.');
       await persistDrafts();
+      // Logging out: the unsaved excerpt notes were just kept as review drafts in this account's storage. Their
+      // copy in this tab's session storage is plain text and must not stay behind after the account has left.
+      // (If the logout does not complete, the next key typed in a note keeps the tab copy again.)
+      try { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); } catch (_) { /* unavailable */ }
     }
 
     // Call inside guarded actions; the public logout hook checks its own boundary.
@@ -6191,6 +6836,7 @@
         draft.stageId = saved.stageId;
         draft.stageRevision = saved.revision;
       }
+      if (state.sourceDrafts.size) storeSourceDrafts();
     }
 
     function dispose(failedMount = false) {
@@ -6204,7 +6850,7 @@
       cleanup(() => { document.title = pageTitle; });
       disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
-      libraryRefresh++; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
+      libraryRefresh++; libraryReading = null; libraryAgain = false; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
       cleanup(() => sourceFoldersMount?.dispose()); sourceFoldersMount = null; sourceFoldersUpdate = null;
       cleanup(() => sourceFoldersUI?.dispose()); sourceFoldersUI = null; sourceFoldersWorkspace = null;
       accountMaterialsSequence += 1;
@@ -6266,6 +6912,9 @@
       state.allStages = [];
       cleanup(() => root?.replaceChildren());
       cleanup(() => root?.remove());
+      // Another account took this screen's place: this tab's copy of unsaved excerpt notes goes with the account it
+      // belonged to. (A logout removes it earlier, in flushDraft; the same account re-verifying keeps it.)
+      cleanup(() => { const account = auth?.getAccount?.(); if (!account || account.userId !== storage.account?.userId) global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); });
       state.sourceDrafts.clear();
       state.readerPositions.clear(); state.readerModes.clear();
       cleanup(resetSearchContext);
@@ -6278,6 +6927,8 @@
       cleanup(() => global.removeEventListener('beforeunload', beforeUnload));
       cleanup(() => document.removeEventListener('visibilitychange', visibility));
       cleanup(() => global.removeEventListener('pagehide', pagehideReading));
+      cleanup(() => { document.removeEventListener('visibilitychange', scheduleDayWatch); global.removeEventListener('pageshow', scheduleDayWatch); global.removeEventListener('focus', scheduleDayWatch); document.removeEventListener('haedo:happiness', scheduleDayWatch); });
+      cleanup(() => { global.clearTimeout(scheduleDayTimer); global.clearTimeout(scheduleDayRetry); scheduleDayTimer = scheduleDayRetry = null; });
       downloadUrls.forEach(url => cleanup(() => URL.revokeObjectURL(url)));
       downloadUrls.clear();
       cleanup(() => signal?.removeEventListener('abort', dispose));

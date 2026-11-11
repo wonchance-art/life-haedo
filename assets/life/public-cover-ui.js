@@ -197,15 +197,35 @@
     }, { full: true }));
     select.addEventListener('change', async () => { const value = select.value; if (acting || loading) { select.value = selected || ''; return; } await run(async () => { await flushInternal(); selected = value; metadata = null; uncertain = false; actionFailure = null; renderForm(); await loadState(); }, { full: true }); if (alive()) select.value = selected || ''; });
     // Account sync (2026-11-01): another device's covers arrive as account_doc_applied.
-    // A clean, unfocused editor reloads; otherwise the small action below waits
-    // and the next autosave keeps this input through the existing conflict copy.
+    // An editor with nothing unsaved takes them, also while a field only has the cursor:
+    // waiting there made the next input a conflict that needed a manual copy (core review
+    // M5, 2026-11-11). With unsaved input the small action below waits and the next
+    // autosave keeps this input through the existing conflict copy.
     const remoteReload = button('다른 기기에서 바뀜 · 불러오기', 'pcRemoteReload', async () => { remoteReload.hidden = true; if (dirty()) throw fault('public_cover_conflict', '입력 중인 내용이 있습니다. 보관한 뒤 최신 표지를 확인해 주세요.'); await reloadInitial(); }, { input: false });
     remoteReload.hidden = true; toolbar.append(remoteReload);
+    // The open cover keeps its object (the title and intro fields write to it) and the field
+    // with the cursor keeps its node and caret; the rest is redrawn from the latest covers.
+    async function takeWhileFocused() {
+      const token = epoch; let value;
+      try { value = await storage.readPublicCover(workspaceId); M.validateState(value); } catch (_) { if (alive(token)) remoteReload.hidden = false; return; }
+      if (!alive(token)) return;
+      if (dirty()) { remoteReload.hidden = false; return; }
+      const owner = cover(), latest = clone(value), at = owner ? latest.covers.findIndex(item => item.id === owner.id) : -1;
+      if (at < 0 || !fields) { run(reloadInitial, { input: false }); return; }   // The open cover is gone there: nothing here to keep.
+      for (const key of Object.keys(owner)) delete owner[key];
+      Object.assign(owner, latest.covers[at]); latest.covers[at] = owner; state = latest; saveFailure = null; remoteReload.hidden = true;
+      for (const [input, key] of [[title, 'title'], [intro, 'intro']]) {
+        if (input.value === owner[key]) continue;
+        const start = input.selectionStart, end = input.selectionEnd, length = owner[key].length; input.value = owner[key];
+        if (document.activeElement === input) input.setSelectionRange(Math.min(start, length), Math.min(end, length));
+      }
+      invalidate(); updateSelect(); renderItems(); renderCatalog(); availability(); notice();
+    }
     const unsubscribe = storage.subscribe?.(workspaceId, event => {
       if (event.type !== 'account_doc_applied' || event.key !== `public-cover:${workspaceId}` || !alive() || !state) return;
+      if (dirty()) { remoteReload.hidden = false; return; }
       const focused = surface.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
-      if (dirty() || focused) { remoteReload.hidden = false; return; }
-      run(reloadInitial, { input: false });
+      if (focused) takeWhileFocused(); else run(reloadInitial, { input: false });
     });
     recovery.append(button('다시 보관', 'pcSaveRetry', async () => { if (!state) await reloadInitial(); else await flushInternal(); saveFailure = null; }), button('내 입력을 새 표지 사본으로 보관', 'pcRecover', recover, { full: true })); recovery.hidden = true;
     actions.append(prepare, publish); management.append(refresh, retry, revoke);

@@ -61,7 +61,8 @@ async function listFromPhoto(page) {
 }
 async function snap(page, scene) {
   const firstCapture = report.visual.length, firstFailure = report.qualityFailures.length;
-  if (scene === 'writing') await page.waitForFunction(expected => document.querySelector('.photo-status')?.textContent === expected, phase === 'after' ? '자동 저장됨' : '초안이 이 브라우저에 저장됨');
+  // 2026-11-11 (글쓰기 M2): opening a saved post for editing stores nothing until something is changed.
+  if (scene === 'writing') await page.waitForFunction(expected => document.querySelector('.photo-status')?.textContent === expected, phase === 'after' ? '바꾼 내용 없음' : '초안이 이 브라우저에 저장됨');
   for (const size of sizes) {
     await page.setViewportSize(size); await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => [...document.querySelectorAll('.home-post-cover,.photo-read-image,.photo-entry-cover[src],.photo-block img')]

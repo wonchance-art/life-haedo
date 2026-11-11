@@ -61,6 +61,12 @@ jobs:
         run: node tests/run-rss-postgres.cjs
       - name: Verify Markdown publication commit ownership, sessions, source CAS, public copies and receipts
         run: node tests/run-post-markdown-publish-postgres.cjs
+      - name: Verify wide news allow list, owner isolation, topic rules under both string settings, install SQL rollback and function hashes
+        env:
+          SQL_REPLAY_REQUIRED: "1"
+        run: node tests/run-news-wide-postgres.cjs
+      - name: Verify withdrawal before any publication, owner-only receipts and the advisory lock between two connections
+        run: node tests/run-blog-unpublish-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -78,12 +84,12 @@ jobs:
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
-    # Keep every existing suite, but give five independent fixture groups their
+    # Keep every existing suite, but give six independent fixture groups their
     # own server/browser so a long serial job cannot omit the final checks.
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4, 5]
+        group: [1, 2, 3, 4, 5, 6, 7]
     timeout-minutes: 25
     permissions:
       contents: read
@@ -184,6 +190,64 @@ jobs:
       - name: Verify schedule exits keep drafts without false leave prompts and integrated search returns to the schedule view
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-exits-browser.cjs
+      # Group 6: core-flow regressions added 2026-11-11 (kept apart so groups 1-5 stay inside the job limit).
+      - name: Verify the annual plan takes remote changes without losing typed input, composition or recovery copies
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-annual-plan-sync-browser.cjs
+      - name: Verify page drafts and the public cover accept remote changes while only focused
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-doc-focus-sync-browser.cjs
+      - name: Verify source edit drafts keep input when discarding fails, another tab discards and the title changed elsewhere
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-edit-draft-browser.cjs
+      - name: Verify reader tool panels stay with the text, close on Tab out and keep the reading position
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-panels-browser.cjs
+      - name: Verify the reading line survives width changes and reloads without per-scroll measuring
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-position-resize-browser.cjs
+      - name: Verify excerpts are chosen only in the original text and the formatted view switches with a notice
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-markdown-excerpt-browser.cjs
+      - name: Verify keyboard selection, logout clearing of tab copies and small reader fixes
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/records-reader-small-browser.cjs
+      - name: Verify the schedule keeps the rendered day across midnight, offers today and reopens today's screen on a later day
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-day-change-browser.cjs
+      - name: Verify full backups keep created and updated times and adjust out-of-range dates without breaking the list
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/full-backup-dates-browser.cjs
+      - name: Verify daily entry waits for slow account checks, retries within a cap and keeps typed input on return
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/daily-entry-browser.cjs
+      - name: Verify writing input survives pasted HTML, long text, strict validation and failed saves
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-input-browser.cjs
+      - name: Verify editing a stored post keeps one edit buffer, cancel and draft delete, and moved ids
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-revision-browser.cjs
+      - name: Verify small writing fixes for paste kinds, status lines, retry timing and focus
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-minor-browser.cjs
+      - name: Verify device recovery copies stay until restored or discarded and never overwrite a newer post
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-recovery-browser.cjs
+      - name: Verify source sync merges both devices' changes, keeps losing sides as recovery copies and never resurrects deletions
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-merge-browser.cjs
+      - name: Verify source sync at size limits falls back to manual comparison and keeps the account storage status truthful
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-merge-limits-browser.cjs
+      - name: Verify the news card feed pages twenty, caps one publisher at three per page and loads images only when turned on
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-card-feed-browser.cjs
+      - name: Verify wide news search sends only typed topics, opens results in a new tab and handles refusals and outages
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-wide-search-browser.cjs
+      - name: Verify an earlier-release device keeps news settings, reactions and reading comparisons across the account
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-old-shell-sync-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -701,6 +765,16 @@ jobs:
             .local/habit-tracker/
             .local/planning-frame-browser/
             .local/schedule-exits-browser/
+            .local/annual-plan-sync-browser/
+            .local/account-doc-focus-sync-browser/
+            .local/schedule-day-change-browser/
+            .local/full-backup-dates-browser/
+            .local/daily-entry-browser/
+            .local/source-merge/
+            .local/source-merge-limits/
+            .local/news-card-feed/
+            .local/news-wide-search/
+            .local/news-old-shell-sync/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
@@ -925,6 +999,9 @@ jobs:
       - name: Verify legacy Markdown publication requests recover with the same operation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_pending" node tests/blog-publish-pending-browser.cjs --prepare-database
+      - name: Verify publication state recovery, withdrawal before publication and unsent choices against the real backend
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_publish_recovery" node tests/publish-recovery-browser.cjs --prepare-database
       - name: Verify Markdown capacity packing keeps the canonical text and the rendered post against the fixed baseline codec
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-packing-browser.cjs
@@ -1015,6 +1092,7 @@ jobs:
             .local/blog-backend/
             .local/blog-completion/
             .local/blog-publish-pending/
+            .local/publish-recovery/
             .local/b2-independent/
             .local/account-blog-continuity/
             .local/account-wide-home/

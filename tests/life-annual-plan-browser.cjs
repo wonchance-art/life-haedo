@@ -246,18 +246,26 @@ async function main() {
       assert.notEqual(await page.locator('#apSaveStatus').textContent(), '저장하지 못함 ·'); await preserve(page, before);
     });
 
-    await check('two-tab CAS leaves the exact draft until latest-read and explicit reapply', async ({ page, context }) => {
+    // Rule change (owner directive 2026-11-01, core review M5 2026-11-11): another tab's or device's plan is not a
+    // failure and needs no manual step. This check used to require 저장하지 못함 → 최신 계획 확인 → 내 입력 다시 적용.
+    await check('two-tab CAS saves the exact draft on top of the other tab\'s plan and keeps its same-field text as a recovery copy', async ({ page, context }) => {
       const before = await seed(page), year = before.plan.rows[0].year, second = await context.newPage(); await open(second);
-      const draft = PRIVATE + ' 이 탭의 정확한 입력';
+      const draft = PRIVATE + ' 이 탭의 정확한 입력', other = { id: 'synthetic-other-tab', date: year + '-04-01', text: '다른 탭의 4월 계획' };
       await page.evaluate(() => { window.__holdAnnualSave = true; }); await annual(page, year).fill(draft); await wait(page, () => window.__annualSaveEntered);
-      const remote = await update(second, { rows: [{ year, text: '다른 탭에 먼저 저장한 계획' }] }); await page.evaluate(() => __annualSaveRelease());
-      await page.locator('#apReload').waitFor({ state: 'visible' }); assert.equal(await annual(page, year).inputValue(), draft); assert.deepEqual((await state(page)).plan, remote);
-      // The explicit recovery stays the way out: 저장하지 못함 without a second retry.
-      assert.equal(await page.locator('#apSaveStatus').textContent(), '저장하지 못함'); assert.equal(await page.locator('#apRetry').isHidden(), true);
-      await page.locator('#apReload').click(); await page.locator('#apReapply').waitFor({ state: 'visible' });
-      assert.equal(await annual(page, year).inputValue(), draft); assert.deepEqual((await state(page)).plan, remote, 'Reading latest does not silently overwrite the other tab');
-      await page.locator('#apReapply').click(); await stored(page, (p, a) => p.rows.find(r => r.year === a.year)?.text === a.draft, { year, draft });
-      assert.equal((await state(page)).plan.revision, remote.revision + 1); await preserve(page, before); await second.close();
+      const remote = await update(second, { rows: [{ year, text: '다른 탭에 먼저 저장한 계획' }], entries: [other] }); await page.evaluate(() => __annualSaveRelease());
+      await stored(page, (p, a) => p.rows.find(r => r.year === a.year)?.text === a.draft, { year, draft });
+      const merged = (await state(page)).plan;
+      assert.equal(merged.revision, remote.revision + 1, 'One save on top of the other tab\'s plan'); assert.deepEqual(merged.entries, [other], 'The other tab\'s separate entry stays');
+      assert.equal(await annual(page, year).inputValue(), draft); assert.equal(await page.locator('[data-ap-entry="' + other.id + '"]').inputValue(), other.text);
+      assert.notEqual(await page.locator('#apSaveStatus').textContent(), '저장하지 못함'); assert.equal(await page.locator('#apRetry').isHidden(), true);
+      assert.equal(await page.locator('#apReload, #apReapply').count(), 0, 'No manual latest/reapply step');
+      // The same field changed in both tabs: the other tab's text is kept, on this device and on screen.
+      assert.equal(await page.locator('#apKept > summary').textContent(), '복구 사본 1개');
+      assert.match(await page.locator('#apKeptText').textContent(), /다른 탭에 먼저 저장한 계획/);
+      const kept = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), key = (await s.listAccountDocs()).find(row => row.prefix === 'annualPlan' && row.workspaceId === w).key; return (await s.listAccountDocRecoveries(key)).map(row => row.value); });
+      assert.deepEqual(kept, [{ items: [{ year, text: '다른 탭에 먼저 저장한 계획' }] }]);
+      await wait(second, id => !!document.querySelector('[data-ap-entry="' + id + '"]') && document.querySelector('#apError').hidden, other.id, 'The other tab stays usable');
+      assert.equal(await annual(second, year).inputValue(), draft, 'The other tab takes the merged plan'); await preserve(page, before); await second.close();
     });
 
     await check('workspace and account changes isolate plans and reject the old delayed writer', async ({ page }) => {

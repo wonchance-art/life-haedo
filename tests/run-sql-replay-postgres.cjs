@@ -20,6 +20,10 @@
  *     Naver schedules' commands (same jobid/schedule/active/database/user, no key value in the
  *     command), is idempotent and reversible; unknown modes, an sb_secret_ Bearer, a change
  *     beyond the command, a row-count change and a database without the schedules roll back.
+ * 4.8 Runs the withdrawal-before-publication contract (tests/run-blog-unpublish-postgres.cjs,
+ *     20261111120000) on a fresh replayed copy: every publish path, owner and visitor reads,
+ *     deletion, receipts, privileges and other owners. That file run directly also checks the
+ *     earlier definition and the installation itself.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -281,6 +285,15 @@ async function main() {
         assert.deepEqual(await jobs(), empty);
         pass('naver cron apikey switch: inspect unchanged; 2 existing schedules rewritten in place (idempotent, reversible); unknown mode, malformed or padded credential, sb_secret_ Bearer, non-command change, row-count change and no schedules rolled back');
       } finally { await db.end(); }
+    }
+
+    {
+      const withdrawDb = await pg.cloneDatabase('replay_blog_withdraw'), db = await pg.connect(withdrawDb);
+      const log = console.log; let count;
+      try { console.log = () => {}; count = await require('./run-blog-unpublish-postgres.cjs').contract(db, { installed: true, connect: () => pg.connect(withdrawDb) }); }
+      finally { console.log = log; await db.end(); }
+      assert(count >= 50, 'withdrawal-before-publication checks ran: ' + count);
+      pass(`withdrawal before publication (20261111120000): ${count} checks on a fresh replayed copy`);
     }
 
     const clone = await pg.cloneDatabase('replay_clone');

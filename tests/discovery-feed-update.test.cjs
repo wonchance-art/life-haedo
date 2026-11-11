@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const script = path.resolve(__dirname, '../scripts/update-discovery-feed.py');
+const Discovery = require('../assets/life/discovery.js');
 const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics', 'llt-journal', 'frontiers-psychology'];
 const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu', 'www.lltjournal.org', 'www.frontiersin.org'];
 const lltFixture = fs.readFileSync(path.join(__dirname, 'fixtures/external-discovery/llt-journal.xml'), 'utf8');
@@ -28,6 +29,11 @@ function workspace(t) {
       ? `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>기술 기록</title><link href="${link}"/><updated>2026-10-08T06:44:57Z</updated><category term="공식 분류"/><content>PRIVATE_BODY_SENTINEL</content></entry></feed>`
       : `<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item><title>문화와 기술</title><link>${link}</link><pubDate>${i === 1 ? '2026-10-16 17:11:27' : 'Tue, 06 Oct 2026 05:00:35 +0000'}</pubDate><dc:creator>공식 작성자</dc:creator><category>공식 분류</category><description><![CDATA[<script>BAD_SCRIPT</script>PRIVATE_BODY_SENTINEL]]></description></item></channel></rss>`;
     fs.writeFileSync(path.join(dir, `${ids[i]}.xml`), xml);
+  }
+  // Sources added after the first registry (published in `extended`): one synthetic item each.
+  for (const id of Discovery.EXTENDED_SOURCE_IDS) {
+    fs.writeFileSync(path.join(dir, `${id}.robots.txt`), 'User-agent: *\nAllow: /\n');
+    fs.writeFileSync(path.join(dir, `${id}.xml`), `<rss version="2.0"><channel><item><title>추가 출처 글 ${id}</title><link>https://${Discovery.ALLOWED_SOURCES[id][0]}/article?id=1</link><pubDate>Tue, 06 Oct 2026 05:00:35 +0000</pubDate></item></channel></rss>`);
   }
   return { dir, output: path.join(dir, 'catalog.json'), report: path.join(dir, 'report.json') };
 }
@@ -238,7 +244,10 @@ print(json.dumps(results))
 
 test('approved English sources are additive metadata feeds with explicit preprint/date limits', () => {
   const sources = python(`print(json.dumps(m.SOURCES))`);
-  assert.deepEqual(sources.map(s => s.id), ids);
+  // 2026-11-11: the first registry keeps its order; later sources follow it and match the browser registry.
+  assert.deepEqual(sources.map(s => s.id), [...ids, ...Discovery.EXTENDED_SOURCE_IDS]);
+  assert.deepEqual(sources.slice(0, ids.length).map(s => s.id), Discovery.LEGACY_SOURCE_IDS);
+  for (const source of sources) assert.deepEqual(source.allowedHosts, Discovery.ALLOWED_SOURCES[source.id]);
   assert.deepEqual(sources.slice(0, 5).map(s => s.allowedHosts), hosts.slice(0, 5).map(h => [h]));
   const arxiv = sources.find(s => s.id === 'arxiv-cs-cl'), mit = sources.find(s => s.id === 'mit-linguistics');
   assert.deepEqual(arxiv.allowedHosts, ['arxiv.org', 'rss.arxiv.org']);

@@ -77,10 +77,20 @@
       const bar = el('div', null, 'life-search-bar'); bar.append(life.Icons.create('search'));
       const label = el('label', null, 'life-search-field'); label.append(el('span', '통합 검색어', 'life-sr-only'));
       input = el('input'); input.type = 'search'; input.id = 'lifeFindQuery'; input.maxLength = 500; input.value = query; input.placeholder = '원문·페이지·컬렉션·9칸 구성 검색'; label.append(input);
-      const update = () => { query = input.value; limits = {}; draw(); };
+      let composingFrame = 0;
+      const update = () => {
+        if (composingFrame) { root.cancelAnimationFrame(composingFrame); composingFrame = 0; }
+        if (query === input.value) return;
+        query = input.value; limits = {}; draw();
+      };
+      // The syllable still being composed (한글) is searched too. Only the results are redrawn, never this field, so
+      // the composition goes on; while composing, key presses within one frame search once with the latest text.
       input.addEventListener('compositionstart', () => { composing = true; });
       input.addEventListener('compositionend', () => { composing = false; update(); });
-      input.addEventListener('input', event => { if (!composing && !event.isComposing) update(); });
+      input.addEventListener('input', event => {
+        if (!composing && !event.isComposing) { update(); return; }
+        const field = input; if (!composingFrame) composingFrame = root.requestAnimationFrame(() => { composingFrame = 0; if (active && field === input && field.isConnected) update(); });
+      });
       const clear = button('', () => { composing = false; input.value = ''; update(); input.focus(); }); clear.classList.add('life-icon-button'); clear.setAttribute('aria-label', '통합 검색어 지우기'); clear.append(life.Icons.create('close')); bar.append(label, clear);
       tabs = el('div', null, 'life-find-tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', '검색할 종류');
       for (const [key, title] of [['all', '전체'], ...Object.entries(M.labels)]) { const b = button(title, () => { kind = key; draw(); }); b.dataset.kind = key; tabs.append(b); }

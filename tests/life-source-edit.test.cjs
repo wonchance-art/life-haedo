@@ -71,16 +71,89 @@ test('a previous version needs explicit restoration and becomes a fresh latest v
   assert.notEqual(restored.version.id, first.version.id); assert.equal(restored.bundle.sourceVersions.at(-1).id, restored.version.id);
   assert.equal(restored.bundle.links.find(link => link.kind === 'source_edit_base' && link.entityRefs[1].entityId === restored.version.id).entityRefs[0].entityId, first.version.id);
 });
-test('head, title, lifecycle roundtrip and changed-account base differences keep stale editing inputs instead of adopting a new head', async () => {
+// 2026-11-11 소유자 지시(자료 수정 초안이 어긋나면 영영 못 고침): 충돌 기준은 최신 판 id·해시와 활성 상태뿐이다.
+// 휴지통 왕복·원천 행 revision은 본문과 무관하므로 충돌이 아니다(이전 단언은 왕복도 충돌로 보았다).
+test('a new head or a changed-account stale base keeps the editing input instead of adopting a new head; a trash round trip is not a conflict', async () => {
   const f = await fixture(), stage = E.edit(E.begin(f.bundle, f.source.id), { text: '작성 중 입력' });
   const newer = await edited(f); assert.throws(() => E.validateCurrent(newer.bundle, stage), { code: 'source_edit_conflict' });
   let trash = C.applyChanges(f.bundle, C.buildSourceStateChanges(f.bundle, f.source.id, 'trash'));
   assert.throws(() => E.validateCurrent(trash, stage), { code: 'source_trashed' });
+  assert.equal(E.baseState(trash, stage).status, 'trashed');
   trash = C.applyChanges(trash, C.buildSourceStateChanges(trash, f.source.id, 'active'));
-  assert.throws(() => E.validateCurrent(trash, stage), { code: 'source_edit_conflict' });
+  assert.notEqual(C.sourceState(trash, f.source.id).revision, stage.lifecycleRevision);
+  assert.equal(E.validateCurrent(trash, stage).head.id, f.version.id); assert.equal(E.baseState(trash, stage).status, 'current');
+  const saved = await E.prepare(trash, stage); assert.equal(saved.version.contentText, '작성 중 입력');
   assert.throws(() => E.validateCurrent(f.bundle, { ...stage, baseChanged: true }), { code: 'source_edit_conflict' });
   assert.throws(() => E.validateCurrent({ ...f.bundle, workspaceId: C.id() }, stage), { code: 'workspace_mismatch' });
   assert.equal(stage.input.text, '작성 중 입력');
+});
+test('baseState tells an untouched draft from real input and a moved head from the current one, without changing either', async () => {
+  const f = await fixture(), opened = E.begin(f.bundle, f.source.id), typed = E.edit(opened, { text: raw + '내 입력' });
+  assert.deepEqual([E.baseState(f.bundle, opened).status, E.baseState(f.bundle, opened).untouched], ['current', true]);
+  assert.equal(E.baseState(f.bundle, typed).untouched, false);
+  for (const patch of [{ title: '바꾼 제목' }, { format: 'text/plain' }]) assert.equal(E.baseState(f.bundle, E.edit(opened, patch)).untouched, false);
+  const newer = await edited(f), before = clone([newer.bundle, opened, typed]);
+  // The body is compared with the version the draft began on, not with the new head.
+  assert.deepEqual([E.baseState(newer.bundle, opened).status, E.baseState(newer.bundle, opened).untouched], ['moved', true]);
+  assert.deepEqual([E.baseState(newer.bundle, typed).status, E.baseState(newer.bundle, typed).untouched], ['moved', false]);
+  assert.equal(E.baseState(newer.bundle, typed).head.id, newer.version.id);
+  assert.equal(E.baseState(f.bundle, { ...typed, baseChanged: true }).status, 'moved');
+  const restore = E.begin(newer.bundle, f.source.id, { versionId: f.version.id, restore: true });
+  assert.deepEqual([E.baseState(newer.bundle, restore).status, E.baseState(newer.bundle, restore).untouched], ['current', true]);
+  const gone = { ...f.bundle, sources: [], sourceVersions: [], records: [], links: [] };
+  assert.equal(E.baseState(gone, typed).status, 'missing'); assert.equal(E.baseState({ ...f.bundle, workspaceId: C.id() }, typed).status, 'missing');
+  assert.deepEqual([newer.bundle, opened, typed], before);
+});
+test('rebase moves only the base facts to the latest version so the kept input saves as a new version on top of it', async () => {
+  const f = await fixture(), typed = E.edit(E.begin(f.bundle, f.source.id), { text: '내가 고친 본문' }), newer = await edited(f);
+  const rebased = E.rebase(newer.bundle, { ...typed, baseChanged: true });
+  assert.deepEqual(rebased.input, typed.input); assert.equal(rebased.stageId, typed.stageId); assert.equal(rebased.revision, typed.revision);
+  assert.equal(rebased.baseSourceVersionId, newer.version.id); assert.equal(rebased.baseHash, newer.version.contentHash);
+  assert.equal(Object.hasOwn(rebased, 'baseChanged'), false); assert.equal(typed.baseSourceVersionId, f.version.id);
+  const saved = await E.prepare(newer.bundle, rebased), bundle = C.applyChanges(newer.bundle, saved.changes);
+  assert.equal(bundle.sourceVersions.length, 3); assert.equal(bundle.sourceVersions.at(-1).contentText, '내가 고친 본문');
+  assert.deepEqual(bundle.sourceVersions.slice(0, 2), newer.bundle.sourceVersions); assert.deepEqual(bundle.records, newer.bundle.records);
+  assert.equal(bundle.links.find(link => link.kind === 'source_edit_base' && link.entityRefs[1].entityId === saved.version.id).entityRefs[0].entityId, newer.version.id);
+  const trashed = C.applyChanges(newer.bundle, C.buildSourceStateChanges(newer.bundle, f.source.id, 'trash'));
+  assert.throws(() => E.rebase(trashed, typed), { code: 'source_trashed' });
+  assert.throws(() => E.rebase({ ...f.bundle, sources: [], sourceVersions: [], records: [], links: [] }, typed), { code: 'missing_reference' });
+  // An explicit restore keeps the version it restores; only the head it is saved on top of moves.
+  const restore = E.edit(E.begin(newer.bundle, f.source.id, { versionId: f.version.id, restore: true }), { text: raw + '복원하며 고침' });
+  const third = await edited(newer, { text: '세 번째 판' }), moved = E.rebase(third.bundle, restore);
+  assert.equal(moved.restoreVersionId, f.version.id); assert.equal(moved.baseSourceVersionId, third.version.id);
+  assert.equal((await E.prepare(third.bundle, moved)).version.contentText, raw + '복원하며 고침');
+});
+// 2026-11-11 독립 검수 수정: 사용자가 건드리지 않은 제목은 다른 곳에서 바꾼 지금 제목을 따른다(본문만 고친 저장이 옛 제목을 되돌리지 않는다).
+test('rebase keeps a title changed elsewhere unless the person changed the title too', async () => {
+  const f = await fixture(), opened = E.begin(f.bundle, f.source.id);
+  assert.equal(opened.baseTitle, '원문 제목');
+  const body = E.edit(opened, { text: '내가 고친 본문' }), both = E.edit(opened, { title: '내가 바꾼 제목', text: '내가 고친 본문' });
+  assert.equal(body.baseTitle, '원문 제목'); assert.equal(E.validate(body), true);
+  const renamed = await edited(f, { title: '다른 곳에서 바꾼 제목', text: raw + '\n다른 곳의 판' }), before = clone([renamed.bundle, body, both]);
+  let state = E.baseState(renamed.bundle, body);
+  assert.deepEqual([state.status, state.untouched, state.titleEdited, state.titleDiffers], ['moved', false, false, false]);
+  const kept = E.rebase(renamed.bundle, body);
+  assert.equal(kept.input.title, '다른 곳에서 바꾼 제목'); assert.equal(kept.baseTitle, '다른 곳에서 바꾼 제목'); assert.equal(kept.input.text, '내가 고친 본문');
+  assert.equal(C.applyChanges(renamed.bundle, (await E.prepare(renamed.bundle, kept)).changes).sources[0].title, '다른 곳에서 바꾼 제목');
+  state = E.baseState(renamed.bundle, both);
+  assert.deepEqual([state.untouched, state.titleEdited, state.titleDiffers], [false, true, true]);
+  const mine = E.rebase(renamed.bundle, both);
+  assert.equal(mine.input.title, '내가 바꾼 제목'); assert.equal(mine.baseTitle, '다른 곳에서 바꾼 제목');
+  assert.equal(C.applyChanges(renamed.bundle, (await E.prepare(renamed.bundle, mine)).changes).sources[0].title, '내가 바꾼 제목');
+  // After the rebase the title counts as the person's own against the new base.
+  assert.deepEqual([E.baseState(renamed.bundle, mine).status, E.baseState(renamed.bundle, mine).titleEdited], ['current', true]);
+  // The person chose the very title the other place chose: theirs, but no difference to show.
+  state = E.baseState(renamed.bundle, E.edit(opened, { title: '다른 곳에서 바꾼 제목' }));
+  assert.deepEqual([state.untouched, state.titleEdited, state.titleDiffers], [false, true, false]);
+  // Only the title was renamed elsewhere, under a draft that holds nothing: still untouched (removed quietly on open).
+  assert.equal(E.baseState(renamed.bundle, opened).untouched, true);
+  // A draft from before this field existed cannot tell: its title is compared with the title now and kept as the person's.
+  const older = clone(body); delete older.baseTitle; assert.equal(E.validate(older), true);
+  assert.equal(E.baseState(f.bundle, older).titleEdited, false);
+  assert.deepEqual([E.baseState(renamed.bundle, older).titleEdited, E.baseState(renamed.bundle, older).titleDiffers], [true, true]);
+  assert.equal(E.rebase(renamed.bundle, older).input.title, '원문 제목');
+  assert.throws(() => E.validate({ ...body, baseTitle: 7 })); assert.throws(() => E.validate({ ...body, baseTitle: '가'.repeat(501) }));
+  assert.deepEqual([renamed.bundle, body, both], before);
 });
 test('checkPrepared rejects extra records, different input/source/author/result and missing marker or base edges before the transaction', async () => {
   const f = await fixture(), result = await edited(f), p = result.prepared;

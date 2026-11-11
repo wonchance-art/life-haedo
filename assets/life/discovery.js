@@ -6,7 +6,10 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const ALLOWED_SOURCES = Object.freeze({
+  // Sources published before 2026-11-11. Validators shipped until then reject the whole catalog when
+  // `sources` lists any other id, so the published file keeps exactly these in `sources`/`articles`
+  // and carries every later source in `extended` (which those validators never read).
+  const LEGACY_SOURCES = Object.freeze({
     'naver-d2': Object.freeze(['d2.naver.com']),
     'seoul-culture': Object.freeze(['news.seoul.go.kr']),
     'woowahan-tech': Object.freeze(['techblog.woowahan.com']),
@@ -16,6 +19,58 @@
     'mit-linguistics': Object.freeze(['news.mit.edu']),
     'llt-journal': Object.freeze(['www.lltjournal.org']),
     'frontiers-psychology': Object.freeze(['www.frontiersin.org'])
+  });
+  // Added 2026-11-11 (docs/design-review/discovery-sources.md). Published in `extended` only.
+  const EXTENDED_SOURCES = Object.freeze({
+    'yna-news': Object.freeze(['www.yna.co.kr']),
+    'yna-culture': Object.freeze(['www.yna.co.kr']),
+    'yna-international': Object.freeze(['www.yna.co.kr']),
+    'sbs-news': Object.freeze(['news.sbs.co.kr']),
+    'sbs-culture': Object.freeze(['news.sbs.co.kr']),
+    'nocut-news': Object.freeze(['www.nocutnews.co.kr', 'rss.nocutnews.co.kr']),
+    'seoul-economy': Object.freeze(['news.seoul.go.kr']),
+    'seoul-welfare': Object.freeze(['news.seoul.go.kr']),
+    'seoul-traffic': Object.freeze(['news.seoul.go.kr']),
+    'seoul-safe': Object.freeze(['news.seoul.go.kr']),
+    'kakao-tech': Object.freeze(['tech.kakao.com']),
+    'toss-tech': Object.freeze(['toss.tech']),
+    'line-tech': Object.freeze(['techblog.lycorp.co.jp']),
+    'conversation-global': Object.freeze(['theconversation.com']),
+    'nasa-news': Object.freeze(['www.nasa.gov', 'science.nasa.gov']),
+    'mit-news': Object.freeze(['news.mit.edu']),
+    'owid': Object.freeze(['ourworldindata.org']),
+    'global-voices': Object.freeze(['globalvoices.org']),
+    'eff-updates': Object.freeze(['www.eff.org'])
+  });
+  const ALLOWED_SOURCES = Object.freeze({ ...LEGACY_SOURCES, ...EXTENDED_SOURCES });
+  // 매체: the publisher behind each feed. Several feeds of one site are one publisher when the latest list is
+  // spread (연합뉴스 종합·문화·세계, SBS 뉴스·생활문화, 서울시의 여섯 피드, MIT News의 두 피드).
+  const PUBLISHERS = Object.freeze({
+    'naver-d2': 'NAVER D2', 'seoul-culture': '서울시', 'woowahan-tech': '우아한형제들', 'readersnews-books': '독서신문', 'seoul-environment': '서울시',
+    'arxiv-cs-cl': 'arXiv', 'mit-linguistics': 'MIT News', 'llt-journal': 'Language Learning & Technology', 'frontiers-psychology': 'Frontiers',
+    'yna-news': '연합뉴스', 'yna-culture': '연합뉴스', 'yna-international': '연합뉴스', 'sbs-news': 'SBS', 'sbs-culture': 'SBS', 'nocut-news': '노컷뉴스',
+    'seoul-economy': '서울시', 'seoul-welfare': '서울시', 'seoul-traffic': '서울시', 'seoul-safe': '서울시',
+    'kakao-tech': '카카오', 'toss-tech': '토스', 'line-tech': 'LY Corporation', 'conversation-global': 'The Conversation', 'nasa-news': 'NASA',
+    'mit-news': 'MIT News', 'owid': 'Our World in Data', 'global-voices': 'Global Voices', 'eff-updates': 'EFF'
+  });
+  // 넓게 찾기 results are links on the supplier's host. They are never part of the public catalog; this id only
+  // lets a saved reaction keep such a link (title, publisher name, the supplier's address, time received).
+  const WIDE_SOURCE = Object.freeze({ id: 'google-news', hosts: Object.freeze(['news.google.com']), label: 'Google 뉴스' });
+  const SNAPSHOT_SOURCES = Object.freeze({ ...ALLOWED_SOURCES, [WIDE_SOURCE.id]: WIDE_SOURCE.hosts });
+  // The latest list is read in pages of 20; one publisher holds at most 3 places of a page (docs/design-review/news-card-feed.md).
+  const PAGE = Object.freeze({ size: 20, perPublisher: 3 });
+  // Hosts a source's own feed names for its representative images. An article image is a link to the
+  // publisher's server, never a copy; an address on any other host is dropped.
+  const IMAGE_HOSTS = Object.freeze({
+    'mit-linguistics': Object.freeze(['news.mit.edu']),
+    'yna-news': Object.freeze(['img.yna.co.kr']),
+    'yna-culture': Object.freeze(['img.yna.co.kr']),
+    'yna-international': Object.freeze(['img.yna.co.kr']),
+    'sbs-news': Object.freeze(['img.sbs.co.kr']),
+    'sbs-culture': Object.freeze(['img.sbs.co.kr']),
+    'mit-news': Object.freeze(['news.mit.edu']),
+    'global-voices': Object.freeze(['globalvoices.org']),
+    'eff-updates': Object.freeze(['www.eff.org'])
   });
   // Small, public and inspectable equivalences. No broader topic inference.
   const ALIASES = Object.freeze([
@@ -41,7 +96,9 @@
     ['책 읽기', ['reading comprehension']],
     ['집중력', ['sustained attention', 'mind wandering', 'minds wander']]
   ].map(([label, values]) => [label, Object.freeze(values)])));
-  const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
+  // `legacyArticles`/`legacySources` are what the pre-2026-11-11 validators accept in `sources`/`articles`.
+  // `matches` is the default result size; a list may ask for every candidate (up to `articles`).
+  const LIMITS = Object.freeze({ articles: 2000, sources: 100, legacyArticles: 500, legacySources: 20, manual: 40, matches: 5, imageUrl: 2048, feedBytes: 4 * 1024 * 1024 });
   const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -110,17 +167,33 @@
     const normalized = canonicalUrl(value); if (!normalized) return false;
     return !hosts || hosts.includes(new URL(normalized).hostname);
   }
+  // A publisher image address: HTTPS, default port, no credentials, a DNS name registered for the source.
+  function imageUrl(value, hosts) {
+    if (typeof value !== 'string' || !value || value.length > LIMITS.imageUrl || /[\u0000-\u0020\u007f\\]/.test(value)) return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+      if (!/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(url.hostname)) return null;
+      return Array.isArray(hosts) && hosts.includes(url.hostname) ? value : null;
+    } catch (_) { return null; }
+  }
   function rights(value) {
     check(plain(value) && text(value.label, 500) && ['metadata_only', 'summary_allowed', 'full_text_allowed'].includes(value.mode));
     check(value.url === null || publicUrl(value.url));
     return { label: value.label, url: value.url, mode: value.mode };
   }
   function validateFeed(input, options = {}) {
-    check(plain(input) && input.schemaVersion === 1 && iso(input.generatedAt) && Array.isArray(input.sources) && input.sources.length <= LIMITS.sources && Array.isArray(input.articles) && input.articles.length <= LIMITS.articles);
+    check(plain(input) && input.schemaVersion === 1 && iso(input.generatedAt) && Array.isArray(input.sources) && Array.isArray(input.articles));
+    // `extended` holds the sources added after the first registry; this validator reads both parts as one catalog.
+    const extended = input.extended === undefined ? { sources: [], articles: [] } : input.extended;
+    check(plain(extended) && Array.isArray(extended.sources) && Array.isArray(extended.articles));
+    const suppliedSources = [...input.sources, ...extended.sources], suppliedArticles = [...input.articles, ...extended.articles];
+    check(suppliedSources.length <= LIMITS.sources && suppliedArticles.length <= LIMITS.articles);
     check(new TextEncoder().encode(JSON.stringify(input)).length <= LIMITS.feedBytes);
-    const allowed = options.allowedSources || ALLOWED_SOURCES, now = nowValue(options.now), ids = new Set(), sources = [];
-    check(plain(allowed) && Date.parse(input.generatedAt) <= now + 300000);
-    for (const source of input.sources) {
+    const allowed = options.allowedSources || ALLOWED_SOURCES, imageHosts = options.imageHosts || (options.allowedSources ? {} : IMAGE_HOSTS);
+    const now = nowValue(options.now), ids = new Set(), sources = [];
+    check(plain(allowed) && plain(imageHosts) && Date.parse(input.generatedAt) <= now + 300000);
+    for (const source of suppliedSources) {
       check(plain(source) && validId(source.id) && !ids.has(source.id) && Array.isArray(allowed[source.id]) && allowed[source.id].length > 0);
       const hosts = allowed[source.id]; check(hosts.every(host => typeof host === 'string' && /^[a-z0-9.-]+$/.test(host)));
       check(text(source.name, 200) && publicUrl(source.url, hosts) && publicUrl(source.feedUrl, hosts));
@@ -134,13 +207,17 @@
       const freshnessMaxAgeDays = source.freshnessMaxAgeDays ?? 7;
       check(Number.isInteger(freshnessMaxAgeDays) && freshnessMaxAgeDays >= 1 && freshnessMaxAgeDays <= 31);
       check(!lastAttemptAt || Date.parse(lastAttemptAt) <= now + 300000);
+      // Present only for a source whose feed images were reviewed: the display terms of those image links.
+      const images = source.images === undefined || source.images === null ? null : source.images;
+      if (images) check(plain(images) && text(images.label, 500) && (images.url === null || publicUrl(images.url)));
       ids.add(source.id); sources.push({ id: source.id, name: source.name, url: source.url, feedUrl: source.feedUrl, language: source.language,
-        rights: rights(source.rights), status: source.status, lastSuccessAt, lastAttemptAt, error: source.error, freshnessMaxAgeDays,
+        rights: rights(source.rights), ...(images ? { images: { label: images.label, url: images.url } } : {}),
+        status: source.status, lastSuccessAt, lastAttemptAt, error: source.error, freshnessMaxAgeDays,
         stale: source.stale || source.status !== 'ok' || !lastSuccessAt || now - Date.parse(lastSuccessAt) > freshnessMaxAgeDays * 86400000 });
     }
     const bySource = new Map(sources.map(source => [source.id, source])), articleIds = new Set(), articles = [], invalid = [];
     if (plain(input.validation) && Array.isArray(input.validation.invalid)) for (const row of input.validation.invalid.slice(0, LIMITS.articles)) if (plain(row) && row.reason === 'invalid_article' && (row.id === null || validId(row.id))) invalid.push({ id: row.id, reason: row.reason });
-    for (const article of input.articles) {
+    for (const article of suppliedArticles) {
       try {
         check(plain(article) && validId(article.id) && !articleIds.has(article.id) && bySource.has(article.sourceId));
         const source = bySource.get(article.sourceId); check(source.status !== 'never_fetched');
@@ -160,12 +237,14 @@
         const updatedAt = article.updatedAt === undefined || article.updatedAt === null ? null : iso(article.updatedAt);
         const usablePublished = dateStatus === 'valid' ? publishedAt : null, usableUpdated = updatedAt && Date.parse(updatedAt) <= now + 300000 ? updatedAt : null;
         const sortDate = usablePublished || usableUpdated, dateBasis = usablePublished ? 'published' : usableUpdated ? 'updated' : 'unknown';
+        // An image the feed named is optional display metadata: an unusable address drops the image, not the article.
+        const image = source.images ? imageUrl(article.imageUrl, imageHosts[article.sourceId]) : null;
         articleIds.add(article.id); articles.push({ id: article.id, sourceId: article.sourceId, url: article.url, canonicalUrl: canonicalUrl(article.url), title: article.title,
           publishedAt, dateStatus, updatedAt, dateBasis, sortDate, author: article.author, language: article.language, summary: article.summary,
-          ...(bodyText ? { bodyText } : {}), coverage: article.coverage, rights: permission, fetchedAt, tags: [...new Set(tags)] });
+          ...(bodyText ? { bodyText } : {}), ...(image ? { imageUrl: image } : {}), coverage: article.coverage, rights: permission, fetchedAt, tags: [...new Set(tags)] });
       } catch (cause) { if (cause.code !== 'discovery_feed_invalid') throw cause; invalid.push({ id: validId(article?.id) ? article.id : null, reason: 'invalid_article' }); }
     }
-    return { schemaVersion: 1, generatedAt: iso(input.generatedAt), stale: sources.some(source => source.stale) || now - Date.parse(input.generatedAt) > 7 * 86400000, sources, articles, validation: { invalid, suppliedArticles: input.articles.length } };
+    return { schemaVersion: 1, generatedAt: iso(input.generatedAt), stale: sources.some(source => source.stale) || now - Date.parse(input.generatedAt) > 7 * 86400000, sources, articles, validation: { invalid, suppliedArticles: suppliedArticles.length } };
   }
   const fold = value => value.replace(/[A-Z]/g, character => character.toLowerCase());
   function terms(label) {
@@ -239,7 +318,7 @@
     check(options.knownUrls === undefined || Array.isArray(options.knownUrls), 'discovery_profile_invalid');
     const known = new Set((options.knownUrls || []).map(canonicalUrl).filter(Boolean));
     const mode = options.mode || 'related'; check(['related', 'latest'].includes(mode));
-    const limit = options.limit === undefined ? 5 : options.limit; check(Number.isInteger(limit) && limit >= 1 && limit <= LIMITS.matches);
+    const limit = options.limit === undefined ? LIMITS.matches : options.limit; check(Number.isInteger(limit) && limit >= 1 && limit <= LIMITS.articles);
     const seen = new Set(), excluded = { known: 0, feedback: 0, duplicate: 0, invalid: (feed.validation?.invalid || []).length }, pool = [];
     if (contentLanguages !== null) excluded.language = 0;
     for (const article of feed.articles) {
@@ -253,13 +332,58 @@
       pool.push({ article, reasons, strength, interests: new Set(reasons.map(reason => reason.interestId)).size });
     }
     const coverage = { linkOnly: 0, summary: 0, fullText: 0 }; for (const article of feed.articles) coverage[{ link_only: 'linkOnly', summary: 'summary', full_text: 'fullText' }[article.coverage]]++;
-    return { feed, pool, excluded, coverage, mode, limit, contentLanguages };
+    // `spread`: the news list asks for the latest order in publisher-capped pages. Other callers (the frozen
+    // reading comparison, evaluations) keep the plain newest-first order.
+    check(options.spread === undefined || typeof options.spread === 'boolean');
+    return { feed, pool, excluded, coverage, mode, limit, contentLanguages, spread: options.spread === true };
+  }
+  const rowDate = row => row.article.sortDate ? Date.parse(row.article.sortDate) : -Infinity;
+  const compareLatest = (a, b) => rowDate(b) - rowDate(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl);
+  // The publisher an article counts toward: its feed's publisher, or for a found link the publisher name it came with.
+  function publisherKey(article) {
+    const name = Object.hasOwn(PUBLISHERS, article.sourceId) ? PUBLISHERS[article.sourceId] : typeof article.sourceName === 'string' && article.sourceName.trim() ? article.sourceName : article.sourceId;
+    return fold(String(name).trim());
+  }
+  // Newest first, read in pages: within each page of `size` no publisher has more than `perPublisher` rows.
+  // A row that does not fit waits for the next page, so every row appears exactly once. When too few publishers
+  // remain to fill a page under the cap, the cap is lifted for that page. Each page is itself newest first.
+  // A pure function of its rows: the same list gives the same order on every device.
+  function spreadLatest(rows, { size = PAGE.size, perPublisher = PAGE.perPublisher } = {}) {
+    check(Array.isArray(rows) && Number.isInteger(size) && size >= 1 && Number.isInteger(perPublisher) && perPublisher >= 1);
+    const rest = [...rows].sort(compareLatest), result = [];
+    while (rest.length) {
+      const page = [], count = new Map();
+      for (let at = 0; at < rest.length && page.length < size;) {
+        const key = publisherKey(rest[at].article), used = count.get(key) || 0;
+        if (used < perPublisher) { count.set(key, used + 1); page.push(rest.splice(at, 1)[0]); } else at++;
+      }
+      if (page.length < size) page.push(...rest.splice(0, size - page.length));
+      result.push(...page.sort(compareLatest));
+    }
+    return result;
+  }
+  // The rows that arrive after a list was drawn (a timed refresh, a 넓게 찾기 answer), placed after the `drawn` rows
+  // without moving them. The page the drawn rows end in is completed under the same publisher cap; later pages are
+  // spreadLatest of the rest. Every row appears exactly once.
+  function spreadAfter(drawn, rows, { size = PAGE.size, perPublisher = PAGE.perPublisher } = {}) {
+    check(Array.isArray(drawn) && Array.isArray(rows) && Number.isInteger(size) && size >= 1 && Number.isInteger(perPublisher) && perPublisher >= 1);
+    const rest = [...rows].sort(compareLatest), open = drawn.length % size, fill = [];
+    if (open) {
+      const count = new Map();
+      for (const row of drawn.slice(drawn.length - open)) { const key = publisherKey(row.article); count.set(key, (count.get(key) || 0) + 1); }
+      for (let at = 0; at < rest.length && open + fill.length < size;) {
+        const key = publisherKey(rest[at].article), used = count.get(key) || 0;
+        if (used < perPublisher) { count.set(key, used + 1); fill.push(rest.splice(at, 1)[0]); } else at++;
+      }
+      if (open + fill.length < size) fill.push(...rest.splice(0, size - open - fill.length));
+      fill.sort(compareLatest);
+    }
+    return [...fill, ...spreadLatest(rest, { size, perPublisher })];
   }
   function rankPool(prepared) {
     const { feed, pool, excluded, coverage, mode, limit } = prepared;
-    const date = row => row.article.sortDate ? Date.parse(row.article.sortDate) : -Infinity;
-    const compareLatest = (a, b) => date(b) - date(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl);
-    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b)) : [...pool].sort(compareLatest);
+    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b))
+      : prepared.spread ? spreadLatest(pool) : [...pool].sort(compareLatest);
     const items = candidates.slice(0, limit).map(({ article, reasons }) => ({ article, reasons: reasons.map(({ weight, ...reason }) => reason) }));
     return { items, eligibleCount: candidates.length, poolCount: pool.length, metadata: { generatedAt: feed.generatedAt,
       stale: feed.stale, sources: feed.sources, coverage, excluded, mode,
@@ -301,5 +425,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, PUBLISHERS, PAGE, WIDE_SOURCE, SNAPSHOT_SOURCES, publisherKey, spreadLatest, spreadAfter, LEGACY_SOURCE_IDS: Object.freeze(Object.keys(LEGACY_SOURCES)), EXTENDED_SOURCE_IDS: Object.freeze(Object.keys(EXTENDED_SOURCES)), IMAGE_HOSTS, imageUrl, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });

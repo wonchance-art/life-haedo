@@ -213,12 +213,16 @@ async function main() {
       assert.match(await page.locator('#lifeApp').innerText(), /본문 미확보/);
       await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#lifeSearch').fill('url-only-marker'); assert.equal(await results(page).count(), 0);
     });
-    await check('IME waits for composition end; literal metacharacters and native case matching retain raw coordinates', async page => {
+    // 2026-11-11 (자료 읽기 m3, 규칙 변경): 조합 중인 글자도 검색에 반영한다. 이전에는 조합이 끝날 때까지 목록이 그대로였다
+    // (입력 중인 마지막 글자가 결과에 빠짐). 입력 칸의 값·초점은 계속 그대로여야 한다.
+    await check('IME composing text is searched without touching the field; literal metacharacters and native case matching retain raw coordinates', async page => {
       const raw = '🌱 .+[x] 그리고 한글 K 끝 é';
       const [s] = await seed(page, [{ title: '문자 검색', texts: [raw] }]);
       await sources(page, '없는구절'); assert.equal(await results(page).count(), 0);
       await page.locator('#lifeSearch').evaluate(el => { el.focus(); el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = '한글'; el.dispatchEvent(new InputEvent('input', { bubbles: true, data: '한글', isComposing: true })); });
-      assert.equal(await results(page).count(), 0); assert.equal(await page.locator('#lifeSearch').inputValue(), '한글');
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await results(page).count(), 1, 'the list follows the text still being composed'); assert.equal(await page.locator('#lifeSearch').inputValue(), '한글');
+      assert.equal(await page.locator('#lifeSearch').evaluate(el => el === document.activeElement), true, 'the field keeps focus while composing');
       await page.locator('#lifeSearch').dispatchEvent('compositionend'); assert.equal(await results(page).count(), 1);
       assert.equal(await page.locator('#lifeSearch').evaluate(el => el === document.activeElement), true);
       await page.locator('#lifeSearch').fill('.+[x]'); assert.equal(await result(page, s.versions[0]).locator('mark').innerText(), '.+[x]');

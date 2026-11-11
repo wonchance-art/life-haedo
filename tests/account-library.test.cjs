@@ -453,3 +453,57 @@ test('a failed space receive starts no further spaces and settles only after the
     assert.ok(h.log.includes('receive:' + first) && !h.log.includes('receive:' + second));
   } finally { manager.dispose(); }
 });
+
+// 2026-11-11 originals merge: the originals settle their own differences (both sides' items stay),
+// like the two other domains. A recorded difference therefore still runs; only a deleted server
+// copy waits. (Before: any recorded originals conflict stopped the workspace until a choice.)
+test('a recorded originals difference still runs and the other domains follow; a deleted server copy waits', async () => {
+  for (const missing of [false, true]) {
+    const h = harness({ local: [first], active: first }); acknowledgedCache(h);
+    Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing, remoteRevision: 5 } });
+    const run = h.args.sync.syncNow;
+    h.args.sync.syncNow = async (id, options) => { delete h.states.get(id).conflict; return run(id, options); }; // the run merges it
+    const manager = create(h.args);
+    try {
+      await manager.bootstrap();
+      assert.equal(h.log.includes('source:' + first), !missing, 'missing=' + missing);
+      assert.equal(h.log.includes('composition:' + first), !missing); assert.equal(h.log.includes('metadata:' + first), !missing);
+      assert.equal((await manager.getState()).status, missing ? 'conflict' : 'synced');
+    } finally { manager.dispose(); }
+  }
+});
+// While a pass runs, a recorded difference is one the pass is about to settle: no conflict band.
+// What is still recorded when the pass ends could not be merged and needs the person.
+test('a recorded difference is shown as a conflict only when the pass could not settle it', async () => {
+  const h = harness({ local: [first], active: first }); acknowledgedCache(h);
+  Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing: false, remoteRevision: 5 } });
+  let gate = null, merge = false;
+  h.args.sync.syncNow = async id => { await gate?.promise; if (merge) Object.assign(h.states.get(id), { status: 'synced', conflict: null }); return h.states.get(id); };
+  const manager = create(h.args);
+  try {
+    await manager.bootstrap();
+    assert.equal((await manager.getState()).status, 'conflict', 'still recorded after the pass: the person compares');
+    // The next pass (a poll, a retry) is running: the difference it is about to settle is not announced again.
+    gate = deferred(); merge = true;
+    const pass = manager.reconcile();
+    for (let i = 0; i < 20; i++) await new Promise(done => setImmediate(done));
+    assert.equal((await manager.getState()).status, 'syncing', 'not shown as a conflict while the pass is running');
+    gate.resolve(); await pass;
+    assert.equal((await manager.getState()).status, 'synced');
+    // A difference the engine already tried and could not merge stays shown while later passes run,
+    // also over an earlier pass's network error (a large library: each pass takes long).
+    Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing: false, remoteRevision: 6 }, unmergeable: true });
+    gate = deferred(); merge = false;
+    const later = manager.reconcile();
+    for (let i = 0; i < 20; i++) await new Promise(done => setImmediate(done));
+    assert.equal((await manager.getState()).status, 'conflict', 'the comparison stays offered during the pass');
+    gate.resolve(); await later;
+    assert.equal((await manager.getState()).status, 'conflict');
+    // A deleted server copy is shown at once, also during a pass.
+    Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing: true, remoteRevision: 5 } });
+    gate = deferred(); const waiting = manager.reconcile();
+    for (let i = 0; i < 20; i++) await new Promise(done => setImmediate(done));
+    assert.equal((await manager.getState()).status, 'conflict');
+    gate.resolve(); await waiting;
+  } finally { manager.dispose(); }
+});
