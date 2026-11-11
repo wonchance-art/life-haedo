@@ -33,6 +33,15 @@ const MUTATIONS = {
   'missing-as-before': sql => sql.replace("if p_expected_revision<>0 then return '{\"status\":\"missing\"}'::jsonb; end if;", "return '{\"status\":\"missing\"}'::jsonb;"),
   // The profile added for the new row replaces an existing name and intro.
   'blank-profile': sql => sql.replace('insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;', "insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do update set author='{\"name\":\"\",\"intro\":\"\"}'::jsonb;"),
+  // The caller gets a profile row before its ownership of the post is checked.
+  'profile-first': sql => sql.replace("  select revision into source_revision from haedo_blog_private.posts where owner_id=who and id=p_post_id for update;\n  if not found then return '{\"status\":\"missing\"}'::jsonb; end if;\n  insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;\n",
+    "  insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;\n  select revision into source_revision from haedo_blog_private.posts where owner_id=who and id=p_post_id for update;\n  if not found then return '{\"status\":\"missing\"}'::jsonb; end if;\n"),
+  // An existing profile gets a new blog token (the public list address changes).
+  'new-blog-token': sql => sql.replace('on conflict(owner_id) do nothing;', 'on conflict(owner_id) do update set token=gen_random_uuid();'),
+  // A receipt is found by post and operation id alone.
+  'any-receipt': sql => sql.replace('from haedo_blog_private.receipts where owner_id=who and post_id=p_post_id and operation_id=p_operation_id;', 'from haedo_blog_private.receipts where post_id=p_post_id and operation_id=p_operation_id;'),
+  // The withdrawal does not take the post's advisory lock.
+  'no-lock': sql => sql.replace(" perform pg_advisory_xact_lock(hashtextextended('blog:'||who::text||':'||p_post_id::text,0));\n", ''),
   // Another owner's post gets a row.
   'any-owner': sql => sql.replace('select revision into source_revision from haedo_blog_private.posts where owner_id=who and id=p_post_id for update;', 'select revision into source_revision from haedo_blog_private.posts where id=p_post_id for update;'),
 };
@@ -45,12 +54,13 @@ function installation() {
 let passed = 0;
 const check = (actual, expected, label) => { assert.deepEqual(actual, expected, label); passed++; console.log('PASS ' + label); };
 
-/* contract(db): the whole contract on one connection.
+/* contract(db): the whole contract.
  * - installed:false (this file run directly): db holds the blog migrations before this one; the
  *   earlier answers are recorded first and the installation itself is checked.
  * - installed:true (tests/run-sql-replay-postgres.cjs, a copy with every migration replayed):
- *   the earlier-definition and replacement checks are skipped; everything else is the same. */
-async function contract(db, { installed = false } = {}) {
+ *   the earlier-definition and replacement checks are skipped; everything else is the same.
+ * - connect(): another connection to the same database (the two-connection case). */
+async function contract(db, { installed = false, connect } = {}) {
   passed = 0;
   {
     await db.query(`create table if not exists auth.users(id uuid primary key);
@@ -58,8 +68,8 @@ async function contract(db, { installed = false } = {}) {
       create table if not exists auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade,not_after timestamptz);
       create or replace function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}')$$;`);
     if (!installed) await db.query(read(MARKDOWN_PUBLISH));
-    const owner = randomUUID(), other = randomUUID(), sid = randomUUID(), workspace = randomUUID();
-    await db.query('insert into auth.users(id) values($1),($2)', [owner, other]);
+    const owner = randomUUID(), other = randomUUID(), stranger = randomUUID(), sid = randomUUID(), workspace = randomUUID();
+    await db.query('insert into auth.users(id) values($1),($2),($3)', [owner, other, stranger]);
     await db.query('insert into auth.sessions(id,user_id) values($1,$2)', [sid, owner]);
     const as = async (role, who, sql, values = []) => {
       await db.query('begin');
@@ -108,7 +118,8 @@ async function contract(db, { installed = false } = {}) {
       check((await db.query("select has_function_privilege($1,'public.life_blog_unpublish(uuid,bigint,uuid)','execute') value", [role])).rows[0].value, expected, role + (expected ? ' may' : ' may not') + ' call the withdrawal');
 
     // ---- A withdrawal before any publication ----
-    const operation = randomUUID();
+    const operation = randomUUID(), profileBefore = await profile(owner);
+    assert(profileBefore?.token, 'the first owner already has a profile (it published before)');
     check(await withdraw(first.id, 0, { operation }), { status: 'stored', revision: 1 }, 'expected revision 0 without a row: stored at publication revision 1');
     const placeholder = await publication(first.id);
     assert(placeholder, 'the withdrawal records a publication row'); passed++; console.log('PASS the withdrawal records a publication row');
@@ -119,6 +130,10 @@ async function contract(db, { installed = false } = {}) {
     await assert.rejects(withdraw(first.id, 1, { operation }), error => error.message === 'life_operation_mismatch', 'the same operation with another revision is a mismatch'); passed++; console.log('PASS the same operation id with another expected revision is refused');
     check(await withdraw(first.id, 0), { status: 'conflict', revision: 1 }, 'expected revision 0 with a row: conflict');
     check(await profile(owner).then(row => row.author), { name: '기존 공개 이름', intro: '기존 소개' }, 'an existing public name and intro are not touched');
+    check(await profile(owner), profileBefore, 'the existing profile row is unchanged: the same blog token (the public list address) as before');
+    // Another account that learned the operation id reads no receipt of the first owner.
+    check(await withdraw(first.id, 0, { operation, who: other }), { status: 'missing' }, 'another account calling with the first owner\'s post and operation id gets no receipt');
+    check(await profile(other), null, 'and that call left no profile row for the caller');
 
     // ---- The late first publication is refused on every publish path ----
     check(await publish(first.id, 0), { status: 'conflict', revision: 1 }, 'publish (text) expecting revision 0: conflict');
@@ -163,6 +178,11 @@ async function contract(db, { installed = false } = {}) {
     check(await profile(other), null, 'the other owner has no profile yet');
     check(await withdraw(foreign.id, 0), { status: 'missing' }, 'another owner\'s post: missing');
     check(await publication(foreign.id), null, 'and no row is recorded for it');
+    // The ownership check comes before anything is written for the caller.
+    check(await withdraw(foreign.id, 0, { who: stranger }), { status: 'missing' }, 'an account without a profile hits another owner\'s post: missing');
+    check(await withdraw(randomUUID(), 0, { who: stranger }), { status: 'missing' }, 'and a post that does not exist: missing');
+    check(await profile(stranger), null, 'neither call gave the caller a profile row');
+    check((await db.query('select count(*)::int value from haedo_blog_private.receipts where owner_id=$1', [stranger])).rows[0].value, 0, 'nor a receipt');
     check(await withdraw(foreign.id, 0, { who: other }), { status: 'stored', revision: 1 }, 'its owner withdraws before publication');
     check((await profile(other)).author, { name: '', intro: '' }, 'a profile with the default empty author is added so the owner can read the row');
     check((await rpc('life_blog_read', [foreign.id], { who: other })).publication.revision, 1, 'the owner without an earlier profile reads the withdrawn row');
@@ -177,6 +197,40 @@ async function contract(db, { installed = false } = {}) {
     check(removed.status, 'deleted', 'a post with only a withdrawn row is deleted (not refused as published)');
     check(await publication(foreign.id), null, 'its withdrawn row goes with it');
     check((await db.query('select count(*)::int value from haedo_blog_private.receipts where post_id=$1', [foreign.id])).rows[0].value, 0, 'and so do its receipts');
+
+    // ---- Two connections: a withdrawal and a first publication of the same never-public post ----
+    // Connection 1 withdraws (expected 0) and keeps its transaction open. Connection 2 then sends the first
+    // publication (expected 0). Both take the post's advisory lock first, so connection 2 waits for exactly
+    // that lock and, once connection 1 commits, sees the withdrawn row and ends in conflict. The order is
+    // fixed by the open transaction; nothing depends on timing.
+    assert.equal(typeof connect, 'function', 'a second connection is required');
+    const raced = v2(randomUUID(), '동시에 온 철회와 첫 게시'); await save(raced);
+    const holder = await connect(), sender = await connect();
+    try {
+      const claim = async client => {
+        await client.query('begin'); await client.query('set local role authenticated');
+        await client.query("select set_config('request.jwt.claims',$1,true),set_config('request.jwt.claim.sub',$2,true),set_config('request.jwt.claim.role','authenticated',true)", [JSON.stringify({ role: 'authenticated', sub: owner, session_id: sid }), owner]);
+      };
+      await claim(holder);
+      check((await holder.query('select public.life_blog_unpublish($1,$2,$3) value', [raced.id, 0, randomUUID()])).rows[0].value, { status: 'stored', revision: 1 }, 'connection 1 withdraws inside an open transaction');
+      check(await publication(raced.id), null, 'not visible to others before it commits');
+      await claim(sender);
+      const pid = (await sender.query('select pg_backend_pid() pid')).rows[0].pid;
+      const sending = sender.query('select public.life_blog_publish($1,$2,$3,$4,$5,$6) value', [raced.id, 1, randomUUID(), [], { name: '익명', intro: '' }, 0]).then(result => result.rows[0].value, error => ({ error: error.code + ' ' + error.message }));
+      let waiting = null;
+      for (let i = 0; i < 400 && !waiting; i++) {
+        const row = (await db.query("select wait_event_type as type,wait_event as event from pg_stat_activity where pid=$1 and state='active' and wait_event_type='Lock'", [pid])).rows[0];
+        if (row) waiting = row; else if (await Promise.race([sending.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 25))])) break;
+      }
+      check(waiting, { type: 'Lock', event: 'advisory' }, 'connection 2 (first publication, expected 0) waits for the post\'s advisory lock, not for a row');
+      await holder.query('commit');
+      check(await sending, { status: 'conflict', revision: 1 }, 'and ends in conflict once the withdrawal is committed');
+      await sender.query('commit');
+      const after = await publication(raced.id);
+      check({ revision: Number(after.revision), active: after.active }, { revision: 1, active: false }, 'one winner: the withdrawn row at revision 1, nothing public');
+    } finally {
+      for (const client of [holder, sender]) { await client.query('rollback').catch(() => {}); await client.end().catch(() => {}); }
+    }
   }
   return passed;
 }
@@ -184,7 +238,7 @@ async function main() {
   const pg = await startCluster({ label: 'blog-unpublish' }), db = await pg.connect();
   try {
     for (const file of BEFORE) await db.query(read(file));
-    const count = await contract(db);
+    const count = await contract(db, { connect: () => pg.connect() });
     console.log(`PASS withdrawal before publication SQL contract: ${count} checks; PostgreSQL ${(await db.query('show server_version')).rows[0].server_version}`);
   } finally { await db.end(); await pg.stop(); }
 }

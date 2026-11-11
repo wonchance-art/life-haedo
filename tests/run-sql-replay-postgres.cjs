@@ -288,9 +288,9 @@ async function main() {
     }
 
     {
-      const db = await pg.connect(await pg.cloneDatabase('replay_blog_withdraw'));
+      const withdrawDb = await pg.cloneDatabase('replay_blog_withdraw'), db = await pg.connect(withdrawDb);
       const log = console.log; let count;
-      try { console.log = () => {}; count = await require('./run-blog-unpublish-postgres.cjs').contract(db, { installed: true }); }
+      try { console.log = () => {}; count = await require('./run-blog-unpublish-postgres.cjs').contract(db, { installed: true, connect: () => pg.connect(withdrawDb) }); }
       finally { console.log = log; await db.end(); }
       assert(count >= 50, 'withdrawal-before-publication checks ran: ' + count);
       pass(`withdrawal before publication (20261111120000): ${count} checks on a fresh replayed copy`);
