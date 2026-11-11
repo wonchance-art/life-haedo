@@ -79,16 +79,22 @@ async function main() {
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await capture(page, 'reader-match', size); await selectMiddle(page);
       const position = await page.evaluate(() => scrollY); verify(`${size.width} selected middle is scrolled`, position > 400, position);
+      // 2026-11-11 (자료 읽기 M3): 읽던 줄은 화면의 같은 높이로 돌아온다. 메모를 쓰는 동안 본문 위에 알림 줄이 생겨 문서
+      // 높이가 달라져도 줄은 그대로여야 하므로, scrollY가 아니라 고른 구절이 화면에 놓인 높이를 비교한다(규칙 변경).
+      const quoteTop = () => page.locator('#lifeSourceText').evaluate((el, { raw, quote }) => { const range = document.createRange(), start = raw.indexOf(quote); range.setStart(el.firstChild, start); range.setEnd(el.firstChild, start + quote.length); return range.getBoundingClientRect().top; }, { raw, quote });
+      const pickedTop = await quoteTop(); verify(`${size.width} selected middle is on the reading line`, pickedTop > 100 && pickedTop < size.height - 100, pickedTop);
       await activateSticky(page.locator('#lifeExcerptToggle')); await page.locator('#lifeSourceTopic').fill('다시 읽은 질문'); await page.locator('#lifeSourceNote').fill('원래 문장의 둘째 생각을 이어 읽는다.');
       verify(`${size.width} excerpt shows exact middle quote`, await page.locator('#lifeSelectedQuote').textContent() === quote);
       await capture(page, 'reader-excerpt', size);
       await page.keyboard.press('Escape'); await frames(page);
       const closed = await page.evaluate(() => ({ y: scrollY, focus: document.activeElement?.id, expanded: document.querySelector('#lifeExcerptToggle').getAttribute('aria-expanded') }));
-      verify(`${size.width} closing excerpt restores reading position and toolbar focus`, closed.expanded === 'false' && closed.focus === 'lifeExcerptToggle' && Math.abs(closed.y - position) < 3, { ...closed, expectedY: position });
+      const closedTop = await quoteTop();
+      verify(`${size.width} closing excerpt restores reading position and toolbar focus`, closed.expanded === 'false' && closed.focus === 'lifeExcerptToggle' && Math.abs(closedTop - pickedTop) < 3, { ...closed, expectedY: position, top: closedTop, expectedTop: pickedTop });
       await activateSticky(page.locator('#lifeExcerptToggle')); assert.equal(await page.locator('#lifeSourceNote').inputValue(), '원래 문장의 둘째 생각을 이어 읽는다.');
       await activate(page.getByRole('button', { name: '선택 구절 모음에 추가', exact: true })); await settle(page); await frames(page);
       const b = await stored(page), record = b.records[0]; assert.equal(record.text, quote); assert.deepEqual(record.sourceRefs[0], { sourceId: source.sourceId, sourceVersionId: source.versionId, locator: { start: raw.indexOf(quote), end: raw.indexOf(quote) + quote.length } }); assert.equal(b.sourceVersions.find(v => v.id === source.versionId).contentText, raw);
-      verify(`${size.width} saving excerpt keeps reading position`, Math.abs(await page.evaluate(() => scrollY) - position) < 3);
+      const savedTop = await quoteTop();
+      verify(`${size.width} saving excerpt keeps reading position`, Math.abs(savedTop - pickedTop) < 3, { top: savedTop, expectedTop: pickedTop });
       await page.locator('#lifeSearchReturn').focus(); await page.keyboard.press('Enter'); await settle(page); await frames(page);
       verify(`${size.width} back preserves query and exact result focus`, await page.locator('#lifeSearch').inputValue() === quote && await result.evaluate(el => el === document.activeElement));
       await page.locator('#lifeSearch').fill('익명 샘플에 없는 검색어'); await capture(page, 'search-empty', size);
