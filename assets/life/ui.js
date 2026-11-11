@@ -5135,19 +5135,24 @@
         if (!reader.getClientRects().length && restoreWaits++ < 900) { requestAnimationFrame(restorePosition); return; }
         // This session's own position returns to the line that was being read (locator.anchor); the column may be
         // a different width now. Without one (the top of the text, an exact match or excerpt) the earlier rules apply.
+        let placed = false;
         if (formattedView) {
           readerWatch?.suppress(); markdown.adapter.scrollToOffset(locator.start);
-          if (locator.anchor && placeLine(locator.anchor)) { /* placed */ }
+          if (locator.anchor && placeLine(locator.anchor)) placed = true;
           else if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
         } else {
           const range = restoreSelection(locator);
           matchIndex = found.findIndex(item => item.start === locator.start && item.end === locator.end); showMatchCount();
-          if (locator.anchor && placeLine(locator.anchor)) { /* placed */ }
+          if (locator.anchor && placeLine(locator.anchor)) placed = true;
           else if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
           else { const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         }
         readingScrollY = global.scrollY;
-        lineKeeper?.set(readingLine.capture());
+        // The point that was put back stays the remembered one. Taking the line again here would name the first
+        // character of whichever line holds it at this width, and reopening at another width would then move a line
+        // each time.
+        const top = placed ? readingLine.top(locator.anchor) : null;
+        lineKeeper?.set(Number.isFinite(top) ? { ...locator.anchor, top, viewport: global.innerHeight } : readingLine.capture());
         positionRestored = true; scheduleHistory(); tellRecoveredDraft();
       };
       const tellRecoveredDraft = () => {

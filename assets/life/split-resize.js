@@ -17,7 +17,9 @@
  *   capture()  지금 읽는 줄의 한 점과 그 화면 높이 { top, viewport, … } 또는 null(본문이 읽는 줄에 걸치지 않음).
  *   top(anchor) 그 점이 지금 있는 화면 높이.
  *   기억한 점은 이 모듈이 아닌 것이 스크롤했을 때만 바뀐다. 그래서 너비가 여러 번 바뀌어도(끌기) 같은 글자로
- *   돌아오고 줄 단위로 밀리지 않으며, 사람이 스크롤하는 동안에는 보정이 끼어들지 않는다(너비가 바뀐 그때 한 번뿐). */
+ *   돌아오고 줄 단위로 밀리지 않으며, 사람이 스크롤하는 동안에는 보정이 끼어들지 않는다(너비가 바뀐 그때 한 번뿐).
+ *   줄은 스크롤이 멎은 뒤(120ms) 한 번만 잰다. 긴 원문 한 덩이에서 글자 위치를 재는 일은 스크롤 프레임마다 하기에는
+ *   비싸다. 아직 재지 않은 스크롤 뒤에 너비가 바뀌면, 본문을 잠깐 이전 너비로 되돌려 그때 화면에 있던 줄을 잰다. */
 (function (root) {
   'use strict';
   const STEP = 16, LARGE_STEP = 64;
@@ -203,24 +205,34 @@
   }
   function keepLine(host, adapter) {
     const doc = host.ownerDocument, view = doc.defaultView || root;
-    let anchor = null, width = null, dirty = false, frame = 0, paused = 0, expected = null, seenY = null, disposed = false;
+    const SETTLE = 120;
+    let anchor = null, width = null, dirty = false, timer = null, paused = 0, expected = null, seenY = null, lastY = null, disposed = false;
     const hostWidth = () => host.getBoundingClientRect().width;
     function measure() {
-      dirty = false;
+      dirty = false; view.clearTimeout(timer); timer = null;
       if (disposed || paused || !host.isConnected) return;
       // A width that differs from the last one seen means the layout already reflowed: what is on the reading
-      // line now is not what the person was reading. The observer below puts the remembered line back first.
+      // line now is not what the person was reading. The observer below takes the line at the earlier width.
       if (width !== null && Math.abs(hostWidth() - width) >= 0.5) return;
       anchor = adapter.capture(); seenY = view.scrollY;
+    }
+    // The line that was on screen before the reflow: lay the text out at its earlier width for one measurement.
+    // Used only when the page was scrolled after the last measurement and the width changed before the next one.
+    function measureAt(previous) {
+      dirty = false; view.clearTimeout(timer); timer = null;
+      const style = host.style, saved = { boxSizing: style.boxSizing, width: style.width, minWidth: style.minWidth, maxWidth: style.maxWidth };
+      Object.assign(style, { boxSizing: 'border-box', width: previous + 'px', minWidth: previous + 'px', maxWidth: previous + 'px' });
+      try { anchor = adapter.capture(); } finally { Object.assign(style, saved); }
+      seenY = view.scrollY;
     }
     function scrolled() {
       if (disposed) return;
       // This module's own correction is not a new place to read from.
       if (expected !== null && Math.abs(view.scrollY - expected) < 1.5) { expected = null; return; }
-      expected = null;
+      expected = null; lastY = view.scrollY;
       if (paused) return;
-      dirty = true;
-      if (!frame) frame = view.requestAnimationFrame(() => { frame = 0; if (dirty) measure(); });
+      // Measured once the scrolling has stopped, not in every scrolled frame.
+      dirty = true; view.clearTimeout(timer); timer = view.setTimeout(() => { timer = null; if (dirty) measure(); }, SETTLE);
     }
     function restore() {
       if (disposed || paused || !anchor || !host.isConnected) return false;
@@ -241,16 +253,16 @@
     function resized() {
       if (disposed || !host.isConnected) return;
       const now = hostWidth();
-      if (width !== null && Math.abs(now - width) >= 0.5) {
-        dirty = false;
-        // Only a line that was measured where the page still is can be put back. If something scrolled the page
-        // since (its event has not been looked at yet), the remembered line is another place: moving the page
-        // there would undo that scroll. Then the line is taken again from the layout as it is now.
-        // (The reflow itself may have shortened the page and pulled the scroll back to its end; that is not such a scroll.)
+      if (width !== null && Math.abs(now - width) >= 0.5 && !paused) {
+        // Only a line that was measured where the page still is can be put back. If the page was scrolled since
+        // (by the person a moment ago, or by the app in this very frame), the remembered line is another place and
+        // moving the page there would undo that scroll: the line is taken where the page is now, as it was laid
+        // out before this reflow. (A reflow that shortened the page and pulled the scroll back to its end is not such a scroll.)
         const limit = Math.max(0, doc.documentElement.scrollHeight - view.innerHeight);
         const still = seenY !== null && (Math.abs(view.scrollY - seenY) < 1.5 || view.scrollY < seenY && view.scrollY >= limit - 1.5);
-        if (still) restore();
-        else if (!paused) { width = now; anchor = adapter.capture(); seenY = view.scrollY; }
+        if (!still) measureAt(width);
+        dirty = false; view.clearTimeout(timer); timer = null;
+        restore();
       }
       width = now;
     }
@@ -260,18 +272,21 @@
     if (observer) observer.observe(host); else view.addEventListener('resize', windowResized);
     view.addEventListener('scroll', scrolled, { passive: true });
     return {
-      // The line being read now. A scroll whose event has not arrived yet (it fires in the next frame) is measured here.
+      // The line being read now. A scroll that has not been measured yet (or whose event has not arrived) is measured here.
       get() { if (dirty || view.scrollY !== seenY) measure(); return anchor ? { ...anchor } : null; },
-      // The last line that was measured, without looking at the page again (for when the screen is already changing).
-      peek() { return anchor ? { ...anchor } : null; },
-      set(value) { anchor = value ? { ...value } : null; dirty = false; seenY = view.scrollY; if (host.isConnected) width = hostWidth(); },
+      // The line last read, for when the screen may already be changing (a reader closing): a pending measurement is
+      // taken only if the page is still where the last scroll left it; otherwise the last measured line stands.
+      peek() { if (dirty && lastY !== null && Math.abs(view.scrollY - lastY) < 1.5) measure(); return anchor ? { ...anchor } : null; },
+      // The caller has just put the page where this line is: the scroll event of that move (it arrives in the next
+      // frame) is not a new place to read from, so the given point stays the remembered one.
+      set(value) { anchor = value ? { ...value } : null; dirty = false; view.clearTimeout(timer); timer = null; seenY = lastY = expected = view.scrollY; if (host.isConnected) width = hostWidth(); },
       restore,
       pause() { if (dirty || view.scrollY !== seenY) measure(); paused++; },
       resume() { paused = Math.max(0, paused - 1); },
       dispose() {
         if (disposed) return;
         disposed = true;
-        if (frame) view.cancelAnimationFrame(frame);
+        view.clearTimeout(timer);
         if (resizeFrame) view.cancelAnimationFrame(resizeFrame);
         observer?.disconnect();
         view.removeEventListener('resize', windowResized);
