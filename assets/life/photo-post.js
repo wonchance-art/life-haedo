@@ -35,6 +35,8 @@
   const posts = () =>
     root.HaedoLife?.PagePosts ||
     (typeof require === "function" && require("./page-posts.js"));
+  const syncCommon = () => root.HaedoLife?.SyncCommon ||
+    (typeof require === "function" && require("./sync-common.js"));
   const markdown = () => root.HaedoLife?.PostMarkdown ||
     (typeof require === "function" && require("./post-markdown.js"));
   const isMarkdown = (d) => d?.format === "life-post-md-v1";
@@ -580,8 +582,14 @@
   }
   // What the title, body and attachments hold, for comparing two documents.
   // A Markdown post's body is its Markdown text (it has no ops to compare).
-  const contentKey = (d) =>
-    JSON.stringify([d.title, isMarkdown(d) ? { markdown: d.markdown } : normalize(d).doc.ops, d.attachments || []]);
+  // Written with sorted keys (the sync modules' canonical text), so the same
+  // content compares equal whatever order its keys arrive in: a post that came
+  // back from the server has them in another order than the editor wrote.
+  function contentKey(d) {
+    const value = [d.title, isMarkdown(d) ? { markdown: d.markdown } : normalize(d).doc.ops, d.attachments || []];
+    const canonical = syncCommon()?.canonical;
+    return canonical ? canonical(value) : JSON.stringify(value);
+  }
   // A short fingerprint of that content, small enough to keep beside a device
   // copy (53-bit string hash and the length; not a security digest).
   function textHash(value) {
@@ -596,7 +604,14 @@
     b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
     return text.length.toString(36) + "." + (4294967296 * (2097151 & b) + (a >>> 0)).toString(36);
   }
-  const contentHash = (d) => textHash(contentKey(d));
+  // The scheme is part of the fingerprint: one written from unsorted text by
+  // an earlier version, or by a page that lacks the shared module, never equals
+  // a sorted one. It then reads as "changed", which never overwrites anything.
+  // (A device copy holds its own input, not what was stored, so an old
+  // fingerprint cannot be recomputed from it.)
+  // keyHash takes a contentKey() already made (the editor keeps one as its baseline).
+  const keyHash = (key) => (syncCommon()?.canonical ? "c1." : "j0.") + textHash(key);
+  const contentHash = (d) => keyHash(contentKey(d));
   const isEmpty = (d) =>
     !String(d.title || "").trim() &&
     !(d.attachments || []).length &&
@@ -624,9 +639,12 @@
             !Number.isSafeInteger(v.revision) || typeof v.savedAt !== "string" ||
             !(v.replaces === null || plain(v.replaces) && typeof v.replaces.id === "string"))
           return null;
-        // Copies written before these fields existed have neither.
+        // A copy written before the fingerprint existed has none.
         if (typeof v.base !== "string") v.base = null;
-        if (typeof v.askedAt !== "string") v.askedAt = null;
+        // An earlier version noted when a copy had been offered and removed it
+        // 30 days later. Nothing reads that note any more: only the writer's
+        // own choice removes a copy.
+        delete v.askedAt;
         return v;
       } catch (_) {
         return null;
@@ -671,15 +689,6 @@
         const k = key(ws, postId);
         try {
           if (k && store) store.removeItem(k);
-        } catch (_) {}
-      },
-      // Notes when a copy whose draft is gone was offered (see the editor).
-      markAsked(ws, postId, at = new Date().toISOString()) {
-        const k = key(ws, postId);
-        if (!k || !store) return;
-        try {
-          const copy = parse(ws, postId, store.getItem(k));
-          if (copy && !copy.askedAt) store.setItem(k, JSON.stringify({ ...copy, askedAt: at }));
         } catch (_) {}
       },
       // Newest first.
@@ -1379,6 +1388,7 @@
     describeChanges,
     contentKey,
     contentHash,
+    keyHash,
     textHash,
     isEmpty,
     recovery,

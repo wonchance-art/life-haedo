@@ -128,6 +128,24 @@ test('emptiness and content comparison ignore what normalization changes only in
   assert.notEqual(M.contentKey(md('첫 문단\n')), M.contentKey(md('다른 문단\n')), 'Markdown bodies are compared');
   assert.equal(M.contentKey(md('같은 문단\n')), M.contentKey(md('같은 문단\n')));
   assert.notEqual(M.contentHash(md('첫 문단\n')), M.contentHash(md('다른 문단\n')));
+  // The same content in another key order is the same content: a post that came back from the server
+  // (jsonb) has its keys in another order than the editor wrote them.
+  const order = value => Array.isArray(value) ? value.map(order) : value && typeof value === 'object' && !(value instanceof Blob) ? Object.fromEntries(Object.keys(value).reverse().map(key => [key, order(value[key])])) : value;
+  const written = doc([{ insert: '항목' }, { attributes: { list: 'bullet', align: 'center' }, insert: '\n' }, { insert: { photo: { id: p.id, alt: '', caption: '설명' } } }, { insert: '\n' }],
+    { title: '순서', photos: [p], attachments: [{ type: 'book', title: '책', creator: '저자', url: 'https://example.org/b' }] });
+  const returned = { ...written, ops: order(written.ops), attachments: order(written.attachments) };
+  assert.notEqual(JSON.stringify(returned.ops), JSON.stringify(written.ops), 'the fixture really differs in key order');
+  assert.equal(M.contentKey(returned), M.contentKey(written));
+  assert.equal(M.contentHash(returned), M.contentHash(written));
+  assert.equal(M.contentKey(written), require('../assets/life/sync-common.js').canonical([written.title, M.normalize(written).doc.ops, written.attachments]), 'the shared sorted-key text, not a second implementation');
+  // The fingerprint names its scheme, so one written from unsorted text by an earlier version never
+  // equals a sorted one: it reads as "changed", the side that overwrites nothing.
+  assert.match(M.contentHash(written), /^c1\.[0-9a-z]+\.[0-9a-z]+$/);
+  assert.notEqual(M.contentHash(written), M.textHash(JSON.stringify([written.title, M.normalize(written).doc.ops, written.attachments])));
+  assert.notEqual(M.contentHash(written), M.textHash(M.contentKey(written)), 'even over the same text, an unversioned fingerprint is not a match');
+  // The editor fingerprints a content key it already holds (its revision baseline) by the same scheme.
+  assert.equal(M.keyHash(M.contentKey(written)), M.contentHash(written));
+  assert.equal(M.keyHash(M.contentKey(returned)), M.contentHash(written));
   // The fingerprint kept beside a device copy follows the content key and is short.
   assert.equal(M.contentHash(a), M.contentHash({ ...structuredClone(a), id: core.id(), revision: 9 }));
   assert.notEqual(M.contentHash(a), M.contentHash(b));
@@ -157,18 +175,22 @@ test('recovery copies: device-only, per account, workspace and draft, exact cont
   assert.equal(copy.ops[0].insert, draft.ops[0].insert);
   assert.deepEqual(copy.ops[1], { insert: { photo: { id: p.id, caption: '설명', alt: '' } } }, 'photo references only');
   assert.deepEqual([copy.revision, copy.replaces, copy.attachments.length], [4, { id: 'saved-1', revision: 2 }, 1]);
-  // What was stored when the copy was taken, and whether it was already offered, travel with it.
-  assert.deepEqual([copy.base, copy.askedAt], [null, null], 'unknown unless given');
+  // What was stored when the copy was taken travels with it.
+  assert.equal(copy.base, null, 'unknown unless given');
   assert.equal(recovery.write('ws-a', draft, M.contentHash(draft)), true);
   assert.equal(recovery.read('ws-a', draft.id).base, M.contentHash(draft));
-  recovery.markAsked('ws-a', draft.id, '2026-11-11T00:00:00.000Z');
-  recovery.markAsked('ws-a', draft.id, '2026-12-01T00:00:00.000Z');
-  assert.equal(recovery.read('ws-a', draft.id).askedAt, '2026-11-11T00:00:00.000Z', 'the first offer is the one that counts');
   assert.equal(recovery.list('ws-a')[0].base, M.contentHash(draft));
-  // A copy written before these fields existed reads as unknown, never as a match.
-  const legacy = JSON.parse(store.getItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id)); delete legacy.base; delete legacy.askedAt;
+  // A copy written before the fingerprint existed reads as unknown, never as a match.
+  const legacy = JSON.parse(store.getItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id)); delete legacy.base;
+  // An earlier version noted when a copy had been offered and removed it 30 days later. Nothing reads
+  // that note now, and nothing removes a copy but the writer's choice: the API has no clock in it.
+  legacy.askedAt = '2020-01-01T00:00:00.000Z';
   store.setItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id, JSON.stringify(legacy));
-  assert.deepEqual([recovery.read('ws-a', draft.id).base, recovery.read('ws-a', draft.id).askedAt], [null, null]);
+  assert.equal(recovery.read('ws-a', draft.id).base, null);
+  assert.equal('askedAt' in recovery.read('ws-a', draft.id), false, 'the old note is not read');
+  assert.equal('askedAt' in recovery.list('ws-a')[0], false);
+  assert.equal(recovery.read('ws-a', draft.id).title, draft.title, 'and the copy is still there');
+  assert.deepEqual(Object.keys(recovery).sort(), ['clear', 'list', 'read', 'write'], 'a copy leaves only by clear()');
   assert(!JSON.stringify([...store.map.values()]).includes('blob'), 'no photo bytes or object URLs in localStorage');
   assert.deepEqual([...store.map.keys()], ['haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id]);
   // Another account in the same browser reads nothing, even for the same workspace and draft ids.

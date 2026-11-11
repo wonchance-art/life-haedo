@@ -1,6 +1,7 @@
 /* A device copy never overwrites what was stored after it was taken (2026-11-11
- * review MAJOR-1), and copies of drafts that no longer exist are settled by a
- * stated rule. Real app, synthetic account and server, real IndexedDB and
+ * review MAJOR-1), and a copy is removed only by the writer's choice: copies of
+ * drafts that were deleted or saved elsewhere are shown every time until then
+ * (review MAJOR-2). Real app, synthetic account and server, real IndexedDB and
  * localStorage in Chromium; two devices are two browser contexts sharing one
  * synthetic server, and "another device changed it" inside one context is a
  * write through the app's own storage. */
@@ -138,41 +139,65 @@ H.run(__filename, {
     const all = await H.stored(page, list => list.length === 3 && list.some(row => row.text.includes('셋째 미보관 입력')), 'a third draft');
     assert(!all.find(row => row.id === second.id).text.includes('셋째'), 'the stored draft is untouched');
   },
-  // A copy whose draft was deleted elsewhere is offered once, as a new draft, and says when it will be removed.
-  async 'copy-of-a-draft-deleted-elsewhere'({ open }) {
-    const { page } = await open();
-    await H.home(page); await H.writer(page);
-    await page.locator('#photoTitle').fill('지워질 초안');
-    await page.locator('.ql-editor').click(); await page.keyboard.type('지워질 초안의 본문.');
-    await draftWith(page, '지워질 초안의 본문.');
-    await H.pasteBody(page, { text: LONG });
-    await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('50,000자'), 'kept on this device only');
-    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-    // Deleted the way another device's deletion removes it (this device's editor was not asked).
+  // Copies whose drafts were deleted elsewhere are shown every time 글쓰기 opens, one at a time with how many more
+  // wait, until the writer chooses. Nothing else removes them: not a second look, not the clock.
+  async 'copies-of-drafts-deleted-elsewhere'({ open }) {
+    const dialogs = [];
+    const { page } = await open({ page: { dialogs } });
+    await H.home(page);
+    for (const title of ['지워질 초안 하나', '지워질 초안 둘']) {
+      await H.writer(page);
+      await page.locator('#photoTitle').fill(title);
+      await page.locator('.ql-editor').click(); await page.keyboard.type(title + '의 본문.');
+      await draftWith(page, title + '의 본문.');
+      await H.pasteBody(page, { text: LONG });
+      await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('50,000자'), 'kept on this device only');
+      await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    }
+    assert.equal((await copies(page)).length, 2);
+    // Deleted the way another device's deletion removes them (this device's editor was not asked).
     await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); for (const row of await s.listPhotoPosts(w)) await s.deletePhotoPost(w, row.id, row.revision); });
-    await H.home(page); await H.writer(page);
-    await page.locator('.photo-recovered').waitFor();
-    const offered = await band(page);
-    assert(offered.text.includes('지운 초안의 입력이라 새 초안으로 복구합니다') && offered.text.includes('지금 고르지 않으면 30일 뒤 지웁니다'), offered.text);
-    assert.deepEqual(offered.buttons, ['새 초안으로 복구', '버리기']);
-    assert.equal(typeof (await copies(page))[0].askedAt, 'string', 'the offer is noted');
-    // Left undecided: it is not offered again and the editor is not locked again, but it is not removed yet.
-    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    const look = async () => {
+      await H.home(page); await H.writer(page);
+      await page.locator('.photo-recovered').waitFor();
+      return band(page);
+    };
+    // The writer looks three times without choosing (the first time the page is simply reloaded).
+    for (const time of ['first', 'second', 'third']) {
+      const offered = await look();
+      assert(offered.text.startsWith('보관하지 못한 입력이 이 기기에 남아 있습니다'), time + ': ' + offered.text);
+      assert(offered.text.includes('지운 초안이나 글의 입력입니다') && offered.text.includes('새 초안으로 복구합니다') && offered.text.endsWith('외 1건'), time + ': ' + offered.text);
+      assert(!/30일|지웁니다/.test(offered.text), 'no deadline is stated because there is none: ' + offered.text);
+      assert.deepEqual(offered.buttons, ['새 초안으로 복구', '버리기']);
+      assert.equal(await H.quill(page, q => q.isEnabled()), true, time + ': the editor is not locked for a copy that restores as its own draft');
+      assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.photo-recovered button')), true, time + ': the band has the focus');
+      assert.equal((await copies(page)).length, 2, time + ': both copies are still there');
+      assert.equal((await copies(page)).some(copy => 'askedAt' in copy), false, 'no "already asked" note is written');
+    }
+    // The device clock moves a year ahead: nothing is removed by time.
+    await H.home(page);
+    await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 366 * 86400000; });
     await H.writer(page);
-    assert.equal(await band(page), null, 'asked once');
-    assert.equal(await H.quill(page, q => q.isEnabled()), true);
-    assert.equal((await copies(page)).length, 1, 'kept for now');
-    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-    // 29 days after the offer it is still there; after 30 it is removed, as the offer said.
-    const age = days => page.evaluate(days => { for (const key of Object.keys(localStorage)) if (key.startsWith('haedo_life_post_recovery_v1:')) { const copy = JSON.parse(localStorage.getItem(key)); copy.askedAt = new Date(Date.now() - days * 86400000).toISOString(); localStorage.setItem(key, JSON.stringify(copy)); } }, days);
-    await age(29); await H.writer(page);
-    assert.equal((await copies(page)).length, 1);
-    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
-    await age(31); await H.writer(page);
-    assert.equal((await copies(page)).length, 0, 'removed 30 days after it was offered');
+    await page.locator('.photo-recovered').waitFor();
+    assert.equal((await copies(page)).length, 2, 'a year later both copies are still there');
+    // An "already asked" note left by the earlier version changes nothing either.
+    await page.evaluate(() => { for (const key of Object.keys(localStorage)) if (key.startsWith('haedo_life_post_recovery_v1:')) { const copy = JSON.parse(localStorage.getItem(key)); copy.askedAt = '2020-01-01T00:00:00.000Z'; localStorage.setItem(key, JSON.stringify(copy)); } });
+    assert((await look()).text.endsWith('외 1건'));
+    assert.equal((await copies(page)).length, 2);
+    // Choosing moves to the next one; the editor and what is typed in it stay as they are.
+    await page.locator('.ql-editor').click(); await page.keyboard.type('띠가 있어도 쓰던 글.');
+    await page.getByRole('button', { name: '버리기', exact: true }).click();
+    await H.until(() => copies(page), list => list.length === 1, 'one copy discarded after confirmation');
+    const next = await band(page);
+    assert(next && !next.text.includes('외 '), 'the last one is shown without a count: ' + JSON.stringify(next));
+    assert.equal(await H.bodyText(page), '띠가 있어도 쓰던 글.\n');
+    await page.getByRole('button', { name: '버리기', exact: true }).click();
+    await H.until(() => copies(page), list => list.length === 0, 'the other one discarded');
     assert.equal(await band(page), null);
+    assert.equal(dialogs.filter(text => text.startsWith('confirm:이 기기에 남아 있는 입력을 버릴까요?')).length, 2);
+    await draftWith(page, '띠가 있어도 쓰던 글.');
   },
-  // Choosing to restore such a copy makes a new draft of it.
+  // Restoring such a copy makes a separate draft, after what the editor holds is stored first.
   async 'copy-of-a-deleted-draft-restored'({ open }) {
     const { page } = await open();
     await H.home(page); await H.writer(page);
@@ -186,11 +211,127 @@ H.run(__filename, {
     await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); for (const row of await s.listPhotoPosts(w)) await s.deletePhotoPost(w, row.id, row.revision); });
     await H.home(page); await H.writer(page);
     await page.locator('.photo-recovered').waitFor();
+    // The writer has started something else in the editor meanwhile.
+    await page.locator('#photoTitle').fill('지금 쓰던 글');
+    await page.locator('.ql-editor').click(); await page.keyboard.type('복구 전에 쓰던 문장');
     await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
-    const rows = await draftWith(page, '지워진 뒤에도 남은 입력.');
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0].text, '지워질 초안의 본문. 지워진 뒤에도 남은 입력.\n');
+    await H.until(() => H.bodyText(page), text => text === '지워질 초안의 본문. 지워진 뒤에도 남은 입력.\n', 'the kept input is in the editor');
+    const rows = await H.stored(page, list => list.length === 2 && list.some(row => row.text.includes('지워진 뒤에도 남은 입력.')), 'both are stored drafts');
+    assert(rows.some(row => row.title === '지금 쓰던 글' && row.text === '복구 전에 쓰던 문장\n' && row.status === 'draft'), 'what the editor held was stored first');
+    assert.deepEqual(rows.find(row => row.text.includes('지워진 뒤에도')).replaces, null, 'the restored copy is a draft of its own');
     await H.until(() => copies(page), list => list.length === 0, 'copy done');
+    assert.equal(await band(page), null);
+  },
+  // A draft with a device copy is saved as a post from another device (same id). The copy is shown by 글쓰기 and by
+  // 글 수정 of that post, and restores as a separate draft: the saved post is not overwritten.
+  async 'copy-of-a-draft-saved-on-another-device'({ open }) {
+    const { page, context } = await open();
+    await dying(context);
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('다른 기기에서 저장될 초안');
+    await page.locator('.ql-editor').click(); await page.keyboard.type('보관된 앞부분.');
+    const id = (await draftWith(page, '보관된 앞부분.'))[0].id;
+    await page.evaluate(() => { window.__dying = true; });
+    await page.keyboard.type(' 올리지 못한 뒷부분.');
+    await hide(page);
+    await H.home(page);
+    // The other device saves the draft as a post, as its 글 저장 does: the same id, now a saved post.
+    const saveElsewhere = body => page.evaluate(async ({ id, body }) => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); d.status = 'saved'; if (body) d.ops = [{ insert: body + '\n' }]; d.updatedAt = new Date().toISOString(); await s.savePhotoPost(w, d, d.revision); }, { id, body });
+    await saveElsewhere(null);
+    await H.home(page);
+    assert.deepEqual((await H.records(page)).map(row => [row.id, row.status]), [[id, 'saved']]);
+    assert.equal((await copies(page)).length, 1);
+    // 글쓰기 shows it.
+    await H.writer(page);
+    await page.locator('.photo-recovered').waitFor();
+    const onCompose = await band(page);
+    assert(onCompose.text.includes('저장한 글이 된 초안의 입력입니다') && onCompose.text.includes('새 초안으로 복구합니다'), onCompose.text);
+    assert.deepEqual(onCompose.buttons, ['새 초안으로 복구', '버리기']);
+    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    // 글 수정 of that post shows it too, without locking the revision.
+    await page.locator('.home-post .home-post-open').first().click(); await page.locator('.photo-article').waitFor();
+    await revise(page);
+    await page.locator('.photo-recovered').waitFor();
+    const onRevise = await band(page);
+    assert(onRevise.text.includes('저장한 글이 된 초안의 입력입니다'), onRevise.text);
+    assert.deepEqual(onRevise.buttons, ['새 초안으로 복구', '버리기']);
+    assert.equal(await H.quill(page, q => q.isEnabled()), true);
+    assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.photo-recovered button')), true, 'the band has the focus');
+    await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
+    await H.until(() => H.bodyText(page), text => text === '보관된 앞부분. 올리지 못한 뒷부분.\n', 'the kept input is in the editor');
+    const rows = await H.stored(page, list => list.length === 2 && list.some(row => row.status === 'draft' && row.text.includes('올리지 못한 뒷부분.')), 'stored as a draft of its own');
+    assert.deepEqual(rows.find(row => row.status === 'draft').replaces, null, 'it does not revise the saved post');
+    assert.equal(rows.find(row => row.id === id).text, '보관된 앞부분.\n', 'the saved post is untouched');
+    assert.equal(rows.find(row => row.id === id).status, 'saved');
+    await H.until(() => copies(page), list => list.length === 0, 'copy done');
+    // When the other device saved exactly the kept input, nothing is left to offer.
+    await page.getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    const second = (await H.records(page)).find(row => row.status === 'draft').id;
+    await page.locator('#homeTab-drafts').click(); await page.locator('.home-draft[data-draft-id="' + second + '"] .home-draft-open').click(); await page.locator('#photoTitle').waitFor();
+    await page.evaluate(() => { window.__dying = true; });
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 덧.');
+    await hide(page);
+    await H.home(page);
+    await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); d.status = 'saved'; d.ops = [{ insert: '보관된 앞부분. 올리지 못한 뒷부분. 덧.\n' }]; await s.savePhotoPost(w, d, d.revision); }, second);
+    await H.home(page); await H.writer(page);
+    await H.sleep(500);
+    assert.equal(await band(page), null, 'the saved post already holds that input');
+    assert.equal((await copies(page)).length, 0);
+  },
+  // 현재 입력을 새 초안으로 보관 stores the input under a new id. Input typed after that and lost with the page
+  // still continues that new draft: its copy restores in place.
+  async 'copy-after-keeping-input-as-a-new-draft'({ open, problems, name }) {
+    const { page, context } = await open();
+    await dying(context);
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('두 탭 초안');
+    await page.locator('.ql-editor').click(); await page.keyboard.type('처음 보관한 문장.');
+    await draftWith(page, '처음 보관한 문장.');
+    const other = await H.newPage(context, problems, name);
+    await other.goto(page.url()); await other.locator('.ql-editor').waitFor();
+    await other.locator('.ql-editor').click(); await other.keyboard.press('Control+End'); await other.keyboard.type(' 다른 탭에서 덧붙임.');
+    await draftWith(other, '다른 탭에서 덧붙임.');
+    await page.bringToFront();
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 이 탭에서 계속 쓴 문장.');
+    await H.until(() => H.status(page), value => value.state === 'error', 'the other tab\'s change is a conflict here');
+    await page.getByRole('button', { name: '현재 입력을 새 초안으로 보관', exact: true }).click();
+    const kept = (await H.stored(page, list => list.length === 2 && list.some(row => row.text.includes('이 탭에서 계속 쓴 문장.')), 'the input is a new draft')).find(row => row.text.includes('이 탭에서 계속 쓴 문장.'));
+    await H.until(() => H.status(page), value => value.text === '자동 저장됨', 'settled');
+    await page.evaluate(() => { window.__dying = true; });
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 새 초안에서 잃은 입력');
+    await hide(page);
+    const copy = (await copies(page)).find(item => item.id === kept.id);
+    assert(copy, 'the lost input is kept under the new draft');
+    assert.equal(copy.base, await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return HaedoLife.PhotoPost.contentHash(await s.readPhotoPost(w, id)); }, kept.id), 'the copy records what the new draft holds, not what the conflicted one held');
+    await page.close({ runBeforeUnload: false });
+    const again = await H.newPage(context, problems, name);
+    await H.home(again);
+    await openDraft(again, kept.id);
+    await again.locator('.photo-recovered').waitFor();
+    assert.deepEqual((await band(again)).buttons, ['복구', '버리기'], 'it continues the new draft: ' + (await band(again)).text);
+    await again.getByRole('button', { name: '복구', exact: true }).click();
+    await H.stored(again, list => list.length === 2 && list.some(row => row.id === kept.id && row.text.includes('새 초안에서 잃은 입력')), 'restored in place');
+  },
+  // 글쓰기 reuses an empty draft left in storage. Input lost with the page continues that draft too.
+  async 'copy-of-a-reused-empty-draft'({ open }) {
+    const { page, context } = await open();
+    await dying(context);
+    await H.home(page);
+    const id = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return (await s.savePhotoPost(w, HaedoLife.PhotoPost.create(HaedoLife.Core.id), 0)).id; });
+    await H.home(page); await H.writer(page);
+    await page.evaluate(() => { window.__dying = true; });
+    await page.locator('.ql-editor').click(); await page.keyboard.type('빈 초안에 쓰다 잃은 입력');
+    await hide(page);
+    const copy = (await copies(page))[0];
+    assert.equal(copy.id, id, 'the empty draft was reused');
+    assert.equal(copy.base, await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return HaedoLife.PhotoPost.contentHash(await s.readPhotoPost(w, id)); }, id), 'the copy records what the empty draft holds');
+    await H.home(page); await H.writer(page);
+    await page.locator('.photo-recovered').waitFor();
+    assert.deepEqual((await band(page)).buttons, ['복구', '버리기'], (await band(page)).text);
+    assert.equal(await H.quill(page, q => q.isEnabled()), false, 'a copy of the open draft is decided before typing over it');
+    await page.getByRole('button', { name: '복구', exact: true }).click();
+    const rows = await draftWith(page, '빈 초안에 쓰다 잃은 입력');
+    assert.deepEqual(rows.map(row => row.id), [id], 'restored into the same draft');
   },
   // Deleting a draft or a post in this app removes its device copies with it.
   async 'copies-leave-with-what-is-deleted-here'({ open }) {

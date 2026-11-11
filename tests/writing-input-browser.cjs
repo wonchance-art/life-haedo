@@ -244,8 +244,11 @@ H.run(__filename, {
     await H.writer(page);
     await page.locator('.photo-recovered').waitFor();
     await H.until(() => page.evaluate(() => document.activeElement === document.querySelector('.photo-recovered button')), focused => focused, 'the band\'s first choice has the focus when 글쓰기 opens on a kept copy');
-    await page.getByRole('button', { name: '복구', exact: true }).click();
+    assert((await page.locator('.photo-recovered-text').textContent()).includes('보관된 적 없는 새 글의 입력입니다'));
+    assert.equal(await H.quill(page, q => q.isEnabled()), true, 'no draft is open for this copy to overwrite: the editor is not locked');
+    await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
     await H.until(() => H.bodyText(page), text => text.length > 50000, 'the new post\'s input is offered when writing again');
+    assert.deepEqual(await H.records(page), [], 'the empty new post was reused: no extra draft');
     await page.getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('#homeComposition[aria-busy="false"]').waitFor();
     await H.writer(page);
