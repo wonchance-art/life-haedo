@@ -137,6 +137,38 @@ async function main() {
       await page.keyboard.press('Escape'); await frames(page);
       state = await layout(page, '#lifeSourceDetails'); assert.equal(state.hidden, true); assert.equal(state.focus, 'lifeSourceInfoToggle'); await unmoved(page, before, 'Escape inside the panel');
 
+      // 2026-11-11 독립 검수: Tab past the last control of the open panel. What follows the panel in the document is
+      // the top of the text; focus used to go there, the page jumped to the top and the open panel covered it.
+      // Now the panel closes and focus returns to its button; the reading line does not move.
+      for (const [trigger, sheet] of [['#lifeSourceInfoToggle', '#lifeSourceDetails'], ['#lifeReaderArrange', '#lifeReaderArrangePanel']]) {
+        await R.pressAt(page, trigger); assert.equal((await layout(page, sheet)).hidden, false);
+        let inside = 0, left = false;
+        for (let step = 0; step < 40 && !left; step++) {
+          await page.keyboard.press('Tab'); await frames(page);
+          if (await page.evaluate(sheet => !!document.activeElement.closest(sheet), sheet)) inside++; else left = inside > 0;
+          await unmoved(page, before, 'Tab step ' + (step + 1) + ' through ' + sheet);
+        }
+        assert(inside >= 1 && left, 'Tab went through the panel and past its last control (' + inside + ' stops)');
+        state = await layout(page, sheet);
+        assert.equal(state.hidden, true, 'the panel closed'); assert.equal(state.expanded, 'false'); assert.equal('#' + state.focus, trigger, 'focus is back on the button that opened it');
+        const shown = await page.evaluate(() => { const box = document.activeElement.getBoundingClientRect(), hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2); return document.activeElement.contains(hit); });
+        assert.equal(shown, true, 'the focused control is not covered');
+        // Tab from there goes on along the tool row; the panel does not open again by itself.
+        await page.keyboard.press('Tab'); await frames(page);
+        assert.equal((await layout(page, sheet)).hidden, true);
+        if (await page.evaluate(() => !!document.activeElement.closest('.life-reader-dock'))) await unmoved(page, before, 'Tab after the panel closed');
+        await page.evaluate(() => document.activeElement.blur()); await page.evaluate(y => scrollTo({ top: y, behavior: 'instant' }), before.scrollY); await frames(page);
+      }
+      // Focus leaving the tool row another way (Shift+Tab before its first control) also closes an open panel: it never covers what is focused next.
+      await R.pressAt(page, '#lifeSourceInfoToggle'); assert.equal((await layout(page, '#lifeSourceDetails')).hidden, false);
+      for (let step = 0; step < 12 && !await atFirst(); step++) await page.keyboard.press('Shift+Tab');
+      assert(await atFirst()); assert.equal((await layout(page, '#lifeSourceDetails')).hidden, false, 'still open while focus is in the tool row');
+      await page.keyboard.press('Shift+Tab'); await frames(page);
+      const away = await page.evaluate(() => ({ inDock: !!document.activeElement.closest('.life-reader-dock'), body: document.activeElement === document.body }));
+      if (!away.inDock && !away.body) assert.equal((await layout(page, '#lifeSourceDetails')).hidden, true, 'the panel closed when focus left the tool row');
+      else assert.fail('Shift+Tab before the first tool did not move focus out of the tool row: ' + JSON.stringify(away));
+      await page.evaluate(() => document.activeElement.blur()); await page.evaluate(y => scrollTo({ top: y, behavior: 'instant' }), before.scrollY); await frames(page);
+
       // At the top of the document the panels open the same way and move nothing.
       await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await frames(page);
       const heading = await R.rect(page, '.life-reader-heading');

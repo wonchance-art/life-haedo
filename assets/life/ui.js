@@ -4473,6 +4473,15 @@
         const stops = [...article.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]')]
           .filter(item => item.tabIndex >= 0 && !item.disabled && (item.checkVisibility ? item.checkVisibility() : item.getClientRects().length > 0));
         const next = stops[stops.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1)];
+        // Tab past the last control of an open panel: what follows it in the document is the top of the text, far
+        // above the line being read, and the open panel would cover it. The panel closes and focus returns to its
+        // button (as Escape does); from there Tab goes on along the tool row.
+        const openSheet = dock.querySelector(':scope > .life-reader-sheet:not([hidden])');
+        if (!event.shiftKey && openSheet?.contains(document.activeElement) && (!next || !dock.contains(next))) {
+          event.preventDefault(); openSheet.closeSheet?.();
+          dock.querySelector('[aria-controls="' + openSheet.id + '"]')?.focus({ preventScroll: true });
+          return;
+        }
         if (!stops.includes(document.activeElement) || !next || !dock.contains(next)) return;
         event.preventDefault(); next.focus({ preventScroll: true });
         const sheet = next.closest('.life-reader-sheet');
@@ -4480,6 +4489,12 @@
         const frame = sheet.getBoundingClientRect(), box = next.getBoundingClientRect();
         if (box.top < frame.top + 8) sheet.scrollTop -= frame.top + 8 - box.top;
         else if (box.bottom > frame.bottom - 8) sheet.scrollTop += box.bottom - frame.bottom + 8;
+      });
+      // Focus that leaves the tool row and its panel some other way (Shift+Tab before the first tool, a script)
+      // closes an open panel, so it never covers what is focused next.
+      dock.addEventListener('focusout', event => {
+        if (!event.relatedTarget || dock.contains(event.relatedTarget)) return;
+        for (const sheet of dock.querySelectorAll(':scope > .life-reader-sheet:not([hidden])')) sheet.closeSheet?.();
       });
       article.append(dock, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (writtenLabel(version.originalCreatedAt) || '미상'), 'life-reader-meta'),
