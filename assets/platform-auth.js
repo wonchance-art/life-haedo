@@ -213,7 +213,10 @@
           if (check && pendingUser?.promise === check) pendingUser = null;
           reject(fault('network_error'));
         }, verifyLimit);
-        timer?.unref?.();
+        // The timer is never unref'd: whoever awaits this check must get its answer at the limit. In Node an
+        // unref'd timer let the process finish with the check still pending (node:test then cancelled the
+        // tests that wait for the limit). It also holds no process open needlessly: a check that settles
+        // clears it below, and no unit file leaves one behind (measured 2026-11-11 with and without unref).
       });
       try { return await Promise.race([attempt, lapse]); }
       finally { clearTimer(timer); }

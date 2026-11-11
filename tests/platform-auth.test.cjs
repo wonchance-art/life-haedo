@@ -944,3 +944,17 @@ test('m2: only the user check request is cut short; token refresh and data reque
   outer.abort();
   await assert.rejects(pending, error => error.name === 'AbortError');
 });
+
+// 2026-11-11 review MAJOR-1: the limit timer was unref'd, so in Node the tests above that wait for the limit were
+// cancelled whenever nothing else kept the event loop alive (pattern runs failed 5/5).
+test('m2: the limit timer stays referenced (an awaited check is answered at the limit even when nothing else is pending)', async () => {
+  let unrefs = 0, armed = 0;
+  const timers = { setTimeout: (run, ms) => { armed++; const timer = setTimeout(run, ms), real = timer.unref.bind(timer); timer.unref = () => { unrefs++; return real(); }; return timer; }, clearTimeout };
+  const { auth, state } = setup({ authOptions: { verifyLimit: 30, ...timers }, userPromise: never() });
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.ok(armed >= 1, 'the injected timer is the one used'); assert.equal(unrefs, 0, 'never unref’d');
+  // A check that answers clears its timer (nothing is left to hold a process).
+  const cleared = []; state.userPromise = null;
+  const second = setup({ authOptions: { verifyLimit: 30, setTimeout: (run, ms) => setTimeout(run, ms), clearTimeout: id => { cleared.push(id); clearTimeout(id); } } });
+  assert.equal((await second.auth.verify()).id, A.id); assert.equal(cleared.length, 1);
+});
