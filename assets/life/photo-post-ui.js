@@ -843,7 +843,9 @@
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
-          if (current(epoch)) watchDraftState();
+          // What was just stored is waiting for the account by definition: no
+          // read now (it would read the whole post back), only the later ones.
+          if (current(epoch)) watchDraftState(draftServer?.id !== target.id);
           if (current(token)) onSaved();
         })
         .finally(() => {
@@ -890,12 +892,16 @@
     }
     // Now, and again after the draft upload delay: a failed first upload has no
     // record that would announce itself.
-    function watchDraftState() {
+    function watchDraftState(now = true) {
       draftTimers.forEach(clearTimeout);
       draftTimers = [];
       if (mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return;
       const token = epoch;
-      readDraftState();
+      if (now) readDraftState();
+      else {
+        if (status) status.dataset.account = draftState() || "";
+        updatePill();
+      }
       draftTimers = [7000, 20000].map((ms) => setTimeout(() => { if (current(token)) readDraftState(); }, ms));
     }
     // The explicit retry beside the state.
