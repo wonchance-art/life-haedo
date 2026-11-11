@@ -1247,7 +1247,7 @@
       await flush();
       guard();
       const token = epoch,
-        next = M.upgrade(doc);
+        next = M.upgrade(M.normalize(doc).doc);
       next.archived = value;
       next.updatedAt = new Date().toISOString();
       setBusy(true);
@@ -1800,8 +1800,6 @@
           }),
         );
         if (!current(token)) return;
-        const next = structuredClone(doc);
-        next.photos.push(...incoming);
         let at = position;
         const Delta = root.Quill.import("delta"),
           delta = new Delta().retain(at).insert("\n");
@@ -1810,8 +1808,9 @@
             .insert({ photo: { id: p.id, caption: "", alt: "" } })
             .insert("\n"),
         );
-        next.ops = new Delta(doc.ops).compose(delta).ops;
-        M.validate(next);
+        // The limits (20 photos, 256 MiB) count the photos the body uses. Ones
+        // already taken out stay in memory for undo and are not stored.
+        M.validate(M.normalize({ ...doc, photos: [...doc.photos, ...incoming], ops: new Delta(doc.ops).compose(delta).ops }).doc);
         doc.photos.push(...incoming);
         editor.enable(true);
         editor.history.cutoff();
@@ -2170,7 +2169,7 @@
               ranges: result.ranges, accepted, composing: imeActive() });
             // Validate before changing the editor; preserve the normal autosave,
             // authorship and one-step undo paths after accepting a suggestion.
-            M.validate({ ...doc, ops: next.ops });
+            M.validate(M.normalize({ ...doc, ops: next.ops }).doc);
             editor.history.cutoff();
             aiInserting = true;
             try { editor.updateContents(before.diff(new Delta(next.ops)), "user"); }
