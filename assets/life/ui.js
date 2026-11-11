@@ -3307,18 +3307,26 @@
       search.label.firstChild.className = 'life-sr-only';
       search.input.placeholder = placeholder;
       search.input.maxLength = 500;
-      let composing = false;
+      let composing = false, composingFrame = 0;
       let lastValue = state[key];
       const finish = () => {
+        if (composingFrame) { global.cancelAnimationFrame(composingFrame); composingFrame = 0; }
         const value = search.input.value;
         state[key] = value;
         if (value !== lastValue) { lastValue = value; update(); }
       };
+      // The syllable still being composed (한글) is part of what is searched: the list follows every input. Only the
+      // list below is redrawn; this field, its focus and caret are not touched, so the composition goes on. While
+      // composing, several key presses within one frame search once, with the latest text.
       search.input.addEventListener('compositionstart', () => { composing = true; });
-      search.input.addEventListener('input', event => { if (!composing && !event.isComposing) finish(); });
+      search.input.addEventListener('input', event => {
+        if (!composing && !event.isComposing) { finish(); return; }
+        if (!composingFrame) composingFrame = requestAnimationFrame(() => { composingFrame = 0; if (search.input.isConnected) finish(); });
+      });
       search.input.addEventListener('compositionend', () => { composing = false; finish(); });
       const clear = iconButton('검색어 지우기', 'close', () => {
         composing = false;
+        if (composingFrame) { global.cancelAnimationFrame(composingFrame); composingFrame = 0; }
         search.input.value = state[key] = lastValue = '';
         update();
         search.input.focus({ preventScroll: true });

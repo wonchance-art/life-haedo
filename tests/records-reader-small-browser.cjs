@@ -153,11 +153,73 @@ async function m2() {
   });
 }
 
+// A Korean IME through the browser's own composition path (CDP): the text is in the field but not committed yet.
+async function ime(context, page) {
+  const session = await context.newCDPSession(page);
+  return { compose: async text => { await session.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length }); await frames(page); },
+    commit: async text => { await session.send('Input.insertText', { text }); await frames(page); } };
+}
+async function m3() {
+  await S.check('m3 the records search follows the syllable being composed, and the composition goes on', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const ids = await R.seed(page, [{ title: '강아지 산책', text: '강아지와 걸은 길.' }, { title: '가방 정리', text: '가방을 비웠다.' },
+      ...Array.from({ length: 6 }, (_, index) => ({ title: '나무 물주기 ' + (index + 1), text: '화분에 물을 준 날.' }))]);
+    const keyboard = await ime(context, page), input = page.locator('#lifeSearch');
+    const titles = () => page.locator('#lifeSearchResults .life-source-open').allTextContents();
+    const field = () => input.evaluate(element => ({ value: element.value, focused: document.activeElement === element, caret: [element.selectionStart, element.selectionEnd], same: element.__probe === true }));
+    await input.click(); await input.evaluate(element => { element.__probe = true; window.__compositionEnds = 0; element.addEventListener('compositionend', () => window.__compositionEnds++); });
+    assert.equal((await titles()).length, 8);
+    await keyboard.compose('ㄱ');
+    assert.deepEqual(await titles(), [], 'ㄱ alone matches no syllable');
+    await keyboard.compose('가');
+    assert.deepEqual(await titles(), ['가방 정리'], 'the list shows 가 while it is still being composed');
+    assert.deepEqual(await field(), { value: '가', focused: true, caret: [1, 1], same: true }, 'the field, its focus and caret are untouched');
+    await keyboard.compose('강');
+    assert.deepEqual(await titles(), ['강아지 산책'], 'the same syllable went on composing (가 → 강), and the list followed');
+    assert.equal((await field()).value, '강', 'not 가강: the composition was not broken by the redraw');
+    assert.equal(await page.evaluate(() => window.__compositionEnds), 0, 'still composing');
+    await keyboard.commit('강');
+    assert.deepEqual(await field(), { value: '강', focused: true, caret: [1, 1], same: true }); assert.equal(await page.evaluate(() => window.__compositionEnds), 1);
+    assert.deepEqual(await titles(), ['강아지 산책']);
+    await keyboard.compose('아'); assert.equal((await field()).value, '강아'); assert.deepEqual(await titles(), ['강아지 산책']);
+    await keyboard.compose('안'); assert.deepEqual(await titles(), [], '강안 matches nothing, while composing');
+    await keyboard.commit('아'); assert.deepEqual(await titles(), ['강아지 산책']); assert.equal((await field()).value, '강아');
+    // Plain typing and clearing still work as before.
+    await page.locator('#lifeSearchClear').click(); await frames(page); assert.equal((await titles()).length, 8);
+    await input.fill('가방'); await frames(page); assert.deepEqual(await titles(), ['가방 정리']);
+    // The list beside an open original (1101px and wider) uses the same field.
+    await page.locator('#lifeSearchClear').click(); await R.openSource(page, ids[0].versionId);
+    const pane = page.locator('#lifePaneSearch'), paneTitles = () => page.locator('#lifeRecordsPaneList .records-row-title').allTextContents();
+    await pane.click(); await keyboard.compose('가');
+    assert.deepEqual(await paneTitles(), ['가방 정리']); assert.equal(await pane.evaluate(element => document.activeElement === element && element.value), '가');
+    await keyboard.compose('강'); assert.deepEqual(await paneTitles(), ['강아지 산책']); assert.equal(await pane.inputValue(), '강');
+    assert.match(await page.locator('#lifeReaderMatchCount').textContent(), /일치 [12]/, 'the open original shows its matches for the composing text');
+    await keyboard.commit('강'); assert.equal(await pane.inputValue(), '강');
+    await context.close();
+  });
+  await S.check('m3 찾기 (unified search) follows the syllable being composed', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900, url: '/index.html?section=records' });
+    await R.seed(page, [{ title: '강아지 산책', text: '강아지와 걸은 길.' }, { title: '가방 정리', text: '가방을 비웠다.' }, { title: '나무 물주기', text: '화분에 물을 준 날.' }]);
+    await page.goto(R.base + '/index.html?section=records&view=find'); await R.ready(page); await settle(page);
+    const keyboard = await ime(context, page), input = page.locator('#lifeFindQuery');
+    const hits = async () => (await page.locator('#lifeFindResults .life-find-result').allTextContents()).map(text => text.includes('강아지') ? '강아지' : text.includes('가방') ? '가방' : '기타').sort();
+    await page.locator('#lifeFind[aria-busy="false"]').waitFor(); await input.click(); await input.evaluate(element => { element.__probe = true; });
+    await keyboard.compose('가');
+    assert.deepEqual(await hits(), ['가방'], 'results while 가 is being composed');
+    await keyboard.compose('강');
+    assert.deepEqual(await hits(), ['강아지']); assert.equal(await input.evaluate(element => element.__probe === true && document.activeElement === element && element.value), '강');
+    await keyboard.commit('강'); assert.deepEqual(await hits(), ['강아지']); assert.equal(await input.inputValue(), '강');
+    assert.equal(JSON.stringify(await page.evaluate(() => history.state)).includes('강'), false, 'the query is not stored');
+    await context.close();
+  });
+}
+
 async function main() {
   await S.start();
   try {
     await group('m1', m1);
     await group('m2', m2);
+    await group('m3', m3);
   } finally { await S.finish(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
