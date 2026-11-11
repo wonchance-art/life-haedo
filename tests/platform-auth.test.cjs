@@ -23,7 +23,7 @@ function setup(overrides = {}) {
     history: { replaceState: (_state, _title, url) => { state.scrubbed = url; } }, Event,
     addEventListener: (name, callback) => pageHandlers.set(name, callback), removeEventListener: name => pageHandlers.delete(name),
     fetch: async (_url, options) => { state.sent = options; return state.fetchPromise || new Response('{}', { status: state.responseStatus || 200 }); },
-    localStorage: backingStorage
+    localStorage: backingStorage, ...(overrides.sessionStorage ? { sessionStorage: overrides.sessionStorage } : {})
   };
   const clientFactory = (_url, _key, options) => {
     state.options = options;
@@ -957,4 +957,104 @@ test('m2: the limit timer stays referenced (an awaited check is answered at the 
   const cleared = []; state.userPromise = null;
   const second = setup({ authOptions: { verifyLimit: 30, setTimeout: (run, ms) => setTimeout(run, ms), clearTimeout: id => { cleared.push(id); clearTimeout(id); } } });
   assert.equal((await second.auth.verify()).id, A.id); assert.equal(cleared.length, 1);
+});
+
+// ── 2026-11-11 review MINOR-4·5: a slow connection is waited for longer; 다시 확인 does not join a stalled check ──
+const { VERIFY_PATIENCE } = require('../assets/platform-auth.js');
+// Timers that record the limit each check was given (and still run, on the real clock).
+const recorded = asked => ({ setTimeout: (run, ms) => { asked.push(ms); return setTimeout(run, ms); }, clearTimeout });
+const memoryStore = () => { const data = new Map(); return { data, getItem: key => data.has(key) ? data.get(key) : null, setItem: (key, value) => data.set(key, String(value)), removeItem: key => data.delete(key) }; };
+test('m2: each lapse in a row lengthens the next check (10 → 20 → 30 s, no further); a quick answer goes back to the first limit', async () => {
+  assert.equal(VERIFY_PATIENCE, 3);
+  const asked = [], { auth, state } = setup({ authOptions: { verifyLimit: 20, ...recorded(asked) }, userPromise: never() });
+  for (let i = 0; i < 4; i++) await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.deepEqual(asked, [20, 40, 60, 60]);
+  state.userPromise = null;
+  assert.equal((await auth.verify()).id, A.id); await tick();
+  await auth.verify();
+  assert.deepEqual(asked.slice(4), [60, 20], 'the check that was answered at once resets the level');
+});
+
+test('m2: a check that was answered, but slowly, keeps the limit it needed (the next check on that connection is not cut at 10 s)', async () => {
+  let clock = 1000000;
+  const asked = [], slow = deferred(), { auth, state } = setup({ now: () => clock, authOptions: { verifyLimit: 10000, ...recorded(asked) }, userPromise: slow.promise });
+  const first = auth.verify(); await tick();
+  clock += 12000; slow.resolve({ data: { user: A }, error: null });   // by this clock the answer took 12 s
+  assert.equal((await first).id, A.id); await tick();
+  state.userPromise = null; await auth.verify(); await tick();
+  assert.deepEqual(asked, [10000, 20000], 'a 12 s answer needs the 20 s limit');
+  // An answer within the first limit goes back to it; one that took 25 s keeps the longest.
+  await auth.verify(); await tick();
+  const slower = deferred(); state.userPromise = slower.promise;
+  const third = auth.verify(); await tick(); clock += 25000; slower.resolve({ data: { user: A }, error: null }); await third; await tick();
+  state.userPromise = null; await auth.verify();
+  assert.deepEqual(asked.slice(2), [10000, 10000, 30000]);
+});
+
+test('m2: 다시 확인 (patient) waits the longest at once and does not join the check that has not been answered; that check’s late answer is not used', async () => {
+  const asked = [], stalled = deferred(), { auth, state } = setup({ authOptions: { verifyLimit: 40, ...recorded(asked) }, userPromise: stalled.promise });
+  const seen = []; auth.onAccountChange(account => seen.push(account?.userId || null));
+  await tick(); state.calls.length = 0;
+  const quiet = auth.verify(); quiet.catch(() => {}); await tick();
+  assert.deepEqual(state.calls, ['getSession', 'getUser']);
+  // The owner presses 다시 확인 while that check is out: a new server request, with the longest limit.
+  state.userPromise = null;
+  assert.equal((await auth.verify({ patient: true })).id, A.id);
+  assert.equal(state.calls.filter(call => call === 'getUser').length, 2, 'a second request, not the stalled one');
+  assert.deepEqual(asked, [40, 120]);
+  assert.deepEqual(seen, [A.id]);
+  // The abandoned check ends as cancelled, and its late answer changes nothing.
+  stalled.resolve({ data: { user: B }, error: null });
+  await assert.rejects(quiet, error => ['request_cancelled', 'network_error'].includes(error.code));
+  await tick(); await tick();
+  assert.equal(auth.user.id, A.id); assert.deepEqual(seen, [A.id]);
+  // The same through the page opening (the shell's path).
+  const opening = auth.beginStartup({ patient: true });
+  assert.equal((await auth.verify({ startup: true, patient: true })).id, A.id); opening.end();
+  assert.equal(asked.at(-1), 120);
+});
+
+test('m2: the level is kept for the tab, so a page that opens again after a lapse waits longer; expectSlow() asks for the longest', async () => {
+  const sessionStorage = memoryStore(), asked = [];
+  const first = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) }, userPromise: never() });
+  await assert.rejects(first.auth.verify(), errorCode('network_error'));
+  assert.deepEqual([...sessionStorage.data.values()], ['1']);
+  // The page reloads: a new auth object in the same tab.
+  const again = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) } });
+  assert.equal((await again.auth.verify()).id, A.id); await tick();
+  assert.deepEqual(asked, [20, 40]);
+  assert.equal(sessionStorage.data.size, 0, 'an answer in time clears it');
+  again.auth.expectSlow();
+  assert.deepEqual([...sessionStorage.data.values()], ['2']);
+  const third = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) } });
+  await third.auth.verify();
+  assert.equal(asked.at(-1), 60);
+  // A value that is not a small whole number is ignored; storage that throws is tolerated.
+  for (const junk of ['99', '-1', '1.5', 'x', '']) {
+    const store = memoryStore(); store.data.set('caeyeon_life_platform_verify_lapses', junk); const seen = [];
+    const { auth } = setup({ sessionStorage: store, authOptions: { verifyLimit: 20, ...recorded(seen) } });
+    await auth.verify(); assert.ok([20, 60].includes(seen[0]), junk + ' → ' + seen[0]); assert.equal(seen[0], junk === '99' ? 60 : 20);
+  }
+  const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() { throw new Error('denied'); } };
+  assert.equal((await setup({ sessionStorage: broken }).auth.verify()).id, A.id);
+});
+
+test('m2: the user check request is cut at the limit of the check that is out (20 s for a second try), and 다시 확인 cuts the earlier request at once', async () => {
+  const asked = [], { auth, state, env } = setup({ authOptions: { verifyLimit: 30, ...recorded(asked) }, userPromise: never() });
+  const sdkFetch = state.options.global.fetch, aborted = [];
+  env.AbortController = AbortController;
+  env.fetch = (url, init) => new Promise((_, reject) => init?.signal?.addEventListener('abort', () => { aborted.push(url); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }));
+  await assert.rejects(auth.verify(), errorCode('network_error'));   // one lapse: the next check is allowed 60
+  asked.length = 0;
+  const second = auth.verify(); second.catch(() => {});
+  await tick();
+  const request = sdkFetch(config.url + '/auth/v1/user', { method: 'GET' }); request.catch(() => {});
+  assert.deepEqual(asked, [60, 60], 'the check and its request share the longer limit');
+  // 다시 확인 now: the request that is out is cut at once.
+  state.userPromise = null;
+  assert.equal(aborted.length, 0);
+  const pressed = auth.verify({ patient: true });
+  assert.equal(aborted.length, 1, 'the earlier request was aborted when 다시 확인 was pressed');
+  assert.equal((await pressed).id, A.id);
+  await assert.rejects(request, error => error.name === 'AbortError');
 });

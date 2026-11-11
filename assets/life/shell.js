@@ -235,7 +235,8 @@
     const status = notice(message, true);
     const retry = root.document.createElement('button');
     retry.type = 'button'; retry.className = 'life-button'; retry.textContent = '다시 확인';
-    retry.addEventListener('click', () => { resetRecovery(); starting = null; start(); });
+    // The owner asks: this check waits the longest (a slow connection) and replaces one that has not been answered.
+    retry.addEventListener('click', () => { resetRecovery(); starting = null; start(false, true); });
     const login = root.document.createElement('a');
     login.href = loginPath(); login.className = 'life-button'; login.textContent = '로그인 화면';
     status.append(retry, login);
@@ -324,7 +325,8 @@
     }
   }
   // quiet (a timed automatic try): the failure notice stays while the account is checked again.
-  function start(quiet = false) {
+  // patient (다시 확인): platform-auth waits its longest limit and gives up an earlier check still out.
+  function start(quiet = false, patient = false) {
     if (suspended) return Promise.resolve(null);
     if (starting) return starting;
     // 다시 확인 may be pressed while a quiet try is still out: the earlier attempt then changes nothing.
@@ -332,13 +334,14 @@
     const pending = (async () => {
       if (isReadOnly()) { hide(); notice('읽기 전용 주소에서는 개인 자료를 열지 않습니다.'); return null; }
       if (!auth) { hide(); retryNotice('로그인 연결을 준비하지 못했습니다.'); return null; }
-      if (quiet !== true) notice('로그인을 확인하고 있습니다.');
+      if (quiet !== true) notice(patient === true ? '로그인을 확인하고 있습니다. 연결이 느리면 30초까지 걸립니다.' : '로그인을 확인하고 있습니다.');
+      const asked = patient === true ? { startup: true, patient: true } : { startup: true };
       const authEpoch = auth.epoch, cached = retained ? mounted : null, transition = suspension;
       // One server check for the opening: the foreground account bootstrap and the
       // first mount reuse it while the session, token and account stay the same.
-      const opening = auth.beginStartup?.();
+      const opening = auth.beginStartup?.(patient === true ? { patient: true } : undefined);
       try {
-        const user = await (publicHome ? auth.verify({ startup: true }) : auth.requireUser({ startup: true }));
+        const user = await (publicHome ? auth.verify(asked) : auth.requireUser(asked));
         if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && (cached !== mounted || transition !== suspension)) return null;
         const account = auth.getAccount();
@@ -348,7 +351,7 @@
         if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && cached === mounted && transition === suspension && auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId === activeKey) conceal();
         else hide();
-        recordFailure(error, accountKey(auth.getAccount()), '개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
+        recordFailure(error, accountKey(auth.getAccount()), '로그인을 확인하지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
         return null;
       } finally { opening?.end(); }
     })();
@@ -374,7 +377,7 @@
     const account = auth?.getAccount();
     if (retained && account && activeKey === account.projectUrl + '|' + account.userId) conceal();
     else hide();
-    recordFailure({ code: event.code || 'auth_error' }, accountKey(account), '로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.');
+    recordFailure({ code: event.code || 'auth_error' }, accountKey(account), '로그인을 확인하지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요.');
   });
   root.document.addEventListener('visibilitychange', () => {
     if (!root.document.hidden) retryAutomatically();
