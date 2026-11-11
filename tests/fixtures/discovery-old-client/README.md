@@ -14,7 +14,11 @@
 - `tests/discovery-card-feed.test.cjs`: 이 판의 `discovery.js`만 실행해 새 형식의 목록을 받아도 첫 등록부 9곳의 글을 그대로 돌려주는 것을 확인한다.
 - `tests/news-card-feed-browser.cjs`: 카드 피드 작업이 고친 네 파일을 이 판으로 바꿔 띄운 화면(나머지 셸 파일은 이 작업이 바꾸지 않았다)이 새 형식의 목록을 받아도 글 목록을 보여 주는 것을 확인한다.
 
-두 검사는 Git 기록이나 네트워크를 쓰지 않는다.
+- `tests/news-old-shell-sync-browser.cjs`: 같은 네 파일로 띄운 "이전 셸 기기"가 새 판 기기의 계정 문서(뉴스 설정의 예약 항목 옵션, 추가 출처·넓게 찾기 링크의 반응, 출처 20곳을 넘는 읽기 비교)를 받았을 때 뉴스가 열리는지, 계정 사본을 덮는지를 실제 동기화로 확인한다. `discovery-settings.js.gz`는 이전 판 설정 검증기다(모르는 필드는 거절, `disabledSourceIds`의 모르는 ID는 지킴).
+
+나머지 셸 파일(예: `index.html`이 새로 싣는 `discovery-wide-remote.js`)은 현재 판 그대로다. 이전 판 화면은 그 파일을 쓰지 않는다.
+
+세 검사는 Git 기록이나 네트워크를 쓰지 않는다.
 
 재생성(저장소 루트, 파일마다):
 
