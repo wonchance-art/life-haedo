@@ -18,7 +18,7 @@ Snapshot은 allowlist 출처·HTTPS URL·권리/범위를 확인한 제목·태�
 
 처음 좋아요하거나 해제 뒤 다시 좋아요할 때 실제 선택한 카드의 메타데이터를 남긴다. 이미 좋아요한 상태에서 담기를 바꿔도 그 좋아요 근거를 새 제목/태그로 바꾸지 않는다. 이 snapshot은 본문 버전 보존이 아니다. 공급 목록에서 빠지거나 출처를 꺼도 보관된 목록에서 URL을 다시 열 수 있고, 원문 접근 가능 여부를 자동 검사하지 않는다.
 
-[Storage](../../assets/life/storage.js)의 별도 `discoveryActions:accountKey:workspaceId` 메타 CAS를 사용한다. owner/project/workspace·revision·transaction 완료·dispose 취소를 재사용하고 원문 bundle/구성 revision을 바꾸지 않는다. 초기화도 revision을 남긴다. 저장 실패·충돌은 대상 boolean intent를 유지하며 최신 확인→명시 재시도/취소를 제공한다. 본인 저장 알림은 같은 facade에서만 local로 표시하고, 다른 탭에는 종류·공간·revision·sender만 전송한다. 외부 채널의 local 표시는 신뢰하지 않는다.
+[Storage](../../assets/life/storage.js)의 별도 `discoveryActions:accountKey:workspaceId` 메타 CAS를 사용한다(2026-11-11부터 추가 출처·넓게 찾기 링크의 반응은 짝 문서 `discoveryActionsExtended:accountKey:workspaceId`에 두고 화면은 둘을 한 프로필로 읽는다. 판 번호는 두 문서의 합이다. 이유와 규칙은 [카드 피드 A4](news-card-feed.md#a4-과도기-이전-판-기기)). owner/project/workspace·revision·transaction 완료·dispose 취소를 재사용하고 원문 bundle/구성 revision을 바꾸지 않는다. 초기화도 revision을 남긴다. 저장 실패·충돌은 대상 boolean intent를 유지하며 최신 확인→명시 재시도/취소를 제공한다. 본인 저장 알림은 같은 facade에서만 local로 표시하고, 다른 탭에는 종류·공간·revision·sender만 전송한다. 외부 채널의 local 표시는 신뢰하지 않는다.
 
 끄기는 저장 실패나 다른 저장의 완료를 기다리지 않고 개인 결과를 중지한다. 다른 탭의 변경도 최신 조회 전에 이전 근거를 제거한다. 이탈 중 바뀐 반응·설정은 복귀 시 이전 개인 결과를 되살리지 않는다. 입력과 한글 조합, 인증 확인 전 화면 중단·검증 후 복귀 경계는 기존 계약을 유지한다.
 
