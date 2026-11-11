@@ -515,6 +515,39 @@
         await navigate('source', { sourceId, sourceVersionId, locator: null, returnContext: origin?.returnContext || null });
       }
     });
+    // Excerpt notes still being typed (not yet in the collection) are kept for this tab, so a reload gives them
+    // back. One entry, for one account and one space: another account or space never reads it and removes it.
+    const SOURCE_DRAFTS_KEY = 'caeyeon_life_reader_drafts';
+    const sourceDraftOwner = () => storage.account?.userId || 'local';
+    function storeSourceDrafts() {
+      try {
+        const drafts = {};
+        for (const [versionId, draft] of state.sourceDrafts) {
+          if (!draft.topic && !draft.note) continue;
+          drafts[versionId] = { topic: draft.topic, note: draft.note,
+            ...(draft.range ? { range: { start: draft.range.start, end: draft.range.end } } : {}),
+            ...(draft.stageId ? { stageId: draft.stageId, stageRevision: draft.stageRevision } : {}) };
+        }
+        if (!state.bundle || !Object.keys(drafts).length) global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY);
+        else global.sessionStorage.setItem(SOURCE_DRAFTS_KEY, JSON.stringify({ owner: sourceDraftOwner(), workspaceId: state.bundle.workspaceId, drafts }));
+      } catch (_) { /* Blocked or full session storage: the note stays in memory, as before. */ }
+    }
+    function restoreSourceDrafts() {
+      try {
+        const raw = global.sessionStorage.getItem(SOURCE_DRAFTS_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (!saved || saved.owner !== sourceDraftOwner() || saved.workspaceId !== state.bundle?.workspaceId || !saved.drafts || typeof saved.drafts !== 'object') { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); return; }
+        for (const [versionId, draft] of Object.entries(saved.drafts)) {
+          const version = state.bundle.sourceVersions.find(item => item.id === versionId);
+          if (!version || state.sourceDrafts.has(versionId) || typeof draft?.topic !== 'string' || typeof draft.note !== 'string' || draft.topic.length > 500 || draft.note.length > 100000) continue;
+          const length = typeof version.contentText === 'string' ? version.contentText.length : 0, range = draft.range;
+          const valid = range && Number.isSafeInteger(range.start) && Number.isSafeInteger(range.end) && range.start >= 0 && range.start <= range.end && range.end <= length;
+          state.sourceDrafts.set(versionId, { topic: draft.topic, note: draft.note, ...(valid ? { range: { start: range.start, end: range.end } } : {}),
+            ...(typeof draft.stageId === 'string' && Number.isSafeInteger(draft.stageRevision) ? { stageId: draft.stageId, stageRevision: draft.stageRevision } : {}), recovered: true });
+        }
+      } catch (_) { try { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); } catch (__) { /* unavailable */ } }
+    }
     // The list of drafts (검토 중) follows drafts made or removed in this session without a full data refresh.
     async function refreshSourceEditStages() {
       const workspaceId = state.bundle?.workspaceId, token = workspaceGeneration;
@@ -4709,6 +4742,8 @@
       quote.id = 'lifeExcerptToggle';
       tools.append(quote);
       const sourceDraft = state.sourceDrafts.get(version.id) || { topic: '', note: '' };
+      // Given back after a reload (this tab only): say so once, where the person is reading.
+      let recoveredDraft = sourceDraft.recovered === true; delete sourceDraft.recovered;
       const instruction = '원문에서 발췌할 구절을 선택하세요.';
       const picked = node('blockquote', instruction, 'life-selection');
       picked.id = 'lifeSelectedQuote';
@@ -4722,7 +4757,7 @@
         const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
         state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
         await commit(changes);
-        state.sourceDrafts.delete(version.id);
+        state.sourceDrafts.delete(version.id); storeSourceDrafts();
         render();
       announceSourceSaved('모음에 반영됨');
       }), 'life-primary');
@@ -4791,7 +4826,7 @@
       };
       const remember = (start, end) => {
         state.sourceSelection = { start, end };
-        if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
+        if (state.sourceDrafts.has(version.id)) { state.sourceDrafts.get(version.id).range = { start, end }; storeSourceDrafts(); }
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
         saveExcerpt.disabled = !sourceActive || formattedView || start >= end;
@@ -4956,7 +4991,7 @@
         sourceDraft.topic = topic.input.value;
         sourceDraft.note = note.input.value;
         sourceDraft.range = state.sourceSelection && { ...state.sourceSelection };
-        state.sourceDrafts.set(version.id, sourceDraft);
+        state.sourceDrafts.set(version.id, sourceDraft); storeSourceDrafts();
         announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.');
       };
       topic.input.addEventListener('input', editDraft);
@@ -5107,10 +5142,17 @@
         }
         readingScrollY = global.scrollY;
         lineKeeper?.set(readingLine.capture());
-        positionRestored = true; scheduleHistory();
+        positionRestored = true; scheduleHistory(); tellRecoveredDraft();
       };
+      const tellRecoveredDraft = () => {
+        if (!recoveredDraft || !reader.isConnected) return;
+        recoveredDraft = false;
+        showNotice('저장하지 않은 발췌 메모가 있습니다. 발췌와 주제 연결에서 이어서 쓸 수 있습니다.');
+      };
+      let shownWaits = 0;
+      const whenShown = task => requestAnimationFrame(() => { if (!reader.isConnected) return; if (!reader.getClientRects().length && shownWaits++ < 900) whenShown(task); else task(); });
       if (locator) requestAnimationFrame(restorePosition);
-      else positionRestored = true;
+      else { positionRestored = true; if (recoveredDraft) whenShown(tellRecoveredDraft); }
       refreshMatches();
       state.locator = null;
     }
@@ -6324,6 +6366,8 @@
     // (an entry can no longer be rewritten while it does), when the tab is hidden, and on pagehide.
     const recordReaderHistory = () => { if (!disposed && state.mode === 'source' && state.bundle && readerHistoryState) writeRoute('source', 'replace'); };
     beforeUnload = event => {
+      // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
+      if (stageTimer && dirty()) persistStage().catch(failure);
       recordReaderHistory();
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
@@ -6337,7 +6381,11 @@
       if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       flushReadingPosition();
     };
-    pagehideReading = () => { flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
+    pagehideReading = () => {
+      flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
+      // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
+      if (stageTimer && dirty()) persistStage().catch(failure);
+    };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
@@ -6412,6 +6460,7 @@
           seedReaderPosition(entry);
         }
       }
+      restoreSourceDrafts();
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();
@@ -6501,6 +6550,7 @@
         draft.stageId = saved.stageId;
         draft.stageRevision = saved.revision;
       }
+      if (state.sourceDrafts.size) storeSourceDrafts();
     }
 
     function dispose(failedMount = false) {
@@ -6576,6 +6626,8 @@
       state.allStages = [];
       cleanup(() => root?.replaceChildren());
       cleanup(() => root?.remove());
+      // Signed out or another account: this tab's copy of unsaved excerpt notes goes with the account it belonged to.
+      cleanup(() => { const account = auth?.getAccount?.(); if (!account || account.userId !== storage.account?.userId) global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); });
       state.sourceDrafts.clear();
       state.readerPositions.clear(); state.readerModes.clear();
       cleanup(resetSearchContext);

@@ -260,6 +260,66 @@ async function m4() {
   });
 }
 
+async function m5() {
+  const DRAFTS = 'caeyeon_life_reader_drafts';
+  await S.check('m5 an excerpt note that was not saved yet comes back after a reload, in this tab only', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const text = paragraphs(60), quote = '가-7번째 문단.';
+    const ids = await R.seed(page, [{ title: '문서 가', text }, { title: '문서 나', text: '짧은 글.' }]);
+    await R.openSource(page, ids[0].versionId);
+    await page.evaluate(quote => { const node = document.querySelector('#lifeSourceText').firstChild, at = node.data.indexOf(quote), range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + quote.length); getSelection().removeAllRanges(); getSelection().addRange(range); }, quote);
+    await R.pressAt(page, '#lifeExcerptToggle'); await page.locator('#lifeExcerptPanel').waitFor();
+    assert.equal(await page.locator('#lifeSelectedQuote').textContent(), quote);
+    await page.locator('#lifeSourceTopic').fill('초안 주제'); await page.locator('#lifeSourceNote').fill('아직 저장하지 않은 메모 🌱\n둘째 줄');
+    const stored = JSON.parse(await page.evaluate(key => sessionStorage.getItem(key), DRAFTS));
+    assert.equal(stored.workspaceId, await page.evaluate(() => HaedoLife.Shell.storage.getActive())); assert.equal(stored.owner, R.accounts.a.id);
+    page.once('dialog', dialog => dialog.accept()); // the browser's own "leave?" question for unsaved input stays
+    await reload(page);
+    assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'source');
+    assert.match(await page.locator('#lifeReaderNotice').textContent(), /저장하지 않은 발췌 메모가 있습니다/);
+    assert.equal((await R.bundle(page)).records.length, 0, 'still not in the collection');
+    await R.pressAt(page, '#lifeExcerptToggle'); await page.locator('#lifeExcerptPanel').waitFor();
+    assert.equal(await page.locator('#lifeSourceTopic').inputValue(), '초안 주제'); assert.equal(await page.locator('#lifeSourceNote').inputValue(), '아직 저장하지 않은 메모 🌱\n둘째 줄');
+    assert.equal(await page.locator('#lifeSelectedQuote').textContent(), quote, 'with the passage it was written for');
+    // Saving it puts it in the collection and removes the tab copy.
+    await page.locator('#lifeSourceExcerptSave').click(); await settle(page);
+    const record = (await R.bundle(page)).records[0];
+    assert.equal(record.text, quote); assert.equal(record.topic, '초안 주제'); assert.equal(record.note, '아직 저장하지 않은 메모 🌱\n둘째 줄');
+    assert.deepEqual(record.sourceRefs[0].locator, { start: text.indexOf(quote), end: text.indexOf(quote) + quote.length });
+    assert.equal(await page.evaluate(key => sessionStorage.getItem(key), DRAFTS), null);
+    await reload(page);
+    assert.equal(await page.locator('#lifeReaderNotice').isHidden(), true, 'nothing to give back after it was saved');
+    await context.close();
+  });
+  await S.check('m5 the tab copy is never shown to another space or account, and is removed there', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const ids = await R.seed(page, [{ title: '문서 가', text: paragraphs(20) }]);
+    await R.openSource(page, ids[0].versionId);
+    await R.pressAt(page, '#lifeExcerptToggle'); await page.locator('#lifeSourceNote').fill('남의 눈에 보이면 안 되는 메모');
+    const saved = await page.evaluate(key => sessionStorage.getItem(key), DRAFTS); assert(saved.includes('남의 눈에'));
+    for (const [name, change] of [['another account', { owner: '00000000-0000-4000-8000-00000000000b' }], ['another space', { workspaceId: '00000000-0000-4000-8000-00000000000c' }]]) {
+      // The same tab storage as that other owner or space would find it.
+      await page.evaluate(({ key, saved, change }) => { window.addEventListener('beforeunload', event => event.stopImmediatePropagation(), true); sessionStorage.setItem(key, JSON.stringify({ ...JSON.parse(saved), ...change })); HaedoLife.Shell.storage.getActive(); }, { key: DRAFTS, saved, change });
+      page.once('dialog', dialog => dialog.accept());
+      await page.goto(R.base + '/index.html?section=records&view=sources'); await R.ready(page); await settle(page);
+      assert.equal(await page.evaluate(key => sessionStorage.getItem(key), DRAFTS), null, name + ': the copy is removed, not read');
+      await R.openSource(page, ids[0].versionId); await R.pressAt(page, '#lifeExcerptToggle');
+      assert.equal(await page.locator('#lifeSourceNote').inputValue(), '', name + ': nothing is shown');
+      await page.locator('#lifeSourceNote').fill('남의 눈에 보이면 안 되는 메모');
+    }
+    await context.close();
+  });
+  await S.check('m5 the import form keeps the last keys typed right before a reload', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900, url: '/index.html?section=records&view=import' });
+    await page.locator('#lifeImportTitle').waitFor();
+    await page.locator('#lifeImportTitle').fill('방금 붙인 글'); await page.locator('#lifeImportText').fill('새로고침 직전에 친 마지막 문장.');
+    await page.reload(); await R.ready(page); await settle(page); // at once: inside the 400ms the form waits before keeping its input
+    const kept = await page.evaluate(async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit').map(stage => [stage.input.title, stage.input.text]); });
+    assert.deepEqual(kept, [['방금 붙인 글', '새로고침 직전에 친 마지막 문장.']]);
+    await context.close();
+  });
+}
+
 async function main() {
   await S.start();
   try {
@@ -267,6 +327,7 @@ async function main() {
     await group('m2', m2);
     await group('m3', m3);
     await group('m4', m4);
+    await group('m5', m5);
   } finally { await S.finish(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
