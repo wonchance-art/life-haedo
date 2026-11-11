@@ -309,13 +309,20 @@ async function m5() {
     }
     await context.close();
   });
-  await S.check('m5 the import form keeps the last keys typed right before a reload', async () => {
+  // The form waits 400ms after the last key before it keeps its input. Leaving the page starts that save at once.
+  // Whether the browser lets the write finish while a page unloads is its own business (not asserted here); what is
+  // fixed is that the save no longer waits for the timer. The 400ms timer is held back so only the leave can save.
+  for (const leave of ['beforeunload', 'pagehide']) await S.check('m5 the import form starts keeping its last input on ' + leave + ', without waiting for its 400ms timer', async () => {
     const { page, context } = await S.open({ width: 1440, height: 900, url: '/index.html?section=records&view=import' });
     await page.locator('#lifeImportTitle').waitFor();
-    await page.locator('#lifeImportTitle').fill('방금 붙인 글'); await page.locator('#lifeImportText').fill('새로고침 직전에 친 마지막 문장.');
-    await page.reload(); await R.ready(page); await settle(page); // at once: inside the 400ms the form waits before keeping its input
-    const kept = await page.evaluate(async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit').map(stage => [stage.input.title, stage.input.text]); });
-    assert.deepEqual(kept, [['방금 붙인 글', '새로고침 직전에 친 마지막 문장.']]);
+    const kept = () => page.evaluate(async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit').map(stage => [stage.input.title, stage.input.text]); });
+    await page.evaluate(() => { const real = window.setTimeout; window.setTimeout = (task, delay, ...rest) => delay === 400 ? 987654321 : real(task, delay, ...rest); });
+    await page.locator('#lifeImportTitle').fill('방금 붙인 글'); await page.locator('#lifeImportText').fill('떠나기 직전에 친 마지막 문장.');
+    await page.waitForTimeout(700);
+    assert.deepEqual(await kept(), [], 'with its timer held back, nothing has been kept yet');
+    await page.evaluate(leave => window.dispatchEvent(new Event(leave, { cancelable: true })), leave);
+    await page.waitForFunction(async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).some(stage => stage.input?.text === '떠나기 직전에 친 마지막 문장.'); });
+    assert.deepEqual(await kept(), [['방금 붙인 글', '떠나기 직전에 친 마지막 문장.']]);
     await context.close();
   });
 }
