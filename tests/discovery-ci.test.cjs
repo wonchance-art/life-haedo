@@ -19,11 +19,15 @@ function seed() {
   const sources = Object.entries(Core.ALLOWED_SOURCES).map(([id, hosts]) => ({ id, name: id,
     url: `https://${hosts[0]}/`, feedUrl: `https://${hosts[0]}/feed`, language: 'ko', rights,
     status: 'ok', lastSuccessAt: BEFORE, lastAttemptAt: BEFORE, fetchedAt: BEFORE, error: null, stale: false }));
-  return { schemaVersion: 1, generatedAt: BEFORE, sources,
-    articles: sources.map(source => ({ id: 'article-' + source.id + '-' + crypto.createHash('sha256').update(source.url + 'article-' + source.id).digest('hex').slice(0, 20), sourceId: source.id,
+  const articles = sources.map(source => ({ id: 'article-' + source.id + '-' + crypto.createHash('sha256').update(source.url + 'article-' + source.id).digest('hex').slice(0, 20), sourceId: source.id,
       url: source.url + 'article-' + source.id, canonicalUrl: source.url + 'article-' + source.id, title: '공개 합성 기사', publishedAt: BEFORE, dateStatus: 'valid',
-      author: null, language: 'ko', tags: [], summary: '', coverage: 'link_only', rights, fetchedAt: BEFORE })) };
+      author: null, language: 'ko', tags: [], summary: '', coverage: 'link_only', rights, fetchedAt: BEFORE }));
+  // 2026-11-11: the first registry stays in `sources`/`articles`; every later source is published in `extended`.
+  const first = id => Core.LEGACY_SOURCE_IDS.includes(id);
+  return { schemaVersion: 1, generatedAt: BEFORE, sources: sources.filter(source => first(source.id)), articles: articles.filter(article => first(article.sourceId)),
+    extended: { sources: sources.filter(source => !first(source.id)), articles: articles.filter(article => !first(article.sourceId)) } };
 }
+const all = catalog => ({ sources: [...catalog.sources, ...(catalog.extended?.sources || [])], articles: [...catalog.articles, ...(catalog.extended?.articles || [])] });
 function workspace(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'haedo-discovery-ci-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -38,23 +42,25 @@ function fakeUpdater({ failures = [], exitCode, mutate } = {}) {
     const next = JSON.parse(fs.readFileSync(candidate)); next.generatedAt = NOW;
     // Model the real updater's additive registry transition: new failed sources
     // have neither a previous success nor invented last-good articles.
-    const current = seed();
-    for (const source of current.sources.filter(row => !next.sources.some(old => old.id === row.id))) {
-      next.sources.push({ ...source, lastSuccessAt: null, fetchedAt: null });
-      if (!failures.includes(source.id)) next.articles.push(...current.articles.filter(article => article.sourceId === source.id));
+    const current = seed(); next.extended ||= { sources: [], articles: [] };
+    for (const [part, registry] of [[next, current], [next.extended, current.extended]]) {
+      for (const source of registry.sources.filter(row => !part.sources.some(old => old.id === row.id))) {
+        part.sources.push({ ...source, lastSuccessAt: null, fetchedAt: null });
+        if (!failures.includes(source.id)) part.articles.push(...registry.articles.filter(article => article.sourceId === source.id));
+      }
     }
-    for (const source of next.sources) {
+    for (const source of all(next).sources) {
       source.lastAttemptAt = NOW;
       if (failures.includes(source.id)) { source.status = 'error'; source.error = '합성 수집 실패'; source.stale = true; }
       else {
         source.status = 'ok'; source.error = null; source.stale = false; source.lastSuccessAt = NOW; source.fetchedAt = NOW;
-        for (const article of next.articles.filter(article => article.sourceId === source.id)) article.fetchedAt = NOW;
+        for (const article of all(next).articles.filter(article => article.sourceId === source.id)) article.fetchedAt = NOW;
       }
     }
     if (mutate) mutate(next);
     fs.writeFileSync(candidate, bytes(next));
-    const okSources = next.sources.filter(source => source.status === 'ok').length;
-    fs.writeFileSync(report, bytes({ okSources, sourceCount: next.sources.length, articleCount: next.articles.length }));
+    const okSources = all(next).sources.filter(source => source.status === 'ok').length;
+    fs.writeFileSync(report, bytes({ okSources, sourceCount: all(next).sources.length, articleCount: all(next).articles.length }));
     return exitCode ?? (failures.length ? 2 : 0);
   };
 }
@@ -95,6 +101,7 @@ function previousRegistry(count = 5) {
   const registries = { 5: five, 7: seven, 8: [...seven, 'llt-journal'] };
   assert.ok(Object.hasOwn(registries, count));
   const previous = seed(), kept = new Set(registries[count]);
+  delete previous.extended; // publications of the earlier registries had no later part
   previous.sources = previous.sources.filter(source => kept.has(source.id));
   previous.articles = previous.articles.filter(article => kept.has(article.sourceId));
   assert.equal(previous.sources.length, count);
@@ -115,7 +122,7 @@ test('exact prior five-source publication can seed an additive registry upgrade 
 });
 
 test('exact prior seven-source publication remains a seed-only upgrade while current artifacts require all nine sources', async t => {
-  assert.equal(Object.keys(Core.ALLOWED_SOURCES).length, 9);
+  assert.equal(Core.LEGACY_SOURCE_IDS.length, 9);
   const previous = previousRegistry(7);
   assert.equal(previous.sources.length, 7);
   assert.doesNotThrow(() => CI.validateCatalog(bytes(previous), stamp(), true));
@@ -129,9 +136,11 @@ test('exact prior seven-source publication remains a seed-only upgrade while cur
   const w = workspace(t), result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
     runUpdater: fakeUpdater() });
-  assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 0);
+  assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.collectorExitCode, 0);
   assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
-  assert.equal(JSON.parse(fs.readFileSync(w.f.candidate)).sources.length, 9);
+  const upgraded = JSON.parse(fs.readFileSync(w.f.candidate));
+  assert.equal(upgraded.sources.length, 9);
+  assert.deepEqual(upgraded.extended.sources.map(source => source.id), Core.EXTENDED_SOURCE_IDS);
 });
 
 test('first failure of an added source retains null history and no fabricated articles', async t => {
@@ -162,7 +171,7 @@ test('exact prior eight-source LLT publication seeds Frontiers upgrade but arbit
   const result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater() });
   const next = JSON.parse(fs.readFileSync(w.f.candidate));
-  assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 0);
+  assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.collectorExitCode, 0);
   assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
   assert.equal(next.sources.find(source => source.id === 'frontiers-psychology').lastSuccessAt, NOW);
   assert.equal(next.articles.filter(article => article.sourceId === 'frontiers-psychology').length, 1);
@@ -175,7 +184,7 @@ test('Frontiers first failure during eight-to-nine upgrade retains null success 
   const result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater({ failures: [id] }) });
   const next = JSON.parse(fs.readFileSync(w.f.candidate)), added = next.sources.find(source => source.id === id);
-  assert.equal(result.sourceCount, 9); assert.equal(result.okSources, 8);
+  assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.okSources, Object.keys(Core.ALLOWED_SOURCES).length - 1);
   assert.equal(result.partialFailure, true); assert.equal(result.collectorExitCode, 2);
   assert.equal(added.status, 'error'); assert.equal(added.stale, true);
   assert.equal(added.lastSuccessAt, null); assert.equal(added.fetchedAt, null); assert.equal(added.lastAttemptAt, NOW);
@@ -196,7 +205,7 @@ for (const history of ['last-good', 'previously-never-succeeded']) {
     const result = await CI.collect({ root: w.root, clock: stamp,
       fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater({ failures: [id] }) });
     const next = JSON.parse(fs.readFileSync(w.f.candidate));
-    assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 2);
+    assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.collectorExitCode, 2);
     assert.equal(next.sources.find(source => source.id === id).lastSuccessAt, history === 'last-good' ? BEFORE : null);
     assert.deepEqual(next.articles.filter(article => article.sourceId === id), before);
     assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));

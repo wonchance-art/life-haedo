@@ -1806,8 +1806,16 @@ test('trash wins over prepared source edits and late original imports without er
   const restoredChanges = Core.buildSourceStateChanges(trashed, sourceId, 'active', { expectedRevision: 1, expectedStatus: 'trash' });
   assert.equal((await f.storage.commitLocal({ workspaceId: trashed.workspaceId, baseRevision: trashed.revision, operationId: Core.id(), changes: restoredChanges })).status, 'stored');
   const restored = await f.storage.read(trashed.workspaceId), oldStage = await f.storage.commitLocal({ ...f.request, operationId: Core.id(), baseRevision: restored.revision, stageRevision: draftAgain.revision });
-  assert.equal(oldStage.status, 'rejected'); assert.equal(oldStage.error.code, 'source_edit_conflict');
+  // The changes were prepared for the earlier input, so the transaction still refuses them (not the base).
+  assert.equal(oldStage.status, 'rejected'); assert.equal(oldStage.error.code, 'source_edit_mismatch');
   assert.equal(Core.sourceState(restored, sourceId).revision, 2); assert.equal(restored.sources[0].id, sourceId);
+  // 2026-11-11 소유자 지시: 휴지통 왕복은 본문과 무관하므로 복원한 뒤에는 같은 초안을 그대로 저장한다.
+  const again = await f.model.prepare(restored, draftAgain), stored = await f.storage.commitLocal({ workspaceId: restored.workspaceId, baseRevision: restored.revision,
+    operationId: Core.id(), stageId: draftAgain.stageId, stageRevision: draftAgain.revision, changes: again.changes, stageResult: again.stageResult });
+  assert.equal(stored.status, 'stored');
+  const after = await f.storage.read(restored.workspaceId);
+  assert.equal(after.sourceVersions.at(-1).contentText, '휴지통에서도 보존할 입력'); assert.deepEqual(after.sourceVersions.slice(0, -1), f.bundle.sourceVersions);
+  assert.deepEqual(after.records, f.bundle.records); assert.equal((await f.storage.getStage(draftAgain.stageId)).state, 'applied');
 });
 test('whole snapshot sync cannot lose known edited-copy/base history or reset a source lifecycle after a clean upload', async t => {
   const f = await sourceEditStorageFixture(t); assert.equal((await f.storage.commitLocal(f.request)).status, 'stored');
@@ -1823,7 +1831,22 @@ test('whole snapshot sync cannot lose known edited-copy/base history or reset a 
     assert.deepEqual(f.rows, before);
   }
 });
+// 2026-11-11 소유자 지시: 낡은 초안의 기준은 최신 판 id·해시뿐이다(이전 단언은 휴지통 왕복만으로 낡았다고 보았다).
 test('new account copies remap source-edit bases and preserve an already stale edit instead of making it current', async t => {
+  const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
+  // A newer version from elsewhere makes the stored draft stale.
+  const newer = await Core.prepareImport({ origin: f.bundle.sources[0].origin, title: f.bundle.sources[0].title, text: '다른 곳에서 생긴 최신 판', existingSourceId: sourceId }, f.bundle);
+  assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildImportChanges(f.bundle, newer, []) })).status, 'stored');
+  const account = f.storage.forAccount(accountA), result = await account.importUnownedWorkspace(f.bundle.workspaceId);
+  const stages = await account.listStages(result.workspaceId), bundle = await account.read(result.workspaceId), stage = stages.find(value => value.kind === 'source-edit');
+  assert(stage.baseChanged); assert.notEqual(stage.stageId, f.stage.stageId); assert.notEqual(stage.baseSourceId, sourceId);
+  assert.equal(stage.baseSourceId, bundle.sources[0].id); assert.equal(stage.baseSourceVersionId, bundle.sourceVersions[0].id);
+  assert.equal(stage.lifecycleRevision, 0); assert.equal(stage.input.text, f.stage.input.text);
+  assert.throws(() => f.model.validateCurrent(bundle, stage), { code: 'source_edit_conflict' });
+  assert.equal(f.model.baseState(bundle, stage).status, 'moved');
+});
+test('new account copies keep a source-edit draft current across a trash round trip', async t => {
   const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
   assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(),
     changes: Core.buildSourceStateChanges(f.bundle, sourceId, 'trash') })).status, 'stored');
@@ -1832,10 +1855,8 @@ test('new account copies remap source-edit bases and preserve an already stale e
     changes: Core.buildSourceStateChanges(trashed, sourceId, 'active') })).status, 'stored');
   const account = f.storage.forAccount(accountA), result = await account.importUnownedWorkspace(f.bundle.workspaceId);
   const stages = await account.listStages(result.workspaceId), bundle = await account.read(result.workspaceId), stage = stages.find(value => value.kind === 'source-edit');
-  assert(stage.baseChanged); assert.notEqual(stage.stageId, f.stage.stageId); assert.notEqual(stage.baseSourceId, sourceId);
-  assert.equal(stage.baseSourceId, bundle.sources[0].id); assert.equal(stage.baseSourceVersionId, bundle.sourceVersions[0].id);
-  assert.equal(stage.lifecycleRevision, 1); assert.equal(stage.input.text, f.stage.input.text);
-  assert.throws(() => f.model.validateCurrent(bundle, stage), { code: 'source_edit_conflict' });
+  assert.equal(Object.hasOwn(stage, 'baseChanged'), false); assert.equal(stage.lifecycleRevision, 1); assert.equal(stage.input.text, f.stage.input.text);
+  assert.equal(f.model.validateCurrent(bundle, stage).head.id, bundle.sourceVersions[0].id);
 });
 test('preservation final selection CAS notices an edited-copy marker disappearing while exact text and post evidence stay unchanged', async t => {
   const f = await preservationFixture(t), Edit = require('../assets/life/source-edit.js'), Refs = require('../assets/life/source-reference.js'), Preserve = require('../assets/life/preservation-references.js');
@@ -2038,4 +2059,358 @@ test('a corrupted workspace keeps post and list operations working while content
   const postKey = JSON.stringify(`photo-post:${ws}:${received.id}`), meta = rows.get('meta'), row = structuredClone(meta.get(postKey));
   row.value.title = 42; meta.set(postKey, row);
   await assert.rejects(storage.readPhotoPost(ws, received.id), { code: 'invalid_photo_post' });
+});
+
+// ---- Originals merge in one storage transaction (2026-11-11) -----------------------------------
+// Both devices changed the workspace. The rules themselves are in tests/source-merge.test.cjs and
+// two real devices in tests/source-merge-browser.cjs; here: what the transaction writes.
+async function addSource(storage, bundle, title, text = title + ' 본문') {
+  const prepared = await Core.prepareImport({ origin: 'other', title, text, forceSeparate: true }, bundle);
+  assert.equal((await storage.commitLocal({ workspaceId: bundle.workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared, []) })).status, 'stored');
+  return storage.read(bundle.workspaceId);
+}
+async function withSource(bundle, title, text = title + ' 본문') {
+  const prepared = await Core.prepareImport({ origin: 'other', title, text, forceSeparate: true }, bundle);
+  return Core.applyChanges(bundle, Core.buildImportChanges(bundle, prepared, []));
+}
+const sourceTitles = bundle => bundle.sources.map(source => source.title).sort();
+
+test('mergeSyncRemote joins both sides, replaces the refused request and keeps the server snapshot as the next base', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  let local = await addSource(storage, base, '이 기기 자료');
+  const refused = await storage.prepareSyncUpload(id, binding); assert.equal(refused.expectedRevision, 1);
+  const server = await withSource(base, '다른 기기 자료');
+  const events = []; storage.subscribe(id, event => events.push(event.type));
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.deepEqual([result.status, result.pending, result.notice], ['merged', true, false]);
+  local = await storage.read(id);
+  assert.deepEqual(sourceTitles(local), ['다른 기기 자료', '이 기기 자료', '익명 자료']); assert.equal(local.revision, result.revision);
+  const state = await storage.getSyncState(id);
+  assert.deepEqual([state.status, state.outbox, state.conflict, state.remoteRevision, state.syncedLocalRevision], ['pending', null, null, 2, -1]);
+  assert.deepEqual(events, ['changed', 'sync_changed']);
+  // The merged snapshot is the next request, against the revision it was merged with.
+  const next = await storage.prepareSyncUpload(id, binding);
+  assert.notEqual(next.operationId, refused.operationId); assert.equal(next.expectedRevision, 2); assert.deepEqual(sourceTitles(next.data), sourceTitles(local));
+  assert.equal((await storage.ackSync(id, binding, next.operationId, 3)).status, 'synced');
+  // The stored snapshot is the base of the next merge: a deletion made elsewhere of an excerpt this device left alone applies.
+  local = await addSource(storage, local, '이 기기 두 번째 자료');
+  const deleted = Core.applyChanges(next.data, { remove: { records: [base.records[0].id] } });
+  await storage.mergeSyncRemote(id, binding, serverRow(deleted, 4));
+  local = await storage.read(id);
+  assert.deepEqual(local.records, []); assert.deepEqual(local.tombstones.map(mark => mark.entityId), [base.records[0].id]);
+  assert.ok(sourceTitles(local).includes('이 기기 두 번째 자료'));
+});
+
+// A device carried over from the previous version: a difference is recorded, this device changed
+// nothing since the acknowledged revision, and no base was ever stored. Its own workspace is the
+// base: the server's deletion and edit are taken, nothing comes back, nothing is sent.
+test('a recorded difference on a device that changed nothing and has no stored base: the server\'s deletion is applied', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, secondExcerpt);
+  const [first, second] = agreed.records;
+  const server = Core.applyChanges(Core.applyChanges({ ...agreed, revision: 0 }, { remove: { records: [first.id] } }),
+    { put: { records: [{ ...second, note: '다른 기기가 고친 메모', revision: second.revision + 1, updatedAt: new Date(Date.now() + 60000).toISOString() }] } });
+  const row = serverRow(server, 2);
+  await storage.setSyncConflict(id, binding, row); assert.equal((await storage.getSyncState(id)).status, 'conflict'); assert.equal(baseRow(rows, id), null);
+  const result = await storage.mergeSyncRemote(id, binding, row);
+  assert.deepEqual([result.pending, result.based, result.notice], [false, true, false]);
+  const local = await storage.read(id);
+  assert.deepEqual({ ...local, revision: 0 }, { ...server, revision: 0 }, 'exactly the server snapshot: the deleted excerpt is gone');
+  assert.equal((await storage.getSyncState(id)).status, 'synced'); assert.equal(await storage.getSyncNotice(id), null);
+});
+
+test('a recorded difference whose local side did not change is taken exactly as the server snapshot and is synced', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  const server = await withSource(base, '다른 기기 자료'), row = serverRow(server, 2);
+  await storage.setSyncConflict(id, binding, row); assert.equal((await storage.getSyncState(id)).status, 'conflict');
+  // Recording the same difference again writes and announces nothing.
+  const events = []; storage.subscribe(id, event => events.push(event.type));
+  await storage.setSyncConflict(id, binding, row); assert.deepEqual(events, []);
+  const result = await storage.mergeSyncRemote(id, binding, row);
+  assert.equal(result.pending, false);
+  const state = await storage.getSyncState(id), local = await storage.read(id);
+  assert.deepEqual([state.status, state.conflict, state.remoteRevision, state.syncedLocalRevision], ['synced', null, 2, local.revision]);
+  assert.deepEqual({ ...local, revision: 0 }, { ...server, revision: 0 });
+  assert.equal(await storage.prepareSyncUpload(id, binding), null, 'nothing to send');
+  assert.equal((await storage.applySyncRemote(id, binding, row)).status, 'stored', 'the equal-revision check of a later run passes');
+});
+
+test('a merge that cannot be made leaves the workspace, the pending request and the state as they were', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  await addSource(storage, base, '이 기기 자료');
+  await storage.prepareSyncUpload(id, binding);
+  const before = { bundle: await storage.read(id), state: await storage.getSyncState(id) };
+  // The same exact version with other text is damage: an error, never a merge.
+  const damaged = structuredClone(await withSource(base, '다른 기기 자료'));
+  damaged.sourceVersions[0].contentText = '같은 식별자의 다른 본문'; damaged.records = [];
+  await assert.rejects(storage.mergeSyncRemote(id, binding, serverRow(damaged, 2)), { code: 'immutable_source_version' });
+  assert.deepEqual({ bundle: await storage.read(id), state: await storage.getSyncState(id) }, before);
+  // Two edited-copy marks for one exact version cannot be one valid workspace: left for the comparison.
+  const versionId = base.sourceVersions[0].id, at = base.sourceVersions[0].importedAt;
+  const mark = () => ({ id: Core.id(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: versionId }], revision: 1, createdAt: at, updatedAt: at });
+  const marked = structuredClone(before.bundle); marked.links.push(mark()); Core.validateWorkspace(marked);
+  const other = structuredClone(base); other.links.push(mark()); Core.validateWorkspace(other);
+  const second = syncFixture(); t.after(() => second.storage.close());
+  await second.storage.installWorkspaces([marked]);
+  const bindingB = bindingFor(marked); await second.storage.bindSync(marked.workspaceId, bindingB);
+  const local = await second.storage.read(marked.workspaceId);
+  await assert.rejects(second.storage.mergeSyncRemote(marked.workspaceId, bindingB, serverRow(other, 1)), { code: 'merge_invalid' });
+  assert.deepEqual(await second.storage.read(marked.workspaceId), local);
+  assert.equal((await second.storage.getSyncState(marked.workspaceId)).conflict, null);
+});
+
+test('the notice of a merged same-item edit stays until acknowledged', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  assert.equal(await storage.getSyncNotice(id), null);
+  let local = await editNote(storage, base, '이 기기 메모');
+  const server = Core.applyChanges(base, { put: { records: [{ ...base.records[0], note: '다른 기기의 나중 메모', revision: 2, updatedAt: new Date(Date.now() + 60000).toISOString() }] } });
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.deepEqual([result.notice, result.based], [true, true]);
+  local = await storage.read(id);
+  assert.deepEqual(local.records.map(record => [record.note, record.topic]), [['다른 기기의 나중 메모', '검증'], ['이 기기 메모', '복구 사본 · 검증']]);
+  const notice = await storage.getSyncNotice(id);
+  assert.deepEqual([notice.sourceIds, notice.recordIds, notice.restoredIds, notice.uncertain], [[], [local.records[1].id], [], false]);
+  const upload = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, upload.operationId, 3);
+  assert.deepEqual((await storage.getSyncNotice(id)).recordIds, notice.recordIds, 'kept across the upload');
+  // A later merge adds to what is not yet acknowledged: this device deletes the excerpt the other device edits again.
+  local = await storage.read(id); const first = local.records[0];
+  assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: local.revision, changes: { remove: { records: [first.id] } } })).status, 'stored');
+  const again = Core.applyChanges({ ...local, revision: 0 }, { put: { records: [{ ...first, note: '다른 기기가 다시 고친 메모', revision: first.revision + 1, updatedAt: new Date(Date.now() + 120000).toISOString() }] } });
+  assert.equal((await storage.mergeSyncRemote(id, binding, serverRow(again, 4))).notice, true);
+  const both = await storage.getSyncNotice(id);
+  assert.deepEqual([both.recordIds, both.restoredIds], [notice.recordIds, [first.id]], 'the earlier line is still there');
+  await storage.dismissSyncNotice(id); assert.equal(await storage.getSyncNotice(id), null);
+});
+
+// ---- When the merge base is kept, and from what ---------------------------------------------------
+const baseKeyOf = id => JSON.stringify('syncBase:' + id);
+const baseRow = (rows, id) => rows.get('meta').get(baseKeyOf(id))?.value || null;
+// A device that carries the data of the version before the merge: synced, and no base record.
+async function syncedWithoutBase(t, extra = null) {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  let bundle = await initialImport(storage);
+  if (extra) bundle = await extra(storage, bundle);
+  const id = bundle.workspaceId, binding = await uploaded(storage, bundle);
+  rows.get('meta').delete(baseKeyOf(id));
+  return { storage, rows, id, binding, agreed: await storage.read(id) };
+}
+// A second excerpt on the first source (the fixture's text is '검증할 원문입니다.').
+async function secondExcerpt(storage, bundle) {
+  const version = bundle.sourceVersions[0], time = new Date().toISOString();
+  const record = { id: Core.id(), kind: 'excerpt', text: version.contentText.slice(4, 6), topic: '둘째', note: '', sourceRefs: [{ sourceId: version.sourceId, sourceVersionId: version.id, locator: { start: 4, end: 6 } }],
+    provenance: { kind: 'user' }, revision: 1, createdAt: time, updatedAt: time };
+  assert.equal((await storage.commitLocal({ workspaceId: bundle.workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: { put: { records: [record] } } })).status, 'stored');
+  return storage.read(bundle.workspaceId);
+}
+const noteOf = (bundle, id) => bundle.records.find(record => record.id === id)?.note;
+const edited = (bundle, id, note, ms = 60000) => { const record = bundle.records.find(value => value.id === id);
+  return Core.applyChanges(bundle, { put: { records: [{ ...record, note, revision: record.revision + 1, updatedAt: new Date(Date.now() + ms).toISOString() }] } }); };
+
+test('the first change of a workspace that equals the acknowledged snapshot keeps that snapshot as the base, in the same transaction', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, secondExcerpt);
+  assert.equal(baseRow(rows, id), null);
+  // Seen clean by a page that opens it: kept without any change or network.
+  assert.equal(await storage.captureSyncBase(id, binding), true);
+  assert.deepEqual([baseRow(rows, id).remoteRevision, baseRow(rows, id).base.records.map(record => record.id)], [1, agreed.records.map(record => record.id)]);
+  rows.get('meta').delete(baseKeyOf(id));
+  // Not seen by a page first: the change itself keeps what the workspace was before it.
+  const changedLocally = await editNote(storage, agreed, '첫 변경');
+  const kept = baseRow(rows, id);
+  assert.equal(kept.remoteRevision, 1); assert.equal(noteOf(kept.base, agreed.records[0].id), '', 'the snapshot before the change, not after');
+  // Later changes do not move it, and a workspace with unsent changes is never taken as a base.
+  await editNote(storage, changedLocally, '둘째 변경');
+  assert.equal(noteOf(baseRow(rows, id).base, agreed.records[0].id), '');
+  rows.get('meta').delete(baseKeyOf(id));
+  assert.equal(await storage.captureSyncBase(id, binding), false); assert.equal(baseRow(rows, id), null);
+  await addSource(storage, await storage.read(id), '미전송 변경 뒤의 저장'); assert.equal(baseRow(rows, id), null, 'no base from a workspace that already differs');
+});
+
+test('a merge keeps the server row it merged with as the base: a refused upload and a second merge keep this device\'s edit', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await secondExcerpt(storage, await initialImport(storage)), id = base.workspaceId, binding = await uploaded(storage, base);
+  const [mine, theirs] = base.records.map(record => record.id);
+  await editNote(storage, base, '이 기기가 고친 메모');                        // this device edits the first excerpt
+  const first = await withSource(base, '다른 기기 자료');                       // the server gained a source meanwhile
+  await storage.mergeSyncRemote(id, binding, serverRow(first, 2));
+  await storage.prepareSyncUpload(id, binding);                                // …the upload is refused: the server moved again,
+  const second = edited(first, theirs, '다른 기기가 다른 발췌를 고침');          // changing only the other excerpt
+  await storage.mergeSyncRemote(id, binding, serverRow(second, 3));
+  const local = await storage.read(id);
+  assert.equal(noteOf(local, mine), '이 기기가 고친 메모', 'not taken for an unchanged item and replaced by the server\'s older text');
+  assert.equal(noteOf(local, theirs), '다른 기기가 다른 발췌를 고침');
+  assert.equal(local.records.length, 2, 'no recovery copy: each excerpt was changed on one device only');
+});
+
+test('an acknowledged upload keeps what was sent as the base: an edit made while it was on its way survives the next merge', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await secondExcerpt(storage, await initialImport(storage)), id = base.workspaceId, binding = await uploaded(storage, base);
+  const [mine, theirs] = base.records.map(record => record.id);
+  let local = await addSource(storage, base, '보내는 자료');
+  const sent = await storage.prepareSyncUpload(id, binding);
+  local = await editNote(storage, local, '보내는 동안 고친 메모');               // after the request was prepared, before its acknowledgement
+  await storage.ackSync(id, binding, sent.operationId, 2);
+  const server = edited(sent.data, theirs, '다른 기기가 다른 발췌를 고침');     // another device changes the other excerpt of what was sent
+  await storage.mergeSyncRemote(id, binding, serverRow(server, 3));
+  local = await storage.read(id);
+  assert.equal(noteOf(local, mine), '보내는 동안 고친 메모');
+  assert.equal(noteOf(local, theirs), '다른 기기가 다른 발췌를 고침'); assert.equal(local.records.length, 2);
+});
+
+test('a base that describes another acknowledged revision is not used', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base), record = base.records[0].id;
+  let local = await addSource(storage, base, '첫 변경');                                 // keeps the base of revision 1 (excerpt note '')
+  const stale = structuredClone(rows.get('meta').get(baseKeyOf(id)));
+  const sent = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, sent.operationId, 2);
+  const second = edited(sent.data, record, '다른 기기가 고친 메모');
+  await storage.applySyncRemote(id, binding, serverRow(second, 3));                     // received clean: this device now holds that edit
+  local = await addSource(storage, await storage.read(id), '둘째 변경');
+  rows.get('meta').set(baseKeyOf(id), stale);                                          // as left behind by a page that does not keep bases
+  const third = Core.applyChanges(second, { remove: { records: [record] } });           // the other device deletes the excerpt
+  await storage.mergeSyncRemote(id, binding, serverRow(third, 4));
+  local = await storage.read(id);
+  // Against the stale base the excerpt would look changed here ('' → the edit) and be kept.
+  assert.equal(local.records.some(value => value.id === record), false); assert.deepEqual(local.tombstones.map(mark => mark.entityId), [record]);
+  assert.ok(sourceTitles(local).includes('둘째 변경'));
+});
+
+test('without a stored base this device\'s commit receipts say what it touched since the acknowledged revision', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, async (storage, bundle) => secondExcerpt(storage, await secondExcerpt(storage, await secondExcerpt(storage, bundle))));
+  const [a, b, c, d] = agreed.records.map(record => record.id);
+  // This device (as on the version before): edits a, deletes b. The base record is absent throughout.
+  let local = await storage.read(id);
+  local = Core.applyChanges(local, { put: { records: [{ ...local.records[0], note: '이 기기가 고친 a', revision: 2, updatedAt: new Date().toISOString() }] } });
+  const commit = async changes => { const now = await storage.read(id); assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: now.revision, changes })).status, 'stored'); rows.get('meta').delete(baseKeyOf(id)); };
+  await commit({ put: { records: [local.records[0]] } }); await commit({ remove: { records: [b] } });
+  // The other device: edits c, deletes d.
+  const server = Core.applyChanges(edited(agreed, c, '다른 기기가 고친 c'), { remove: { records: [d] } });
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.deepEqual([result.based, result.notice], [true, false], 'decided from the receipts, nothing to announce');
+  local = await storage.read(id);
+  assert.deepEqual(local.records.map(record => [record.id, record.note]), [[a, '이 기기가 고친 a'], [c, '다른 기기가 고친 c']], 'no recovery copies: no excerpt was changed on both devices');
+  assert.deepEqual(local.tombstones.map(mark => mark.entityId).sort(), [b, d].sort(), 'both deletions stand');
+  assert.equal(baseRow(rows, id).remoteRevision, 2, 'from here on the stored base is used');
+});
+
+test('receipts: a real double edit keeps a recovery copy; a deletion of an excerpt the other device edited is not applied and is announced', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, secondExcerpt);
+  const [a, b] = agreed.records.map(record => record.id);
+  const commit = async changes => { const now = await storage.read(id); assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: now.revision, changes })).status, 'stored'); rows.get('meta').delete(baseKeyOf(id)); };
+  await commit({ put: { records: [{ ...agreed.records[0], note: '이 기기가 고친 a', revision: 2, updatedAt: new Date().toISOString() }] } });
+  await commit({ remove: { records: [b] } });
+  const server = edited(edited(agreed, a, '다른 기기가 나중에 고친 a'), b, '이 기기가 지운 b를 다른 기기가 고침');
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.deepEqual([result.based, result.notice], [true, true]);
+  const local = await storage.read(id), notice = await storage.getSyncNotice(id);
+  assert.deepEqual(local.records.map(record => [record.note, record.topic]), [['다른 기기가 나중에 고친 a', '검증'], ['이 기기가 고친 a', '복구 사본 · 검증'], ['이 기기가 지운 b를 다른 기기가 고침', '둘째']]);
+  assert.deepEqual(local.tombstones, []);
+  assert.deepEqual([notice.recordIds, notice.restoredIds, notice.uncertain], [[local.records[1].id], [b], false]);
+});
+
+test('receipts that do not cover every revision since the acknowledged one are not used: nothing is deleted and the notice says the merge was uncertain', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, secondExcerpt);
+  const [a, b] = agreed.records.map(record => record.id);
+  await editNote(storage, agreed, '이 기기가 고친 a'); await addSource(storage, await storage.read(id), '이 기기 자료');
+  rows.get('meta').delete(baseKeyOf(id));
+  // One commit's receipt is missing (the workspace was written by something that left none).
+  const operations = rows.get('operations'), last = [...operations.keys()].at(-1); operations.delete(last);
+  const server = Core.applyChanges(agreed, { remove: { records: [b] } });
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 2));
+  assert.equal(result.based, false);
+  const local = await storage.read(id), notice = await storage.getSyncNotice(id);
+  assert.ok(local.records.some(record => record.id === b), 'the excerpt the other device deleted stays: it cannot be shown unchanged here');
+  assert.deepEqual([notice.restoredIds, notice.uncertain], [[b], true]);
+  // A receipt this version cannot read has the same effect.
+  const second = await syncedWithoutBase(t, secondExcerpt);
+  await editNote(second.storage, second.agreed, '고친 a'); second.rows.get('meta').delete(baseKeyOf(second.id));
+  const map = second.rows.get('operations'), key = [...map.keys()].at(-1), receipt = structuredClone(map.get(key)); receipt.payload = '{"baseRevision":'; map.set(key, receipt);
+  const other = Core.applyChanges(second.agreed, { remove: { records: [second.agreed.records[1].id] } });
+  assert.equal((await second.storage.mergeSyncRemote(second.id, second.binding, serverRow(other, 2))).based, false);
+  assert.ok((await second.storage.read(second.id)).records.some(record => record.id === second.agreed.records[1].id), 'nothing is deleted');
+});
+
+test('receipts: an excerpt this device deleted is deleted only when the server still holds it as first made or as this device last wrote it', async t => {
+  // c was edited by the OTHER device before both agreed (revision 2, never written here): its deletion here cannot be confirmed.
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, async (storage, bundle) => {
+    let next = await secondExcerpt(storage, await secondExcerpt(storage, bundle));
+    next = await editNote(storage, next, '이 기기가 예전에 고친 a');             // a: revision 2, written here
+    return next;
+  });
+  const [a, b, c] = agreed.records.map(record => record.id);
+  const withEditedC = edited(agreed, c, '다른 기기가 예전에 고친 c', 1000);       // received clean from the other device
+  await storage.applySyncRemote(id, binding, serverRow(withEditedC, 2)); rows.get('meta').delete(baseKeyOf(id));
+  const commit = async changes => { const now = await storage.read(id); assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: now.revision, changes })).status, 'stored'); rows.get('meta').delete(baseKeyOf(id)); };
+  await commit({ remove: { records: [a] } }); await commit({ remove: { records: [b] } }); await commit({ remove: { records: [c] } });
+  const server = await withSource(withEditedC, '다른 기기 자료');                 // the other device touched none of the three
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 3));
+  const local = await storage.read(id), notice = await storage.getSyncNotice(id);
+  assert.equal(result.based, true);
+  assert.deepEqual(local.tombstones.map(mark => mark.entityId).sort(), [a, b].sort(), 'a: exactly as written here; b: as first made');
+  assert.deepEqual(local.records.map(record => record.id), [c], 'c could be an edit this device never saw: kept');
+  assert.deepEqual(notice.restoredIds, [c]);
+});
+
+test('a merged snapshot with text the server refuses (half of a surrogate pair) is not stored as a merge', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
+  const broken = { ...base.records[0], topic: '끊긴 글자 \ud83d', revision: 2, updatedAt: new Date().toISOString() };
+  assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: base.revision, changes: { put: { records: [broken] } } })).status, 'stored');
+  const before = await storage.read(id);
+  await assert.rejects(storage.mergeSyncRemote(id, binding, serverRow(await withSource(base, '다른 기기 자료'), 2)), { code: 'merge_invalid' });
+  assert.deepEqual(await storage.read(id), before);
+});
+
+test('a draft saved by this page is announced as its own; one written by sync is not', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const bundle = await initialImport(storage), events = [];
+  storage.subscribe(bundle.workspaceId, event => { if (event.type === 'writing_draft_changed') events.push(event.local === true); });
+  const draft = Writing.createDraft(bundle); draft.title = '초안'; draft.text = '본문';
+  await storage.saveStage(draft);
+  assert.deepEqual(events, [true]);
+});
+
+// The proof by content covers every kind the receipts hold, not only excerpts: a title this device
+// itself had sent is the title it started from, so its second rename is its change alone.
+test('receipts: this device\'s own earlier write of a source shows the server has not changed it (no title row, nothing announced)', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  let bundle = await initialImport(storage); const id = bundle.workspaceId, binding = await uploaded(storage, bundle);
+  const rename = async title => { bundle = await storage.read(id); const source = bundle.sources[0];
+    assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: bundle.revision,
+      changes: { put: { sources: [{ ...source, title, revision: source.revision + 1, updatedAt: new Date(Date.parse(source.updatedAt) + 1000).toISOString() }] } } })).status, 'stored'); };
+  await rename('이 기기가 먼저 보낸 제목');
+  const sent = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, sent.operationId, 2);
+  const agreed = await storage.read(id);
+  await rename('이 기기가 다시 고친 제목');
+  rows.get('meta').delete(baseKeyOf(id));                 // as if that change had been made on the version that kept no base
+  const server = await withSource({ ...agreed, revision: 0 }, '다른 기기 자료');   // the server still holds this device's first title
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 3));
+  assert.deepEqual([result.based, result.notice, result.pending], [true, false, true]);
+  const local = await storage.read(id);
+  assert.deepEqual(local.sources.map(source => source.title), ['이 기기가 다시 고친 제목', '다른 기기 자료']);
+  assert.deepEqual(local.links, [], 'no title lost: none is kept beside the source');
+});
+
+// Cascade (2026-11-11): a draft that points at no original is connected while the originals are
+// still unsent. A draft that was saved as an original (its applied marker), or that edits one,
+// waits: the draft's row never reaches the server before the original it names.
+test('while the originals are unsent: a new draft connects, an applied draft and a draft of an original wait', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  let bundle = await initialImport(storage); const id = bundle.workspaceId, binding = await uploaded(storage, bundle);
+  const item = await writingItem(storage, bundle);
+  assert.equal((await storage.commitLocal(item.request)).status, 'stored');           // saved as an original: the originals now differ from the server
+  bundle = await storage.read(id);
+  assert.equal((await storage.getSyncState(id)).status, 'pending'); assert.equal((await storage.getStage(item.stage.stageId)).state, 'applied');
+  const free = Writing.createDraft(bundle); free.title = '새 초안'; free.text = '원문과 무관한 초안';
+  const edit = Writing.createDraft(bundle, { sourceId: bundle.sources.at(-1).id }); edit.text = '보관한 글을 고치는 초안';
+  await storage.saveStage(free); await storage.saveStage(edit);
+  assert.equal((await storage.bindWritingSync(id, free.stageId, binding)).enabled, true);
+  await assert.rejects(storage.bindWritingSync(id, item.stage.stageId, binding), { code: 'writing_source_pending' });
+  await assert.rejects(storage.bindWritingSync(id, edit.stageId, binding), { code: 'writing_source_pending' });
+  // Once the originals are acknowledged both follow.
+  const outbox = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, outbox.operationId, 2);
+  assert.equal((await storage.bindWritingSync(id, item.stage.stageId, binding)).enabled, true);
+  assert.equal((await storage.bindWritingSync(id, edit.stageId, binding)).enabled, true);
 });

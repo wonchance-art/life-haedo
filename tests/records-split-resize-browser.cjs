@@ -11,6 +11,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const { harnessFrameError } = require('./helpers/news-reader.cjs');
+const { lineAt, sameLine } = require('./helpers/records-reader.cjs');
 const out = path.resolve(process.env.RECORDS_SPLIT_OUTPUT || path.join(__dirname, '../.local/records-split-resize'));
 const report = { createdAt: new Date().toISOString(), scope: 'Local Chromium, synthetic Auth, anonymous records and synthetic news feed; mouse and keyboard only.', checks: [], consoleErrors: [], pageErrors: [], external: [], captures: [] };
 const RECORDS_KEY = 'caeyeon_life_split_records', NEWS_KEY = 'caeyeon_life_split_news';
@@ -191,17 +192,35 @@ async function main() {
       await drag(page, '#lifeMain', -1000); state = await split(page, '#lifeMain'); assertSeparator(state); assert.equal(state.now, 280); assert.equal(state.stored, '280');
       await drag(page, '#lifeMain', 3000); state = await split(page, '#lifeMain'); assertSeparator(state);
       assert.equal(state.now, state.max); assert.equal(state.stored, String(state.max)); assert(Math.abs(state.columns[2] - 420) <= 1, 'reader at its 420px minimum');
-      // Keyboard: ±16px, Shift ±64px, Home/End, Enter resets; page scroll does not move.
+      // Keyboard: ±16px, Shift ±64px, Home/End, Enter resets; the keys do not scroll the page.
+      // Each key that changes the width reflows the reader, and the reader puts the line being read back at its height
+      // (SplitResize.keepLine) in the rendering frame after the width change, not in the key's own task. So the page
+      // can be anywhere between those frames; what must hold is that the separator took the keys (the page's default
+      // Home/End/arrow scroll is prevented) and that, once the frame has come, the reading line is where it was.
       const handle = page.locator('#lifeMain > .haedo-split-handle');
-      await handle.focus(); const scrollY = await page.evaluate(() => scrollY);
+      await handle.focus();
+      await page.evaluate(() => { window.__separatorKeys = []; addEventListener('keydown', event => { if (event.target?.classList?.contains('haedo-split-handle') && event.key !== 'Shift') window.__separatorKeys.push(event); }, true); });
+      const scrollY = await page.evaluate(() => Math.round(scrollY)), reading = await lineAt(page);
+      assert(reading.para > 5 && reading.para < 75, 'reading in the middle of the original: ' + JSON.stringify(reading));
       await page.keyboard.press('Home'); assert.equal((await split(page, '#lifeMain')).now, 280);
+      // Home widens the reader from 420 to 720px (the text reflows); after that frame the same character is on the reading line.
+      await frames(page);
+      const wide = await lineAt(page, reading);
+      assert(wide.width > reading.width && wide.textHeight < reading.textHeight - 10 * wide.lineHeight, 'Home reflowed the reader: ' + JSON.stringify({ reading, wide }));
+      sameLine(reading, wide, 'Home on the separator');
       await page.keyboard.press('ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 296);
       await page.keyboard.press('Shift+ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 360);
       await page.keyboard.press('ArrowLeft'); state = await split(page, '#lifeMain'); assert.equal(state.now, 344); assert.equal(state.stored, '344');
       await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Shift+ArrowLeft'); assert.equal((await split(page, '#lifeMain')).now, 280, 'keys stop at the minimum');
       await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, state.max);
       await page.keyboard.press('ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, state.max, 'keys stop at the maximum');
-      assert.equal(await page.evaluate(() => scrollY), scrollY, 'Home/End on the separator do not scroll the page');
+      assert.deepEqual(await page.evaluate(() => window.__separatorKeys.map(event => [event.key, event.defaultPrevented])),
+        ['Home', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowLeft', 'ArrowLeft', 'End', 'ArrowRight'].map(key => [key, true]), 'the separator takes Home/End and the arrows: the page does not scroll by them');
+      // Back at the width the keys started from, after the frame in which the reader keeps its line.
+      await frames(page);
+      const kept = await lineAt(page, reading);
+      sameLine(reading, kept, 'Home/End and the arrows on the separator');
+      assert.equal(kept.y, scrollY, 'Home/End on the separator do not scroll the page: back at the first width it is where it was');
       assert.deepEqual(await handle.evaluate(node => ({ focus: node.matches(':focus-visible'), ring: getComputedStyle(node.querySelector('.haedo-split-grip')).outlineStyle })), { focus: true, ring: 'solid' }, 'visible focus ring');
       await page.keyboard.press('Enter'); state = await split(page, '#lifeMain'); assert.equal(state.now, 400); assert.equal(state.stored, null, 'Enter resets to the default');
       await page.keyboard.press('Shift+ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 464);
@@ -312,10 +331,14 @@ async function main() {
           const main = document.querySelector('#lifeMain'), css = getComputedStyle(main), host = document.querySelector('#discoveryReaderHost'), list = document.querySelector('#discoveryListPane');
           return { split: main.dataset.split || null, wide: main.dataset.wide || null, handles: document.querySelectorAll('.haedo-split-handle').length, reading: document.querySelector('#discoveryReview').dataset.reading,
             host: host.checkVisibility(), hostChildren: host.childElementCount, placeholder: document.querySelectorAll('.discovery-reader-empty').length, text: document.body.innerText.includes('목록에서 글을 고르면'),
-            content: main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), list: list.getBoundingClientRect().width, app: document.querySelector('.life-app').getBoundingClientRect().width };
+            content: main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), list: list.getBoundingClientRect().width, app: document.querySelector('.life-app').getBoundingClientRect().width,
+            start: Math.round(list.getBoundingClientRect().left - main.getBoundingClientRect().left - parseFloat(css.paddingLeft)) };
         });
         assert.deepEqual([layout.split, layout.wide, layout.handles, layout.reading, layout.host, layout.hostChildren, layout.placeholder, layout.text], [null, 'news', 0, 'false', false, 0, 0, false], label + ': list only');
-        assert(Math.abs(layout.list - layout.content) <= 1, label + ': the list fills the content width');
+        // 2026-11-11 (카드 피드, 총괄 결정): the card list alone is one 680px column on the 자료 list's start line; the
+        // 960px frame below stays the frame it sits in (was: the list fills that frame, for the row list).
+        assert(Math.abs(layout.list - Math.min(680, layout.content)) <= 1, label + ': the card list is one 680px column: ' + layout.list);
+        assert(Math.abs(layout.start) <= 1, label + ': same start line as the 자료 list');
         assert.equal(Math.round(layout.content), Math.min(960, Math.round(layout.app - 48)), label + ': same frame as the 자료 list');
       };
       for (const width of [1101, 1440, 1920]) {
@@ -384,7 +407,15 @@ async function main() {
         assert.equal(await page.evaluate(() => document.querySelector('.haedo-split-handle')?.checkVisibility() ?? false), false, width + ': no separator');
         assert.equal(await horizontalOverflow(page), false, width + ': horizontal overflow');
       }
-      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page); await nav(page, 'records');
+      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page);
+      // 미해결(2026-11-11): 이 nav 안의 aria-current 단언이 한 번 null로 실패했고 다시 재현되지 않았다. 단언은 그대로 두고,
+      // 다시 실패하면 그 순간의 화면 상태를 실패 메시지에 남긴다(원인 판정용 계측).
+      await nav(page, 'records').catch(async error => {
+        const seen = await page.evaluate(() => ({ mode: document.querySelector('#lifeMain')?.dataset.mode ?? null, mainBusy: document.querySelector('#lifeMain')?.getAttribute('aria-busy') ?? null,
+          appBusy: document.querySelector('#lifeApp')?.getAttribute('aria-busy') ?? null, appHidden: document.querySelector('#lifeApp')?.hidden ?? null, address: location.pathname + location.search + location.hash, historyLength: history.length,
+          current: [...document.querySelectorAll('[data-haedo-navigation] [aria-current]')].map(item => item.dataset.haedoSection + '=' + item.getAttribute('aria-current')), width: innerWidth })).catch(failure => ({ unreadable: String(failure) }));
+        throw new Error(error.message + ' · state at the failure: ' + JSON.stringify(seen), { cause: error });
+      });
       assert.deepEqual(await page.evaluate(() => ({ handles: document.querySelectorAll('.haedo-split-handle').length, observers: window.__splitObservers.size })), { handles: 0, observers: 0 }, 'leaving news removes its separator');
     }, { width: 1440, height: 960 });
   } finally {

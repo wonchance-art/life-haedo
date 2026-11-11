@@ -113,13 +113,20 @@ test('stale source revision, malformed evidence and occupied recovery IDs leave 
   const collision = copy(f.memory.rows); await assert.rejects(f.run(), { code: 'photo_post_conflict' }); assert.deepEqual(f.memory.rows, collision);
 });
 
-test('replacement at the 200-post limit succeeds, but an in-place draft at the limit rolls back', async t => {
-  for (const draft of [false, true]) {
+// Rule change (core review M6, 2026-11-11): the transition's recovery copy is a copy of a post that is
+// already here, not a post the person starts, so the 200 cap does not refuse it. This check used to
+// require photo_post_limit and a rollback for an in-place draft at 200; before that change a
+// replacement was refused from 201 and an in-place draft from 200.
+test('the transition and its recovery copy are stored at and above the 200-post cap; a new post is still refused', async t => {
+  for (const total of [200, 204]) for (const draft of [false, true]) {
     const f = await fixture(t, { draft }), indexKey = `photo-posts:${f.ws}`, index = f.memory.rows.get('meta').get(key(indexKey)).value;
-    while (index.length < 200) index.push({ ...index[0], id: Core.id() });
-    const before = copy(f.memory.rows);
-    if (draft) { await assert.rejects(f.run(), { code: 'photo_post_limit' }); assert.deepEqual(f.memory.rows, before); }
-    else { await f.run(); assert.equal((await f.storage.listPhotoPosts(f.ws)).length, 200); }
+    while (index.length < total) index.push({ ...index[0], id: Core.id() });
+    const result = await f.run(), label = `${total} posts, ${draft ? 'in-place draft' : 'replacement'}`;
+    // A replacement removes the post it replaces; an in-place draft keeps its place. Both add the recovery copy.
+    assert.equal((await f.storage.listPhotoPosts(f.ws)).length, draft ? total + 1 : total, label);
+    assert.equal((await f.storage.readPhotoPost(f.ws, result.recoveryId)).title, '복구 사본 · 원래 제목', label);
+    const fresh = Photo.create(Core.id, '2026-11-06T00:00:00.000Z'); fresh.title = '새 글'; fresh.ops = [{ insert: '본문\n' }];
+    await assert.rejects(f.storage.savePhotoPost(f.ws, fresh, 0), { code: 'photo_post_limit' }, label);
   }
 });
 

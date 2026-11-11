@@ -26,6 +26,22 @@ const paste = (page, text) => page.evaluate(value => {
   document.querySelector('.ql-editor').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
 }, text);
 const status = page => page.locator('.photo-commandbar .photo-status-text').textContent();
+// A note about a mark is shown only until the 300 ms autosave replaces it with 자동 저장됨. Reading the status
+// after a few page round trips races that save (2026-11-11: it failed on a busy machine, on the base commit too),
+// so the texts the status shows are recorded in order from before the action, and the check is that the note
+// was shown and then gave way to the save state.
+const watchStatus = page => page.evaluate(() => {
+  const node = document.querySelector('.photo-commandbar .photo-status-text');
+  window.__statusWatch?.disconnect();
+  window.__statusSeen = [node.textContent];
+  window.__statusWatch = new MutationObserver(() => { if (window.__statusSeen.at(-1) !== node.textContent) window.__statusSeen.push(node.textContent); });
+  window.__statusWatch.observe(node, { childList: true, characterData: true, subtree: true });
+});
+async function notedThenSaved(page, note) {
+  const seen = await page.waitForFunction(note => { const seen = window.__statusSeen || [], at = seen.indexOf(note); return at >= 0 && seen.indexOf('자동 저장됨', at + 1) > at; }, note)
+    .then(() => null, () => page.evaluate(() => window.__statusSeen));
+  assert.equal(seen, null, 'the status showed ' + JSON.stringify(seen) + '; expected ' + JSON.stringify(note) + ' and then 자동 저장됨');
+}
 async function stored(page) {
   return page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, ws = await s.getActive();
@@ -117,12 +133,13 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       assert.deepEqual(aiRuns(s.ops), [], 'a plain paste is the owner\'s text');
       const at = await indexOf(page, 'AI suggested sentence.');
       await setSelection(page, at, 'AI suggested sentence.'.length);
+      await openFormats(); await watchStatus(page);
       await clickToggle();
       s = await editorState(page);
       assert.deepEqual(aiRuns(s.ops), ['AI suggested sentence.']);
       assert.deepEqual(s.spans, ['AI suggested sentence.']);
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true', 'the selection is all AI text');
-      assert.equal(await status(page), 'AI 글로 표시했어요');
+      await notedThenSaved(page, 'AI 글로 표시했어요');
       // D1 (2026-11-04): the dots are a background along the bottom edge, like the reader's
       // .blog-ai-text, so an underline or a link drawn as text decoration cannot cover them.
       const style = await page.locator('.ql-editor .photo-ai-text').evaluate(n => { const c = getComputedStyle(n); return { image: c.backgroundImage, positionY: c.backgroundPositionY, repeat: c.backgroundRepeat, background: c.backgroundColor }; });
@@ -283,9 +300,10 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await paste(page, ' Plain paste.');
       await clickToggle();
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+      await watchStatus(page);
       await paste(page, ' Armed AI paste.');
       assert.equal(await toggle.getAttribute('aria-pressed'), 'false', 'the armed state covers one paste');
-      assert.equal(await status(page), '붙여넣은 글을 AI 글로 표시했어요');
+      await notedThenSaved(page, '붙여넣은 글을 AI 글로 표시했어요');
       // The caret is at the end of the AI run: this paste inherits the mark
       // first and is settled as the owner's text.
       await paste(page, ' Second plain paste.');
@@ -301,8 +319,9 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await setSelection(page, at, ' Armed AI paste.'.length);
       assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
       await pause(page);
+      await openFormats(); await watchStatus(page);
       await clickToggle();
-      assert.equal(await status(page), 'AI 글 표시를 해제했어요');
+      await notedThenSaved(page, 'AI 글 표시를 해제했어요');
       const after = await editorState(page);
       assert.equal(aiRuns(after.ops).includes(' Armed AI paste.'), false);
       assert.equal(after.text, before.text, 'unmarking never changes the text');

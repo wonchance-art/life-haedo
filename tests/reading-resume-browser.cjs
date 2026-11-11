@@ -23,7 +23,9 @@ async function openHomeLibrary(page) {
 async function home(page) { await openHomeLibrary(page); }
 const current = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.read(await s.getActive()); });
 async function fixture(page) {
-  await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+  // 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+  // 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+  await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
   const ids = await page.evaluate(async ({ title, raw, latest }) => {
     const s = HaedoLife.Shell.storage, c = HaedoLife.Core; let b = await s.read(await s.getActive());
     const old = await c.prepareImport({ origin: 'apple_notes', title, text: raw, forceSeparate: true }, b);
@@ -91,7 +93,9 @@ async function actualScroll(page, amount = 640) {
   await page.waitForFunction(before => scrollY !== before, point.before); await frames(page);
 }
 async function recordList(page) {
-  await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+  // 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+  // 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+  await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
   await page.locator('#lifeSearch').waitFor(); await frames(page);
 }
 async function exactResume(page, ids, bookmark, button = '#lifeReadingResumeOpen') {

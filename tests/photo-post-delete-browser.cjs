@@ -111,20 +111,28 @@ async function main() {
       });
     }
     await check('a post changed in another tab is not deleted from a stale read view', { width: 1440, height: 1000 }, async ({ page, refs, deletes }) => {
-      const [target] = refs.ids;
+      const [target] = refs.ids, refusal = '다른 탭이나 기기에서 글이 바뀌어 삭제하지 않았습니다. 글을 다시 연 뒤 삭제해 주세요.';
       await openPost(page, target);
       const control = await deleteControl(page);
-      await page.evaluate(async id => {
-        const s = HaedoLife.Shell.storage, w = await s.getActive(), doc = await s.readPhotoPost(w, id);
-        doc.title = '다른 탭에서 고친 제목'; await s.savePhotoPost(w, doc, doc.revision);
-      }, target);
+      // 2026-11-11 (글쓰기 m4): a read view now re-reads a change it can see, so it is stale only in
+      // the moment the change lands: here in another tab, while this tab's confirmation is open.
+      const other = await page.context().newPage(); await other.goto(base + '/index.html'); await ready(other);
       report.expectedErrors++;
-      page.once('dialog', dialog => dialog.accept());
+      page.once('dialog', async dialog => {
+        await other.evaluate(async id => {
+          const s = HaedoLife.Shell.storage, w = await s.getActive(), doc = await s.readPhotoPost(w, id);
+          doc.title = '다른 탭에서 고친 제목'; await s.savePhotoPost(w, doc, doc.revision);
+        }, target);
+        await dialog.accept();
+      });
       await control.click();
-      await page.waitForFunction(text => document.querySelector('.photo-status')?.textContent === text,
-        '다른 탭이나 기기에서 글이 바뀌어 삭제하지 않았습니다. 글을 다시 연 뒤 삭제해 주세요.');
+      await page.waitForFunction(text => document.querySelector('.photo-status')?.textContent === text, refusal);
       assert((await posts(page)).includes(target), 'the changed post is kept');
       assert.deepEqual(deletes, []);
+      // The view then shows what the post holds now and keeps the reason on screen.
+      await page.waitForFunction(() => document.querySelector('.photo-read-heading')?.textContent === '다른 탭에서 고친 제목');
+      assert.equal(await page.locator('.photo-status').textContent(), refusal);
+      assert((await posts(page)).includes(target));
     });
     await check('a post written from 9칸 구성 and deleted from its read view returns to 9칸 and forgets its draft receipt', { width: 1440, height: 1000 }, async ({ page, deletes }) => {
       const kept = await page.evaluate(async () => {

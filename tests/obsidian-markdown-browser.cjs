@@ -41,7 +41,9 @@ const report = { createdAt: new Date().toISOString(), scope: 'Actual local file 
 async function snapshot(page) {
   return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), interest: await s.readInterestProfile(w) }; });
 }
-async function records(page) { await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
+// 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+// 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
 async function reveal(control) {
   const depth = await control.locator('xpath=ancestor::details').count();
   for (let n = depth; n > 0; n--) { const parent = control.locator('xpath=ancestor::details[' + n + ']'); if (!await parent.evaluate(el => el.open)) await parent.locator(':scope > summary').click(); }

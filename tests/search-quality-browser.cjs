@@ -232,7 +232,10 @@ async function main() {
         const backScroll = await page.evaluate(() => scrollY); assert(Math.abs(backScroll - beforeReaderScroll) <= 2);
         await measureInput(page, '이번측정에는없는문장');
         await page.locator('#lifeSearch').evaluate(el => { el.focus(); el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = '정원'; el.dispatchEvent(new InputEvent('input', { bubbles: true, data: '정원', isComposing: true })); });
-        assert.equal(await page.locator('#lifeSearchResults article[data-version-id]').count(), 0);
+        // 2026-11-11 (자료 읽기 m3, 규칙 변경): 조합 중인 글자도 검색에 반영한다(이전에는 조합이 끝날 때까지 0개였다).
+        await twoFrames(page);
+        assert.equal(await page.locator('#lifeSearchResults article[data-version-id]').count(), phase === 'before' ? count + 1 : 40, 'the list follows the text still being composed');
+        assert.equal(await page.locator('#lifeSearch').evaluate(el => el === document.activeElement && el.value), '정원');
         await page.locator('#lifeSearch').dispatchEvent('compositionend'); await twoFrames(page);
         const compositionEndCards = await page.locator('#lifeSearchResults article[data-version-id]').count(); assert.equal(compositionEndCards, phase === 'before' ? count + 1 : 40);
         const performanceLongTasks = await page.evaluate(() => [...__searchLongTasks]);

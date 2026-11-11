@@ -177,6 +177,225 @@
       readBackText = "사진 글 목록",
       committed = false,
       standalone = false;
+    // Storing a draft and judging a post are separate (2026-11-11). Autosave
+    // writes the normalized document and never refuses the editor's input; when
+    // no valid form exists (over a limit) the input is kept in a device-only
+    // recovery copy instead. keptTick is the dirtyTick that copy holds and
+    // `unstored` the reason shown until the draft can be stored again. `offer`
+    // is a recovery copy found on opening, waiting for the writer's choice.
+    let keptTick = -1,
+      unstored = null,
+      offer = null,
+      // Device copies with no draft to open in place: their draft was deleted,
+      // became a saved post or was hidden, or they hold a new post that never
+      // reached storage. Each is shown every time 글쓰기 opens (and when 글 수정
+      // opens the post its draft became) until the writer chooses 복구 or 버리기;
+      // nothing else removes one, however long it waits. The editor is not
+      // locked for them: restoring one always makes a separate draft.
+      strays = [],
+      strayBand = null,
+      // What storage holds for the open document, as a fingerprint
+      // (M.contentHash): of the stored draft, of the saved post for a revision
+      // not stored yet, "" for a new post, null when unknown. A device copy
+      // records it, and continues a document only while it is still stored
+      // (revision numbers also rise without a content change).
+      storedBase = null,
+      storedAt = 0,
+      // What storing changed in the input, said on its own line for a few
+      // seconds; the save state beside the pill stays the real one.
+      changeNote = "",
+      changeNoteTimer = null,
+      noteLine = null,
+      // The account state of the stored draft being edited (read from BlogSync,
+      // never changed here except by the explicit retry): { id, revision, status }.
+      draftServer = null,
+      draftBusy = false,
+      draftTimers = [],
+      titleInput = null,
+      // A revision of a saved post is that post's editing buffer (2026-11-11):
+      // nothing is stored until the first real change, and a buffer that holds
+      // what the post holds is removed on leaving. `baseline` is the saved
+      // post's content when the revision was opened.
+      baseline = null;
+    // The last store refusal of the open document ({ doc, error }). While the
+    // same input waits for the next attempt the refusal stays said: the line
+    // (and the height of the tools) does not blink off on every attempt.
+    let failedStore = null;
+    const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
+    // Device copies belong to the signed-in account (and its workspace and draft).
+    const recoveryStore = M.recovery(localStore, storage.account?.userId || "local");
+    const writeCopy = (snapshot = doc) => recoveryStore.write(workspaceId, snapshot, storedBase);
+    const copyContinues = (copy) =>
+      !!doc && typeof copy?.base === "string" && copy.base === storedBase &&
+      (copy.id === doc.id || doc.revision === 0);
+    function showChangeNote(text = changeNote) {
+      changeNote = text;
+      clearTimeout(changeNoteTimer);
+      changeNoteTimer = text ? setTimeout(() => showChangeNote(""), 8000) : null;
+      if (!noteLine) return;
+      if (noteLine.textContent !== text) noteLine.textContent = text;
+      noteLine.hidden = !text;
+    }
+    // The editor's first focus: the choice about a kept copy when a band shows
+    // one, otherwise the body.
+    function focusEditing() {
+      const choice = host?.querySelector(".photo-recovered .photo-recovered-restore");
+      if (choice) choice.focus({ preventScroll: true });
+      else editor?.focus();
+    }
+    const sameContent = (copy, d) => {
+      try {
+        return M.contentKey({ ...d, title: copy.title, ops: copy.ops, attachments: copy.attachments }) === M.contentKey(d);
+      } catch (_) {
+        return false;
+      }
+    };
+    // Which device copies have no draft to open in place, and why (see `strays`).
+    async function strayCopies(rows, token) {
+      const byId = new Map(rows.map((row) => [row.id, row])),
+        found = [];
+      for (const copy of recoveryStore.list(workspaceId)) {
+        // The open document's own copy is offered in place.
+        if (copy.id === doc?.id) continue;
+        const home = byId.get(copy.id),
+          post = copy.replaces ? byId.get(copy.replaces.id) : null;
+        // Its draft is still an editable draft: offered when that draft opens.
+        if (home?.status === "draft" && !home.archived) continue;
+        // Input of a revision never stored, of a post that can be revised: offered by its 글 수정.
+        if (!home && copy.revision === 0 && post?.status === "saved" && !post.archived) continue;
+        if (home) {
+          // The other place may have stored exactly this input: nothing is left to offer.
+          const now = await storage.readPhotoPost(workspaceId, home.id).catch(() => null);
+          if (!current(token)) return [];
+          if (now && sameContent(copy, now)) {
+            recoveryStore.clear(workspaceId, copy.id);
+            continue;
+          }
+        }
+        found.push({ copy, kind: home ? (home.status === "saved" ? "saved" : "hidden") : copy.revision === 0 && !copy.replaces ? "new" : "gone" });
+      }
+      return found;
+    }
+    const STRAY_KINDS = {
+      gone: "지운 초안이나 글의 입력입니다",
+      saved: "저장한 글이 된 초안의 입력입니다",
+      hidden: "숨긴 초안의 입력입니다",
+      new: "보관된 적 없는 새 글의 입력입니다",
+    };
+    // One copy at a time, with how many more wait. Redrawn in place: the editor is not touched.
+    function drawStrays() {
+      if (!strayBand) return;
+      const item = offer ? null : strays[0];
+      // The band exists only while there is a copy to show (the slot holds its place).
+      strayBand.replaceChildren();
+      strayBand.hidden = !item;
+      if (!item) return;
+      const bar = el("div", null, "photo-recovered");
+      const taken = when(item.copy.savedAt),
+        more = strays.length - 1;
+      const text = el("p", "보관하지 못한 입력이 이 기기에 남아 있습니다" + (taken ? " · " + taken : "") + " · " +
+        STRAY_KINDS[item.kind] + " · 새 초안으로 복구합니다" + (more ? " · 외 " + more + "건" : ""), "photo-recovered-text");
+      text.id = "photoRecoveredText";
+      text.setAttribute("role", "status");
+      bar.setAttribute("role", "group");
+      bar.setAttribute("aria-labelledby", text.id);
+      const choices = el("div", null, "photo-recovered-actions");
+      choices.append(button("새 초안으로 복구", restoreStray), button("버리기", discardStray));
+      choices.firstChild.classList.add("photo-recovered-restore");
+      choices.firstChild.setAttribute("aria-describedby", text.id);
+      bar.append(text, choices);
+      strayBand.append(bar);
+    }
+    // Always a separate draft (it revises nothing). What the editor holds is
+    // kept first by the same store as autosave; an empty new draft is reused.
+    async function restoreStray() {
+      const item = strays[0];
+      if (!item || !doc || mode !== "edit" || offer) return;
+      guard(true);
+      const token = epoch, copy = item.copy;
+      // Photo bytes can only come from the post this copy's draft became. Read
+      // before the editor's input is kept: input typed while this waits is
+      // kept by that same flush, and nothing waits between it and the swap.
+      let photos = [];
+      if (item.kind === "saved" || item.kind === "hidden") {
+        const home = await storage.readPhotoPost(workspaceId, copy.id).catch(() => null);
+        if (!current(token) || strays[0] !== item) return;
+        photos = home?.photos || [];
+      }
+      do {
+        await flush();
+        if (!current(token) || strays[0] !== item) return;
+      } while (!settled());
+      const reuse = !doc.replaces && M.isEmpty(doc) && settled();
+      const next = reuse ? doc : M.create(life.Core.id);
+      next.photos = [...photos];
+      let attachments = [];
+      try {
+        life.PagePosts.validateAttachments(copy.attachments);
+        attachments = structuredClone(copy.attachments);
+      } catch (_) {}
+      const normal = M.normalize({ ...next, title: copy.title, ops: copy.ops, attachments });
+      const wanted = copy.ops.filter((op) => op?.insert?.photo).length,
+        kept = normal.doc.ops.filter((op) => typeof op.insert !== "string").length;
+      Object.assign(next, { title: normal.doc.title, ops: normal.doc.ops, attachments, updatedAt: new Date().toISOString() });
+      doc = next;
+      baseline = null;
+      strays.shift();
+      if (reuse) {
+        dirtyTick++;
+        keptTick = -1;
+        unstored = null;
+      } else {
+        resetTicks(1);
+        storedBase = "";
+      }
+      handOverCopy(copy);
+      error = null;
+      render();
+      authorNote = wanted > kept
+        ? "복구했어요 · 사진 " + (wanted - kept) + "장은 이 기기에 남아 있지 않아요"
+        : "새 초안으로 복구했어요";
+      authorNoteKept = true;
+      showStatus();
+      focusEditing();
+    }
+    // A restored copy now in `doc` (under another id): the original copy goes
+    // only once the input is kept again, by the device copy of `doc` now or by
+    // its first store. A full device store never loses both.
+    let handedOver = null;
+    function handOverCopy(copy) {
+      handedOver = null;
+      if (writeCopy() || copy.id === doc.id) {
+        if (copy.id !== doc.id) recoveryStore.clear(workspaceId, copy.id);
+      } else handedOver = { doc, id: copy.id, savedAt: copy.savedAt };
+    }
+    function storedHandedOver(target) {
+      if (handedOver?.doc !== target) return;
+      if (recoveryStore.read(workspaceId, handedOver.id)?.savedAt === handedOver.savedAt) recoveryStore.clear(workspaceId, handedOver.id);
+      handedOver = null;
+    }
+    function discardStray() {
+      const item = strays[0];
+      if (!item || !valid()) return;
+      if (typeof root.confirm === "function" && !root.confirm("이 기기에 남아 있는 입력을 버릴까요? 되돌릴 수 없습니다.")) return;
+      recoveryStore.clear(workspaceId, item.copy.id);
+      strays = strays.filter((other) => other !== item);
+      drawStrays();
+      focusEditing();
+    }
+    // Which id took a saved post's place when its revision was saved (ids only).
+    const movedStore = M.moved(localStore, storage.account?.userId || "local");
+    // What an open IME composition holds: the model does not have it yet.
+    let composingRange = null,
+      composingText = "",
+      lifecycleBound = false;
+    const settled = () => dirtyTick === storedTick || dirtyTick === keptTick;
+    function resetTicks(dirty = 0) {
+      dirtyTick = dirty;
+      storedTick = 0;
+      keptTick = -1;
+      unstored = null;
+    }
     // AI authorship: a one-shot "next paste is AI text" state, a short status
     // note, and owner-typed ranges that inherited the mark and must lose it
     // once no IME composition is active.
@@ -264,10 +483,21 @@
       authorNote = "";
       authorButton = null;
       editor = null;
+      strayBand = null;
+      noteLine = null;
+      composingRange = null;
+      composingText = "";
+      draftTimers.forEach(clearTimeout);
+      draftTimers = [];
+      draftBusy = false;
+      titleInput = null;
       selected = null;
       recoveryActions = null;
     }
     function showStatus(e) {
+      // Input kept on this device only stays said until the draft is stored.
+      if (!e && unstored && mode === "edit") e = unstored;
+      if (!e && mode === "edit" && failedStore && failedStore.doc === doc && error === failedStore.error) e = error;
       error = e || null;
       if (status) {
         status.hidden = mode === "read" && !e && !committed;
@@ -284,15 +514,24 @@
               ? "비공개 글을 저장했어요"
               : doc?.revision
                 ? "자동 저장됨"
-                : "사진 없이도 바로 쓸 수 있어요");
+                : doc?.replaces
+                  ? "바꾼 내용 없음"
+                  : "사진 없이도 바로 쓸 수 있어요");
         const state = e instanceof Error ? "error" : e || authorText ? "notice" :
           composing || dirtyTick !== storedTick ? "pending" :
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
         if (statusText.textContent !== message) statusText.textContent = message;
-        const detail = !e && authorText === AI_PENDING ? AI_PENDING_DETAIL : "";
+        // An error may carry a longer reason (`detail`): the one-line status
+        // keeps the short message and the reason gets its own line below.
+        const detail = e?.detail ? " " + e.detail : !e && authorText === AI_PENDING ? AI_PENDING_DETAIL
+          : !e && !authorText && message === "자동 저장됨" && draftState() === "error" ? " · 계정에 올리지 못함" : "";
         if (statusDetail && statusDetail.textContent !== detail) statusDetail.textContent = detail;
         status.dataset.state = state;
+        // A long error does not fit the one-line slot on a phone (about 110px):
+        // the stylesheet gives it its own line under the command row.
+        if (e instanceof Error && !e.detail && String(message).length > 24) status.dataset.long = "true";
+        else delete status.dataset.long;
         const role = e instanceof Error ? "alert" : "status";
         if (status.getAttribute("role") !== role) status.setAttribute("role", role);
         if (state === "error" && changed)
@@ -304,6 +543,9 @@
         recoveryActions.hidden = !e;
         recoveryActions.querySelector(".photo-recovery-copy").hidden =
           recoveryActions.dataset.conflict !== "true";
+        const reason = recoveryActions.querySelector(".photo-recovery-reason");
+        if (reason.textContent !== (e?.detail || "")) reason.textContent = e?.detail || "";
+        reason.hidden = !e?.detail;
       }
       refreshInfo?.();
       onDirty();
@@ -394,7 +636,13 @@
     // publicState: { id, published } once read; { id, checking } while the first read
     // runs; { id, failed } when it could not be read. Until it is known the pill and
     // 글 정보 say nothing about visibility (a public post must never look private).
-    let publicState = null;
+    // { id, unsettled }: this device sent a publish or withdrawal whose result it does not
+    // know (BlogSync publicationStatus "unknown"); the server may differ from what is
+    // recorded here, so neither 공개 nor 비공개 is shown until 공개 상태 확인 settles it.
+    // `notice`: what BlogSync says is still unanswered (publicationNotice). `log`: what the
+    // settlement did by itself. A newly opened post starts unread (mount), never from a value
+    // read before it was left: its publication may have changed meanwhile.
+    let publicState = null, publicBusy = false, publicError = "";
     const publicTarget = () =>
       mode === "read" ? (doc?.status === "saved" ? doc.id : null) : doc?.replaces?.id || null;
     function publication() {
@@ -402,6 +650,7 @@
       if (!id) return "private"; // a new or unsaved draft cannot have a public copy
       if (publicState?.id !== id || publicState.failed) return "unknown";
       if (publicState.checking) return "checking";
+      if (publicState.unsettled) return "unsettled";
       return publicState.published ? "public" : "private";
     }
     const isPublished = () => publication() === "public";
@@ -410,9 +659,9 @@
       serverValue.revision === doc.revision ? serverValue.status : null;
     function updatePill() {
       if (!pill) return;
-      const state = publication(), problem = PILL_PROBLEMS[serverState()] || "",
-        label = state === "public" ? "공개" : state === "private" ? "비공개" : "글 정보",
-        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" ? "공개 여부 확인 못 함" : label;
+      const state = publication(), problem = PILL_PROBLEMS[serverState() || draftState()] || "",
+        label = state === "public" ? "공개" : state === "private" ? "비공개" : state === "unsettled" ? "공개 확인 못 함" : "글 정보",
+        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" || state === "unsettled" ? "공개 여부 확인 못 함" : label;
       pill.dataset.state = problem ? "problem" : state;
       // The button is the 44px target; the drawn pill is its inner face.
       const face = el("span", null, "photo-privacy-face");
@@ -425,7 +674,7 @@
       face.append(glyph("forward", 16));
       pill.replaceChildren(face);
       pill.setAttribute("aria-label", spoken + (problem ? " · " + problem : "") + (revising ? " · 기존 글 수정 중" : "") +
-        (state === "public" || state === "private" ? " · 글 정보" : ""));
+        (state === "public" || state === "private" || state === "unsettled" ? " · 글 정보" : ""));
     }
     function privacyPill() {
       const b = el("button", null, "photo-privacy");
@@ -482,18 +731,45 @@
         if (known) shown.append(glyph(published ? "globe" : "lock", 16));
         shown.append(el("span", published ? "공개 중" : state === "private" ? "비공개" : state === "checking" ? "확인 중" : "확인하지 못함", "photo-info-value"));
         const visibility = row("공개", shown);
+        visibility.dataset.publication = state;
         visibility.append(el("p", published
           ? "공개 사본은 이 글과 따로 있습니다. 고친 내용은 공개 설정에서 갱신해야 공개 화면에 반영됩니다."
+          : state === "unsettled" ? "이 기기에서 보낸 공개 게시나 철회의 결과를 받지 못했습니다. 서버에서는 공개 중일 수 있습니다."
           : !known ? "공개 여부를 아직 확인하지 못했습니다. 글 공개·보관에서 확인할 수 있습니다."
           : saved ? "공개는 미리보기를 확인한 뒤 따로 선택합니다. 사진은 고른 것만, 촬영·위치 정보를 뺀 사본으로 공개합니다."
             : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
+        // A request of this device that is still unanswered is said for as long as it is kept, next
+        // to either state (never as failed for good: it can still arrive), and so is what the
+        // settlement did by itself (an old withdrawal sent again, a withdrawal overtaken by a publication).
+        const notes = life.BlogRemote?.publicationNotes || {};
+        if (known && saved && notes[publicState?.notice]) {
+          const said = el("p", life.BlogRemote?.publicationNote ? life.BlogRemote.publicationNote(publicState.notice, { publicationEarlier: publicState.earlier }) : notes[publicState.notice], "photo-info-note photo-public-unapplied");
+          said.dataset.notice = publicState.notice;
+          visibility.append(said);
+        }
+        if (known && saved && notes[publicState?.log?.code]) {
+          const done = el("p", notes[publicState.log.code], "photo-info-note photo-public-log");
+          if (Number.isFinite(Date.parse(publicState.log.at))) done.append(" (" + when(publicState.log.at) + ")");
+          visibility.append(done);
+        }
+        if (publicError && !known) {
+          const failed = el("p", publicError, "photo-info-note photo-public-error");
+          failed.setAttribute("role", "alert");
+          visibility.append(failed);
+        }
         if (saved && typeof onManageServer === "function") {
-          const manage = button(published ? "공개 설정" : known ? "공개하기" : "공개 상태 확인", () => {
+          // Not known: one exact server check here (BlogSync settles what this device sent).
+          // Without that check (an older engine) the review screen is the place to look.
+          const inPlace = !known && state !== "checking" && typeof blogSync?.settlePublication === "function";
+          const manage = button(published ? "공개 설정" : known ? "공개하기" : publicBusy ? "공개 상태 확인 중" : "공개 상태 확인", () => {
+            if (inPlace) return confirmPublication();
             sheet.close();
             return openPostTask(onManageServer, origin.dataset.focusKey);
           });
           manage.classList.add("photo-info-action");
           manage.dataset.infoFocus = "manage";
+          // Kept focusable while the check runs, so focus stays in the sheet.
+          if (inPlace && publicBusy) manage.setAttribute("aria-disabled", "true");
           visibility.append(manage);
         }
         // A new draft not yet stored has no saved time to show.
@@ -504,8 +780,33 @@
           row(mode === "edit" ? "마지막 보관" : "저장한 시각", time);
         }
         if (mode === "edit") {
-          const state = row("저장", stateValue(statusText?.textContent || ""));
-          state.append(el("p", "초안은 계정에 비공개로 자동 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다. 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
+          // This device first, then the account, in the words a saved post uses.
+          const account = doc.revision > 0 && dirtyTick === storedTick && !error && !composing ? draftState() : null;
+          const failed = !unstored && error instanceof Error;
+          const state = row("저장", stateValue(account
+            ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ")
+            : statusText?.textContent || ""));
+          if (account) state.dataset.state = account;
+          state.append(el("p", (unstored
+            // Over a limit: the same fact the status line states.
+            ? "한도를 넘어 계정에 올리지 않았습니다. 이 기기에만 임시로 보관하고 있어 다른 기기에서는 보이지 않습니다. 줄이면 다시 자동 저장하고 계정에 올립니다."
+            : failed
+            ? "지금 입력은 아직 보관하지 못했습니다. 보관한 뒤에 계정에 비공개로 올립니다."
+            : account === "synced"
+            ? "초안은 계정에 비공개로 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다."
+            : account === "error" || account === "refresh"
+              ? "이 기기에는 보관했지만 계정에는 올리지 못했습니다. 다시 올리기 전에는 다른 기기에서 보이지 않습니다."
+              : "초안은 이 기기에 먼저 보관하고 곧 계정에 비공개로 올립니다. 올린 뒤에는 로그인한 다른 기기에서 이어 쓸 수 있습니다.") +
+            " 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
+          // Only after a failure or a wait that has lasted: the first seconds of
+          // waiting are the normal upload delay.
+          const waited = account === "pending" && Date.now() - storedAt >= 15000;
+          if ((["not_enabled", "error"].includes(account) || waited) && !draftBusy && blogSync?.saveDefault) {
+            const retry = button("계정에 다시 올리기", uploadDraft);
+            retry.classList.add("photo-info-action");
+            retry.dataset.infoFocus = "retry";
+            state.append(retry);
+          }
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
@@ -582,14 +883,15 @@
           controls = [];
         }
       }
-      editor?.enable(!value);
+      editor?.enable(!value && !offer);
+      if (!value && readStale) refreshRead();
       if (!value) scheduleSettle();
       onDirty();
       if (
         !value &&
         valid() &&
         mode === "edit" &&
-        dirtyTick !== storedTick
+        !settled()
       ) {
         scheduleAutosave();
       }
@@ -598,6 +900,7 @@
       if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
       if (busy) throw new Error("사진 처리를 마친 뒤 이동해 주세요.");
       if (composing) throw new Error("한글 입력을 마친 뒤 다시 시도해 주세요.");
+      if (offer) throw new Error("이 기기에 남아 있는 입력을 복구할지 먼저 골라 주세요.");
       if (!acceptedOnly && attachmentUI?.composing())
         throw new Error("첨부의 한글 입력을 마친 뒤 다시 시도해 주세요.");
     }
@@ -607,7 +910,7 @@
     }
     function scheduleAutosave() {
       clearTimeout(timer); timer = null;
-      if (!doc || mode !== "edit" || !current(epoch) || dirtyTick === storedTick || saving) return;
+      if (!doc || mode !== "edit" || !current(epoch) || settled() || saving) return;
       const target = doc, token = epoch;
       const store = () => {
         if (!current(token) || doc !== target || mode !== "edit") return;
@@ -743,29 +1046,181 @@
       if (modelOnly) {
         if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
       } else guard(true);
-      M.validate(doc);
       const tick = dirtyTick,
-        payload = structuredClone(doc),
+        normal = M.normalize(doc),
         token = epoch;
+      let payload;
+      try {
+        // Only a valid document reaches storage and account sync.
+        M.validate(normal.doc);
+        payload = structuredClone(normal.doc);
+      } catch (cause) {
+        keepLocally(tick, cause);
+        return;
+      }
       saving = storage
         .savePhotoPost(workspaceId, payload, doc.revision)
         .then((saved) => {
           if (!valid() || doc !== target) return;
+          const first = target.revision === 0 && !!target.replaces;
           target.revision = saved.revision;
           storedTick = tick;
+          keptTick = -1;
+          unstored = null;
+          failedStore = null;
+          storedHandedOver(target);
+          storedBase = M.contentHash(payload);
+          storedAt = Date.now();
+          // The stored draft now holds everything: the device copy is done.
+          if (storedTick === dirtyTick) recoveryStore.clear(workspaceId, target.id);
+          if (normal.changed) alignEditor(normal, tick);
+          if (first && current(token) && mode === "edit") onModeChange({ mode, id: target.id });
           // A short AI-mark note gives way to the save state once saved.
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
+          // What was just stored is waiting for the account by definition: no
+          // read now (it would read the whole post back), only the later ones.
+          if (current(epoch)) watchDraftState(draftServer?.id !== target.id);
           if (current(token)) onSaved();
         })
         .finally(() => {
           saving = null;
           if (valid() && doc === target) onDirty();
         });
-      await saving;
+      try {
+        await saving;
+      } catch (cause) {
+        // The store refused (quota, another tab): the input also goes to the
+        // device copy. Leaving stays blocked exactly as before.
+        if (valid() && doc === target && mode === "edit") {
+          writeCopy();
+          failedStore = { doc: target, error: cause };
+        }
+        throw cause;
+      }
       if (valid() && doc === target && dirtyTick !== storedTick) return persist(modelOnly || busy || composing, target);
     }
+    // ---- a draft's account state ---------------------------------------------
+    // A revision stored after the one that was read is waiting to be uploaded.
+    function draftState() {
+      if (mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return null;
+      if (draftServer?.id !== doc.id) return "checking";
+      return draftServer.revision === doc.revision ? draftServer.status : "pending";
+    }
+    function showDraftState() {
+      if (status) status.dataset.account = draftState() || "";
+      showStatus(error);
+      updatePill();
+    }
+    async function readDraftState() {
+      if (draftBusy || mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return;
+      const target = doc, token = epoch, revision = doc.revision;
+      let value;
+      try {
+        value = (await blogSync.getState(workspaceId, target.id)).status;
+        // Still waiting after a sync pass that could not reach the account
+        // (offline, sign-in expired): it was not uploaded.
+        if (value === "pending" && blogSync.getStatus?.()?.lastError) value = "error";
+      } catch (_) {
+        value = staleApp() ? "refresh" : "error";
+      }
+      if (!current(token) || doc !== target || mode !== "edit" || draftBusy) return;
+      draftServer = { id: target.id, revision, status: value };
+      showDraftState();
+    }
+    // Now, and again after the draft upload delay: a failed first upload has no
+    // record that would announce itself.
+    function watchDraftState(now = true) {
+      draftTimers.forEach(clearTimeout);
+      draftTimers = [];
+      if (mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return;
+      const token = epoch;
+      if (now) readDraftState();
+      else {
+        if (status) status.dataset.account = draftState() || "";
+        updatePill();
+      }
+      draftTimers = [7000, 20000].map((ms) => setTimeout(() => { if (current(token)) readDraftState(); }, ms));
+    }
+    // The explicit retry beside the state.
+    async function uploadDraft() {
+      if (draftBusy || mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.saveDefault) return;
+      const target = doc, token = epoch, revision = doc.revision;
+      const set = (value) => { if (current(token) && doc === target) draftServer = { id: target.id, revision, status: value }; };
+      draftBusy = true;
+      set("saving");
+      showDraftState();
+      try {
+        set((await blogSync.saveDefault(workspaceId, target.id, { expectedLocalRevision: revision })).status);
+      } catch (_) {
+        set(staleApp() ? "refresh" : "error");
+      } finally {
+        draftBusy = false;
+        if (current(token) && doc === target) showDraftState();
+      }
+    }
+    // No valid form of the input exists (it is over a limit). Nothing invalid
+    // is stored or synced; the input stays whole on this device and the reason
+    // is shown. If even that fails the caller is refused and nothing moves.
+    function keepLocally(tick, cause) {
+      if (!writeCopy()) {
+        const unkept = Object.assign(new Error(cause.message + " 이 기기에도 임시 보관하지 못했습니다. 더 보기의 HTML 읽기 파일 받기로 내려받아 주세요."), { code: "photo_post_unkept" });
+        failedStore = { doc, error: unkept };
+        throw unkept;
+      }
+      failedStore = null;
+      keptTick = tick;
+      unstored = Object.assign(new Error("이 기기에만 임시 보관 중"), {
+        code: "photo_post_local_only",
+        detail: cause.message + " 그때까지는 계정에 올리지 않고 이 기기에만 임시 보관합니다.",
+      });
+      if (current(epoch)) showStatus();
+    }
+    // The screen follows what was stored. Never during an IME composition (the
+    // save after it normalizes again) and never under newer input.
+    function alignEditor(normal, tick) {
+      if (!editor || mode !== "edit" || tick !== dirtyTick || imeActive() || !current(epoch)) return;
+      const before = editor.getContents(),
+        change = before.diff(new Delta(normal.doc.ops));
+      // A photo block being edited keeps its own node.
+      if (selected && change.ops.some((op) => op.insert && typeof op.insert !== "string")) return;
+      if (change.ops.length) {
+        editor.updateContents(change, "silent");
+        doc.ops = editor.getContents().ops;
+      }
+      if (titleInput && titleInput.value !== normal.doc.title) {
+        const end = Math.min(titleInput.selectionEnd, normal.doc.title.length);
+        titleInput.value = normal.doc.title;
+        if (document.activeElement === titleInput) titleInput.setSelectionRange(end, end);
+      }
+      doc.title = normal.doc.title;
+      const note = M.describeChanges(normal.changes);
+      if (note) showChangeNote(note);
+    }
+    // The page is being hidden or closed before autosave ran: what the editor
+    // holds goes to the device copy synchronously (async stores may not finish).
+    // Nothing is committed or changed here: an open composition, a caption
+    // still in its field and the editor itself stay exactly as they are.
+    function stash() {
+      if (!host || !valid() || mode !== "edit" || !doc || offer) return;
+      let ops = doc.ops,
+        newer = dirtyTick !== storedTick;
+      if (composingRange && composingText && editor?.composition?.isComposing) {
+        ops = new Delta(ops).compose(new Delta().retain(composingRange.index).delete(composingRange.length).insert(composingText)).ops;
+        newer = true;
+      }
+      if (selected?.isConnected && captionInput && altInput) {
+        const value = Photo.value(selected);
+        if (captionInput.value !== value.caption || altInput.value !== value.alt) {
+          ops = ops.map((op) => op.insert?.photo?.id === value.id
+            ? { ...op, insert: { photo: { ...op.insert.photo, caption: captionInput.value, alt: altInput.value } } } : op);
+          newer = true;
+        }
+      }
+      if (newer) writeCopy({ ...doc, ops });
+    }
+    const stashWhenHidden = () => { if (document.visibilityState === "hidden") stash(); };
     function checkpoint() {
       // Keep the accepted model durable without committing an IME field or a
       // file whose signature, dimensions and original bytes are still pending.
@@ -786,11 +1241,11 @@
       if (mode === "edit" && selected?.isConnected) changePhoto();
       // Only reading: leaving is allowed. detach() advances the epoch, so the
       // late read result is discarded by the existing current(token) checks.
-      if (loading && !composing && (!doc || mode !== "edit" || dirtyTick === storedTick)) return;
+      if (loading && !composing && (!doc || mode !== "edit" || settled())) return;
       if (
         !busy &&
         !composing &&
-        (!doc || mode !== "edit" || dirtyTick === storedTick)
+        (!doc || mode !== "edit" || settled())
       )
         return;
       guard();
@@ -813,23 +1268,105 @@
       settleAuthorship();
       attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
-      M.validate(doc);
-      return M.compact(doc);
+      // The files of the current input (ZIP, HTML) are written from the
+      // normalized document and do not wait for it to be storable.
+      return M.normalize(doc).doc;
     }
     async function backup() {
       const value = outputSnapshot(),
         token = epoch;
       setBusy(true);
       try {
-        const blob = await M.backup(value);
+        const blob = await M.backup(value, { lenient: true });
         if (current(token)) download(blob, "haedo-photo-post.zip");
       } finally {
         setBusy(false);
       }
     }
-    async function list() {
+    // A stored draft leaves this device and, by the same deletion record as
+    // 삭제, the account's other devices.
+    async function removeDraft(target) {
+      if (target.revision > 0) {
+        if (blogSync?.deletePost) await blogSync.deletePost(workspaceId, target.id, { expectedRevision: target.revision });
+        else await storage.deletePhotoPost(workspaceId, target.id, target.revision);
+      }
+      recoveryStore.clear(workspaceId, target.id);
+    }
+    // Leaving the editor: a revision that holds exactly what the saved post
+    // holds, and a draft with nothing in it, are not kept. Cleaning up never
+    // blocks leaving; whatever could not be removed simply stays.
+    async function settleDraft() {
+      if (mode !== "edit" || !doc || doc.status !== "draft" || offer || busy || composing || dirtyTick !== storedTick) return false;
+      const target = doc;
+      if (!(M.isEmpty(target) || (target.replaces && baseline !== null && M.contentKey(target) === baseline))) return false;
+      if (target.revision > 0 && staleApp()) return false;
+      try { await removeDraft(target); }
+      catch (_) { return false; }
+      if (doc === target) {
+        target.revision = 0;
+        resetTicks();
+        storedBase = target.replaces ? (baseline === null ? null : M.keyHash(baseline)) : "";
+        // If the editor stays open, other screens name the saved post again.
+        if (target.replaces && current(epoch) && mode === "edit") onModeChange({ mode, id: shownId() });
+      }
+      return true;
+    }
+    // What other screens ask before moving on: store the input, then settle.
+    async function leave() {
       await flush();
-      if (onReturn && (await onReturn({ id: doc?.id || null, committed })) !== false)
+      return settleDraft();
+    }
+    // 수정 취소 / 초안 삭제: asked first; if the removal fails the input stays in the editor.
+    async function discardDraft() {
+      if (mode !== "edit" || !doc || doc.status !== "draft") return;
+      guard(true);
+      const target = doc, token = epoch, original = target.replaces?.id || null;
+      if (target.revision > 0 && staleApp())
+        throw new Error("앱을 새로고침한 뒤 다시 시도해 주세요. 입력은 이 기기에 그대로 있습니다.");
+      if (typeof root.confirm === "function" && !root.confirm(original
+        ? "수정한 내용을 버릴까요? 저장한 글은 그대로 남습니다."
+        : "이 초안을 삭제할까요? 로그인한 모든 기기에서 함께 삭제됩니다.")) return;
+      if (!current(token) || doc !== target) return;
+      cancelAutosave();
+      if (saving) await saving.catch(() => {});
+      if (!current(token) || doc !== target) return;
+      setBusy(true);
+      try {
+        await removeDraft(target);
+      } catch (e) {
+        if (e?.code === "photo_post_conflict")
+          throw Object.assign(new Error("다른 탭이나 기기에서 초안이 바뀌어 지우지 않았습니다. 입력은 그대로 있습니다."), { code: e.code });
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+      if (!current(token)) return;
+      doc = null;
+      mode = "list";
+      resetTicks();
+      error = null;
+      committed = false;
+      onSaved();
+      if (original) {
+        // Back to the saved post the revision belonged to.
+        try {
+          await open(original);
+          if (current(epoch)) host.querySelector(".photo-read-heading")?.focus({ preventScroll: true });
+          return;
+        } catch (_) {
+          if (!valid() || !host?.isConnected) return;
+        }
+      }
+      if (onReturn && (await onReturn({ id: null, deletedId: target.id, committed: false })) !== false) return;
+      if (!valid() || !host?.isConnected) return;
+      render();
+    }
+    // The id other screens use for the open post: an unstored revision is
+    // still the saved post it revises (its own id names nothing yet).
+    const shownId = () => (mode === "edit" && doc?.replaces && doc.revision === 0 ? doc.replaces.id : doc?.id || null);
+    async function list() {
+      const removed = await leave();
+      if (onReturn && (await onReturn({ id: removed ? doc?.replaces?.id || null : doc?.id || null, committed })) !== false)
         return;
       doc = null;
       mode = "list";
@@ -840,9 +1377,10 @@
     async function begin() {
       try {
         const token = epoch;
-        await flush();
+        await leave();
         await beforeOpen();
         if (!current(token)) return;
+        baseline = null;
         setBusy(true); loading = true;
         try {
           const rows = await storage.listPhotoPosts(workspaceId);
@@ -875,27 +1413,35 @@
           )
             empty = null;
           doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
+          storedBase = empty ? M.contentHash(doc) : "";
+          offer = usableCopy(recoveryStore.read(workspaceId, doc.id));
+          strays = await strayCopies(rows, token);
+          if (!current(token)) return;
         } finally {
           loading = false; setBusy(false);
         }
         mode = "edit";
-        dirtyTick = storedTick = 0;
+        resetTicks();
         error = null;
         committed = false;
         render();
-        editor?.focus();
+        focusEditing();
       } catch (e) {
         if (valid()) showStatus(e);
       }
     }
     async function open(id, editing = false, expectedRevision = null) {
       const token = epoch, wasReading = mode === "read";
-      await flush();
+      // Reopening the post that is open must not settle it away first.
+      if (doc?.id === id) await flush(); else await leave();
       await beforeOpen();
       if (!current(token)) return;
       setBusy(true); loading = true;
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
+        let orphan = null;
+        const waiting = [];
+        baseline = null;
         if (!current(token)) return;
         if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || next.revision !== expectedRevision))
           throw Object.assign(new Error('글이 바뀌었습니다. 목록을 다시 확인해 최신 글을 직접 열어 주세요.'), { code: 'photo_post_changed' });
@@ -933,17 +1479,38 @@
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          dirtyTick = retained ? 0 : 1;
-          storedTick = 0;
+          // Nothing is stored for a revision until something is changed.
+          resetTicks();
+          baseline = M.contentKey(next);
+          // Input of the draft this post was before another device saved it:
+          // shown here too, and restored as a draft of its own (never over the post).
+          const before = recoveryStore.read(workspaceId, next.id);
+          if (before && sameContent(before, next)) recoveryStore.clear(workspaceId, next.id);
+          else if (before) waiting.push({ copy: before, kind: "saved" });
+          // Input of an earlier, never stored revision of this post.
+          if (!retained) {
+            const stored = new Set(rows.map((item) => item.id));
+            orphan = recoveryStore.list(workspaceId).find((copy) => copy.replaces?.id === next.id && !stored.has(copy.id)) || null;
+          }
         } else {
           doc = next;
-          dirtyTick = storedTick = 0;
+          resetTicks();
+          if (next.status === "draft" && next.replaces && !next.archived) {
+            // A stored revision opened from the drafts: compare with its post on leaving.
+            const original = await storage.readPhotoPost(workspaceId, next.replaces.id).catch(() => null);
+            if (!current(token)) return;
+            if (original?.status === "saved" && original.revision === next.replaces.revision) baseline = M.contentKey(original);
+          }
         }
         mode =
           !next.archived && (editing || next.status === "draft")
             ? "edit"
             : "read";
         if (mode === "edit") doc = M.upgrade(doc);
+        // A stored draft: what it holds. A revision not stored yet: what the saved post holds.
+        storedBase = mode !== "edit" ? null : doc.revision > 0 ? M.contentHash(doc) : M.contentHash(next);
+        offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id) || orphan) : null;
+        strays = mode === "edit" ? waiting : [];
         error = null;
         committed = false;
         render();
@@ -954,10 +1521,62 @@
               root.HaedoMotion?.enter(host, { kind: "compose" });
           });
         }
-        if (mode === "edit") editor?.focus();
+        if (mode === "edit") focusEditing();
       } finally {
         loading = false; setBusy(false);
       }
+    }
+    // A device copy is offered only when it differs from what the draft holds.
+    function usableCopy(copy) {
+      if (!copy || !doc) return null;
+      const same = sameContent(copy, doc);
+      if (same) recoveryStore.clear(workspaceId, copy.id);
+      return same ? null : copy;
+    }
+    function restoreCopy() {
+      const copy = offer;
+      if (!copy || !doc || mode !== "edit" || !valid()) return;
+      // The copy continues what is still stored (this draft, or for a revision
+      // not stored yet the saved post, or nothing for a new post): it takes
+      // that place. If the draft or the post changed after the copy was taken,
+      // or is gone, nothing is overwritten: the copy becomes a draft of its own.
+      const continues = copyContinues(copy);
+      const next = continues ? doc : { ...M.create(life.Core.id), photos: doc.photos };
+      let attachments = next.attachments;
+      try {
+        life.PagePosts.validateAttachments(copy.attachments);
+        attachments = structuredClone(copy.attachments);
+      } catch (_) {}
+      const normal = M.normalize({ ...next, title: copy.title, ops: copy.ops, attachments });
+      const wanted = copy.ops.filter((op) => op?.insert?.photo).length,
+        kept = normal.doc.ops.filter((op) => typeof op.insert !== "string").length;
+      Object.assign(next, { title: normal.doc.title, ops: normal.doc.ops, attachments, updatedAt: new Date().toISOString() });
+      doc = next;
+      offer = null;
+      resetTicks(1);
+      if (!continues) {
+        storedBase = "";
+        baseline = null;
+      }
+      handOverCopy(copy);
+      error = null;
+      render();
+      authorNote = wanted > kept
+        ? "복구했어요 · 사진 " + (wanted - kept) + "장은 이 기기에 남아 있지 않아요"
+        : continues ? "남아 있던 입력을 복구했어요" : "새 초안으로 복구했어요";
+      authorNoteKept = true;
+      showStatus();
+      editor?.focus();
+    }
+    function discardCopy() {
+      const copy = offer;
+      if (!copy || !valid()) return;
+      if (typeof root.confirm === "function" && !root.confirm("이 기기에 남아 있는 입력을 버릴까요? 되돌릴 수 없습니다.")) return;
+      recoveryStore.clear(workspaceId, copy.id);
+      offer = null;
+      error = null;
+      render();
+      focusEditing();
     }
     async function finish(asNew = false) {
       if (asNew) return saveIndependent("saved");
@@ -965,21 +1584,46 @@
       const token = epoch;
       await flush();
       if (!current(token)) return;
-      const payload = structuredClone(doc);
+      const draftId = doc.id,
+        payload = structuredClone(M.normalize(doc).doc);
       const previousId = payload.replaces?.id || payload.id;
       payload.status = "saved";
       payload.updatedAt = new Date().toISOString();
-      M.validate(payload);
+      // The strict check, naming what to fix, belongs to this explicit save.
+      try {
+        M.validate(payload);
+      } catch (cause) {
+        // A long reason reads on its own line; short ones stay in the status.
+        if (cause?.code !== "invalid_photo_post" || String(cause.message).length <= 30) throw cause;
+        throw Object.assign(new Error("저장하지 못했습니다"), { code: cause.code, detail: cause.message });
+      }
       setBusy(true);
+      // An address or another tab that still names the replaced post finds this
+      // one. Recorded before the save: another tab reading the post learns of
+      // the change the moment it commits and must already find where it went.
+      const replaced = previousId !== payload.id;
+      if (replaced) movedStore.record(workspaceId, previousId, payload.id);
       try {
         const saved = await storage.savePhotoPost(
           workspaceId,
           payload,
           doc.revision,
-        );
+        ).catch(async (cause) => {
+          // Taken back only when the replacement did not happen. Another tab
+          // with this same revision (the same two ids) may have saved it just
+          // before this save was refused: then the record is true and stays.
+          if (replaced) {
+            const now = await storage.readPhotoPost(workspaceId, payload.id).then((value) => value.status, (e) => (e?.code === "photo_post_missing" ? "missing" : "unknown"));
+            if (now === "missing" || now === "draft") movedStore.forget(workspaceId, previousId, payload.id);
+          }
+          throw cause;
+        });
         if (!current(token)) return;
+        recoveryStore.clear(workspaceId, draftId);
+        keptTick = -1;
+        unstored = null;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = "read";
         error = null;
         committed = true;
@@ -997,7 +1641,7 @@
       await flush();
       guard();
       const token = epoch,
-        next = M.upgrade(doc);
+        next = M.upgrade(M.normalize(doc).doc);
       next.archived = value;
       next.updatedAt = new Date().toISOString();
       setBusy(true);
@@ -1009,7 +1653,7 @@
         );
         if (!current(token)) return;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = value ? "read" : saved.status === "draft" ? "edit" : "read";
         error = null;
         committed = false;
@@ -1046,7 +1690,8 @@
         now = new Date().toISOString();
       // outputSnapshot may settle authorship marks; this copy is the write.
       cancelAutosave();
-      const previousId = doc.replaces?.id || doc.id;
+      const previousId = doc.replaces?.id || doc.id,
+        sourceId = doc.id;
       Object.assign(next, {
         id: life.Core.id(),
         revision: 0,
@@ -1062,8 +1707,12 @@
         if (!current(token)) return;
         const saved = await storage.savePhotoPostWithEvidence(workspaceId, next, 0, evidence.refs, 0);
         if (!current(token)) return;
+        // The input now lives in the new document.
+        recoveryStore.clear(workspaceId, sourceId);
+        keptTick = -1;
+        unstored = null;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = nextStatus === "saved" ? "read" : "edit";
         error = null;
         committed = nextStatus === "saved";
@@ -1105,9 +1754,13 @@
       } finally {
         setBusy(false);
       }
+      // The writer deleted this post here: device copies of it, and of revisions
+      // of it that were never stored, go with it.
+      for (const copy of recoveryStore.list(workspaceId))
+        if (copy.id === id || copy.replaces?.id === id) recoveryStore.clear(workspaceId, copy.id);
       if (!current(token)) return;
       doc = null;
-      dirtyTick = storedTick = 0;
+      resetTicks();
       committed = false;
       error = null;
       onSaved();
@@ -1128,6 +1781,91 @@
           if (document.activeElement === node) break;
         }
     }
+    // The read view shows what is stored now. When the open post changes in
+    // another tab or arrives changed from another device, it is read again;
+    // a post replaced by its saved revision is followed to the post that took
+    // its place. Only the read view: an editor's input is never replaced.
+    let refreshingRead = false,
+      readStale = false;
+    async function refreshRead() {
+      if (mode !== "read" || !doc || !current(epoch)) {
+        readStale = false;
+        return;
+      }
+      // Not under a running action, an open photo or another read: right after it.
+      if (refreshingRead || busy || navigating || closeViewer) {
+        readStale = true;
+        return;
+      }
+      readStale = false;
+      const token = epoch, shownDoc = doc;
+      refreshingRead = true;
+      try {
+        const read = (id) => storage.readPhotoPost(workspaceId, id).catch((e) => {
+          if (e?.code !== "photo_post_missing") throw e;
+          return null;
+        });
+        let next = await read(shownDoc.id);
+        if (!next) {
+          const successor = movedStore.resolve(workspaceId, shownDoc.id);
+          next = successor ? await read(successor) : null;
+        }
+        // Deleted elsewhere: the view stays and its actions say so, as before.
+        if (!next || !current(token) || doc !== shownDoc || mode !== "read") return;
+        if (busy || navigating || closeViewer) {
+          readStale = true;
+          return;
+        }
+        if (next.id === shownDoc.id && next.revision === shownDoc.revision) return;
+        // Only the stored revision moved (a finished upload writes the post
+        // again with the same content): nothing on screen changes. The view
+        // takes the new revision for its actions and reads its account state again.
+        if (next.id === shownDoc.id && next.status === shownDoc.status && next.archived === shownDoc.archived &&
+            next.updatedAt === shownDoc.updatedAt && M.contentKey(next) === M.contentKey(shownDoc)) {
+          doc = next;
+          serverSequence++;
+          serverBusy = false;
+          readServerState();
+          return;
+        }
+        // The reader keeps the place: the block at the top of the screen stays
+        // there (the nearest one if the new content is shorter), and focus goes
+        // back to the same control. Only the content changes.
+        const blocks = () => [...host.querySelectorAll(".photo-article > *")];
+        const before = blocks(),
+          seen = before.findIndex((node) => node.getBoundingClientRect().bottom > 0),
+          at = seen < 0 ? Math.max(0, before.length - 1) : seen,
+          top = before[at]?.getBoundingClientRect().top ?? 0,
+          active = host.contains(document.activeElement) ? document.activeElement : null,
+          mark = active && {
+            key: active.dataset.focusKey, action: active.dataset.postAction,
+            photo: active.classList.contains("photo-expand") ? active.dataset.photoId : null,
+            label: active.getAttribute("aria-label"), text: active.textContent,
+          };
+        doc = next;
+        committed = false;
+        // The reason of an action that was just refused (the post had changed)
+        // stays on the refreshed view.
+        render();
+        const after = blocks(),
+          anchor = after[Math.min(at, after.length - 1)];
+        if (anchor && before.length) root.scrollBy({ top: anchor.getBoundingClientRect().top - top, behavior: "instant" });
+        if (mark) {
+          const controls = [...host.querySelectorAll("button,summary,a[href]")].filter((node) => node.getClientRects().length && !node.disabled);
+          const same = controls.find((node) => mark.key && node.dataset.focusKey === mark.key) ||
+            controls.find((node) => mark.action && node.dataset.postAction === mark.action) ||
+            controls.find((node) => mark.photo && node.classList.contains("photo-expand") && node.dataset.photoId === mark.photo) ||
+            controls.find((node) => mark.label && node.getAttribute("aria-label") === mark.label) ||
+            controls.find((node) => !mark.label && mark.text && node.textContent === mark.text);
+          (same || host.querySelector(".photo-read-heading"))?.focus({ preventScroll: true });
+        }
+      } catch (_) {
+        // A failed read leaves what is shown.
+      } finally {
+        refreshingRead = false;
+        if (readStale) refreshRead();
+      }
+    }
     function serverCurrent(token, id, revision, sequence) {
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
         doc.revision === revision && sequence === serverSequence;
@@ -1142,7 +1880,10 @@
         if (!current(token) || mode !== "read" || doc?.id !== id || doc.revision !== revision || doc.status !== "saved") return;
         await callback(id, { expectedRevision: revision, originFocusKey });
       }
-      finally { navigating = false; }
+      finally {
+        navigating = false;
+        if (readStale) refreshRead();
+      }
     }
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
@@ -1170,8 +1911,37 @@
     // Publication is shown, never changed, from the state BlogSync reports.
     function notePublication(id, state) {
       // A result without the field (e.g. a push receipt) says nothing about it.
-      if (state && typeof state === "object" && Object.hasOwn(state, "publication"))
-        publicState = { id, published: state.publication?.active === true };
+      if (!state || typeof state !== "object") return;
+      // An unacknowledged publish or withdrawal: the recorded value may not be the server's.
+      if (state.publicationStatus === "unknown") publicState = { id, unsettled: true };
+      else if (Object.hasOwn(state, "publication")) {
+        // Older engines report no notice: an unanswered publish request is then named from the request itself.
+        const published = state.publication?.active === true,
+          notice = Object.hasOwn(state, "publicationNotice") ? state.publicationNotice : state.publishPending ? (published ? "update_unapplied" : "publish_unapplied") : null;
+        publicState = { id, published, notice, log: state.publicationLog || null, earlier: state.publicationEarlier || null };
+        publicError = "";
+      }
+    }
+    // 공개 상태 확인: one exact server check. BlogSync adopts the server's publication, ends its
+    // own applied requests and sends an unanswered withdrawal again; it never publishes here.
+    async function confirmPublication() {
+      if (publicBusy || mode !== "read" || doc?.status !== "saved" || !valid()) return;
+      const token = epoch, id = doc.id;
+      const here = () => current(token) && mode === "read" && doc?.id === id;
+      publicBusy = true; publicError = ""; refreshInfo?.();
+      try {
+        const state = await blogSync.settlePublication(workspaceId, id);
+        if (here()) {
+          notePublication(id, state);
+          // The server was read and the request is still neither applied nor ruled out: say so, the check did run.
+          if (state?.publicationStatus === "unknown") publicError = "아직 확인되지 않았습니다. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다.";
+        }
+      } catch (e) {
+        if (here()) publicError = e?.message || "공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.";
+      } finally {
+        publicBusy = false;
+        if (here()) { updatePill(); refreshInfo?.(); }
+      }
     }
     // A read of the publication starts: a value already read for this post stays shown.
     function checkPublication(id) {
@@ -1323,6 +2093,7 @@
         dialog.remove();
         document.body.style.overflow = overflow;
         closeViewer = null;
+        if (readStale) refreshRead();
         if (valid() && mode === "read" && doc?.id === documentId) {
           const target =
             host.querySelector(
@@ -1528,25 +2299,49 @@
       guard();
       if (!files.length) return;
       const token = epoch,
+        failed = [],
         position = editor.getSelection(true)?.index ?? editor.getLength() - 1;
       setBusy(true);
       try {
         // At most two files at a time; HEIC conversions are further
         // serialized inside PhotoPost so a 48 MP bitmap is decoded alone.
         const list = [...files],
-          incoming = new Array(list.length);
+          read = new Array(list.length);
         let nextFile = 0;
         await Promise.all(
           Array.from({ length: Math.min(2, list.length) }, async () => {
             while (nextFile < list.length) {
               const index = nextFile++;
-              incoming[index] = await M.readPhoto(list[index], life.Core.id);
+              // One file that cannot be used does not refuse the others.
+              try {
+                read[index] = await M.readPhoto(list[index], life.Core.id);
+              } catch (cause) {
+                failed.push({ index, name: list[index]?.name || "이름 없는 파일", message: cause?.message || "사진을 읽지 못했습니다." });
+              }
             }
           }),
         );
         if (!current(token)) return;
-        const next = structuredClone(doc);
-        next.photos.push(...incoming);
+        // In the order chosen, as many as the limits still allow.
+        const using = M.normalize(doc).doc.photos;
+        let count = using.length,
+          bytes = using.reduce((sum, p) => sum + p.size + (p.view ? p.view.size : 0), 0);
+        const incoming = [];
+        read.forEach((p, index) => {
+          if (!p) return;
+          const size = p.size + (p.view ? p.view.size : 0);
+          const refusal = count >= M.LIMITS.photos
+            ? "한 글에 사진은 20장까지 붙일 수 있습니다."
+            : bytes + size > M.LIMITS.bytes
+              ? "한 글의 원본 사진은 합계 256 MiB까지 보관할 수 있습니다. 해상도는 줄이지 않습니다."
+              : null;
+          if (refusal) return failed.push({ index, name: p.name, message: refusal });
+          incoming.push(p);
+          count++;
+          bytes += size;
+        });
+        failed.sort((a, b) => a.index - b.index);
+        if (!incoming.length) throw photoFailure(list.length, failed);
         let at = position;
         const Delta = root.Quill.import("delta"),
           delta = new Delta().retain(at).insert("\n");
@@ -1555,8 +2350,18 @@
             .insert({ photo: { id: p.id, caption: "", alt: "" } })
             .insert("\n"),
         );
-        next.ops = new Delta(doc.ops).compose(delta).ops;
-        M.validate(next);
+        // The limits (20 photos, 256 MiB) count the photos the body uses. Ones
+        // already taken out stay in memory for undo and are not stored.
+        try {
+          M.validate(M.normalize({ ...doc, photos: [...doc.photos, ...incoming], ops: new Delta(doc.ops).compose(delta).ops }).doc);
+        } catch (cause) {
+          // The body is over a limit, so the draft cannot be stored and photo
+          // bytes cannot be kept on the side: say that the photos were not added.
+          throw Object.assign(new Error("사진을 넣지 못했습니다"), {
+            code: cause?.code || "invalid_photo_post",
+            detail: "사진을 넣지 못했습니다. " + (cause?.message || "") + " 초안을 보관할 수 있게 된 뒤에 사진을 넣어 주세요.",
+          });
+        }
         doc.photos.push(...incoming);
         editor.enable(true);
         editor.history.cutoff();
@@ -1571,6 +2376,18 @@
         setBusy(false);
       }
       await persist();
+      // The photos that could be used are in and stored; say which were not.
+      if (failed.length) throw photoFailure(files.length, failed);
+    }
+    function photoFailure(total, failed) {
+      // A single file keeps its own reason, as before.
+      if (total === 1) return Object.assign(new Error(failed[0].message), { code: "invalid_photo_post" });
+      const reasons = [...new Set(failed.map((item) => item.message))];
+      return Object.assign(new Error("사진 " + failed.length + "장을 넣지 못했습니다"), {
+        code: "photo_files_refused",
+        detail: "사진 " + total + "장 중 " + failed.length + "장을 넣지 못했습니다: " +
+          failed.map((item) => item.name).join(", ") + ". " + reasons.join(" "),
+      });
     }
     function selectPhoto(node) {
       guard();
@@ -1593,20 +2410,22 @@
       if (!selected?.isConnected) return;
       const value = Photo.value(selected),
         p = doc.photos.find((p) => p.id === value.id);
+      // Cleaned here (not while an IME composition is open) so the caption can
+      // never make the draft unstorable.
       const next = {
         ...value,
-        caption: captionInput.value,
-        alt: altInput.value,
+        caption: composing ? captionInput.value : M.cleanText(captionInput.value),
+        alt: composing ? altInput.value : M.cleanText(altInput.value, false),
       };
-      if (next.caption === value.caption && next.alt === value.alt) return;
-      M.validate({
-        ...doc,
-        ops: doc.ops.map((op) =>
-          op.insert?.photo?.id === p.id
-            ? { ...op, insert: { photo: next } }
-            : op,
-        ),
-      });
+      if (!composing) {
+        for (const [input, text] of [[captionInput, next.caption], [altInput, next.alt]])
+          if (input.value !== text) {
+            const end = Math.min(input.selectionEnd ?? text.length, text.length);
+            input.value = text;
+            if (document.activeElement === input) input.setSelectionRange(end, end);
+          }
+      }
+      if (!p || (next.caption === value.caption && next.alt === value.alt)) return;
       const blot = root.Quill.find(selected),
         patch = { caption: next.caption, alt: next.alt };
       blot.updateContent(patch);
@@ -1677,21 +2496,25 @@
         e.preventDefault();
         editor?.focus();
       });
-      // Line breaks become spaces without moving the caret (same length or shorter).
+      titleInput = title;
+      // Line breaks become spaces and characters a post cannot hold are removed
+      // (a manual line break from Word becomes a space), without moving the caret
+      // past the end. Never during an IME composition.
       const flattenTitle = () => {
-        if (!/[\r\n]/.test(title.value)) return;
+        const clean = M.cleanText(title.value, false).replace(/[\r\n]+/g, " ");
+        if (clean === title.value) return;
         const end = title.selectionEnd;
-        title.value = title.value.replace(/[\r\n]+/g, " ");
+        title.value = clean;
         title.setSelectionRange(Math.min(end, title.value.length), Math.min(end, title.value.length));
       };
       title.addEventListener("paste", (e) => {
         const text = e.clipboardData?.getData("text/plain");
-        if (!text || !/[\r\n]/.test(text) || !acceptsInput()) return;
+        if (!text || M.cleanText(text, false).replace(/[\r\n]/g, "") === text || !acceptsInput()) return;
         e.preventDefault();
         // setRangeText does not apply maxLength: insert only what still fits, so a
         // long multi-line paste can never make the title (and every save) invalid.
         const room = title.maxLength - (title.value.length - (title.selectionEnd - title.selectionStart));
-        let insert = text.replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
+        let insert = M.cleanText(text, false).replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
         if (/[\uD800-\uDBFF]$/.test(insert)) insert = insert.slice(0, -1);  // never split a surrogate pair
         title.setRangeText(insert, title.selectionStart, title.selectionEnd, "end");
         title.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1726,10 +2549,16 @@
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
         button("사본으로 이어 쓰기", duplicate),
-        button("목록에서 숨기기", () => archive(true)),
-        button("초안 다시 저장", persist),
       );
+      // Hiding belongs to the saved post (its read view has it). In a revision
+      // it used to hide the editing copy and leave the post in the list.
+      if (!doc.replaces) menu.append(button("목록에서 숨기기", () => archive(true)));
+      menu.append(button("초안 다시 저장", persist));
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
+      const discard = button(doc.replaces ? "수정 취소" : "초안 삭제", discardDraft);
+      discard.dataset.postAction = "discard";
+      discard.classList.add("photo-delete");
+      menu.append(discard);
       // D1 (soft redesign): one quiet line — close, the privacy pill that
       // opens 글 정보, the autosave state, then more and the one save action.
       const commandState = el("div", null, "photo-command-state"),
@@ -1744,6 +2573,10 @@
       save.setAttribute("aria-describedby", scope.id);
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, more, save);
       sticky.append(commands);
+      noteLine = el("p", "", "photo-edit-note");
+      noteLine.setAttribute("role", "status");
+      sticky.append(noteLine);
+      showChangeNote();
       if (doc.replaces && blogSync?.getState) {
         // Revising a saved post: the pill says whether that post has a public copy.
         const target = doc.replaces.id;
@@ -1759,7 +2592,10 @@
       }
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
+      const recoveryReason = el("p", "", "photo-recovery-reason");
+      recoveryReason.hidden = true;
       recoveryActions.append(
+        recoveryReason,
         button("다시 보관", persist),
         button("현재 입력 백업", backup),
       );
@@ -1767,6 +2603,38 @@
       recoverCopy.classList.add("photo-recovery-copy");
       recoveryActions.append(recoverCopy);
       sticky.append(recoveryActions);
+      if (offer) {
+        // Input this device kept when the draft could not be stored (or the page
+        // closed first). The editor waits for the choice so neither is overwritten.
+        const bar = el("div", null, "photo-recovered"),
+          taken = when(offer.savedAt),
+          apart = !copyContinues(offer),
+          known = typeof offer.base === "string";
+        // Why the copy is not put over what is open: nothing stored is overwritten.
+        const why = !apart ? ""
+          : known && offer.id === doc.id ? " · 이 초안은 그 뒤에 바뀌어 새 초안으로 복구합니다"
+          : known && offer.replaces && doc.replaces && doc.revision === 0 ? " · 이 글은 그 뒤에 바뀌어 새 초안으로 복구합니다"
+          : " · 새 초안으로 복구합니다";
+        const text = el("p", "보관하지 못한 입력이 이 기기에 남아 있습니다" + (taken ? " · " + taken : "") + why, "photo-recovered-text");
+        text.id = "photoRecoveredText";
+        // The band takes the first focus (see focusEditing) and its first
+        // choice is described by the sentence, so the locked editor is explained
+        // to assistive technology as soon as it opens.
+        text.setAttribute("role", "status");
+        bar.setAttribute("role", "group");
+        bar.setAttribute("aria-labelledby", text.id);
+        const choices = el("div", null, "photo-recovered-actions");
+        choices.append(button(apart ? "새 초안으로 복구" : "복구", restoreCopy), button("버리기", discardCopy));
+        choices.firstChild.classList.add("photo-recovered-restore");
+        choices.firstChild.setAttribute("aria-describedby", text.id);
+        bar.append(text, choices);
+        sticky.append(bar);
+        title.readOnly = true;
+      } else {
+        strayBand = el("div", null, "photo-recovered-slot");
+        sticky.append(strayBand);
+        drawStrays();
+      }
       const toolbar = el("div", null, "photo-toolbar");
       toolbar.setAttribute("role", "toolbar");
       toolbar.setAttribute("aria-label", "본문 서식");
@@ -1885,7 +2753,7 @@
               ranges: result.ranges, accepted, composing: imeActive() });
             // Validate before changing the editor; preserve the normal autosave,
             // authorship and one-step undo paths after accepting a suggestion.
-            M.validate({ ...doc, ops: next.ops });
+            M.validate(M.normalize({ ...doc, ops: next.ops }).doc);
             editor.history.cutoff();
             aiInserting = true;
             try { editor.updateContents(before.diff(new Delta(next.ops)), "user"); }
@@ -1941,9 +2809,17 @@
         fitTitle();
       });
       titleSize.observe(title);
+      // The sticky tools grow (an error line, a recovery band): the offsets that
+      // keep the caret below them follow their real height (see photo-post.css).
+      const toolsSize = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--photo-tools-height", Math.round(sticky.getBoundingClientRect().height) + "px");
+      });
+      toolsSize.observe(sticky);
       releaseViewport = () => {
         releaseKeyboard?.();
         titleSize.disconnect();
+        toolsSize.disconnect();
+        document.documentElement.style.removeProperty("--photo-tools-height");
       };
       editor = new root.Quill(area, {
         theme: "snow",
@@ -1960,8 +2836,39 @@
           "author",
           "photo",
         ],
-        modules: { toolbar, history: { userOnly: true, delay: 700 } },
+        modules: {
+          toolbar,
+          history: { userOnly: true, delay: 700 },
+          // A post has bullet and numbered lists only. "[ ] " and "[x] " stay
+          // the characters the writer typed instead of becoming a checklist the
+          // post cannot hold; "- ", "* " and "1. " still start a list.
+          keyboard: { bindings: { "list autofill": { prefix: /^\s*?(\d+\.|-|\*)$/ } } },
+        },
       });
+      if (offer) editor.enable(false);
+      // The link box takes an address without a scheme as https and refuses
+      // anything that is not an http(s) address, with the reason, before it
+      // reaches the text.
+      const tooltip = editor.theme?.tooltip;
+      if (tooltip?.save && tooltip.textbox) {
+        const saveLink = tooltip.save.bind(tooltip);
+        tooltip.textbox.addEventListener("input", () => tooltip.textbox.removeAttribute("aria-invalid"));
+        tooltip.save = () => {
+          if (tooltip.root.getAttribute("data-mode") === "link") {
+            const address = M.safeLink(tooltip.textbox.value);
+            if (!address) {
+              tooltip.textbox.setAttribute("aria-invalid", "true");
+              tooltip.textbox.focus();
+              authorNote = "링크는 http·https 주소만 넣을 수 있어요"; authorNoteKept = true;
+              showStatus(error);
+              return;
+            }
+            tooltip.textbox.removeAttribute("aria-invalid");
+            tooltip.textbox.value = address;
+          }
+          saveLink();
+        };
+      }
       for (const n of toolbar.querySelectorAll(".ql-picker-label")) {
         n.setAttribute("aria-label", "문단 종류");
         n.setAttribute("title", "문단 종류");
@@ -2006,9 +2913,17 @@
       editor.root.addEventListener("compositionstart", () => {
         if (!acceptsInput()) return;
         composing = true;
+        // Read only (no editor update): where the composition will land.
+        try { composingRange = editor.selection.getRange()[0] || null; } catch (_) { composingRange = null; }
+        composingText = "";
         showStatus();
       });
+      editor.root.addEventListener("compositionupdate", (e) => {
+        if (acceptsInput()) composingText = e.data || "";
+      });
       editor.root.addEventListener("compositionend", () => {
+        composingRange = null;
+        composingText = "";
         if (!acceptsInput()) return;
         composing = false;
         mark();
@@ -2047,13 +2962,32 @@
           // The armed state covers exactly one paste, whatever it contains.
           const ai = aiPending;
           if (ai) setAiPending(false, false);
-          const files = [...(e.clipboardData?.files || [])];
+          // Characters a post cannot hold never enter the body: a manual line
+          // break from Word or PowerPoint (U+000B) becomes a line break.
+          const text = M.cleanText(e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n");
+          // Word and slide apps put the text, its rich form (HTML or RTF) and a
+          // picture of it on the clipboard together: the text is what was
+          // copied. Any other clipboard with a file is that file: a screen
+          // capture, a copied photo, or a file copied in a file manager, whose
+          // only text is its name.
+          // A picture copied in a browser also carries its address as text (and
+          // as text/uri-list) or markup that is nothing but the <img>: that is
+          // the picture, not text from a document.
+          const types = [...(e.clipboardData?.types || [])],
+            html = types.includes("text/html") ? e.clipboardData.getData("text/html") : "",
+            address = types.includes("text/uri-list") ? e.clipboardData.getData("text/uri-list").trim() : "";
+          let onlyPicture = !!address && address === text.trim();
+          if (!onlyPicture && html) {
+            const body = new DOMParser().parseFromString(html, "text/html").body;
+            onlyPicture = body.querySelectorAll("img").length === 1 && !body.textContent.trim();
+          }
+          const fromDocument = !!text.trim() && !onlyPicture && (!!html || types.includes("text/rtf"));
+          const files = fromDocument ? [] : [...(e.clipboardData?.files || [])];
           if (files.length) {
             run(() => insertFiles(files));
             return;
           }
-          const text = e.clipboardData?.getData("text/plain") || "",
-            range = editor.getSelection(true);
+          const range = editor.getSelection(true);
           if (text) {
             if (range.length)
               editor.deleteText(range.index, range.length, "user");
@@ -2199,12 +3133,9 @@
         report: showStatus,
         onChange: (values) => {
           guard();
-          const next = M.upgrade(doc);
-          next.attachments = structuredClone(values);
-          M.validate(next);
-          doc.attachments = next.attachments;
-          doc.format = next.format;
-          doc.archived = next.archived;
+          // The attachments' own rules; the body is judged at 글 저장, not here.
+          life.PagePosts.validateAttachments(values);
+          doc.attachments = structuredClone(values);
           mark();
         },
       });
@@ -2230,12 +3161,17 @@
       if (!host || !valid()) return;
       cancelAutosave();
       cleanup();
+      if (mode !== "edit") { offer = null; strays = []; storedBase = null; keptTick = -1; unstored = null; showChangeNote(""); }
+      // An editor drawn for a stored document with nothing unsaved shows what is
+      // stored: the fingerprint follows the document (also after it was just
+      // stored under a new id, as 현재 입력을 새 초안으로 보관 does).
+      else if (doc?.revision > 0 && dirtyTick === storedTick) storedBase = M.contentHash(doc);
       const token = ++epoch;
       serverSequence++; serverBusy = false;
       serverStatus = serverActions = null;
       host.replaceChildren();
       host.dataset.mode = mode;
-      onModeChange({ mode, id: doc?.id || null });
+      onModeChange({ mode, id: shownId() });
       status = el("p", "", "life-help photo-status");
       status.setAttribute("role", "status");
       status.setAttribute("aria-atomic", "true");
@@ -2303,7 +3239,7 @@
                     if (!current(t)) return;
                     doc = result;
                     mode = "edit";
-                    dirtyTick = storedTick = 0;
+                    resetTicks();
                     error = null;
                     render();
                   } finally {
@@ -2554,14 +3490,24 @@
       }
       dismissControls = bindDisclosureControls(host);
       showStatus(error);
+      if (mode === "edit") watchDraftState();
       scheduleAutosave();
     }
     async function mount(
       target,
       { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록", standalone: isolated = false } = {},
     ) {
-      if ((reset || postId) && doc) await flush();
+      if ((reset || postId) && doc) { if (postId && postId === doc.id) await flush(); else await leave(); }
+      // The publication shown before this view was left may be out of date: read it again first.
+      publicState = null; publicError = "";
       host = target;
+      if (!lifecycleBound) {
+        // The page is hidden or closed: async stores may never finish, so what
+        // the editor holds is also written synchronously to the device copy.
+        lifecycleBound = true;
+        root.addEventListener("pagehide", stash);
+        document.addEventListener("visibilitychange", stashWhenHidden);
+      }
       standalone = isolated;
       feedListener = onFeed;
       feedHost = listHost;
@@ -2571,9 +3517,12 @@
       unsubscribe?.();
       unsubscribeServer?.();
       unsubscribeServer = blogSync?.subscribe?.(event => {
-        if (event.workspaceId === workspaceId && event.localPostId === doc?.id && !serverBusy && current(epoch)) readServerState();
+        if (event.workspaceId !== workspaceId || event.localPostId !== doc?.id || !current(epoch)) return;
+        if (mode === "edit") readDraftState();
+        else if (!serverBusy) readServerState();
       });
       unsubscribe = storage.subscribe(workspaceId, (event) => {
+        if (event.type === "photo_posts_changed" && mode === "read" && doc && host?.isConnected) refreshRead();
         if (
           event.type === "photo_posts_changed" &&
           !busy &&
@@ -2599,14 +3548,14 @@
         mode = "list";
         error = null;
         committed = false;
-        dirtyTick = storedTick = 0;
+        resetTicks();
       }
       render();
       if (postId) {
         try {
           await open(postId, false, expectedRevision);
           if (host?.isConnected && valid()) {
-            const h = host.querySelector(".photo-read-heading,.ql-editor");
+            const h = (offer && host.querySelector(".photo-recovered-restore")) || host.querySelector(".photo-read-heading,.ql-editor");
             h?.focus({ preventScroll: true });
             h?.scrollIntoView({ block: "nearest" });
           }
@@ -2621,6 +3570,11 @@
       heldId = null; releaseHeld = null;
       serverSequence++; serverBusy = false; serverValue = null; serverStatus = serverActions = null;
       unsubscribeServer?.(); unsubscribeServer = null;
+      if (lifecycleBound) {
+        lifecycleBound = false;
+        root.removeEventListener("pagehide", stash);
+        document.removeEventListener("visibilitychange", stashWhenHidden);
+      }
       cancelAutosave();
       cleanup();
       // Leaving the view: the feed rows go with it.
@@ -2644,7 +3598,8 @@
     return {
       mount,
       begin,
-      flush,
+      // Other screens call this before moving away from the post.
+      flush: leave,
       checkpoint,
       dirty: () =>
         (busy && !loading) || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),

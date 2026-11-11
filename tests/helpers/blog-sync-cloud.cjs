@@ -155,7 +155,8 @@ function server() {
         row.publication = { token: row.publication?.token || Core.id(), blogToken: Core.id(), revision: options.expectedPublicRevision + 1, active: true };
         return { status: 'stored', ...row.publication };
       },
-      async unpublish(id, revision) { const row = rows.get(id); row.publication = { ...row.publication, revision: revision + 1, active: false }; return { status: 'stored', revision: revision + 1 }; },
+      // Without a publication row (expected revision 0) a withdrawn row is recorded at revision 1 (20261111120000).
+      async unpublish(id, revision) { const row = rows.get(id); row.publication = { token: Core.id(), blogToken: Core.id(), ...row.publication, revision: revision + 1, active: false }; return { status: 'stored', revision: revision + 1 }; },
       dispose() { disposed = true; }, get disposed() { return disposed; }
     };
   }

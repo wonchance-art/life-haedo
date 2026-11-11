@@ -28,7 +28,8 @@
     fields(value, ['id', 'sourceId', 'sourceName', 'url', 'canonicalUrl', 'title', 'author', 'language', 'tags', 'publishedAt', 'updatedAt', 'fetchedAt', 'coverage', 'rights']);
     check(id(value.id) && id(value.sourceId) && text(value.sourceName, 200) && text(value.title, 500) && (value.author === null || text(value.author, 200)) && text(value.language, 30));
     check(key(value.url) === value.canonicalUrl && key(value.canonicalUrl) === value.canonicalUrl);
-    const hosts = api().ALLOWED_SOURCES[value.sourceId]; check(Array.isArray(hosts) && hosts.includes(new URL(value.canonicalUrl).hostname));
+    // A saved reaction may also hold a 넓게 찾기 link (the supplier's host); the public catalog registry stays as it is.
+    const hosts = (api().SNAPSHOT_SOURCES || api().ALLOWED_SOURCES)[value.sourceId]; check(Array.isArray(hosts) && hosts.includes(new URL(value.canonicalUrl).hostname));
     check(Array.isArray(value.tags) && value.tags.length <= 50 && Array.from(value.tags).every(tag => text(tag, 200)) && new Set(value.tags).size === value.tags.length);
     check(nullableStamp(value.publishedAt) && nullableStamp(value.updatedAt) && stamp(value.fetchedAt) && value.coverage === 'link_only');
     fields(value.rights, ['label', 'url', 'mode']); check(text(value.rights.label, 500) && (value.rights.url === null || key(value.rights.url)) && value.rights.mode === 'metadata_only');
@@ -53,28 +54,32 @@
     snapshot(value.snapshot); check(value.canonicalUrl === value.snapshot.canonicalUrl && typeof value.liked === 'boolean' && typeof value.bookmarked === 'boolean' && typeof value.excludedFromRecommendations === 'boolean' && stamp(value.updatedAt));
     for (const kind of ['liked', 'bookmarked']) check(value[kind] ? stamp(value[kind + 'At']) && Date.parse(value[kind + 'At']) <= Date.parse(value.updatedAt) : value[kind + 'At'] === null);
   }
-  function entries(values, activeOnly = false) {
-    check(Array.isArray(values)); check(values.length <= MAX_ENTRIES, 'discovery_actions_too_large'); const seen = new Set();
+  // `totals: false` skips the 500-entry and 1 MB bounds. They hold for every stored document and for anything that
+  // adds an entry; the profile read from the two account documents (combine) may be above them and still opens.
+  function entries(values, activeOnly = false, totals = true) {
+    check(Array.isArray(values)); if (totals) check(values.length <= MAX_ENTRIES, 'discovery_actions_too_large'); const seen = new Set();
     for (const value of values) { entry(value); check(!seen.has(value.canonicalUrl) && (!activeOnly || value.liked || value.bookmarked)); seen.add(value.canonicalUrl); }
   }
-  function validate(profile) {
+  function validate(profile, { totals = true } = {}) {
     fields(profile, ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'personalizationEnabled', 'entries']);
     check(profile.schemaVersion === 1 && id(profile.workspaceId) && Number.isSafeInteger(profile.revision) && profile.revision >= 0 && typeof profile.deleted === 'boolean' && typeof profile.personalizationEnabled === 'boolean');
     check(profile.revision === 0 ? !profile.deleted && profile.updatedAt === null : stamp(profile.updatedAt));
-    entries(profile.entries);
+    entries(profile.entries, false, totals);
     if (profile.deleted || profile.revision === 0) check(!profile.personalizationEnabled && profile.entries.length === 0);
     for (const row of profile.entries) check(Date.parse(row.updatedAt) <= Date.parse(profile.updatedAt));
-    bounded(profile); return true;
+    if (totals) bounded(profile); return true;
   }
   function empty(workspaceId) { const value = { schemaVersion: 1, workspaceId, revision: 0, deleted: false, updatedAt: null, personalizationEnabled: false, entries: [] }; validate(value); return value; }
   function clock(options) { const value = typeof options.now === 'function' ? options.now() : options.now === undefined ? new Date().toISOString() : options.now; check(stamp(value)); return value; }
   function next(profile, options) {
-    validate(profile); check(plain(options) && Object.keys(options).every(name => ['expectedRevision', 'now'].includes(name)));
+    validate(profile, { totals: false }); check(plain(options) && Object.keys(options).every(name => ['expectedRevision', 'now'].includes(name)));
     check(Number.isSafeInteger(options.expectedRevision) && options.expectedRevision === profile.revision && profile.revision < Number.MAX_SAFE_INTEGER, 'discovery_actions_conflict');
     const updatedAt = clock(options); check(profile.updatedAt === null || Date.parse(updatedAt) >= Date.parse(profile.updatedAt));
     return { ...copy(profile), revision: profile.revision + 1, deleted: false, updatedAt };
   }
-  function finish(value) { validate(value); return value; }
+  // A change that adds an entry (or a stored document) meets the bounds; one that only changes or removes entries of a
+  // profile already above them is allowed, so a combined profile over 500 can still be edited, reset or trimmed.
+  function finish(value, before = null) { validate(value, { totals: before === null || value.entries.length > before }); return value; }
   function setReaction(profile, captured, kind, target, options = {}) {
     check(['liked', 'bookmarked'].includes(kind) && typeof target === 'boolean'); snapshot(captured);
     const result = next(profile, options); let row = result.entries.find(value => value.canonicalUrl === captured.canonicalUrl);
@@ -84,17 +89,17 @@
     if (kind === 'liked' && target && !row.liked) row.snapshot = copy(captured);
     if (row[kind] !== target) row[kind + 'At'] = target ? result.updatedAt : null;
     row[kind] = target; row.updatedAt = result.updatedAt;
-    return finish(result);
+    return finish(result, profile.entries.length);
   }
-  function setPersonalization(profile, target, options = {}) { check(typeof target === 'boolean'); const result = next(profile, options); result.personalizationEnabled = target; return finish(result); }
+  function setPersonalization(profile, target, options = {}) { check(typeof target === 'boolean'); const result = next(profile, options); result.personalizationEnabled = target; return finish(result, profile.entries.length); }
   function setExcluded(profile, url, target, options = {}) {
     check(typeof target === 'boolean'); const canonical = key(url), result = next(profile, options), row = result.entries.find(value => value.canonicalUrl === canonical); check(row);
-    row.excludedFromRecommendations = target; row.updatedAt = result.updatedAt; return finish(result);
+    row.excludedFromRecommendations = target; row.updatedAt = result.updatedAt; return finish(result, profile.entries.length);
   }
-  function forget(profile, url, options = {}) { const canonical = key(url), result = next(profile, options); result.entries = result.entries.filter(value => value.canonicalUrl !== canonical); return finish(result); }
-  function clear(profile, options = {}) { return finish({ ...next(profile, options), deleted: true, personalizationEnabled: false, entries: [] }); }
+  function forget(profile, url, options = {}) { const canonical = key(url), result = next(profile, options); result.entries = result.entries.filter(value => value.canonicalUrl !== canonical); return finish(result, profile.entries.length); }
+  function clear(profile, options = {}) { return finish({ ...next(profile, options), deleted: true, personalizationEnabled: false, entries: [] }, profile.entries.length); }
   function exportCopy(profile, options = {}) {
-    validate(profile); check(plain(options) && Object.keys(options).every(name => name === 'now'));
+    validate(profile, { totals: false }); check(plain(options) && Object.keys(options).every(name => name === 'now'));
     const result = { format: FORMAT, schemaVersion: 1, exportedAt: clock(options), entries: copy(profile.entries.filter(row => row.liked || row.bookmarked)) };
     previewCopy(result); return result;
   }
@@ -109,7 +114,83 @@
       check(Date.parse(row.updatedAt) <= Date.parse(result.updatedAt));
       result.entries.push({ ...row, excludedFromRecommendations: true }); seen.add(row.canonicalUrl);
     }
-    result.personalizationEnabled = false; return finish(result);
+    result.personalizationEnabled = false; return finish(result, profile.entries.length);
   }
-  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy });
+  // --- Two account documents (review MAJOR-1, 2026-11-11). The shell shipped before the added sources validates
+  // `discoveryActions` with its nine-source registry and holds back the whole document when one entry names another
+  // source (an added source or a 넓게 찾기 link). Its next own reaction then replaced the account copy and the newer
+  // device's entries were lost. So `discoveryActions` keeps only what that validator accepts, and every other entry
+  // lives in `discoveryActionsExtended`, which that shell does not know and leaves alone. Storage reads the pair as one
+  // profile (combine) and writes a saved profile back as the pair (separate). Both are ordinary account documents.
+  function legacyIds() { const value = api(); return new Set(Array.isArray(value.LEGACY_SOURCE_IDS) ? value.LEGACY_SOURCE_IDS : Object.keys(value.ALLOWED_SOURCES)); }
+  // Accepted by the earlier validator: its registry is exactly the first nine sources with the same hosts.
+  function legacyEntry(row, ids = legacyIds()) { return ids.has(row?.snapshot?.sourceId); }
+  function legacyCompatible(profile) { validate(profile); const ids = legacyIds(); return profile.entries.every(row => legacyEntry(row, ids)); }
+  const later = (a, b) => Date.parse(a) >= Date.parse(b) ? a : b;
+  // The pair as one profile. An address in both (two feeds of one site can list one article) shows the version
+  // changed last (a tie: the extended one); the other stays stored where it is. The revision is the sum, so a change
+  // of either document is a change of the profile.
+  function combine(legacy, extended) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId);
+    const extra = new Map(extended.entries.map(row => [row.canonicalUrl, row])), used = new Set(), entries = [];
+    for (const row of legacy.entries) {
+      const other = extra.get(row.canonicalUrl);
+      entries.push(copy(other && Date.parse(other.updatedAt) >= Date.parse(row.updatedAt) ? other : row)); used.add(row.canonicalUrl);
+    }
+    for (const row of extended.entries) if (!used.has(row.canonicalUrl)) entries.push(copy(row));
+    const stamps = [legacy.updatedAt, extended.updatedAt].filter(Boolean), revision = legacy.revision + extended.revision;
+    const gone = value => value.deleted || value.revision === 0;
+    const result = { schemaVersion: 1, workspaceId: legacy.workspaceId, revision, deleted: revision > 0 && gone(legacy) && gone(extended) && (legacy.deleted || extended.deleted),
+      updatedAt: stamps.length ? stamps.reduce(later) : null, personalizationEnabled: legacy.personalizationEnabled, entries };
+    // Each document is within the bounds; the two together may not be (an earlier shell adding to its document, or two
+    // devices adding to different documents near the bound). Reading never fails on that; adding is refused (finish).
+    validate(result, { totals: false }); return result;
+  }
+  // A saved profile (built from combine) back as the pair. Each document keeps its own order and its own copy of an
+  // address the other one shows; only what the profile changed is written. `null` leaves that document as it is;
+  // when nothing changed the legacy document still takes the save, as a single document did.
+  function separate(profile, legacy, extended) {
+    validate(profile, { totals: false }); validate(legacy); validate(extended); check(profile.workspaceId === legacy.workspaceId && legacy.workspaceId === extended.workspaceId);
+    const ids = legacyIds(), wanted = new Map(profile.entries.map(row => [row.canonicalUrl, row]));
+    const side = (doc, mine) => {
+      const rows = [], seen = new Set();
+      for (const row of doc.entries) {
+        const next = wanted.get(row.canonicalUrl); if (!next) continue; // forgotten, or cleared
+        rows.push(copy(mine(next) ? next : row)); seen.add(row.canonicalUrl); // another document's version: this copy stays
+      }
+      for (const row of profile.entries) if (mine(row) && !seen.has(row.canonicalUrl)) rows.push(copy(row));
+      return rows;
+    };
+    const legacyRows = side(legacy, row => legacyEntry(row, ids)), extendedRows = side(extended, row => !legacyEntry(row, ids));
+    const legacyNext = { ...copy(legacy), revision: legacy.revision + 1, deleted: profile.deleted, updatedAt: profile.updatedAt, personalizationEnabled: profile.personalizationEnabled, entries: legacyRows };
+    const extendedNext = { ...copy(extended), revision: extended.revision + 1, deleted: profile.deleted && !extendedRows.length, updatedAt: profile.updatedAt, personalizationEnabled: false, entries: extendedRows };
+    const meaning = value => JSON.stringify([value.deleted, value.personalizationEnabled, value.entries]);
+    const extendedChanged = extended.revision === 0 ? extendedRows.length > 0 : meaning(extendedNext) !== meaning(extended);
+    const legacyChanged = meaning(legacyNext) !== meaning(legacy) || !extendedChanged;
+    if (legacyChanged) { finish(legacyNext); check(legacyNext.entries.every(row => legacyEntry(row, ids))); }
+    if (extendedChanged) finish(extendedNext);
+    return { legacy: legacyChanged ? legacyNext : null, extended: extendedChanged ? extendedNext : null };
+  }
+  // A legacy document that still holds other entries (written before this split, e.g. during development): those
+  // entries move to the extended document. An address already there keeps the version changed last; the other
+  // version is returned as `lost` for a recovery copy. Nothing is moved when there is nothing to move.
+  function migrate(legacy, extended, now) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId && stamp(now));
+    const ids = legacyIds(), moving = legacy.entries.filter(row => !legacyEntry(row, ids));
+    if (!moving.length) return null;
+    const rows = copy(extended.entries), lost = [], at = new Map(rows.map((row, index) => [row.canonicalUrl, index]));
+    for (const row of moving) {
+      if (!at.has(row.canonicalUrl)) { at.set(row.canonicalUrl, rows.length); rows.push(copy(row)); continue; }
+      const index = at.get(row.canonicalUrl), kept = rows[index];
+      if (Date.parse(row.updatedAt) > Date.parse(kept.updatedAt)) { lost.push(kept); rows[index] = copy(row); } else lost.push(copy(row));
+    }
+    const time = [now, legacy.updatedAt, extended.updatedAt].filter(Boolean).reduce(later);
+    const legacyNext = finish({ ...copy(legacy), revision: legacy.revision + 1, deleted: false, updatedAt: time, entries: legacy.entries.filter(row => legacyEntry(row, ids)) });
+    const extendedNext = finish({ ...copy(extended), revision: extended.revision + 1, deleted: false, updatedAt: time, personalizationEnabled: false, entries: rows });
+    // Every moved address is in the new extended document before the legacy one lets go of it.
+    check(moving.every(row => extendedNext.entries.some(kept => kept.canonicalUrl === row.canonicalUrl)));
+    return { legacy: legacyNext, extended: extendedNext, lost };
+  }
+  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy,
+    legacyEntry, legacyCompatible, combine, separate, migrate });
 });

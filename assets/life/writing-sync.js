@@ -51,18 +51,24 @@
         dismissCompositionNotice: () => storage.dismissWritingNotice(ws, id),
         readWorkbenchSnapshot: async () => { const value = await storage.readWritingSnapshot(ws, id); return { workbench: value.stage, bundle: value.bundle }; },
         listWorkspaces: async () => { const state = await getState(ws, id); return state.enabled && state.status !== 'closed' ? [{ workspaceId: id }] : []; },
+        // The draft's engine sends a saved change half a second later. A hidden page does that for
+        // its own saves only: another tab's save is sent by that tab (both tabs would otherwise
+        // send the same stored request, three requests each).
         subscribe: (_, listener) => storage.subscribe(ws, event => {
           if (event.stageId !== id) return;
-          if (event.type === 'writing_draft_changed') listener({ workspaceId: id, type: 'workbench_changed' });
+          if (event.type === 'writing_draft_changed' && (event.local === true || !hidden())) listener({ workspaceId: id, type: 'workbench_changed' });
           if (event.type === 'writing_sync_changed') listener({ workspaceId: id, type: 'composition_sync_changed' });
         })
       };
       const sourceAdapter = { getState: () => sourceSync.getState(ws), syncNow: () => sourceSync.syncNow(ws),
         subscribe: listener => sourceSync.subscribe(event => { if (event.workspaceId === ws) listener({ workspaceId: id }); }) };
       const transport = { read: () => remote.read(ws, id), write: request => remote.write({ ...request, workspaceId: ws, draftId: id }) };
+      // A new piece of writing (no original it edits, not yet saved as a record) points at no
+      // original: it is sent while the originals are still pending, failing or unmerged.
+      const sourceOptional = async () => { const stage = await storage.getStage(id); return !!stage && stage.kind === 'writing' && stage.workspaceId === ws && stage.state === 'draft' && stage.sourceId === null; };
       const instance = engine.create({ storage: adapter, sourceSync: sourceAdapter, auth, remote: transport,
         errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false,
-        autoResolve: latest });
+        autoResolve: latest, sourceOptional });
       instance.subscribe(event => emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null));
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
@@ -119,12 +125,17 @@
       const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
       availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
     }
-    // A pass lists a workspace's drafts only while its originals sync is enabled, bound to this
-    // account and synced. Workspaces a pass had to skip for that reason are remembered: when the
+    // A pass needs a workspace's originals to be connected (enabled, bound to this account, a
+    // server revision acknowledged). Drafts that point at an original also need them ready
+    // (synced). Workspaces whose originals a pass found not ready are remembered: when the
     // originals engine connects (an open, a reconnect) or such a workspace's originals become ready,
     // a pass runs then instead of at the next poll. Other originals changes start no pass.
     const originalsReady = state => !!state?.enabled && same(state.binding) && state.status === 'synced';
     const waiting = new Set();
+    // Server drafts that could not be installed while the originals were not ready (they point at
+    // an original that has not arrived): the same server revision is not read again until the
+    // originals are ready, so a long originals outage costs one body read per draft, not one per pass.
+    const held = new Map();
     let sourceCheck = null, sourceAgain = null, offSource = null, sourceEvents = 0;
     function onSource(event) {
       sourceEvents++;
@@ -154,7 +165,10 @@
     // One pass per workspace: one metadata list (100 per page) decides which draft bodies to fetch.
     // A draft whose local text is unchanged since its last exchange and whose listed server revision
     // equals the acknowledged one is skipped: no body read on cellular for unchanged drafts.
-    async function workspacePass(ws, epoch) {
+    // uploadOnly (a hidden page): what this device holds is sent; the server list is not read and
+    // nothing new is installed.
+    async function workspacePass(ws, epoch, uploadOnly = false, own = null) {
+      if (uploadOnly && ![...own].some(key => key.startsWith(ws + '/'))) return;
       // An originals event that lands while this read is in flight may already be past: check again.
       const seen = sourceEvents, wait = () => { waiting.add(ws); if (sourceEvents !== seen) onSource({ type: 'state', workspaceId: ws }); };
       let source;
@@ -163,7 +177,9 @@
       if (originalsReady(source)) waiting.delete(ws); else wait();
       if (!source?.enabled || !same(source.binding)) return;
       let listed = null;
-      if (source.status === 'synced') {
+      // The list needs the originals' connection, not their being up to date: each draft and row
+      // that points at an original is still held by its own check until the originals arrive.
+      if (!uploadOnly && source.remoteRevision >= 1) {
         listed = new Map();
         try {
           let after = null;
@@ -179,6 +195,7 @@
       const stages = (await storage.listStages(ws)).filter(stage => stage.kind === 'writing'); guard(epoch);
       const states = new Map((await storage.listWritingSyncStates(ws)).map(state => [state.draftId, state])); guard(epoch);
       for (const stage of stages) {
+        if (uploadOnly && !own.has(ws + '/' + stage.stageId)) continue;
         const state = states.get(stage.stageId);
         try {
           if (!state) { if (stage.state !== 'applied') await call('enable', ws, stage.stageId); }
@@ -196,9 +213,13 @@
       }
       if (!listed) return;
       const known = new Set(stages.map(stage => stage.stageId));
+      const ready = originalsReady(source);
       for (const row of listed.values()) {
         if (row.state !== 'draft' || known.has(row.draft_id)) continue;
-        try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
+        const key = ws + '/' + row.draft_id;
+        if (!ready && held.get(key) === row.revision) continue;
+        try { await download(ws, row.draft_id, source); known.add(row.draft_id); held.delete(key); }
+        catch (error) { guard(epoch); if (!ready && error?.code === 'writing_source_pending') held.set(key, row.revision); else held.delete(key); }
       }
     }
     // Callers that arrive during a pass wait for the same pass, which then runs once more.
@@ -209,22 +230,54 @@
     let suspended = false, parked = false;
     const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
     const resume = () => { if (!suspended) return; suspended = false; automatic(); };
+    // A page that is closed or left for another page of the application (pagehide, not kept in the
+    // cache) starts nothing here: the platform has suspended its session by then (platform-auth.js
+    // hides the private screen and cancels the session's generation on pagehide, and
+    // haedo:page-suspend arrives first). Chromium sends beforeunload, then pagehide while the
+    // document still reads "visible", and only then visibilitychange: the hidden upload does not
+    // run for a page that is going away. What was typed in the last seconds before leaving stays
+    // on this device and the next page sends it. Switching to another tab or application hides
+    // the page without pagehide, and that is the case the hidden upload covers.
     const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
     const pageshow = event => { if (event?.persisted) parked = false; };
-    function automatic() {
-      if (disposed || suspended || parked || root.document?.visibilityState === 'hidden') return Promise.resolve();
+    const hidden = () => root.document?.visibilityState === 'hidden';
+    // mine: drafts this page itself saved and no pass has taken yet (storage marks its own saves
+    // `local`; another tab's saves and sync's own writes arrive without it). full: a visible
+    // page asked for the whole pass (list, receive, send).
+    const mine = new Set();
+    let full = false;
+    function begin() {
       if (refreshing) { again = true; return refreshing; }
       refreshing = passes().finally(() => { refreshing = null; });
       return refreshing;
     }
+    function automatic() {
+      if (disposed || suspended || parked || hidden()) return Promise.resolve();
+      full = true;
+      return begin();
+    }
+    // A page that is being hidden sends what it saved itself and has not sent yet, once (typed,
+    // then switched away): an upload-only pass for those drafts, no list and no installs. With
+    // nothing of its own to send it does nothing: another tab's saves are sent by that tab, and
+    // the poll stays quiet while hidden.
+    function flush() {
+      if (disposed || suspended || parked || !mine.size) return Promise.resolve();
+      root.clearTimeout(soon); soon = null;
+      return begin();
+    }
+    const wake = () => hidden() ? flush() : automatic();
     async function passes() {
       if (Date.now() < availability.until) return;
       try {
         do {
           again = false;
+          // The whole pass only for a visible page that asked for it; otherwise this page's own saves.
+          const uploadOnly = !full || hidden(), own = new Set(mine);
+          full = false; mine.clear();
+          if (uploadOnly && !own.size) continue;
           guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
           for (const workspace of workspaces) {
-            try { await workspacePass(workspace.workspaceId, epoch); }
+            try { await workspacePass(workspace.workspaceId, epoch, uploadOnly, own); }
             catch (error) { guard(epoch); if (Date.now() < availability.until) return; /* Other workspaces still sync. */ }
           }
         } while (again && !disposed);
@@ -232,17 +285,20 @@
     }
     function nudge() {
       if (disposed || suspended || parked || soon) return;
-      soon = root.setTimeout(() => { soon = null; automatic(); }, 3000); soon?.unref?.();
+      soon = root.setTimeout(() => { soon = null; wake(); }, 3000); soon?.unref?.();
     }
     // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
     // reads no body for drafts that did not change on either side.
     function onStorage(event) {
       if (event?.type !== 'writing_draft_changed' || !event.stageId) return;
+      if (event.local === true) mine.add(event.workspaceId + '/' + event.stageId);
+      // A hidden page reacts to its own saves only.
+      else if (hidden()) return;
       nudge();
     }
     function start() { guard(); if (started) return; started = true;
       wiring = syncLifecycle()?.attach(root, {
-        listen: [['window', 'online', automatic], ['window', 'focus', automatic], ['document', 'visibilitychange', automatic],
+        listen: [['window', 'online', wake], ['window', 'focus', automatic], ['document', 'visibilitychange', wake],
           ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', resume],
           ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
         poll: [every, automatic],
@@ -256,7 +312,7 @@
       automatic();
     }
     function dispose() { if (disposed) return; disposed = true; wiring?.detach(); wiring = null; root.clearTimeout(soon); soon = null;
-      offAll?.(); offSource?.(); offSource = null; waiting.clear(); sourceAgain = null; material?.dispose(); material = null;
+      offAll?.(); offSource?.(); offSource = null; waiting.clear(); held.clear(); mine.clear(); sourceAgain = null; material?.dispose(); material = null;
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
     }
     // { force: true } (an explicit retry) ignores the unavailable back-off once.

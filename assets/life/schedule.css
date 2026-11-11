@@ -237,6 +237,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-happiness-option:has(input:checked) { background: var(--color-primary); color: var(--haedo-on-accent); font-weight: 750; }
 .schedule-happiness-option:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .schedule-happiness-option:has(input:disabled) { opacity: .5; cursor: default; }
+/* The day is held for its failed 행복도 choice (schedule-entries.js heldDay): nothing below the notice takes
+   input, and it looks so. The notice and its two buttons sit outside this block at full contrast. */
+.schedule-entry-body[inert] { opacity: .5; }
 .schedule-happiness-clear { min-height: 44px; margin-top: 4px; }
 .schedule-happiness-day { min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
 .schedule-happiness-day:hover { background: var(--haedo-soft); }

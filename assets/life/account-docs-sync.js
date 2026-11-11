@@ -35,6 +35,8 @@
     'page-drafts': [{ path: 'posts', key: 'id', time: 'updatedAt' }],
     'public-cover': [{ path: 'covers', key: 'id' }],
     discoveryActions: [{ path: 'entries', key: 'canonicalUrl', time: 'updatedAt' }],
+    // The second document of the reactions pair (storage.js): the same entries, merged the same way.
+    discoveryActionsExtended: [{ path: 'entries', key: 'canonicalUrl', time: 'updatedAt' }],
     discoveryProfile: [{ path: 'feedback', key: 'canonicalUrl', time: 'updatedAt' }],
     interestProfile: [{ path: 'manual', key: 'id' }, { path: 'confirmedIds' }],
     annualPlan: [{ path: 'rows', key: 'year', sort: (a, b) => a.year - b.year }, { path: 'entries', key: 'id', sort: byDate('date') }],

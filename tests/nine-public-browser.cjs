@@ -68,6 +68,24 @@ async function main() {
   const busy = () => page.waitForFunction(() => document.getElementById('nineShare')?.getAttribute('aria-busy') === 'false');
   const click = async id => { await page.locator(id).click(); await busy(); };
   const publicState = value => visitor.waitForFunction(value => document.getElementById('ninePublicStatus')?.dataset.state === value, value);
+  // The visitor page keeps its state ('published') while it reads again, so waiting for the state
+  // alone is already satisfied before the answer arrives (2026-11-11: with a read 25 ms slower the
+  // checks below read the old content, or passed without looking at the new one). A read disables
+  // 공개 상태 다시 확인 and marks the content busy when it starts and releases both when it ends:
+  // armVisitorRead() watches for exactly one such read, started after it was armed.
+  const armVisitorRead = () => visitor.evaluate(() => {
+    const refresh = document.getElementById('ninePublicRefresh'), content = document.getElementById('ninePublicContent');
+    window.__nineRead = new Promise(resolve => {
+      let started = false;
+      const observer = new MutationObserver(() => {
+        if (refresh.disabled) started = true;
+        else if (started && !content.hasAttribute('aria-busy')) { observer.disconnect(); resolve(); }
+      });
+      observer.observe(refresh, { attributes: true, attributeFilter: ['disabled'] }); observer.observe(content, { attributes: true, attributeFilter: ['aria-busy'] });
+    });
+  });
+  const visitorRead = () => visitor.evaluate(() => Promise.race([window.__nineRead, new Promise((_, reject) => setTimeout(() => reject(new Error('The visitor read did not start and end')), 25000))]));
+  const refreshVisitor = async () => { await armVisitorRead(); await visitor.locator('#ninePublicRefresh').click(); await visitorRead(); };
   const putCount = () => server.pageRequests.filter(row => row.name === 'life_public_page_put').length;
   const readPublic = () => server.rpc(null, 'life_public_page_read', { p_public_id: publicId });
   async function go(target = page, areaId = fixture.areaId) {
@@ -219,7 +237,7 @@ async function main() {
       const beforePoll = await visitor.locator('#ninePublicContent .np-document').elementHandle();
       await visitor.evaluate(() => { const n = document.querySelector('.np-detail-title'); const selection = getSelection(), range = document.createRange(); range.selectNodeContents(n); selection.removeAllRanges(); selection.addRange(range); });
       const selection = await visitor.evaluate(() => getSelection().toString());
-      await visitor.evaluate(() => __ninePolls.at(-1)()); await publicState('published');
+      await armVisitorRead(); await visitor.evaluate(() => { __ninePolls.at(-1)(); }); await visitorRead(); await publicState('published');
       assert(await beforePoll.evaluate(node => node.isConnected && node === document.querySelector('#ninePublicContent .np-document'))); assert.equal(await visitor.evaluate(() => getSelection().toString()), selection);
     });
     await check('A changed saved area invalidates old consent while an explicit fresh preview updates the same public copy', async () => {
@@ -230,7 +248,7 @@ async function main() {
       await prepare(); await page.locator('#nineShareConsent').check(); await click('#nineSharePublish');
       assert.equal(readPublic().publicId, oldWire.publicId); assert.equal(readPublic().snapshot.entries[0].attachments[8].title, '다른 탭에서 고친 아홉 번째');
       assert.deepEqual(await original(), changed); before = changed;
-      await visitor.locator('#ninePublicRefresh').click(); await publicState('published'); assert((await visitor.locator('#ninePublicContent').innerText()).includes('다른 탭에서 고친 아홉 번째'));
+      await refreshVisitor(); await publicState('published'); assert((await visitor.locator('#ninePublicContent').innerText()).includes('다른 탭에서 고친 아홉 번째'));
     });
     await check('Two actual owner tabs require a fresh review after public CAS conflict and preserve the competing publication', async () => {
       const other = await owner.newPage(); observe(other);
@@ -247,7 +265,7 @@ async function main() {
       } finally { await other.close(); }
     });
     await check('Book covers require explicit opt-in and a one-item area leaves eight noninteractive empty slots', async () => {
-      await visitor.locator('#ninePublicRefresh').click(); await publicState('published'); assert.deepEqual(report.covers, []);
+      await refreshVisitor(); await publicState('published'); assert.deepEqual(report.covers, []);
       coverMode = 'failure'; await visitor.locator('.np-media-toggle').click(); await visitor.locator('.np-tile[data-index="1"]').scrollIntoViewIfNeeded();
       await visitor.locator('.np-cover[data-state=error]').waitFor(); assert.equal(await visitor.locator('.np-cover img').count(), 0);
       assert((await visitor.locator('.np-tile[data-index="1"]').innerText()).includes(fixture.titles[1]));
@@ -274,13 +292,13 @@ async function main() {
       assert.equal(await page.locator('#nineShareStatus').getAttribute('data-state'), 'published');
       const count = putCount(); await click('#nineSharePrepare'); await page.locator('.nine-share-error:not([hidden])').waitFor(); assert.equal(putCount(), count);
       await page.locator('#nineShareRevokeConsent').check(); await click('#nineShareRevoke');
-      await visitor.locator('#ninePublicRefresh').click(); await publicState('missing'); before = emptied;
+      await refreshVisitor(); await publicState('missing'); before = emptied;
       await page.locator('#nineShareClose').click(); await go(); await open();
       await visitor.goto(publicURL); await publicState('published');
     });
     await check('Revocation removes the anonymous grid and details while original files and draft composition remain reusable', async () => {
       await page.locator('#nineShareRevokeConsent').check(); await click('#nineShareRevoke'); assert.equal(readPublic().status, 'missing');
-      await visitor.locator('#ninePublicRefresh').click(); await publicState('missing'); assert.equal(await visitor.locator('#ninePublicContent').innerText(), ''); assert.equal(await visitor.locator('#ninePublicContent img').count(), 0);
+      await refreshVisitor(); await publicState('missing'); assert.equal(await visitor.locator('#ninePublicContent').innerText(), ''); assert.equal(await visitor.locator('#ninePublicContent img').count(), 0);
       assert.deepEqual(await original(), before); assert.equal(server.rpc(accounts.a.id, 'life_public_page_get', { p_workspace_id: fixture.ws }).publicId, oldPage.publicId);
       await page.locator('#nineShareClose').click(); await go();
       await page.locator('.nb-files > summary').click(); await page.locator('#nbImageArea').selectOption(fixture.areaId);
@@ -339,7 +357,7 @@ async function main() {
       assert.equal(server.rpc(null, 'life_public_page_read', { p_public_id: id }).status, 'published', 'First confirmation does not revoke');
       await row.locator('.wb-public-revoke-confirm').click(); await row.waitFor({ state: 'detached' });
       assert.equal(server.rpc(null, 'life_public_page_read', { p_public_id: id }).status, 'missing');
-      await visitor.locator('#ninePublicRefresh').click(); await publicState('missing'); assert.equal(await visitor.locator('#ninePublicContent').innerText(), '');
+      await refreshVisitor(); await publicState('missing'); assert.equal(await visitor.locator('#ninePublicContent').innerText(), '');
       assert.deepEqual(await original(), deleted); assert.equal(server.rpc(accounts.a.id, 'life_public_page_get', { p_workspace_id: fixture.ws }).publicId, oldPage.publicId);
     });
     await check('Reopening restores the exact explicitly public title and introduction while status refresh preserves current edits', async () => {

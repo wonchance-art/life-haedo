@@ -122,6 +122,7 @@ const PINNED = {
     "DiscoveryRecommendations",
     "DiscoverySettings",
     "DiscoveryUI",
+    "DiscoveryWideRemote",
     "FullBackup",
     "FullBackupUI",
     "HomeUI",

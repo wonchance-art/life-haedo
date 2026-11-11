@@ -19,14 +19,20 @@
     if (year < 1900 || year > 2199 || month < 1 || month > 12 || day < 1) return false;
     return day <= new Date(year, month, 0).getDate();
   }
-  function civil(date) { return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()); }
+  // Always YYYY-MM-DD: a year below 1000 is written with four digits (parts() reads exactly that shape).
+  function civil(date) { return String(date.getFullYear()).padStart(4, '0') + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()); }
   // Noon keeps daylight-saving shifts from moving a civil date.
   function toDate(value) { const m = civilPattern.exec(value); return new Date(+m[1], +m[2] - 1, +m[3], 12); }
   function today(now = new Date()) { return civil(now); }
-  // The civil date of an ISO timestamp in this device's time zone; null when unreadable.
+  // The civil date of an ISO timestamp in this device's time zone; null when unreadable or outside the days
+  // 일정 handles (valid(): 1900–2199). A record stored with such a time (2026-11-11: a restored post dated in
+  // the year 999) has no day here: the list shows it under 날짜 미확인 and the calendars leave it out, instead
+  // of one record stopping the whole screen.
   function dayOf(iso) {
     const time = Date.parse(iso);
-    return Number.isFinite(time) ? civil(new Date(time)) : null;
+    if (!Number.isFinite(time)) return null;
+    const day = civil(new Date(time));
+    return valid(day) ? day : null;
   }
   function timeOf(iso) {
     const time = Date.parse(iso);

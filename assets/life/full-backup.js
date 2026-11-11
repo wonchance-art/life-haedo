@@ -14,7 +14,10 @@
   // Version 1: first release (manifest/README first, no notIncluded).
   // Version 2: adds blog series, preparations, Naver captures, originals,
   // `notIncluded`, missing reasons; manifest/README are written last.
-  const FORMAT = 'haedo-full-backup-v1', VERSION = 2, DOCS_FORMAT = 'haedo-account-documents-v1';
+  // VERSION 3 (2026-11-11): the same files as 2; each post ZIP also carries the post's createdAt·updatedAt, which an
+  // app before this change cannot read. It refuses version 3 up front (unsupported_version) instead of restoring
+  // everything but the posts.
+  const FORMAT = 'haedo-full-backup-v1', VERSION = 3, DOCS_FORMAT = 'haedo-account-documents-v1';
   const MiB = 1024 * 1024, GiB = 1024 * MiB;
   // ZIP32 without ZIP64: every offset must stay below 4 GiB. The same limit
   // applies to the whole file when it is written and when it is opened.
@@ -24,6 +27,9 @@
     NaverMedia: './naver-media.js', SourceReference: './source-reference.js' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require(paths[name]));
   const zip = () => root.fflate || (typeof require === 'function' && require('../../vendor/fflate/fflate.js'));
+  // File names carry this device's civil day (HaedoData.localDate), not the UTC day: a backup received at
+  // 08:30 KST was named for the day before (2026-11-11 m5).
+  const localDate = date => (root.HaedoData || (typeof require === 'function' && require('../data.js'))).localDate(date);
   const fault = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra });
   const clone = value => structuredClone(value);
   const plain = value => !!value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -63,6 +69,11 @@
   // first group embed the account; the rest belong to an owned workspace.
   const ACCOUNT_PREFIXES = Object.freeze(['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings',
     'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading']);
+  // The second document of each news pair (storage.js, review MAJOR-1, 2026-11-11), account-scoped like the above.
+  // A backup keeps them in the file's `extended` list, a field the earlier release does not read: it still opens the
+  // ZIP (its check refuses an unknown prefix in `documents`), as happinessDays rides in the timeline part.
+  const EXTENDED_PREFIXES = Object.freeze(['discoveryActionsExtended', 'discoveryReadingExtended']);
+  const allDocuments = data => [...data.documents, ...(Array.isArray(data.extended) ? data.extended : [])];
   const WORKSPACE_PREFIXES = Object.freeze(['public-cover', 'page-drafts', 'post-evidence']);
   // `restored-copy` describes how one workspace was made. It is not written to
   // the file: every restore marks its own new copies (see restoredCopyOf).
@@ -116,7 +127,7 @@
     blogSeries: snapshot => ({ series: 1, seriesPosts: snapshot.posts.length, photos: snapshot.posts.reduce((n, row) => n + row.doc.photos.length, 0) }),
     materialWriting: data => ({ plans: data.plans.length }),
     naverCaptures: attachment => ({ captures: 1, photos: attachment.photos.length }),
-    accountDocuments: data => ({ documents: data.documents.length }),
+    accountDocuments: data => ({ documents: allDocuments(data).length }),
     originals: part => ({ parts: 1, files: part.count || 0 }),
     timeline: data => ({ timelines: (data.docs || []).length, goals: (data.items || []).filter(item => item?.kind === 'goal').length,
       habits: (data.items || []).filter(item => item?.kind === 'habit').length, ...happinessCount(data) })
@@ -139,7 +150,7 @@
   // ---- Reading the account (export) ----
   const accountKeyOf = storage => JSON.stringify([storage.account.projectUrl, storage.account.userId]);
   function docKey(storage, prefix, workspaceId, postId) {
-    if (ACCOUNT_PREFIXES.includes(prefix)) return prefix + ':' + accountKeyOf(storage) + ':' + workspaceId;
+    if (ACCOUNT_PREFIXES.includes(prefix) || EXTENDED_PREFIXES.includes(prefix)) return prefix + ':' + accountKeyOf(storage) + ':' + workspaceId;
     return prefix + ':' + workspaceId + (prefix === 'post-evidence' ? ':' + postId : '');
   }
   function timelineSnapshot({ platformData, localStorage, uid, now = () => new Date().toISOString() }) {
@@ -251,7 +262,7 @@
     if (storage.listAccountDocs && storage.listAccountDocRecoveries) try {
       const known = new Set(workspaces.map(row => row.workspaceId));
       let count = 0;
-      for (const row of await storage.listAccountDocs()) if (DOC_PREFIXES.has(row.prefix) && known.has(row.workspaceId)) count += (await storage.listAccountDocRecoveries(row.key)).length;
+      for (const row of await storage.listAccountDocs()) if ((DOC_PREFIXES.has(row.prefix) || EXTENDED_PREFIXES.includes(row.prefix)) && known.has(row.workspaceId)) count += (await storage.listAccountDocRecoveries(row.key)).length;
       if (count) excluded.push(notIncluded('accountDocRecoveries', count));
     } catch (_) { excluded.push(notIncluded('accountDocRecoveries')); }
     if (originals) {
@@ -296,18 +307,18 @@
       return { blob: part.blob, format: 'haedo-private-originals-part-v1', counts: COUNT.originals({ count: task.count }), meta: { partId: task.partId, title: task.title } };
     }
     if (task.kind === 'accountDocuments') {
-      const known = new Set(workspaces.map(row => row.workspaceId)), documents = [], others = new Map();
+      const known = new Set(workspaces.map(row => row.workspaceId)), documents = [], extended = [], others = new Map();
       for (const row of await storage.listAccountDocs()) {
-        if (!DOC_PREFIXES.has(row.prefix)) continue;
+        if (!DOC_PREFIXES.has(row.prefix) && !EXTENDED_PREFIXES.includes(row.prefix)) continue;
         if (!known.has(row.workspaceId)) { others.set(row.workspaceId, (others.get(row.workspaceId) || 0) + 1); continue; }
         const record = await storage.readAccountDocRecord(row.key);
         if (!record.exists) continue;
         const postId = row.prefix === 'post-evidence' ? row.key.split(':')[2] : null;
-        documents.push({ prefix: row.prefix, workspaceId: row.workspaceId, ...(postId ? { postId } : {}), value: record.value });
+        (EXTENDED_PREFIXES.includes(row.prefix) ? extended : documents).push({ prefix: row.prefix, workspaceId: row.workspaceId, ...(postId ? { postId } : {}), value: record.value });
       }
-      documents.sort((a, b) => (a.workspaceId + a.prefix + (a.postId || '')).localeCompare(b.workspaceId + b.prefix + (b.postId || '')));
+      for (const list of [documents, extended]) list.sort((a, b) => (a.workspaceId + a.prefix + (a.postId || '')).localeCompare(b.workspaceId + b.prefix + (b.postId || '')));
       const count = [...others.values()].reduce((sum, n) => sum + n, 0);
-      return { value: { format: DOCS_FORMAT, exportedAt: new Date().toISOString(), documents },
+      return { value: { format: DOCS_FORMAT, exportedAt: new Date().toISOString(), documents, ...(extended.length ? { extended } : {}) },
         skipped: count ? [{ kind: 'accountDocuments', workspace: null, error: '계정 자료공간 목록에 없는 공간(' + others.size + '개)의 문서 ' + count + '개는 복원할 곳이 없어 담지 않았습니다.' }] : [] };
     }
     if (task.kind === 'timeline') {
@@ -479,7 +490,7 @@
       add('manifest.json', pretty(manifest));
       archive.end(); if (error) throw error; flush(); finished = true;
       if (written > limit) throw fault('backup_too_large', '백업이 3.5 GiB를 넘어 ZIP 하나로 만들 수 없습니다. 형식별로 나눠 받아 주세요.');
-      const stamp = manifest.createdAt.slice(0, 10);
+      const stamp = localDate(new Date(manifest.createdAt));
       return { blob: new Blob(parts, { type: 'application/zip' }), manifest, bytes: written,
         fileName: 'haedo-backup-' + stamp + (missingTasks.length ? '-partial' : '') + '.zip' };
     }
@@ -568,6 +579,11 @@
         doc.prefix === 'post-evidence' && !ID.test(doc.postId || '') || !Object.hasOwn(doc, 'value'))
         throw fault('invalid_backup', '계정 설정·기록 문서의 항목을 확인해 주세요.');
     }
+    if (Object.hasOwn(data, 'extended')) {
+      if (!Array.isArray(data.extended)) throw fault('invalid_backup', '계정 설정·기록 문서 파일의 형식을 확인해 주세요.');
+      for (const doc of data.extended) if (!plain(doc) || !EXTENDED_PREFIXES.includes(doc.prefix) || !ID.test(doc.workspaceId || '') || !Object.hasOwn(doc, 'value'))
+        throw fault('invalid_backup', '계정 설정·기록 문서의 항목을 확인해 주세요.');
+    }
     return data;
   }
   function libraryTitle(data) { return libraryParts(data)?.bundle?.title || null; }
@@ -611,7 +627,7 @@
       counts: kind === 'timeline' ? COUNT.timeline(data) : {}, text };
     if (kind === 'accountDocuments') validateDocuments(data);
     const workspaces = kind === 'accountDocuments'
-      ? [...new Set(data.documents.map(doc => doc.workspaceId))].map((workspaceId, i) => ({ index: i + 1, workspaceId, title: '복원한 설정 · ' + (i + 1) }))
+      ? [...new Set(allDocuments(data).map(doc => doc.workspaceId))].map((workspaceId, i) => ({ index: i + 1, workspaceId, title: '복원한 설정 · ' + (i + 1) }))
       : [{ index: 1, workspaceId: libraryParts(data)?.bundle?.workspaceId || (kind === 'materialWriting' ? data.workspaceId : null), title: libraryTitle(data) || '복원한 ' + KINDS[kind].label }];
     let counts;
     try { counts = COUNT[kind](data); } catch (_) { throw fault('invalid_backup', KINDS[kind].label + ' 파일의 형식을 확인해 주세요.'); }
@@ -620,7 +636,7 @@
   }
   async function verifyBundle(manifest, entries, onProgress) {
     const invalid = text => fault('invalid_backup', text);
-    if (!plain(manifest) || ![1, 2].includes(manifest.version)) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
+    if (!plain(manifest) || ![1, 2, 3].includes(manifest.version)) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
     const v1 = manifest.version === 1;
     const keys = ['format', 'version', 'createdAt', 'appVersion', 'complete', 'workspaces', 'files', 'missing', ...(v1 ? [] : ['notIncluded'])];
     if (Object.keys(manifest).some(key => !keys.includes(key)) || keys.some(key => !Object.hasOwn(manifest, key))) throw invalid('전체 백업 목록의 항목을 확인해 주세요.');
@@ -679,7 +695,7 @@
       const row = kinds[entry.kind] ||= { kind: entry.kind, label: KINDS[entry.kind].label, files: 0, counts: {}, workspaces: new Set(), formats: new Set(), restorable: entry.kind !== 'timeline' };
       row.files++; addCounts(row.counts, entry.counts); row.formats.add(entry.format + ' v' + entry.formatVersion);
       if (entry.workspace) row.workspaces.add(entry.workspace);
-      if (entry.kind === 'accountDocuments') for (const doc of entry.data.documents) {
+      if (entry.kind === 'accountDocuments') for (const doc of allDocuments(entry.data)) {
         const ws = opened.workspaces.find(item => item.workspaceId === doc.workspaceId);
         if (ws) row.workspaces.add(ws.index);
       }
@@ -783,7 +799,7 @@
     const wanted = (kind, ws, entry) => kinds.has(kind) && (!select || select(kind, ws, entry));
     const guard = () => { if (!isCurrent()) throw fault('restore_cancelled', '계정이나 화면이 바뀌어 복원을 멈췄습니다. 이미 만든 새 사본은 그대로 있습니다.'); };
     const docsEntry = opened.entries.find(entry => entry.kind === 'accountDocuments');
-    const documents = docsEntry ? (await entryData(docsEntry)).documents : [];
+    const documents = docsEntry ? allDocuments(await entryData(docsEntry)) : [];
     const previousActive = await storage.getActive().catch(() => null);
     const report = { workspaces: [], items: [], extraCopies: [] };
     // Titles already in use on this device, so a copy never shares a name.
@@ -867,13 +883,16 @@
             let saved, evidenceNote = null;
             if (evidence?.value?.refs?.length && target.library) {
               const refs = remap(evidence.value.refs, target.map);
-              try { saved = await storage.savePhotoPostWithEvidence(id, candidate, 0, refs, 0); }
+              try { saved = await (storage.restorePhotoPost ? storage.restorePhotoPost(id, candidate, refs) : storage.savePhotoPostWithEvidence(id, candidate, 0, refs, 0)); }
               catch (error) { evidenceNote = '인용 근거 ' + refs.length + '개는 원문과 맞지 않아 연결하지 않았습니다.'; }
             } else if (evidence?.value?.refs?.length) evidenceNote = '자료·구성을 함께 복원하지 않아 인용 근거 ' + evidence.value.refs.length + '개를 연결하지 않았습니다.';
-            if (!saved) saved = await storage.savePhotoPost(id, candidate, 0);
+            // A restored post existed before: the 200 cap for posts started on this device does not apply
+            // to the restore copy (an older storage without the entry point saves it as a new post).
+            if (!saved) saved = await (storage.restorePhotoPost ? storage.restorePhotoPost(id, candidate) : storage.savePhotoPost(id, candidate, 0));
             if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); target.postDocs.set(saved.id, saved); }
+            // times: 'kept' | 'missing' (a backup without the post's times: the restore time) | 'adjusted' (a time later than now).
             record('photoPosts', ws, 'restored', { targetId: id, postId: entry.postId, newPostId: saved.id, title: saved.title, postStatus: saved.status,
-              counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
+              times: P.backupTimes?.(candidate) || 'missing', counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
           } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('photoPosts', ws, 'failed', { postId: entry.postId, title: entry.title, message: message(error) }); }
         }
         for (const entry of own.filter(item => item.kind === 'nineBoards')) {

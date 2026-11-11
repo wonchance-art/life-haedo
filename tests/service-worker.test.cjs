@@ -178,3 +178,58 @@ test('interest review shell includes local worker without pre-caching remote mod
   for (const path of ['assets/life/interest-model-loader.js', 'assets/life/interest-model-worker.js', 'assets/life/interest-analysis.js', 'assets/life/interest-profile.js', 'assets/life/interest-policy.js', 'assets/life/interest-ui.js', 'assets/life/interest.css']) assert.ok(urls.some(url => url.endsWith('/' + path)), path);
   assert.ok(urls.every(url => url.startsWith('https://test.invalid/life-haedo/')));
 });
+
+// ── 2026-11-11 m4: every address the app itself uses opens from the installed shell ──
+// habits.html?month=YYYY-MM (일정 M's habit rows link to it) fell through to the network: `month` was not
+// a shell parameter, so that one address did not open offline.
+const swSource = readFileSync(require.resolve('../sw.js'), 'utf8');
+const swSet = name => new Set(JSON.parse(new RegExp('const ' + name + '=new Set\\((\\[[^\\]]*\\])\\)').exec(swSource)[1].replace(/'/g, '"')));
+// The scripts that read or write the addresses of the installed private pages.
+const ADDRESS_SCRIPTS = ['assets/life/ui.js', 'assets/life/shell.js', 'assets/haedo-navigation.js', 'assets/platform-auth.js', 'assets/platform-ui.js', 'assets/timeline-entry.js'];
+const addressKeys = file => new Set([...readFileSync(require.resolve('../' + file), 'utf8').matchAll(/(?:searchParams|params|query)\.(?:get|has|set|delete|append)\(\s*["']([A-Za-z_-]+)["']/g)].map(match => match[1]));
+test('m4: habits.html?month=… and every other address of the app’s own pages open from the installed shell offline', async () => {
+  const h = harness({ fetchResult: new Error('offline') });
+  const pages = ['index.html', 'life.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'login.html'];
+  for (const page of pages) h.entries.set(request(page).url, new Response('installed ' + page));
+  // Each page with every parameter it reads or writes (ui.js writeRoute/routeMode, platform-ui.js, timeline-entry.js,
+  // haedo-navigation.js, the login return address).
+  const addresses = {
+    'index.html': ['', 'section=schedule', 'section=news', 'section=records&view=sources', 'section=manage&view=backup', 'section=schedule&view=annual-plan', 'section=schedule&view=tools',
+      'section=schedule&view=tools&date=2025-06-01', 'section=schedule&view=quarter&date=2026-04-01', 'section=schedule&view=month&date=2026-09-01', 'section=schedule&view=week&date=2026-10-29',
+      'section=schedule&view=day&date=2026-10-29', 'section=schedule&view=find', 'view=page&blog=new', 'view=page&blog=profile', 'view=page&blog=photo.anonymousPost_1', 'view=page&blog=plain.anon-2',
+      'view=page&blog=draft.anon3', 'section=schedule&view=page&blog=photo.anonymousPost_1', 'compose=1', 'section=records&view=page', 'view=time', 'section=home', 'section=tools&view=annual-plan'],
+    'life.html': ['', 'section=records', 'section=schedule&view=day&date=2026-10-29', 'view=page&blog=photo.anonymousPost_1', 'view-only=1'],
+    'habits.html': ['', 'month=2026-10', 'month=2025-12'],
+    'goals.html': [''],
+    'workspace.html': ['', 'section=manage'],
+    'timeline.html': ['', 'doc=d_1', 'view=records&doc=d_1', 'view=map&doc=d_1'],
+    'login.html': ['', 'next=index.html', 'next=' + encodeURIComponent('index.html?section=schedule&view=day&date=2026-10-29'), 'next=' + encodeURIComponent('habits.html?month=2026-09'),
+      'next=' + encodeURIComponent('index.html?view=page&blog=photo.anonymousPost_1')]
+  };
+  assert.deepEqual(Object.keys(addresses).sort(), [...pages].sort());
+  for (const [page, queries] of Object.entries(addresses)) for (const query of queries) {
+    const response = await h.run('fetch', request(page + (query ? '?' + query : ''), 'navigate'));
+    assert.ok(response, page + '?' + query + ' is answered by the worker (not left to the network)');
+    assert.equal(await response.text(), 'installed ' + page, page + '?' + query);
+  }
+  assert.equal(h.state().fetches, 0, 'no address went to the network');
+  // An address with a parameter the app does not use is still left to the browser, as before.
+  assert.equal(await h.run('fetch', request('habits.html?month=2026-10&unknown=1', 'navigate')), undefined);
+});
+test('m4: every parameter name the address-handling scripts use is a shell parameter or an OAuth callback value', () => {
+  const shell = swSet('shellParams'), oauth = swSet('authParams');
+  assert.ok(shell.has('month'), 'month is a shell parameter');
+  const used = new Map();
+  for (const file of ADDRESS_SCRIPTS) for (const key of addressKeys(file)) used.set(key, [...(used.get(key) || []), file]);
+  // The scan sees the names: these are the ones in use today, so the list cannot go empty unnoticed.
+  for (const key of ['section', 'view', 'date', 'blog', 'compose', 'month', 'doc', 'next']) assert.ok(used.has(key), key + ' is read or written by the address scripts');
+  const unknown = [...used].filter(([key]) => !shell.has(key) && !oauth.has(key));
+  assert.deepEqual(unknown, [], 'add a new address parameter to sw.js shellParams (and to this test’s address list), or it will not open offline');
+  // Everything a login return address may carry is a shell parameter as well (platform-auth.js safeNext).
+  const { safeNext } = require('../assets/platform-auth.js');
+  for (const address of ['index.html?section=schedule&view=day&date=2026-10-29', 'index.html?view=page&blog=photo.a1', 'index.html?compose=1', 'habits.html?month=2026-09',
+    'timeline.html?view=map&doc=d_1', 'workspace.html?section=manage']) {
+    const kept = safeNext(address); assert.equal(kept, address);
+    for (const key of new URL(kept, 'https://test.invalid/').searchParams.keys()) assert.ok(shell.has(key), key + ' of ' + kept);
+  }
+});
