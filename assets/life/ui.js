@@ -492,6 +492,15 @@
       host: main, storage, core, getBundle: () => state.bundle, getAccountKey: () => state.syncAccountKey,
       isDisposed: () => disposed, announce,
       onClose: closeSourceEditor,
+      onDraftsChanged: refreshSourceEditStages,
+      // The draft is gone; the list of drafts must not keep offering it.
+      onDiscarded: async ({ sourceId, sourceVersionId, missing }) => {
+        const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
+        await refreshData();
+        if (disposed || state.mode !== 'source-edit' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        if (missing || !sourceFor(sourceId)) return navigate('sources');
+        return closeSourceEditor({ sourceId, sourceVersionId });
+      },
       onSaved: async ({ sourceId, sourceVersionId }) => {
         const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
         await refreshData();
@@ -500,7 +509,16 @@
         await navigate('source', { sourceId, sourceVersionId, locator: null, returnContext: origin?.returnContext || null });
       }
     });
+    // The list of drafts (검토 중) follows drafts made or removed in this session without a full data refresh.
+    async function refreshSourceEditStages() {
+      const workspaceId = state.bundle?.workspaceId, token = workspaceGeneration;
+      if (disposed || !workspaceId) return;
+      const stages = await storage.listStages(workspaceId);
+      if (disposed || token !== workspaceGeneration || state.bundle?.workspaceId !== workspaceId) return;
+      state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
+    }
     async function closeSourceEditor(fallback = {}) {
+      await refreshSourceEditStages().catch(() => {});
       const origin = sourceEditOrigin?.workspaceId === state.bundle?.workspaceId ? sourceEditOrigin : null;
       const sourceId = origin?.sourceId || fallback.sourceId || sourceEditOpenOptions?.sourceId;
       if (!sourceId) return navigate('sources');
@@ -3105,10 +3123,14 @@
     }
 
     function renderStages(parent) {
-      if (!state.stages.length && !state.sourceEditStages.length) return;
+      // A stage that holds nothing the person typed is not something to review (the editor removes it when opened).
+      const editDrafts = state.sourceEditStages.filter(stage => {
+        try { return !global.HaedoLife.SourceEdit.baseState(state.bundle, stage).untouched; } catch (_) { return true; }
+      });
+      if (!state.stages.length && !editDrafts.length) return;
       const details = node('details', null, 'life-details');
       details.id = 'lifeImportDrafts';
-      details.append(node('summary', '검토 중 ' + (state.stages.length + state.sourceEditStages.length) + '개 · 이어서 확인'));
+      details.append(node('summary', '검토 중 ' + (state.stages.length + editDrafts.length) + '개 · 이어서 확인'));
       const listedBatches = new Set();
       state.stages.forEach(stage => {
         if (validBatchStage(stage)) {
@@ -3122,15 +3144,28 @@
         row.append(button(stage.input.title || stage.input.fileName || '제목 없는 검토 항목', guarded(() => openStage(stage.stageId))), node('span', originName(stage.input.origin), 'life-meta'));
         details.append(row);
       });
-      state.sourceEditStages.forEach(stage => {
+      editDrafts.forEach(stage => {
         const row = node('div', null, 'life-row');
         const open = button(stage.input.title || '제목 없는 수정 초안', guarded(() => {
+          // No version here: the editor says which version to return to (the latest one after a choice).
           sourceEditOrigin = { workspaceId: state.bundle.workspaceId, sourceId: stage.baseSourceId,
-            sourceVersionId: stage.baseSourceVersionId, scrollY: 0, returnContext: { mode: 'sources', workspaceId: state.bundle.workspaceId } };
+            sourceVersionId: null, scrollY: 0, returnContext: { mode: 'sources', workspaceId: state.bundle.workspaceId } };
           return navigate('source-edit', { sourceEdit: { stageId: stage.stageId } });
         }));
         open.dataset.sourceEditStageId = stage.stageId;
-        row.append(open, node('span', '자료 수정', 'life-meta')); details.append(row);
+        const discard = button('초안 버리기', guarded(async () => {
+          if (!global.confirm('수정 초안을 버릴까요? 보관한 자료와 이전 판은 그대로입니다.')) return;
+          const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
+          await sourceEditor.discard(stage.stageId);
+          await refreshData();
+          if (disposed || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId || state.mode !== 'sources') return;
+          render();
+          (main.querySelector('#lifeImportDrafts summary') || main.querySelector('#lifeSearch'))?.focus({ preventScroll: true });
+          announce('수정 초안을 버렸습니다. 보관한 자료는 그대로입니다.');
+        }));
+        discard.dataset.sourceEditDiscard = stage.stageId;
+        discard.setAttribute('aria-label', '초안 버리기: ' + (stage.input.title || '제목 없는 수정 초안'));
+        row.append(open, node('span', '자료 수정', 'life-meta'), discard); details.append(row);
       });
       parent.append(details);
     }

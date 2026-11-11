@@ -537,12 +537,20 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
 .life-source-edit-controls > label { flex:1; max-width:12rem; min-width:0; margin:0; }
 .life-source-edit-controls select { width:100%; min-height:44px; font-size:16px; }
 .life-source-edit-controls > button { margin-left:auto; }
+.life-source-edit-controls > button + button { margin-left:0; }
 .life-source-edit .life-writing-field { display:block; margin:0; }
 .life-source-edit .life-writing-title { font-size:30px; line-height:1.5; letter-spacing:-.035em; border-bottom:0; }
 .life-source-edit .life-writing-body { min-height:45dvh; max-height:none; overflow:hidden; resize:none; }
 .life-source-edit-preview > .life-heading { margin-block:20px 28px; font-size:30px; line-height:1.5; }
 .life-source-edit-error { margin-block:12px 20px; color:var(--danger,var(--ink)); }
 .life-source-edit-error p { margin-bottom:8px; }
+/* 수정 초안이 자료의 현재 판과 어긋났을 때: 일어난 일, 내 입력, 고를 수 있는 일. */
+.life-source-edit-base > .life-heading { margin-block:20px 12px; font-size:var(--haedo-text-title,22px); line-height:1.5; }
+.life-source-edit-base > .life-heading:focus { outline:none; }
+.life-source-edit-mine { margin-block:16px; }
+.life-source-edit-mine-text { max-height:40dvh; overflow:auto; padding:12px 0; font-size:var(--haedo-text-body); line-height:1.9; white-space:pre-wrap; word-break:keep-all; overflow-wrap:anywhere; }
+.life-source-edit-choices { align-items:stretch; }
+.life-source-edit-choices > .life-button { min-height:44px; }
 .life-source-trash-confirm { padding-block:16px; margin-top:16px; border-top:1px solid var(--line); }
 .life-source-trash-confirm > button + button { margin-left:8px; }
 #lifeSourceTrashList > article { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px; }
