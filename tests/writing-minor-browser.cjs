@@ -328,4 +328,27 @@ H.run(__filename, {
     await c.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await c.locator('.photo-article').waitFor();
     assert((await c.locator('.photo-article').innerText()).includes('첫 탭에서 고침.'), 'the old address still opens the revised post');
   },
+  // m4: when only the stored revision moves (a finished upload writes the post again), the read view does not redraw;
+  // its actions use the revision that is stored now.
+  async 'read-view-stays-when-only-the-revision-moves'({ open }) {
+    const dialogs = [];
+    const { page } = await open({ page: { dialogs } });
+    await H.home(page);
+    const post = await savedPost(page, '그대로인 글', '바뀌지 않는 본문.');
+    await page.locator('#photoServerStatus[data-state="synced"]').waitFor({ timeout: 20000 });
+    await page.evaluate(() => { window.__article = document.querySelector('.photo-article'); });
+    const said = await page.locator('.photo-status').textContent();
+    assert.equal(said, '비공개 글을 저장했어요');
+    const moved = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); return (await s.savePhotoPost(w, d, d.revision)).revision; }, post.id);
+    assert(moved > post.revision);
+    await H.sleep(700);
+    assert.equal(await page.evaluate(() => document.querySelector('.photo-article') === window.__article), true, 'the view is not redrawn');
+    assert.equal(await page.locator('.photo-status').textContent(), said, 'what it said stays');
+    await H.until(() => page.locator('#photoServerStatus').getAttribute('data-state'), state => ['synced', 'pending', 'saving'].includes(state), 'the account state is read for the revision stored now');
+    // Its actions act on what is stored now: deleting is not refused as "changed elsewhere".
+    await H.menu(page, '삭제');
+    await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    assert.deepEqual(await H.records(page), []);
+    assert(dialogs.some(text => text.startsWith('confirm:')));
+  },
 });

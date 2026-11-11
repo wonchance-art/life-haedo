@@ -1644,6 +1644,17 @@
           return;
         }
         if (next.id === shownDoc.id && next.revision === shownDoc.revision) return;
+        // Only the stored revision moved (a finished upload writes the post
+        // again with the same content): nothing on screen changes. The view
+        // takes the new revision for its actions and reads its account state again.
+        if (next.id === shownDoc.id && next.status === shownDoc.status && next.archived === shownDoc.archived &&
+            next.updatedAt === shownDoc.updatedAt && M.contentKey(next) === M.contentKey(shownDoc)) {
+          doc = next;
+          serverSequence++;
+          serverBusy = false;
+          readServerState();
+          return;
+        }
         // The reader keeps the place: the block at the top of the screen stays
         // there (the nearest one if the new content is shorter), and focus goes
         // back to the same control. Only the content changes.
