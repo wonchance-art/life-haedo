@@ -297,6 +297,58 @@ async function main() {
       await f.context.close();
     });
 
+    // 2026-11-11 독립 검수: 다른 탭이 목록에서 이 초안을 버리면, 열려 있던 편집기의 입력은 새 초안으로 다시 보관할 수 있다.
+    // (이전에는 `다시 저장`이 계속 실패하고 `입력 파일 받기`만 남았다.)
+    async function discardedElsewhere() {
+      const f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
+      f.first = (await drafts(f.page))[0].stageId;
+      const other = await f.context.newPage(); other.setDefaultTimeout(15000);
+      await R.list(other); await other.locator('#lifeImportDrafts summary').click();
+      other.once('dialog', dialog => dialog.accept()); await other.locator('[data-source-edit-discard]').click(); await settle(other);
+      await other.waitForFunction(() => !document.querySelector('#lifeImportDrafts'));
+      assert.deepEqual(await R.stages(other), [], 'the other tab removed the draft'); await other.close();
+      await f.page.bringToFront();
+      f.later = typed + '\n\n다른 탭이 버린 뒤에 쓴 문장.';
+      await f.page.locator('#lifeSourceEditText').fill(f.later); await f.page.locator('#lifeSourceEditError:not([hidden])').waitFor();
+      const state = await editorState(f.page);
+      assert.match(state.error, /다른 탭에서 수정 초안이 바뀌었습니다/); assert.equal(state.text, f.later);
+      return f;
+    }
+    await S.check('the draft was discarded in another tab: 다시 저장 saves this screen\'s input as a new version', async () => {
+      const f = await discardedElsewhere();
+      await f.page.locator('#lifeSourceEditRetry').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      assert.equal(await f.page.locator('#lifeSourceText').textContent(), f.later);
+      assert.equal((await preserved(f.page, f, 2)).rows[1].contentText, f.later); assert.deepEqual(await drafts(f.page), []);
+      await f.context.close();
+    });
+    await S.check('the draft was discarded in another tab: leaving the editor keeps this screen\'s input as a new draft', async () => {
+      const f = await discardedElsewhere();
+      await f.page.locator('#lifeSourceEditClose').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      const rows = await drafts(f.page);
+      assert.equal(rows.length, 1); assert.equal(rows[0].text, f.later); assert.notEqual(rows[0].stageId, f.first, 'a new draft, not the discarded one');
+      await openEditor(f.page);
+      const state = await editorState(f.page); assert.equal(state.text, f.later); assert.equal(state.error, null);
+      await preserved(f.page, f, 1);
+      await f.context.close();
+    });
+    await S.check('a draft changed (not discarded) in another tab stays a conflict: nothing is overwritten', async () => {
+      const f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
+      const elsewhere = typed + ' 다른 탭의 입력.';
+      await f.page.evaluate(async text => {
+        const storage = HaedoLife.Shell.storage, row = (await storage.listStages(await storage.getActive())).find(stage => stage.kind === 'source-edit');
+        await storage.saveStage(HaedoLife.SourceEdit.edit(row, { text }));
+      }, elsewhere);
+      await f.page.locator('#lifeSourceEditText').fill(typed + ' 이 탭의 입력.'); await f.page.locator('#lifeSourceEditError:not([hidden])').waitFor();
+      await f.page.locator('#lifeSourceEditRetry').click(); await f.page.waitForTimeout(400);
+      const state = await editorState(f.page);
+      assert.match(state.error, /다른 탭에서 수정 초안이 바뀌었습니다/); assert.equal(state.text, typed + ' 이 탭의 입력.');
+      const rows = await drafts(f.page); assert.equal(rows.length, 1); assert.equal(rows[0].text, elsewhere, 'the other tab\'s draft is not replaced');
+      await preserved(f.page, f, 1);
+      await f.context.close();
+    });
+
     await S.check('이 버전으로 복원 still saves without any typing, and an unchanged 저장 makes no version', async () => {
       const f = await fixture();
       const head = await R.addVersion(f.page, f.sourceId, remote);

@@ -120,7 +120,7 @@
       if (session.saving) { await session.saving; return flushSession(session, { force }); }
       // Saving the material needs the stage row once, even when nothing was typed (an explicit restore).
       if (!dirtySession(session) && !(force && session.stage.revision === 0)) return;
-      if (session.error?.code === 'stage_conflict') throw session.error;
+      if (session.error?.code === 'stage_conflict' && !await revive(session)) throw session.error;
       const tick = session.edit, payload = copy(session.stage);
       model.validate(payload);
       const task = (async () => {
@@ -185,6 +185,18 @@
         finally { session.openingSaved = false; update(session); }
       }
       return result;
+    }
+    // Another tab discarded this draft while it was open here: its row is gone, so every save of it conflicts and
+    // the input on this screen could never be kept again. That input then starts a new draft. A row that still
+    // exists (the draft was edited elsewhere) stays a conflict.
+    async function revive(session) {
+      let row;
+      try { row = await storage.getStage(session.stage.stageId); } catch (_) { return false; }
+      if (!scope(session) || row || session.stage.state !== 'draft') return false;
+      const time = new Date().toISOString();
+      Object.assign(session.stage, { stageId: core.id(), revision: 0, createdAt: time, updatedAt: time });
+      session.stored = -1; session.pendingCommit = null; clearError(session);
+      return true;
     }
     // Remove a draft: its stage row (when one was ever stored) and the live session. The material is untouched.
     // The session counts as discarded only once the row is really gone. If the removal fails, the draft is still
