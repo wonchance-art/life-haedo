@@ -33,7 +33,9 @@ async function instrument(context) {
     }
   });
 }
-async function records(page) { await page.goto(base + '/index.html?section=records'); await ready(page); await page.locator('#lifeSelectionToggle').waitFor(); }
+// 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+// 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await page.locator('#lifeSelectionToggle').waitFor(); }
 async function selectMode(page) { if (await page.locator('#lifeSelectionToggle').getAttribute('aria-pressed') !== 'true') await page.locator('#lifeSelectionToggle').click(); }
 async function selectVersion(page, id) {
   const b = page.locator(`.life-source-select[data-version-id="${id}"]`);
