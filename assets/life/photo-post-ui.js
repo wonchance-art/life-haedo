@@ -177,6 +177,25 @@
       readBackText = "사진 글 목록",
       committed = false,
       standalone = false;
+    // Storing a draft and judging a post are separate (2026-11-11). Autosave
+    // writes the normalized document and never refuses the editor's input; when
+    // no valid form exists (over a limit) the input is kept in a device-only
+    // recovery copy instead. keptTick is the dirtyTick that copy holds and
+    // `unstored` the reason shown until the draft can be stored again. `offer`
+    // is a recovery copy found on opening, waiting for the writer's choice.
+    let keptTick = -1,
+      unstored = null,
+      offer = null,
+      titleInput = null;
+    const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
+    const recoveryStore = M.recovery(localStore);
+    const settled = () => dirtyTick === storedTick || dirtyTick === keptTick;
+    function resetTicks(dirty = 0) {
+      dirtyTick = dirty;
+      storedTick = 0;
+      keptTick = -1;
+      unstored = null;
+    }
     // AI authorship: a one-shot "next paste is AI text" state, a short status
     // note, and owner-typed ranges that inherited the mark and must lose it
     // once no IME composition is active.
@@ -264,10 +283,13 @@
       authorNote = "";
       authorButton = null;
       editor = null;
+      titleInput = null;
       selected = null;
       recoveryActions = null;
     }
     function showStatus(e) {
+      // Input kept on this device only stays said until the draft is stored.
+      if (!e && unstored && mode === "edit") e = unstored;
       error = e || null;
       if (status) {
         status.hidden = mode === "read" && !e && !committed;
@@ -582,14 +604,14 @@
           controls = [];
         }
       }
-      editor?.enable(!value);
+      editor?.enable(!value && !offer);
       if (!value) scheduleSettle();
       onDirty();
       if (
         !value &&
         valid() &&
         mode === "edit" &&
-        dirtyTick !== storedTick
+        !settled()
       ) {
         scheduleAutosave();
       }
@@ -598,6 +620,7 @@
       if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
       if (busy) throw new Error("사진 처리를 마친 뒤 이동해 주세요.");
       if (composing) throw new Error("한글 입력을 마친 뒤 다시 시도해 주세요.");
+      if (offer) throw new Error("이 기기에 남아 있는 입력을 복구할지 먼저 골라 주세요.");
       if (!acceptedOnly && attachmentUI?.composing())
         throw new Error("첨부의 한글 입력을 마친 뒤 다시 시도해 주세요.");
     }
@@ -607,7 +630,7 @@
     }
     function scheduleAutosave() {
       clearTimeout(timer); timer = null;
-      if (!doc || mode !== "edit" || !current(epoch) || dirtyTick === storedTick || saving) return;
+      if (!doc || mode !== "edit" || !current(epoch) || settled() || saving) return;
       const target = doc, token = epoch;
       const store = () => {
         if (!current(token) || doc !== target || mode !== "edit") return;
@@ -743,16 +766,29 @@
       if (modelOnly) {
         if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
       } else guard(true);
-      M.validate(doc);
       const tick = dirtyTick,
-        payload = structuredClone(doc),
+        normal = M.normalize(doc),
         token = epoch;
+      let payload;
+      try {
+        // Only a valid document reaches storage and account sync.
+        M.validate(normal.doc);
+        payload = structuredClone(normal.doc);
+      } catch (cause) {
+        keepLocally(tick, cause);
+        return;
+      }
       saving = storage
         .savePhotoPost(workspaceId, payload, doc.revision)
         .then((saved) => {
           if (!valid() || doc !== target) return;
           target.revision = saved.revision;
           storedTick = tick;
+          keptTick = -1;
+          unstored = null;
+          // The stored draft now holds everything: the device copy is done.
+          if (storedTick === dirtyTick) recoveryStore.clear(workspaceId, target.id);
+          if (normal.changed) alignEditor(normal, tick);
           // A short AI-mark note gives way to the save state once saved.
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
@@ -763,8 +799,52 @@
           saving = null;
           if (valid() && doc === target) onDirty();
         });
-      await saving;
+      try {
+        await saving;
+      } catch (cause) {
+        // The store refused (quota, another tab): the input also goes to the
+        // device copy. Leaving stays blocked exactly as before.
+        if (valid() && doc === target && mode === "edit") recoveryStore.write(workspaceId, doc);
+        throw cause;
+      }
       if (valid() && doc === target && dirtyTick !== storedTick) return persist(modelOnly || busy || composing, target);
+    }
+    // No valid form of the input exists (it is over a limit). Nothing invalid
+    // is stored or synced; the input stays whole on this device and the reason
+    // is shown. If even that fails the caller is refused and nothing moves.
+    function keepLocally(tick, cause) {
+      if (!recoveryStore.write(workspaceId, doc))
+        throw Object.assign(new Error(cause.message + " 이 기기에도 임시 보관하지 못했습니다. 더 보기의 HTML 읽기 파일 받기로 내려받아 주세요."), { code: "photo_post_unkept" });
+      keptTick = tick;
+      unstored = Object.assign(new Error(cause.message + " 그때까지 이 기기에만 임시 보관합니다."), { code: "photo_post_local_only" });
+      if (current(epoch)) showStatus();
+    }
+    // The screen follows what was stored. Never during an IME composition (the
+    // save after it normalizes again) and never under newer input.
+    function alignEditor(normal, tick) {
+      if (!editor || mode !== "edit" || tick !== dirtyTick || imeActive() || !current(epoch)) return;
+      const before = editor.getContents(),
+        change = before.diff(new Delta(normal.doc.ops));
+      // A photo block being edited keeps its own node.
+      if (selected && change.ops.some((op) => op.insert && typeof op.insert !== "string")) return;
+      if (change.ops.length) {
+        editor.updateContents(change, "silent");
+        doc.ops = editor.getContents().ops;
+      }
+      if (titleInput && titleInput.value !== normal.doc.title) {
+        const end = Math.min(titleInput.selectionEnd, normal.doc.title.length);
+        titleInput.value = normal.doc.title;
+        if (document.activeElement === titleInput) titleInput.setSelectionRange(end, end);
+      }
+      doc.title = normal.doc.title;
+      const note = M.describeChanges(normal.changes);
+      if (note) { authorNote = note; authorNoteKept = true; }
+    }
+    // The page is being hidden or closed before autosave ran: what the editor
+    // holds goes to the device copy synchronously (async stores may not finish).
+    function stash() {
+      if (!host || !valid() || mode !== "edit" || !doc || offer || dirtyTick === storedTick) return;
+      recoveryStore.write(workspaceId, doc);
     }
     function checkpoint() {
       // Keep the accepted model durable without committing an IME field or a
@@ -786,11 +866,11 @@
       if (mode === "edit" && selected?.isConnected) changePhoto();
       // Only reading: leaving is allowed. detach() advances the epoch, so the
       // late read result is discarded by the existing current(token) checks.
-      if (loading && !composing && (!doc || mode !== "edit" || dirtyTick === storedTick)) return;
+      if (loading && !composing && (!doc || mode !== "edit" || settled())) return;
       if (
         !busy &&
         !composing &&
-        (!doc || mode !== "edit" || dirtyTick === storedTick)
+        (!doc || mode !== "edit" || settled())
       )
         return;
       guard();
@@ -813,15 +893,16 @@
       settleAuthorship();
       attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
-      M.validate(doc);
-      return M.compact(doc);
+      // The files of the current input (ZIP, HTML) are written from the
+      // normalized document and do not wait for it to be storable.
+      return M.normalize(doc).doc;
     }
     async function backup() {
       const value = outputSnapshot(),
         token = epoch;
       setBusy(true);
       try {
-        const blob = await M.backup(value);
+        const blob = await M.backup(value, { lenient: true });
         if (current(token)) download(blob, "haedo-photo-post.zip");
       } finally {
         setBusy(false);
@@ -875,11 +956,15 @@
           )
             empty = null;
           doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
+          const stored = new Set(rows.map((item) => item.id));
+          // Input of a new post that never reached storage (no draft names it).
+          offer = usableCopy(recoveryStore.read(workspaceId, doc.id) ||
+            recoveryStore.list(workspaceId).find((copy) => !copy.replaces && !stored.has(copy.id)));
         } finally {
           loading = false; setBusy(false);
         }
         mode = "edit";
-        dirtyTick = storedTick = 0;
+        resetTicks();
         error = null;
         committed = false;
         render();
@@ -933,17 +1018,17 @@
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          dirtyTick = retained ? 0 : 1;
-          storedTick = 0;
+          resetTicks(retained ? 0 : 1);
         } else {
           doc = next;
-          dirtyTick = storedTick = 0;
+          resetTicks();
         }
         mode =
           !next.archived && (editing || next.status === "draft")
             ? "edit"
             : "read";
         if (mode === "edit") doc = M.upgrade(doc);
+        offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id)) : null;
         error = null;
         committed = false;
         render();
@@ -959,16 +1044,70 @@
         loading = false; setBusy(false);
       }
     }
+    // A device copy is offered only when it differs from what the draft holds.
+    function usableCopy(copy) {
+      if (!copy || !doc) return null;
+      let same = false;
+      try {
+        same = M.contentKey({ ...doc, title: copy.title, ops: copy.ops, attachments: copy.attachments }) === M.contentKey(doc);
+      } catch (_) {}
+      if (same) recoveryStore.clear(workspaceId, copy.id);
+      return same ? null : copy;
+    }
+    function restoreCopy() {
+      const copy = offer;
+      if (!copy || !doc || mode !== "edit" || !valid()) return;
+      // The copy continues what is stored here (or nothing is stored yet): it
+      // takes that place. If the draft changed after the copy was taken, both
+      // are kept and the copy becomes a draft of its own.
+      const continues = doc.revision === 0 || (copy.id === doc.id && copy.revision === doc.revision);
+      const next = continues ? doc : { ...M.create(life.Core.id), photos: doc.photos };
+      let attachments = next.attachments;
+      try {
+        life.PagePosts.validateAttachments(copy.attachments);
+        attachments = structuredClone(copy.attachments);
+      } catch (_) {}
+      const normal = M.normalize({ ...next, title: copy.title, ops: copy.ops, attachments });
+      const wanted = copy.ops.filter((op) => op?.insert?.photo).length,
+        kept = normal.doc.ops.filter((op) => typeof op.insert !== "string").length;
+      Object.assign(next, { title: normal.doc.title, ops: normal.doc.ops, attachments, updatedAt: new Date().toISOString() });
+      doc = next;
+      offer = null;
+      resetTicks(1);
+      // The copy stays on this device until the restored input is stored.
+      recoveryStore.write(workspaceId, doc);
+      if (copy.id !== doc.id) recoveryStore.clear(workspaceId, copy.id);
+      error = null;
+      render();
+      authorNote = wanted > kept
+        ? "복구했어요 · 사진 " + (wanted - kept) + "장은 이 기기에 남아 있지 않아요"
+        : "남아 있던 입력을 복구했어요";
+      authorNoteKept = true;
+      showStatus();
+      editor?.focus();
+    }
+    function discardCopy() {
+      const copy = offer;
+      if (!copy || !valid()) return;
+      if (typeof root.confirm === "function" && !root.confirm("이 기기에 남아 있는 입력을 버릴까요? 되돌릴 수 없습니다.")) return;
+      recoveryStore.clear(workspaceId, copy.id);
+      offer = null;
+      error = null;
+      render();
+      editor?.focus();
+    }
     async function finish(asNew = false) {
       if (asNew) return saveIndependent("saved");
       guard();
       const token = epoch;
       await flush();
       if (!current(token)) return;
-      const payload = structuredClone(doc);
+      const draftId = doc.id,
+        payload = structuredClone(M.normalize(doc).doc);
       const previousId = payload.replaces?.id || payload.id;
       payload.status = "saved";
       payload.updatedAt = new Date().toISOString();
+      // The strict check, naming what to fix, belongs to this explicit save.
       M.validate(payload);
       setBusy(true);
       try {
@@ -978,8 +1117,11 @@
           doc.revision,
         );
         if (!current(token)) return;
+        recoveryStore.clear(workspaceId, draftId);
+        keptTick = -1;
+        unstored = null;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = "read";
         error = null;
         committed = true;
@@ -1009,7 +1151,7 @@
         );
         if (!current(token)) return;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = value ? "read" : saved.status === "draft" ? "edit" : "read";
         error = null;
         committed = false;
@@ -1046,7 +1188,8 @@
         now = new Date().toISOString();
       // outputSnapshot may settle authorship marks; this copy is the write.
       cancelAutosave();
-      const previousId = doc.replaces?.id || doc.id;
+      const previousId = doc.replaces?.id || doc.id,
+        sourceId = doc.id;
       Object.assign(next, {
         id: life.Core.id(),
         revision: 0,
@@ -1062,8 +1205,12 @@
         if (!current(token)) return;
         const saved = await storage.savePhotoPostWithEvidence(workspaceId, next, 0, evidence.refs, 0);
         if (!current(token)) return;
+        // The input now lives in the new document.
+        recoveryStore.clear(workspaceId, sourceId);
+        keptTick = -1;
+        unstored = null;
         doc = saved;
-        dirtyTick = storedTick = 0;
+        resetTicks();
         mode = nextStatus === "saved" ? "read" : "edit";
         error = null;
         committed = nextStatus === "saved";
@@ -1107,7 +1254,7 @@
       }
       if (!current(token)) return;
       doc = null;
-      dirtyTick = storedTick = 0;
+      resetTicks();
       committed = false;
       error = null;
       onSaved();
@@ -1593,20 +1740,22 @@
       if (!selected?.isConnected) return;
       const value = Photo.value(selected),
         p = doc.photos.find((p) => p.id === value.id);
+      // Cleaned here (not while an IME composition is open) so the caption can
+      // never make the draft unstorable.
       const next = {
         ...value,
-        caption: captionInput.value,
-        alt: altInput.value,
+        caption: composing ? captionInput.value : M.cleanText(captionInput.value),
+        alt: composing ? altInput.value : M.cleanText(altInput.value, false),
       };
-      if (next.caption === value.caption && next.alt === value.alt) return;
-      M.validate({
-        ...doc,
-        ops: doc.ops.map((op) =>
-          op.insert?.photo?.id === p.id
-            ? { ...op, insert: { photo: next } }
-            : op,
-        ),
-      });
+      if (!composing) {
+        for (const [input, text] of [[captionInput, next.caption], [altInput, next.alt]])
+          if (input.value !== text) {
+            const end = Math.min(input.selectionEnd ?? text.length, text.length);
+            input.value = text;
+            if (document.activeElement === input) input.setSelectionRange(end, end);
+          }
+      }
+      if (!p || (next.caption === value.caption && next.alt === value.alt)) return;
       const blot = root.Quill.find(selected),
         patch = { caption: next.caption, alt: next.alt };
       blot.updateContent(patch);
@@ -1677,21 +1826,25 @@
         e.preventDefault();
         editor?.focus();
       });
-      // Line breaks become spaces without moving the caret (same length or shorter).
+      titleInput = title;
+      // Line breaks become spaces and characters a post cannot hold are removed
+      // (a manual line break from Word becomes a space), without moving the caret
+      // past the end. Never during an IME composition.
       const flattenTitle = () => {
-        if (!/[\r\n]/.test(title.value)) return;
+        const clean = M.cleanText(title.value, false).replace(/[\r\n]+/g, " ");
+        if (clean === title.value) return;
         const end = title.selectionEnd;
-        title.value = title.value.replace(/[\r\n]+/g, " ");
+        title.value = clean;
         title.setSelectionRange(Math.min(end, title.value.length), Math.min(end, title.value.length));
       };
       title.addEventListener("paste", (e) => {
         const text = e.clipboardData?.getData("text/plain");
-        if (!text || !/[\r\n]/.test(text) || !acceptsInput()) return;
+        if (!text || M.cleanText(text, false).replace(/[\r\n]/g, "") === text || !acceptsInput()) return;
         e.preventDefault();
         // setRangeText does not apply maxLength: insert only what still fits, so a
         // long multi-line paste can never make the title (and every save) invalid.
         const room = title.maxLength - (title.value.length - (title.selectionEnd - title.selectionStart));
-        let insert = text.replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
+        let insert = M.cleanText(text, false).replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, Math.max(0, room));
         if (/[\uD800-\uDBFF]$/.test(insert)) insert = insert.slice(0, -1);  // never split a surrogate pair
         title.setRangeText(insert, title.selectionStart, title.selectionEnd, "end");
         title.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1767,6 +1920,24 @@
       recoverCopy.classList.add("photo-recovery-copy");
       recoveryActions.append(recoverCopy);
       sticky.append(recoveryActions);
+      if (offer) {
+        // Input this device kept when the draft could not be stored (or the page
+        // closed first). The editor waits for the choice so neither is overwritten.
+        const bar = el("div", null, "photo-recovered"),
+          taken = when(offer.savedAt),
+          apart = !(doc.revision === 0 || (offer.id === doc.id && offer.revision === doc.revision));
+        bar.setAttribute("role", "group");
+        bar.setAttribute("aria-label", "이 기기에 남아 있는 입력");
+        bar.append(
+          el("p", "보관하지 못한 입력이 이 기기에 남아 있습니다" + (taken ? " · " + taken : "") +
+            (apart ? " · 이 초안은 그 뒤에 바뀌어 새 초안으로 복구합니다" : ""), "photo-recovered-text"),
+          button(apart ? "새 초안으로 복구" : "복구", restoreCopy),
+          button("버리기", discardCopy),
+        );
+        bar.querySelector("button").classList.add("photo-recovered-restore");
+        sticky.append(bar);
+        title.readOnly = true;
+      }
       const toolbar = el("div", null, "photo-toolbar");
       toolbar.setAttribute("role", "toolbar");
       toolbar.setAttribute("aria-label", "본문 서식");
@@ -1960,8 +2131,39 @@
           "author",
           "photo",
         ],
-        modules: { toolbar, history: { userOnly: true, delay: 700 } },
+        modules: {
+          toolbar,
+          history: { userOnly: true, delay: 700 },
+          // A post has bullet and numbered lists only. "[ ] " and "[x] " stay
+          // the characters the writer typed instead of becoming a checklist the
+          // post cannot hold; "- ", "* " and "1. " still start a list.
+          keyboard: { bindings: { "list autofill": { prefix: /^\s*?(\d+\.|-|\*)$/ } } },
+        },
       });
+      if (offer) editor.enable(false);
+      // The link box takes an address without a scheme as https and refuses
+      // anything that is not an http(s) address, with the reason, before it
+      // reaches the text.
+      const tooltip = editor.theme?.tooltip;
+      if (tooltip?.save && tooltip.textbox) {
+        const saveLink = tooltip.save.bind(tooltip);
+        tooltip.textbox.addEventListener("input", () => tooltip.textbox.removeAttribute("aria-invalid"));
+        tooltip.save = () => {
+          if (tooltip.root.getAttribute("data-mode") === "link") {
+            const address = M.safeLink(tooltip.textbox.value);
+            if (!address) {
+              tooltip.textbox.setAttribute("aria-invalid", "true");
+              tooltip.textbox.focus();
+              authorNote = "링크는 http·https 주소만 넣을 수 있어요"; authorNoteKept = true;
+              showStatus(error);
+              return;
+            }
+            tooltip.textbox.removeAttribute("aria-invalid");
+            tooltip.textbox.value = address;
+          }
+          saveLink();
+        };
+      }
       for (const n of toolbar.querySelectorAll(".ql-picker-label")) {
         n.setAttribute("aria-label", "문단 종류");
         n.setAttribute("title", "문단 종류");
@@ -2052,7 +2254,9 @@
             run(() => insertFiles(files));
             return;
           }
-          const text = e.clipboardData?.getData("text/plain") || "",
+          // Characters a post cannot hold never enter the body: a manual line
+          // break from Word or PowerPoint (U+000B) becomes a line break.
+          const text = M.cleanText(e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n"),
             range = editor.getSelection(true);
           if (text) {
             if (range.length)
@@ -2199,12 +2403,9 @@
         report: showStatus,
         onChange: (values) => {
           guard();
-          const next = M.upgrade(doc);
-          next.attachments = structuredClone(values);
-          M.validate(next);
-          doc.attachments = next.attachments;
-          doc.format = next.format;
-          doc.archived = next.archived;
+          // The attachments' own rules; the body is judged at 글 저장, not here.
+          life.PagePosts.validateAttachments(values);
+          doc.attachments = structuredClone(values);
           mark();
         },
       });
@@ -2230,6 +2431,7 @@
       if (!host || !valid()) return;
       cancelAutosave();
       cleanup();
+      if (mode !== "edit") { offer = null; keptTick = -1; unstored = null; }
       const token = ++epoch;
       serverSequence++; serverBusy = false;
       serverStatus = serverActions = null;
@@ -2303,7 +2505,7 @@
                     if (!current(t)) return;
                     doc = result;
                     mode = "edit";
-                    dirtyTick = storedTick = 0;
+                    resetTicks();
                     error = null;
                     render();
                   } finally {
@@ -2599,7 +2801,7 @@
         mode = "list";
         error = null;
         committed = false;
-        dirtyTick = storedTick = 0;
+        resetTicks();
       }
       render();
       if (postId) {

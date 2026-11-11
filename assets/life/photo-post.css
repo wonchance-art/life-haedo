@@ -152,6 +152,29 @@
 .photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .photo-recovery-actions[hidden] { display: none; }
 .photo-recovery-actions > button { font-size: 13px; padding: 8px 12px; }
+/* Input this device kept when the draft could not be stored: one quiet row
+ * with the two choices, above the title. */
+.photo-recovered {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d9e2dd);
+  border-radius: 12px;
+  background: var(--soft, #eaf1ed);
+}
+.photo-recovered-text {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.5;
+  color: var(--ink, #1f2a26);
+  overflow-wrap: anywhere;
+}
+.photo-recovered > button { flex: none; min-height: 44px; font-size: 13px; padding: 8px 14px; }
+.ql-tooltip input[aria-invalid="true"] { border-color: var(--color-error, #a3243d); outline-color: var(--color-error, #a3243d); }
 .photo-commandbar .photo-status {
   flex: 1;
   margin: 0;
