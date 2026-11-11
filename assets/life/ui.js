@@ -507,6 +507,8 @@
         const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
         await refreshData();
         if (disposed || state.mode !== 'source-edit' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        // This screen made the change and has just read it back; it is not a change from elsewhere (as 글쓰기 does).
+        state.remoteChanged = false;
         const origin = sourceEditOrigin?.workspaceId === workspaceId ? sourceEditOrigin : null;
         await navigate('source', { sourceId, sourceVersionId, locator: null, returnContext: origin?.returnContext || null });
       }
@@ -1351,7 +1353,8 @@
         if (event.type === 'error') { failure(event.error); return; }
         if (event.type === 'sync_changed') { refreshSync().catch(failure); return; }
         if (event.type !== 'changed') return;
-        if (event.revision <= state.bundle.revision || state.busy) return;
+        // The material editor's own save is read back by its onSaved; it is not "changed elsewhere".
+        if (event.revision <= state.bundle.revision || state.busy || sourceEditor?.isSaving()) return;
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();

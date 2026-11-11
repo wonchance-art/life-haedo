@@ -413,7 +413,9 @@
       for (const url of urls) URL.revokeObjectURL(url); urls.clear();
     }
     const isDirty = () => !!current && (dirtySession(current) || !!current.saving || !!current.recordSaving || !!current.composing.size);
-    return Object.freeze({ open, flush, isDirty, discard, close, dispose });
+    // From the commit until the saved version is open: the workspace change in between is this editor's own.
+    const isSaving = () => !!current && (!!current.recordSaving || !!current.openingSaved);
+    return Object.freeze({ open, flush, isDirty, isSaving, discard, close, dispose });
   }
   life.SourceEditUI = Object.freeze({ create });
 })(globalThis);
