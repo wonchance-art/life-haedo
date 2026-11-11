@@ -28,6 +28,19 @@
   // offline page spends none. A timed try is quiet: the failure notice and its 다시 확인 stay on screen.
   const AUTO_RETRY_DELAYS = [2000, 5000, 15000];
   let retryTimer = null, timedRetries = 0, attempts = 0;
+  // A screen that was just opened never shows only a checking line for longer than this (2026-11-11
+  // re-review): a check that is allowed more (after lapses on a slow connection, platform-auth
+  // VERIFY_PATIENCE) goes on in the background while the failure notice and 다시 확인 are already there; when
+  // it is answered after all, the app opens. A check the owner asked for with 다시 확인 keeps its checking
+  // line: it says how long it may take.
+  const NOTICE_AFTER_MS = 10000;
+  const CHECK_FAILED = '로그인을 확인하지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.';
+  // The attempt whose account check is still out while the failure notice is on screen (a quiet try, or a
+  // check that passed NOTICE_AFTER_MS); 0 when there is none. checkBegan: when the latest attempt began.
+  let noticedCheck = 0, checkBegan = 0;
+  // A check this old may have been sent into the connection that was lost; a newer one went out on the
+  // connection the signal is about (the signals of one return, online and shown again, come together).
+  const RENEW_AFTER_MS = 1000;
   const retryableFailures = new Set(['network_error', 'storage_unavailable', 'request_cancelled', 'storage_aborted']);
   const accountKey = account => account ? account.projectUrl + '|' + account.userId : null;
   function resetRecovery() { failure = null; retryOwner = null; automaticRetries = 0; timedRetries = 0; if (retryTimer) { root.clearTimeout(retryTimer); retryTimer = null; } }
@@ -53,16 +66,24 @@
     if (status.hidden || status.getAttribute('role') !== 'alert' || status.querySelector('p')?.textContent !== message || !status.querySelector('button:not(:disabled)')) retryNotice(message);
     scheduleRetry();
   }
-  // timed: one of the AUTO_RETRY_DELAYS tries; otherwise an online / shown-again event.
-  function retryAutomatically(timed = false) {
-    if (!failure?.retryable || (timed === true ? timedRetries >= AUTO_RETRY_DELAYS.length : automaticRetries >= AUTO_RETRY_LIMIT) || starting || showing || suspended || retained || leaving || isReadOnly()) return false;
+  // timed: one of the AUTO_RETRY_DELAYS tries; otherwise an event. returned: the event says the connection or
+  // the screen came back (online, shown again), not that the account became known.
+  function retryAutomatically(timed = false, returned = false) {
+    // The connection or the screen came back while a check is out behind the failure notice: that check may
+    // be waiting on a request the lost connection will never answer (it would keep the screen closed for the
+    // rest of its limit, or for good after the last timed try). It is given up and the account is asked
+    // anew, quietly, as 다시 확인 does. These restarts are counted like every event retry, so any number of
+    // signals makes at most AUTO_RETRY_LIMIT requests. (The account notice of that very check being answered
+    // is no such signal: the check is about to open the screen.)
+    const renew = timed !== true && returned === true && !!starting && noticedCheck === attempts && noticedCheck !== 0 && Date.now() - checkBegan >= RENEW_AFTER_MS;
+    if (!failure?.retryable || (timed === true ? timedRetries >= AUTO_RETRY_DELAYS.length : automaticRetries >= AUTO_RETRY_LIMIT) || starting && !renew || showing || suspended || retained || leaving || isReadOnly()) return false;
     if (root.document.visibilityState === 'hidden' || root.navigator.onLine === false) return false;
     const key = accountKey(auth?.getAccount());
     // An initial Auth network failure has no verified owner yet. A real logout
     // clears its failure record through the null-account notification instead.
     if (failure.key && failure.key !== key) return false;
     if (timed === true) timedRetries += 1; else automaticRetries += 1;
-    start(timed === true);
+    if (renew) { starting = null; start(true, true); } else start(timed === true);
     return true;
   }
   let workerScheduled = false;
@@ -331,17 +352,32 @@
     if (starting) return starting;
     // 다시 확인 may be pressed while a quiet try is still out: the earlier attempt then changes nothing.
     const attempt = ++attempts;
+    checkBegan = Date.now();
     const pending = (async () => {
       if (isReadOnly()) { hide(); notice('읽기 전용 주소에서는 개인 자료를 열지 않습니다.'); return null; }
       if (!auth) { hide(); retryNotice('로그인 연결을 준비하지 못했습니다.'); return null; }
-      if (quiet !== true) notice(patient === true ? '로그인을 확인하고 있습니다. 연결이 느리면 30초까지 걸립니다.' : '로그인을 확인하고 있습니다.');
+      // This tab's checks have been running into their limit, so this one is allowed more than NOTICE_AFTER_MS.
+      const slow = patient !== true && Number(auth.verifyWait?.()) > NOTICE_AFTER_MS;
+      if (quiet !== true) notice(patient === true ? '로그인을 확인하고 있습니다. 연결이 느리면 30초까지 걸립니다.' : slow ? '로그인을 확인하고 있습니다. 연결이 느려 평소보다 오래 걸릴 수 있습니다.' : '로그인을 확인하고 있습니다.');
       const asked = patient === true ? { startup: true, patient: true } : { startup: true };
       const authEpoch = auth.epoch, cached = retained ? mounted : null, transition = suspension;
       // One server check for the opening: the foreground account bootstrap and the
       // first mount reuse it while the session, token and account stay the same.
       const opening = auth.beginStartup?.(patient === true ? { patient: true } : undefined);
+      // A quiet try already has the notice on screen. Another check gets it after NOTICE_AFTER_MS while it goes on.
+      let noticeTimer = null;
+      if (quiet === true) noticedCheck = attempt;
+      else if (slow) noticeTimer = root.setTimeout(() => {
+        noticeTimer = null;
+        if (attempt !== attempts || suspended) return;
+        noticedCheck = attempt;
+        // Not a failure yet (no timed retry is due): the record lets an online / shown-again signal ask anew.
+        failure = { key: accountKey(auth.getAccount()), code: 'network_error', retryable: true, message: CHECK_FAILED };
+        retryNotice(CHECK_FAILED);
+      }, NOTICE_AFTER_MS);
+      const checked = () => { if (noticeTimer) { root.clearTimeout(noticeTimer); noticeTimer = null; } if (noticedCheck === attempt) noticedCheck = 0; };
       try {
-        const user = await (publicHome ? auth.verify(asked) : auth.requireUser(asked));
+        const user = await (publicHome ? auth.verify(asked) : auth.requireUser(asked)).finally(checked);
         if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && (cached !== mounted || transition !== suspension)) return null;
         const account = auth.getAccount();
@@ -351,7 +387,7 @@
         if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && cached === mounted && transition === suspension && auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId === activeKey) conceal();
         else hide();
-        recordFailure(error, accountKey(auth.getAccount()), '로그인을 확인하지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
+        recordFailure(error, accountKey(auth.getAccount()), CHECK_FAILED);
         return null;
       } finally { opening?.end(); }
     })();
@@ -380,7 +416,7 @@
     recordFailure({ code: event.code || 'auth_error' }, accountKey(account), '로그인을 확인하지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요.');
   });
   root.document.addEventListener('visibilitychange', () => {
-    if (!root.document.hidden) retryAutomatically();
+    if (!root.document.hidden) retryAutomatically(false, true);
     if (!mounted || retained) return;
     resumePoint = root.document.hidden ? rememberPosition() : null;
   });
@@ -416,10 +452,10 @@
       if (status.hidden || status.getAttribute('role') !== 'alert' || status.querySelector('p')?.textContent !== failure.message || !status.querySelector('button:not(:disabled)')) retryNotice(failure.message);
     }
   });
-  root.addEventListener('online', retryAutomatically);
+  root.addEventListener('online', () => { retryAutomatically(false, true); });
   // Persisted pageshow is owned by Auth's page-resume event above. Do not race
   // its verification or bypass the failure budget with a second start.
-  root.addEventListener('pageshow', event => { if (!event.persisted) retryAutomatically(); });
+  root.addEventListener('pageshow', event => { if (!event.persisted) retryAutomatically(false, true); });
   root.document.querySelectorAll('.life-global-nav .life-icon-button').forEach(control => {
     control.addEventListener('keydown', event => {
       if (event.key === 'Escape') control.dataset.tooltipDismissed = 'true';

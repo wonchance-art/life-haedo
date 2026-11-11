@@ -152,26 +152,40 @@
     };
     return;
   }
+  // The account could not be checked (yet): the notice, 다시 확인, and the page opening again by itself when
+  // the connection or the page comes back (2026-11-11 m2). Nothing has been entered on this screen yet.
+  // Each automatic try follows one event; there is no timer for it.
+  let retryOffered = false, pageOpened = false;
+  function offerRetry() {
+    if (retryOffered) return;
+    retryOffered = true;
+    byId("accessState").querySelector("p").textContent =
+      "개인 공간을 열지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 기기의 기록은 보존돼 있습니다.";
+    byId("accessRetry").hidden = false;
+    // 다시 확인: the next opening's account check waits the longest (a slow connection, platform-auth.js).
+    byId("accessRetry").onclick = () => { auth.expectSlow?.(); location.reload(); };
+    // (Never once the page has opened after all: from then on there may be input on it.)
+    const again = () => { if (!pageOpened && !document.hidden && navigator.onLine !== false) location.reload(); };
+    addEventListener("online", again);
+    document.addEventListener("visibilitychange", again);
+    addEventListener("pageshow", (event) => { if (event.persisted) again(); });
+  }
+  // A check that is allowed more than 10 s (after lapses on a slow connection) says so, and after 10 s the
+  // notice and 다시 확인 are shown while it goes on: answered after all, the page opens (2026-11-11 re-review).
+  const checkWait = Number(auth.verifyWait?.()) || 10000;
+  if (checkWait > 10000) byId("accessState").querySelector("p").textContent = "로그인을 확인하고 있습니다. 연결이 느려 평소보다 오래 걸릴 수 있습니다.";
+  const slowCheck = checkWait > 10000 ? setTimeout(offerRetry, 10000) : null;
   try {
-    const user = await auth.requireUser();
+    const user = await auth.requireUser().finally(() => clearTimeout(slowCheck));
     if (!user) return;
+    pageOpened = true;
     uid = user.id;
     setAccount(user);
     store.init(uid);
     byId("accessState").hidden = true;
     document.querySelector("[data-private]").hidden = false;
   } catch (_) {
-    byId("accessState").querySelector("p").textContent =
-      "개인 공간을 열지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 기기의 기록은 보존돼 있습니다.";
-    byId("accessRetry").hidden = false;
-    // 다시 확인: the next opening's account check waits the longest (a slow connection, platform-auth.js).
-    byId("accessRetry").onclick = () => { auth.expectSlow?.(); location.reload(); };
-    // The page opens again by itself when the connection or the page comes back (2026-11-11 m2). Nothing
-    // has been entered on this screen yet. Each try follows one event; there is no timer here.
-    const again = () => { if (!document.hidden && navigator.onLine !== false) location.reload(); };
-    addEventListener("online", again);
-    document.addEventListener("visibilitychange", again);
-    addEventListener("pageshow", (event) => { if (event.persisted) again(); });
+    offerRetry();
     return;
   }
   document.querySelectorAll("[data-close]").forEach((button) => {

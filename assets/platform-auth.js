@@ -303,8 +303,10 @@
       startupScope?.end();
       // A stalled bootstrap or mount cannot keep the opening's result alive: past the
       // first-screen budget every opt-in call checks with Auth again. On a slow connection the budget
-      // grows with the check's own limit (see VERIFY_PATIENCE), or the opening would repeat a check that
-      // took longer than the budget and never finish.
+      // grows with the check's own limit (see VERIFY_PATIENCE): a check that took longer than a fixed budget
+      // is too old the moment it is answered, and everything that follows in the opening asks again.
+      // Measured 2026-11-11 on a connection that answers in 12 s (tests/daily-entry-browser.cjs): after the
+      // check that was given up, two answered checks before the screen (as an ordinary opening) with this, five with a fixed 10 s.
       const patience = options?.patient === true ? VERIFY_PATIENCE : Math.min(1 + lapses, VERIFY_PATIENCE);
       const scope = makeScope(scoped => serverVerify(scoped?.patient === true), now() + STARTUP_LIMIT_MS * patience);
       startupScope = scope;
@@ -352,6 +354,8 @@
     }
     // A page about to reload for 다시 확인 (the plan pages): its next check waits the longest.
     function expectSlow() { setLapses(VERIFY_PATIENCE - 1); }
+    // How long the next check of a newly opened screen may take (ms), for the screen that waits for it.
+    function verifyWait() { return verifyLimit * Math.min(1 + lapses, VERIFY_PATIENCE); }
     async function requireUser(options) {
       const verified = await verify(options);
       if (!verified) location.replace?.('login.html?next=' + encodeURIComponent(safeNext(location.pathname?.split('/').pop() + (location.search || ''))));
@@ -472,7 +476,7 @@
     env.addEventListener?.('pagehide', pagehide); env.addEventListener?.('pageshow', pageshow); env.addEventListener?.('storage', storageChange);
     // Let SDK PKCE initialization read the callback first, then scrub success and failure URLs.
     if (client) client.auth.getSession().then(scrubCallback, scrubCallback); else scrubCallback();
-    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, beginStartup, requireUser, expectSlow, login, signOut, request,
+    return Object.freeze({ ready, client, config, safeNext, verify, verificationScope, beginStartup, requireUser, expectSlow, verifyWait, login, signOut, request,
       get user() { return blocked() ? null : user; }, get session() { return blocked() ? null : session; }, get epoch() { return epoch; },
       getAccount: account, getClient: () => client,
       onAccountChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },

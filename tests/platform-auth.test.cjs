@@ -1039,6 +1039,45 @@ test('m2: the level is kept for the tab, so a page that opens again after a laps
   assert.equal((await setup({ sessionStorage: broken }).auth.verify()).id, A.id);
 });
 
+test('m2: verifyWait() tells the screen how long the next check of an opening may take (10 → 20 → 30 s with the level)', async () => {
+  const sessionStorage = memoryStore(), { auth, state } = setup({ sessionStorage, authOptions: { verifyLimit: 20 }, userPromise: never() });
+  assert.equal(auth.verifyWait(), 20);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 40);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 60);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 60, 'no further');
+  // A page of the same tab that opens next starts from the level that was kept.
+  assert.equal(setup({ sessionStorage, authOptions: { verifyLimit: 20 } }).auth.verifyWait(), 60);
+  state.userPromise = null; await auth.verify(); await tick();
+  assert.equal(auth.verifyWait(), 20, 'an answer in time goes back to the first limit');
+  auth.expectSlow(); assert.equal(auth.verifyWait(), 60);
+});
+
+test('m2: the opening’s budget grows with the level: a check that took 12 s is still shared at 20 s after the opening began, and no longer after that', async () => {
+  const clock = { now: 1_000_000 }, sessionStorage = memoryStore();
+  sessionStorage.data.set('caeyeon_life_platform_verify_lapses', '1');   // this tab's last check ran into its limit
+  const slow = deferred(), { auth, state } = setup({ now: () => clock.now, sessionStorage, userPromise: slow.promise });
+  const opening = auth.beginStartup();
+  const first = auth.verify({ startup: true }); await tick();
+  clock.now += 12000; slow.resolve({ data: { user: A }, error: null });
+  assert.equal((await first).id, A.id); await tick();
+  state.userPromise = null;
+  // With a budget of STARTUP_LIMIT_MS for every opening this answer would be too old at once.
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1, 'shared 12 s after the opening began');
+  clock.now += 2 * STARTUP_LIMIT_MS - 12000;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1, 'and at exactly twice the budget');
+  clock.now += 1;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2, 'past it the opening asks again');
+  opening.end(); auth.dispose();
+  // 다시 확인 (patient): three times the budget at once.
+  const pressed = setup({ now: () => clock.now });
+  const again = pressed.auth.beginStartup({ patient: true });
+  await pressed.auth.verify({ startup: true, patient: true }); clock.now += 3 * STARTUP_LIMIT_MS;
+  await pressed.auth.verify({ startup: true }); assert.equal(serverChecks(pressed.state), 1);
+  clock.now += 1;
+  await pressed.auth.verify({ startup: true }); assert.equal(serverChecks(pressed.state), 2);
+  again.end(); pressed.auth.dispose();
+});
+
 test('m2: the user check request is cut at the limit of the check that is out (20 s for a second try), and 다시 확인 cuts the earlier request at once', async () => {
   const asked = [], { auth, state, env } = setup({ authOptions: { verifyLimit: 30, ...recorded(asked) }, userPromise: never() });
   const sdkFetch = state.options.global.fetch, aborted = [];
