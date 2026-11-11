@@ -622,10 +622,12 @@
       surface.dataset.date = context.date;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
       context.notice.hidden = true; context.notice.setAttribute('role', 'status');
-      // The empty frame keeps the plan links usable while records load.
-      context.body.append(views[unit](context));
+      // The empty frame keeps the plan links usable while records load. The surface goes into the page first:
+      // an entry slot (습관·행복도·목표) paints only on a shown screen, and built before that it stayed empty
+      // until the records were read, so every redraw showed the panel blank for a moment (2026-11-11).
       surface.append(context.error, context.notice, context.body);
       host.append(surface);
+      context.body.append(views[unit](context));
       watch(context);
       try { await refresh(context); }
       catch (_) { if (showing(context)) { surface.setAttribute('aria-busy', 'false'); showError(context, '기록을 불러오지 못했어요. 다시 시도해 주세요.'); } }

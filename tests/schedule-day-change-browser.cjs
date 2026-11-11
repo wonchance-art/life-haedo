@@ -320,6 +320,20 @@ async function main() {
       await page.goForward(); await shown(page, 'week'); await page.goForward(); await shown(page, 'day'); await titled(page, '11월 12일 목요일');
     });
 
+    await check('a redraw (‹ ›, the day change) never shows the 습관·행복도 panel blank: it is drawn in the frame the screen appears in', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'habit-1', kind: 'habit', data: habit([]) });
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=week'); await ready(page); await shown(page, 'week'); await entries(page);
+      await page.waitForFunction(() => document.querySelectorAll('.schedule-habit-grid input[type=checkbox]').length === 7);
+      // Every time a schedule surface is put into the page: what the next painted frame shows of the habit grid.
+      await page.evaluate(() => { window.__frames = []; new MutationObserver(list => { for (const change of list) for (const node of change.addedNodes) if (node.id === 'lifeSchedule')
+        requestAnimationFrame(() => __frames.push(document.querySelectorAll('#lifeSchedule .schedule-habit-grid input[type=checkbox]').length)); }).observe(document.querySelector('#lifeMain'), { childList: true }); });
+      await step(page, -1); await titled(page, '11.2 – 11.8'); await step(page, 1); await titled(page, '11.9 – 11.15');
+      await overnight(page, '2026-11-16T07:30:00+09:00'); await titled(page, '11.16 – 11.22'); await entries(page);
+      await page.waitForFunction(() => window.__frames.length >= 3);
+      assert.deepEqual(await page.evaluate(() => __frames), [7, 7, 7], 'the grid was there in the first frame of each of the three redraws');
+    });
+
     await check('another screen overnight: the next calendar screen opens on the new day; a reload of a screen that showed today opens today', async ({ page }) => {
       await at(page, '2026-11-11T23:40:00+09:00');
       await page.goto(base + '/index.html'); await ready(page); await list(page);

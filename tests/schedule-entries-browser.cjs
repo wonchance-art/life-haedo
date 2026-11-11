@@ -57,6 +57,11 @@ async function shown(page, mode) {
   await page.waitForFunction(m => document.querySelector('#lifeMain')?.dataset.mode === m && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false', mode);
 }
 async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.dataset.happiness !== 'loading' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }); }
+// Found and measured in ONE evaluation in the page. locator.evaluateAll() resolves the nodes first and measures
+// them in a second step; right after a load the entry slot repaints several times within a few tens of ms
+// (the 행복도 document, then two store notices), so the resolved nodes were sometimes already detached: the
+// lists came back empty and this suite failed about one run in twelve (2026-11-11, traced with a mutation log).
+const all = (page, selector, measure) => page.evaluate(({ selector, source }) => new Function('nodes', 'return (' + source + ')(nodes)')([...document.querySelectorAll(selector)]), { selector, source: measure.toString() });
 async function overflow(page, label) {
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   if (wide) report.overflow.push(label);
@@ -310,7 +315,7 @@ async function main() {
       await context.route('**/assets/life/schedule-entries.js', route => route.fulfill({ status: 500, body: '' }));
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day');
       await page.waitForFunction(() => document.querySelector('.schedule-entries-day')?.getAttribute('aria-busy') === 'false');
-      const links = await page.locator('.schedule-entries-day a').evaluateAll(nodes => nodes.map(n => [n.textContent.trim(), n.getAttribute('href')]));
+      const links = await all(page, '.schedule-entries-day a', nodes => nodes.map(n => [n.textContent.trim(), n.getAttribute('href')]));
       assert.deepEqual(links, [['습관 체크', 'habits.html']]);
     });
 
@@ -442,7 +447,7 @@ async function main() {
             body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));
           assert.deepEqual([empty.text, empty.size], ['이 날 기록이 없어요.', empty.body], 'the empty day at body size');
           // 행복도 0–10: one row on wide screens; on a phone two rows (0–5, 6–10), each choice 44 × 44.
-          const scale = await page.locator('.schedule-happiness-option').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
+          const scale = await all(page, '.schedule-happiness-option', nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
           const rows = [...new Set(scale.map(o => o.top))].map(top => scale.filter(o => o.top === top).map(o => o.n));
           if (width <= 760) assert.deepEqual(rows, [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']]);
           else assert.equal(rows.length, 1, 'one row on a wide screen');
@@ -451,16 +456,16 @@ async function main() {
         await overflow(page, view + ' ' + width);
         if (view === 'week') {
           // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
-          const names = await page.locator('.schedule-grid-label td').evaluateAll(cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
+          const names = await all(page, '.schedule-grid-label td', cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
           if (width <= 760) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true], ['행복도', true]]);
           else {
             assert.deepEqual(names, [], 'wide: names stay in the row headers');
             // Wide: the row header wraps instead of cutting, and keeps the name as its title.
-            const heads = await page.locator('.schedule-habit-grid tbody tr:not(.schedule-grid-label) > th').evaluateAll(cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
+            const heads = await all(page, '.schedule-habit-grid tbody tr:not(.schedule-grid-label) > th', cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
             assert.deepEqual(heads.filter(([text]) => text !== '행복도'), [['아침 산책', '아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true]]);
           }
           // The whole cell takes the tap, not only the 22px box.
-          const targets = await page.locator('.schedule-grid-check').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
+          const targets = await all(page, '.schedule-grid-check', nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
             const inner = cell.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight); return b.height >= 44 && b.width >= inner - 1; }));
           assert.ok(targets.length && targets.every(Boolean), 'week ' + width + ': each check cell is a full-size target');
           // Seven day columns only (no empty eighth column at phone width), each at least 44px wide.
@@ -475,7 +480,7 @@ async function main() {
             return { scrolls: scroll.scrollWidth > scroll.clientWidth + 1, sunday: sunday.textContent, inside: day.right <= box.right + 1 && day.right <= innerWidth }; });
           assert.deepEqual(fit, { scrolls: false, sunday: '일', inside: true }, 'week ' + width + ': Monday to Sunday visible');
         }
-        const small = await page.locator('.schedule-entries input, .schedule-entries button, .schedule-entries a').evaluateAll(nodes => nodes.filter(n => n.checkVisibility()).map(n => {
+        const small = await all(page, '.schedule-entries input, .schedule-entries button, .schedule-entries a', nodes => nodes.filter(n => n.checkVisibility()).map(n => {
           const box = (n.matches('input[type=checkbox],input[type=radio]') ? n.closest('label,td') || n : n).getBoundingClientRect(); return { w: box.width, h: box.height, name: n.getAttribute('aria-label') || n.textContent };
         }).filter(r => r.h < 44 || r.w < 24));
         assert.deepEqual(small, [], view + ' ' + width + ': controls are at least 44px tall');
