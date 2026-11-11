@@ -223,7 +223,7 @@
       if (options?.startup === true && startupScope && !startupScope.ended) return startupScope.verify(patient ? { patient: true } : undefined);
       return serverVerify(patient);
     }
-    // One account check, given up after verifyLimit as network_error. The limit covers the whole attempt
+    // One account check, given up after its limit (see VERIFY_PATIENCE) as network_error. The limit covers the whole attempt
     // (reading the stored session, a token refresh it may need, the server check), so no stalled step keeps
     // the caller waiting. An answer that still arrives later is applied under the same guards as before
     // (same epoch, same session user): it never switches accounts and never reveals a screen by itself.
