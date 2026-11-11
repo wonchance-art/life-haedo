@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
-const { playwright, settle } = require('./unified-home-browser.cjs');
+const { playwright } = require('./unified-home-browser.cjs');
 const { sleep, until, imp, editNote, snap, light, kick, openDevice, convergedOn } = require('./source-merge-browser.cjs');
 const out = path.resolve(__dirname, '../.local/source-merge-limits');
 const owner = accounts.a.id;
@@ -103,12 +103,15 @@ async function main() {
       const spaces = (await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length;
       // The band offers the comparison between the account library's passes over this large library (it reads "working" during one).
       await until(async () => { try { await small.page.locator('#lifeAccountStorageReview').click({ timeout: 2000 }); return true; } catch (_) { return false; } }, value => value, 'the comparison is offered', 120000, 500);
-      await settle(small.page);
-      await small.page.getByRole('button', { name: '양쪽 자료 비교', exact: true }).click(); await settle(small.page);
-      await small.page.getByRole('button', { name: '서버 변경 받기 · 내 변경은 사본 보관', exact: true }).click();
-      const resolved = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced' && !state.conflict, 'resolved by hand', 120000, 1000);
-      phase('the manual choice'); assert.equal(resolved.sources, before + 9);
-      console.log('     over 16 MiB, ' + ((Date.now() - started) / 1000).toFixed(0) + ' s in all: ' + phases.at(-1));
+      // The screen is busy for a long time here: it reads the 9 MB server side and lays out both sides, then
+      // copies this device's 9 MB into a new space. The waits are for megabytes, not for a timer.
+      const busy = { timeout: 240000 }, idle = () => small.page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'), null, busy);
+      await idle(); phase('opening the account screen');
+      await small.page.getByRole('button', { name: '양쪽 자료 비교', exact: true }).click(busy); await idle(); phase('reading and showing both sides');
+      await small.page.getByRole('button', { name: '서버 변경 받기 · 내 변경은 사본 보관', exact: true }).click(busy);
+      const resolved = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced' && !state.conflict, 'resolved by hand', 240000, 1000);
+      phase('taking the server side and keeping a copy'); assert.equal(resolved.sources, before + 9);
+      console.log('     over 16 MiB, ' + ((Date.now() - started) / 1000).toFixed(0) + ' s in all, the manual choice: ' + phases.slice(-3).join(' · '));
       assert.equal((await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length, spaces + 1, 'this device\'s side is kept as a copy');
     });
 
