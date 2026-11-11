@@ -506,6 +506,20 @@ test('M1/M3: every failure in the middle of ending an unanswered request leaves 
     // The owner withdraws again: now there is an exact revision to withdraw.
     assert.equal((await f.withdraw()).status, 'stored'); assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.equal((await f.state()).publicationLog ?? null, null);
   });
+  await t.test('no row, withdrawal unanswered, then the owner publishes the same choice again: public at once, and the old withdrawal is over', async () => {
+    const { f, old } = await never(); f.net.control.block = 'unpublish';
+    await assert.rejects(f.withdraw(), { code: 'network_error' }); f.net.control.block = null;
+    const withdrawal = f.net.tried('unpublish')[0];
+    const events = []; f.a.sync.subscribe(event => events.push(event));
+    const published = await f.publish({ photoIds: f.doc.photos.map(photo => photo.id) });
+    assert.equal(published.revision, 1); assert.equal(f.net.tried('publish').at(-1).operation, old.operation, 'the same choice replays the same request');
+    const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null);
+    assert.deepEqual(await f.view(), { status: 'public', notice: null });
+    await f.a.sync.syncNow();
+    assert.deepEqual(f.published(), { active: true, revision: 1 }); assert.equal(f.net.sent('unpublish').length, 0); assert.equal((await f.state()).publicationLog ?? null, null);
+    assert.deepEqual(events.filter(event => event.type === 'publication_notice'), [], 'nothing is said about a withdrawal the owner replaced by publishing');
+    assert.throws(() => f.late(withdrawal), conflict, 'the old withdrawal arriving late changes nothing'); assert.equal(f.row().publication.active, true);
+  });
   await t.test('no row, new choice: the old request is ended first (revision 0 to 1), then the new one is sent against revision 1', async () => {
     const { f, old } = await never();
     const published = await f.publish({ photoIds: [], expectedPublicRevision: 0 });

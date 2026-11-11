@@ -1101,7 +1101,10 @@
       // The name and intro this request set for the whole public list, kept with the post on this
       // device (publicProfile reads it back while nothing is public and the server shows none).
       const publishedAuthor = { name: pending.selection.author.name, intro: pending.selection.author.intro, at: new Date(now()).toISOString() };
-      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { publishPending: null } : {}) }));
+      // A withdrawal still recorded for an earlier publication revision can only end in conflict now
+      // (the same choice was published again before that withdrawal got an answer): it is over.
+      const overtaken = stored => stored?.unpublishPending && stored.unpublishPending.expectedRevision < result.revision;
+      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { publishPending: null } : {}), ...(overtaken(stored) ? { unpublishPending: null } : {}) }));
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
