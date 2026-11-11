@@ -4369,6 +4369,23 @@
       heading.tabIndex = -1;
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
       dock.append(tools, arrangePanel);
+      // Tab into or within the tool row and its open panel must not scroll the document. They are already on screen;
+      // the browser would scroll the page to clear the shell's scroll padding (meant for content under a fixed
+      // header) and push the text being read. Focus moves in the same order, without that scroll; a control
+      // hidden inside the panel's own scroll is brought into the panel's view only.
+      article.addEventListener('keydown', event => {
+        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+        const stops = [...article.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]')]
+          .filter(item => item.tabIndex >= 0 && !item.disabled && item.checkVisibility());
+        const next = stops[stops.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1)];
+        if (!stops.includes(document.activeElement) || !next || !dock.contains(next)) return;
+        event.preventDefault(); next.focus({ preventScroll: true });
+        const sheet = next.closest('.life-reader-sheet');
+        if (!sheet) return;
+        const frame = sheet.getBoundingClientRect(), box = next.getBoundingClientRect();
+        if (box.top < frame.top + 8) sheet.scrollTop -= frame.top + 8 - box.top;
+        else if (box.bottom > frame.bottom - 8) sheet.scrollTop += box.bottom - frame.bottom + 8;
+      });
       article.append(dock, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
@@ -4433,7 +4450,12 @@
       if (sourceActive) {
         const confirmPanel = node('section', null, 'life-source-trash-confirm'); confirmPanel.id = 'lifeSourceTrashConfirmation'; confirmPanel.hidden = true;
         confirmPanel.setAttribute('aria-label', '자료 휴지통 이동 확인');
-        const trash = button('휴지통으로 이동', () => { confirmPanel.hidden = false; confirmPanel.querySelector('#lifeSourceTrashConfirm').focus({ preventScroll: true }); }); trash.id = 'lifeSourceTrash';
+        const trash = button('휴지통으로 이동', () => {
+          confirmPanel.hidden = false; confirmPanel.querySelector('#lifeSourceTrashConfirm').focus({ preventScroll: true });
+          // The confirmation appears at the end of the panel; show it inside the panel's own scroll.
+          const frame = details.getBoundingClientRect(), box = confirmPanel.getBoundingClientRect();
+          if (box.bottom > frame.bottom) details.scrollTop += box.bottom - frame.bottom + 12;
+        }); trash.id = 'lifeSourceTrash';
         const confirm = button('휴지통으로 이동', guarded(async () => {
           if (!await changeSourceState(source.id, 'trash', lifecycle.revision, { expectedSourceRevision: source.revision, expectedStatus: 'active' })) return;
           if (state.returnContext?.mode === 'source-trash') await navigate('source-trash');

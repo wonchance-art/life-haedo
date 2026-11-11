@@ -169,12 +169,6 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-dock > .life-reader-sheet { position: absolute; top: 100%; left: 0; right: 0; max-height: calc(100dvh - 76px - var(--haedo-dock-clearance, 0px)); margin: 0; padding: 16px 12px 20px; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); }
 .life-reader-dock > .life-reader-sheet[hidden] { display: none; }
 .life-reader-dock > .life-reader-sheet > .life-button { margin: 8px 8px 0 0; }
-/* 화면에 붙어 있는 묶음 안으로 초점이 가도 문서를 스크롤하지 않는다. 공통 셸은 초점이 간 조작을 고정 머리줄 아래로
- * 내리려고 문서의 scroll-padding 80px과 조작의 scroll-margin 80px(아래쪽은 하단 탭 높이)을 쓰는데, 이 묶음은 이미
- * 보이는 자리에 있으므로 그 값이 읽던 본문만 밀어낸다. 조작의 여백을 반대로 주어 문서 쪽 계산을 0으로 만들고,
- * 패널 안쪽 스크롤에는 같은 크기의 scroll-padding을 주어 가려진 조작은 패널 안에서만 스크롤해 보이게 한다. */
-.life-reader .life-reader-dock :is(a, button, summary, input, select, textarea, [tabindex]) { scroll-margin-top: -80px; scroll-margin-bottom: calc(-1 * var(--haedo-dock-clearance, 0px)); }
-.life-reader-sheet { scroll-padding-top: 80px; scroll-padding-bottom: var(--haedo-dock-clearance, 0px); }
 .life-reader-tools > :first-child { margin-right: auto; }
 .life-reader-tools > :first-child .life-tooltip { left: 0; transform: none; }
 .life-reader-tools > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
