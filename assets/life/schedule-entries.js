@@ -23,17 +23,22 @@
   // ── 하루 행복도(happinessDays) — 셸 저장소 범위마다 하나 ──
   const REFRESH = '앱을 새로고침한 뒤 다시 시도해 주세요. 값은 그대로 있습니다.';
   let current = null; // the happinessDays controller of the open storage scope
+  // The day the shell holds on screen although the date changed, because that day's 행복도 choice failed
+  // (2026-11-11 review): its panel says so, takes no other input, and offers to store it again or drop it.
+  let heldDay = null;
   const happinessKey = account => `happinessDays:${JSON.stringify([account.projectUrl, account.userId])}:days`;
   function moodFor(storage, s) {
     if (current && current.storage === storage) return current;
     current?.stop();
-    const m = { storage, entries: null, refresh: false, error: null, sync: 'ok', pending: new Map(), stops: [], loading: null, again: false,
+    // pending: the choices not stored yet (date → score). writing: the days whose write is on its way now
+    // (date → count); a pending day without one is a choice that failed and stays selected.
+    const m = { storage, entries: null, refresh: false, error: null, sync: 'ok', pending: new Map(), writing: new Map(), stops: [], loading: null, again: false,
       absorbing: null, absorbAgain: false };
     // Repaint only when what the panel shows changed (values, notices, save state): a repaint
     // rebuilds the panel, so status notices alone must not churn it.
     let shown = null;
     const repaint = () => {
-      const now = JSON.stringify([m.entries, m.refresh, m.error, m.sync, [...m.pending]]);
+      const now = JSON.stringify([m.entries, m.refresh, m.error, m.sync, [...m.pending], [...m.writing.keys()], heldDay]);
       if (now === shown) return;
       shown = now; document.dispatchEvent(new Event('haedo:happiness'));
     };
@@ -95,8 +100,9 @@
     };
     // 일정 D: score 0–10 or null (지우기). The choice stays on screen until it is stored.
     m.write = async (date, score) => {
-      m.pending.set(date, score); m.error = null; repaint();
+      m.pending.set(date, score); m.error = null;
       if (!m.ready || m.refresh) { m.refresh = true; repaint(); return; }
+      m.writing.set(date, (m.writing.get(date) || 0) + 1); repaint();
       try {
         await storage.writeHappinessDay(date, score === null ? null : (score - 5) / 5);
         if (!same()) return;
@@ -107,9 +113,15 @@
         if (!same()) return;
         if (error?.code === 'app_refresh_required') m.refresh = true;
         else m.error = error?.message || '행복도를 저장하지 못했습니다. 다시 시도해 주세요.';
-        repaint();
+      } finally {
+        // The write ended (stored, failed or left behind by an account change): the shell hears it and checks the day again.
+        const left = (m.writing.get(date) || 1) - 1;
+        if (left) m.writing.set(date, left); else m.writing.delete(date);
+        if (same()) repaint();
       }
     };
+    // A choice that failed is dropped (the stored value of that day stays as it is).
+    m.discard = date => { if (!m.writing.has(date)) { m.pending.delete(date); m.error = null; repaint(); } };
     m.stop = () => { for (const stop of m.stops.splice(0)) { try { stop(); } catch (_) { /* Closed scope. */ } } };
     if (m.ready) {
       try {
@@ -207,7 +219,10 @@
     const body = el('div', null, 'schedule-entry-body');
     // 행복도 notices apart from the goal/habit error line (a save failure there is not hidden by them).
     const moodNotice = el('p', null, 'life-error schedule-happiness-error'); moodNotice.setAttribute('role', 'alert'); moodNotice.hidden = true;
-    host.replaceChildren(body, status, error, moodNotice);
+    // Shown only while the shell holds this day (heldDay): the date changed and this day's choice is not stored.
+    const dayNotice = el('div', null, 'life-error schedule-day-held'); dayNotice.setAttribute('role', 'alert'); dayNotice.hidden = true;
+    let heldSaid = null;
+    host.replaceChildren(dayNotice, body, status, error, moodNotice);
     let dirty = false, painted = false, retrying = false, statusSaid = null;
     // 행복도 is shown in the day and week panels only (not in the year goals or the month habit tracker).
     const moodShown = kind === 'day' || kind === 'week';
@@ -406,6 +421,28 @@
       if (moodShown) mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
       body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : kind === 'month' ? monthPanel() : yearPanel()));
       painted = true;
+      // The date changed, and this day's 행복도 choice failed: no other input lands on this (earlier) day by
+      // mistake. The choice is stored again or dropped here; then the shell opens today.
+      const held = kind === 'day' && !!days && heldDay === date && days.pending.has(date);
+      body.inert = held; dayNotice.hidden = !held;
+      if (held) {
+        const busy = days.writing.has(date), score = days.pending.get(date), said = JSON.stringify([date, score, busy]);
+        if (said !== heldSaid) {
+          heldSaid = said;
+          const keep = host.contains(document.activeElement) && dayNotice.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+          const title = life.ScheduleData?.dayTitle ? life.ScheduleData.dayTitle(date) : date;
+          const text = el('p', '날짜가 바뀌었습니다. 이 화면(' + title + ')의 ' + (score === null ? '행복도 지우기를' : '행복도 ' + score + ([2, 4, 5, 9].includes(score) ? '를' : '을')) + ' 저장하지 못했습니다. 다시 저장하거나 취소하면 오늘 화면으로 옮깁니다.');
+          const again = el('button', '다시 저장', 'life-button'); again.type = 'button'; again.dataset.focusKey = 'schedule:held:retry';
+          const drop = el('button', '선택 취소', 'life-button'); drop.type = 'button'; drop.dataset.focusKey = 'schedule:held:discard';
+          // aria-disabled while the write runs (a focused button that turns disabled drops keyboard focus).
+          for (const control of [again, drop]) control.setAttribute('aria-disabled', String(busy));
+          again.addEventListener('click', () => { if (alive() && !days.writing.has(date) && days.pending.has(date)) days.write(date, days.pending.get(date)); });
+          drop.addEventListener('click', () => { if (alive()) days.discard(date); });
+          const actions = el('div', null, 'life-actions'); actions.append(again, drop);
+          dayNotice.replaceChildren(text, actions);
+          if (keep) [again, drop].find(control => control.dataset.focusKey === keep)?.focus({ preventScroll: true });
+        }
+      } else heldSaid = null;
       // 'loading' until the 행복도 document is read here (one more repaint follows), then 'ready'.
       host.dataset.happiness = moodShown && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
       const itemState = saveState(s.items), moodState = kind === 'day' && days ? days.sync : 'ok';
@@ -462,8 +499,16 @@
     paint();
     return () => { document.removeEventListener('haedo:store', onStore); document.removeEventListener('haedo:happiness', onMood); };
   }
-  // A 행복도 choice still on its way to this device's store (or one that failed and stays selected): the shell
-  // does not move the shown day under it (2026-11-11 M1).
-  const unsaved = () => !!current?.pending.size;
-  life.ScheduleEntries = Object.freeze({ render, saveState, STATE_TEXT, unsaved });
+  // For the shell's day change (2026-11-11 M1 and review):
+  //   saving()  a 행복도 choice is on its way to this device's store now. It ends by itself, with a repaint.
+  //   failed()  the days whose choice failed and stays selected. Nothing ends these but the owner.
+  //   holdDay(date | null)  the shell keeps that day on screen for its failed choice (see heldDay).
+  const saving = () => !!current?.writing.size;
+  const failed = () => current ? [...current.pending.keys()].filter(date => !current.writing.has(date)) : [];
+  function holdDay(date) {
+    const next = typeof date === 'string' ? date : null;
+    if (next === heldDay) return;
+    heldDay = next; document.dispatchEvent(new Event('haedo:happiness'));
+  }
+  life.ScheduleEntries = Object.freeze({ render, saveState, STATE_TEXT, saving, failed, holdDay });
 })(globalThis);

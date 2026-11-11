@@ -36,6 +36,21 @@ const entries = page => page.waitForFunction(() => { const slot = document.query
 const list = page => page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'home' && document.querySelector('#homePosts')?.getAttribute('aria-busy') === 'false');
 const step = (page, n) => page.locator('[data-focus-key="schedule:step:' + n + '"]').click();
 const todayButton = page => page.locator('[data-focus-key="schedule:today"]');
+const focused = page => page.evaluate(() => document.activeElement === document.body ? 'BODY' : document.activeElement?.dataset.focusKey || document.activeElement?.tagName);
+const happiness = page => page.evaluate(async () => (await HaedoLife.Shell.storage.readHappinessDays()).entries.map(entry => [entry.date, entry.v]));
+// The 행복도 document's write: held open until released (hold), or refused (fail).
+const patchHappinessWrite = page => page.evaluate(() => {
+  window.__hold = false; window.__fail = false; const put = IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put = function (...args) {
+    const key = args[0]?.key, mine = typeof key === 'string' && /happiness/i.test(key);
+    if (mine && window.__hold) { const store = this, spin = () => { if (window.__hold) { try { store.get('test-keepalive').onsuccess = spin; } catch (_) { /* The transaction ended. */ } } }; spin(); }
+    const request = put.apply(this, args);
+    if (mine && window.__fail) this.transaction.abort();
+    return request;
+  };
+});
+const held = page => page.evaluate(() => { const notice = document.querySelector('.schedule-day-held'); return { shown: !!notice && !notice.hidden, text: notice?.querySelector('p')?.innerText || '', buttons: [...(notice?.querySelectorAll('button') || [])].map(node => node.innerText),
+  inert: document.querySelector('.schedule-entry-body')?.inert === true, checked: [...document.querySelectorAll('.schedule-happiness input:checked')].map(node => node.value) }; });
 
 async function main() {
   await fs.mkdir(output, { recursive: true });
@@ -177,6 +192,132 @@ async function main() {
       assert.equal((await snap(page)).title, '2027년'); assert.equal(await page.locator('#scheduleShortcuts').isVisible(), true);
       await page.locator('#scheduleShortcuts').getByRole('button', { name: '닫기' }).click();
       await titled(page, '2028년');
+    });
+
+    await check('an address that names today, and today reached again with ‹ ›, follow the new day (2026-11-11 review; owner’s call recorded in schedule-consolidation.md)', async ({ page }) => {
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day');
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined });
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일');
+      assert.equal((await snap(page)).date, '2026-11-12');
+      // Away and back to today with ‹ ›: the screen shows today again, and follows.
+      await step(page, -1); await titled(page, '11월 11일 수요일'); await step(page, 1); await titled(page, '11월 12일 목요일');
+      await overnight(page, '2026-11-13T07:30:00+09:00'); await titled(page, '11월 13일 금요일');
+      // One day back is a chosen day: it stays.
+      await step(page, -1); await titled(page, '11월 12일 목요일');
+      await overnight(page, '2026-11-14T07:30:00+09:00'); await page.waitForTimeout(1200);
+      assert.equal((await snap(page)).title, '11월 12일 목요일');
+    });
+
+    await check('a 행복도 choice on its way to the store holds the screen until it is stored, then the screen follows (no input is lost)', async ({ page }) => {
+      await at(page, '2026-11-11T23:50:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day'); await ready(page); await shown(page, 'day'); await entries(page);
+      await patchHappinessWrite(page); await page.evaluate(() => { window.__hold = true; });
+      await page.getByRole('radio', { name: '행복도 7', exact: true }).check();
+      await page.waitForFunction(() => HaedoLife.ScheduleEntries.saving());
+      await overnight(page, '2026-11-12T00:05:00+09:00'); await page.waitForTimeout(2500);
+      assert.equal((await snap(page)).title, '11월 11일 수요일', 'the screen waits for the write');
+      assert.deepEqual([await page.evaluate(() => HaedoLife.ScheduleEntries.saving()), (await held(page)).shown], [true, false]);
+      await page.evaluate(() => { window.__hold = false; });
+      await titled(page, '11월 12일 목요일');
+      assert.deepEqual(await happiness(page), [['2026-11-11', 0.4]], 'the choice was stored for the day it was made on');
+      assert.deepEqual((await held(page)).checked, [], 'the new day has no choice yet');
+    });
+
+    for (const action of ['다시 저장', '선택 취소']) {
+      await check('a 행복도 choice that failed: the day changes → the screen says so and takes no other input until ' + action + ', then it opens today', async ({ page, tables }) => {
+        tables.seed('haedo_items', accounts.a.id, { id: 'habit-1', kind: 'habit', data: habit([]) });
+        await at(page, '2026-11-11T23:50:00+09:00');
+        await page.goto(base + '/index.html?section=schedule&view=day'); await ready(page); await shown(page, 'day'); await entries(page);
+        await patchHappinessWrite(page); await page.evaluate(() => { window.__fail = true; });
+        await page.getByRole('radio', { name: '행복도 3', exact: true }).check();
+        await page.waitForFunction(() => { const notice = document.querySelector('.schedule-happiness-error'); return notice && !notice.hidden; });
+        assert.deepEqual(await page.evaluate(() => [HaedoLife.ScheduleEntries.saving(), HaedoLife.ScheduleEntries.failed()]), [false, ['2026-11-11']]);
+        assert.equal((await held(page)).shown, false, 'nothing is said about the date while it is still that day');
+        // No timer runs for a failed choice: count the timers armed from here to the morning after.
+        await page.evaluate(() => { window.__timers = []; const arm = window.setTimeout; window.setTimeout = function (...args) { __timers.push(args[1]); return arm.apply(this, args); }; });
+        await overnight(page, '2026-11-12T07:30:00+09:00');
+        await page.waitForFunction(() => { const notice = document.querySelector('.schedule-day-held'); return notice && !notice.hidden; });
+        const morning = await held(page);
+        assert.deepEqual(morning, { shown: true, text: '날짜가 바뀌었습니다. 이 화면(11월 11일 수요일)의 행복도 3을 저장하지 못했습니다. 다시 저장하거나 취소하면 오늘 화면으로 옮깁니다.', buttons: ['다시 저장', '선택 취소'], inert: true, checked: ['3'] });
+        assert.equal((await snap(page)).title, '11월 11일 수요일');
+        // The earlier day takes no other input: neither a 행복도 choice nor a habit check lands on it by mistake.
+        // (Read from the DOM and by a real pointer press: role queries do not see an inert subtree reliably.)
+        assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.schedule-entries input[aria-label="행복도 9"], .schedule-entries input[type=checkbox]')].map(node => !!node.closest('[inert]'))), [true, true]);
+        for (const selector of ['.schedule-entries input[aria-label="행복도 9"]', '.schedule-entries input[type=checkbox]']) {
+          const box = await page.locator(selector).evaluate(node => { const r = (node.closest('label') || node).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+          await page.mouse.click(box.x, box.y);
+        }
+        await page.waitForTimeout(400);
+        assert.deepEqual([(await held(page)).checked, await page.locator('.schedule-entries input[type=checkbox]').evaluate(node => node.checked), await happiness(page), tables.owned('haedo_items', accounts.a.id)[0].data.checks], [['3'], false, [], []], 'a press on the earlier day changes nothing');
+        await page.waitForTimeout(3200);
+        assert.equal((await snap(page)).title, '11월 11일 수요일', 'the screen stays for the owner');
+        // The earlier wait for an unsaved choice was a 1-second timer armed again and again.
+        const armed = await page.evaluate(() => __timers);
+        assert.deepEqual(armed.filter(delay => delay === 1000), [], 'the held day is not polled: ' + JSON.stringify(armed));
+        await page.screenshot({ path: path.join(output, 'held-day-' + (action === '다시 저장' ? 'retry' : 'discard') + '.png') });
+        if (action === '다시 저장') {
+          // Still failing: the screen stays and the notice keeps its focus.
+          await page.locator('.schedule-day-held').getByRole('button', { name: '다시 저장', exact: true }).click();
+          await page.waitForFunction(() => !HaedoLife.ScheduleEntries.saving()); await page.waitForTimeout(300);
+          assert.deepEqual([(await held(page)).shown, (await snap(page)).title, await focused(page)], [true, '11월 11일 수요일', 'schedule:held:retry']);
+          await page.evaluate(() => { window.__fail = false; });
+        }
+        await page.locator('.schedule-day-held').getByRole('button', { name: action, exact: true }).click();
+        await titled(page, '11월 12일 목요일'); await entries(page);
+        assert.deepEqual(await happiness(page), action === '다시 저장' ? [['2026-11-11', -0.4]] : [], action === '다시 저장' ? 'the failed choice was stored for its own day' : 'nothing was stored');
+        const today = await held(page);
+        assert.deepEqual([today.shown, today.inert, today.checked], [false, false, []]);
+        // Focus goes to the title that names the new day, not to the page (the notice's button is gone).
+        await page.waitForFunction(() => document.activeElement?.tagName === 'H1');
+        await page.waitForTimeout(300); assert.equal(await focused(page), 'H1');
+        // Today takes input as usual.
+        await page.evaluate(() => { window.__fail = false; });
+        await page.getByRole('radio', { name: '행복도 9', exact: true }).check();
+        await page.waitForFunction(() => !HaedoLife.ScheduleEntries.saving() && !HaedoLife.ScheduleEntries.failed().length);
+        assert.deepEqual((await happiness(page)).filter(([date]) => date === '2026-11-12'), [['2026-11-12', 0.8]]);
+      });
+    }
+
+    await check('keyboard focus follows the day: the same habit’s box, the same 행복도 choice; focus that was nowhere stays nowhere', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'habit-1', kind: 'habit', data: habit([]) });
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day'); await ready(page); await shown(page, 'day'); await entries(page);
+      await page.getByRole('checkbox', { name: '아침 산책', exact: true }).focus();
+      assert.equal(await focused(page), 'schedule:habit:habit-1:2026-11-11');
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일'); await entries(page);
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:habit:habit-1:2026-11-12');
+      await page.getByRole('radio', { name: '행복도 4', exact: true }).focus();
+      await overnight(page, '2026-11-13T07:30:00+09:00'); await titled(page, '11월 13일 금요일'); await entries(page);
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:happiness:2026-11-13:4');
+      assert.deepEqual((await held(page)).checked, [], 'focus alone chose nothing');
+      await page.evaluate(() => document.activeElement.blur());
+      await overnight(page, '2026-11-14T07:30:00+09:00'); await titled(page, '11월 14일 토요일'); await entries(page); await page.waitForTimeout(300);
+      assert.equal(await focused(page), 'BODY');
+      // W: the focused box of the day that was today moves to today's column of the new week.
+      await at(page, '2026-11-15T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=week'); await ready(page); await shown(page, 'week'); await entries(page);
+      await page.locator('[data-focus-key="schedule:habit:habit-1:2026-11-15"]').focus();
+      await overnight(page, '2026-11-16T07:30:00+09:00'); await titled(page, '11.16 – 11.22'); await entries(page);
+      await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:habit:habit-1:2026-11-16');
+    });
+
+    await check('Back to a screen that showed today opens today, as its reload does; Back to a chosen day opens that day', async ({ page }) => {
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html'); await ready(page); await list(page);
+      await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day');
+      await step(page, -1); await titled(page, '11월 10일 화요일');
+      await page.locator('[data-schedule-view="week"]').first().click(); await shown(page, 'week');
+      await todayButton(page).click(); await titled(page, '11.9 – 11.15');
+      await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      await page.locator('[data-schedule-view="month"]').first().click(); await shown(page, 'month');
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await page.waitForTimeout(600);
+      // month ← day (showed today) ← week (showed today's week) ← day (the chosen 10th)
+      await page.goBack(); await shown(page, 'day'); await titled(page, '11월 12일 목요일');
+      assert.equal((await snap(page)).date, '2026-11-12');
+      await page.goBack(); await shown(page, 'week'); await titled(page, '11.9 – 11.15');
+      await page.goBack(); await shown(page, 'day'); await titled(page, '11월 10일 화요일');
+      await page.goForward(); await shown(page, 'week'); await page.goForward(); await shown(page, 'day'); await titled(page, '11월 12일 목요일');
     });
 
     await check('another screen overnight: the next calendar screen opens on the new day; a reload of a screen that showed today opens today', async ({ page }) => {

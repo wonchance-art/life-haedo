@@ -200,7 +200,7 @@
     // The date 일정 shows (2026-11-11 M1). `scheduleDay` is the today the shown schedule was drawn with: a
     // date never chosen means that day, not the clock at each call, so the title, the address, 오늘, ‹ › and
     // the day's checks all use the one date on screen. scheduleRollover() moves it when the day changes.
-    let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null;
+    let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null, scheduleDayMoving = false, scheduleDayFocus = null;
     const scheduleDate = () => {
       const sd = global.HaedoLife.ScheduleData;
       if (!sd) return null;
@@ -2056,28 +2056,57 @@
     }
     // The app stayed open over midnight (2026-11-11 M1). Checked when the page is shown again, on focus and
     // right after midnight: a calendar screen is drawn again with the new day (scheduleRollover in navigate).
-    // While a control is in use or a choice is not stored yet it waits, so nothing typed or chosen is lost.
+    // While a control is in use it waits, so nothing typed or chosen is lost.
     function scheduleInUse() {
       if (state.busy || navigationRender !== null || historyWait || historyPending || document.querySelector('dialog[open]')) return true;
       const active = document.activeElement;
-      if (active && root.contains(active) && (active.isContentEditable || active.matches('textarea,select,input:not([type=checkbox]):not([type=radio]):not([type=button])') && (active.type !== 'range' || active.matches(':active')))) return true;
-      return !!global.HaedoLife.ScheduleEntries?.unsaved?.();
+      return !!active && root.contains(active) && (active.isContentEditable || active.matches('textarea,select,input:not([type=checkbox]):not([type=radio]):not([type=button])') && (active.type !== 'range' || active.matches(':active')));
+    }
+    // Keyboard focus after the day moved under it: the same control when it is still there, else the same kind
+    // of control of the new day (the same habit's box, the same 행복도 choice), else the title that names the new day.
+    // Focus that was nowhere stays nowhere.
+    function scheduleRefocus(focusKey, from) {
+      if (!focusKey) return;
+      const find = key => [...root.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === key && item.checkVisibility?.());
+      const to = scheduleDate(), moved = from && to && from !== to && focusKey.includes(from) ? focusKey.split(from).join(to) : null;
+      const target = find(focusKey) || (moved && find(moved)) ||
+        // 지우기 exists only on a day with a value; a habit not due on the new day has no box.
+        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || toolbar.querySelector('h1');
+      target?.focus({ preventScroll: true });
     }
     function scheduleDayCheck() {
-      const sd = global.HaedoLife.ScheduleData;
-      if (disposed || !sd || !state.bundle || document.hidden || !scheduleDay || scheduleDay === sd.today()) return;
+      const sd = global.HaedoLife.ScheduleData, entries = global.HaedoLife.ScheduleEntries;
+      if (disposed || !sd || !state.bundle || document.hidden || !scheduleDay || scheduleDay === sd.today() || scheduleDayMoving) return;
       // Another screen shows no schedule date: only the kept date follows, for the next schedule screen.
       if (!calendarModes.has(state.mode)) { scheduleRollover(); return; }
+      // The held day's 다시 저장 / 선택 취소 go away with their notice before the screen moves: their focus is
+      // remembered here, so it ends on the new day's title and not on the page.
+      const heldFocus = root.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+      if (heldFocus?.startsWith('schedule:held:')) scheduleDayFocus = heldFocus;
+      // A 행복도 choice on its way to the store: its end is announced (haedo:happiness) and this runs again. No timer.
+      if (entries?.saving?.()) return;
+      // The day on screen is the one that was today, and its 행복도 choice failed: the screen stays, says that the
+      // date changed and takes no other input for that day, until the owner stores the choice again or drops it
+      // (ScheduleEntries.holdDay). Nothing is polled meanwhile.
+      const shown = scheduleDate();
+      if (state.mode === 'day' && shown === scheduleDay && entries?.failed?.().includes(shown)) { entries.holdDay(shown); return; }
       if (scheduleInUse()) {
         if (!scheduleDayRetry) scheduleDayRetry = global.setTimeout(() => { scheduleDayRetry = null; scheduleDayCheck(); }, 1000);
         return;
       }
-      guarded(async () => {
-        const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
+      // One move at a time: the return fires several events at once (shown, focus), and releasing the held day announces itself.
+      scheduleDayMoving = true;
+      // Read before guarded(): it disables the fields while it runs, which drops their focus.
+      const focusKey = (root.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null) || scheduleDayFocus;
+      scheduleDayFocus = null;
+      entries?.holdDay?.(null);
+      Promise.resolve(guarded(async () => {
         if (await navigate(state.mode, { preserveContext: true, historyAction: 'replace', navigationMotion: 'tab', restoresFocus: true, sectionPosition: { scrollY: global.scrollY } }) === false) return;
-        if (disposed || !focusKey) return;
-        [...root.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey && item.checkVisibility?.())?.focus({ preventScroll: true });
-      })();
+        // The new day's controls are drawn when its records are read.
+        const drawn = renderGeneration;
+        await Promise.resolve(mainRenderPromise).catch(() => {});
+        if (!disposed && drawn === renderGeneration) scheduleRefocus(focusKey, shown);
+      })()).finally(() => { scheduleDayMoving = false; });
     }
     // One timer to the next local midnight (a hidden page is checked when it is shown again).
     function armScheduleDayTimer() {
@@ -2151,7 +2180,10 @@
       const options = { preserveContext: true, historyAction: 'replace', navigationMotion: backward ? 'back' : 'push',
         restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
       if (entry.homeState) options.homeState = entry.homeState;
-      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate)) options.scheduleDate = entry.scheduleDate;
+      // An entry that showed today reopens on today, as a reload of it does (mount): back to "today's" screen on a
+      // later day is not yesterday's screen.
+      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate))
+        options.scheduleDate = entry.scheduleToday === true ? global.HaedoLife.ScheduleData.today() : entry.scheduleDate;
       if (entry.mode === 'source' && entry.sourceId) Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null });
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
@@ -6141,6 +6173,8 @@
     document.addEventListener('visibilitychange', scheduleDayWatch);
     global.addEventListener('pageshow', scheduleDayWatch);
     global.addEventListener('focus', scheduleDayWatch);
+    // A 행복도 write that ended, or a failed choice the owner stored again or dropped.
+    document.addEventListener('haedo:happiness', scheduleDayWatch);
     armScheduleDayTimer();
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
@@ -6386,7 +6420,7 @@
       cleanup(() => global.removeEventListener('beforeunload', beforeUnload));
       cleanup(() => document.removeEventListener('visibilitychange', visibility));
       cleanup(() => global.removeEventListener('pagehide', pagehideReading));
-      cleanup(() => { document.removeEventListener('visibilitychange', scheduleDayWatch); global.removeEventListener('pageshow', scheduleDayWatch); global.removeEventListener('focus', scheduleDayWatch); });
+      cleanup(() => { document.removeEventListener('visibilitychange', scheduleDayWatch); global.removeEventListener('pageshow', scheduleDayWatch); global.removeEventListener('focus', scheduleDayWatch); document.removeEventListener('haedo:happiness', scheduleDayWatch); });
       cleanup(() => { global.clearTimeout(scheduleDayTimer); global.clearTimeout(scheduleDayRetry); scheduleDayTimer = scheduleDayRetry = null; });
       downloadUrls.forEach(url => cleanup(() => URL.revokeObjectURL(url)));
       downloadUrls.clear();
