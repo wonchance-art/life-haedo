@@ -132,6 +132,8 @@
     let readerCleanup = null;
     // The open reader's keeper of the reading line across width changes (SplitResize.keepLine), or null.
     let readerLineKeeper = null;
+    // The open reader's view, selection and reading line as numbers for its history entry (a reload reopens there), or null.
+    let readerHistoryState = null;
     let splitCleanup = null;
     let readerMatchRefresh = null;
     let readerWatch = null;
@@ -1819,7 +1821,11 @@
     // history.state receives only historyPublic(entry).
     function historyEntry(mode = state.mode) {
       const entry = { mode, workspaceId: state.bundle?.workspaceId || null };
-      if (mode === 'source') Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+      if (mode === 'source') {
+        Object.assign(entry, { sourceId: state.sourceId || null, sourceVersionId: state.sourceVersionId || null, returnContext: state.returnContext || null });
+        const reading = readerHistoryState?.();
+        if (reading) entry.reading = reading;
+      }
       // A news article read in place of the list (below 1101px) is its own entry, so the browser's back closes it.
       if (mode === 'external-discovery' && state.newsArticle) entry.newsArticle = state.newsArticle;
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
@@ -1847,6 +1853,15 @@
       if (findSections.has(value.findSection)) out.findSection = value.findSection;
       if (global.HaedoLife.ScheduleData?.valid(value.scheduleDate)) out.scheduleDate = value.scheduleDate;
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
+      // Where the reader was: view, selection offsets and the reading line. Numbers only, no text.
+      if (value.reading && typeof value.reading === 'object') {
+        const reading = value.reading, whole = key => Number.isSafeInteger(reading[key]) && reading[key] >= 0, position = { view: reading.view === 'formatted' ? 'formatted' : 'raw' };
+        if (whole('start') && whole('end') && reading.start <= reading.end) Object.assign(position, { start: reading.start, end: reading.end });
+        if (whole('y')) position.y = reading.y;
+        if (whole('offset') && Number.isFinite(reading.top) && whole('viewport') && reading.viewport > 0)
+          Object.assign(position, { offset: reading.offset, top: Math.round(reading.top), viewport: reading.viewport, ...(Number.isFinite(reading.ratio) ? { ratio: Math.min(1, Math.max(0, Math.round(reading.ratio * 1000) / 1000)) } : {}) });
+        out.reading = position;
+      }
       for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
@@ -1937,6 +1952,8 @@
       if (recorded) syncHistoryPosition();
       else if (historyKey && lastRouteBase === global.location.pathname + global.location.search) { historyIndex += 1; historyKey = null; }
       const entry = historyEntry(mode);
+      // Between a reader's renders nothing can measure its line; keep what the entry already holds for this exact version.
+      if (mode === 'source' && !entry.reading && recorded?.entry?.reading && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.reading = recorded.entry.reading;
       try {
         if (push && !(destination === here && recorded && sameHistoryScreen(recorded.entry, historyPublic(entry)))) {
           const leftKey = historyKey || core.id();
@@ -2128,12 +2145,21 @@
       return state.mode === 'page' && blogPageTask && !materialWritingTask && blogMode === 'edit' && blogComposing;
     }
 
+    // A recorded reader entry (after a reload only history.state has it) becomes this session's position for that version.
+    function seedReaderPosition(entry) {
+      const reading = entry?.reading, versionId = entry?.sourceVersionId;
+      if (!reading || !versionId || state.readerPositions.has(versionId)) return;
+      const anchor = Number.isSafeInteger(reading.offset) ? { mode: reading.view, offset: reading.offset, ratio: reading.ratio || 0, top: reading.top, viewport: reading.viewport } : null;
+      const selection = Number.isSafeInteger(reading.start) ? { start: reading.start, end: reading.end } : { start: 0, end: 0 };
+      state.readerPositions.set(versionId, { ...(reading.view === 'formatted' ? { start: anchor?.offset || 0, end: anchor?.offset || 0 } : selection), mode: reading.view, scrollY: reading.y || 0, anchor });
+      state.readerModes.set(versionId, reading.view);
+    }
     async function historyOptions(entry, backward) {
       const options = { preserveContext: true, historyAction: 'replace', navigationMotion: backward ? 'back' : 'push',
         restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
       if (entry.homeState) options.homeState = entry.homeState;
       if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate)) options.scheduleDate = entry.scheduleDate;
-      if (entry.mode === 'source' && entry.sourceId) Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null });
+      if (entry.mode === 'source' && entry.sourceId) { seedReaderPosition(entry); Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null }); }
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
         if (blog) Object.assign(options, blog, { blogContext: true });
@@ -4743,7 +4769,11 @@
       const lineKeeper = readerLineKeeper = global.HaedoLife.SplitResize?.keepLine?.(readerHost, readingLine) || null;
       // The line read before the excerpt panel took the screen (the page then shows the panel at the end).
       let readingAnchor = null;
+      // False until this render has put the remembered position back (next frame). A render replaced before
+      // that has nothing of its own to remember and must not overwrite the position it was about to restore.
+      let positionRestored = false;
       const savePosition = final => {
+        if (!positionRestored) return;
         const previous = state.readerPositions.get(version.id), offset = formattedView ? markdown.adapter?.visibleOffset() ?? previous?.start ?? 0 : null;
         // Scroll events keep this cheap; the reading line is taken once when the reader closes. It is the line last
         // measured while reading (peek): by then the page may already be scrolling for the next screen.
@@ -4807,8 +4837,25 @@
       }
       document.addEventListener('selectionchange', capture);
       global.addEventListener('scroll', savePosition, { passive: true });
+      // For this reader's history entry: where it is now. Until the first restore has run it is the position being restored.
+      let historyTimer = null;
+      const historyState = () => {
+        if (state.sourceVersionId !== version.id || state.mode !== 'source' || !reader.isConnected) return null;
+        const saved = state.readerPositions.get(version.id);
+        const anchor = !positionRestored ? saved?.anchor || null : panel.hidden ? lineKeeper?.peek() || null : readingAnchor;
+        const selection = !positionRestored && saved && saved.mode !== 'formatted' ? saved : state.sourceSelection;
+        return { view: formattedView ? 'formatted' : 'raw', y: Math.round(!positionRestored ? saved?.scrollY || 0 : panel.hidden ? global.scrollY : readingScrollY),
+          ...(!formattedView && selection && Number.isSafeInteger(selection.start) ? { start: selection.start, end: selection.end } : {}),
+          ...(anchor ? { offset: anchor.offset, top: anchor.top, viewport: anchor.viewport, ratio: anchor.ratio } : {}) };
+      };
+      readerHistoryState = historyState;
+      // Written a little after the reading stops (browsers limit how often an entry may be replaced), and on pagehide.
+      const recordHistory = () => { historyTimer = null; if (!disposed && readerHistoryState === historyState && state.mode === 'source' && reader.isConnected) writeRoute('source', 'replace'); };
+      const scheduleHistory = () => { global.clearTimeout(historyTimer); historyTimer = global.setTimeout(recordHistory, 500); };
+      global.addEventListener('scroll', scheduleHistory, { passive: true });
       readerCleanup = () => {
         savePosition(true);
+        global.clearTimeout(historyTimer); global.removeEventListener('scroll', scheduleHistory); if (readerHistoryState === historyState) readerHistoryState = null;
         lineKeeper?.dispose(); if (readerLineKeeper === lineKeeper) readerLineKeeper = null;
         hideNotice();
         readerWatch?.close();
@@ -5017,9 +5064,12 @@
       const readerBaseCleanup = readerCleanup;
       readerCleanup = () => { readerBaseCleanup(); clearExcerptPaint(); clearMatchPaint(); if (readerMatchRefresh === refreshMatches) readerMatchRefresh = null; };
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
-      if (locator) requestAnimationFrame(() => {
+      let restoreWaits = 0;
+      const restorePosition = () => {
         // A fresh user choice takes priority over a navigation restore queued before it.
-        if (!reader.isConnected || readerInteracted) return;
+        if (!reader.isConnected || readerInteracted) { positionRestored = true; return; }
+        // On a reload the app is still hidden while it starts: nothing can be measured or scrolled until it shows.
+        if (!reader.getClientRects().length && restoreWaits++ < 900) { requestAnimationFrame(restorePosition); return; }
         // This session's own position returns to the line that was being read (locator.anchor); the column may be
         // a different width now. Without one (the top of the text, an exact match or excerpt) the earlier rules apply.
         if (formattedView) {
@@ -5035,7 +5085,10 @@
         }
         readingScrollY = global.scrollY;
         lineKeeper?.set(readingLine.capture());
-      });
+        positionRestored = true; scheduleHistory();
+      };
+      if (locator) requestAnimationFrame(restorePosition);
+      else positionRestored = true;
       refreshMatches();
       state.locator = null;
     }
@@ -6245,11 +6298,16 @@
       main.append(scope);
     }
 
+    // The reader's line goes into its history entry so a reload returns to it. Before the page starts to unload
+    // (an entry can no longer be rewritten while it does), when the tab is hidden, and on pagehide.
+    const recordReaderHistory = () => { if (!disposed && state.mode === 'source' && state.bundle && readerHistoryState) writeRoute('source', 'replace'); };
     beforeUnload = event => {
+      recordReaderHistory();
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     visibility = () => {
       if (!document.hidden) return;
+      recordReaderHistory();
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
@@ -6257,7 +6315,7 @@
       if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       flushReadingPosition();
     };
-    pagehideReading = () => { flushReadingPosition(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
+    pagehideReading = () => { flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
@@ -6319,6 +6377,18 @@
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
           viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
         } else state.mode = 'home';
+      }
+      // A reload while reading reopens the same material, exact version and line. The address stays the records
+      // address; the entry in history.state names the reader. Another account or space, or a material that is
+      // gone, opens the list as before.
+      if (state.mode === 'sources') {
+        const entry = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
+        if (entry?.mode === 'source' && entry.workspaceId === active && state.bundle.sources.some(source => source.id === entry.sourceId) &&
+            state.bundle.sourceVersions.some(version => version.id === entry.sourceVersionId && version.sourceId === entry.sourceId)) {
+          Object.assign(state, { mode: 'source', sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId,
+            returnContext: entry.returnContext?.workspaceId === active ? entry.returnContext : null });
+          seedReaderPosition(entry);
+        }
       }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();

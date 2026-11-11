@@ -124,7 +124,8 @@ async function main() {
       await page.locator('#lifeExcerptPanel .life-panel-heading button').click(); await frames(page); await frames(page);
       same(before, await at(page), 'closing the excerpt panel');
       // Leaving and reopening from the list still returns there.
-      await page.locator('#lifeSearchReturn').click(); await settle(page);
+      // (Pressed where it is: a locator click may scroll the page first, which a person's press never does.)
+      await R.pressAt(page, '#lifeSearchReturn'); await settle(page);
       await page.locator(`.life-source-open[data-version-id="${ids[0].versionId}"], .records-row[data-version-id="${ids[0].versionId}"] .records-row-open`).first().click(); await settle(page); await frames(page); await frames(page);
       same(before, await at(page), 'reopen from the list');
       await context.close();

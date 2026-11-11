@@ -88,7 +88,8 @@ const stages = (page, kind = 'source-edit') => page.evaluate(async kind => {
   return (await storage.listStages(await storage.getActive())).filter(stage => stage.kind === kind).map(stage => ({ stageId: stage.stageId, state: stage.state, revision: stage.revision, text: stage.input.text, title: stage.input.title, base: stage.baseSourceVersionId }));
 }, kind);
 async function list(page) {
-  await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+  // (A different address than the reader's own: going to the same address again is a reload, and a reload reopens the reader.)
+  await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
   await page.locator('#lifeMain[data-mode="sources"]').waitFor();
 }
 // Open an original from the records list by its exact version.
