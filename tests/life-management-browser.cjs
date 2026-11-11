@@ -62,7 +62,7 @@ async function enable(page) {
 // screen on a page that still runs the shared module of the version before the merge (a cache
 // that kept it during an update; the file is that commit's, unchanged); their assertions are unchanged.
 const olderPages = new WeakSet();
-const previousModule = require('node:fs').readFileSync(require('node:path').resolve(__dirname, 'fixtures/source-merge/sync-common-a423773.js'), 'utf8');
+const previousModule = require('./helpers/previous-version.cjs').previousFile('sync-common.js');
 async function withoutMerge(page) {
   const context = page.context();
   if (olderPages.has(context)) return; olderPages.add(context);

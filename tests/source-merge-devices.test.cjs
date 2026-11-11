@@ -4,10 +4,10 @@
 // tests/source-merge.test.cjs. The storage transaction: tests/life-storage.test.cjs. Two real
 // pages: tests/source-merge-browser.cjs.
 const test = require('node:test'), assert = require('node:assert/strict');
-const fs = require('node:fs'), path = require('node:path');
 const { Core, createServer, createDevice, content, clone } = require('./helpers/sync-devices.cjs');
 const SyncCommon = require('../assets/life/sync-common.js');
 const previous = require('./fixtures/source-merge/previous-version-device.json');
+const { COMMIT: PREVIOUS_COMMIT, FILES: PREVIOUS_FILES, previousFile } = require('./helpers/previous-version.cjs');
 const tick = () => new Promise(resolve => setTimeout(resolve, 3));
 const titles = bundle => bundle.sources.map(source => source.title).sort();
 const copies = bundle => bundle.records.filter(record => record.topic.startsWith(SyncCommon.RECOVERY_TOPIC));
@@ -32,6 +32,14 @@ async function add(device, title, text = title + ' 본문') {
   return device.commit(Core.buildImportChanges(bundle, await Core.prepareImport({ origin: 'other', title, text, authorRelation: 'self', forceSeparate: true }, bundle), []));
 }
 const noteOf = (bundle, id) => bundle.records.find(record => record.id === id)?.note;
+
+// ---- The previous version's files are kept as fixtures: no Git history is read (CI clones one commit) ----
+test('the fixtures of the previous version are that commit\'s files (length and SHA-256), and its recorded device data names the same commit', () => {
+  assert.deepEqual(Object.keys(PREVIOUS_FILES).sort(), ['account-library.js', 'composition-sync.js', 'storage.js', 'sync-common.js', 'sync-lifecycle.js', 'sync.js', 'ui.js', 'writing-sync.js']);
+  for (const name of Object.keys(PREVIOUS_FILES)) assert.equal(Buffer.byteLength(previousFile(name)), PREVIOUS_FILES[name].bytes, name); // previousFile() checks the SHA-256 constant
+  assert.ok(PREVIOUS_COMMIT.startsWith(previous.commit));
+  assert.match(previousFile('sync-common.js'), /canonical/); assert.doesNotMatch(previousFile('storage.js'), /mergeSyncRemote/);
+});
 
 // ---- A device that carries the previous version's data (the fixture was written by that version's code) ----
 for (const fixture of previous.cases) {
@@ -189,7 +197,7 @@ test('a page that still runs the previous shared module records the difference; 
   const { server, a, b } = await pair(t);
   // The module file of the commit before the merge, as a cache that kept it would hand it to a newer page.
   const module_ = { exports: {} };
-  new Function('module', 'globalThis', fs.readFileSync(path.join(__dirname, 'fixtures/source-merge/sync-common-a423773.js'), 'utf8'))(module_, {});
+  new Function('module', 'globalThis', previousFile('sync-common.js'))(module_, {});
   assert.deepEqual(Object.keys(module_.exports), ['canonical']);
   const mixed = createDevice('B with the previous module', server, { rows: Object.fromEntries([...b.rows].map(([name, map]) => [name, [...map]])), syncCommon: module_.exports });
   t.after(() => mixed.close()); mixed.ws = b.ws; await mixed.login();

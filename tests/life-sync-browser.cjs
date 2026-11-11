@@ -407,7 +407,7 @@ async function main() {
     // assertions and run on a page that still has the shared module of the version before the
     // merge (a cache that kept it during an update; the file is that commit's, unchanged): there
     // the difference is recorded as before.
-    const previousModule = require('node:fs').readFileSync(require('node:path').resolve(__dirname,'fixtures/source-merge/sync-common-a423773.js'),'utf8');
+    const previousModule = require('./helpers/previous-version.cjs').previousFile('sync-common.js');
     const olderModule = async route => route.fulfill({response:await route.fetch(),body:previousModule});
     const reopen = async page => { await page.reload(); await ready(page); await page.waitForFunction(() => HaedoLife.Shell.sync.getAccount()?.userId === '11111111-1111-4111-8111-111111111111'); };
     await b.context.route(`${base}/assets/life/sync-common.js`,olderModule); await reopen(b.page);

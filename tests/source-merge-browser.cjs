@@ -1,6 +1,8 @@
 /* Originals merge between devices: isolated Chromium contexts ("devices") of one anonymous
  * account, the bundled SDK, the real application and IndexedDB against the tests' FakeCloud.
  * Not evidence for the production database, RLS or Apple hardware.
+ * What still reaches the manual comparison by its real cause (16 MiB, text the server refuses,
+ * a deleted server copy) is in tests/source-merge-limits-browser.cjs: megabytes, minutes.
  *   python3 scripts/dev-server.py --port 4613 &
  *   BASE_URL=http://127.0.0.1:4613 node tests/source-merge-browser.cjs
  * SOURCE_MERGE_ONLY=<regex> runs only the checks whose name matches (each check makes its own
@@ -9,9 +11,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
+const { FILES: PREVIOUS_FILES, previousFile } = require('./helpers/previous-version.cjs');
 const out = path.resolve(__dirname, '../.local/source-merge');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(read, predicate, label, timeout = 40000, step = 150) {
@@ -88,13 +90,35 @@ const idb = (page, action, workspaceId) => page.evaluate(({ action, workspaceId 
     tx.oncomplete = () => { db.close(); resolve(value); }; tx.onerror = () => reject(tx.error);
   };
 }), { action, workspaceId });
-// A file of the version before the originals merge (commit a423773), exactly as it was served then.
-// The shared module is kept as a fixture; the other files are read from the Git history.
-const PREVIOUS = 'a423773';
-function previousFile(name) {
-  if (name === 'sync-common.js') return fs.readFileSync(path.join(__dirname, 'fixtures/source-merge/sync-common-' + PREVIOUS + '.js'), 'utf8');
-  try { return execFileSync('git', ['show', PREVIOUS + ':assets/life/' + name], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
-  catch (_) { throw new Error('this check needs commit ' + PREVIOUS + ' in the Git history (a full clone)'); }
+// One device: an isolated context of the anonymous account on `cloud`, with the records screen open.
+async function openDevice(browser, cloud, name, { viewport = { width: 1280, height: 900 }, prepare = null } = {}) {
+  const context = await makeContext(browser, cloud, name, accounts.a, { viewport });
+  if (prepare) await prepare(context);
+  // Every sync status this device's storage announces and every state of the account band.
+  await context.addInitScript(() => {
+    window.__merge = { statuses: new Set(), band: new Set(), changes: 0 };
+    const wait = setInterval(() => {
+      const storage = globalThis.HaedoLife?.Shell?.storage, band = document.querySelector('#lifeAccountStorage');
+      if (!storage || !band) return; clearInterval(wait);
+      storage.subscribeAll(event => { if (event.type === 'sync_changed') { __merge.statuses.add(event.status); __merge.changes++; } });
+      const read = () => { __merge.band.add(band.dataset.state + (document.querySelector('#lifeAccountStorageReview')?.hidden === false ? ':review' : '')); };
+      new MutationObserver(read).observe(band, { attributes: true, subtree: true, childList: true }); read();
+    }, 20);
+  });
+  const errors = [];
+  const page = await context.newPage(); page.setDefaultTimeout(25000);
+  page.on('pageerror', error => errors.push('pageerror: ' + error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+  return { name, context, page, errors };
+}
+// Every device of the list holds exactly the server snapshot `read()` returns, synced, with no difference recorded.
+async function convergedOn(list, label, read) {
+  await until(async () => {
+    for (const item of list) await kick(item.page);
+    const states = []; for (const item of list) states.push(await snap(item.page));
+    return states;
+  }, states => states.every(state => state.sync.status === 'synced' && !state.sync.conflict && content(state.bundle) === content(read().data)), label, 60000, 500);
 }
 
 async function main() {
@@ -102,39 +126,11 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   const server = new FakeCloud().enableAccountLibrary();
   const devices = [];
-  // Requests of one device that the test answers itself (a failing or delayed upload).
-  async function device(name, { viewport = { width: 1280, height: 900 }, prepare = null, cloud = server } = {}) {
-    const context = await makeContext(browser, cloud, name, accounts.a, { viewport });
-    if (prepare) await prepare(context);
-    // Every sync status this device's storage announces and every state of the account band.
-    await context.addInitScript(() => {
-      window.__merge = { statuses: new Set(), band: new Set(), changes: 0 };
-      const wait = setInterval(() => {
-        const storage = globalThis.HaedoLife?.Shell?.storage, band = document.querySelector('#lifeAccountStorage');
-        if (!storage || !band) return; clearInterval(wait);
-        storage.subscribeAll(event => { if (event.type === 'sync_changed') { __merge.statuses.add(event.status); __merge.changes++; } });
-        const read = () => { __merge.band.add(band.dataset.state + (document.querySelector('#lifeAccountStorageReview')?.hidden === false ? ':review' : '')); };
-        new MutationObserver(read).observe(band, { attributes: true, subtree: true, childList: true }); read();
-      }, 20);
-    });
-    const errors = [];
-    const page = await context.newPage(); page.setDefaultTimeout(25000);
-    page.on('pageerror', error => errors.push('pageerror: ' + error.message));
-    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
-    const entry = { name, context, page, errors }; devices.push(entry); return entry;
-  }
+  const device = async (name, options = {}) => { const entry = await openDevice(browser, server, name, options); devices.push(entry); return entry; };
   const row = () => server.row(owner, workspaceId);
   let workspaceId;
-  // Every device holds exactly the server snapshot, synced, with no difference recorded.
-  async function converged(list, label, read = row) {
-    await until(async () => {
-      for (const item of list) await kick(item.page);
-      const states = []; for (const item of list) states.push(await snap(item.page));
-      return states;
-    }, states => states.every(state => state.sync.status === 'synced' && !state.sync.conflict && content(state.bundle) === content(read().data)), label, 60000, 500);
-  }
-  const offline = (item, on, cloud = server) => { if (on) cloud.offline.add(item.name); else cloud.offline.delete(item.name); };
+  const converged = (list, label) => convergedOn(list, label, row);
+  const offline = (item, on) => { if (on) server.offline.add(item.name); else server.offline.delete(item.name); };
   const acknowledge = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; await s.dismissSyncNotice(await s.getActive()); });
   const records = async page => { await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); };
   const syncView = async page => { await page.goto(base + '/index.html?section=manage&view=sync'); await ready(page); await settle(page); };
@@ -460,8 +456,8 @@ async function main() {
     });
 
     await check('a device that changed its workspace on the real previous version, then loads this version: both devices\' deletions stand, nothing comes back, no 복구 사본', async () => {
-      // The seven files this change touches, as commit a423773 served them (index.html and the rest are the same).
-      const files = new Map(['account-library.js', 'composition-sync.js', 'storage.js', 'sync-common.js', 'sync.js', 'ui.js', 'writing-sync.js'].map(name => [name, previousFile(name)]));
+      // The files the merge work changed, as commit a423773 served them (kept as fixtures; index.html and the other modules were the same).
+      const files = new Map(Object.keys(PREVIOUS_FILES).map(name => [name, previousFile(name)]));
       const serve = async route => { const name = new URL(route.request().url()).pathname.split('/').pop(); return files.has(name) ? route.fulfill({ response: await route.fetch(), body: files.get(name) }) : route.fallback(); };
       const ipad = await device('ipad', { viewport: { width: 820, height: 1180 }, prepare: context => context.route(base + '/assets/life/*.js', serve) });
       assert.deepEqual(await ipad.page.evaluate(() => [typeof HaedoLife.SyncCommon.mergeWorkspace, typeof HaedoLife.Shell.storage.mergeSyncRemote]), ['undefined', 'undefined'], 'the page runs the previous version');
@@ -614,97 +610,6 @@ async function main() {
       await converged([mac], 'mac receives the chosen snapshot');
     });
 
-    // ---- what still reaches the manual comparison, by its real cause. A library of its own
-    // (another anonymous cloud): the 16 MiB case leaves megabytes behind. ----
-    const second = new FakeCloud().enableAccountLibrary();
-    let big = null, small = null, secondId = null;
-    const row2 = () => second.row(owner, secondId);
-    const pair2 = async () => {
-      if (big) return;
-      big = await device('big', { cloud: second }); small = await device('small', { cloud: second, viewport: { width: 390, height: 844 } });
-      secondId = (await snap(big.page)).workspaceId; assert.equal((await snap(small.page)).workspaceId, secondId);
-      await converged([big, small], 'second library synced', row2);
-    };
-    await check('a merged snapshot the server would refuse (half of a character pair) is recorded for the comparison; once the text is whole the same device merges by itself', async () => {
-      await pair2();
-      const fixture = await imp(big.page, '끊긴 글자', '끊긴 글자의 본문입니다', [{ start: 0, end: 2, topic: '글자', note: '처음' }]);
-      await converged([big, small], 'fixture on both', row2);
-      offline(small, true, second);
-      await small.page.evaluate(async id => {
-        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = await s.getActive(), b = await s.read(w), record = b.records.find(value => value.id === id);
-        const result = await s.commitLocal({ workspaceId: w, baseRevision: b.revision, operationId: c.id(),
-          changes: { put: { records: [{ ...record, note: '끊긴 메모 ' + String.fromCharCode(0xd83d), revision: record.revision + 1, updatedAt: new Date().toISOString() }] } } });
-        if (result.status !== 'stored') throw new Error('edit ' + result.status);
-      }, fixture.recordIds[0]);
-      await imp(big.page, '끊긴 글자와 함께 온 자료', '큰 화면 본문');
-      await until(() => snap(big.page), state => state.sync.status === 'synced' && row2().data.sources.length === 2, 'the other device stored');
-      const stored = row2().revision;
-      offline(small, false, second);
-      const recorded = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'conflict', 'recorded for the comparison', 40000, 500);
-      assert.equal(recorded.conflict.missing, false); assert.equal(row2().revision, stored, 'nothing was sent');
-      await small.page.locator('#lifeAccountStorage[data-state="conflict"]').waitFor();
-      assert.ok(await small.page.locator('#lifeAccountStorageReview').isVisible(), 'the band offers the comparison');
-      await editNote(small.page, fixture.recordIds[0], '고친 메모 😀');
-      await converged([big, small], 'merged once the text was whole', row2);
-      assert.deepEqual([row2().data.records[0].note, row2().data.sources.length], ['고친 메모 😀', 2]);
-    });
-
-    await check('a merged snapshot over 16 MiB is recorded for the comparison; later runs ask for the revision only; the manual choice resolves it', async () => {
-      await pair2();
-      // Nine originals of 1 MB on each device, saved by one commit each: 18 MB together.
-      const many = (page, label) => page.evaluate(async label => {
-        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = await s.getActive(), b = await s.read(w), put = {};
-        for (let index = 0; index < 9; index++) {
-          const prepared = await c.prepareImport({ origin: 'other', title: label + ' 큰 자료 ' + index, text: (label + index + ' ').padEnd(1000 * 1000, 'x'), authorRelation: 'self', coverage: 'full_text', forceSeparate: true }, b);
-          for (const [name, items] of Object.entries(c.buildImportChanges(b, prepared, []).put)) put[name] = (put[name] || []).concat(items);
-        }
-        const result = await s.commitLocal({ workspaceId: w, baseRevision: b.revision, operationId: c.id(), changes: { put } });
-        if (result.status !== 'stored') throw new Error('import ' + result.status + ' ' + (result.error?.code || ''));
-      }, label);
-      const before = row2().data.sources.length;
-      offline(small, true, second);
-      await many(small.page, '작은 화면'); await many(big.page, '큰 화면');
-      await until(() => light(big.page), state => state.status === 'synced' && row2().data.sources.length === before + 9, 'the other device stored its nine', 120000, 500);
-      const stored = row2().revision, own = (await light(small.page)).sources;
-      const reads = []; const record = request => { const url = new URL(request.url()); if (url.pathname === '/rest/v1/life_workspaces' && url.searchParams.get('id')) reads.push(url.searchParams.get('select')?.split(',').includes('data') ? 'full' : 'revision'); };
-      small.page.on('request', record);
-      offline(small, false, second);
-      const recorded = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'conflict', 'recorded for the comparison', 120000, 1000);
-      assert.equal(recorded.conflict.missing, false); assert.equal(recorded.sources, own, 'this device\'s originals are untouched'); assert.equal(row2().revision, stored, 'nothing was sent');
-      // The band follows once the account library's pass over this large library has finished.
-      await until(() => small.page.evaluate(() => document.querySelector('#lifeAccountStorage')?.dataset.state + ' / ' + [...(window.__merge?.band || [])].join(',')), value => value.startsWith('conflict '), 'the band shows the difference', 120000, 1000);
-      await sleep(3000); const first = reads.length;
-      // Six further runs of the engine, as the account library starts them (focus and online events are joined and spaced).
-      for (let run = 0; run < 6; run++) assert.equal(await small.page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await HaedoLife.Shell.sync.syncNow(await s.getActive(), { headIfClean: true })).status; }), 'conflict');
-      const later = reads.slice(first); small.page.off('request', record);
-      console.log('     over 16 MiB: ' + reads.slice(0, first).filter(kind => kind === 'full').length + ' full download(s) until it was recorded; in six further runs ' + later.filter(kind => kind === 'full').length + ' full and ' + later.filter(kind => kind === 'revision').length + ' revision-only reads');
-      assert.equal(later.filter(kind => kind === 'full').length, 0, 'the megabytes are not downloaded again');
-      assert.ok(later.filter(kind => kind === 'revision').length >= 6, 'each run asks whether the server moved (the page\'s own runs in the same seconds do too)');
-      // The comparison still resolves it: the server side is taken, this device's side stays as a copy.
-      const spaces = (await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length;
-      await small.page.locator('#lifeAccountStorageReview').click(); await settle(small.page);
-      await small.page.getByRole('button', { name: '양쪽 자료 비교', exact: true }).click(); await settle(small.page);
-      await small.page.getByRole('button', { name: '서버 변경 받기 · 내 변경은 사본 보관', exact: true }).click();
-      const resolved = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced' && !state.conflict, 'resolved by hand', 120000, 1000);
-      assert.equal(resolved.sources, before + 9);
-      assert.equal((await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length, spaces + 1, 'this device\'s side is kept as a copy');
-    });
-
-    await check('a deleted server copy is recorded as missing: never merged, never created again', async () => {
-      await pair2();
-      await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced', 'synced before the deletion', 120000, 1000);
-      offline(small, true, second);
-      await imp(small.page, '서버 사본이 지워진 뒤의 자료', '본문');
-      const writes = second.writes(owner, secondId).length;
-      second.rows.delete(second.key(owner, secondId));
-      offline(small, false, second);
-      await until(async () => { await kick(small.page); return light(small.page); }, state => state.conflict?.missing === true, 'recorded as missing', 60000, 1000);
-      for (let run = 0; run < 3; run++) { await kick(small.page); await sleep(1500); }
-      assert.equal(second.rows.has(second.key(owner, secondId)), false, 'the server copy was not created again');
-      assert.deepEqual(second.writes(owner, secondId).slice(writes).filter(request => request.device === 'small').map(request => request.expected).filter(expected => expected === 0), [], 'no first upload was tried');
-      assert.equal((await light(small.page)).conflict.missing, true);
-    });
-
     await check('no unexpected console or page errors on any device', async () => {
       const expected = /ERR_INTERNET_DISCONNECTED|ERR_FAILED|net::ERR_/;
       for (const item of devices) assert.deepEqual(item.errors.filter(text => !expected.test(text)), [], item.name);
@@ -717,4 +622,5 @@ async function main() {
   console.log(results.filter(item => item.ok).length + '/' + results.length + ' checks passed');
   if (failures.length) process.exitCode = 1;
 }
+module.exports = { sleep, until, imp, editNote, snap, light, kick, content, openDevice, convergedOn };
 if (require.main === module) main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
