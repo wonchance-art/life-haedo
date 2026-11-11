@@ -867,10 +867,12 @@
             let saved, evidenceNote = null;
             if (evidence?.value?.refs?.length && target.library) {
               const refs = remap(evidence.value.refs, target.map);
-              try { saved = await storage.savePhotoPostWithEvidence(id, candidate, 0, refs, 0); }
+              try { saved = await (storage.restorePhotoPost ? storage.restorePhotoPost(id, candidate, refs) : storage.savePhotoPostWithEvidence(id, candidate, 0, refs, 0)); }
               catch (error) { evidenceNote = '인용 근거 ' + refs.length + '개는 원문과 맞지 않아 연결하지 않았습니다.'; }
             } else if (evidence?.value?.refs?.length) evidenceNote = '자료·구성을 함께 복원하지 않아 인용 근거 ' + evidence.value.refs.length + '개를 연결하지 않았습니다.';
-            if (!saved) saved = await storage.savePhotoPost(id, candidate, 0);
+            // A restored post existed before: the 200 cap for posts started on this device does not apply
+            // to the restore copy (an older storage without the entry point saves it as a new post).
+            if (!saved) saved = await (storage.restorePhotoPost ? storage.restorePhotoPost(id, candidate) : storage.savePhotoPost(id, candidate, 0));
             if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); target.postDocs.set(saved.id, saved); }
             record('photoPosts', ws, 'restored', { targetId: id, postId: entry.postId, newPostId: saved.id, title: saved.title, postStatus: saved.status,
               counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });

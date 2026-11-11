@@ -394,7 +394,12 @@
       } else section.append(goalRows(goals));
       return [section];
     }
-    function paint() {
+    // What the panel shows. A store notice that changes none of it leaves the nodes in place: a press that
+    // spans a rebuild is lost, and a node found just before it is detached.
+    let bodyShown = null;
+    const bodyState = () => JSON.stringify([s.items, !!days, (kind === 'day' ? [date] : kind === 'week' ? week : [])
+      .map(day => [mood.on(day)?.score ?? null, days?.pending.has(day) ? [days.pending.get(day)] : 0])]);
+    function paint(onNotice = false) {
       if (!alive()) return;
       // Do not rebuild under a control in use (a dragged range).
       const active = document.activeElement;
@@ -404,7 +409,9 @@
       // a day deleted in 일정 D must not come back as its old value for a moment. A page whose storage has
       // no happinessDays (mixed versions) shows the timeline's points as before.
       if (moodShown) mood = days?.ready && days.entries === null ? { source: null, on: () => null } : s.happinessReader(days?.entries ?? null);
-      body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : kind === 'month' ? monthPanel() : yearPanel()));
+      const shows = bodyState(), rebuild = !onNotice || shows !== bodyShown;
+      bodyShown = shows;
+      if (rebuild) body.replaceChildren(...(kind === 'day' ? dayPanel() : kind === 'week' ? weekPanel() : kind === 'month' ? monthPanel() : yearPanel()));
       painted = true;
       // 'loading' until the 행복도 document is read here (one more repaint follows), then 'ready'.
       host.dataset.happiness = moodShown && days?.ready && days.entries === null && !days.error ? 'loading' : 'ready';
@@ -455,7 +462,7 @@
       else if (focusKey === 'schedule:entry:retry' && !status.hidden) { status.tabIndex = -1; status.focus({ preventScroll: true }); }
     }
     // Timelines or items changed here: repaint, mirror recovery copies, and absorb timeline days.
-    const onStore = () => { if (alive()) { paint(); mirrorRecovery(s, storage); days?.absorb(); } };
+    const onStore = () => { if (alive()) { paint(true); mirrorRecovery(s, storage); days?.absorb(); } };
     const onMood = () => { if (alive()) paint(); };
     document.addEventListener('haedo:store', onStore);
     document.addEventListener('haedo:happiness', onMood);

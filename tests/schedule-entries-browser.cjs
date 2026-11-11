@@ -11,6 +11,9 @@ const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 
 const output = path.resolve(process.env.SCHEDULE_ENTRIES_OUTPUT || '.local/schedule-entries-browser');
+// Finds and measures in one evaluation. locator.evaluateAll() resolves the nodes in one round trip and runs the
+// function in the next; the slot rebuilds on store notices, so a node resolved first could be detached (0 × 0) by then.
+const measureAll = (page, selector, run) => page.evaluate(({ selector, source }) => new Function('nodes', 'return (' + source + ')(nodes)')([...document.querySelectorAll(selector)]), { selector, source: run.toString() });
 const TODAY = '2026-11-03T12:00:00+09:00'; // a Tuesday
 const report = { checks: [], consoleErrors: [], pageErrors: [], overflow: [], expectedErrors: 0 };
 const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS', 'content-type': 'application/json' };
@@ -310,7 +313,7 @@ async function main() {
       await context.route('**/assets/life/schedule-entries.js', route => route.fulfill({ status: 500, body: '' }));
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-03'); await ready(page); await shown(page, 'day');
       await page.waitForFunction(() => document.querySelector('.schedule-entries-day')?.getAttribute('aria-busy') === 'false');
-      const links = await page.locator('.schedule-entries-day a').evaluateAll(nodes => nodes.map(n => [n.textContent.trim(), n.getAttribute('href')]));
+      const links = await measureAll(page, '.schedule-entries-day a', nodes => nodes.map(n => [n.textContent.trim(), n.getAttribute('href')]));
       assert.deepEqual(links, [['습관 체크', 'habits.html']]);
     });
 
@@ -397,6 +400,28 @@ async function main() {
       await statusOf(page).filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 10000 });
     });
 
+    // A store notice rebuilt the whole panel also when nothing shown had changed: a press that spanned the rebuild
+    // was lost and a node found just before it was detached (the 1440 week measurement failed that way under load).
+    for (const view of ['day', 'week']) await check('a store notice that changes nothing shown leaves the ' + view + ' panel\'s nodes in place; a real change rebuilds it', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
+      await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
+      await page.waitForFunction(() => HaedoPlatformStore.items.length === 1 && document.querySelector('.schedule-entries input[type=checkbox]'));
+      await page.waitForTimeout(400);   // start-up notices (account documents, 행복도) have passed
+      const result = await page.evaluate(async () => {
+        const wait = () => new Promise(resolve => setTimeout(resolve, 150));
+        const box = document.querySelector('.schedule-entries input[type=checkbox]'), mood = document.querySelector('.schedule-happiness input[type=radio], .schedule-happiness-day');
+        for (let n = 0; n < 5; n++) document.dispatchEvent(new Event('haedo:store'));
+        await wait();
+        const same = { box: box.isConnected && box === document.querySelector('.schedule-entries input[type=checkbox]'), mood: mood.isConnected, size: box.getBoundingClientRect().width > 0 };
+        // What is shown changes (the habit's name): the next notice rebuilds.
+        const item = HaedoPlatformStore.items[0]; HaedoPlatformStore.change(item.id, 'habit', { ...item.data, title: '저녁 산책' });
+        await wait();
+        return { same, rebuilt: !box.isConnected, name: document.querySelector('.schedule-entries input[type=checkbox]').getAttribute('aria-label') };
+      });
+      assert.deepEqual(result.same, { box: true, mood: true, size: true }, 'the same notice kept the nodes');
+      assert.equal(result.rebuilt, true, 'a change of what is shown rebuilt the panel'); assert.match(result.name, /^저녁 산책/);
+    });
+
     // Review 2 m6: Y without a goal says so at body size and links 목표 추가 to the goal screen (drafts kept first).
     await check('Y with no goal links 목표 추가 to the goal screen and writes nothing', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: habitData([]) });
@@ -442,7 +467,7 @@ async function main() {
             body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));
           assert.deepEqual([empty.text, empty.size], ['이 날 기록이 없어요.', empty.body], 'the empty day at body size');
           // 행복도 0–10: one row on wide screens; on a phone two rows (0–5, 6–10), each choice 44 × 44.
-          const scale = await page.locator('.schedule-happiness-option').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
+          const scale = await measureAll(page, '.schedule-happiness-option', nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
           const rows = [...new Set(scale.map(o => o.top))].map(top => scale.filter(o => o.top === top).map(o => o.n));
           if (width <= 760) assert.deepEqual(rows, [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']]);
           else assert.equal(rows.length, 1, 'one row on a wide screen');
@@ -451,16 +476,16 @@ async function main() {
         await overflow(page, view + ' ' + width);
         if (view === 'week') {
           // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
-          const names = await page.locator('.schedule-grid-label td').evaluateAll(cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
+          const names = await measureAll(page, '.schedule-grid-label td', cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
           if (width <= 760) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true], ['행복도', true]]);
           else {
             assert.deepEqual(names, [], 'wide: names stay in the row headers');
             // Wide: the row header wraps instead of cutting, and keeps the name as its title.
-            const heads = await page.locator('.schedule-habit-grid tbody tr:not(.schedule-grid-label) > th').evaluateAll(cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
+            const heads = await measureAll(page, '.schedule-habit-grid tbody tr:not(.schedule-grid-label) > th', cells => cells.map(c => [c.textContent, c.title, c.scrollWidth <= c.clientWidth + 1]));
             assert.deepEqual(heads.filter(([text]) => text !== '행복도'), [['아침 산책', '아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', '저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true]]);
           }
           // The whole cell takes the tap, not only the 22px box.
-          const targets = await page.locator('.schedule-grid-check').evaluateAll(nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
+          const targets = await measureAll(page, '.schedule-grid-check', nodes => nodes.map(n => { const b = n.getBoundingClientRect(), cell = n.closest('td'), style = getComputedStyle(cell);
             const inner = cell.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight); return b.height >= 44 && b.width >= inner - 1; }));
           assert.ok(targets.length && targets.every(Boolean), 'week ' + width + ': each check cell is a full-size target');
           // Seven day columns only (no empty eighth column at phone width), each at least 44px wide.
@@ -475,7 +500,7 @@ async function main() {
             return { scrolls: scroll.scrollWidth > scroll.clientWidth + 1, sunday: sunday.textContent, inside: day.right <= box.right + 1 && day.right <= innerWidth }; });
           assert.deepEqual(fit, { scrolls: false, sunday: '일', inside: true }, 'week ' + width + ': Monday to Sunday visible');
         }
-        const small = await page.locator('.schedule-entries input, .schedule-entries button, .schedule-entries a').evaluateAll(nodes => nodes.filter(n => n.checkVisibility()).map(n => {
+        const small = await measureAll(page, '.schedule-entries input, .schedule-entries button, .schedule-entries a', nodes => nodes.filter(n => n.checkVisibility()).map(n => {
           const box = (n.matches('input[type=checkbox],input[type=radio]') ? n.closest('label,td') || n : n).getBoundingClientRect(); return { w: box.width, h: box.height, name: n.getAttribute('aria-label') || n.textContent };
         }).filter(r => r.h < 44 || r.w < 24));
         assert.deepEqual(small, [], view + ' ' + width + ': controls are at least 44px tall');
