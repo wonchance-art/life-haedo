@@ -49,137 +49,139 @@ SAME_HOST_INTERVAL_SECONDS = 2
 # `articles` and carries every later source in `extended` (which those validators never read).
 LEGACY_SOURCE_IDS = ('naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment',
                      'arxiv-cs-cl', 'mit-linguistics', 'llt-journal', 'frontiers-psychology')
+# `publisher`: the 매체 a feed belongs to. The news list counts feeds of one publisher together when it spreads
+# the latest order (assets/life/discovery.js PUBLISHERS must name the same publisher). Not written to the catalog.
 SOURCES = (
-    {'id': 'naver-d2', 'name': 'NAVER D2', 'url': 'https://d2.naver.com/home',
+    {'id': 'naver-d2', 'publisher': 'NAVER D2', 'name': 'NAVER D2', 'url': 'https://d2.naver.com/home',
      'feedUrl': 'https://d2.naver.com/d2.atom', 'allowedHosts': ['d2.naver.com'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://d2.naver.com/home'}},
-    {'id': 'seoul-culture', 'name': '서울시 문화', 'url': 'https://news.seoul.go.kr/culture',
+    {'id': 'seoul-culture', 'publisher': '서울시', 'name': '서울시 문화', 'url': 'https://news.seoul.go.kr/culture',
      'feedUrl': 'https://news.seoul.go.kr/culture/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/culture'}},
-    {'id': 'woowahan-tech', 'name': '우아한형제들 기술블로그', 'url': 'https://techblog.woowahan.com/',
+    {'id': 'woowahan-tech', 'publisher': '우아한형제들', 'name': '우아한형제들 기술블로그', 'url': 'https://techblog.woowahan.com/',
      'feedUrl': 'https://techblog.woowahan.com/feed/', 'allowedHosts': ['techblog.woowahan.com'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://techblog.woowahan.com/'}},
-    {'id': 'readersnews-books', 'name': '독서신문', 'url': 'https://www.readersnews.com/',
+    {'id': 'readersnews-books', 'publisher': '독서신문', 'name': '독서신문', 'url': 'https://www.readersnews.com/',
      'feedUrl': 'https://www.readersnews.com/rss/allArticle.xml', 'allowedHosts': ['www.readersnews.com'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '공식 RSS 제목·링크 이용 범위 · 본문 미확보', 'url': 'https://www.readersnews.com/rssIndex.html'}},
-    {'id': 'seoul-environment', 'name': '서울시 환경', 'url': 'https://news.seoul.go.kr/env',
+    {'id': 'seoul-environment', 'publisher': '서울시', 'name': '서울시 환경', 'url': 'https://news.seoul.go.kr/env',
      'feedUrl': 'https://news.seoul.go.kr/env/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/env'}},
-    {'id': 'arxiv-cs-cl', 'name': 'arXiv cs.CL · 영문 사전공개 논문', 'url': 'https://arxiv.org/',
+    {'id': 'arxiv-cs-cl', 'publisher': 'arXiv', 'name': 'arXiv cs.CL · 영문 사전공개 논문', 'url': 'https://arxiv.org/',
      'feedUrl': 'https://rss.arxiv.org/rss/cs.CL', 'allowedHosts': ['arxiv.org', 'rss.arxiv.org'],
      'language': 'en', 'requestIntervalSeconds': 3, 'rights': {'mode': 'metadata_only',
      'label': '메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공', 'url': 'https://info.arxiv.org/help/api/tou.html'}},
-    {'id': 'mit-linguistics', 'name': 'MIT News · 언어학 · 영문', 'url': 'https://news.mit.edu/topic/linguistics',
+    {'id': 'mit-linguistics', 'publisher': 'MIT News', 'name': 'MIT News · 언어학 · 영문', 'url': 'https://news.mit.edu/topic/linguistics',
      'feedUrl': 'https://news.mit.edu/topic/mitlinguistics-rss.xml', 'allowedHosts': ['news.mit.edu'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': 'MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://news.mit.edu/terms-of-use'},
      'images': {'hosts': ['news.mit.edu'], 'label': 'MIT News 이미지 CC BY-NC-ND · 출처 표시 · MIT 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://news.mit.edu/terms-of-use'}},
-    {'id': 'llt-journal', 'name': 'Language Learning & Technology', 'url': 'https://www.lltjournal.org/',
+    {'id': 'llt-journal', 'publisher': 'Language Learning & Technology', 'name': 'Language Learning & Technology', 'url': 'https://www.lltjournal.org/',
      'feedUrl': 'https://www.lltjournal.org/feedlet/', 'allowedHosts': ['www.lltjournal.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)',
      'url': 'https://www.lltjournal.org/about/'}},
-    {'id': 'frontiers-psychology', 'name': 'Frontiers in Psychology · 영문 심리학 연구',
+    {'id': 'frontiers-psychology', 'publisher': 'Frontiers', 'name': 'Frontiers in Psychology · 영문 심리학 연구',
      'url': 'https://www.frontiersin.org/journals/psychology',
      'feedUrl': 'https://www.frontiersin.org/journals/psychology/rss', 'allowedHosts': ['www.frontiersin.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '공식 RSS · 원문 CC-BY(출처표시·변경명시) · 제목·링크·첫 작성자·발행일만 · 초록·본문·이미지 미제공',
      'url': 'https://www.frontiersin.org/journals/psychology/about#copyright-statement'}},
     # --- Added 2026-11-11 (docs/design-review/discovery-sources.md). Published in `extended`. ---
-    {'id': 'yna-news', 'name': '연합뉴스', 'url': 'https://www.yna.co.kr/',
+    {'id': 'yna-news', 'publisher': '연합뉴스', 'name': '연합뉴스', 'url': 'https://www.yna.co.kr/',
      'feedUrl': 'https://www.yna.co.kr/rss/news.xml', 'allowedHosts': ['www.yna.co.kr'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '연합뉴스 RSS · 비상업·개인 용도 허용 범위 · 제목과 링크 정보만 제공', 'url': 'https://www.yna.co.kr/rss/index'},
      'images': {'hosts': ['img.yna.co.kr'], 'label': '연합뉴스 RSS의 대표 이미지 주소 · 연합뉴스 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://www.yna.co.kr/rss/index'}},
-    {'id': 'yna-culture', 'name': '연합뉴스 문화', 'url': 'https://www.yna.co.kr/culture/all',
+    {'id': 'yna-culture', 'publisher': '연합뉴스', 'name': '연합뉴스 문화', 'url': 'https://www.yna.co.kr/culture/all',
      'feedUrl': 'https://www.yna.co.kr/rss/culture.xml', 'allowedHosts': ['www.yna.co.kr'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '연합뉴스 RSS · 비상업·개인 용도 허용 범위 · 제목과 링크 정보만 제공', 'url': 'https://www.yna.co.kr/rss/index'},
      'images': {'hosts': ['img.yna.co.kr'], 'label': '연합뉴스 RSS의 대표 이미지 주소 · 연합뉴스 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://www.yna.co.kr/rss/index'}},
-    {'id': 'yna-international', 'name': '연합뉴스 세계', 'url': 'https://www.yna.co.kr/international/all',
+    {'id': 'yna-international', 'publisher': '연합뉴스', 'name': '연합뉴스 세계', 'url': 'https://www.yna.co.kr/international/all',
      'feedUrl': 'https://www.yna.co.kr/rss/international.xml', 'allowedHosts': ['www.yna.co.kr'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '연합뉴스 RSS · 비상업·개인 용도 허용 범위 · 제목과 링크 정보만 제공', 'url': 'https://www.yna.co.kr/rss/index'},
      'images': {'hosts': ['img.yna.co.kr'], 'label': '연합뉴스 RSS의 대표 이미지 주소 · 연합뉴스 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://www.yna.co.kr/rss/index'}},
-    {'id': 'sbs-news', 'name': 'SBS 뉴스', 'url': 'https://news.sbs.co.kr/',
+    {'id': 'sbs-news', 'publisher': 'SBS', 'name': 'SBS 뉴스', 'url': 'https://news.sbs.co.kr/',
      'feedUrl': 'https://news.sbs.co.kr/news/newsflashRssFeed.do?plink=RSSREADER', 'allowedHosts': ['news.sbs.co.kr'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': 'SBS 뉴스 RSS · 개인 이용자의 비상업적 사용 허가 범위 · 제목과 링크 정보만 제공', 'url': 'https://news.sbs.co.kr/news/rss.do'},
      'images': {'hosts': ['img.sbs.co.kr'], 'label': 'SBS 뉴스 RSS의 대표 이미지 주소 · SBS 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://news.sbs.co.kr/news/rss.do'}},
-    {'id': 'sbs-culture', 'name': 'SBS 뉴스 생활·문화', 'url': 'https://news.sbs.co.kr/news/newsSection.do?sectionType=07',
+    {'id': 'sbs-culture', 'publisher': 'SBS', 'name': 'SBS 뉴스 생활·문화', 'url': 'https://news.sbs.co.kr/news/newsSection.do?sectionType=07',
      'feedUrl': 'https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=07&plink=RSSREADER', 'allowedHosts': ['news.sbs.co.kr'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': 'SBS 뉴스 RSS · 개인 이용자의 비상업적 사용 허가 범위 · 제목과 링크 정보만 제공', 'url': 'https://news.sbs.co.kr/news/rss.do'},
      'images': {'hosts': ['img.sbs.co.kr'], 'label': 'SBS 뉴스 RSS의 대표 이미지 주소 · SBS 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://news.sbs.co.kr/news/rss.do'}},
-    {'id': 'nocut-news', 'name': '노컷뉴스', 'url': 'https://www.nocutnews.co.kr/',
+    {'id': 'nocut-news', 'publisher': '노컷뉴스', 'name': '노컷뉴스', 'url': 'https://www.nocutnews.co.kr/',
      'feedUrl': 'https://rss.nocutnews.co.kr/nocutnews.xml', 'allowedHosts': ['www.nocutnews.co.kr', 'rss.nocutnews.co.kr'],
-     'language': 'ko', 'rights': {'mode': 'metadata_only',
+     'language': 'ko', 'gmtLabelIsKoreanTime': True, 'rights': {'mode': 'metadata_only',
      'label': '노컷뉴스 RSS · 개인 이용자의 비상업적 사용 허용 범위 · 제목과 링크 정보만 제공', 'url': 'https://www.nocutnews.co.kr/rss/'}},
-    {'id': 'seoul-economy', 'name': '서울시 경제', 'url': 'https://news.seoul.go.kr/economy',
+    {'id': 'seoul-economy', 'publisher': '서울시', 'name': '서울시 경제', 'url': 'https://news.seoul.go.kr/economy',
      'feedUrl': 'https://news.seoul.go.kr/economy/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/economy'}},
-    {'id': 'seoul-welfare', 'name': '서울시 복지', 'url': 'https://news.seoul.go.kr/welfare',
+    {'id': 'seoul-welfare', 'publisher': '서울시', 'name': '서울시 복지', 'url': 'https://news.seoul.go.kr/welfare',
      'feedUrl': 'https://news.seoul.go.kr/welfare/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/welfare'}},
-    {'id': 'seoul-traffic', 'name': '서울시 교통', 'url': 'https://news.seoul.go.kr/traffic',
+    {'id': 'seoul-traffic', 'publisher': '서울시', 'name': '서울시 교통', 'url': 'https://news.seoul.go.kr/traffic',
      'feedUrl': 'https://news.seoul.go.kr/traffic/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/traffic'}},
-    {'id': 'seoul-safe', 'name': '서울시 안전', 'url': 'https://news.seoul.go.kr/safe',
+    {'id': 'seoul-safe', 'publisher': '서울시', 'name': '서울시 안전', 'url': 'https://news.seoul.go.kr/safe',
      'feedUrl': 'https://news.seoul.go.kr/safe/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/safe'}},
-    {'id': 'kakao-tech', 'name': '카카오 기술블로그', 'url': 'https://tech.kakao.com/',
+    {'id': 'kakao-tech', 'publisher': '카카오', 'name': '카카오 기술블로그', 'url': 'https://tech.kakao.com/',
      'feedUrl': 'https://tech.kakao.com/feed/', 'allowedHosts': ['tech.kakao.com'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://tech.kakao.com/'}},
-    {'id': 'toss-tech', 'name': '토스 기술블로그', 'url': 'https://toss.tech/',
+    {'id': 'toss-tech', 'publisher': '토스', 'name': '토스 기술블로그', 'url': 'https://toss.tech/',
      'feedUrl': 'https://toss.tech/rss.xml', 'allowedHosts': ['toss.tech'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://toss.tech/'}},
-    {'id': 'line-tech', 'name': 'LY Corporation 기술블로그', 'url': 'https://techblog.lycorp.co.jp/ko',
+    {'id': 'line-tech', 'publisher': 'LY Corporation', 'name': 'LY Corporation 기술블로그', 'url': 'https://techblog.lycorp.co.jp/ko',
      'feedUrl': 'https://techblog.lycorp.co.jp/ko/feed/index.xml', 'allowedHosts': ['techblog.lycorp.co.jp'],
      'language': 'ko', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://techblog.lycorp.co.jp/ko'}},
-    {'id': 'conversation-global', 'name': 'The Conversation · 영문', 'url': 'https://theconversation.com/global',
+    {'id': 'conversation-global', 'publisher': 'The Conversation', 'name': 'The Conversation · 영문', 'url': 'https://theconversation.com/global',
      'feedUrl': 'https://theconversation.com/global/articles.atom', 'allowedHosts': ['theconversation.com'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '원문 CC BY-ND · 영문 제목·링크·작성자만 · 본문 미제공', 'url': 'https://theconversation.com/global/republishing-guidelines'}},
-    {'id': 'nasa-news', 'name': 'NASA · 영문', 'url': 'https://www.nasa.gov/news/',
+    {'id': 'nasa-news', 'publisher': 'NASA', 'name': 'NASA · 영문', 'url': 'https://www.nasa.gov/news/',
      'feedUrl': 'https://www.nasa.gov/feed/', 'allowedHosts': ['www.nasa.gov', 'science.nasa.gov'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': 'NASA 공개 자료(미국 내 저작권 대상 아님, 표장 제외) · 영문 제목·링크만 · 본문 미제공',
      'url': 'https://www.nasa.gov/nasa-brand-center/images-and-media/'}},
-    {'id': 'mit-news', 'name': 'MIT News · 영문', 'url': 'https://news.mit.edu/',
+    {'id': 'mit-news', 'publisher': 'MIT News', 'name': 'MIT News · 영문', 'url': 'https://news.mit.edu/',
      'feedUrl': 'https://news.mit.edu/rss/feed', 'allowedHosts': ['news.mit.edu'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': 'MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://news.mit.edu/terms-of-use'},
      'images': {'hosts': ['news.mit.edu'], 'label': 'MIT News 이미지 CC BY-NC-ND · 출처 표시 · MIT 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://news.mit.edu/terms-of-use'}},
-    {'id': 'owid', 'name': 'Our World in Data · 영문', 'url': 'https://ourworldindata.org/',
+    {'id': 'owid', 'publisher': 'Our World in Data', 'name': 'Our World in Data · 영문', 'url': 'https://ourworldindata.org/',
      'feedUrl': 'https://ourworldindata.org/atom.xml', 'allowedHosts': ['ourworldindata.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '원문 CC BY · 영문 제목·링크·작성자만 · 본문 미제공', 'url': 'https://ourworldindata.org/faqs'}},
-    {'id': 'global-voices', 'name': 'Global Voices · 영문', 'url': 'https://globalvoices.org/',
+    {'id': 'global-voices', 'publisher': 'Global Voices', 'name': 'Global Voices · 영문', 'url': 'https://globalvoices.org/',
      'feedUrl': 'https://globalvoices.org/feed/', 'allowedHosts': ['globalvoices.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '원문 CC BY · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://globalvoices.org/about/global-voices-attribution-policy/'},
      'images': {'hosts': ['globalvoices.org'], 'label': 'Global Voices RSS의 대표 이미지 주소 · 이미지별 권리는 원문 확인 · Global Voices 서버에서 직접 표시하며 보관하지 않음',
                 'url': 'https://globalvoices.org/about/global-voices-attribution-policy/'}},
-    {'id': 'eff-updates', 'name': 'EFF · 영문', 'url': 'https://www.eff.org/updates',
+    {'id': 'eff-updates', 'publisher': 'EFF', 'name': 'EFF · 영문', 'url': 'https://www.eff.org/updates',
      'feedUrl': 'https://www.eff.org/rss/updates.xml', 'allowedHosts': ['www.eff.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '원문 CC BY 4.0 · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://www.eff.org/copyright'},
@@ -232,7 +234,7 @@ def iso(value):
     return value.astimezone(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
-def parse_date(value, source, now):
+def parse_date(value, source, now, local_gmt_label=False):
     value = plain(value, 160)
     if not value:
         return None, 'unknown'
@@ -241,6 +243,9 @@ def parse_date(value, source, now):
             date = datetime.fromisoformat(value.replace('Z', '+00:00'))
         except ValueError:
             date = parsedate_to_datetime(value)
+        if local_gmt_label and value.endswith(' GMT') and date.tzinfo is not None:
+            # This run found the feed writing Korean local time under a GMT label (see parse_feed).
+            date = date.replace(tzinfo=timezone(timedelta(hours=9)))
         if date.tzinfo is None:
             # Seoul's official RSS emits local post_date without an offset.
             date = date.replace(tzinfo=timezone(timedelta(hours=9))) if source.get('timezone') == '+09:00' else None
@@ -539,6 +544,12 @@ def parse_feed(body, source, now, limit=20):
         raise FeedError('지원하지 않는 RSS/Atom 형식')
     if not entries or len(entries) > 1000:
         raise FeedError('비어 있거나 항목 제한을 넘은 피드')
+    # A feed registered with `gmtLabelIsKoreanTime` (노컷뉴스) writes Korean local time and labels it GMT: on
+    # 2026-11-11 its newest items read 7 to 9 hours ahead of the clock on two fetches. The label is corrected only
+    # in a run where it actually puts an item in the future, so a feed that fixes its label is read as written.
+    local_gmt_label = False
+    if source.get('gmtLabelIsKoreanTime') and not atom:
+        local_gmt_label = any(parse_date(child_text(entry, 'pubDate') or child_text(entry, f'{{{DC}}}date'), source, now)[1] == 'future' for entry in entries)
     articles = {}
     rejected = 0
     for entry in entries:
@@ -571,8 +582,8 @@ def parse_feed(body, source, now, limit=20):
                 tags = []
             url = approved_url(link, source['allowedHosts'])
             canonical = approved_url(url, source['allowedHosts'], canonical=True)
-            published, date_status = parse_date(published_raw, source, now)
-            updated, updated_status = parse_date(updated_raw, source, now)
+            published, date_status = parse_date(published_raw, source, now, local_gmt_label)
+            updated, updated_status = parse_date(updated_raw, source, now, local_gmt_label)
             date_basis = 'published' if date_status == 'valid' else 'updated' if updated_status == 'valid' else 'unknown'
             article = {
                 'id': 'article-' + source['id'] + '-' + hashlib.sha256(canonical.encode()).hexdigest()[:20],

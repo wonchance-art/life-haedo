@@ -126,22 +126,54 @@ test('a reading comparison still starts with every added source; image links sta
   await assert.rejects(Reading.createComparison(Reading.empty('workspace-a'), withImages, { expectedRevision: 0, now: LATER, sessionId: 'card-feed-session' }), { code: 'discovery_reading_invalid' });
 });
 
-test('기사 이미지 보기 is an optional account setting that is off until chosen', () => {
-  const empty = Settings.empty('workspace-a');
-  assert.equal(Settings.DEFAULT_SHOW_IMAGES, false); assert.equal(Settings.showImages(empty), false); assert.equal(Object.hasOwn(empty, 'showImages'), false);
+// The settings model exactly as shipped before this change (tests/fixtures/discovery-old-client/README.md).
+function oldSettings() {
+  const raw = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures/discovery-old-client/discovery-settings.js.gz')));
+  assert.equal(crypto.createHash('sha256').update(raw).digest('hex'), 'f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc');
+  const sandbox = vm.createContext({ TextEncoder, structuredClone }); vm.runInContext(raw.toString('utf8'), sandbox);
+  const api = vm.runInContext('HaedoLife.DiscoverySettings', sandbox), parse = vm.runInContext('JSON.parse', sandbox), inside = value => parse(JSON.stringify(value));
+  const outside = run => { try { return JSON.parse(JSON.stringify(run())); } catch (error) { throw Object.assign(new Error(error.message), { code: error.code }); } };
+  return { validate: value => outside(() => api.validate(inside(value))), update: (current, patch, options) => outside(() => api.update(inside(current), inside(patch), inside(options))) };
+}
+
+test('기사 이미지 보기 and 넓게 찾기 are account options, off until chosen, in a form the earlier settings model reads and keeps', () => {
+  const empty = Settings.empty('workspace-a'), old = oldSettings();
+  assert.equal(Settings.DEFAULT_SHOW_IMAGES, false); assert.equal(Settings.DEFAULT_WIDE_SEARCH, false);
+  assert.equal(Settings.showImages(empty), false); assert.equal(Settings.wideSearch(empty), false);
   const on = Settings.update(empty, { showImages: true }, { expectedRevision: 0, now: NOW });
-  assert.equal(on.showImages, true); assert.equal(Settings.showImages(on), true); assert.doesNotThrow(() => Settings.validate(on));
-  const off = Settings.update(on, { showImages: false }, { expectedRevision: 1, now: LATER });
-  assert.equal(off.showImages, false); assert.equal(Settings.showImages(off), false);
-  // Another setting keeps the stored choice and the stored shape.
-  const other = Settings.update(on, { autoRefresh: true }, { expectedRevision: 1, now: LATER }); assert.equal(other.showImages, true);
-  const untouched = Settings.update(empty, { autoRefresh: true }, { expectedRevision: 0, now: NOW }); assert.equal(Object.hasOwn(untouched, 'showImages'), false);
-  // Settings saved before this option keep validating exactly as they were.
+  assert.equal(Settings.showImages(on), true); assert.equal(Settings.wideSearch(on), false); assert.doesNotThrow(() => Settings.validate(on));
+  // No new field: the stored keys are the first format's, and the choice is a reserved entry of disabledSourceIds.
+  assert.deepEqual(Object.keys(on), Object.keys(empty)); assert.deepEqual(on.disabledSourceIds, ['option-images-on']);
+  const both = Settings.update(on, { wideSearch: true, disabledSourceIds: ['yna-news'] }, { expectedRevision: 1, now: LATER });
+  assert.equal(Settings.showImages(both), true); assert.equal(Settings.wideSearch(both), true);
+  assert.deepEqual(Settings.disabledSources(both), ['yna-news'], 'the reserved entries are not sources');
+  const off = Settings.update(both, { showImages: false }, { expectedRevision: 2, now: LATER });
+  assert.equal(Settings.showImages(off), false); assert.equal(Settings.wideSearch(off), true); assert.deepEqual(Settings.disabledSources(off), ['yna-news']);
+  // An explicit off is stored, so a later change of the default does not turn it on.
+  assert.ok(off.disabledSourceIds.includes('option-images-off') && !off.disabledSourceIds.includes('option-images-on'));
+  // Another setting, or a new source selection, keeps the stored options.
+  assert.equal(Settings.showImages(Settings.update(on, { autoRefresh: true }, { expectedRevision: 1, now: LATER })), true);
+  const reselected = Settings.update(both, { disabledSourceIds: [] }, { expectedRevision: 2, now: LATER });
+  assert.equal(Settings.showImages(reselected), true); assert.equal(Settings.wideSearch(reselected), true); assert.deepEqual(Settings.disabledSources(reselected), []);
+  assert.deepEqual(Settings.update(empty, { autoRefresh: true }, { expectedRevision: 0, now: NOW }).disabledSourceIds, []);
+  // The earlier model accepts these settings and keeps the options when it saves a change of its own
+  // (it copies the stored list and only toggles the ids it knows).
+  for (const value of [on, both, off]) assert.doesNotThrow(() => old.validate(value));
+  const olderEdit = old.update(both, { autoRefresh: both.autoRefresh, disabledInterestIds: [], disabledSourceIds: [...both.disabledSourceIds, 'seoul-culture'] }, { expectedRevision: both.revision, now: LATER });
+  assert.equal(Settings.showImages(olderEdit), true); assert.equal(Settings.wideSearch(olderEdit), true); assert.deepEqual(Settings.disabledSources(olderEdit), ['yna-news', 'seoul-culture']);
+  // A new field, by contrast, is what the earlier model refuses (the form this work first used and dropped).
+  assert.throws(() => old.validate({ ...on, showImages: true }), { code: 'discovery_settings_invalid' });
+  assert.throws(() => Settings.validate({ ...on, showImages: true }), { code: 'discovery_settings_invalid' });
+  // Bounds: never both on and off, booleans only, a later version's reserved entry is kept untouched, no source uses the prefix.
+  assert.throws(() => Settings.validate({ ...on, disabledSourceIds: ['option-images-on', 'option-images-off'] }), { code: 'discovery_settings_invalid' });
+  for (const value of ['yes', 1, null]) assert.throws(() => Settings.update(empty, { showImages: value }, { expectedRevision: 0, now: NOW }), { code: 'discovery_settings_invalid' });
+  const later = { ...on, disabledSourceIds: ['option-images-on', 'option-later-on'] };
+  assert.doesNotThrow(() => Settings.validate(later)); assert.ok(Settings.update(later, { wideSearch: true }, { expectedRevision: 1, now: LATER }).disabledSourceIds.includes('option-later-on'));
+  assert.equal(Object.keys(Discovery.ALLOWED_SOURCES).some(id => id.startsWith('option-')), false);
+  // Settings saved before these options keep validating exactly as they were; a reset clears the options too.
   assert.doesNotThrow(() => Settings.validate({ schemaVersion: 1, workspaceId: 'workspace-a', revision: 3, deleted: false, updatedAt: NOW, autoRefresh: true, disabledInterestIds: ['a'], disabledSourceIds: ['naver-d2'] }));
-  for (const value of ['yes', 1, null]) assert.throws(() => Settings.validate({ ...on, showImages: value }), { code: 'discovery_settings_invalid' });
-  assert.throws(() => Settings.validate({ ...empty, showImages: true }), { code: 'discovery_settings_invalid' });
-  const cleared = Settings.clear(on, { expectedRevision: 1, now: LATER }); assert.equal(Object.hasOwn(cleared, 'showImages'), false); assert.equal(Settings.showImages(cleared), false);
-  assert.equal(Settings.showImages(null), false);
+  const cleared = Settings.clear(both, { expectedRevision: 2, now: LATER }); assert.deepEqual(cleared.disabledSourceIds, []); assert.equal(Settings.showImages(cleared), false); assert.equal(Settings.wideSearch(cleared), false);
+  assert.equal(Settings.showImages(null), false); assert.equal(Settings.wideSearch(undefined), false);
 });
 
 // --- collector -----------------------------------------------------------------------------------
@@ -319,4 +351,107 @@ test('the first deployment after this change: the nine-source publication seeds 
   assert.equal(second.collectorExitCode, 2); assert.equal(second.seedKind, 'previous-publication');
   assert.equal(second.sources.find(source => source.id === 'sbs-news').lastSuccessAt, null);
   assert.equal(second.sources.find(source => source.id === 'yna-news').lastSuccessAt, '2026-11-13T03:00:00Z');
+});
+
+// --- A1 (2026-11-11): the latest order in pages of 20, at most three of one publisher on a page ---------------
+// A synthetic list shaped like the local collection of 2026-11-11 (405 articles, 25 sources): the two broadcasters
+// publish every few minutes, everyone else hours apart. Only ids, publishers and times are real-shaped.
+function measuredRows() {
+  const start = Date.parse('2026-11-11T15:00:00Z'), rows = [];
+  const plan = [
+    // [feeds of one publisher, articles, minutes between them, minutes before the first]
+    [['yna-news', 'yna-culture', 'yna-international'], 60, 4, 0], [['sbs-news', 'sbs-culture'], 40, 5, 1], [['nocut-news'], 20, 20, 60],
+    [['seoul-culture', 'seoul-environment', 'seoul-economy', 'seoul-welfare', 'seoul-traffic', 'seoul-safe'], 60, 90, 120], [['arxiv-cs-cl'], 20, 0, 600],
+    [['readersnews-books'], 20, 60, 180], [['nasa-news'], 10, 120, 240], [['global-voices'], 10, 150, 300], [['mit-news', 'mit-linguistics'], 20, 300, 360],
+    [['conversation-global'], 20, 200, 420], [['eff-updates'], 10, 400, 480]
+  ];
+  for (const [ids, count, every, first] of plan) for (let i = 0; i < count; i++) {
+    const sourceId = ids[i % ids.length], minutes = first + 3 + i * every + (every ? ids.indexOf(sourceId) : i);
+    rows.push({ article: { sourceId, sourceName: sourceId, canonicalUrl: `https://${Discovery.ALLOWED_SOURCES[sourceId][0]}/a/${sourceId}-${i}`, sortDate: new Date(start - minutes * 60000).toISOString() } });
+  }
+  return rows;
+}
+const publishers = rows => rows.reduce((tally, row) => tally.set(Discovery.publisherKey(row.article), (tally.get(Discovery.publisherKey(row.article)) || 0) + 1), new Map());
+const newestFirst = rows => rows.every((row, i) => i === 0 || Date.parse(rows[i - 1].article.sortDate) >= Date.parse(row.article.sortDate));
+
+test('A1: the latest list spreads publishers over each page of 20 and still shows every article exactly once', () => {
+  const rows = measuredRows(), plain = [...rows].sort((a, b) => Date.parse(b.article.sortDate) - Date.parse(a.article.sortDate));
+  assert.ok(publishers(plain.slice(0, 20)).size <= 2, 'without the rule the first page is the two broadcasters');
+  const spread = Discovery.spreadLatest(rows);
+  assert.equal(spread.length, rows.length);
+  assert.deepEqual(new Set(spread.map(row => row.article.canonicalUrl)), new Set(rows.map(row => row.article.canonicalUrl)), 'no article lost');
+  assert.equal(new Set(spread.map(row => row.article.canonicalUrl)).size, rows.length, 'no article twice');
+  const first = publishers(spread.slice(0, 20));
+  assert.ok(first.size >= 6, 'first page publishers: ' + first.size);
+  for (let at = 0; at < spread.length; at += 20) {
+    const page = spread.slice(at, at + 20);
+    assert.ok(newestFirst(page), 'a page reads newest first: ' + at);
+    // A page short of publishers is filled anyway; only then can one publisher hold more than three places.
+    const counts = [...publishers(page).values()], fillable = [...publishers(spread.slice(at)).values()].reduce((sum, left) => sum + Math.min(3, left), 0);
+    if (fillable >= 20) assert.ok(Math.max(...counts) <= 3, 'page ' + at / 20 + ' holds ' + Math.max(...counts));
+    else assert.equal(page.length, Math.min(20, spread.length - at), 'a short page is filled');
+  }
+  // 연합뉴스 종합·문화·세계 are one publisher, as are the six 서울시 feeds.
+  assert.equal(first.get('연합뉴스'), 3); assert.equal(Discovery.publisherKey({ sourceId: 'seoul-safe' }), Discovery.publisherKey({ sourceId: 'seoul-culture' }));
+  // Deterministic: the order of the input does not matter, so every device shows the same pages.
+  const shuffled = [...rows].sort((a, b) => crypto.createHash('md5').update(a.article.canonicalUrl).digest('hex').localeCompare(crypto.createHash('md5').update(b.article.canonicalUrl).digest('hex')));
+  assert.deepEqual(Discovery.spreadLatest(shuffled).map(row => row.article.canonicalUrl), spread.map(row => row.article.canonicalUrl));
+});
+
+test('A1: a short list lifts the cap to fill the page; a found link counts by its publisher name', () => {
+  const at = minutes => new Date(Date.parse(NOW) - minutes * 60000).toISOString();
+  const row = (sourceId, i, sourceName = sourceId) => ({ article: { sourceId, sourceName, canonicalUrl: `https://x.example/${sourceId}/${sourceName}/${i}`, sortDate: at(i) } });
+  const two = [...Array.from({ length: 15 }, (_, i) => row('yna-news', i)), ...Array.from({ length: 15 }, (_, i) => row('sbs-news', i + 100))];
+  const spread = Discovery.spreadLatest(two);
+  assert.equal(spread.length, 30); assert.equal(spread.slice(0, 20).length, 20, 'the first page is full even with two publishers');
+  assert.equal(publishers(spread.slice(0, 20)).get('연합뉴스'), 15);
+  // Found links: the publisher name decides (case folded); a fixed feed's publisher wins over its display name.
+  const found = [...Array.from({ length: 6 }, (_, i) => row('google-news', i, '합성일보')), ...Array.from({ length: 6 }, (_, i) => row('google-news', i + 10, i % 2 ? 'Synthetic Daily' : 'SYNTHETIC DAILY')),
+    ...Array.from({ length: 14 }, (_, i) => row('google-news', i + 20, '합성매체 ' + i))];
+  const page = Discovery.spreadLatest(found).slice(0, 20);
+  assert.equal(publishers(page).get(Discovery.publisherKey({ sourceId: 'google-news', sourceName: '합성일보' })), 3);
+  assert.equal(publishers(page).get('synthetic daily'), 3);
+  assert.equal(Discovery.publisherKey({ sourceId: 'sbs-culture', sourceName: '다른 이름' }), Discovery.publisherKey({ sourceId: 'sbs-news' }));
+  assert.equal(Discovery.publisherKey({ sourceId: 'google-news', sourceName: null }), 'google-news');
+  for (const bad of [null, [{}].slice(1), 'rows']) if (!Array.isArray(bad)) assert.throws(() => Discovery.spreadLatest(bad));
+  assert.throws(() => Discovery.spreadLatest([], { perPublisher: 0 })); assert.throws(() => Discovery.spreadLatest([], { size: 1.5 }));
+});
+
+test('A1: only the news list asks for the spread order; 관심순 and the default stay as they were', () => {
+  const input = catalog(), options = { now: LATER, mode: 'latest', profile: { manual: [] }, feedback: [], knownUrls: [], limit: Discovery.LIMITS.articles };
+  const plain = Discovery.rank(input, options).items.map(item => item.article.canonicalUrl), spread = Discovery.rank(input, { ...options, spread: true }).items.map(item => item.article.canonicalUrl);
+  assert.deepEqual([...spread].sort(), [...plain].sort(), 'the same articles');
+  assert.deepEqual(spread, Discovery.spreadLatest(Discovery.rank(input, options).items).map(item => item.article.canonicalUrl));
+  const related = { ...options, mode: 'related', profile: { manual: [{ id: 'interest-1', label: '합성', aliases: [] }] } };
+  assert.deepEqual(Discovery.rank(input, { ...related, spread: true }).items.map(item => item.article.canonicalUrl), Discovery.rank(input, related).items.map(item => item.article.canonicalUrl));
+  assert.throws(() => Discovery.rank(input, { ...options, spread: 'yes' }));
+});
+
+test('A1: browser and collector name the same publisher for every source; the found-link id is not a catalog source', () => {
+  const rows = python(`print(json.dumps({s['id']: s.get('publisher') for s in m.SOURCES}))`);
+  assert.deepEqual(rows, { ...Discovery.PUBLISHERS });
+  assert.deepEqual(Object.keys(Discovery.PUBLISHERS).sort(), Object.keys(Discovery.ALLOWED_SOURCES).sort());
+  assert.equal(Object.hasOwn(Discovery.ALLOWED_SOURCES, Discovery.WIDE_SOURCE.id), false);
+  assert.deepEqual(Discovery.SNAPSHOT_SOURCES[Discovery.WIDE_SOURCE.id], ['news.google.com']);
+  // The publisher label is the registry's own; the catalog never carries it.
+  const w = python(`print(json.dumps(sorted({k for s in m.SOURCES for k in s})))`);
+  assert.ok(w.includes('publisher'));
+});
+
+test('노컷뉴스: Korean time written under a GMT label is read as Korean time only when the label puts it in the future', t => {
+  const nocut = 'www.nocutnews.co.kr', entry = (n, date) => `<item><title>합성 노컷 ${n}</title><link>https://${nocut}/news/${6000000 + n}</link><pubDate>${date}</pubDate></item>`;
+  // NOW is 2026-11-11T03:00:00Z (12:00 KST). 11:40 "GMT" is 8 h 40 min ahead: the feed's own 11:40 KST.
+  const ahead = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(1, 'Wed, 11 Nov 2026 11:40:00 GMT')}${entry(2, 'Wed, 11 Nov 2026 09:10:00 GMT')}</channel></rss>`,
+    'sbs-news': `<rss version="2.0"><channel><item><title>합성 SBS</title><link>https://news.sbs.co.kr/news/endPage.do?news_id=N1</link><pubDate>Wed, 11 Nov 2026 11:40:00 GMT</pubDate></item></channel></rss>` });
+  assert.ok([0, 2].includes(update(ahead).status));
+  const read = w => JSON.parse(fs.readFileSync(w.output)).extended.articles;
+  const rows = read(ahead).filter(article => article.sourceId === 'nocut-news').sort((a, b) => a.url.localeCompare(b.url));
+  assert.deepEqual(rows.map(article => [article.publishedAt, article.dateStatus]), [['2026-11-11T02:40:00Z', 'valid'], ['2026-11-11T00:10:00Z', 'valid']]);
+  // Another source with the same label is read as written (no correction flag): still a future item.
+  const sbs = read(ahead).find(article => article.sourceId === 'sbs-news');
+  assert.equal(sbs.publishedAt, '2026-11-11T11:40:00Z'); assert.equal(sbs.dateStatus, 'future');
+  // A run where every GMT label is already in the past keeps the labels as they are.
+  const behind = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(3, 'Wed, 11 Nov 2026 02:10:00 GMT')}</channel></rss>` });
+  assert.ok([0, 2].includes(update(behind).status));
+  assert.equal(read(behind).find(article => article.sourceId === 'nocut-news').publishedAt, '2026-11-11T02:10:00Z');
 });

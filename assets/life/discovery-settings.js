@@ -10,6 +10,22 @@
   // 기사 이미지 보기: the list asks each publisher's server for article images only when this is on.
   // The one place that sets what an account sees before it has chosen (2026-11-11: off).
   const DEFAULT_SHOW_IMAGES = false;
+  // 넓게 찾기: the interest topics typed in news settings go to the external news search only when this is on.
+  // Off until chosen (owner approval 2026-11-11 covers "only when turned on in settings").
+  const DEFAULT_WIDE_SEARCH = false;
+  // Options added after the first settings format are stored as reserved entries of disabledSourceIds, not as new
+  // fields. The validator shipped before them refuses unknown fields but accepts unknown ids in that list and keeps
+  // them when it saves its own change, so a device still on the older shell reads these settings and cannot drop an
+  // option. No source id may start with `option-` (asserted against the source registry by the tests).
+  const OPTIONS = Object.freeze({
+    showImages: Object.freeze({ on: 'option-images-on', off: 'option-images-off', initial: DEFAULT_SHOW_IMAGES }),
+    wideSearch: Object.freeze({ on: 'option-wide-on', off: 'option-wide-off', initial: DEFAULT_WIDE_SEARCH }),
+    // Set when 넓게 찾기 is turned off and taken away once the server copy of its results is confirmed erased,
+    // so any device of the account can finish an erase that failed.
+    wideClear: Object.freeze({ on: 'option-wide-clear', off: null, initial: false })
+  });
+  const OPTION_IDS = Object.freeze(Object.values(OPTIONS).flatMap(option => [option.on, option.off]).filter(Boolean));
+  const isOption = value => typeof value === 'string' && value.startsWith('option-');
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
   const copy = value => structuredClone(value);
@@ -20,13 +36,14 @@
   function fields(value, allowed) { check(plain(value) && Object.keys(value).every(key => allowed.includes(key))); }
   function ids(value, max) { check(Array.isArray(value) && value.length <= max && Array.from(value).every(id) && new Set(value).size === value.length); }
   function validate(settings) {
-    fields(settings, ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'autoRefresh', 'disabledInterestIds', 'disabledSourceIds', 'showImages']);
-    // Optional: absent until the account chooses, so settings saved before this option keep their exact shape.
-    check(settings.showImages === undefined || typeof settings.showImages === 'boolean');
+    fields(settings, ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'autoRefresh', 'disabledInterestIds', 'disabledSourceIds']);
     check(settings.schemaVersion === 1 && id(settings.workspaceId) && Number.isSafeInteger(settings.revision) && settings.revision >= 0 && typeof settings.deleted === 'boolean' && typeof settings.autoRefresh === 'boolean');
     check(settings.revision === 0 ? settings.updatedAt === null && !settings.deleted : timestamp(settings.updatedAt));
     ids(settings.disabledInterestIds, MAX_INTERESTS); ids(settings.disabledSourceIds, MAX_SOURCES);
-    if (settings.deleted || settings.revision === 0) check(!settings.autoRefresh && settings.disabledInterestIds.length === 0 && settings.disabledSourceIds.length === 0 && settings.showImages === undefined);
+    if (settings.deleted || settings.revision === 0) check(!settings.autoRefresh && settings.disabledInterestIds.length === 0 && settings.disabledSourceIds.length === 0);
+    // An option is never both on and off. A reserved entry this version does not know is kept as it is
+    // (a later version's option), exactly as the first format kept unknown ids.
+    for (const option of Object.values(OPTIONS)) check(!(option.off && settings.disabledSourceIds.includes(option.on) && settings.disabledSourceIds.includes(option.off)));
     check(new TextEncoder().encode(JSON.stringify(settings)).length < MAX_BYTES, 'discovery_settings_too_large');
     return true;
   }
@@ -42,14 +59,24 @@
     return { ...copy(current), revision: current.revision + 1, deleted: false, updatedAt };
   }
   function update(current, patch, options = {}) {
-    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds', 'showImages']);
+    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds', ...Object.keys(OPTIONS)]);
     const result = next(current, options);
-    for (const key of Object.keys(patch)) result[key] = copy(patch[key]);
+    for (const key of ['autoRefresh', 'disabledInterestIds']) if (Object.hasOwn(patch, key)) result[key] = copy(patch[key]);
+    // A new source selection never carries options in or out: the stored options stay unless this patch names them.
+    let sources = result.disabledSourceIds;
+    if (Object.hasOwn(patch, 'disabledSourceIds')) {
+      check(Array.isArray(patch.disabledSourceIds));
+      sources = [...Array.from(patch.disabledSourceIds).filter(value => !isOption(value)), ...current.disabledSourceIds.filter(isOption)];
+    }
+    for (const [name, option] of Object.entries(OPTIONS)) if (Object.hasOwn(patch, name)) {
+      check(typeof patch[name] === 'boolean');
+      sources = [...sources.filter(value => value !== option.on && value !== option.off), ...(patch[name] ? [option.on] : option.off ? [option.off] : [])];
+    }
+    result.disabledSourceIds = sources;
     validate(result); return result;
   }
   function clear(current, options = {}) {
     const result = { ...next(current, options), deleted: true, autoRefresh: false, disabledInterestIds: [], disabledSourceIds: [] };
-    delete result.showImages;
     validate(result); return result;
   }
   // These helpers only project explicit selections. Unknown disabled IDs are retained
@@ -68,6 +95,15 @@
     result.articles = result.articles.filter(article => !disabled.has(article.sourceId));
     return result;
   }
-  function showImages(settings) { return typeof settings?.showImages === 'boolean' ? settings.showImages : DEFAULT_SHOW_IMAGES; }
-  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, showImages, empty, validate, update, clear, effectiveProfile, filterFeed });
+  function option(settings, name) {
+    const stored = Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : [];
+    return stored.includes(OPTIONS[name].on) ? true : stored.includes(OPTIONS[name].off) ? false : OPTIONS[name].initial;
+  }
+  const showImages = settings => option(settings, 'showImages');
+  const wideSearch = settings => option(settings, 'wideSearch');
+  const wideClear = settings => option(settings, 'wideClear');
+  // The sources actually turned off, without the reserved option entries.
+  const disabledSources = settings => (Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : []).filter(value => !isOption(value));
+  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, DEFAULT_WIDE_SEARCH, OPTION_IDS, showImages, wideSearch, wideClear, disabledSources,
+    empty, validate, update, clear, effectiveProfile, filterFeed });
 });

@@ -43,6 +43,22 @@
     'eff-updates': Object.freeze(['www.eff.org'])
   });
   const ALLOWED_SOURCES = Object.freeze({ ...LEGACY_SOURCES, ...EXTENDED_SOURCES });
+  // 매체: the publisher behind each feed. Several feeds of one site are one publisher when the latest list is
+  // spread (연합뉴스 종합·문화·세계, SBS 뉴스·생활문화, 서울시의 여섯 피드, MIT News의 두 피드).
+  const PUBLISHERS = Object.freeze({
+    'naver-d2': 'NAVER D2', 'seoul-culture': '서울시', 'woowahan-tech': '우아한형제들', 'readersnews-books': '독서신문', 'seoul-environment': '서울시',
+    'arxiv-cs-cl': 'arXiv', 'mit-linguistics': 'MIT News', 'llt-journal': 'Language Learning & Technology', 'frontiers-psychology': 'Frontiers',
+    'yna-news': '연합뉴스', 'yna-culture': '연합뉴스', 'yna-international': '연합뉴스', 'sbs-news': 'SBS', 'sbs-culture': 'SBS', 'nocut-news': '노컷뉴스',
+    'seoul-economy': '서울시', 'seoul-welfare': '서울시', 'seoul-traffic': '서울시', 'seoul-safe': '서울시',
+    'kakao-tech': '카카오', 'toss-tech': '토스', 'line-tech': 'LY Corporation', 'conversation-global': 'The Conversation', 'nasa-news': 'NASA',
+    'mit-news': 'MIT News', 'owid': 'Our World in Data', 'global-voices': 'Global Voices', 'eff-updates': 'EFF'
+  });
+  // 넓게 찾기 results are links on the supplier's host. They are never part of the public catalog; this id only
+  // lets a saved reaction keep such a link (title, publisher name, the supplier's address, time received).
+  const WIDE_SOURCE = Object.freeze({ id: 'google-news', hosts: Object.freeze(['news.google.com']), label: 'Google 뉴스' });
+  const SNAPSHOT_SOURCES = Object.freeze({ ...ALLOWED_SOURCES, [WIDE_SOURCE.id]: WIDE_SOURCE.hosts });
+  // The latest list is read in pages of 20; one publisher holds at most 3 places of a page (docs/design-review/news-card-feed.md).
+  const PAGE = Object.freeze({ size: 20, perPublisher: 3 });
   // Hosts a source's own feed names for its representative images. An article image is a link to the
   // publisher's server, never a copy; an address on any other host is dropped.
   const IMAGE_HOSTS = Object.freeze({
@@ -316,13 +332,40 @@
       pool.push({ article, reasons, strength, interests: new Set(reasons.map(reason => reason.interestId)).size });
     }
     const coverage = { linkOnly: 0, summary: 0, fullText: 0 }; for (const article of feed.articles) coverage[{ link_only: 'linkOnly', summary: 'summary', full_text: 'fullText' }[article.coverage]]++;
-    return { feed, pool, excluded, coverage, mode, limit, contentLanguages };
+    // `spread`: the news list asks for the latest order in publisher-capped pages. Other callers (the frozen
+    // reading comparison, evaluations) keep the plain newest-first order.
+    check(options.spread === undefined || typeof options.spread === 'boolean');
+    return { feed, pool, excluded, coverage, mode, limit, contentLanguages, spread: options.spread === true };
+  }
+  const rowDate = row => row.article.sortDate ? Date.parse(row.article.sortDate) : -Infinity;
+  const compareLatest = (a, b) => rowDate(b) - rowDate(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl);
+  // The publisher an article counts toward: its feed's publisher, or for a found link the publisher name it came with.
+  function publisherKey(article) {
+    const name = Object.hasOwn(PUBLISHERS, article.sourceId) ? PUBLISHERS[article.sourceId] : typeof article.sourceName === 'string' && article.sourceName.trim() ? article.sourceName : article.sourceId;
+    return fold(String(name).trim());
+  }
+  // Newest first, read in pages: within each page of `size` no publisher has more than `perPublisher` rows.
+  // A row that does not fit waits for the next page, so every row appears exactly once. When too few publishers
+  // remain to fill a page under the cap, the cap is lifted for that page. Each page is itself newest first.
+  // A pure function of its rows: the same list gives the same order on every device.
+  function spreadLatest(rows, { size = PAGE.size, perPublisher = PAGE.perPublisher } = {}) {
+    check(Array.isArray(rows) && Number.isInteger(size) && size >= 1 && Number.isInteger(perPublisher) && perPublisher >= 1);
+    const rest = [...rows].sort(compareLatest), result = [];
+    while (rest.length) {
+      const page = [], count = new Map();
+      for (let at = 0; at < rest.length && page.length < size;) {
+        const key = publisherKey(rest[at].article), used = count.get(key) || 0;
+        if (used < perPublisher) { count.set(key, used + 1); page.push(rest.splice(at, 1)[0]); } else at++;
+      }
+      if (page.length < size) page.push(...rest.splice(0, size - page.length));
+      result.push(...page.sort(compareLatest));
+    }
+    return result;
   }
   function rankPool(prepared) {
     const { feed, pool, excluded, coverage, mode, limit } = prepared;
-    const date = row => row.article.sortDate ? Date.parse(row.article.sortDate) : -Infinity;
-    const compareLatest = (a, b) => date(b) - date(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl);
-    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b)) : [...pool].sort(compareLatest);
+    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b))
+      : prepared.spread ? spreadLatest(pool) : [...pool].sort(compareLatest);
     const items = candidates.slice(0, limit).map(({ article, reasons }) => ({ article, reasons: reasons.map(({ weight, ...reason }) => reason) }));
     return { items, eligibleCount: candidates.length, poolCount: pool.length, metadata: { generatedAt: feed.generatedAt,
       stale: feed.stale, sources: feed.sources, coverage, excluded, mode,
@@ -364,5 +407,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, LEGACY_SOURCE_IDS: Object.freeze(Object.keys(LEGACY_SOURCES)), EXTENDED_SOURCE_IDS: Object.freeze(Object.keys(EXTENDED_SOURCES)), IMAGE_HOSTS, imageUrl, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, PUBLISHERS, PAGE, WIDE_SOURCE, SNAPSHOT_SOURCES, publisherKey, spreadLatest, LEGACY_SOURCE_IDS: Object.freeze(Object.keys(LEGACY_SOURCES)), EXTENDED_SOURCE_IDS: Object.freeze(Object.keys(EXTENDED_SOURCES)), IMAGE_HOSTS, imageUrl, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });
