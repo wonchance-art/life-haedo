@@ -61,6 +61,10 @@ jobs:
         run: node tests/run-rss-postgres.cjs
       - name: Verify Markdown publication commit ownership, sessions, source CAS, public copies and receipts
         run: node tests/run-post-markdown-publish-postgres.cjs
+      - name: Verify wide news allow list, owner isolation, topic rules under both string settings, install SQL rollback and function hashes
+        env:
+          SQL_REPLAY_REQUIRED: "1"
+        run: node tests/run-news-wide-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
