@@ -288,4 +288,6 @@
 - 규칙: `tests/source-merge.test.cjs`. 저장 트랜잭션·기준·영수증: `tests/life-storage.test.cjs`. 엔진: `tests/life-sync.test.cjs`.
 - 실제 `storage.js`+`sync.js` 여러 기기(메모리 IndexedDB, CAS 서버 한 행): `tests/source-merge-devices.test.cjs`. 이전 판이 쓴 기기 DB(`tests/fixtures/source-merge/previous-version-device.json`, 생성기 같은 폴더), 실제 이전 공유 모듈(`tests/fixtures/source-merge/a423773/`의 고정본), 16 MiB, 서버가 받지 못하는 글자, 서버 사본 삭제, 고정 시드 무작위 3기기.
 - 두 브라우저 컨텍스트(실제 IndexedDB·SDK, 익명 서버): `tests/source-merge-browser.cjs`. 실제 이전 판 파일로 갈라뜨린 뒤 새 판으로 여는 검사도 여기 있다. 이전 판 파일은 `tests/fixtures/source-merge/a423773/`의 고정본에서 읽는다(Git 기록 불필요, SHA-256 대조). 수동 비교가 남는 실제 원인 셋(16 MiB, 서버가 받지 못하는 글자, 서버 사본 삭제)은 수 MB를 다뤄 오래 걸리므로 `tests/source-merge-limits-browser.cjs`로 나눴다.
+- 영수증 판정(이전 판에서 갈라진 기기): `tests/source-merge-devices.test.cjs`의 고정 seed 36개 검사가 같은 상태를 영수증과 진짜 기준으로 각각 합쳐 대조한다. 검수용 큰 시뮬레이션(실제 이전 판, 1,250회)은 저장소 밖에서 돌렸다.
+- `account-library-browser`의 "simultaneous first login" 실패(15초 대기 초과)는 이 변경 전에도 같다. CDP 2배 감속에서 두 기기 동시 로그인부터 A의 두 번째 구성 읽기까지 기준 커밋 평균 14.2초(8회 중 5회 15초 초과), 이 판 평균 15.2초(8회 중 3회)였다. 번갈아 돌린 짝의 차이는 평균 +1.0초로(로그인 직후 기준 확보 `captureSyncBase` 몫일 수 있다) 실행 간 편차(11~19초) 안이고, 16회 모두 읽기는 결국 도착했다. 제품이 멈춘 것이 아니라 검사의 15초 예산이 부하에서 모자란 것이다. 검사 예산은 이 변경에서 바꾸지 않았다.
 - 미검증: 운영 DB와 RLS, 실제 Mac·iPad·iPhone, 기기 시계가 크게 다른 실제 사용. 시계가 틀린 기기의 수정은 실제 순서와 다르게 이기거나 질 수 있다. 진 쪽은 복구 사본·이전 버전으로 남는다.
