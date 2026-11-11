@@ -24,7 +24,7 @@ function suite(name, scope) {
   // One isolated signed-in context on the records list.
   async function open({ width = 1440, height = 900, touch = false, url = '/index.html?section=records', server = new FakeCloud(), device = name + '-' + Math.random().toString(36).slice(2), label = name } = {}) {
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width, height }, hasTouch: touch });
-    const page = await context.newPage(); page.setDefaultTimeout(15000);
+    const page = await context.newPage(); page.setDefaultTimeout(Number(process.env.RECORDS_READER_TIMEOUT) || 15000);
     page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: label, message: event.text() }); });
     page.on('pageerror', error => report.pageErrors.push({ check: label, message: error.message }));
     await context.route('**/*', route => {

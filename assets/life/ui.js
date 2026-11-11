@@ -717,6 +717,38 @@
       panel.addEventListener('keydown', escape);
       return setOpen;
     }
+    // A reader panel that opens as a layer under the sticky tool row (출처 정보, 이 원문 담기). It shows where the
+    // person is reading and takes no room in the document, so the reading line does not move. It closes on
+    // Escape from anywhere, a press outside it, or its own button; one layer is open at a time.
+    function readerSheet(tools, trigger, panel, options = {}) {
+      panel.classList.add('life-reader-sheet');
+      const fit = () => {
+        // From under the tool row down to the bottom tab (narrow screens) or the screen edge; longer content scrolls inside.
+        const nav = document.querySelector('.haedo-nav')?.getBoundingClientRect();
+        const floor = nav && nav.height && nav.top > global.innerHeight / 2 && nav.width >= global.innerWidth - 1 ? nav.top : global.innerHeight;
+        panel.style.maxHeight = Math.max(120, Math.floor(floor - tools.getBoundingClientRect().bottom)) + 'px';
+      };
+      const disarm = () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape); global.removeEventListener('resize', resized); };
+      const gone = () => { if (panel.isConnected) return false; disarm(); return true; };
+      const outside = event => { if (!gone() && !panel.hidden && !panel.contains(event.target) && !trigger.contains(event.target)) setOpen(false); };
+      const escape = event => {
+        if (gone() || event.key !== 'Escape' || panel.hidden || event.defaultPrevented) return;
+        event.preventDefault(); setOpen(false); trigger.focus({ preventScroll: true });
+      };
+      const resized = () => { if (!gone() && !panel.hidden) fit(); };
+      const arm = () => { disarm(); fit(); document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape); global.addEventListener('resize', resized); };
+      const setOpen = disclosure(trigger, panel, { onChange: open => {
+        if (open) {
+          for (const other of panel.parentNode?.querySelectorAll(':scope > .life-reader-sheet:not([hidden])') || []) if (other !== panel) other.closeSheet?.();
+          panel.scrollTop = 0; arm();
+        } else disarm();
+        options.onChange?.(open);
+      } });
+      panel.closeSheet = () => setOpen(false);
+      // Rendered already open (the panel stays open across a re-render after 담기).
+      if (!panel.hidden) requestAnimationFrame(() => { if (panel.isConnected && !panel.hidden) arm(); });
+      return setOpen;
+    }
 
     function originName(value) { return value === 'writing' ? '내 글' : (ORIGINS.find(pair => pair[0] === value) || [value, value])[1]; }
     function isOwnWriting(source) { return !!global.HaedoLife.Writing?.isOwnSource(source, state.bundle); }
@@ -4309,7 +4341,9 @@
       arrangePanel.setAttribute('aria-label', '읽던 원문 정리');
       arrangePanel.hidden = !state.readerArrangeOpen;
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
-      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
+      // The tool row and its two panels stick to the top of the screen as one unit (assets/life/ui.css).
+      const dock = node('div', null, 'life-reader-dock');
+      readerSheet(tools, arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
       arrange.disabled = !sourceActive;
       const useQuote = button('선택 구절로 글 쓰기', guarded(() => {
@@ -4334,7 +4368,8 @@
       const heading = node('h1', sourceLabel(source), 'life-heading life-reader-heading');
       heading.tabIndex = -1;
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
-      article.append(tools, arrangePanel, heading,
+      dock.append(tools, arrangePanel);
+      article.append(dock, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
       // One row for the exact version (and when it was kept) and moving between list matches.
@@ -4371,7 +4406,7 @@
       const folders = sourceActive && foldersController();
       if (folders) details.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '이 자료를 폴더로 이동' }));
       info.addEventListener('click', () => { if (details.hidden) optionOffset = currentReaderOffset(); }, { capture: true });
-      const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
+      const setDetails = readerSheet(tools, info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
@@ -4416,7 +4451,7 @@
         details.append(restore);
         article.append(node('p', '휴지통의 자료입니다.', 'life-meta life-source-trash-status'));
       }
-      article.append(details);
+      dock.append(details);
       const connections = obsidianConnections(version.id);
       if (connections) article.append(connections);
       const candidates = obsidianCandidates(source, version, article);
@@ -4761,7 +4796,7 @@
       positionStatus.id = 'lifeReadingPositionStatus';
       positionStatus.hidden = true;
       positionStatus.setAttribute('role', 'status');
-      tools.after(positionStatus);
+      dock.after(positionStatus);
       function watchReading() {
         readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           reader, ...(formattedView ? { positionAdapter: markdown.adapter } : {}),

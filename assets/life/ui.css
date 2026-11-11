@@ -133,7 +133,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-arrange-actions { margin-top: 12px; gap: 8px; }
 .life-arrange-actions .life-glyph { width: 20px; height: 20px; }
 .life-selection-bar > .life-button { margin-top: 8px; border-color: transparent; color: var(--ink-soft); }
-.life-reader-arrange { padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.life-reader-arrange > .life-meta { margin-bottom: 12px; }
 .life-excerpt-note { display: grid; grid-template-columns: 16px minmax(0,1fr); column-gap: 12px; align-items: start; padding: 12px 16px; border-radius: var(--control-radius); background: #f3f8f5; }
 .life-excerpt-note > .life-glyph { margin-top: 8px; color: var(--mint-ink); }
 .life-excerpt-note > .life-note { font-size: var(--haedo-text-control); color: #4e6359; }
@@ -161,7 +161,20 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reading-resume-copy ~ .life-reading-resume-status { order: 1; }
 .life-reading-position-status { margin-bottom: 16px; }
 .life-reader { max-width: 700px; margin: 0 auto; }
-.life-reader-tools { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px 0; margin: -8px -12px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
+/* 읽기 도구 줄과 그 아래에 뜨는 두 패널(출처 정보·이 원문 담기)은 한 묶음으로 화면 위에 붙는다.
+ * 패널은 문서 흐름에 자리를 차지하지 않는 층이라, 긴 글을 읽다가 열어도 누른 자리에서 보이고 읽던 줄이 밀리지 않는다.
+ * 최대 높이는 열 때 보이는 높이(도구 줄 아래 ~ 하단 탭 위)로 맞추고(assets/life/ui.js), 아래 값은 그 전의 기본값이다. */
+.life-reader-dock { position: sticky; top: 0; z-index: 10; margin: -8px -12px 24px; background: var(--paper); }
+.life-reader-tools { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); background: var(--paper); }
+.life-reader-dock > .life-reader-sheet { position: absolute; top: 100%; left: 0; right: 0; max-height: calc(100dvh - 76px - var(--haedo-dock-clearance, 0px)); margin: 0; padding: 16px 12px 20px; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); }
+.life-reader-dock > .life-reader-sheet[hidden] { display: none; }
+.life-reader-dock > .life-reader-sheet > .life-button { margin: 8px 8px 0 0; }
+/* 화면에 붙어 있는 묶음 안으로 초점이 가도 문서를 스크롤하지 않는다. 공통 셸은 초점이 간 조작을 고정 머리줄 아래로
+ * 내리려고 문서의 scroll-padding 80px과 조작의 scroll-margin 80px(아래쪽은 하단 탭 높이)을 쓰는데, 이 묶음은 이미
+ * 보이는 자리에 있으므로 그 값이 읽던 본문만 밀어낸다. 조작의 여백을 반대로 주어 문서 쪽 계산을 0으로 만들고,
+ * 패널 안쪽 스크롤에는 같은 크기의 scroll-padding을 주어 가려진 조작은 패널 안에서만 스크롤해 보이게 한다. */
+.life-reader .life-reader-dock :is(a, button, summary, input, select, textarea, [tabindex]) { scroll-margin-top: -80px; scroll-margin-bottom: calc(-1 * var(--haedo-dock-clearance, 0px)); }
+.life-reader-sheet { scroll-padding-top: 80px; scroll-padding-bottom: var(--haedo-dock-clearance, 0px); }
 .life-reader-tools > :first-child { margin-right: auto; }
 .life-reader-tools > :first-child .life-tooltip { left: 0; transform: none; }
 .life-reader-tools > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
@@ -268,7 +281,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
   .life-reading-resume-copy { flex-basis: 100%; }
   .life-card { padding-block: 28px; }
   .life-reader-heading { font-size: 25px; }
-  .life-reader-tools { margin-bottom: 28px; }
+  .life-reader-dock { margin-bottom: 28px; }
   div.life-source-text { font-size: 17px; }
   .life-reader-meta + .life-reader-meta { margin-bottom: 28px; }
   .life-management { padding-top: 12px; }
@@ -382,7 +395,8 @@ body.haedo-shell .haedo-account-host { top: calc(env(safe-area-inset-top, 0px) +
   .life-app { margin-block: 8px; padding-top: 4px; min-height: calc(100svh - 16px); }
   .life-toolbar.haedo-page-heading { min-height: 44px; margin-bottom: 0; }
   .life-main { padding-top: 0; }
-  .life-reader-tools { padding-block: 4px; margin-bottom: 16px; }
+  .life-reader-tools { padding-block: 4px; }
+  .life-reader-dock { margin-bottom: 16px; }
   .life-reader-heading { font-size: 24px; margin-bottom: 8px; }
   .life-reader-meta + .life-reader-meta { margin-bottom: 16px; }
   .life-reader-layout { margin-top: 16px; }
