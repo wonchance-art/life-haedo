@@ -67,10 +67,17 @@
     withdrawal_overtaken: '철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다. 비공개로 두려면 다시 철회해 주세요.'
   });
   // The text of one note for a post's state (BlogSync getState): 'earlier_choice_public' says how
-  // many photos the public copy shows when that was read.
+  // many photos the public copy shows when that was read, and whose publication it is when that
+  // could be told (publicationEarlier.own, review r4-m1): this device's earlier request (true),
+  // another publication, such as another device's (false), or not readable (null). A record
+  // made before `own` existed keeps the first wording.
   function publicationNote(code, state = null) {
-    const text = publicationNotes[code] || '', photos = state?.publicationEarlier?.photos;
-    if (code !== 'earlier_choice_public' || !Number.isSafeInteger(photos) || photos < 0) return text;
+    let text = publicationNotes[code] || '';
+    if (code !== 'earlier_choice_public') return text;
+    const earlier = state?.publicationEarlier, photos = earlier?.photos;
+    if (earlier?.own === false) text = text.replace('먼저 보낸 게시가', '다른 게시가');
+    else if (earlier && earlier.own === null) text = text.replace('먼저 보낸 게시가', '먼저 보낸 게시나 다른 게시가');
+    if (!Number.isSafeInteger(photos) || photos < 0) return text;
     return text.replace('공개 중입니다.', `공개 중입니다(사진 ${photos}장).`);
   }
   const publicationFault = kind => Object.assign(new Error(publicationMessages[kind] || publicationMessages.settle_failed), { code: 'network_error' });

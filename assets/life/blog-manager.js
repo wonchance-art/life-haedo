@@ -618,7 +618,8 @@
         if (event?.type === 'status') { if (!event.status?.running) void refreshSync(); }
         else if (event?.type === 'delete_refused') { if (event.workspaceId === workspaceId) refusedDelete = true; }
         else if (event?.type === 'publication_notice') {
-          const said = logTexts[event.code] || (event.code === 'earlier_choice_public' ? noticeTexts.earlier_choice_public : '');
+          // The same text as the review and 글 정보, with the photo count the settlement read.
+          const said = logTexts[event.code] || (event.code === 'earlier_choice_public' ? noteText(event.code, { publicationEarlier: event.publicationEarlier || null }) : '');
           if (event.workspaceId !== workspaceId || !said) return;
           const row = rows.find(item => item.kind === 'photo' && item.id === event.localPostId);
           if (!busy) announce((row ? `“${postLabel(row)}”: ` : '') + said);

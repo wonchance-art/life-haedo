@@ -47,6 +47,7 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version(); const contexts = [], dialogs = [];
   // Requests this suite fails on purpose; every other console error fails the run.
+  const offlineCut = { on: false };
   const deliberate = /\/rest\/v1\/rpc\/life_blog_(?:publish|publish_copies|unpublish|read|public_list|sync_list)$|\/functions\/v1\/haedo-blog-media/;
   function watch(page, name) {
     page.setDefaultTimeout(25000);
@@ -55,6 +56,8 @@ async function main() {
       if (event.type() !== 'error') return;
       const entry = { name, message: event.text(), url: event.location().url };
       if (entry.url.startsWith(cloud) && deliberate.test(new URL(entry.url).pathname) && /Failed to load resource:.*(?:ERR_FAILED|404)/.test(entry.message)) report.expectedTransportErrors.push(entry);
+      // R4-M1: while this suite cuts every request to the project (offlineCut), each one fails so.
+      else if (offlineCut.on && entry.url.startsWith(cloud) && /Failed to load resource:.*ERR_INTERNET_DISCONNECTED/.test(entry.message)) report.expectedTransportErrors.push(entry);
       // earlierWithdrawal(): the refusal of the definition before 20261111120000.
       else if (entry.url === cloud + '/rest/v1/rpc/life_blog_unpublish' && earlier.on && /Failed to load resource:.*400/.test(entry.message)) report.expectedTransportErrors.push(entry);
       else report.consoleErrors.push(entry);
@@ -691,7 +694,8 @@ async function main() {
     assert.match((await current(page)).text, /현재 공개 상태: 공개 중/); assert.match((await current(page)).text, noticeA4);
     assert.equal(await consentA4.isChecked(), false, 'the consent ends with the preview');
     assert.match(await panel(page).locator('.blog-manager-public-preview').innerText(), /이 미리보기는 게시되지 않았습니다\. 미리보기를 갱신해 현재 공개 상태를 확인해 주세요/);
-    assert.match(await statusLine(page), /“빼려던 사진이 공개된 글”: 마지막으로 고른 내용은 게시되지 않았습니다\. 먼저 보낸 게시가 반영되어 공개 중입니다/);
+    // r4-m2: the status line says the photo count too, as the review and 글 정보 do.
+    assert.equal(await statusLine(page), '“빼려던 사진이 공개된 글”: 마지막으로 고른 내용은 게시되지 않았습니다. 먼저 보낸 게시가 반영되어 공개 중입니다(사진 2장). 미리보기를 갱신해 다시 게시하거나 철회해 주세요.');
     await panel(page).locator('.blog-manager-current').scrollIntoViewIfNeeded(); await shot(page, 'r3m1-earlier-choice-review-1440');
     for (const [width, height] of [[820, 1180], [390, 844]]) {
       await page.setViewportSize({ width, height }); await panel(page).locator('.blog-manager-current').scrollIntoViewIfNeeded();
@@ -722,6 +726,85 @@ async function main() {
     assert.equal(await mark(page, a4.doc.id), '공개 중');
     await visit(visitor.page, new URL('blog.html?post=' + publication(a4.remoteId).token, base + '/').href, 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 0);
     pass('R3-M1: when the withdrawal that ends the earlier request fails and that request becomes public, the review, the list and 글 정보 keep saying so with the photo count, the stale preview and consent end, and the next publication ends it');
+
+    // ---- Round five, item 5: the photo-count read of that notice is slow -----------------------------------
+    // The settlement holds the post's lock while it reads the public copy anonymously; a publish
+    // pressed in the same tab meanwhile waits for that lock (10 s). The read has its own short
+    // limit, so the press is answered for this tab's own state, never as "another tab".
+    const d5 = await savedPost(page, '사진 수 읽기가 느린 글', files);
+    await manager(page); await openReview(page, d5.doc.id); await preview(page, { selected: d5.doc.photos.map(photo => photo.id), name: '익명 검수' });
+    replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
+    await preview(page, { selected: [] });
+    const endingD5 = await neverArrives(owner.context, 'life_blog_unpublish'); await publish(page); await endingD5.stop();
+    assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isChecked(), true);
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', replacedRequest.bodies[0]).status, 'stored');
+    const slowRead = { seen: 0, answered: 0 };
+    const slow = async route => { slowRead.seen++; await new Promise(done => setTimeout(done, 12000)); slowRead.answered++; await route.fallback().catch(() => {}); };
+    await owner.context.route(rpcPath('life_blog_public_read'), slow);
+    await kick(page); await until(() => slowRead.seen, value => value >= 1, 'the settlement reads the public copy');
+    const pressedD5 = Date.now();
+    await publish(page);
+    report.slowCountRead = { answerMs: Date.now() - pressedD5, line: await statusLine(page) };
+    assert.doesNotMatch(await statusLine(page), /다른 탭에서 처리 중/, 'the press is not told to wait for another tab');
+    assert.equal(await statusLine(page), '글이나 공개 상태가 이 미리보기와 달라졌습니다. 공개 미리보기를 갱신해 현재 상태를 확인한 뒤 다시 게시해 주세요.');
+    assert.equal(slowRead.answered, 0, 'answered before the slow read would have ended');
+    await until(() => panel(page).locator('.blog-manager-current').getAttribute('data-notice'), value => value === 'earlier_choice_public', 'the notice is recorded without the count');
+    assert.match((await current(page)).text, /마지막으로 고른 내용은 게시되지 않았습니다\. 먼저 보낸 게시나 다른 게시가 반영되어 공개 중입니다\. 미리보기를 갱신해/);
+    assert.equal(sentPublish(d5.remoteId).length, 0); assert.equal(sentUnpublish(d5.remoteId).length, 0, 'the device sent nothing by itself');
+    await owner.context.unroute(rpcPath('life_blog_public_read'), slow);
+    await click(page, '공개 검토 닫기');
+    pass('round five: a slow photo-count read of the notice ends by its own limit inside the post lock; a publish pressed meanwhile in the same tab is answered for its own state, and the notice is said without the count');
+
+    // ---- R4-M1: the new choice is pressed with no connection (every request to the project fails), then the earlier request arrives ----
+    const offlineChoice = async (title, cutRequests) => {
+      const made = await savedPost(page, title, files);
+      await manager(page); await openReview(page, made.doc.id); await preview(page, { selected: made.doc.photos.map(photo => photo.id), name: '익명 검수' });
+      const first = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await first.stop();
+      await preview(page, { selected: [] });
+      const stop = await cutRequests(); await publish(page); const tried = await stop();
+      assert.match(await statusLine(page), /^이번 공개 게시 요청은 보내지 못했습니다\. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다/, 'never "공개 상태는 바뀌지 않았습니다": the earlier request can still arrive');
+      assert(tried >= 1, 'the press tried the connection');
+      assert.equal(sentPublish(made.remoteId).length, 0); assert.equal(sentUnpublish(made.remoteId).length, 0, 'nothing was sent');
+      assert.equal((await state(page, made.doc.id)).choiceUnsent?.operationId, first.bodies[0].p_operation_id, 'the earlier request is named on this device');
+      const consent = page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true });
+      assert.equal(await consent.isChecked(), true, 'a connection failure keeps the reviewed preview');
+      assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', first.bodies[0]).status, 'stored');
+      await kick(page); await until(() => publicStatus(page, made.doc.id), value => value === 'public', 'the cycle reads the publication');
+      await until(() => panel(page).locator('.blog-manager-current').getAttribute('data-notice'), value => value === 'earlier_choice_public', 'the open review names it');
+      assert.match((await current(page)).text, /현재 공개 상태: 공개 중/);
+      assert.match((await current(page)).text, /마지막으로 고른 내용은 게시되지 않았습니다\. 먼저 보낸 게시가 반영되어 공개 중입니다\(사진 2장\)\. 미리보기를 갱신해 다시 게시하거나 철회해 주세요/);
+      assert.equal(await consent.isChecked(), false, 'the consent ends with the preview');
+      assert.match(await panel(page).locator('.blog-manager-public-preview').innerText(), /이 미리보기는 게시되지 않았습니다/);
+      // The status line no longer says that nothing changed: it says what is public, with the count.
+      assert.equal(await statusLine(page), '“' + title + '”: 마지막으로 고른 내용은 게시되지 않았습니다. 먼저 보낸 게시가 반영되어 공개 중입니다(사진 2장). 미리보기를 갱신해 다시 게시하거나 철회해 주세요.');
+      await consent.check(); await publish(page);
+      assert.equal(await statusLine(page), '공개 미리보기를 먼저 갱신해 주세요.'); assert.equal(sentPublish(made.remoteId).length, 0);
+      await click(page, '공개 검토 닫기');
+      assert.equal(await mark(page, made.doc.id), '공개 중 · 마지막 선택 미반영');
+      await cycle(page); assert.equal(sentPublish(made.remoteId).length, 0); assert.equal(sentUnpublish(made.remoteId).length, 0, 'the device publishes and withdraws nothing by itself');
+      await visit(visitor.page, new URL('blog.html?post=' + publication(made.remoteId).token, base + '/').href, 'published');
+      assert.equal(await visitor.page.locator('#blogContent img').count(), 2, 'visitors read the earlier choice meanwhile');
+      // Publishing the choice again from a new preview ends it.
+      await openReview(page, made.doc.id); await preview(page, { selected: [] }); await publish(page); await publishedLink(page).waitFor();
+      assert.deepEqual({ active: publication(made.remoteId).active, photos: publication(made.remoteId).photos, revision: publication(made.remoteId).revision }, { active: true, photos: 0, revision: 2 });
+      assert.equal(await panel(page).locator('.blog-manager-current').getAttribute('data-notice'), ''); assert.equal((await state(page, made.doc.id)).choiceUnsent ?? null, null);
+      await click(page, '공개 검토 닫기'); assert.equal(await mark(page, made.doc.id), '공개 중');
+      return made;
+    };
+    // Offline: the account check, the first request of the attempt, fails like every other.
+    let offlineTried = 0;
+    const offlineRoute = route => { offlineTried++; return route.abort('internetdisconnected'); };
+    await offlineChoice('연결 없이 사진을 뺀 글', async () => {
+      offlineTried = 0; offlineCut.on = true; await owner.context.route(cloud + '/**', offlineRoute);
+      return async () => { await owner.context.unroute(cloud + '/**', offlineRoute); offlineCut.on = false; return offlineTried; };
+    });
+    // Only the exact post read fails (the account check works).
+    await offlineChoice('글 읽기만 막힌 글', async () => {
+      let tried = 0; const handler = route => { tried++; return route.abort('failed'); };
+      await owner.context.route(rpcPath('life_blog_read'), handler);
+      return async () => { await owner.context.unroute(rpcPath('life_blog_read'), handler); return tried; };
+    });
+    pass('R4-M1: a new choice pressed offline, or while the post head cannot be read, names the earlier request on the device; when that request becomes public the review, the status line and the list say so with the photo count, the stale preview and consent end, nothing is sent by the device, and publishing again ends it');
 
     // A conflict that is not this device's earlier request: nothing is sent again, and the screen says what is public.
     const x = await savedPost(page, '다른 기기 경합 글', files);
