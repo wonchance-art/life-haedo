@@ -41,10 +41,12 @@ const until = async (test, what) => { for (const end = Date.now() + LIVENESS_MS;
 //            each went out, when and how it ended. With hold, a check is not sent on until the test answers it.
 //   notices  every notice drawn on the first screen.
 //   retries  every timed retry the shell armed (a 2, 5 or 15 s timer set from shell.js).
+//   shown    when the document was first shown (its pageshow).
 async function watchAuth(page, hold = false) {
   await page.addInitScript(held => {
     const send = [];
-    window.__auth = { checks: [], sent: [], notices: [], retries: [], hold: held };
+    window.__auth = { checks: [], sent: [], notices: [], retries: [], shown: null, hold: held };
+    window.addEventListener('pageshow', () => { if (__auth.shown === null) __auth.shown = Date.now(); }, true);
     window.__authSend = index => send[index]?.();
     const real = window.fetch;
     window.fetch = function (input, init) {
@@ -88,6 +90,7 @@ const checks = {
 };
 // The shell armed its n-th timed retry (it does so when a check has failed, with nothing to see on the screen).
 const armed = (page, n) => until(() => asked(page, count => (window.__auth?.retries.length || 0) >= count, n), 'timed retry ' + n + ' to be armed');
+const pageShown = page => until(() => asked(page, () => window.__auth?.shown != null), 'the page to be shown');
 const retryShown = page => until(() => asked(page, () => !!document.querySelector('#lifeStartup:not([hidden]) button')), '다시 확인 on the first screen');
 const appOpen = page => asked(page, () => !document.querySelector('#lifeApp').hidden);
 const listReady = page => until(() => asked(page, () => document.querySelector('#lifeMain')?.dataset.mode === 'home' && document.querySelector('#homePosts')?.getAttribute('aria-busy') === 'false'), 'the list');
@@ -236,7 +239,7 @@ async function main() {
     // The first account check of an opening is never answered: the failure notice after its 10 s limit.
     async function stalledOpening(page) {
       await page.goto(base + '/index.html');
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       await page.clock.runFor(10000);
       await retryShown(page); await checks.ended(page, 1); await armed(page, 1);
     }
@@ -244,7 +247,7 @@ async function main() {
     await check('m2: an account check that is never answered → 다시 확인 exactly ten seconds after the request; the tries 2, 5 and 15 s after each failure wait 20, 30 and 30 s and keep the notice, the button and its focus; nothing personal is opened', async ({ page }) => {
       await watchAuth(page, true);
       await page.goto(base + '/index.html');
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       const checking = { app: false, text: CHECKING, retry: false, welcome: false, stores: 0 };
       assert.deepEqual(await startup(page), checking);
       await page.clock.runFor(9999);
@@ -285,14 +288,14 @@ async function main() {
       const rows = seen => seen.checks.map(row => [row.at - seen.checks[0].at, row.how, row.ended === null ? null : row.ended - row.at]);
       // The ordinary opening, every check answered at once: the checks it makes before the screen is shown.
       await page.goto(base + '/index.html');
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       await answerAfter(page, 0, () => appOpen(page));
       const ordinary = await timeline(page);
       await checks.release(page); await listReady(page);
       assert.deepEqual(rows(ordinary), [[0, 'answered', 0], [0, 'answered', 0]], 'the ordinary opening: the shell’s check and one more, then the screen');
       // The same opening when every answer takes 12 s.
       await page.reload();
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       await answerAfter(page, 12000, () => appOpen(page));
       const seen = await timeline(page), now = await page.evaluate(() => Date.now());
       await checks.release(page); await listReady(page);
@@ -329,11 +332,16 @@ async function main() {
       assert.deepEqual(seen.notices.slice(shown).filter(row => !/확인하고 있습니다/.test(row.text)), [], 'after the press only checking lines were shown: the earlier try’s failure never reached the screen');
     }, { expect: failedCheck, clock: 'paused' });
 
+    const refused = { status: 503, headers: json, body: '{"message":"anonymous upstream failure"}' };
     await check('m2: a failing account check is tried again by itself 2, 5 and 15 seconds after each failure and no more; 다시 확인 then opens the app', async ({ page, context }) => {
       let failing = true;
-      await context.route(cloud + '/auth/v1/user', route => failing ? route.fulfill({ status: 503, headers: json, body: '{"message":"anonymous upstream failure"}' }) : route.fallback());
-      await watchAuth(page);
+      await context.route(cloud + '/auth/v1/user', route => failing ? route.fulfill(refused) : route.fallback());
+      // The first check is held until the page has been shown, then every check goes to the failing server. (A failure
+      // that comes before the page is first shown takes another path: the next check.)
+      await watchAuth(page, true);
       await page.goto(base + '/index.html');
+      await checks.out(page, 1); await pageShown(page);
+      await checks.release(page);
       await retryShown(page); await checks.ended(page, 1); await armed(page, 1);
       for (const [wait, n] of [[2000, 2], [5000, 3], [15000, 4]]) {
         await page.clock.runFor(wait - 1);
@@ -352,6 +360,32 @@ async function main() {
       failing = false;
       await retryButton(page).click();
       await until(() => appOpen(page), 'the app to open'); await listReady(page);
+    }, { expect: failedCheck, clock: 'paused' });
+
+    await check('m2: an account check that fails before the page is first shown is tried once more when the page is shown (the shell’s own pageshow retry), and the three timed tries follow that failure', async ({ page, context }) => {
+      await context.route(cloud + '/auth/v1/user', route => route.fulfill(refused));
+      // One image holds back the end of loading, so the page is first shown when the test says so.
+      let show; const loading = new Promise(resolve => { show = resolve; });
+      await context.route('**/held-for-this-check.png', async route => { await loading; await route.fulfill({ status: 404, body: '' }); });
+      await watchAuth(page);
+      await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const image = document.createElement('img'); image.src = '/held-for-this-check.png'; image.hidden = true; document.body.append(image); }));
+      await page.goto(base + '/index.html', { waitUntil: 'commit' });
+      await retryShown(page); await checks.ended(page, 1); await armed(page, 1);
+      let seen = await timeline(page);
+      assert.deepEqual([seen.checks.length, seen.shown], [1, null], 'the first check failed while the page was still loading');
+      show();
+      await pageShown(page); await checks.out(page, 2); await checks.ended(page, 2); await armed(page, 2);
+      await page.clock.runFor(1999);
+      assert.equal((await timeline(page)).checks.length, 2);
+      await page.clock.runFor(1); await checks.out(page, 3); await checks.ended(page, 3); await armed(page, 3);
+      await page.clock.runFor(5000); await checks.out(page, 4); await checks.ended(page, 4); await armed(page, 4);
+      await page.clock.runFor(15000); await checks.out(page, 5); await checks.ended(page, 5);
+      await page.clock.runFor(300000); await page.waitForTimeout(400);
+      seen = await timeline(page);
+      assert.deepEqual(seen.checks.map(row => row.at - seen.checks[0].at), [0, 0, 2000, 7000, 22000], 'one more check when the page was shown, then the three timed tries and none after');
+      assert.deepEqual([seen.shown - seen.checks[0].at, seen.retries.map(row => row.delay)], [0, [2000, 2000, 5000, 15000]], 'the wait began again at the second failure');
+      const state = await startup(page);
+      assert.deepEqual([state.app, state.retry, state.stores, state.text], [false, true, 0, FAILED_NOTICE]);
     }, { expect: failedCheck, clock: 'paused' });
 
     // The connection (online) or the screen (shown again) comes back while a check is out behind the failure notice.
@@ -410,7 +444,7 @@ async function main() {
       await watchAuth(page, true);
       await stalledOpening(page);                      // this tab's level is raised: the next check may take 20 s
       await page.reload();
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       const checking = { app: false, text: CHECKING_SLOW, retry: false, welcome: false, stores: 0 };
       assert.deepEqual(await startup(page), checking);
       await page.clock.runFor(9999);
@@ -437,7 +471,7 @@ async function main() {
       await watchAuth(page, true);
       await stalledOpening(page);
       await page.reload();
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       await page.clock.runFor(10000); await retryShown(page);
       await retryButton(page).focus();
       const shown = (await timeline(page)).notices.length;
@@ -480,7 +514,7 @@ async function main() {
     await check('m2: a plan page whose account check takes 25 seconds: 다시 확인 opens it again saying the connection is slow, offers 다시 확인 again at 10 s while that check goes on (up to 30 s), and the page opens when it is answered; open, it does not reload on a signal', async ({ page }) => {
       await watchAuth(page, true);
       await page.goto(base + '/habits.html');
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       assert.deepEqual(await plan(page), { text: CHECKING, retry: false, open: false });
       await page.clock.runFor(10000); await checks.ended(page, 1);
       await until(async () => (await plan(page)).retry, '다시 확인 on the plan page');
@@ -512,7 +546,7 @@ async function main() {
     await check('m2: timeline.html whose account check takes 25 seconds: opened again with 다시 확인 it says the connection is slow, offers 다시 확인 at 10 s while the check goes on, and goes on when the check is answered', async ({ page, context }) => {
       await watchAuth(page, true);
       await page.goto(base + '/timeline.html');
-      await checks.out(page, 1);
+      await checks.out(page, 1); await pageShown(page);
       assert.deepEqual(await chart(page), { page: 'timeline.html', text: CHECKING, retry: false });
       await page.clock.runFor(10000); await checks.ended(page, 1);
       await until(async () => (await chart(page)).retry, '다시 확인 on the timeline page');
