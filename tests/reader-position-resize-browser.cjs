@@ -4,6 +4,8 @@
  * C. 보정은 너비가 바뀐 그때 한 번뿐이고, 그 뒤의 사람 스크롤을 되돌리지 않는다. 계정에 올라가는 읽기 위치는 바뀌지 않는다.
  * D. 읽는 줄은 스크롤이 멎은 뒤에 한 번만 잰다(스크롤 프레임마다 재지 않는다). 아직 재지 않은 스크롤 바로 뒤에 너비가
  *    바뀌어도 그때 화면에 있던 줄을 지킨다.
+ *    C·D의 너비 변화는 구분선의 키보드 조절(End·Home)이고, 읽기 칸이 480→420px로 좁아져 본문 높이가 실제로 바뀐다
+ *    (줄바꿈이 바뀐다). 본문 높이가 그대로인 너비 변화로는 보정이 없어도 통과하므로, 높이 변화를 함께 단언한다.
  * npm run dev; node tests/reader-position-resize-browser.cjs
  * 허용 오차는 글자 높이 기준이다: 읽는 줄(화면 높이 1/3)에 있던 바로 그 글자가 너비가 바뀐 뒤에도 같은 화면 높이(회전 뒤에는
  * 화면 높이의 같은 비율)에서 반 줄 안에 있어야 한다. 실측 오차는 0~1px이다. 수정 전에는 27~50문단 어긋났다.
@@ -19,36 +21,26 @@ const S = R.suite('reader-position-resize', 'Local Chromium, synthetic Auth, ano
 const paragraphs = (tag, count) => Array.from({ length: count }, (_, index) => `${tag}-${index + 1}번째 문단. 저녁마다 조금씩 읽어 나간 긴 글의 한 대목이다. 창밖이 어두워질 때까지 읽었고 다음 날에도 이어서 읽었다.`).join('\n\n');
 const worst = { raw: 0, formatted: 0 };
 
-// What is on the reading line (a third down the screen), in either view: the paragraph, and the exact character there
-// (`mark`: which text node of the reader and which offset in it) with its height on screen. Given an earlier
-// mark, `was` is where that same character is now. Run in the page; also used inside other page scripts.
-const measure = mark => {
-  const element = document.querySelector('#lifeSourceText'), line = innerHeight / 3, range = document.createRange();
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), nodes = []; let node; while ((node = walker.nextNode())) nodes.push(node);
-  const rect = (node, offset) => { range.setStart(node, offset); range.setEnd(node, Math.min(node.length, offset + 1)); return range.getBoundingClientRect(); };
-  const ends = node => { range.selectNodeContents(node); return range.getBoundingClientRect(); };
-  // The first text node that reaches below the line, then the first character in it that does.
-  let index = nodes.findIndex(node => /\S/.test(node.data) && ends(node).bottom > line);
-  if (index < 0) index = nodes.length - 1;
-  let low = 0, high = nodes[index].length - 1;
-  while (low < high) { const mid = (low + high) >> 1, box = rect(nodes[index], mid); if (!box.height || box.bottom <= line) low = mid + 1; else high = mid; }
-  const before = nodes.slice(0, index).map(node => node.data).join('') + nodes[index].data.slice(0, low + 1);
-  const place = (node, offset) => { const box = rect(node, offset); return Math.round(box.top * 10) / 10; };
-  return { para: (before.match(/가-(\d+)번째/g) || []).length, mark: [index, low], top: place(nodes[index], low), was: mark ? place(nodes[mark[0]], mark[1]) : null,
-    y: Math.round(scrollY), height: innerHeight, lineHeight: parseFloat(getComputedStyle(element).lineHeight) || parseFloat(getComputedStyle(element).fontSize) * 1.6,
-    width: Math.round(element.getBoundingClientRect().width), mode: element.dataset.readingMode,
-    split: !!document.querySelector('#lifeRecordsPane')?.checkVisibility(), title: document.querySelector('.life-reader-heading').textContent };
-};
-const at = (page, before) => page.evaluate('(' + measure + ')(' + JSON.stringify(before?.mark || null) + ')');
+// The reading line (tests/helpers/records-reader.cjs): `measure` runs in the page and is also used inside other page scripts.
+const measure = R.measureLine, at = R.lineAt;
+// The keyboard step of the separator (End: the widest list, so the narrowest reading column; Home: the narrowest list),
+// sent from inside a page script so it lands in the same task as a scroll, before that scroll's event has arrived.
+// A real key press arrives a round trip later, by when the scroll may already have been measured (120ms after it
+// on a quiet machine, unpredictably on a busy one) and the case under test would not happen. This is the separator's
+// own keydown handler, not a CSS variable set by hand. (End takes the reading column from 480 to 420px, which adds a line
+// to every paragraph: a real reflow. Widening a 480px column does not change its line breaks with this text.)
+const SEPARATOR_KEY = key => `document.querySelector('.haedo-split-handle').dispatchEvent(new KeyboardEvent('keydown', { key: '${key}', bubbles: true, cancelable: true }))`;
+// The width change reflowed the text: the same text is now laid out in a different number of lines, so the character
+// that was on the reading line moved unless the page was corrected.
+const reflowed = (before, after, label) => assert(after.width !== before.width && Math.abs(after.textHeight - before.textHeight) > 10 * after.lineHeight,
+  label + ': the reading column changed width and its text reflowed (' + before.width + 'px, ' + before.textHeight + 'px tall → ' + after.width + 'px, ' + after.textHeight + 'px tall)');
 const savedPosition = page => page.evaluate(async () => JSON.stringify((await HaedoLife.Shell.storage.readReadingPosition(await HaedoLife.Shell.storage.getActive())).position));
-// The character that was on the reading line is at the same height (the same share of the screen after a rotation), within half a line.
-// `lines`: whole lines allowed on top of that (only where the person scrolled at another width in between).
+// The character that was on the reading line is at the same height, within half a line (R.sameLine).
+// `extra`: whole lines allowed on top of that (only where the person scrolled at another width in between).
 function same(before, after, label, extra = 0) {
   assert(Number.isFinite(before.para) && before.para > 20, label + ': reading in the middle (' + JSON.stringify(before) + ')');
-  assert(Number.isFinite(after.was), label + ': measured where the earlier character is now');
-  const want = before.top * after.height / before.height, error = Math.abs(after.was - want), lines = extra + (after.mode === 'formatted' ? 1 : 0);
+  const error = R.sameLine(before, after, label, extra);
   if (!extra) worst[after.mode] = Math.max(worst[after.mode], error);
-  assert(error <= after.lineHeight * (lines + 0.5), label + ': the character being read stays at its height within ' + (lines + 0.5) + ' lines (' + after.lineHeight * (lines + 0.5) + 'px): wanted ' + want.toFixed(1) + ', is ' + after.was + ' · ' + JSON.stringify(before) + ' → ' + JSON.stringify(after));
 }
 
 async function main() {
@@ -108,15 +100,17 @@ async function main() {
       // The app moves the page (as a return to an earlier place does) and the column reflows in the same frame,
       // before the scroll has been looked at. The line remembered at the old place must not be restored: the line
       // that was on screen at the new place, before the reflow, is the one kept.
-      const moved = await page.evaluate('(() => { scrollTo({ top: 4000, behavior: "instant" }); const there = (' + measure + ')(null); document.querySelector("#lifeMain").style.setProperty("--haedo-split-list", "300px"); return there; })()');
+      const moved = await page.evaluate('(() => { scrollTo({ top: 4000, behavior: "instant" }); const there = (' + measure + ')(null); ' + SEPARATOR_KEY('End') + '; return there; })()');
       await frames(page); await frames(page); await page.waitForTimeout(200);
       const after = await at(page, moved);
-      assert.notEqual(after.width, before.width, 'the reading column changed width');
+      reflowed(moved, after, 'narrower');
       assert(moved.para < before.para - 50 && Math.abs(after.para - moved.para) <= 1, 'not pulled back to the earlier line: ' + before.para + ' → ' + moved.para + ' → ' + after.para);
       same(moved, after, 'the line at the place the page was moved to');
       // From there the line is kept again on the next width change.
-      await page.evaluate(() => document.querySelector('#lifeMain').style.setProperty('--haedo-split-list', '420px')); await frames(page); await frames(page);
-      same(moved, await at(page, moved), 'the new line on the next width change');
+      await page.evaluate(SEPARATOR_KEY('Home')); await frames(page); await frames(page);
+      const wider = await at(page, moved);
+      reflowed(after, wider, 'wider again');
+      same(moved, wider, 'the new line on the next width change');
       await context.close();
     });
 
@@ -150,16 +144,18 @@ async function main() {
       const viewport = page.viewportSize(); await page.mouse.move(viewport.width - 300, 450);
       const y = await page.evaluate(() => scrollY);
       await page.mouse.wheel(0, 3000);
-      const moved = await page.evaluate('(async () => { while (scrollY < ' + (y + 2990) + ') await new Promise(resolve => requestAnimationFrame(resolve)); const there = (' + measure + ')(null); document.querySelector("#lifeMain").style.setProperty("--haedo-split-list", "300px"); return there; })()');
+      const moved = await page.evaluate('(async () => { while (scrollY < ' + (y + 2990) + ') await new Promise(resolve => requestAnimationFrame(resolve)); const there = (' + measure + ')(null); ' + SEPARATOR_KEY('End') + '; return there; })()');
       await frames(page); await frames(page); await page.waitForTimeout(250);
       const after = await at(page, moved);
-      assert.notEqual(after.width, start.width, 'the reading column changed width');
+      reflowed(moved, after, 'narrower after the wheel');
       assert(moved.para > start.para + 10, 'the wheel moved the reading on: ' + start.para + ' → ' + moved.para);
       same(moved, after, 'the line read after the wheel turn, not the one measured before it');
       // One frame after the scroll arrived (its event was seen, the measurement still waits): the same.
-      const again = await page.evaluate('(async () => { scrollBy({ top: -1500, behavior: "instant" }); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); const there = (' + measure + ')(null); document.querySelector("#lifeMain").style.setProperty("--haedo-split-list", "420px"); return there; })()');
+      const again = await page.evaluate('(async () => { scrollBy({ top: -1500, behavior: "instant" }); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); const there = (' + measure + ')(null); ' + SEPARATOR_KEY('Home') + '; return there; })()');
       await frames(page); await frames(page); await page.waitForTimeout(250);
-      same(again, await at(page, again), 'the line read one frame after a scroll');
+      const afterAgain = await at(page, again);
+      reflowed(again, afterAgain, 'wider one frame after a scroll');
+      same(again, afterAgain, 'the line read one frame after a scroll');
       assert.equal(await page.evaluate(() => HaedoLife.SplitResize.adjusting()), false);
       // What the measurement at rest is for: once the scrolling has rested, the remembered line is the one that was
       // on screen then, also when it is asked for after the page has started to move again (a reader closing).

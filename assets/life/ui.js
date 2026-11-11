@@ -5125,7 +5125,7 @@
         const top = Number.isInteger(place.start) ? charTop(place.start) : null;
         if (top !== null) global.scrollTo({ top: Math.max(0, global.scrollY + top - place.top), behavior: 'instant' });
         reader.focus({ preventScroll: true });
-        showNotice('발췌할 구절은 원문 텍스트에서 고릅니다. 원문 텍스트에서 구절을 다시 선택해 주세요.');
+        showNotice('발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.');
         // The button's own hover label would sit on the notice it just produced; it returns when the pointer leaves.
         quote.dataset.tooltipDismissed = 'true';
       }, { capture: true });

@@ -11,7 +11,7 @@ const R = require('./helpers/records-reader.cjs');
 const { assert, frames, settle } = R;
 const S = R.suite('reader-markdown-excerpt', 'Local Chromium, synthetic Auth, anonymous Markdown records. A passage picked in the formatted view never becomes an excerpt locator.');
 const pad = (from, count) => Array.from({ length: count }, (_, index) => `채움 문단 ${from + index}은 읽기 화면을 길게 만들려고 넣은 익명 문장이다.`).join('\n\n');
-const NOTICE = '발췌할 구절은 원문 텍스트에서 고릅니다. 원문 텍스트에서 구절을 다시 선택해 주세요.';
+const NOTICE = '발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.';
 const INSTRUCTION = '원문에서 발췌할 구절을 선택하세요.';
 // Each case: the raw text, a rendered block (by text it contains), what is picked there, and where that place is in the raw text.
 // In the first seven the picked words stand somewhere else in the raw text too (or only there): a locator from them would be wrong.

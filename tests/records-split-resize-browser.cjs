@@ -11,6 +11,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const { harnessFrameError } = require('./helpers/news-reader.cjs');
+const { lineAt, sameLine } = require('./helpers/records-reader.cjs');
 const out = path.resolve(process.env.RECORDS_SPLIT_OUTPUT || path.join(__dirname, '../.local/records-split-resize'));
 const report = { createdAt: new Date().toISOString(), scope: 'Local Chromium, synthetic Auth, anonymous records and synthetic news feed; mouse and keyboard only.', checks: [], consoleErrors: [], pageErrors: [], external: [], captures: [] };
 const RECORDS_KEY = 'caeyeon_life_split_records', NEWS_KEY = 'caeyeon_life_split_news';
@@ -191,17 +192,35 @@ async function main() {
       await drag(page, '#lifeMain', -1000); state = await split(page, '#lifeMain'); assertSeparator(state); assert.equal(state.now, 280); assert.equal(state.stored, '280');
       await drag(page, '#lifeMain', 3000); state = await split(page, '#lifeMain'); assertSeparator(state);
       assert.equal(state.now, state.max); assert.equal(state.stored, String(state.max)); assert(Math.abs(state.columns[2] - 420) <= 1, 'reader at its 420px minimum');
-      // Keyboard: ±16px, Shift ±64px, Home/End, Enter resets; page scroll does not move.
+      // Keyboard: ±16px, Shift ±64px, Home/End, Enter resets; the keys do not scroll the page.
+      // Each key that changes the width reflows the reader, and the reader puts the line being read back at its height
+      // (SplitResize.keepLine) in the rendering frame after the width change, not in the key's own task. So the page
+      // can be anywhere between those frames; what must hold is that the separator took the keys (the page's default
+      // Home/End/arrow scroll is prevented) and that, once the frame has come, the reading line is where it was.
       const handle = page.locator('#lifeMain > .haedo-split-handle');
-      await handle.focus(); const scrollY = await page.evaluate(() => scrollY);
+      await handle.focus();
+      await page.evaluate(() => { window.__separatorKeys = []; addEventListener('keydown', event => { if (event.target?.classList?.contains('haedo-split-handle') && event.key !== 'Shift') window.__separatorKeys.push(event); }, true); });
+      const scrollY = await page.evaluate(() => Math.round(scrollY)), reading = await lineAt(page);
+      assert(reading.para > 5 && reading.para < 75, 'reading in the middle of the original: ' + JSON.stringify(reading));
       await page.keyboard.press('Home'); assert.equal((await split(page, '#lifeMain')).now, 280);
+      // Home widens the reader from 420 to 720px (the text reflows); after that frame the same character is on the reading line.
+      await frames(page);
+      const wide = await lineAt(page, reading);
+      assert(wide.width > reading.width && wide.textHeight < reading.textHeight - 10 * wide.lineHeight, 'Home reflowed the reader: ' + JSON.stringify({ reading, wide }));
+      sameLine(reading, wide, 'Home on the separator');
       await page.keyboard.press('ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 296);
       await page.keyboard.press('Shift+ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 360);
       await page.keyboard.press('ArrowLeft'); state = await split(page, '#lifeMain'); assert.equal(state.now, 344); assert.equal(state.stored, '344');
       await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Shift+ArrowLeft'); assert.equal((await split(page, '#lifeMain')).now, 280, 'keys stop at the minimum');
       await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, state.max);
       await page.keyboard.press('ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, state.max, 'keys stop at the maximum');
-      assert.equal(await page.evaluate(() => scrollY), scrollY, 'Home/End on the separator do not scroll the page');
+      assert.deepEqual(await page.evaluate(() => window.__separatorKeys.map(event => [event.key, event.defaultPrevented])),
+        ['Home', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowLeft', 'ArrowLeft', 'End', 'ArrowRight'].map(key => [key, true]), 'the separator takes Home/End and the arrows: the page does not scroll by them');
+      // Back at the width the keys started from, after the frame in which the reader keeps its line.
+      await frames(page);
+      const kept = await lineAt(page, reading);
+      sameLine(reading, kept, 'Home/End and the arrows on the separator');
+      assert.equal(kept.y, scrollY, 'Home/End on the separator do not scroll the page: back at the first width it is where it was');
       assert.deepEqual(await handle.evaluate(node => ({ focus: node.matches(':focus-visible'), ring: getComputedStyle(node.querySelector('.haedo-split-grip')).outlineStyle })), { focus: true, ring: 'solid' }, 'visible focus ring');
       await page.keyboard.press('Enter'); state = await split(page, '#lifeMain'); assert.equal(state.now, 400); assert.equal(state.stored, null, 'Enter resets to the default');
       await page.keyboard.press('Shift+ArrowRight'); assert.equal((await split(page, '#lifeMain')).now, 464);
