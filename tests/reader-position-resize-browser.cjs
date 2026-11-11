@@ -21,27 +21,8 @@ const S = R.suite('reader-position-resize', 'Local Chromium, synthetic Auth, ano
 const paragraphs = (tag, count) => Array.from({ length: count }, (_, index) => `${tag}-${index + 1}번째 문단. 저녁마다 조금씩 읽어 나간 긴 글의 한 대목이다. 창밖이 어두워질 때까지 읽었고 다음 날에도 이어서 읽었다.`).join('\n\n');
 const worst = { raw: 0, formatted: 0 };
 
-// What is on the reading line (a third down the screen), in either view: the paragraph, and the exact character there
-// (`mark`: which text node of the reader and which offset in it) with its height on screen. Given an earlier
-// mark, `was` is where that same character is now. Run in the page; also used inside other page scripts.
-const measure = mark => {
-  const element = document.querySelector('#lifeSourceText'), line = innerHeight / 3, range = document.createRange();
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), nodes = []; let node; while ((node = walker.nextNode())) nodes.push(node);
-  const rect = (node, offset) => { range.setStart(node, offset); range.setEnd(node, Math.min(node.length, offset + 1)); return range.getBoundingClientRect(); };
-  const ends = node => { range.selectNodeContents(node); return range.getBoundingClientRect(); };
-  // The first text node that reaches below the line, then the first character in it that does.
-  let index = nodes.findIndex(node => /\S/.test(node.data) && ends(node).bottom > line);
-  if (index < 0) index = nodes.length - 1;
-  let low = 0, high = nodes[index].length - 1;
-  while (low < high) { const mid = (low + high) >> 1, box = rect(nodes[index], mid); if (!box.height || box.bottom <= line) low = mid + 1; else high = mid; }
-  const before = nodes.slice(0, index).map(node => node.data).join('') + nodes[index].data.slice(0, low + 1);
-  const place = (node, offset) => { const box = rect(node, offset); return Math.round(box.top * 10) / 10; };
-  return { para: (before.match(/가-(\d+)번째/g) || []).length, mark: [index, low], top: place(nodes[index], low), was: mark ? place(nodes[mark[0]], mark[1]) : null,
-    y: Math.round(scrollY), height: innerHeight, lineHeight: parseFloat(getComputedStyle(element).lineHeight) || parseFloat(getComputedStyle(element).fontSize) * 1.6,
-    width: Math.round(element.getBoundingClientRect().width), textHeight: Math.round(element.getBoundingClientRect().height), mode: element.dataset.readingMode,
-    split: !!document.querySelector('#lifeRecordsPane')?.checkVisibility(), title: document.querySelector('.life-reader-heading').textContent };
-};
-const at = (page, before) => page.evaluate('(' + measure + ')(' + JSON.stringify(before?.mark || null) + ')');
+// The reading line (tests/helpers/records-reader.cjs): `measure` runs in the page and is also used inside other page scripts.
+const measure = R.measureLine, at = R.lineAt;
 // The keyboard step of the separator (End: the widest list, so the narrowest reading column; Home: the narrowest list),
 // sent from inside a page script so it lands in the same task as a scroll, before that scroll's event has arrived.
 // A real key press arrives a round trip later, by when the scroll may already have been measured (120ms after it
@@ -54,14 +35,12 @@ const SEPARATOR_KEY = key => `document.querySelector('.haedo-split-handle').disp
 const reflowed = (before, after, label) => assert(after.width !== before.width && Math.abs(after.textHeight - before.textHeight) > 10 * after.lineHeight,
   label + ': the reading column changed width and its text reflowed (' + before.width + 'px, ' + before.textHeight + 'px tall → ' + after.width + 'px, ' + after.textHeight + 'px tall)');
 const savedPosition = page => page.evaluate(async () => JSON.stringify((await HaedoLife.Shell.storage.readReadingPosition(await HaedoLife.Shell.storage.getActive())).position));
-// The character that was on the reading line is at the same height (the same share of the screen after a rotation), within half a line.
-// `lines`: whole lines allowed on top of that (only where the person scrolled at another width in between).
+// The character that was on the reading line is at the same height, within half a line (R.sameLine).
+// `extra`: whole lines allowed on top of that (only where the person scrolled at another width in between).
 function same(before, after, label, extra = 0) {
   assert(Number.isFinite(before.para) && before.para > 20, label + ': reading in the middle (' + JSON.stringify(before) + ')');
-  assert(Number.isFinite(after.was), label + ': measured where the earlier character is now');
-  const want = before.top * after.height / before.height, error = Math.abs(after.was - want), lines = extra + (after.mode === 'formatted' ? 1 : 0);
+  const error = R.sameLine(before, after, label, extra);
   if (!extra) worst[after.mode] = Math.max(worst[after.mode], error);
-  assert(error <= after.lineHeight * (lines + 0.5), label + ': the character being read stays at its height within ' + (lines + 0.5) + ' lines (' + after.lineHeight * (lines + 0.5) + 'px): wanted ' + want.toFixed(1) + ', is ' + after.was + ' · ' + JSON.stringify(before) + ' → ' + JSON.stringify(after));
 }
 
 async function main() {

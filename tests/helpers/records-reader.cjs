@@ -120,4 +120,35 @@ const rect = (page, selector) => page.evaluate(selector => {
   const box = element.getBoundingClientRect();
   return { hidden: !element.checkVisibility(), top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height };
 }, selector);
-module.exports = { assert, base, cloud, accounts, FakeCloud, suite, seed, addVersion, bundle, stages, list, openSource, wheel, pressAt, rect, frames, ready, settle };
+// What is on the original reader's reading line (a third down the screen), in either view: the paragraph (counted by the
+// "N번째" each fixture paragraph has), and the exact character there
+// (`mark`: which text node of the reader and which offset in it) with its height on screen. Given an earlier
+// mark, `was` is where that same character is now. Run in the page; also used inside other page scripts.
+const measureLine = mark => {
+  const element = document.querySelector('#lifeSourceText'), line = innerHeight / 3, range = document.createRange();
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), nodes = []; let node; while ((node = walker.nextNode())) nodes.push(node);
+  const rect = (node, offset) => { range.setStart(node, offset); range.setEnd(node, Math.min(node.length, offset + 1)); return range.getBoundingClientRect(); };
+  const ends = node => { range.selectNodeContents(node); return range.getBoundingClientRect(); };
+  // The first text node that reaches below the line, then the first character in it that does.
+  let index = nodes.findIndex(node => /\S/.test(node.data) && ends(node).bottom > line);
+  if (index < 0) index = nodes.length - 1;
+  let low = 0, high = nodes[index].length - 1;
+  while (low < high) { const mid = (low + high) >> 1, box = rect(nodes[index], mid); if (!box.height || box.bottom <= line) low = mid + 1; else high = mid; }
+  const before = nodes.slice(0, index).map(node => node.data).join('') + nodes[index].data.slice(0, low + 1);
+  const place = (node, offset) => { const box = rect(node, offset); return Math.round(box.top * 10) / 10; };
+  return { para: (before.match(/\d+번째/g) || []).length, mark: [index, low], top: place(nodes[index], low), was: mark ? place(nodes[mark[0]], mark[1]) : null,
+    y: Math.round(scrollY), height: innerHeight, lineHeight: parseFloat(getComputedStyle(element).lineHeight) || parseFloat(getComputedStyle(element).fontSize) * 1.6,
+    width: Math.round(element.getBoundingClientRect().width), textHeight: Math.round(element.getBoundingClientRect().height), mode: element.dataset.readingMode,
+    split: !!document.querySelector('#lifeRecordsPane')?.checkVisibility(), title: document.querySelector('.life-reader-heading')?.textContent ?? null };
+};
+const lineAt = (page, before) => page.evaluate('(' + measureLine + ')(' + JSON.stringify(before?.mark || null) + ')');
+// The character that was on the reading line (`before`) is at the same height in `after` (the same share of the screen after
+// a rotation), within half a line. `extra`: whole lines allowed on top of that. The formatted (Markdown) view keeps a block
+// and a share of its height, not a character, so one more line there. Returns the distance in px.
+function sameLine(before, after, label, extra = 0) {
+  assert(Number.isFinite(after.was), label + ': measured where the earlier character is now');
+  const want = before.top * after.height / before.height, error = Math.abs(after.was - want), lines = extra + (after.mode === 'formatted' ? 1 : 0);
+  assert(error <= after.lineHeight * (lines + 0.5), label + ': the character being read stays at its height within ' + (lines + 0.5) + ' lines (' + after.lineHeight * (lines + 0.5) + 'px): wanted ' + want.toFixed(1) + ', is ' + after.was + ' · ' + JSON.stringify(before) + ' → ' + JSON.stringify(after));
+  return error;
+}
+module.exports = { assert, base, cloud, accounts, FakeCloud, suite, seed, addVersion, bundle, stages, list, openSource, wheel, pressAt, rect, frames, ready, settle, measureLine, lineAt, sameLine };
