@@ -235,12 +235,23 @@
       // A program scroll, not reading (see holdReading): the scroll event fires in the next frame before its animation callbacks.
       holdingScroll++; view.requestAnimationFrame(() => { holdingScroll--; });
       view.scrollTo({ top: target, behavior: 'instant' });
+      seenY = view.scrollY;
       return true;
     }
     function resized() {
       if (disposed || !host.isConnected) return;
       const now = hostWidth();
-      if (width !== null && Math.abs(now - width) >= 0.5) { dirty = false; restore(); }
+      if (width !== null && Math.abs(now - width) >= 0.5) {
+        dirty = false;
+        // Only a line that was measured where the page still is can be put back. If something scrolled the page
+        // since (its event has not been looked at yet), the remembered line is another place: moving the page
+        // there would undo that scroll. Then the line is taken again from the layout as it is now.
+        // (The reflow itself may have shortened the page and pulled the scroll back to its end; that is not such a scroll.)
+        const limit = Math.max(0, doc.documentElement.scrollHeight - view.innerHeight);
+        const still = seenY !== null && (Math.abs(view.scrollY - seenY) < 1.5 || view.scrollY < seenY && view.scrollY >= limit - 1.5);
+        if (still) restore();
+        else if (!paused) { width = now; anchor = adapter.capture(); seenY = view.scrollY; }
+      }
       width = now;
     }
     const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(resized) : null;

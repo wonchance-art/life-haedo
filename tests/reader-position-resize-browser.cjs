@@ -81,6 +81,27 @@ async function main() {
       await context.close();
     });
 
+    await S.check('C. a width change right after the page was scrolled elsewhere does not pull it back to the earlier line', async () => {
+      const { page, context } = await S.open({ width: 1440, height: 900 });
+      const ids = await R.seed(page, [{ title: '문서 가', text: paragraphs('가', 400) }]);
+      await R.openSource(page, ids[0].versionId);
+      await R.wheel(page, 15000); await page.waitForTimeout(500);
+      const before = await at(page);
+      // The app moves the page (as a return to an earlier place does) and the column reflows in the same frame,
+      // before the scroll has been looked at. The line remembered at the old place must not be restored.
+      const moved = await page.evaluate(() => { scrollTo({ top: 4000, behavior: 'instant' }); document.querySelector('#lifeMain').style.setProperty('--haedo-split-list', '300px'); return scrollY; });
+      await frames(page); await frames(page); await page.waitForTimeout(200);
+      const after = await at(page);
+      assert.notEqual(after.width, before.width, 'the reading column changed width');
+      assert.equal(after.y, moved, 'the page stays where it was moved to (' + moved + ' → ' + after.y + ')');
+      assert(after.para < before.para - 50, 'not pulled back to the earlier line: ' + before.para + ' → ' + after.para);
+      // From there the line is kept again on the next width change.
+      await page.evaluate(() => document.querySelector('#lifeMain').style.setProperty('--haedo-split-list', '420px')); await frames(page); await frames(page);
+      const next = await at(page);
+      assert(Math.abs(next.para - after.para) <= TOLERANCE, 'the new line is kept: ' + after.para + ' → ' + next.para);
+      await context.close();
+    });
+
     const cases = [['window 1440→1150', [1440, 900], [1150, 900], false], ['tablet portrait→landscape', [820, 1180], [1180, 820], true],
       ['tablet landscape→portrait', [1180, 820], [820, 1180], true], ['phone portrait→landscape', [390, 844], [844, 390], true]];
     for (const format of ['text/plain', 'text/markdown']) for (const [name, from, to, touch] of cases) await S.check('B. ' + format + ' ' + name + ': the paragraph stays, there and back', async () => {
