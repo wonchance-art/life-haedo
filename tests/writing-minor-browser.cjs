@@ -62,4 +62,23 @@ H.run(__filename, {
     await H.stored(page, list => list[0]?.photos === 20 && list[0].ops.some(op => op.insert?.photo?.id === first), 'and it is stored again');
     await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
   },
+  // m5: one unusable file no longer refuses the photos that are fine.
+  async 'photos-partial-failure'({ open }) {
+    const { page } = await open();
+    await H.home(page); await H.writer(page);
+    const good = async (name, color) => ({ name, mimeType: 'image/jpeg', buffer: await H.jpeg(page, 120, 90, color) });
+    await page.locator('#photoFiles').setInputFiles([await good('첫째.jpg', '#446688'), { name: '메모.txt', mimeType: 'text/plain', buffer: Buffer.from('사진이 아님') },
+      await good('둘째.jpg', '#884466'), { name: '가짜.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('JPEG가 아닌 내용') }]);
+    await H.until(() => blocks(page), count => count === 2, 'the two usable photos are inserted');
+    const said = await H.until(() => H.status(page), value => value.state === 'error', 'the failure is said');
+    assert(said.text.includes('메모.txt') && said.text.includes('가짜.jpg') && /2장/.test(said.text), 'the files that failed are named: ' + said.text);
+    assert(!said.text.includes('첫째.jpg') && !said.text.includes('둘째.jpg'));
+    const rows = await H.stored(page, list => list[0]?.photos === 2, 'the usable photos are stored');
+    assert.deepEqual(await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, (await s.listPhotoPosts(w))[0].id); return d.ops.filter(op => op.insert?.photo).map(op => d.photos.find(p => p.id === op.insert.photo.id).name); }), ['첫째.jpg', '둘째.jpg'], 'in the order chosen');
+    assert.equal(rows.length, 1);
+    // A single unusable file says why, as before.
+    await page.locator('#photoFiles').setInputFiles({ name: '메모.txt', mimeType: 'text/plain', buffer: Buffer.from('사진이 아님') });
+    await H.until(() => H.status(page), value => value.state === 'error' && value.text.startsWith('JPEG·PNG·WebP·HEIC 사진을 골라 주세요'), 'single failure keeps its reason');
+    assert.equal(await blocks(page), 2);
+  },
 });

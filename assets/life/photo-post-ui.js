@@ -1783,23 +1783,49 @@
       guard();
       if (!files.length) return;
       const token = epoch,
+        failed = [],
         position = editor.getSelection(true)?.index ?? editor.getLength() - 1;
       setBusy(true);
       try {
         // At most two files at a time; HEIC conversions are further
         // serialized inside PhotoPost so a 48 MP bitmap is decoded alone.
         const list = [...files],
-          incoming = new Array(list.length);
+          read = new Array(list.length);
         let nextFile = 0;
         await Promise.all(
           Array.from({ length: Math.min(2, list.length) }, async () => {
             while (nextFile < list.length) {
               const index = nextFile++;
-              incoming[index] = await M.readPhoto(list[index], life.Core.id);
+              // One file that cannot be used does not refuse the others.
+              try {
+                read[index] = await M.readPhoto(list[index], life.Core.id);
+              } catch (cause) {
+                failed.push({ index, name: list[index]?.name || "이름 없는 파일", message: cause?.message || "사진을 읽지 못했습니다." });
+              }
             }
           }),
         );
         if (!current(token)) return;
+        // In the order chosen, as many as the limits still allow.
+        const using = M.normalize(doc).doc.photos;
+        let count = using.length,
+          bytes = using.reduce((sum, p) => sum + p.size + (p.view ? p.view.size : 0), 0);
+        const incoming = [];
+        read.forEach((p, index) => {
+          if (!p) return;
+          const size = p.size + (p.view ? p.view.size : 0);
+          const refusal = count >= M.LIMITS.photos
+            ? "한 글에 사진은 20장까지 붙일 수 있습니다."
+            : bytes + size > M.LIMITS.bytes
+              ? "한 글의 원본 사진은 합계 256 MiB까지 보관할 수 있습니다. 해상도는 줄이지 않습니다."
+              : null;
+          if (refusal) return failed.push({ index, name: p.name, message: refusal });
+          incoming.push(p);
+          count++;
+          bytes += size;
+        });
+        failed.sort((a, b) => a.index - b.index);
+        if (!incoming.length) throw photoFailure(list.length, failed);
         let at = position;
         const Delta = root.Quill.import("delta"),
           delta = new Delta().retain(at).insert("\n");
@@ -1825,6 +1851,15 @@
         setBusy(false);
       }
       await persist();
+      // The photos that could be used are in and stored; say which were not.
+      if (failed.length) throw photoFailure(files.length, failed);
+    }
+    function photoFailure(total, failed) {
+      // A single file keeps its own reason, as before.
+      if (total === 1) return Object.assign(new Error(failed[0].message), { code: "invalid_photo_post" });
+      const reasons = [...new Set(failed.map((item) => item.message))];
+      return Object.assign(new Error("사진 " + total + "장 중 " + failed.length + "장을 넣지 못했습니다: " +
+        failed.map((item) => item.name).join(", ") + ". " + reasons.join(" ")), { code: "photo_files_refused" });
     }
     function selectPhoto(node) {
       guard();
