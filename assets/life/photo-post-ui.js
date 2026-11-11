@@ -2397,15 +2397,18 @@
           // The armed state covers exactly one paste, whatever it contains.
           const ai = aiPending;
           if (ai) setAiPending(false, false);
-          const files = [...(e.clipboardData?.files || [])];
+          // Characters a post cannot hold never enter the body: a manual line
+          // break from Word or PowerPoint (U+000B) becomes a line break.
+          const text = M.cleanText(e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n");
+          // Word and slide apps put the text and a picture of it on the
+          // clipboard together: the text is what was copied. A clipboard with
+          // no text (a screen capture, a copied photo) is a photo.
+          const files = text.trim() ? [] : [...(e.clipboardData?.files || [])];
           if (files.length) {
             run(() => insertFiles(files));
             return;
           }
-          // Characters a post cannot hold never enter the body: a manual line
-          // break from Word or PowerPoint (U+000B) becomes a line break.
-          const text = M.cleanText(e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n"),
-            range = editor.getSelection(true);
+          const range = editor.getSelection(true);
           if (text) {
             if (range.length)
               editor.deleteText(range.index, range.length, "user");

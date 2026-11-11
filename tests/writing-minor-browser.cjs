@@ -81,4 +81,18 @@ H.run(__filename, {
     await H.until(() => H.status(page), value => value.state === 'error' && value.text.startsWith('JPEG·PNG·WebP·HEIC 사진을 골라 주세요'), 'single failure keeps its reason');
     assert.equal(await blocks(page), 2);
   },
+  // m6: a clipboard with text and a picture of it (Word, slides) pastes the text.
+  async 'paste-text-with-image'({ open }) {
+    const { page } = await open();
+    await H.home(page); await H.writer(page);
+    await page.locator('.ql-editor').click();
+    await H.pasteBody(page, { text: '워드에서 복사한 문단입니다.', image: true });
+    await H.until(() => H.bodyText(page), text => text === '워드에서 복사한 문단입니다.\n', 'the text is pasted');
+    assert.equal(await blocks(page), 0, 'not its picture');
+    await draftWith(page, '워드에서 복사한 문단입니다.');
+    // A picture alone (a screen capture) is still a photo; blank text does not count as text.
+    await H.pasteBody(page, { text: ' \n', image: true });
+    await H.until(() => blocks(page), count => count === 1, 'a picture with no text is a photo');
+    await H.stored(page, rows => rows[0]?.photos === 1, 'stored');
+  },
 });
