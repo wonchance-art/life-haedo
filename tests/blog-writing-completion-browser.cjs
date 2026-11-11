@@ -194,6 +194,10 @@ async function main() {
       const before = await read(), empty = before.docs.find(v => v.status === 'draft' && !v.title.trim() && !v.photos.length && !v.attachments.length && !v.ops.some(op => typeof op.insert === 'string' && op.insert.trim()));
       assert(empty); await click('닫기');
       // 2026-11-11 (글쓰기 M2 2c): a draft emptied before closing is removed, not kept in the draft area.
+      // The editor leaves only after 닫기 has finished storing and removing the draft (list() awaits leave()).
+      // No list row ever named this draft, so waiting for its row alone passes at once and read() raced the
+      // removal (lost once deletePost also waits for the post's publication lock and sync state).
+      await page.locator('.photo-editor').waitFor({ state: 'detached' });
       await page.waitForFunction(id => !document.querySelector('[data-photo-post-id="' + id + '"]'), empty.id);
       const closed = await read(); assert.equal(closed.index.some(v => v.id === empty.id), false); assert.equal(closed.index.length, before.index.length - 1);
       // An empty draft left by another device or an earlier version still lives in the draft area and is reused by 글쓰기.
