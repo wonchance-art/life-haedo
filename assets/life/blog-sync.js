@@ -477,8 +477,10 @@
     // The exact server head decides what this device records about a post's public copy and
     // about its own unacknowledged publish and withdraw requests. It runs in the post's queue,
     // so the head it reads is never older than a result this device already recorded.
-    // - A head beyond a publish request's publication revision, or a different post revision,
-    //   ends that request: it was applied (the head is its result) or can never be applied.
+    // - A head beyond a publish request's publication revision ends that request: it was
+    //   applied (the head is its result) or another publication took its place. A request
+    //   whose post revision moved is kept like any other unapplied one: its explicit retry is
+    //   answered by the server (conflict), as before.
     // - A publish request the head shows as not applied is never sent again from here: nothing
     //   becomes public without the owner's action. It stays for an explicit retry of the same
     //   choice and is marked checked (publishChecked). `replace` drops it for a new explicit
@@ -499,7 +501,7 @@
         let row = await remote.read(state.remoteId); guard(c);
         const publishing = state.publishPending, withdrawing = state.unpublishPending;
         if (publishing) {
-          if (replace || !row || publicRevision(row.publication) > (publishing.expectedPublicRevision || 0) || row.revision !== publishing.expectedRevision) changes.publishPending = null;
+          if (replace || !row || publicRevision(row.publication) > (publishing.expectedPublicRevision || 0)) changes.publishPending = null;
           else if (state.publishChecked !== publishing.operationId) changes.publishChecked = publishing.operationId;
         }
         if (withdrawing) {

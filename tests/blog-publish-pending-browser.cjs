@@ -188,18 +188,34 @@ async function main() {
       const owner=await device('pending-lost-ack',390),page=owner.page,f=await seed(page,'unknown-ack'),pending=await pendingFixture(page,f);
       await manager(page,f.id);await preview(page);const edgeBefore=server.edgeRequests.length;server.abortLegacy=true;await publish(page);
       assert.deepEqual((await state(page,f)).publishPending,pending);assert.equal(server.edgeRequests.length,edgeBefore);assert.equal(receipts(f,pending.operationId),0);
-      assert.match(await statusText(page),/서버 연결/);await snap(page,'unknown-ack-preserved-390');await unchanged(page,f);
+      // 2026-11-11: a publication failure no longer borrows the document-save message (it promised an automatic retry that never happens for publishing).
+      assert.match(await statusText(page),/공개 게시 결과를 받지 못했습니다/);assert.doesNotMatch(await statusText(page),/자동으로 다시 시도/);await snap(page,'unknown-ack-preserved-390');await unchanged(page,f);
       await publish(page);assert.equal((await state(page,f)).publishPending,null);assert.equal(server.edgeRequests.length,edgeBefore+1);assert.equal(server.edgeRequests.at(-1).body.p_operation_id,pending.operationId);assert.equal(receipts(f,pending.operationId),1);
       await owner.context.close();
     });
-    await check('completed legacy receipt on a now-Markdown document replays without an Edge publication',async()=>{
+    // 2026-11-11 (publication recovery): a completed request whose answer was lost is settled from the
+    // server head (by the first cycle or when the review opens) instead of waiting for the owner to press
+    // publish again. The completed legacy receipt is therefore recognized without sending it again through
+    // either route; the earlier form of this check replayed it. A later explicit publication is an update
+    // of the same public address through the Markdown route. The receipt replay itself stays covered by
+    // tests/blog-publish-pending-recovery.test.cjs and the lost-ACK check above.
+    await check('completed legacy receipt on a now-Markdown document is settled from the server head without any publication request',async()=>{
       const owner=await device('pending-completed-receipt',1440),page=owner.page,f=await seed(page,'receipt',true),pending=await pendingFixture(page,f);
       await manager(page,f.id);await preview(page);server.abortLegacy=true;await publish(page);
       assert.deepEqual((await state(page,f)).publishPending,pending);assert.equal(receipts(f,pending.operationId),1);
       const original=read(f).publication,converted=await upgraded(page,f,pending);f.private=converted.private;
-      await page.reload();await ready(page);await manager(page,f.id);await preview(page);const edgeBefore=server.edgeRequests.length;await publish(page);
-      assert.equal(server.edgeRequests.length,edgeBefore);assert.equal(server.legacy.at(-1).body.p_operation_id,pending.operationId);assert.equal(server.legacy.at(-1).status,'stored');
-      assert.equal((await state(page,f)).publishPending,null);assert.deepEqual(read(f).publication,original);assert.equal(receipts(f,pending.operationId),1);await unchanged(page,f);
+      const legacyBefore=server.legacy.length,edgeBefore=server.edgeRequests.length;
+      await page.reload();await ready(page);await manager(page,f.id);
+      const settled=await state(page,f);
+      assert.equal(settled.publishPending,null);assert.deepEqual(settled.publication,original,'the completed publication is recorded as the server holds it');
+      assert.equal(await page.locator('.blog-manager-current').getAttribute('data-publication'),'public');
+      assert.equal(server.legacy.length,legacyBefore,'the completed request is not sent again');assert.equal(server.edgeRequests.length,edgeBefore,'and is not replaced through Edge');
+      assert.deepEqual(read(f).publication,original);assert.equal(receipts(f,pending.operationId),1);await unchanged(page,f);
+      await preview(page);await publish(page);
+      assert.equal(server.legacy.length,legacyBefore);assert.equal(server.edgeRequests.length,edgeBefore+1,'an explicit update uses the Markdown route');
+      assert.notEqual(server.edgeRequests.at(-1).body.p_operation_id,pending.operationId);assert.equal(server.edgeRequests.at(-1).body.p_expected_publication_revision,original.revision);
+      const updated=read(f).publication;assert.equal(updated.token,original.token,'the same public address');assert.equal(updated.revision,original.revision+1);assert.equal(updated.active,true);
+      assert.equal((await state(page,f)).publishPending,null);await unchanged(page,f);
       await owner.context.close();
     });
     await check('missing historical public copies keep the pending intent and explain recovery',async()=>{
