@@ -46,7 +46,10 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
   await query('산책');await page.getByText('검색 범위·옵션',{exact:true}).click();await page.getByRole('checkbox',{name:'숨긴 컬렉션 항목 포함',exact:true}).check();await page.locator('.life-find-tabs [data-kind=collection]').click();await click('컬렉션 20개 더 보기');assert.equal(await rows().count(),24);assert((await rows().allTextContents()).some(t=>t.includes('보관 중')));assert.deepEqual(await snapshot(),before);
  });
  await check('Drafts excluded, composition input does not query midway, query never enters the URL',async()=>{
-  await page.locator('.life-find-tabs [data-kind=all]').click();await query('작성중기밀');assert.equal(await rows().count(),0);await page.locator('#lifeFindQuery').dispatchEvent('compositionstart');await page.locator('#lifeFindQuery').fill('산책');assert.equal(await rows().count(),0);await page.locator('#lifeFindQuery').dispatchEvent('compositionend');assert(await rows().count()>0);assert(!page.url().includes(encodeURIComponent('산책')));assert.deepEqual(await snapshot(),before);
+  await page.locator('.life-find-tabs [data-kind=all]').click();await query('작성중기밀');assert.equal(await rows().count(),0);await page.locator('#lifeFindQuery').dispatchEvent('compositionstart');await page.locator('#lifeFindQuery').fill('산책');
+  // 2026-11-11 (자료 읽기 m3, 규칙 변경): 조합 중인 글자도 검색에 반영한다(이전에는 조합이 끝날 때까지 결과가 없었다).
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));assert(await rows().count()>0,'results follow the text still being composed');assert.equal(await page.locator('#lifeFindQuery').inputValue(),'산책');
+  await page.locator('#lifeFindQuery').dispatchEvent('compositionend');assert(await rows().count()>0);assert(!page.url().includes(encodeURIComponent('산책')));assert.deepEqual(await snapshot(),before);
  });
  await check('A failed collection read retains source/page results and retries without losing query',async()=>{
   await page.evaluate(()=>{window.__findGet=IDBObjectStore.prototype.get;window.__findFail=true;IDBObjectStore.prototype.get=function(key){const r=__findGet.call(this,key);if(__findFail&&String(key).startsWith('collection:'))this.transaction.abort();return r;};});
