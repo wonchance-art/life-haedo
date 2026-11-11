@@ -49,16 +49,14 @@ async function main() {
     if (status === 'saved') { await page.locator('.photo-article').waitFor(); await page.locator('.photo-posts').getByRole('button', { name: '글 수정', exact: true }).click(); }
     await page.locator('#photoTitle').waitFor();
     if (status === 'saved') {
-      // Opening a saved post creates an editing draft. Establish the durable
-      // baseline before counting the separate copy, rather than racing autosave.
-      await page.locator('.photo-status[data-state="draft"]').waitFor();
+      // 2026-11-11 (글쓰기 M2): opening a saved post for editing stores nothing until
+      // something is changed. The revision is the saved post's editing buffer.
+      await page.locator('.photo-status[data-state="idle"]').waitFor();
       const drafts = await page.evaluate(async () => {
         const s = HaedoLife.Shell.storage, w = await s.getActive(), rows = await s.listPhotoPosts(w);
         return Promise.all(rows.filter(row => row.status === 'draft').map(row => s.readPhotoPost(w, row.id)));
       });
-      assert.equal(drafts.length, 1);
-      assert(drafts[0].revision > 0);
-      assert.deepEqual(drafts[0].replaces, { id: seed.id, revision: seed.original.revision });
+      assert.equal(drafts.length, 0);
     }
     return { context, page, seed, server };
   }

@@ -35,6 +35,8 @@
   const posts = () =>
     root.HaedoLife?.PagePosts ||
     (typeof require === "function" && require("./page-posts.js"));
+  const syncCommon = () => root.HaedoLife?.SyncCommon ||
+    (typeof require === "function" && require("./sync-common.js"));
   const markdown = () => root.HaedoLife?.PostMarkdown ||
     (typeof require === "function" && require("./post-markdown.js"));
   const isMarkdown = (d) => d?.format === "life-post-md-v1";
@@ -149,8 +151,10 @@
     }
   }
   function ops(values, photoIds, markdownBody = false) {
-    if (!Array.isArray(values) || !values.length || values.length > LIMITS.ops)
+    if (!Array.isArray(values) || !values.length)
       throw fault("본문 길이를 확인해 주세요.");
+    if (values.length > LIMITS.ops)
+      throw fault("본문 길이를 확인해 주세요. 서식 조각이 5,000개를 넘었습니다. 서식이 섞인 부분을 줄여 주세요.");
     let length = 0;
     const used = new Set();
     for (const op of values) {
@@ -161,15 +165,16 @@
       )
         throw fault("지원하지 않는 본문 형식입니다.");
       if (typeof op.insert === "string") {
-        text(op.insert, LIMITS.text);
+        // Characters only: the length is the whole body's, reported once below.
+        text(op.insert, Infinity, "본문");
         length += op.insert.length;
       } else {
         fields(op.insert, ["photo"]);
         const p = op.insert.photo;
         fields(p, ["id", "caption", "alt"]);
         id(p.id);
-        text(p.caption, 2000);
-        text(p.alt, 2000);
+        text(p.caption, 2000, "사진 설명");
+        text(p.alt, 2000, "사진 대체 텍스트");
         if (!photoIds.has(p.id) || used.has(p.id))
           throw fault("사진 참조가 없거나 중복됐습니다.");
         used.add(p.id);
@@ -199,12 +204,14 @@
         }
       }
     }
-    if (
-      length > LIMITS.text ||
-      (!markdownBody && (typeof values.at(-1).insert !== "string" ||
+    if (length > LIMITS.text)
+      throw fault(
+        "본문은 50,000자까지 쓸 수 있습니다. 지금 " +
+          length.toLocaleString("ko-KR") + "자입니다. 줄여 주세요.",
+      );
+    if (!markdownBody && (typeof values.at(-1).insert !== "string" ||
       !values.at(-1).insert.endsWith("\n")))
-    )
-      throw fault("본문은 50,000자까지 쓸 수 있습니다.");
+      throw fault("지원하지 않는 본문 형식입니다.");
     return used;
   }
   function photo(p, withBlob = true) {
@@ -408,6 +415,355 @@
       next = structuredClone(d);
     next.photos = next.photos.filter((p) => used.has(p.id));
     return next;
+  }
+  // ---- Input cleaning and normalization ------------------------------------
+  // The editor accepts more than a stored post may hold. These functions are
+  // the one place that turns accepted input into the stored form, so a draft
+  // is never refused for something the editor let the writer do. They know
+  // the Delta document only, not the editor that produced it.
+  const UNSAFE_TEXT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u;
+  // Vertical tab and form feed are the manual line breaks of Word and
+  // PowerPoint clipboards: a line break in the body, a space in one-line
+  // fields. Other control characters and unpaired surrogates carry no text.
+  function cleanText(value, lineBreaks = true) {
+    if (typeof value !== "string") return "";
+    if (!UNSAFE_TEXT.test(value)) return value;
+    return value
+      .replace(/[\u000b\u000c]/g, lineBreaks ? "\n" : " ")
+      .replace(/[\u0000-\u0008\u000e-\u001f\u007f]/g, "")
+      .replace(/[\uD800-\uDFFF]/gu, "");
+  }
+  // An address typed without a scheme is an https address. Returns the
+  // address validation accepts, or null when it is not an http(s) address.
+  function safeLink(value) {
+    if (typeof value !== "string") return null;
+    let v = value.trim();
+    if (!v) return null;
+    if (!/^https?:\/\//i.test(v)) {
+      // "example.com:8080/x" names a port, not a scheme.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(v) && !/^[^\s/?#:@]+:\d{1,5}(?:[/?#]|$)/.test(v))
+        return null;
+      v = (v.startsWith("//") ? "https:" : "https://") + v;
+      try {
+        const host = new URL(v).hostname;
+        if (!host.includes(".") && host !== "localhost") return null;
+      } catch (_) {
+        return null;
+      }
+    }
+    try {
+      link(v);
+    } catch (_) {
+      return null;
+    }
+    return v;
+  }
+  // Nearest supported form of one op's attributes. `note(kind)` records a
+  // change; a kind names one the writer should be told about.
+  function normalAttributes(attributes, isText, note) {
+    if (attributes == null) return null;
+    if (!plain(attributes)) {
+      note("format");
+      return null;
+    }
+    const out = {};
+    for (const [key, v] of Object.entries(attributes)) {
+      if (v == null || v === false) {
+        note();
+        continue;
+      }
+      if (["bold", "italic", "underline", "blockquote"].includes(key)) {
+        if (v !== true) note();
+        out[key] = true;
+      } else if (key === "header") {
+        const level = Number(v);
+        if (level === 1 || level === 2) {
+          if (v !== level) note();
+          out.header = level;
+        } else {
+          note("format");
+          if (Number.isInteger(level) && level >= 3 && level <= 6) out.header = 2;
+        }
+      } else if (key === "list") {
+        if (v === "ordered" || v === "bullet") out.list = v;
+        else if (v === "checked" || v === "unchecked") {
+          note("checklist");
+          out.list = "bullet";
+        } else note("format");
+      } else if (key === "align") {
+        if (["center", "right", "justify"].includes(v)) out.align = v;
+        else note(v === "left" || v === "" ? undefined : "format");
+      } else if (key === "link") {
+        const safe = safeLink(v);
+        if (safe) {
+          if (safe !== v) note();
+          out.link = safe;
+        } else note("link");
+      } else if (key === "author") {
+        if (v === "ai" && isText) out.author = "ai";
+        else note("format");
+      } else note("format");
+    }
+    return Object.keys(out).length ? out : null;
+  }
+  const sameAttributes = (a, b) => {
+    const x = a || {}, y = b || {}, keys = Object.keys(x);
+    return keys.length === Object.keys(y).length && keys.every((k) => x[k] === y[k]);
+  };
+  // The document in the form validation accepts, when one exists: unsupported
+  // formats become the nearest supported one, characters a post cannot hold
+  // are cleaned, photos the body no longer uses are left out (the editor keeps
+  // them for undo). Lengths are never cut: a document over a limit stays over
+  // it and is reported by validate(). `changes` lists what the writer should
+  // be told; `changed` is true when the body or title differs at all.
+  function normalize(input) {
+    if (!plain(input) || isMarkdown(input) || !Array.isArray(input.ops))
+      return { doc: input, changes: [], changed: false };
+    const changes = new Set();
+    let changed = false;
+    const note = (kind) => {
+      changed = true;
+      if (kind) changes.add(kind);
+    };
+    const all = Array.isArray(input.photos) ? input.photos : [];
+    const known = new Set(all.map((p) => p?.id)),
+      used = new Set(),
+      out = [];
+    const push = (insert, attributes) => out.push(attributes ? { insert, attributes } : { insert });
+    for (const op of input.ops) {
+      if (!plain(op) || !Object.hasOwn(op, "insert")) {
+        note("format");
+        continue;
+      }
+      if (Object.keys(op).some((k) => k !== "insert" && k !== "attributes")) note();
+      if (typeof op.insert === "string") {
+        const value = cleanText(op.insert);
+        if (value !== op.insert) note("chars");
+        if (value) push(value, normalAttributes(op.attributes, true, note));
+        continue;
+      }
+      const p = plain(op.insert) ? op.insert.photo : null;
+      if (!plain(p) || typeof p.id !== "string" || !known.has(p.id) || used.has(p.id)) {
+        note("embed");
+        continue;
+      }
+      used.add(p.id);
+      const caption = cleanText(typeof p.caption === "string" ? p.caption : ""),
+        alt = cleanText(typeof p.alt === "string" ? p.alt : "", false);
+      if (caption !== p.caption || alt !== p.alt) note("chars");
+      else if (Object.keys(op.insert).length !== 1 || Object.keys(p).length !== 3) note();
+      push({ photo: { id: p.id, caption, alt } }, normalAttributes(op.attributes, false, note));
+    }
+    const last = out.at(-1);
+    if (!last || typeof last.insert !== "string" || !last.insert.endsWith("\n")) {
+      // Every stored body ends with a line break (the editor's own form).
+      push("\n", null);
+      changed = true;
+    }
+    const title = cleanText(typeof input.title === "string" ? input.title : "", false);
+    if (title !== input.title) note("chars");
+    // A body that needed nothing keeps its exact ops (a copy or a backup of a
+    // stored post is the same document). Only a mapped body is compacted, the
+    // way the editor itself joins text that now carries the same formats.
+    let body = input.ops;
+    if (changed) {
+      body = [];
+      for (const op of out) {
+        const last = body.at(-1);
+        if (last && typeof op.insert === "string" && typeof last.insert === "string" && sameAttributes(last.attributes, op.attributes))
+          last.insert += op.insert;
+        else body.push(op);
+      }
+    }
+    return {
+      doc: { ...input, title, ops: body, photos: all.filter((p) => used.has(p?.id)) },
+      changes: [...changes],
+      changed,
+    };
+  }
+  // One status line for what normalize() changed.
+  const CHANGE_NOTES = {
+    checklist: "체크 목록은 글머리 목록으로 바꿨어요",
+    chars: "쓸 수 없는 문자를 뺐어요",
+    link: "주소가 아닌 링크는 풀었어요",
+    format: "지원하지 않는 서식은 풀었어요",
+    embed: "넣을 수 없는 항목은 뺐어요",
+  };
+  function describeChanges(changes) {
+    const notes = (changes || []).map((kind) => CHANGE_NOTES[kind]).filter(Boolean);
+    return notes.length > 1 ? "지원하지 않는 서식·문자를 정리했어요" : notes[0] || "";
+  }
+  // What the title, body and attachments hold, for comparing two documents.
+  // A Markdown post's body is its Markdown text (it has no ops to compare).
+  // Written with sorted keys (the sync modules' canonical text), so the same
+  // content compares equal whatever order its keys arrive in: a post that came
+  // back from the server has them in another order than the editor wrote.
+  function contentKey(d) {
+    const value = [d.title, isMarkdown(d) ? { markdown: d.markdown } : normalize(d).doc.ops, d.attachments || []];
+    const canonical = syncCommon()?.canonical;
+    return canonical ? canonical(value) : JSON.stringify(value);
+  }
+  // A short fingerprint of that content, small enough to keep beside a device
+  // copy (53-bit string hash and the length; not a security digest).
+  function textHash(value) {
+    const text = String(value);
+    let a = 0xdeadbeef ^ text.length, b = 0x41c6ce57 ^ text.length;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      a = Math.imul(a ^ code, 2654435761);
+      b = Math.imul(b ^ code, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return text.length.toString(36) + "." + (4294967296 * (2097151 & b) + (a >>> 0)).toString(36);
+  }
+  // The scheme is part of the fingerprint: one written from unsorted text by
+  // an earlier version, or by a page that lacks the shared module, never equals
+  // a sorted one. It then reads as "changed", which never overwrites anything.
+  // (A device copy holds its own input, not what was stored, so an old
+  // fingerprint cannot be recomputed from it.)
+  // keyHash takes a contentKey() already made (the editor keeps one as its baseline).
+  const keyHash = (key) => (syncCommon()?.canonical ? "c1." : "j0.") + textHash(key);
+  const contentHash = (d) => keyHash(contentKey(d));
+  const isEmpty = (d) =>
+    !String(d.title || "").trim() &&
+    !(d.attachments || []).length &&
+    contentOps(d).every((op) => typeof op.insert === "string" && !op.insert.trim());
+  // ---- Device-only recovery copies ------------------------------------------
+  // What the editor holds, written without validation and synchronously to
+  // this browser only, for the moments the draft itself cannot be stored: the
+  // content is over a limit, the store failed, or the page is closing before
+  // autosave ran. Text, formats and photo references only; photo bytes stay in
+  // the stored draft. One copy per account, workspace and draft: `scope` is the
+  // signed-in account, so another account in the same browser never reads it
+  // (its workspaces are other ids as well). Never synced, never public.
+  const RECOVERY_PREFIX = "haedo_life_post_recovery_v1:";
+  const MOVED_PREFIX = "haedo_life_post_moved_v1:";
+  const KEY_PART = /^[A-Za-z0-9_-]{1,128}$/;
+  function recovery(store, scope = "local") {
+    if (!KEY_PART.test(scope || "")) store = null;
+    const key = (ws, postId) =>
+      KEY_PART.test(ws || "") && KEY_PART.test(postId || "") ? RECOVERY_PREFIX + scope + ":" + ws + ":" + postId : null;
+    function parse(ws, postId, raw) {
+      try {
+        const v = JSON.parse(raw);
+        if (!plain(v) || v.v !== 1 || v.account !== scope || v.workspaceId !== ws || v.id !== postId ||
+            typeof v.title !== "string" || !Array.isArray(v.ops) || !Array.isArray(v.attachments) ||
+            !Number.isSafeInteger(v.revision) || typeof v.savedAt !== "string" ||
+            !(v.replaces === null || plain(v.replaces) && typeof v.replaces.id === "string"))
+          return null;
+        // A copy written before the fingerprint existed has none.
+        if (typeof v.base !== "string") v.base = null;
+        // An earlier version noted when a copy had been offered and removed it
+        // 30 days later. Nothing reads that note any more: only the writer's
+        // own choice removes a copy.
+        delete v.askedAt;
+        return v;
+      } catch (_) {
+        return null;
+      }
+    }
+    return {
+      // True only when the copy is durably written. `base` is the fingerprint
+      // (contentHash) of what was stored when this input was taken: of the
+      // stored draft, of the saved post for a revision not stored yet, "" for a
+      // new post. A copy continues a document only while that is still stored.
+      write(ws, d, base = null) {
+        const k = key(ws, d?.id);
+        if (!k || !store) return false;
+        try {
+          store.setItem(k, JSON.stringify({
+            v: 1, account: scope, workspaceId: ws, id: d.id, revision: d.revision,
+            base: typeof base === "string" ? base : null,
+            replaces: d.replaces ? { id: d.replaces.id, revision: d.replaces.revision } : null,
+            savedAt: new Date().toISOString(), title: String(d.title ?? ""),
+            ops: (Array.isArray(d.ops) ? d.ops : []).map((op) =>
+              plain(op?.insert) && plain(op.insert.photo)
+                ? { ...op, insert: { photo: { id: op.insert.photo.id, caption: op.insert.photo.caption || "", alt: op.insert.photo.alt || "" } } }
+                : op),
+            attachments: Array.isArray(d.attachments) ? d.attachments : [],
+          }));
+          return true;
+        } catch (_) {
+          return false;
+        }
+      },
+      read(ws, postId) {
+        const k = key(ws, postId);
+        if (!k || !store) return null;
+        try {
+          const raw = store.getItem(k);
+          return raw === null ? null : parse(ws, postId, raw);
+        } catch (_) {
+          return null;
+        }
+      },
+      clear(ws, postId) {
+        const k = key(ws, postId);
+        try {
+          if (k && store) store.removeItem(k);
+        } catch (_) {}
+      },
+      // Newest first.
+      list(ws) {
+        const found = [];
+        if (!store || !KEY_PART.test(ws || "")) return found;
+        try {
+          const prefix = RECOVERY_PREFIX + scope + ":" + ws + ":";
+          for (let i = 0; i < store.length; i++) {
+            const k = store.key(i);
+            if (!k?.startsWith(prefix)) continue;
+            const copy = parse(ws, k.slice(prefix.length), store.getItem(k));
+            if (copy) found.push(copy);
+          }
+        } catch (_) {}
+        return found.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+      },
+    };
+  }
+  // Saving a revision gives the post a new id. This device remembers which id
+  // took an old one's place (identifiers only), so an address kept from before
+  // the edit still opens the post.
+  function moved(store, scope = "local") {
+    if (!KEY_PART.test(scope || "")) store = null;
+    const name = (ws) => MOVED_PREFIX + scope + ":" + ws;
+    const read = (ws) => {
+      try {
+        const v = JSON.parse(store.getItem(name(ws)) || "{}");
+        return plain(v) ? v : {};
+      } catch (_) {
+        return {};
+      }
+    };
+    return {
+      record(ws, from, to) {
+        if (!store || ![ws, from, to].every((v) => KEY_PART.test(v || "")) || from === to) return;
+        try {
+          const entries = Object.entries(read(ws)).filter(([k]) => k !== from);
+          entries.push([from, to]);
+          store.setItem(name(ws), JSON.stringify(Object.fromEntries(entries.slice(-300))));
+        } catch (_) {}
+      },
+      // Takes back a record whose save did not happen.
+      forget(ws, from, to) {
+        if (!store || !KEY_PART.test(ws || "")) return;
+        try {
+          const map = read(ws);
+          if (map[from] !== to) return;
+          delete map[from];
+          store.setItem(name(ws), JSON.stringify(map));
+        } catch (_) {}
+      },
+      // The id that now stands for `postId`, or null when none is recorded.
+      resolve(ws, postId) {
+        if (!store || !KEY_PART.test(ws || "") || !KEY_PART.test(postId || "")) return null;
+        const map = read(ws);
+        let at = postId;
+        for (let hops = 0; hops < 300 && typeof map[at] === "string" && KEY_PART.test(map[at]); hops++)
+          at = map[at];
+        return at === postId ? null : at;
+      },
+    };
   }
   async function digest(blob) {
     return Array.from(
@@ -926,8 +1282,10 @@
   const zip = () =>
     root.fflate ||
     (typeof require === "function" && require("../../vendor/fflate/fflate.js"));
-  async function backup(input) {
-    const d = compact(input),
+  // `lenient` writes what the editor holds even when it cannot be stored (over
+  // a limit): a file of the writer's own input must not depend on validation.
+  async function backup(input, { lenient = false } = {}) {
+    const d = lenient ? normalize(input).doc : compact(input),
       files = {};
     for (const p of d.photos) {
       const { blob } = p;
@@ -1084,6 +1442,17 @@
     upgrade,
     validate,
     validatedBody,
+    cleanText,
+    safeLink,
+    normalize,
+    describeChanges,
+    contentKey,
+    contentHash,
+    keyHash,
+    textHash,
+    isEmpty,
+    recovery,
+    moved,
     compact,
     plainText,
     contentOps,

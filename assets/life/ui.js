@@ -1855,21 +1855,32 @@
         typeof options.searchTarget?.postId === 'string' ? 'plain.' + options.searchTarget.postId : null;
       return value && blogRoutePattern.test(value) ? value : null;
     }
+    const missingPostNotice = '글을 찾지 못했습니다. 수정했거나 삭제한 글일 수 있어 목록을 열었습니다.';
     // `recordedCompose` is the history entry's own 글쓰기 flag; without an entry (an address
     // only) a post that replaces no saved post and was never saved counts as a new post.
     async function openBlogRoute(workspaceId, value, recordedCompose) {
       if (typeof value !== 'string' || !blogRoutePattern.test(value)) return null;
       if (value === 'new') return { pageCompose: true };
       if (value === 'profile') return { pageProfileEdit: true };
-      const [kind, id] = value.split('.');
+      const [kind, named] = value.split('.');
+      let id = named;
       if (kind === 'draft') return { pageDraftId: id, ...(recordedCompose === true ? { composingPost: true } : {}) };
       if (kind === 'plain') return { pagePreview: false, searchTarget: { postId: id } };
-      let post;
-      try { post = await storage.readPhotoPost(workspaceId, id); }
-      catch (cause) {
-        // A new editor that was left before its first save has nothing stored.
-        if (cause?.code === 'photo_post_missing') return { pageCompose: true };
-        throw cause;
+      const read = async postId => {
+        try { return await storage.readPhotoPost(workspaceId, postId); }
+        catch (cause) { if (cause?.code === 'photo_post_missing') return null; throw cause; }
+      };
+      let post = await read(id);
+      if (!post) {
+        // Saving a revision gives the post a new id: an address kept from before the edit opens the post that took its place.
+        let successor = null;
+        try { successor = global.HaedoLife.PhotoPost.moved(global.localStorage, storage.account?.userId || 'local').resolve(workspaceId, id); } catch (_) {}
+        if (successor) { post = await read(successor); if (post) id = successor; }
+      }
+      if (!post) {
+        // 글쓰기 left before its first save has nothing stored; its own history entry says it was 글쓰기.
+        // Any other address that names no post opens the list with a notice, never an empty editor.
+        return recordedCompose === true ? { pageCompose: true } : { blogMissing: true };
       }
       const composing = composingPost(typeof recordedCompose === 'boolean' ? recordedCompose : true, post);
       return { pagePreview: false, searchTarget: { photoPostId: id }, ...(composing ? { composingPost: true } : {}) };
@@ -2316,7 +2327,8 @@
       if (entry.mode === 'source' && entry.sourceId) { seedReaderPosition(entry); Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null }); }
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
-        if (blog) Object.assign(options, blog, { blogContext: true });
+        if (blog?.blogMissing) Object.assign(options, { historyTask: null, missingPost: true });
+        else if (blog) Object.assign(options, blog, { blogContext: true });
         else options.historyTask = null;
       } else if (entry.mode === 'page' && entry.material) Object.assign(options, { materialWritingSeed: entry.material, materialReader: entry.materialReader || null });
       if (entry.mode === 'external-discovery' && entry.newsArticle) options.newsArticle = entry.newsArticle;
@@ -2358,7 +2370,12 @@
       historyPending = { idx: record.idx, key: record.key };
       let opened;
       const restoresFocus = !view.blog && !view.material;
-      try { opened = await navigate(view.mode, { ...await historyOptions(view, record.idx < from), restoresFocus }); }
+      try {
+        // An entry whose post is gone (deleted, or replaced with no record on this device) opens the list instead.
+        const { missingPost, ...restored } = await historyOptions(view, record.idx < from);
+        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus });
+        if (missingPost) announce(missingPostNotice);
+      }
       catch (cause) {
         // Saving failed or input is still composing: stay, and move the
         // browser back to the entry of the screen that is still shown.
@@ -6585,6 +6602,7 @@
       if (recorded?.mode === state.mode && recorded.scheduleToday === true && recorded.scheduleDate === state.scheduleDate) state.scheduleDate = null;
     }
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
+    let startMissingPost = false;
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit'; blogRoute = 'new'; blogComposing = true;
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
@@ -6609,7 +6627,8 @@
         const recorded = global.history.state?.haedo?.v === 1 && global.history.state.haedo.entry?.blog === startBlogRoute ? global.history.state.haedo.entry : null;
         const opened = await openBlogRoute(active, startBlogRoute, recorded ? recorded.compose === true : undefined).catch(() => null);
         if (disposed || signal?.aborted) return { dispose };
-        if (opened) {
+        if (opened?.blogMissing) { state.mode = 'home'; startMissingPost = true; }
+        else if (opened) {
           blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);
           blogRoute = blogRouteFrom(opened);
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
@@ -6636,6 +6655,7 @@
       connectSubscription();
       render();
       announce(managedLibrary ? '자료를 열었습니다.' : '이 브라우저에 보관한 자료를 열었습니다.', { quiet: true });
+      if (startMissingPost) { writeRoute('home', 'replace'); announce(missingPostNotice); }
       if (accountMaterialsFailure?.workspaceId === active) announce(accountMaterialsFailure.partial ? accountMaterialsPartialNotice : accountMaterialsNotice);
       if (sync) await refreshSync();
       if (managedLibrary) {
