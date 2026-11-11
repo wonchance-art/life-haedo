@@ -125,6 +125,9 @@
       value.parentElement.dataset.idle = String(state === 'ok' || state === 'none');
       surface.dataset.dirty = String(dirty()); surface.setAttribute('aria-busy', String(!!writing || !!current.reading));
       const error = surface.querySelector('#apError'); error.textContent = current.error || ''; error.hidden = !current.error;
+      const notice = surface.querySelector('#apNotice'), said = notice.querySelector('span');
+      if (said.textContent !== (current.notice || '')) said.textContent = current.notice || '';
+      notice.hidden = !current.notice;
       // A retry that worked hides its button: keep keyboard focus on the screen title, not the page.
       const retryFocused = root.document.activeElement === retry;
       retry.hidden = !retryable; retry.setAttribute('aria-disabled', String(!!writing));
@@ -391,13 +394,22 @@
       if (!equal(before, base) && !equal(before, theirs)) {
         const merged = root.HaedoLife.AccountDocsSync?.mergeDocument('annualPlan', base, before, theirs, true);
         next = before; lost = [{ why: 'plan', plan: theirs }];
-        if (merged) try {
+        if (merged) {
           const plan = payload(merged.value);
           // Settings merge one by one, so one side's birthday basis can meet the other side's cleared birth
-          // date. As when the date is cleared on this screen, the plan then goes by calendar year.
-          if (plan.basis === 'birthday' && !plan.birthDate) plan.basis = 'year';
-          next = payload(model().update(latest, plan, { expectedRevision: latest.revision })); lost = merged.lost.map(item => ({ why: 'field', item }));
-        } catch (_) { next = before; /* Above a storage limit together: this plan stays whole and the other plan is kept whole. */ }
+          // date. As when the date is cleared on this screen, the plan then goes by calendar year, and says so.
+          const settled = plan.basis === 'birthday' && !plan.birthDate;
+          if (settled) plan.basis = 'year';
+          try {
+            next = payload(model().update(latest, plan, { expectedRevision: latest.revision })); lost = merged.lost.map(item => ({ why: 'field', item }));
+            if (settled) slot.notice = before.birthDate ? '다른 탭이나 기기에서 생년월일을 지워, 여기서 고른 생일 기준을 연도 기준으로 바꿨습니다.'
+              : '여기서 생년월일을 지워, 다른 탭이나 기기에서 고른 생일 기준을 연도 기준으로 바꿨습니다.';
+          } catch (error) {
+            // Not storable together: this plan stays whole and the other plan is kept whole. Only a storage limit is called one.
+            const limit = error?.code === 'annual_plan_too_large' || plan.rows.length > model().MAX_ROWS || plan.entries.length > model().MAX_ENTRIES;
+            next = before; lost = [{ why: limit ? 'limit' : 'plan', plan: theirs }];
+          }
+        }
       }
       // A composition that has not reached the plan yet still owns its field.
       for (const input of composing) {
@@ -416,15 +428,15 @@
       slot.saved = latest; slot.draft = next;
       if (lost.length) { slot.recovery.push(...lost); slot.kept.push(...lost); }
       syncSettings(before); drawGrid(); drawKept(); readAccountState();
-      // Stored now when no save follows (nothing unsaved). A failure keeps them listed here and the next save tries again.
-      if (lost.length) keepRecovery(slot).catch(() => {});
+      if (lost.length) keepSoon(slot);
       schedule();   // Merged input is saved on top of the plan just taken (not while composing or after a real failure).
     }
-    // Recovery copies go where the account sync keeps its own (bounded per document, on this device).
+    // Recovery copies go where the account sync keeps its own (bounded per document, on this device),
+    // under the document of the workspace the slot was opened for (not the one shown when a queued write runs).
     // One writer at a time; a copy leaves the list only after it is stored.
     function keepRecovery(slot) {
+      const key = slot.docKey;
       const run = (slot.keeping || Promise.resolve()).catch(() => {}).then(async () => {
-        const key = accountDocKey();
         while (key && slot.recovery.length) {
           const batch = slot.recovery.slice();
           for (const why of ['field', 'undo']) {
@@ -437,9 +449,24 @@
       });
       slot.keeping = run; return run;
     }
+    // Stored at once when no save follows (nothing unsaved). If this device cannot store them now: a few spaced
+    // tries, and one more whenever the page is hidden or left. They stay listed on screen meanwhile, and a save
+    // stores them before it writes.
+    const KEEP_RETRY = [2000, 8000, 30000];
+    function keepSoon(slot, attempt = 0) {
+      clearTimeout(slot.keepTimer); slot.keepTimer = null;
+      if (disposed || !slot.recovery.length) return;
+      keepRecovery(slot).catch(() => {
+        if (disposed || !slot.recovery.length || attempt >= KEEP_RETRY.length) return;
+        clearTimeout(slot.keepTimer);
+        slot.keepTimer = root.setTimeout(() => { slot.keepTimer = null; keepSoon(slot, attempt + 1); }, KEEP_RETRY[attempt]);
+      });
+    }
+    function keepOnLeave() { for (const slot of sessions.values()) if (slot.recovery.length) keepRecovery(slot).catch(() => {}); }
     const KEPT_NOTES = [
       ['field', '같은 칸을 다른 탭이나 기기에서도 고쳤습니다. 이 화면의 입력을 남겼고, 다른 쪽 내용은 아래에 있습니다.'],
-      ['plan', '두 쪽의 계획을 합친 결과가 보관 한도를 넘어 저장할 수 없습니다. 이 화면의 계획을 남겼고, 다른 쪽 계획 전체는 아래에 있습니다.'],
+      ['limit', '두 쪽의 계획을 합친 결과가 보관 한도를 넘어 저장할 수 없습니다. 이 화면의 계획을 남겼고, 다른 쪽 계획 전체는 아래에 있습니다.'],
+      ['plan', '두 쪽의 계획을 합친 결과를 저장할 수 없습니다. 이 화면의 계획을 남겼고, 다른 쪽 계획 전체는 아래에 있습니다.'],
       ['undo', '다른 탭이나 기기의 변경을 받으면서 되돌리기를 닫았습니다. 되돌릴 수 있던 내용은 아래에 있습니다.']];
     const keptText = row => row.plan ? latestText(row.plan) : (Object.hasOwn(row.item, 'year') ? row.item.year + '년 연간 계획' : row.item.date) + '\n' + row.item.text;
     function drawKept() {
@@ -532,7 +559,10 @@
       const kept = node('details', null, 'ap-kept'); kept.id = 'apKept'; kept.hidden = true; kept.append(node('summary', '복구 사본'));
       const keptContent = node('div'); keptContent.id = 'apKeptText';
       kept.append(keptContent, button('닫기', 'apKeptClose', () => { current.kept = []; drawKept(); }));
-      recovery.append(error, kept); surface.append(recovery);
+      // A setting this screen had to change because of what arrived (see rebase), until it is acknowledged.
+      const notice = node('p', null, 'ap-meta ap-notice'); notice.id = 'apNotice'; notice.setAttribute('role', 'status'); notice.hidden = true;
+      notice.append(node('span', ''), ' ', button('확인', 'apNoticeSeen', () => { current.notice = ''; status(); }));
+      recovery.append(error, notice, kept); surface.append(recovery);
       const confirm = node('div', null, 'ap-confirm'); confirm.id = 'apConfirmation'; confirm.hidden = true; confirm.setAttribute('role', 'group'); confirm.setAttribute('aria-label', '계획 삭제 확인'); surface.append(confirm);
       const undo = node('div'); undo.id = 'apUndo'; undo.hidden = true; surface.append(undo);
       const grid = node('div', null, 'ap-grid'); grid.id = 'apGrid'; grid.tabIndex = 0; grid.setAttribute('role', 'region'); grid.setAttribute('aria-label', '연간 계획 표, 좌우로 스크롤');
@@ -549,14 +579,14 @@
       birth.addEventListener('change', () => {
         if (!owns(birth)) return;
         if (birth.value && !model().validDate(birth.value)) { current.invalidBirth = true; current.invalidBirthValue = birth.value; fail(fault('생년월일을 1900–2199년의 날짜로 확인해 주세요.')); return; }
-        current.invalidBirth = false; current.invalidBirthValue = '';
+        current.invalidBirth = false; current.invalidBirthValue = ''; current.notice = '';
         edit(plan => { plan.birthDate = birth.value; if (!birth.value && plan.basis === 'birthday') plan.basis = 'year'; });
         basis.value = current.draft.basis; drawGrid();
       });
       basis.addEventListener('change', () => {
         if (!owns(basis)) return;
         if (basis.value === 'birthday' && !current.draft.birthDate) { basis.value = current.draft.basis; fail(fault('생일 기준을 사용하려면 생년월일을 입력하세요.')); birth.focus(); return; }
-        edit(plan => { plan.basis = basis.value; }); drawGrid();
+        current.notice = ''; edit(plan => { plan.basis = basis.value; }); drawGrid();
       });
       age.addEventListener('change', () => { if (owns(age)) { edit(plan => { plan.ageMode = age.value; }); drawGrid(); } });
       quarters.addEventListener('change', () => { if (owns(quarters)) { edit(plan => { plan.quarters = quarters.checked; }); drawGrid(); } });
@@ -574,8 +604,8 @@
       const nextWorkspace = getBundle()?.workspaceId; if (!nextWorkspace) return;
       const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); engineLooks = 0;
       current = sessions.get(workspaceId);
-      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', recovery: [], kept: [], keeping: null, redraw: false, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
-      const slot = current;
+      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', recovery: [], kept: [], keeping: null, keepTimer: null, docKey: null, notice: '', redraw: false, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
+      const slot = current; slot.docKey = accountDocKey();
       if (!slot.saved) {
         const loading = node('p', '연간 계획을 불러옵니다.', 'ap-meta'); container.replaceChildren(loading);
         try { const saved = await storage.readAnnualPlan(workspaceId); if (!valid(token) || slot !== current) return; slot.saved = saved; slot.draft = payload(saved); loading.remove(); }
@@ -597,11 +627,11 @@
     function onHidden() {
       if (!inScope()) return;
       if (root.document.visibilityState === 'visible') { readAccountState(); refresh(); return; }
-      if (root.document.visibilityState === 'hidden' && !composing.size) flush().catch(() => {});
+      if (root.document.visibilityState === 'hidden') { keepOnLeave(); if (!composing.size) flush().catch(() => {}); }
     }
-    function pageHide() { if (inScope() && !composing.size) flush().catch(() => {}); }
+    function pageHide() { keepOnLeave(); if (inScope() && !composing.size) flush().catch(() => {}); }
     root.document.addEventListener('visibilitychange', onHidden); root.addEventListener('pagehide', pageHide);
-    function dispose() { leave(); disposed = true; sessions.clear(); current = null; surface = null; root.document.removeEventListener('visibilitychange', onHidden); root.removeEventListener('pagehide', pageHide); }
+    function dispose() { leave(); disposed = true; for (const slot of sessions.values()) clearTimeout(slot.keepTimer); sessions.clear(); current = null; surface = null; root.document.removeEventListener('visibilitychange', onHidden); root.removeEventListener('pagehide', pageHide); }
     return Object.freeze({ render, flush, dirty, leave, dispose });
   }
   (root.HaedoLife ||= {}).AnnualPlanUI = Object.freeze({ create });

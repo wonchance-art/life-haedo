@@ -148,5 +148,10 @@ test('a backup made above the cap restores every post into its copy; the restore
   const ordinary = (await target.createWorkspace('보통 자료공간')).workspaceId;
   await assert.rejects(target.restorePhotoPost(ordinary, await post({ title: '복원이 아닌 글' })), { code: 'restored_copy_invalid' });
   assert.deepEqual(await target.listPhotoPosts(ordinary), []);
+  // And only as a new post: a document that states a revision, or one that is already in the copy, is refused.
+  const copy = copies[0].workspaceId, once = await target.restorePhotoPost(copy, await post({ title: '한 번 되살린 글' }));
+  await assert.rejects(target.restorePhotoPost(copy, { ...(await post({ title: '판이 적힌 글' })), revision: 3 }), { code: 'photo_post_conflict' });
+  await assert.rejects(target.restorePhotoPost(copy, { ...once, revision: 0 }), { code: 'photo_post_conflict' });
+  assert.equal((await target.listPhotoPosts(copy)).length, 205); assert.equal((await target.readPhotoPost(copy, once.id)).revision, 1);
   target.close();
 });

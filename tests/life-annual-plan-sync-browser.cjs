@@ -330,6 +330,68 @@ async function main() {
       assert.deepEqual({ birthDate: plan.birthDate, basis: plan.basis, ...texts(plan) }, { birthDate: '', basis: 'year', rows: [year + ':올해 원문'], entries: [date + ':다른 탭이 고친 3월'] });
       assert.equal(await page.locator('#apBasis').inputValue(), 'year'); assert.equal(await page.locator('#apBirthDate').inputValue(), '');
       assert.equal(await page.locator('#apKept').isVisible(), false, 'nothing had to be set aside'); assert.deepEqual(await recoveryRows(page), []); await quiet(page, 'after the settings met');
+      // The basis chosen a moment ago changed: the screen says so, once, until acknowledged.
+      const notice = page.locator('#apNotice'); await notice.waitFor({ state: 'visible' });
+      assert.equal(await notice.locator('span').textContent(), '다른 탭이나 기기에서 생년월일을 지워, 여기서 고른 생일 기준을 연도 기준으로 바꿨습니다.');
+      assert.equal(await notice.getAttribute('role'), 'status');
+      const seen = await page.locator('#apNoticeSeen').boundingBox(); assert.ok(seen.height >= 44 && seen.width >= 44, 'the acknowledge control is a full-size target');
+      await page.locator('#apNoticeSeen').click(); assert.equal(await notice.isVisible(), false);
+    });
+
+    await check('an ordinary arrival says nothing about settings', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device);
+      await otherTab(second, (plan, year) => ({ birthDate: '1990-07-15', basis: 'birthday', rows: [{ year, text: '올해' }] }), year);
+      await until(() => page.locator('#apBasis').inputValue(), value => value === 'birthday', 'the other tab\'s settings are shown'); await clean(page);
+      await hold(page); await annual(page, year).fill('이 탭의 올해'); await held(page);
+      await otherTab(second, (plan, year) => ({ entries: [{ id: 'e-march', date: year + '-03-01', text: '3월' }] }), year);
+      await page.evaluate(() => __annualSaveRelease());
+      await until(() => stored(page), plan => plan.rows[0].text === '이 탭의 올해' && plan.entries.length === 1, 'merged and stored'); await clean(page);
+      assert.equal(await page.locator('#apNotice').isVisible(), false); assert.equal((await stored(page)).basis, 'birthday');
+    });
+
+    await check('a recovery copy this device could not store is tried again by itself, and when the page is hidden or left', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device);
+      await otherTab(second, (plan, year) => ({ rows: [{ year, text: '올해' }], entries: [{ id: 'e-march', date: year + '-03-01', text: '지울 3월 원문' }, { id: 'e-april', date: year + '-04-01', text: '지울 4월 원문' }, { id: 'e-may', date: year + '-05-01', text: '5월' }] }), year);
+      await until(() => month(page, year + '-03-01').count(), count => count === 1, 'the entries are shown'); await clean(page);
+      const breakRecovery = () => page.evaluate(() => {
+        window.__apAdd ||= IDBObjectStore.prototype.add; window.__apRecoveryTries = 0;
+        IDBObjectStore.prototype.add = function (...args) { const request = __apAdd.apply(this, args); if (this.name === 'meta' && typeof args[0]?.key === 'string' && args[0].key.startsWith('accountDocRecovery:')) { __apRecoveryTries++; this.transaction.abort(); } return request; };
+      });
+      const heal = () => page.evaluate(() => { IDBObjectStore.prototype.add = __apAdd; });
+      const remove = async id => { await page.locator('[data-ap-remove-entry="' + id + '"]').click(); await page.locator('#apConfirmation').getByRole('button', { name: '삭제', exact: true }).click(); await until(() => stored(page), plan => !plan.entries.some(item => item.id === id), 'the deletion is stored'); };
+      const arrive = text => otherTab(second, (plan, text) => ({ entries: plan.entries.map(item => item.id === 'e-may' ? { ...item, text } : item) }), text);
+      // By itself: nothing is typed or saved after the copy failed.
+      await remove('e-march'); await breakRecovery(); await arrive('다른 탭의 5월');
+      await until(() => page.evaluate(() => window.__apRecoveryTries), tries => tries >= 1, 'the copy could not be stored');
+      assert.match(await page.locator('#apKeptText').textContent(), /지울 3월 원문/, 'it is readable on screen meanwhile'); assert.deepEqual(await recoveryRows(page), []);
+      await quiet(page, 'while the copy waits'); await heal();
+      await until(() => recoveryRows(page), rows => rows.length === 1, 'a later try stored the copy with no input', 20000);
+      assert.deepEqual((await recoveryRows(page))[0], { reason: 'undo_discarded', value: { items: [{ id: 'e-march', date: year + '-03-01', text: '지울 3월 원문' }] } });
+      assert.ok(await page.evaluate(() => window.__apRecoveryTries) <= 4, 'the tries are few');
+      // Leaving: the copy is tried at once, not at the next timed try.
+      await remove('e-april'); await breakRecovery(); await arrive('다른 탭의 5월 다시');
+      await until(() => page.evaluate(() => window.__apRecoveryTries), tries => tries >= 1, 'the second copy could not be stored'); await heal();
+      const kept = await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), key = (await s.listAccountDocs()).find(item => item.prefix === 'annualPlan' && item.workspaceId === w).key;
+        dispatchEvent(new Event('pagehide'));
+        for (let n = 0; n < 20; n++) { const rows = await s.listAccountDocRecoveries(key); if (rows.length === 2) return rows.length; await new Promise(resolve => setTimeout(resolve, 50)); }
+        return (await s.listAccountDocRecoveries(key)).length;
+      });
+      assert.equal(kept, 2, 'leaving the page stored the waiting copy');
+      assert.deepEqual((await recoveryRows(page))[1].value, { items: [{ id: 'e-april', date: year + '-04-01', text: '지울 4월 원문' }] });
+    });
+
+    await check('a merged plan that cannot be stored for another reason than a limit is not called a limit', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device);
+      // Fault injection: the merge returns a plan the model refuses (a year outside its range).
+      await page.evaluate(() => { const real = HaedoLife.AccountDocsSync; HaedoLife.AccountDocsSync = { ...real, mergeDocument: (...args) => { const merged = real.mergeDocument(...args); if (args[0] === 'annualPlan' && merged) merged.value.rows = [{ year: 1800, text: '형식에 맞지 않는 행' }, ...merged.value.rows]; return merged; } }; });
+      await hold(page); await annual(page, year).fill('이 탭의 올해'); await held(page);
+      await otherTab(second, (plan, year) => ({ entries: [{ id: 'e-march', date: year + '-03-01', text: '다른 탭의 3월' }] }), year);
+      await page.evaluate(() => __annualSaveRelease());
+      await until(() => stored(page), plan => plan.rows[0].text === '이 탭의 올해', 'this plan is stored'); await clean(page);
+      assert.deepEqual((await stored(page)).entries, [], 'the two plans were not stored together');
+      const note = await page.locator('#apKeptText').textContent(); assert.match(note, /합친 결과를 저장할 수 없습니다/); assert.doesNotMatch(note, /보관 한도/); assert.match(note, /다른 탭의 3월/);
+      assert.equal((await recoveryRows(page))[0].reason, 'conflict_remote');
     });
 
     await check('two plans that together pass the year limit: this plan stays whole, the other plan is kept whole and the note says so', async ({ device }) => {

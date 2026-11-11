@@ -69,6 +69,7 @@ body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-toolbar > .haedo-he
 .ap-file-label input::file-selector-button { min-height: 44px; padding: 8px 12px; margin-right: 8px; border: 1px solid var(--field-line); border-radius: var(--haedo-control-radius, 12px); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
 .ap-error { color: var(--color-error, #a3243d); font-size: 14px; }
 .ap-recovery:has(> .ap-error:not([hidden])), .ap-confirm { margin: 12px 0 20px; }
+.ap-notice:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 12px 0; }
 .ap-confirm > .ap-button, .ap-settings > .ap-button { margin-right: 20px; }
 .ap-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
 .ap-confirm > .ap-button { margin-right: 0; }
