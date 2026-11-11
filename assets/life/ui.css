@@ -564,6 +564,14 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
 .life-source-edit-choices > .life-button { min-height:44px; }
 .life-source-trash-confirm { padding-block:16px; margin-top:16px; border-top:1px solid var(--line); }
 .life-source-trash-confirm > button + button { margin-left:8px; }
+/* 자료 휴지통: 좁은 화면의 큰 제목 크기에서는 '자료 휴지통'이 두 줄로 꺾여 머리줄 위에 붙었다. 한 줄 크기로 둔다.
+ * 360px 이하에서는 머리줄 단추와 함께 한 줄에 들어가지 않으므로, 머리줄 높이 안에 들어가는 두 줄 크기로 낮춘다. */
+@media (max-width: 760px) {
+  .life-app:has(> #lifeMain[data-mode=source-trash]) .life-toolbar.haedo-page-heading h1 { font-size: var(--haedo-text-title); line-height: 1.5; white-space: nowrap; }
+}
+@media (max-width: 360px) {
+  .life-app:has(> #lifeMain[data-mode=source-trash]) .life-toolbar.haedo-page-heading h1 { font-size: var(--haedo-text-body); line-height: 1.3; white-space: normal; }
+}
 #lifeSourceTrashList > article { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px; }
 #lifeSourceTrashList .life-source-open { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:760px) {

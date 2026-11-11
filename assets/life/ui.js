@@ -74,6 +74,21 @@
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
   }
 
+  // When an original was written. An ISO date or timestamp (a kept news article, a re-import) reads as a date;
+  // anything a person typed ("2024년 가을", "오래전 봄") stays exactly as typed.
+  function writtenLabel(value) {
+    if (!value) return '';
+    const text = String(value).trim(), day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (day) return Number(day[1]) + '. ' + Number(day[2]) + '. ' + Number(day[3]) + '.';
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/.test(text)) return String(value);
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
+  }
+  function timeLabel(value) {
+    const date = new Date(value);
+    return !value || Number.isNaN(date.getTime()) ? String(value || '모름') : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
   // Textareas normalize CRLF (and lone CR) to LF; source locators use unchanged input.
   function displayToRaw(text, offset) {
     let raw = 0;
@@ -3904,7 +3919,10 @@
         const key = resultFocusKey('sources', version.id);
         const control = button(null, guarded(() => open(hit, key)), 'records-row-open');
         control.dataset.paneKey = key;
-        if (version.id === state.sourceVersionId) { control.setAttribute('aria-current', 'true'); item.dataset.current = 'true'; }
+        // The row of what is being read. While an earlier version is open the list has no row for that exact
+        // version (it lists each material's latest), so the material's own row is marked and says so.
+        const reading = version.id === state.sourceVersionId || earlierOpen && source.id === state.sourceId;
+        if (reading) { control.setAttribute('aria-current', 'true'); item.dataset.current = 'true'; }
         control.append(node('span', sourceLabel(source), 'records-row-title'));
         if (hit.locator) {
           const before = hit.snippet?.before || '', after = hit.snippet?.after || '', context = node('span', null, 'records-row-context');
@@ -3916,9 +3934,12 @@
         if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
         if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
         if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
+        if (reading && version.id !== state.sourceVersionId) facts.push('이전 버전 읽는 중');
         item.append(RecordsList.when(document, version.importedAt), control, RecordsList.badges(document, facts));
         return item;
       };
+      // True while the open version has no row of its own in the list just drawn.
+      let earlierOpen = false;
       const more = button('자료 더 보기', () => {
         const start = list.children.length; limit += SEARCH_PAGE_SIZE; draw();
         list.children[start]?.querySelector('button')?.focus({ preventScroll: true });
@@ -3929,6 +3950,7 @@
         const kind = state.recordKind = RecordsList.validKind(state.recordKind), query = state.sourcesSearch.trim();
         const { matchingRecords, matches, sourcePasses } = sourceListMatches(foldersController());
         const rows = kind === 'excerpt' ? excerptMatches(matchingRecords, sourcePasses) : matches.filter(hit => RecordsList.kindAllows(kind, sourceFor(hit.sourceId)));
+        earlierOpen = kind !== 'excerpt' && !rows.some(hit => hit.sourceVersionId === state.sourceVersionId);
         list.replaceChildren(...rows.slice(0, limit).map(value => kind === 'excerpt'
           ? excerptRow(value.record, value.ref, query, { open, current: value.ref.sourceVersionId === state.sourceVersionId }) : row(value, query)));
         if (!rows.length) list.append(empty(query ? '조건에 맞는 자료가 없습니다.' : '목록에 표시할 자료가 없습니다.'));
@@ -4234,7 +4256,7 @@
       const details = node(expanded ? 'section' : 'details', null, expanded ? 'life-source-details' : 'life-details');
       if (!expanded) details.append(node('summary', '출처와 포함 범위'));
       const authorRelation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' };
-      const lines = [sourceOrigin(source), '원문 작성: ' + (version.originalCreatedAt || '모름'), (isOwnWriting(source) ? '이 버전 저장: ' : '가져온 시각: ') + version.importedAt,
+      const lines = [sourceOrigin(source), '원문 작성: ' + (writtenLabel(version.originalCreatedAt) || '모름'), (isOwnWriting(source) ? '이 버전 저장: ' : '가져온 시각: ') + timeLabel(version.importedAt),
         '작성자: ' + (version.originalAuthor.label || '모름') + ' · ' + (authorRelation[version.originalAuthor.relation] || authorRelation.unknown),
         COVERAGE[version.coverage.status] || COVERAGE.unknown,
         '누락/미확인: ' + (version.coverage.omissions.length ? version.coverage.omissions.join(', ') : (isOwnWriting(source) ? '없음' : '별도 표시 없음 · 사진은 자동 수집하지 않음'))];
@@ -4460,7 +4482,7 @@
         else if (box.bottom > frame.bottom - 8) sheet.scrollTop += box.bottom - frame.bottom + 8;
       });
       article.append(dock, heading,
-        node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
+        node('p', sourceOrigin(source) + ' · 원문 작성 ' + (writtenLabel(version.originalCreatedAt) || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
       // One row for the exact version (and when it was kept) and moving between list matches.
       const versionRow = node('div', null, 'life-reader-version-row'); versionRow.id = 'lifeReaderVersionRow';

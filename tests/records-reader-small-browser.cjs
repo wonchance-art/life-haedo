@@ -320,6 +320,63 @@ async function m5() {
   });
 }
 
+async function m6() {
+  await S.check('m6 원문 작성 reads as a date when it is an ISO timestamp, and stays as typed otherwise', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const ids = await R.seed(page, [{ title: '뉴스에서 보관한 글', text: '보관한 기사 본문.', originalCreatedAt: '2026-11-03T09:30:00.000Z' }, { title: '날짜만 있는 글', text: '본문.', originalCreatedAt: '2020-11-05' },
+      { title: '직접 적은 때', text: '본문.', originalCreatedAt: '2024년 가을 산책' }, { title: '때를 모르는 글', text: '본문.' }]);
+    const expected = ['원문 작성 2026. 11. 3.', '원문 작성 2020. 11. 5.', '원문 작성 2024년 가을 산책', '원문 작성 미상'];
+    for (const [index, id] of ids.entries()) {
+      await R.list(page); await R.openSource(page, id.versionId);
+      const meta = await page.locator('.life-reader-meta').first().textContent();
+      assert(meta.endsWith(expected[index]), meta + ' ends with ' + expected[index]); assert.doesNotMatch(meta, /T\d\d:\d\d|\d{4}-\d\d-\d\d/);
+      await page.locator('#lifeSourceInfoToggle').click();
+      const lines = await page.locator('#lifeSourceDetails > p.life-meta').allTextContents();
+      assert(lines.includes(expected[index].replace('원문 작성 ', '원문 작성: ').replace('미상', '모름')), JSON.stringify(lines));
+      const kept = lines.find(line => line.startsWith('가져온 시각: ')); assert(kept && !/T\d\d:\d\d:\d\d|Z$/.test(kept) && /\d{4}\. \d{1,2}\. \d{1,2}\./.test(kept), 'the kept-at time reads as a local date and time: ' + kept);
+    }
+    // The stored value is untouched (display only).
+    assert.equal((await R.bundle(page)).sourceVersions.find(version => version.id === ids[0].versionId).originalCreatedAt, '2026-11-03T09:30:00.000Z');
+    await context.close();
+  });
+  await S.check('m6 while an earlier version is open, the list beside it still marks that material and says so', async () => {
+    const { page, context } = await S.open({ width: 1440, height: 900 });
+    const ids = await R.seed(page, [{ title: '문서 가', text: paragraphs(20) }, { title: '문서 나', text: '짧은 글.' }]);
+    const head = await R.addVersion(page, ids[0].sourceId, '새 판의 본문.');
+    await R.list(page); await R.openSource(page, head);
+    const current = () => page.evaluate(() => [...document.querySelectorAll('#lifeRecordsPaneList .records-row')].filter(row => row.dataset.current === 'true').map(row => ({ source: row.dataset.sourceId, aria: row.querySelector('.records-row-open').getAttribute('aria-current'), badges: [...row.querySelectorAll('.records-badge')].map(badge => badge.textContent) })));
+    let rows = await current();
+    assert.equal(rows.length, 1); assert.equal(rows[0].source, ids[0].sourceId); assert(!rows[0].badges.includes('이전 버전 읽는 중'));
+    await page.locator('#lifeVersion').selectOption(ids[0].versionId); await settle(page); await frames(page);
+    assert.match(await page.locator('.life-reader-meta').nth(1).textContent(), /버전 1\/2 · 이전 버전/);
+    rows = await current();
+    assert.equal(rows.length, 1, 'one row is marked while the earlier version is open'); assert.equal(rows[0].source, ids[0].sourceId); assert.equal(rows[0].aria, 'true');
+    assert(rows[0].badges.includes('이전 버전 읽는 중'), JSON.stringify(rows[0].badges));
+    await S.capture(page, 'm6-earlier-version-row');
+    await page.locator('#lifeVersion').selectOption(head); await settle(page); await frames(page);
+    rows = await current(); assert.equal(rows.length, 1); assert(!rows[0].badges.includes('이전 버전 읽는 중'));
+    await context.close();
+  });
+  for (const width of [390, 320]) await S.check('m6 the 자료 휴지통 title stays inside the header row, clear of the top edge and the buttons, at ' + width, async () => {
+    const { page, context } = await S.open({ width, height: 844, touch: true, url: '/index.html?section=records&view=source-trash' });
+    await page.locator('#lifeMain[data-mode="source-trash"]').waitFor(); await frames(page);
+    const box = await page.evaluate(() => {
+      const title = document.querySelector('.life-toolbar.haedo-page-heading h1'), rect = title.getBoundingClientRect(), style = getComputedStyle(title);
+      const range = document.createRange(); range.selectNodeContents(title);
+      const others = [...document.querySelectorAll('.life-toolbar.haedo-page-heading button, .haedo-nav-compose')].filter(item => item.checkVisibility()).map(item => item.getBoundingClientRect());
+      const header = document.querySelector('.life-toolbar.haedo-page-heading').getBoundingClientRect();
+      return { text: title.textContent, lines: new Set([...range.getClientRects()].map(line => Math.round(line.top))).size, top: rect.top, bottom: rect.bottom, height: rect.height, lineHeight: parseFloat(style.lineHeight), header: { top: header.top, bottom: header.bottom },
+        overlap: others.some(other => { const text = range.getBoundingClientRect(); return text.left < other.right && other.left < text.right && text.top < other.bottom && other.top < text.bottom; }) };
+    });
+    // One line where it fits beside the header buttons (360px and wider); two short lines inside the row below that.
+    assert.equal(box.text, '자료 휴지통'); assert.equal(box.lines, width > 360 ? 1 : 2, 'lines: ' + JSON.stringify(box));
+    assert(box.top >= box.header.top + 4 && box.bottom <= box.header.bottom - 4 && box.top >= 4, 'inside the header row with room above and below: ' + JSON.stringify(box));
+    assert.equal(box.overlap, false, 'the title does not run under the header buttons');
+    await S.capture(page, 'm6-trash-title-' + width);
+    await context.close();
+  });
+}
+
 async function main() {
   await S.start();
   try {
@@ -328,6 +385,7 @@ async function main() {
     await group('m3', m3);
     await group('m4', m4);
     await group('m5', m5);
+    await group('m6', m6);
   } finally { await S.finish(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
