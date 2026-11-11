@@ -4807,13 +4807,74 @@
       readerCleanup = () => {
         savePosition(true);
         lineKeeper?.dispose(); if (readerLineKeeper === lineKeeper) readerLineKeeper = null;
+        hideNotice();
         readerWatch?.close();
         readerWatch = null;
         document.removeEventListener('selectionchange', capture);
         global.removeEventListener('scroll', savePosition);
       };
       quote.disabled = !sourceActive;
-      quote.addEventListener('click', () => { if (formattedView) changeReaderMode?.('raw', false); }, { capture: true });
+      // A short message under the sticky tool row, where the person is reading (the page status line is at the top of the document).
+      const readerNotice = node('p', null, 'life-reader-notice'); readerNotice.id = 'lifeReaderNotice'; readerNotice.setAttribute('role', 'status'); readerNotice.hidden = true;
+      dock.append(readerNotice);
+      let noticeTimer = null;
+      const hideNotice = () => { clearTimeout(noticeTimer); noticeTimer = null; document.removeEventListener('pointerdown', hideNotice, true); document.removeEventListener('keydown', hideNotice, true); if (readerNotice.isConnected) { readerNotice.hidden = true; readerNotice.textContent = ''; } };
+      const showNotice = text => {
+        hideNotice(); readerNotice.hidden = false; readerNotice.textContent = text;
+        noticeTimer = global.setTimeout(hideNotice, 8000);
+        // The next press or key (starting the new selection) takes it away; not the press that produced it.
+        global.setTimeout(() => { if (noticeTimer !== null) { document.addEventListener('pointerdown', hideNotice, true); document.addEventListener('keydown', hideNotice, true); } }, 0);
+      };
+      // Formatted Markdown: a passage picked there becomes the excerpt candidate only when it names one exact place
+      // in the original. The picked string (blank space at its two ends dropped, nothing inside changed) must occur
+      // exactly once in the raw text, inside the raw range of the blocks it was picked in (the parser's block map).
+      // The rendered DOM is never used to work out a raw position (docs/design-review/material-markdown-edit-delete.md).
+      const readFormattedPick = () => {
+        if (!formattedView || !markdown?.formatted) return null;
+        const selection = global.getSelection();
+        if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+        const range = selection.getRangeAt(0);
+        if (!reader.contains(range.startContainer) || !reader.contains(range.endContainer)) return null;
+        const blockOf = container => {
+          const element = (container.nodeType === 1 ? container : container.parentElement)?.closest('[data-source-block]');
+          return element && reader.contains(element) ? markdown.blocks.find(block => block.element === element) || null : null;
+        };
+        const first = blockOf(range.startContainer), last = blockOf(range.endContainer);
+        if (!first) return null;
+        return { text: selection.toString().trim(), from: first.start, to: last ? Math.max(first.end, last.end) : version.contentText.length,
+          top: range.getBoundingClientRect().top, blockStart: first.start, blockTop: first.element.getBoundingClientRect().top };
+      };
+      const exactPick = pick => {
+        const raw = version.contentText, start = pick.text ? raw.indexOf(pick.text) : -1;
+        if (start < 0 || raw.indexOf(pick.text, start + 1) >= 0) return null;
+        const end = start + pick.text.length;
+        return start >= pick.from && end <= pick.to && raw.slice(start, end) === pick.text ? { start, end } : null;
+      };
+      // A touch on the button can clear the page selection before the click arrives; take it at the press.
+      let pressedPick = null;
+      quote.addEventListener('pointerdown', () => { pressedPick = readFormattedPick(); }, { capture: true });
+      quote.addEventListener('click', event => {
+        const pick = formattedView && panel.hidden ? readFormattedPick() || pressedPick : null; pressedPick = null;
+        if (!formattedView) return;
+        // Nothing picked (or the panel is closing): the original text, as before.
+        if (!pick || !pick.text) { changeReaderMode?.('raw', false); return; }
+        const exact = exactPick(pick);
+        changeReaderMode('raw', false);
+        if (exact) {
+          // The same passage, selected in the original text at the height it was picked at; the panel then opens with it.
+          const range = restoreSelection(exact), rect = rangeRect(range);
+          global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - pick.top), behavior: 'instant' });
+          return;
+        }
+        // Formatting inside it, or the same words elsewhere: do not guess. Stay at that paragraph in the original text
+        // and ask for the passage there, without jumping to the excerpt panel.
+        event.stopImmediatePropagation();
+        global.getSelection()?.removeAllRanges(); state.sourceSelection = null;
+        const top = charTop(pick.blockStart);
+        if (top !== null) global.scrollTo({ top: Math.max(0, global.scrollY + top - pick.blockTop), behavior: 'instant' });
+        reader.focus({ preventScroll: true });
+        showNotice('고른 구절이 원문의 한 곳으로 정해지지 않습니다. 원문 텍스트에서 다시 선택해 주세요.');
+      }, { capture: true });
       const setPanel = disclosure(quote, panel, { onChange: open => {
         flushReadingPosition();
         readerWatch?.suppress();
