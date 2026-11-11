@@ -204,7 +204,7 @@
     const contentLanguages = copy(input.contentLanguages);
     check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(input.translationTarget) && typeof input.personalAllowed === 'boolean');
     const baselineMode = input.baselineMode === undefined ? 'related' : input.baselineMode; check(['latest', 'related'].includes(baselineMode));
-    if (input.actions !== null) { dep('DiscoveryActions').validate(input.actions); check(input.actions.workspaceId === workspaceId); }
+    if (input.actions !== null) { dep('DiscoveryActions').validate(input.actions, { totals: false }); check(input.actions.workspaceId === workspaceId); }
     const personalOptIn = !!input.actions && !input.actions.deleted && input.actions.personalizationEnabled;
     return { feed, profile, feedback, knownUrls: copy(input.knownUrls), contentLanguages, actions: input.personalAllowed && personalOptIn ? copy(input.actions) : null,
       personalAllowed: input.personalAllowed, personalOptIn, translationTarget: input.translationTarget, baselineMode,

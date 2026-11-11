@@ -666,7 +666,22 @@
     function optionPatch(patch) { return Object.fromEntries(['showImages', 'wideSearch', 'wideClear', 'wideRefused'].filter(name => patch[name] !== undefined).map(name => [name, patch[name]])); }
     function settingsDirty() { const p = current?.settingChanges; return !!p && (p.autoRefresh !== undefined || Object.keys(optionPatch(p)).length > 0 || Object.keys(p.interests).length > 0 || Object.keys(p.sources).length > 0); }
     // A new tab, order, filter or refresh starts the list again: 20 cards and a newly computed order.
-    function resetList() { current.visible = PAGE; current.order = null; }
+    // A list computed again has not been used yet: answers that arrive before the person scrolls, presses or moves the
+    // keyboard focus in it still take their place in the order (re-review MAJOR-B).
+    function resetList() { current.visible = PAGE; current.order = null; current.listTouched = false; }
+    // The person's first use of the drawn list: scrolling it (wheel, touch, scroll keys), 더 보기, a card's focus or press.
+    function touchList() { if (current && !current.listTouched) current.listTouched = true; }
+    // Focus the screen moves itself (restoring a place, the shell's own focus) is not a use; focus that follows the
+    // person's key press (Tab into the list) is.
+    let lastKeyAt = 0;
+    function focusIntoList() { if (Date.now() - lastKeyAt < 1000) touchList(); }
+    const SCROLL_KEYS = new Set(['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Spacebar']);
+    function pageScrollIntent(event) {
+      if (event.type === 'keydown') lastKeyAt = Date.now();
+      if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      if (event.type === 'keydown' && (!SCROLL_KEYS.has(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable]'))) return;
+      touchList();
+    }
     // 기사 이미지 보기 (default off): only then does a card ask a publisher's server for its image.
     function imagesOn() { return !!current?.settings && settingsModel().showImages(desiredSettings()); }
     function dropImages() {
@@ -912,6 +927,8 @@
       // List and reading column. The reader host stays attached so an open original page is never reloaded by a redraw.
       const layout = node('div', null, 'discovery-layout'), listPane = node('section', null, 'discovery-list-pane'), readerHost = node('div', null, 'discovery-reader-host');
       listPane.setAttribute('aria-label', '뉴스 목록'); listPane.id = 'discoveryListPane'; readerHost.id = 'discoveryReaderHost';
+      for (const type of ['pointerdown', 'keydown', 'wheel', 'touchmove']) listPane.addEventListener(type, touchList, { passive: true });
+      listPane.addEventListener('focusin', focusIntoList);
       listPane.append(reactionHost, body); layout.append(listPane, readerHost);
       surface.append(layout, settingsPanel); container.replaceChildren(surface);
       current.reader = null;
@@ -1007,10 +1024,11 @@
         const fetchedAt = result.fetchedAt || new Date().toISOString();
         const items = result.items.map(item => wideModel().toArticle(item, { sourceId: engine().WIDE_SOURCE.id, canonicalUrl: engine().canonicalUrl, fetchedAt })).filter(article => article.canonicalUrl && wideModel().link(article.url));
         // The answer covers the topics that were asked and taken.
-        const answered = planned.topics.filter(topic => !current.wide.refused.has(wideModel().topicKey(topic)));
-        // Links that join a list already looked at are counted in 새 글 n건 like a timed refresh's articles; a list not
-        // looked at since the request takes them in its order.
-        if (!current.wide.listSeen) current.order = null;
+        const answered = planned.topics.filter(topic => !current.wide.refused.has(wideModel().refusalKey(topic)));
+        // A list the person has not used yet (no scroll, 더 보기, card focus or press since it was computed), or one the
+        // settings covered since the request, takes the links in its order. A list in use keeps every drawn card; the
+        // links join after them and 새 글 n건 counts them, like a timed refresh's articles.
+        if (!current.listTouched || !current.wide.listSeen) current.order = null;
         if (current.order) {
           const listed = new Set(current.order.urls), added = items.map(article => article.canonicalUrl).filter(value => !listed.has(value));
           if (added.length) { current.newUrls = new Set([...(current.newDismissed ? [] : current.newUrls || []), ...added]); current.newDismissed = false; }
@@ -1687,7 +1705,7 @@
       active = true; const next = getBundle()?.workspaceId;
       if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; }
       workspaceId = next; const token = generation;
-      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
+      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, listTouched: false, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
         wide: { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0, notEnabled: false, clearError: false, clearTried: false, refused: new Set(), listSeen: true } };
       current.selected = null; current.toast = null; current.readerPushed = false; current.wide.clearTried = false;
       const reopen = typeof options.articleId === 'string' ? options.articleId : null;
@@ -1782,8 +1800,9 @@
       if (current) current.loading = false;
     }
     root.document.addEventListener('pointerdown', closeCardMenus, true);
+    for (const type of ['wheel', 'touchmove', 'keydown']) root.addEventListener(type, pageScrollIntent, { passive: true });
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });

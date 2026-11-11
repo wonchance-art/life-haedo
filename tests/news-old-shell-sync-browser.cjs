@@ -268,6 +268,37 @@ async function main() {
       assert.deepEqual(legacy.data.entries.map(entry => entry.snapshot.sourceId), ['naver-d2']);
       assert.equal(Old.actions(legacy.data), true, 'the legacy document stays readable by the older validator');
     });
+    // Re-review MAJOR-A: each document within 500 entries and 1 MB, the pair above them. News opens on the new shell,
+    // the list and 담은 글 show, and only adding is refused with the usual message.
+    const filled = (workspaceId, sourceId, count, title = n => '합성 ' + n, tags = []) => {
+      let profile = Actions.empty(workspaceId);
+      for (let n = 0; n < count; n++) {
+        const host = Discovery.SNAPSHOT_SOURCES[sourceId][0];
+        const article = { id: `limit-${sourceId}-${n}`, sourceId, url: `https://${host}/limit/${sourceId}/${n}`, title: title(n), author: null, language: 'ko', tags, publishedAt: null, updatedAt: null, fetchedAt: NOW(), coverage: 'link_only', rights: { label: '합성', url: null, mode: 'metadata_only' } };
+        profile = Actions.setReaction(profile, Actions.capture(article, { id: sourceId, name: '합성 ' + sourceId }), 'bookmarked', true, { expectedRevision: profile.revision, now: NOW() });
+      }
+      return profile;
+    };
+    for (const [label, legacyCount, extendedCount, title, tags] of [['501 entries (300 + 201)', 300, 201, undefined, []], ['more than 1 MB (250 + 250 long titles)', 250, 250, n => '가'.repeat(480) + n, ['나'.repeat(150)]]]) {
+      await check('reactions: an account pair of ' + label + ' opens on the new shell; adding is refused, nothing is written', async ({ page, workspaceId, upload, stored, updateShell }) => {
+        await updateShell();
+        const legacy = filled(workspaceId, 'naver-d2', legacyCount, title, tags), extended = filled(workspaceId, 'yna-news', extendedCount, title, tags);
+        upload('discoveryActions', legacy); upload('discoveryActionsExtended', extended);
+        await syncNow(page); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+        const read = await local(page, 'readDiscoveryActions');
+        assert.equal(read.ok, true, 'the pair reads: ' + read.code); assert.equal(read.value.entries.length, legacyCount + extendedCount);
+        assert.equal(await page.locator('#discoveryList > .discovery-article').count(), 20, 'the news list shows');
+        assert.equal(await page.locator('#discoveryError').isVisible(), false);
+        assert.equal(await bookmarkedCount(page), legacyCount + extendedCount, '담은 글 counts both documents');
+        const before = { legacy: stored('discoveryActions'), extended: stored('discoveryActionsExtended') };
+        await page.locator('#discoveryList > .discovery-article').first().locator('[data-discovery-reaction=bookmarked]').click(); await idle(page);
+        await page.locator('#discoveryActionsError').waitFor();
+        assert.match(await page.locator('#discoveryActionsError').innerText(), /^목록 보관 한도를 넘었습니다/);
+        await syncNow(page);
+        assert.deepEqual(stored('discoveryActions'), before.legacy); assert.deepEqual(stored('discoveryActionsExtended'), before.extended);
+        assert.equal((await local(page, 'readDiscoveryActions')).value.entries.length, legacyCount + extendedCount);
+      });
+    }
     assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.external, [], 'external requests');
   } catch (error) { report.checks.push({ name: 'cross-check totals', pass: false, error: error.stack }); console.error('FAIL cross-check totals\n' + error.stack); }
   finally {

@@ -280,3 +280,64 @@ test('storage: a mixed legacy row (written before the pair) is split once before
   assert.equal(listed.length, 4); assert.ok(listed.every(doc => !doc.sync || doc.hash !== doc.sync.hash), 'every changed document is pending');
   assert.equal(raw(keys.legacy).revision, mixed.revision + 1, 'moved once');
 });
+
+// Re-review MAJOR-A: each document holds at most 500 entries and 1 MB; the two together may hold more (an earlier
+// shell adding to its document, or two devices adding to different documents near the bound). Reading never fails
+// on the sum; only a change that adds an entry meets the bounds.
+function filled(w, sourceId, count, title = n => '합성 ' + sourceId + ' ' + n, tags = []) {
+  let profile = Actions.empty(w);
+  for (let n = 0; n < count; n++) profile = Actions.setReaction(profile, Actions.capture({ ...article(sourceId, n), title: title(n), tags }, { id: sourceId, name: '합성 ' + sourceId }), 'bookmarked', true, { expectedRevision: profile.revision, now: T(1 + n / 1000) });
+  return profile;
+}
+test('reactions: a pair above 500 entries or 1 MB opens and can be changed, reset or trimmed; adding is refused', () => {
+  const legacy = filled(W, 'naver-d2', 300), extended = filled(W, 'yna-news', 201), shown = Actions.combine(legacy, extended);
+  assert.equal(shown.entries.length, 501);
+  const tooLarge = { code: 'discovery_actions_too_large' }, at = { expectedRevision: shown.revision, now: T(30) };
+  assert.throws(() => Actions.setReaction(shown, captured('sbs-news', 9000), 'bookmarked', true, at), tooLarge, 'a new entry is refused');
+  const unliked = Actions.setReaction(shown, shown.entries[0].snapshot, 'bookmarked', false, at);
+  assert.equal(unliked.entries.length, 501, 'an existing entry changes');
+  const written = Actions.separate(unliked, legacy, extended);
+  assert.ok(written.legacy && !written.extended); assert.equal(Old.actions(written.legacy), true);
+  assert.equal(Actions.forget(shown, shown.entries[400].canonicalUrl, at).entries.length, 500);
+  assert.equal(Actions.clear(shown, at).entries.length, 0);
+  assert.equal(Actions.setPersonalization(shown, true, at).personalizationEnabled, true);
+  // Bytes: 250 + 250 long titles hold 500 entries but more than 1 MB together.
+  const long = n => '가'.repeat(480) + n, tags = ['나'.repeat(150)], a = filled(W, 'naver-d2', 250, long, tags), b = filled(W, 'yna-news', 250, long, tags), big = Actions.combine(a, b);
+  assert.ok(new TextEncoder().encode(JSON.stringify(a)).length < Actions.MAX_BYTES, 'each document is within 1 MB');
+  assert.ok(new TextEncoder().encode(JSON.stringify(big)).length > Actions.MAX_BYTES);
+  assert.throws(() => Actions.setReaction(big, captured('sbs-news', 9001), 'bookmarked', true, { expectedRevision: big.revision, now: T(31) }), tooLarge);
+  assert.equal(Actions.forget(big, big.entries[0].canonicalUrl, { expectedRevision: big.revision, now: T(31) }).entries.length, 499);
+  // Each stored document still meets the bounds: a document above them is refused as before.
+  assert.throws(() => Actions.validate(filled(W, 'yna-news', 501)), tooLarge);
+});
+
+test('storage: two devices adding near the bound to different documents; the account pair opens and only adding is refused', async t => {
+  const Sync = require('../assets/life/account-docs-sync.js');
+  const { base, store, raw } = fixture(); t.after(() => base.close());
+  const w = (await store.createWorkspace('익명 한도 근처')).workspaceId;
+  const keys = { legacy: `discoveryActions:${accountKey}:${w}`, extended: `discoveryActionsExtended:${accountKey}:${w}` };
+  // The account holds 300 legacy entries; the extended document had 190 on both devices, and each added its own.
+  const legacy = filled(w, 'naver-d2', 300), agreed = filled(w, 'yna-news', 190);
+  let here = agreed, there = agreed;
+  for (let n = 0; n < 6; n++) here = Actions.setReaction(here, captured('sbs-news', 500 + n), 'bookmarked', true, { expectedRevision: here.revision, now: T(40 + n) });
+  for (let n = 0; n < 6; n++) there = Actions.setReaction(there, captured('owid', 600 + n), 'bookmarked', true, { expectedRevision: there.revision, now: T(50 + n) });
+  assert.equal(Actions.combine(legacy, here).entries.length, 496, 'each device was under 500 when it added');
+  const merged = Sync.mergeDocument('discoveryActionsExtended', agreed, here, there, false);
+  assert.equal(merged.value.entries.length, 202); assert.deepEqual(merged.lost, []);
+  for (const [key, value] of [[keys.legacy, legacy], [keys.extended, merged.value]]) assert.equal((await store.applyAccountDoc(key, { value, expectedHash: null })).status, 'applied');
+  const profile = await store.readDiscoveryActions(w);
+  assert.equal(profile.entries.length, 502, 'the pair opens above 500');
+  // Adding is refused with the usual code and nothing is written.
+  const before = { legacy: structuredClone(raw(keys.legacy)), extended: structuredClone(raw(keys.extended)) };
+  // (The screen's model already refuses this; storage refuses it on its own too.)
+  assert.throws(() => Actions.setReaction(profile, captured('kakao-tech', 1), 'bookmarked', true, { expectedRevision: profile.revision, now: T(60) }), { code: 'discovery_actions_too_large' });
+  const row = Actions.setReaction(Actions.empty(w), captured('kakao-tech', 1), 'bookmarked', true, { expectedRevision: 0, now: T(60) }).entries[0];
+  const grown = { ...profile, revision: profile.revision + 1, updatedAt: T(60), entries: [...profile.entries, row] };
+  assert.equal(grown.entries.length, 503, 'a profile with one more entry');
+  await assert.rejects(store.saveDiscoveryActions(w, grown, profile.revision), { code: 'discovery_actions_too_large' });
+  assert.deepEqual(raw(keys.legacy), before.legacy); assert.deepEqual(raw(keys.extended), before.extended);
+  // Changing and removing entries is saved.
+  const trimmed = Actions.forget(profile, profile.entries[0].canonicalUrl, { expectedRevision: profile.revision, now: T(61) });
+  const result = await store.saveDiscoveryActions(w, trimmed, profile.revision);
+  assert.equal(result.status, 'stored'); assert.equal(result.profile.entries.length, 501);
+});

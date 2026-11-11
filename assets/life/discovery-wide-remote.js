@@ -33,7 +33,7 @@
   // the account's news settings so a new opening does not ask again).
   const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
   // Control, format (zero-width, bidi), line/paragraph separators, private use, unassigned.
-  const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}͏ᅟᅠ឴឵᠋-᠏ㅤ︀-️ﾠ\u{e0100}-\u{e01ef}]/u;
+  const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\u{e0100}-\u{e01ef}]/u;
   const WORD_CHAR = /[\p{L}\p{N}]/u;
   const ALLOWED = /^[\p{L}\p{N}\p{M} .&+#'’·/,%!?-]+$/u;
   const OPERATOR_WORDS = new Set(['OR', 'AND', 'NOT']);

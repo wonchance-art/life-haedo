@@ -601,6 +601,43 @@ async function main() {
       assert.equal(wide.requests.length, 0);
     });
 
+    // Re-review MAJOR-B: a list the person has not used yet takes a late answer in its order; once used, it keeps its cards.
+    const twelve = body => { const base = answer(body, { per: 0 }); base.items = Array.from({ length: 12 }, (_, i) => item(body.topics[0], 'ko', i, { sourceName: '넓은 매체 ' + i, publishedAt: new Date(Date.now() - (i + 2) * 60000).toISOString() }));
+      base.topics = [{ topic: body.topics[0], language: 'ko', status: 'fresh', fetchedAt: base.fetchedAt, count: 12 }]; return { status: 200, body: base }; };
+    for (const delay of [1500, 0]) await check('news opened again with 넓게 찾기 on: an answer ' + (delay ? 'after ' + delay + 'ms' : 'at once') + ' takes its place on the first page', async ({ page, wide, state }) => {
+      wide.reply = twelve; state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      let release; wide.hold = new Promise(resolve => { release = resolve; }); setTimeout(() => { release(); wide.hold = null; }, delay);
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await until(page, () => document.querySelectorAll('#discoveryList > .discovery-article[data-wide]').length > 0, null, 'found links drawn'); await frames(page);
+      const first = await cards(page).evaluateAll(nodes => nodes.slice(0, 20).map(node => node.dataset.wide === 'true'));
+      assert.ok(first.filter(Boolean).length >= 3, 'found links on the first page: ' + first.filter(Boolean).length);
+      assert.ok(first.slice(0, 3).every(Boolean), 'the newest links lead it');
+      assert.equal(await page.locator('#discoveryNewArticles').count(), 0, 'nothing to announce: the list took them');
+      assert.equal(await page.evaluate(() => scrollY), 0, 'the page did not move');
+    });
+    await check('news opened again with 넓게 찾기 on: once the list is scrolled, a late answer joins after the drawn cards', async ({ page, wide, state }) => {
+      wide.reply = twelve; state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+      const before = await shownIds(page); assert.equal(before.length, 20);
+      const box = await page.locator('#discoveryList').boundingBox(); await page.mouse.move(box.x + 40, box.y + 40); await page.mouse.wheel(0, 300); await frames(page);
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 12건/);
+      assert.deepEqual(await shownIds(page), before, 'the cards already drawn keep their places');
+    });
+    await check('a topic the server refuses (safety net) leaves the taken topics\' answer in place: no request beyond one per topic', async ({ page, wide }) => {
+      for (const topic of ['주제 하나', '서버만 거절', '주제 둘']) await addTopic(page, topic);
+      await setWide(page, true); await settled(async () => wide.requests.length, 4, 'one request, then one per topic');
+      await page.waitForTimeout(500); assert.equal(wide.requests.length, 4, 'the answer already covers the topics taken');
+      await closeSettings(page); await until(page, () => document.querySelectorAll('#discoveryList > .discovery-article[data-wide]').length > 0, null, 'links drawn');
+      const links = await wideCards(page).count();
+      await nav(page, 'schedule'); await nav(page, 'news'); await idle(page); await page.waitForTimeout(500);
+      assert.equal(wide.requests.length, 4, 'reopening the tab reuses the answer'); assert.equal(await wideCards(page).count(), links, 'the links stay');
+    });
+
     for (const width of [820, 390]) await check('found links at ' + width + 'px: full-width text cards, 44px targets, no overflow', async ({ page, wide }) => {
       await start(page, wide, ['동네 도서관']);
       const card = wideCards(page).first(), box = await card.boundingBox(), pane = await page.locator('#discoveryListPane').boundingBox();

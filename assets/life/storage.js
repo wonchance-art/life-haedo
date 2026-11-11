@@ -1247,7 +1247,10 @@
     }
     async function saveDiscoveryActions(workspaceId, input, baseRevision) {
       privateProfileScope(workspaceId, '좋아요·담기를'); requireRevision(baseRevision, 'baseRevision');
-      validateDiscoveryActions(input, workspaceId);
+      // The profile of the pair may be above one document's bounds (see discovery-actions.js combine). Each written
+      // document is checked in full below; the profile meets the bounds only when this save adds an entry.
+      discoveryActions().validate(input, { totals: false });
+      if (input.workspaceId !== workspaceId) throw fault('workspace_mismatch', '좋아요·담기의 작업공간이 다릅니다.');
       const value = clone(input);
       if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
         throw fault('discovery_actions_conflict', '좋아요·담기의 저장 기준을 확인해 주세요.');
@@ -1257,6 +1260,10 @@
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await discoveryActionsPair(meta, workspaceId);
         if (previous.profile.revision !== baseRevision) return { status: 'conflict', profile: clone(previous.profile) };
+        if (value.entries.length > previous.profile.entries.length) {
+          discoveryActions().validate(value);
+          if (new TextEncoder().encode(stablePayload(value)).length >= 1024 * 1024) throw fault('discovery_actions_too_large', '좋아요·담기 자료가 너무 큽니다. 기존 선택은 보존했습니다.');
+        }
         const next = discoveryActions().separate(value, previous.legacy, previous.extended), written = [];
         if (next.legacy) { validateDiscoveryActions(next.legacy, workspaceId); await meta.put({ key: discoveryActionsKey(workspaceId), value: next.legacy }); written.push(discoveryActionsKey(workspaceId)); }
         if (next.extended) { validateDiscoveryActions(next.extended, workspaceId); await meta.put({ key: discoveryActionsExtendedKey(workspaceId), value: next.extended }); written.push(discoveryActionsExtendedKey(workspaceId)); }
@@ -5797,7 +5804,7 @@
       accountDocScope(key);
       return transaction(['meta'], 'readonly', async tx => {
         const prefix = `accountDocRecovery:${key}:`, meta = tx.objectStore('meta'), result = [];
-        for (const item of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '￿')))
+        for (const item of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff')))
           if (typeof item === 'string' && item.startsWith(prefix)) result.push({ id: item, ...clone((await meta.get(item)).value) });
         return result;
       });
