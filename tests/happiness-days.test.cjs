@@ -201,16 +201,17 @@ test('two devices: different dates both stay; the same date keeps the later edit
   for (const store of [a, b]) assert.equal((await entryOf(store, '2026-11-01')).v, null);
 });
 
-test('schema 5 is recorded and an older device reads the change list again once', async t => {
+// 6 since the news pairs (discoveryActionsExtended/discoveryReadingExtended, 2026-11-11); happinessDays came with 4.
+test('the current schema (6) is recorded and an older device reads the change list again once', async t => {
   const local = device(); t.after(() => local.base.close());
   const store = local.base.forAccount(accountA);
-  assert.equal(store.accountDocKinds.schema, 5);
+  assert.equal(store.accountDocKinds.schema, 6);
   assert.ok(store.accountDocKinds.account.includes('happinessDays'));
   await store.writeAccountDocCursor(7);
   const k = JSON.stringify(`accountDocSchema:${JSON.stringify([accountA.projectUrl, accountA.userId])}`);
   local.rows.get('meta').set(k, { key: JSON.parse(k), value: 3 });
-  assert.deepEqual(await store.upgradeAccountDocSchema(), { schema: 5, rewound: true });
-  assert.deepEqual(await store.upgradeAccountDocSchema(), { schema: 5, rewound: false });
+  assert.deepEqual(await store.upgradeAccountDocSchema(), { schema: 6, rewound: true });
+  assert.deepEqual(await store.upgradeAccountDocSchema(), { schema: 6, rewound: false });
 });
 
 // ── 이행 ──

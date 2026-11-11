@@ -112,5 +112,79 @@
     }
     result.personalizationEnabled = false; return finish(result);
   }
-  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy });
+  // --- Two account documents (review MAJOR-1, 2026-11-11). The shell shipped before the added sources validates
+  // `discoveryActions` with its nine-source registry and holds back the whole document when one entry names another
+  // source (an added source or a 넓게 찾기 link). Its next own reaction then replaced the account copy and the newer
+  // device's entries were lost. So `discoveryActions` keeps only what that validator accepts, and every other entry
+  // lives in `discoveryActionsExtended`, which that shell does not know and leaves alone. Storage reads the pair as one
+  // profile (combine) and writes a saved profile back as the pair (separate). Both are ordinary account documents.
+  function legacyIds() { const value = api(); return new Set(Array.isArray(value.LEGACY_SOURCE_IDS) ? value.LEGACY_SOURCE_IDS : Object.keys(value.ALLOWED_SOURCES)); }
+  // Accepted by the earlier validator: its registry is exactly the first nine sources with the same hosts.
+  function legacyEntry(row, ids = legacyIds()) { return ids.has(row?.snapshot?.sourceId); }
+  function legacyCompatible(profile) { validate(profile); const ids = legacyIds(); return profile.entries.every(row => legacyEntry(row, ids)); }
+  const later = (a, b) => Date.parse(a) >= Date.parse(b) ? a : b;
+  // The pair as one profile. An address in both (two feeds of one site can list one article) shows the version
+  // changed last (a tie: the extended one); the other stays stored where it is. The revision is the sum, so a change
+  // of either document is a change of the profile.
+  function combine(legacy, extended) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId);
+    const extra = new Map(extended.entries.map(row => [row.canonicalUrl, row])), used = new Set(), entries = [];
+    for (const row of legacy.entries) {
+      const other = extra.get(row.canonicalUrl);
+      entries.push(copy(other && Date.parse(other.updatedAt) >= Date.parse(row.updatedAt) ? other : row)); used.add(row.canonicalUrl);
+    }
+    for (const row of extended.entries) if (!used.has(row.canonicalUrl)) entries.push(copy(row));
+    const stamps = [legacy.updatedAt, extended.updatedAt].filter(Boolean), revision = legacy.revision + extended.revision;
+    const gone = value => value.deleted || value.revision === 0;
+    const result = { schemaVersion: 1, workspaceId: legacy.workspaceId, revision, deleted: revision > 0 && gone(legacy) && gone(extended) && (legacy.deleted || extended.deleted),
+      updatedAt: stamps.length ? stamps.reduce(later) : null, personalizationEnabled: legacy.personalizationEnabled, entries };
+    return finish(result);
+  }
+  // A saved profile (built from combine) back as the pair. Each document keeps its own order and its own copy of an
+  // address the other one shows; only what the profile changed is written. `null` leaves that document as it is;
+  // when nothing changed the legacy document still takes the save, as a single document did.
+  function separate(profile, legacy, extended) {
+    validate(profile); validate(legacy); validate(extended); check(profile.workspaceId === legacy.workspaceId && legacy.workspaceId === extended.workspaceId);
+    const ids = legacyIds(), wanted = new Map(profile.entries.map(row => [row.canonicalUrl, row]));
+    const side = (doc, mine) => {
+      const rows = [], seen = new Set();
+      for (const row of doc.entries) {
+        const next = wanted.get(row.canonicalUrl); if (!next) continue; // forgotten, or cleared
+        rows.push(copy(mine(next) ? next : row)); seen.add(row.canonicalUrl); // another document's version: this copy stays
+      }
+      for (const row of profile.entries) if (mine(row) && !seen.has(row.canonicalUrl)) rows.push(copy(row));
+      return rows;
+    };
+    const legacyRows = side(legacy, row => legacyEntry(row, ids)), extendedRows = side(extended, row => !legacyEntry(row, ids));
+    const legacyNext = { ...copy(legacy), revision: legacy.revision + 1, deleted: profile.deleted, updatedAt: profile.updatedAt, personalizationEnabled: profile.personalizationEnabled, entries: legacyRows };
+    const extendedNext = { ...copy(extended), revision: extended.revision + 1, deleted: profile.deleted && !extendedRows.length, updatedAt: profile.updatedAt, personalizationEnabled: false, entries: extendedRows };
+    const meaning = value => JSON.stringify([value.deleted, value.personalizationEnabled, value.entries]);
+    const extendedChanged = extended.revision === 0 ? extendedRows.length > 0 : meaning(extendedNext) !== meaning(extended);
+    const legacyChanged = meaning(legacyNext) !== meaning(legacy) || !extendedChanged;
+    if (legacyChanged) { finish(legacyNext); check(legacyNext.entries.every(row => legacyEntry(row, ids))); }
+    if (extendedChanged) finish(extendedNext);
+    return { legacy: legacyChanged ? legacyNext : null, extended: extendedChanged ? extendedNext : null };
+  }
+  // A legacy document that still holds other entries (written before this split, e.g. during development): those
+  // entries move to the extended document. An address already there keeps the version changed last; the other
+  // version is returned as `lost` for a recovery copy. Nothing is moved when there is nothing to move.
+  function migrate(legacy, extended, now) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId && stamp(now));
+    const ids = legacyIds(), moving = legacy.entries.filter(row => !legacyEntry(row, ids));
+    if (!moving.length) return null;
+    const rows = copy(extended.entries), lost = [], at = new Map(rows.map((row, index) => [row.canonicalUrl, index]));
+    for (const row of moving) {
+      if (!at.has(row.canonicalUrl)) { at.set(row.canonicalUrl, rows.length); rows.push(copy(row)); continue; }
+      const index = at.get(row.canonicalUrl), kept = rows[index];
+      if (Date.parse(row.updatedAt) > Date.parse(kept.updatedAt)) { lost.push(kept); rows[index] = copy(row); } else lost.push(copy(row));
+    }
+    const time = [now, legacy.updatedAt, extended.updatedAt].filter(Boolean).reduce(later);
+    const legacyNext = finish({ ...copy(legacy), revision: legacy.revision + 1, deleted: false, updatedAt: time, entries: legacy.entries.filter(row => legacyEntry(row, ids)) });
+    const extendedNext = finish({ ...copy(extended), revision: extended.revision + 1, deleted: false, updatedAt: time, personalizationEnabled: false, entries: rows });
+    // Every moved address is in the new extended document before the legacy one lets go of it.
+    check(moving.every(row => extendedNext.entries.some(kept => kept.canonicalUrl === row.canonicalUrl)));
+    return { legacy: legacyNext, extended: extendedNext, lost };
+  }
+  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy,
+    legacyEntry, legacyCompatible, combine, separate, migrate });
 });

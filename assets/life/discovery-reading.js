@@ -266,5 +266,59 @@
   }
   function setPreference(profile, value, options) { const result = next(profile, options); check(result.session !== null); result.session.preference = value; return finish(result); }
   function clear(profile, options) { return finish({ ...next(profile, options), deleted: true, session: null }); }
-  return Object.freeze({ MAX_BYTES, INTENTS, READINGS, REASONS, PREFERENCES, empty, validate, createComparison, setReview, setPreference, clear });
+  // --- Two account documents (review MAJOR-1, 2026-11-11), as for reactions (discovery-actions.js). The shell shipped
+  // before the added sources reads `discoveryReading` with at most twenty sources from its nine-source registry and holds
+  // back a comparison over more. Its next own edit then replaced the account copy. So a comparison that validator
+  // cannot read lives in `discoveryReadingExtended`, which that shell does not know; `discoveryReading` only ever holds
+  // one it can read. The pair reads as one profile: the comparison of the document changed last (a tie: the extended).
+  function legacyIds() { const value = dep('Discovery'); return new Set(Array.isArray(value.LEGACY_SOURCE_IDS) ? value.LEGACY_SOURCE_IDS : Object.keys(value.ALLOWED_SOURCES)); }
+  function legacySession(session) {
+    if (session === null) return true;
+    const ids = legacyIds(), sources = session.conditions.sourceIds;
+    return sources.length <= (dep('Discovery').LIMITS.legacySources ?? 20) && sources.every(value => ids.has(value));
+  }
+  function legacyCompatible(profile) { validate(profile); return legacySession(profile.session); }
+  const later = (a, b) => Date.parse(a) >= Date.parse(b) ? a : b;
+  function shownFrom(legacy, extended) {
+    if (!legacy.session) return extended.session ? 'extended' : null;
+    if (!extended.session) return 'legacy';
+    return Date.parse(extended.updatedAt) >= Date.parse(legacy.updatedAt) ? 'extended' : 'legacy';
+  }
+  function combine(legacy, extended) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId);
+    const from = shownFrom(legacy, extended), session = from ? copy((from === 'legacy' ? legacy : extended).session) : null;
+    const stamps = [legacy.updatedAt, extended.updatedAt].filter(Boolean), revision = legacy.revision + extended.revision;
+    return finish({ schemaVersion: 1, workspaceId: legacy.workspaceId, revision, deleted: revision > 0 && !session && (legacy.deleted || extended.deleted),
+      updatedAt: stamps.length ? stamps.reduce(later) : null, session });
+  }
+  // A saved profile back to the document it belongs to; the other one is left as it is (`null`). An edit of the shown
+  // comparison stays in its document; a new comparison goes to the legacy document only when that shell can read it.
+  function separate(profile, legacy, extended) {
+    validate(profile); validate(legacy); validate(extended); check(profile.workspaceId === legacy.workspaceId && legacy.workspaceId === extended.workspaceId);
+    const from = shownFrom(legacy, extended), shown = from ? (from === 'legacy' ? legacy : extended).session : null;
+    let target = profile.session === null ? from || 'legacy' : shown && profile.session.id === shown.id ? from : legacySession(profile.session) ? 'legacy' : 'extended';
+    if (target === 'legacy' && !legacySession(profile.session)) target = 'extended';
+    const doc = target === 'legacy' ? legacy : extended;
+    const next = finish({ ...copy(doc), revision: doc.revision + 1, deleted: profile.deleted, updatedAt: profile.updatedAt, session: copy(profile.session) });
+    return { legacy: target === 'legacy' ? next : null, extended: target === 'extended' ? next : null };
+  }
+  // A legacy document holding a comparison that shell cannot read (written before this split): the comparison moves
+  // to the extended document unless that one holds a newer comparison. The replaced or older one is returned as `lost`
+  // ({ from, value }) for a recovery copy. Nothing happens when there is nothing to move.
+  function migrate(legacy, extended, now) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId && stamp(now));
+    if (legacySession(legacy.session)) return null;
+    const time = [now, legacy.updatedAt, extended.updatedAt].filter(Boolean).reduce(later), lost = [];
+    const moves = !extended.session || Date.parse(legacy.updatedAt) >= Date.parse(extended.updatedAt);
+    let extendedNext = null;
+    if (moves) {
+      if (extended.session) lost.push({ from: 'extended', value: copy(extended) });
+      extendedNext = finish({ ...copy(extended), revision: extended.revision + 1, deleted: false, updatedAt: time, session: copy(legacy.session) });
+      check(extendedNext.session.id === legacy.session.id);
+    } else lost.push({ from: 'legacy', value: copy(legacy) });
+    const legacyNext = finish({ ...copy(legacy), revision: legacy.revision + 1, deleted: true, updatedAt: time, session: null });
+    return { legacy: legacyNext, extended: extendedNext, lost };
+  }
+  return Object.freeze({ MAX_BYTES, INTENTS, READINGS, REASONS, PREFERENCES, empty, validate, createComparison, setReview, setPreference, clear,
+    legacySession, legacyCompatible, combine, separate, migrate });
 });

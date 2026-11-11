@@ -134,7 +134,7 @@
     };
     const discoveryActions = () => {
       const value = options.discoveryActions || root.HaedoLife?.DiscoveryActions;
-      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
+      if (!value?.validate || !value?.empty || !value?.combine || !value?.separate || !value?.migrate) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
       return value;
     };
     const discoveryLanguageSettings = () => {
@@ -144,7 +144,7 @@
     };
     const discoveryReading = () => {
       const value = options.discoveryReading || root.HaedoLife?.DiscoveryReading;
-      if (!value?.validate || !value?.empty || !Number.isSafeInteger(value.MAX_BYTES) || value.MAX_BYTES < 1) {
+      if (!value?.validate || !value?.empty || !value?.combine || !value?.separate || !value?.migrate || !Number.isSafeInteger(value.MAX_BYTES) || value.MAX_BYTES < 1) {
         throw fault('dependency_unavailable', '읽기 평가 모듈을 불러오지 못했습니다.');
       }
       return value;
@@ -1225,12 +1225,24 @@
     async function discoveryActionsValue(meta, workspaceId) {
       return privateProfileValue(meta, discoveryActionsKey(workspaceId), workspaceId, discoveryActions(), validateDiscoveryActions);
     }
+    // Reactions live in two account documents (review MAJOR-1, discovery-actions.js combine/separate):
+    // `discoveryActions` holds only what the shell shipped before the added sources can read, every other entry
+    // (added sources, 넓게 찾기 links) is in `discoveryActionsExtended`. The screen reads and saves them as one profile
+    // whose revision is the sum of the two.
+    const discoveryActionsExtendedKey = workspaceId => `discoveryActionsExtended:${accountKey}:${workspaceId}`;
+    async function discoveryActionsExtendedValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryActionsExtendedKey(workspaceId), workspaceId, discoveryActions(), validateDiscoveryActions);
+    }
+    async function discoveryActionsPair(meta, workspaceId) {
+      const legacy = await discoveryActionsValue(meta, workspaceId), extended = await discoveryActionsExtendedValue(meta, workspaceId);
+      return { legacy, extended, profile: discoveryActions().combine(legacy, extended) };
+    }
     async function readDiscoveryActions(workspaceId) {
       privateProfileScope(workspaceId, '좋아요·담기를');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta');
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
-        return clone(await discoveryActionsValue(meta, workspaceId));
+        return clone((await discoveryActionsPair(meta, workspaceId)).profile);
       });
     }
     async function saveDiscoveryActions(workspaceId, input, baseRevision) {
@@ -1243,13 +1255,15 @@
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta');
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
-        const previous = await discoveryActionsValue(meta, workspaceId);
-        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
-        await meta.put({ key: discoveryActionsKey(workspaceId), value });
-        return { status: 'stored', profile: clone(value) };
+        const previous = await discoveryActionsPair(meta, workspaceId);
+        if (previous.profile.revision !== baseRevision) return { status: 'conflict', profile: clone(previous.profile) };
+        const next = discoveryActions().separate(value, previous.legacy, previous.extended), written = [];
+        if (next.legacy) { validateDiscoveryActions(next.legacy, workspaceId); await meta.put({ key: discoveryActionsKey(workspaceId), value: next.legacy }); written.push(discoveryActionsKey(workspaceId)); }
+        if (next.extended) { validateDiscoveryActions(next.extended, workspaceId); await meta.put({ key: discoveryActionsExtendedKey(workspaceId), value: next.extended }); written.push(discoveryActionsExtendedKey(workspaceId)); }
+        return { status: 'stored', profile: clone((await discoveryActionsPair(meta, workspaceId)).profile), written };
       });
       if (result.status === 'stored') {
-        accountDocChanged(discoveryActionsKey(workspaceId));
+        accountDocChanged(...result.written); delete result.written;
         const event = { type: 'discovery_actions_changed', workspaceId, revision: result.profile.revision };
         // Only this storage facade observes its own committed action write.
         // Other facades/tabs receive the minimal event and must revalidate.
@@ -1265,12 +1279,22 @@
     async function discoveryReadingValue(meta, workspaceId) {
       return privateProfileValue(meta, discoveryReadingKey(workspaceId), workspaceId, discoveryReading(), validateDiscoveryReading);
     }
+    // The reading comparison, likewise (discovery-reading.js combine/separate): one over more than the first nine
+    // sources lives in `discoveryReadingExtended`.
+    const discoveryReadingExtendedKey = workspaceId => `discoveryReadingExtended:${accountKey}:${workspaceId}`;
+    async function discoveryReadingExtendedValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryReadingExtendedKey(workspaceId), workspaceId, discoveryReading(), validateDiscoveryReading);
+    }
+    async function discoveryReadingPair(meta, workspaceId) {
+      const legacy = await discoveryReadingValue(meta, workspaceId), extended = await discoveryReadingExtendedValue(meta, workspaceId);
+      return { legacy, extended, profile: discoveryReading().combine(legacy, extended) };
+    }
     async function readDiscoveryReading(workspaceId) {
       privateProfileScope(workspaceId, '읽기 평가를');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta');
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
-        return clone(await discoveryReadingValue(meta, workspaceId));
+        return clone((await discoveryReadingPair(meta, workspaceId)).profile);
       });
     }
     async function saveDiscoveryReading(workspaceId, input, baseRevision) {
@@ -1283,13 +1307,15 @@
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta');
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
-        const previous = await discoveryReadingValue(meta, workspaceId);
-        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
-        await meta.put({ key: discoveryReadingKey(workspaceId), value });
-        return { status: 'stored', profile: clone(value) };
+        const previous = await discoveryReadingPair(meta, workspaceId);
+        if (previous.profile.revision !== baseRevision) return { status: 'conflict', profile: clone(previous.profile) };
+        const next = discoveryReading().separate(value, previous.legacy, previous.extended), written = [];
+        if (next.legacy) { validateDiscoveryReading(next.legacy, workspaceId); await meta.put({ key: discoveryReadingKey(workspaceId), value: next.legacy }); written.push(discoveryReadingKey(workspaceId)); }
+        if (next.extended) { validateDiscoveryReading(next.extended, workspaceId); await meta.put({ key: discoveryReadingExtendedKey(workspaceId), value: next.extended }); written.push(discoveryReadingExtendedKey(workspaceId)); }
+        return { status: 'stored', profile: clone((await discoveryReadingPair(meta, workspaceId)).profile), written };
       });
       if (result.status === 'stored') {
-        accountDocChanged(discoveryReadingKey(workspaceId));
+        accountDocChanged(...result.written); delete result.written;
         const event = { type: 'discovery_reading_changed', workspaceId, revision: result.profile.revision };
         notify({ ...event, local: true });
         try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
@@ -5514,8 +5540,11 @@
       discoveryProfile: { read: (meta, ws) => discoveryProfileValue(meta, ws), event: 'discovery_profile_changed', recovery: true },
       discoverySettings: { read: (meta, ws) => discoverySettingsValue(meta, ws), event: 'discovery_settings_changed', recovery: false },
       discoveryLanguageSettings: { read: (meta, ws) => discoveryLanguageSettingsValue(meta, ws), event: 'discovery_language_settings_changed', recovery: false },
-      discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true },
-      discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true },
+      // Each pair is one profile on the screen: its change event carries the pair's revision (the sum).
+      discoveryActions: { read: (meta, ws) => discoveryActionsValue(meta, ws), event: 'discovery_actions_changed', recovery: true, eventRevision: async (meta, ws) => (await discoveryActionsPair(meta, ws)).profile.revision },
+      discoveryActionsExtended: { read: (meta, ws) => discoveryActionsExtendedValue(meta, ws), event: 'discovery_actions_changed', recovery: true, eventRevision: async (meta, ws) => (await discoveryActionsPair(meta, ws)).profile.revision },
+      discoveryReading: { read: (meta, ws) => discoveryReadingValue(meta, ws), event: 'discovery_reading_changed', recovery: true, eventRevision: async (meta, ws) => (await discoveryReadingPair(meta, ws)).profile.revision },
+      discoveryReadingExtended: { read: (meta, ws) => discoveryReadingExtendedValue(meta, ws), event: 'discovery_reading_changed', recovery: true, eventRevision: async (meta, ws) => (await discoveryReadingPair(meta, ws)).profile.revision },
       // Items are only added (union by rid), so merging both sides never loses one.
       platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false },
       // 하루 행복도: 날짜별로 합치고(LISTS), 두 기기가 같은 날을 고치면 늦은 쪽, 진 쪽은 이 기기에 남긴다.
@@ -5594,8 +5623,8 @@
     function accountDocChanged(...keys) {
       for (const key of keys) notify({ type: 'account_doc_changed', key });
     }
-    function accountDocApplied(parsed, value) {
-      const revision = value?.revision;
+    function accountDocApplied(parsed, value, eventRevision = value?.revision) {
+      const revision = eventRevision;
       const event = { type: 'account_doc_applied', key: parsed.key, workspaceId: parsed.workspaceId };
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Durable row remains authoritative. */ }
       if (parsed.spec.event && Number.isSafeInteger(revision) && revision >= 1) {
@@ -5609,6 +5638,7 @@
       // Older open tabs can still write legacy evidence after this release's
       // first pass. Promote only proven links and never remove the old proof.
       await promoteMaterialOutputDeletions();
+      await moveDiscoveryExtended();
       return transaction(['meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'), result = [], owners = new Map();
         for (const key of await meta.getAllKeys()) {
@@ -5627,6 +5657,51 @@
       });
     }
     async function listAccountDocKeys() { return (await listAccountDocs()).map(item => item.key); }
+    // A `discoveryActions`/`discoveryReading` document that holds what the earlier shell cannot read (written before
+    // the pair existed, or received so from the account) moves that part to its extended document, once, before any
+    // sync pass lists the documents. One transaction: the extended document is written and read back first; the legacy
+    // one lets go only after that, and a version either side loses becomes a recovery copy. A failure changes nothing.
+    async function moveDiscoveryExtended() {
+      const kinds = [
+        { prefix: 'discoveryActions', model: discoveryActions, key: discoveryActionsKey, extendedKey: discoveryActionsExtendedKey, read: discoveryActionsValue, readExtended: discoveryActionsExtendedValue,
+          pair: discoveryActionsPair, event: 'discovery_actions_changed', lost: (moved, keys) => moved.lost.length ? [[keys.extended, { items: moved.lost }]] : [] },
+        { prefix: 'discoveryReading', model: discoveryReading, key: discoveryReadingKey, extendedKey: discoveryReadingExtendedKey, read: discoveryReadingValue, readExtended: discoveryReadingExtendedValue,
+          pair: discoveryReadingPair, event: 'discovery_reading_changed', lost: (moved, keys) => moved.lost.map(item => [item.from === 'legacy' ? keys.legacy : keys.extended, item.value]) }
+      ];
+      const found = await transaction(['meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), list = [];
+        for (const kind of kinds) {
+          const start = kind.prefix + ':' + accountKey + ':';
+          for (const key of await meta.getAllKeys(root.IDBKeyRange?.bound(start, start + '\uffff'))) {
+            if (typeof key !== 'string' || !key.startsWith(start)) continue;
+            const workspaceId = key.slice(start.length); if (!ACCOUNT_DOC_ID.test(workspaceId)) continue;
+            try { if (!kind.model().legacyCompatible(await kind.read(meta, workspaceId))) list.push({ kind, workspaceId }); } catch (_) { /* Not valid here: left to the usual sync rules. */ }
+          }
+        }
+        return list;
+      });
+      for (const { kind, workspaceId } of found) {
+        const keys = { legacy: kind.key(workspaceId), extended: kind.extendedKey(workspaceId) };
+        let revision = null;
+        try {
+          revision = await transaction(['meta'], 'readwrite', async tx => {
+            const meta = tx.objectStore('meta'), legacy = await kind.read(meta, workspaceId), extended = await kind.readExtended(meta, workspaceId);
+            const moved = kind.model().migrate(legacy, extended, new Date().toISOString()); if (!moved) return null;
+            if (moved.extended) {
+              await meta.put({ key: keys.extended, value: moved.extended });
+              if (stablePayload(await kind.readExtended(meta, workspaceId)) !== stablePayload(moved.extended)) throw fault('discovery_move_unverified', '옮긴 내용을 확인하지 못해 그대로 두었습니다.');
+            }
+            for (const [key, value] of kind.lost(moved, keys)) await addAccountDocRecovery(meta, key, value, 'moved_extended');
+            await meta.put({ key: keys.legacy, value: moved.legacy });
+            return (await kind.pair(meta, workspaceId)).profile.revision;
+          });
+        } catch (_) { continue; /* Nothing was written; the next pass tries again and sync goes on meanwhile. */ }
+        if (revision === null) continue;
+        accountDocChanged(keys.legacy, keys.extended);
+        const event = { type: kind.event, workspaceId, revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed rows remain authoritative. */ }
+      }
+    }
     async function readAccountDocRecord(key) {
       const parsed = accountDocScope(key);
       return transaction(['meta'], 'readonly', async tx => {
@@ -5675,7 +5750,9 @@
     // past them, so those rows would never come again (a restored-copy marker
     // is written once). Raise this number whenever a prefix is added above.
     // 1: the 2026-11-01 kinds. 2: restored-copy. 3: platformRecovery. 4: happinessDays. 5: materialOutputDeleted.
-    const ACCOUNT_DOC_SCHEMA = 5;
+    // 6: discoveryActionsExtended, discoveryReadingExtended (the second document of each pair, review MAJOR-1). An
+    // earlier shell skipped those rows, and one that held a row back left it unread; rereading once settles both.
+    const ACCOUNT_DOC_SCHEMA = 6;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
     // reads the change list again from the start. Rows it already has return
@@ -5759,6 +5836,9 @@
           throw fault('account_doc_rejected', rejected.message);
         }
         const applied = await accountDocLocal(meta, parsed), hash = accountDocHash(applied);
+        // A document read as part of a pair reports the pair's revision (see ACCOUNT_DOC_ACCOUNT_PREFIXES).
+        let eventRevision = applied?.revision;
+        if (parsed.spec.eventRevision) try { eventRevision = await parsed.spec.eventRevision(meta, parsed.workspaceId); } catch (error) { if (typeof error?.code !== 'string') throw error; }
         if (parsed.prefix === 'materialOutputDeleted' && (local === undefined || stablePayload(local) !== stablePayload(applied))) materialChanges = await refreshMaterialDeletionPlans(meta, applied);
         if (recoveryReason && local !== undefined && (parsed.spec.recovery || recoveryReason === 'first_sync')) {
           await addAccountDocRecovery(meta, parsed.key, local, recoveryReason);
@@ -5770,15 +5850,15 @@
           await meta.put({ key: accountDocSyncKey(parsed.key), value: sync });
           await meta.put({ key: accountDocBaseKey(parsed.key), value: input.base === undefined ? clone(applied) : clone(input.base) });
         }
-        return { status: 'applied', hash, value: clone(applied) };
+        return { status: 'applied', hash, value: clone(applied), eventRevision };
       }).catch(error => {
         if (rejected && error?.code === 'account_doc_rejected') return { status: 'rejected', error: rejected };
         throw error;
       });
       if (result.status === 'applied') {
-        accountDocApplied(parsed, result.value);
+        accountDocApplied(parsed, result.value, result.eventRevision);
         for (const change of materialChanges) materialWritingChanged(change.workspaceId, change.revision);
-        delete result.value;
+        delete result.value; delete result.eventRevision;
       }
       return result;
     }

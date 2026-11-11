@@ -499,9 +499,9 @@ test('a device that synced on an older release, which skipped restored-copy mark
     readAccountDocRecord: docKey => docKey.startsWith('restored-copy:') ? Promise.reject(unknown) : b.readAccountDocRecord(docKey),
     listAccountDocs: async () => (await b.listAccountDocs()).filter(doc => !doc.key.startsWith('restored-copy:')) };
   await engine(older, server, accountA, { now }).sync.syncNow();
-  // That release kept no schema mark (this storage records one with the first cursor).
+  // That release kept no schema mark (this storage records the current one, 6, with the first cursor).
   const schemaRow = JSON.stringify(`accountDocSchema:${accountKey(accountA)}`);
-  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 5); ipad.rows.get('meta').delete(schemaRow);
+  assert.equal(ipad.rows.get('meta').get(schemaRow)?.value, 6); ipad.rows.get('meta').delete(schemaRow);
   assert.equal((await b.readDiscoverySettings(w)).autoRefresh, true);
   assert.equal((await b.readAccountDocRecord(key)).exists, false, 'the older release skipped the marker');
   const passed = await b.readAccountDocCursor();
@@ -521,15 +521,15 @@ test('a device that synced on an older release, which skipped restored-copy mark
   // Once only: later passes continue from the stored cursor.
   await updated.sync.syncNow();
   assert.equal(updated.remote.calls.filter(call => call.type === 'changes' && call.after === 0).length, 1);
-  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 5, rewound: false });
+  assert.deepEqual(await b.upgradeAccountDocSchema(), { schema: 6, rewound: false });
   assert.ok((await b.readAccountDocCursor()) >= passed);
   // Per account: another account on the same device has its own mark and cursor; returning to A does not re-read.
   const other = ipad.base.forAccount(accountB);
-  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 5, rewound: false });
+  assert.deepEqual(await other.upgradeAccountDocSchema(), { schema: 6, rewound: false });
   assert.equal(await other.readAccountDocCursor(), null);
   assert.equal(ipad.rows.get('meta').has(JSON.stringify(`accountDocSchema:${accountKey(accountB)}`)), false);
   const back = ipad.base.forAccount(accountA);
-  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 5, rewound: false });
+  assert.deepEqual(await back.upgradeAccountDocSchema(), { schema: 6, rewound: false });
   assert.ok((await back.readAccountDocCursor()) >= passed);
 });
 
@@ -548,6 +548,8 @@ test('the account document schema number is pinned to its document kinds', t => 
     4: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading', 'platformRecovery', 'happinessDays'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] },
     5: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryReading', 'platformRecovery', 'happinessDays', 'materialOutputDeleted'],
+      workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] },
+    6: { account: ['readingPosition', 'interestProfile', 'annualPlan', 'discoveryProfile', 'discoverySettings', 'discoveryLanguageSettings', 'discoveryActions', 'discoveryActionsExtended', 'discoveryReading', 'discoveryReadingExtended', 'platformRecovery', 'happinessDays', 'materialOutputDeleted'],
       workspace: ['public-cover', 'page-drafts', 'post-evidence', 'restored-copy'] }
   };
   const local = device(); t.after(() => local.base.close());

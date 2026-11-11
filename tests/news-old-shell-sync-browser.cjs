@@ -1,10 +1,12 @@
 /* 과도기 확인: 새 판 기기가 남긴 뉴스 설정·반응·읽기 비교를, 아직 이전 셸인 같은 계정의 기기가 받았을 때.
  * npm run dev; node tests/news-old-shell-sync-browser.cjs
- * The "older device" is the actual shell with the four news files of the card-feed work replaced by the committed
- * base-commit bytes (tests/fixtures/discovery-old-client). What a new-shell device of the same account and
- * workspace uploads is built by the current models and placed in the in-memory account-document fixture; the
+ * The "older device" is the actual shell with every file this work changed replaced by the committed base-commit
+ * bytes (tests/fixtures/discovery-old-client: the four news screen files, storage, account sync, backup, reactions and
+ * reading models). What a new-shell device of the same account and workspace uploads is built by the current models
+ * (the pair of documents, discovery-actions.js separate) and placed in the in-memory account-document fixture; the
  * older device then syncs for real. Synthetic catalog only; no publisher, image or production request.
- * What must hold is asserted. What an older shell is known to lose is recorded in the report as an observation. */
+ * Review MAJOR-1 (2026-11-11): an older device that reacts keeps the newer device's added-source and found-link
+ * reactions on the account and on the newer screen, and its own reaction too. Asserted. */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
@@ -12,6 +14,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const crypto = require('node:crypto');
+const vm = require('node:vm');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const Discovery = require('../assets/life/discovery.js');
@@ -29,7 +32,22 @@ async function until(check, label, ms = 20000) {
   for (;;) { let value; try { value = await check(); } catch (_) { value = null; } if (value) return value; if (Date.now() > deadline) throw new Error('timed out: ' + label); await new Promise(done => setTimeout(done, 100)); }
 }
 const digests = { 'discovery.js': 'ee284b29696fc6fdaadf8efc63cd2ebf4305030514411150e009fa2321ff234b', 'discovery-ui.js': 'a03cd2f1bab7f63585897f0d121a386cc6468a3b678e239b4f0192d877b5870b',
-  'discovery.css': '07a0fa3d5f27e2a418fa82e692bc8d76a8e26705168b6a6b054238eb61013127', 'discovery-settings.js': 'f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc' };
+  'discovery.css': '07a0fa3d5f27e2a418fa82e692bc8d76a8e26705168b6a6b054238eb61013127', 'discovery-settings.js': 'f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc',
+  'storage.js': '6436add886ac555043a4f81fc0bfa31fe4ea5f763fcf2468e9d2709c3f76ace5', 'account-docs-sync.js': '2ecc53d98add9a566f9da5148299d1720e7ff0d4daecd2066f5fab6f9bf51e00',
+  'full-backup.js': '8c0e5d698686466ba707c64e225e11af320c2c285c0ecbfa793475609c4828a4', 'discovery-actions.js': 'cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9',
+  'discovery-reading.js': '8b6c18f69c752ed971ffdd1d578ccd7d7927ba97dcee0906b5582469ff548028' };
+// The earlier reactions and reading validators, run in their own realm on what the account holds.
+function olderValidators(old) {
+  const sandbox = vm.createContext({ TextEncoder, URL, AbortController, structuredClone, crypto: globalThis.crypto });
+  vm.runInContext(old['discovery.js'].toString('utf8'), sandbox); vm.runInContext(old['discovery-actions.js'].toString('utf8'), sandbox);
+  for (const file of ['discovery-profile.js', 'discovery-language-settings.js', 'interest-profile.js', 'discovery-recommendations.js']) vm.runInContext(require('node:fs').readFileSync(path.join(__dirname, '../assets/life', file), 'utf8'), sandbox);
+  vm.runInContext(old['discovery-reading.js'].toString('utf8'), sandbox);
+  const parse = vm.runInContext('JSON.parse', sandbox), inside = value => parse(JSON.stringify(value));
+  const accepts = name => value => { try { vm.runInContext('HaedoLife.' + name, sandbox).validate(inside(value)); return true; } catch (_) { return false; } };
+  return { actions: accepts('DiscoveryActions'), reading: accepts('DiscoveryReading') };
+}
+// What a new-shell device uploads for its reactions or comparison: the pair, from an empty one.
+const pairOf = (model, workspaceId, change) => { const legacy = model.empty(workspaceId), extended = model.empty(workspaceId), next = change(model.combine(legacy, extended)); return model.separate(next, legacy, extended); };
 // Every registered source in the published two-part form.
 function catalog() {
   const now = Date.now(), iso = minutes => new Date(now - minutes * 60000).toISOString(), rights = { mode: 'metadata_only', label: '합성 제목·링크', url: null };
@@ -54,6 +72,7 @@ async function main() {
     old[file] = zlib.gunzipSync(await fs.readFile(path.join(__dirname, 'fixtures/discovery-old-client', file + '.gz')));
     assert.equal(crypto.createHash('sha256').update(old[file]).digest('hex'), digest, file + ' fixture bytes');
   }
+  const Old = olderValidators(old);
   async function check(name, run) {
     if (only && !name.includes(only)) return;
     const server = new FakeCloud(), feed = catalog(), label = 'older-' + report.checks.length;
@@ -84,7 +103,7 @@ async function main() {
       const receive = async () => { await syncNow(page); await page.reload(); await openNews(); await syncNow(page); await idle(page); };
       // The same device after its next load: the new shell over the same local data.
       const updateShell = async () => { for (const file of Object.keys(old)) await context.unroute(base + '/assets/life/' + file); await page.reload(); await openNews(); await syncNow(page); await idle(page); };
-      await run({ page, feed, workspaceId, upload, stored, receive, updateShell });
+      await run({ page, feed, workspaceId, upload, stored, receive, updateShell, Old });
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) {
       report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack);
@@ -96,6 +115,9 @@ async function main() {
     assert.equal(await page.locator('#discoveryList > .discovery-article').count(), 5, 'older screen lists its five rows');
     assert.equal(await page.locator('#discoveryList .discovery-card-foot').count(), 0, 'this is the older row layout');
     assert.equal(await page.locator('#discoveryError').isVisible(), false, 'no error on the older screen');
+    // It is the earlier shell: no pair in its reactions model, the earlier document kinds in its storage.
+    assert.deepEqual(await page.evaluate(() => ({ pair: typeof HaedoLife.DiscoveryActions.combine, schema: HaedoLife.Shell.storage.accountDocKinds?.schema, kinds: HaedoLife.Shell.storage.accountDocKinds?.account.filter(kind => kind.endsWith('Extended')) })),
+      { pair: 'undefined', schema: 5, kinds: [] });
   };
   try {
     await check('settings: options chosen on the new shell survive an older device that receives them and then edits news settings', async ({ page, workspaceId, upload, stored, receive, updateShell }) => {
@@ -144,66 +166,107 @@ async function main() {
       const finished = await until(() => { const row = stored('discoverySettings'); return !Settings.wideClear(row.data) ? row : null; }, 'erase mark removed on the account');
       assert.deepEqual([...finished.data.disabledSourceIds].sort(), ['option-wide-off', 'seoul-culture']); assert.equal(clears[0], '{}');
     });
-    await check('reactions: a saved 넓게 찾기 link leaves the older device working, and its account copy untouched while that device only reads', async ({ page, workspaceId, upload, stored, receive, updateShell }) => {
+    const both = stored => [...(stored('discoveryActions')?.data.entries || []), ...(stored('discoveryActionsExtended')?.data.entries || [])];
+    const bookmarkedCount = async page => Number((await tab(page, '#discoveryBookmarked')).match(/\d+/)?.[0] || 0);
+    await check('reactions: a saved 넓게 찾기 link is in the extended document; the older device works and leaves it alone; the new shell shows it', async ({ page, workspaceId, upload, stored, receive, updateShell, Old }) => {
       const found = Wide.validate({ supplier: 'google-news-rss', fetchedAt: NOW(), stale: false, topics: [], items: [{ id: 'a'.repeat(32), title: '합성 넓게 찾은 글', link: 'https://news.google.com/rss/articles/SYNOLD?oc=5', publishedAt: NOW(), sourceName: '합성매체', sourceUrl: null, topic: '합성 주제', language: 'ko' }] }).items[0];
       const article = Wide.toArticle(found, { sourceId: Discovery.WIDE_SOURCE.id, canonicalUrl: Discovery.canonicalUrl, fetchedAt: NOW() });
-      const uploaded = upload('discoveryActions', Actions.setReaction(Actions.empty(workspaceId), Actions.capture(article, { id: article.sourceId, name: article.sourceName, rights: article.rights }), 'bookmarked', true, { expectedRevision: 0, now: NOW() }));
+      const pair = pairOf(Actions, workspaceId, profile => Actions.setReaction(profile, Actions.capture(article, { id: article.sourceId, name: article.sourceName, rights: article.rights }), 'bookmarked', true, { expectedRevision: 0, now: NOW() }));
+      assert.equal(pair.legacy, null, 'the new shell writes a found link to the extended document only');
+      const uploaded = upload('discoveryActionsExtended', pair.extended);
       await receive(); await olderOpens(page);
       assert.equal((await local(page, 'readDiscoveryActions')).ok, true, 'older device reads its own reactions');
-      assert.deepEqual(stored('discoveryActions').data, uploaded.data, 'an older device that only reads changes nothing on the account');
+      assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data, 'the older device leaves the extended document alone');
+      assert.equal(stored('discoveryActions'), null);
       report.observations.wideReactionOnOlderDevice = { tab: await tab(page, '#discoveryBookmarked'), olderDeviceSync: await page.evaluate(() => HaedoLife.Shell.accountDocsSync.getStatus().state) };
       await updateShell(); await page.waitForTimeout(1500); await syncNow(page); await idle(page);
-      assert.deepEqual(stored('discoveryActions').data, uploaded.data, 'nothing was written back');
-      report.observations.wideReactionAfterShellUpdate = { tab: await tab(page, '#discoveryBookmarked'), localEntries: (await local(page, 'readDiscoveryActions')).value.entries.length };
+      assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data, 'nothing was written back');
+      // The older release moved its cursor past the row it did not know; the new shell reads the list again once.
+      assert.equal(await bookmarkedCount(page), 1, 'the found link is in 담은 글 on the new shell');
+      assert.equal((await local(page, 'readDiscoveryActions')).value.entries.length, 1);
     });
-    await check('reactions: a reaction on an added source leaves the older device working, and its account copy untouched while that device only reads', async ({ page, feed, workspaceId, upload, stored, receive, updateShell }) => {
+    await check('reactions: an older device that reacts keeps the newer device\'s added-source and found-link reactions, and its own (MAJOR-1)', async ({ page, feed, workspaceId, upload, stored, receive, updateShell, Old }) => {
       const target = Discovery.validateFeed(feed).articles.find(article => article.sourceId === 'yna-news');
-      const actions = Actions.setReaction(Actions.empty(workspaceId), Actions.capture(target, { id: 'yna-news', name: '합성 yna-news' }), 'bookmarked', true, { expectedRevision: 0, now: NOW() });
-      const uploaded = upload('discoveryActions', actions);
+      const found = Wide.validate({ supplier: 'google-news-rss', fetchedAt: NOW(), stale: false, topics: [], items: [{ id: 'b'.repeat(32), title: '합성 넓게 찾은 글 둘', link: 'https://news.google.com/rss/articles/SYNOLD2?oc=5', publishedAt: NOW(), sourceName: '합성매체', sourceUrl: null, topic: '합성 주제', language: 'ko' }] }).items[0];
+      const link = Wide.toArticle(found, { sourceId: Discovery.WIDE_SOURCE.id, canonicalUrl: Discovery.canonicalUrl, fetchedAt: NOW() });
+      const pair = pairOf(Actions, workspaceId, profile => {
+        const one = Actions.setReaction(profile, Actions.capture(target, { id: 'yna-news', name: '합성 yna-news' }), 'bookmarked', true, { expectedRevision: 0, now: NOW() });
+        return Actions.setReaction(one, Actions.capture(link, { id: link.sourceId, name: link.sourceName }), 'bookmarked', true, { expectedRevision: 1, now: NOW() });
+      });
+      assert.equal(pair.legacy, null); const uploaded = upload('discoveryActionsExtended', pair.extended);
       await receive(); await olderOpens(page);
-      const received = await local(page, 'readDiscoveryActions');
-      assert.equal(received.ok, true, 'older device reads its own reactions');
-      assert.deepEqual(stored('discoveryActions').data, uploaded.data, 'an older device that only reads changes nothing on the account');
-      report.observations.reactionsOnOlderDevice = { localEntries: received.value.entries.length, tab: await tab(page, '#discoveryBookmarked') };
-      // Observation (recorded, not required): the older device now adds a reaction of its own.
+      assert.equal((await local(page, 'readDiscoveryActions')).ok, true, 'older device reads its own reactions');
+      // The older device now adds a reaction of its own (a first-registry article on its screen).
       await page.locator('#discoveryList > .discovery-article').first().locator('[data-discovery-reaction=bookmarked]').click(); await idle(page);
       await syncNow(page); await page.waitForTimeout(1200); await syncNow(page);
-      const after = stored('discoveryActions');
-      report.observations.reactionsAfterOlderReaction = { accountEntries: after.data.entries.map(entry => entry.snapshot.sourceId), keptNewSourceReaction: after.data.entries.some(entry => entry.canonicalUrl === target.canonicalUrl),
+      const legacy = await until(() => stored('discoveryActions'), 'older device uploaded its reaction');
+      report.observations.reactionsAfterOlderReaction = { legacyEntries: legacy.data.entries.map(entry => entry.snapshot.sourceId), extendedEntries: stored('discoveryActionsExtended').data.entries.map(entry => entry.snapshot.sourceId),
         olderDeviceSync: await page.evaluate(() => HaedoLife.Shell.accountDocsSync.getStatus().state) };
-      await updateShell();
-      report.observations.reactionsAfterShellUpdate = { tab: await tab(page, '#discoveryBookmarked'), accountEntries: stored('discoveryActions').data.entries.map(entry => entry.snapshot.sourceId) };
+      assert.equal(legacy.data.entries.length, 1, 'the older device\'s own reaction is on the account');
+      assert.ok(Discovery.LEGACY_SOURCE_IDS.includes(legacy.data.entries[0].snapshot.sourceId));
+      assert.equal(Old.actions(legacy.data), true, 'what the older device wrote is what its validator accepts');
+      assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data, 'the newer device\'s added-source and found-link reactions stay on the account');
+      // The same device on the new shell: all three are in 담은 글, nothing on the account changed.
+      await updateShell(); await page.waitForTimeout(1200); await syncNow(page); await idle(page);
+      assert.deepEqual(await page.evaluate(() => [typeof HaedoLife.DiscoveryActions.combine, HaedoLife.Shell.storage.accountDocKinds.schema]), ['function', 6], 'the new shell after the update');
+      report.observations.reactionsAfterShellUpdate = { tab: await tab(page, '#discoveryBookmarked') };
+      assert.equal(await bookmarkedCount(page), 3, 'three reactions on the new shell');
+      assert.deepEqual(both(stored).map(entry => entry.canonicalUrl).sort(), [legacy.data.entries[0].canonicalUrl, ...uploaded.data.entries.map(entry => entry.canonicalUrl)].sort());
+      assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data);
+      // A newer-device screen that receives the account: the older device's reaction joins its own two.
+      const combined = Actions.combine(stored('discoveryActions').data, stored('discoveryActionsExtended').data);
+      assert.equal(combined.entries.filter(entry => entry.bookmarked).length, 3);
     });
-    await check('reading comparison: one started with more than twenty sources leaves the older device working, and its account copy untouched while that device only reads', async ({ page, feed, workspaceId, upload, stored, receive, updateShell }) => {
+    await check('reading comparison: one over more than twenty sources is in the extended document; the older device works; the new shell shows it', async ({ page, feed, workspaceId, upload, stored, receive, updateShell, Old }) => {
       const validated = Discovery.validateFeed(feed);
       const input = { feed: validated, profile: { workspaceId, revision: 1, manual: [{ id: 'manual-a', label: '합성' }] }, feedback: [], knownUrls: [], contentLanguages: null, actions: null, translationTarget: 'original', personalAllowed: false, baselineMode: 'latest' };
       const comparison = await Reading.createComparison(Reading.empty(workspaceId), input, { expectedRevision: 0, now: NOW(), sessionId: 'old-shell-session' });
       assert.ok(comparison.session.conditions.sourceIds.length > 20);
-      const uploaded = upload('discoveryReading', comparison);
+      const pair = Reading.separate(comparison, Reading.empty(workspaceId), Reading.empty(workspaceId));
+      assert.equal(pair.legacy, null, 'the new shell writes it to the extended document only'); assert.equal(Old.reading(pair.extended), false, 'the earlier validator could not read it');
+      const uploaded = upload('discoveryReadingExtended', pair.extended);
       await receive(); await olderOpens(page);
       const received = await local(page, 'readDiscoveryReading');
       assert.equal(received.ok, true, 'older device reads its own comparison state');
-      assert.deepEqual(stored('discoveryReading').data, uploaded.data, 'an older device that only reads changes nothing on the account');
+      assert.deepEqual(stored('discoveryReadingExtended').data, uploaded.data, 'the older device leaves the extended document alone');
       report.observations.readingOnOlderDevice = { localSession: !!received.value.session, olderDeviceSync: await page.evaluate(() => HaedoLife.Shell.accountDocsSync.getStatus().state) };
-      // Observation (recorded, not required): whether the comparison shows up on this device once its shell is new.
       await updateShell(); await page.waitForTimeout(1500); await syncNow(page);
       const later = await local(page, 'readDiscoveryReading');
-      report.observations.readingAfterShellUpdate = { arrived: later.ok && !!later.value.session, accountStillHasIt: !!stored('discoveryReading').data.session };
-      assert.deepEqual(stored('discoveryReading').data, uploaded.data, 'the account copy is still the newer device\'s comparison');
+      assert.equal(later.ok && later.value.session?.id, 'old-shell-session', 'the comparison is on the new shell');
+      assert.deepEqual(stored('discoveryReadingExtended').data, uploaded.data, 'the account copy is still the newer device\'s comparison');
     });
-    await check('reactions: an older device that never reacts keeps the account copy through its own shell update', async ({ page, feed, workspaceId, upload, stored, receive, updateShell }) => {
+    await check('reactions: a legacy document holding an added-source entry (written before the pair) is split by the new shell; the older validator then accepts it', async ({ page, feed, workspaceId, upload, stored, receive, updateShell, Old }) => {
+      const articles = Discovery.validateFeed(feed).articles, first = articles.find(article => article.sourceId === 'naver-d2'), added = articles.find(article => article.sourceId === 'sbs-news');
+      let mixed = Actions.setReaction(Actions.empty(workspaceId), Actions.capture(first, { id: 'naver-d2', name: '합성 naver-d2' }), 'bookmarked', true, { expectedRevision: 0, now: NOW() });
+      mixed = Actions.setReaction(mixed, Actions.capture(added, { id: 'sbs-news', name: '합성 sbs-news' }), 'bookmarked', true, { expectedRevision: 1, now: NOW() });
+      assert.equal(Old.actions(mixed), false);
+      upload('discoveryActions', mixed);
+      await receive(); await olderOpens(page);
+      await updateShell(); await page.waitForTimeout(1200); await syncNow(page); await page.waitForTimeout(1200); await syncNow(page); await idle(page);
+      const legacy = await until(() => { const row = stored('discoveryActions'); return row && Old.actions(row.data) ? row : null; }, 'the account legacy copy is readable by the older validator');
+      assert.deepEqual(legacy.data.entries.map(entry => entry.canonicalUrl), [first.canonicalUrl]);
+      assert.deepEqual(stored('discoveryActionsExtended').data.entries.map(entry => entry.canonicalUrl), [added.canonicalUrl], 'the moved entry is on the account');
+      assert.equal(await bookmarkedCount(page), 2, 'both reactions on the screen');
+    });
+    await check('reactions: an older device that never reacts keeps the account copy through its own shell update; the new shell writes added sources to the extended document', async ({ page, feed, workspaceId, upload, stored, receive, updateShell, Old }) => {
       const target = Discovery.validateFeed(feed).articles.find(article => article.sourceId === 'yna-news');
-      const uploaded = upload('discoveryActions', Actions.setReaction(Actions.empty(workspaceId), Actions.capture(target, { id: 'yna-news', name: '합성 yna-news' }), 'bookmarked', true, { expectedRevision: 0, now: NOW() }));
+      const pair = pairOf(Actions, workspaceId, profile => Actions.setReaction(profile, Actions.capture(target, { id: 'yna-news', name: '합성 yna-news' }), 'bookmarked', true, { expectedRevision: 0, now: NOW() }));
+      const uploaded = upload('discoveryActionsExtended', pair.extended);
       await receive(); await olderOpens(page);
       await updateShell(); await page.waitForTimeout(1500); await syncNow(page); await idle(page);
-      assert.deepEqual(stored('discoveryActions').data, uploaded.data, 'nothing was written back');
-      // Observation (recorded, not required): whether the reaction shows up on this device once its shell is new.
-      report.observations.reactionsIdleAfterShellUpdate = { tab: await tab(page, '#discoveryBookmarked'), localEntries: (await local(page, 'readDiscoveryActions')).value.entries.length };
-      // It then reacts on the new shell: both reactions are on the account.
-      await page.locator('#discoveryList > .discovery-article').nth(3).locator('[data-discovery-reaction=bookmarked]').click(); await idle(page);
+      assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data, 'nothing was written back');
+      assert.equal(stored('discoveryActions'), null);
+      assert.equal(await bookmarkedCount(page), 1, 'the reaction shows on the new shell');
+      // It then reacts on the new shell, on an added-source card and on a first-registry card.
+      const card = async id => { const locator = page.locator(`#discoveryList > .discovery-article[data-discovery-id="${id}"]`); while (!await locator.count() && await page.locator('#discoveryShowMore').count()) { await page.locator('#discoveryShowMore').click(); await idle(page); } return locator; };
+      await (await card('sync-sbs-news')).locator('[data-discovery-reaction=bookmarked]').click(); await idle(page);
+      await (await card('sync-naver-d2')).locator('[data-discovery-reaction=bookmarked]').click(); await idle(page);
       await syncNow(page); await page.waitForTimeout(1500); await syncNow(page);
-      const after = await until(() => { const row = stored('discoveryActions'); return row.data.entries.length === 2 ? row : null; }, 'both reactions on the account');
-      assert.ok(after.data.entries.some(entry => entry.canonicalUrl === target.canonicalUrl), 'the newer device\'s reaction is kept');
+      const extended = await until(() => { const row = stored('discoveryActionsExtended'); return row?.data.entries.length === 2 ? row : null; }, 'the added-source reaction in the extended document');
+      const legacy = await until(() => stored('discoveryActions'), 'the first-registry reaction in the legacy document');
+      assert.deepEqual(extended.data.entries.map(entry => entry.snapshot.sourceId).sort(), ['sbs-news', 'yna-news']);
+      assert.deepEqual(legacy.data.entries.map(entry => entry.snapshot.sourceId), ['naver-d2']);
+      assert.equal(Old.actions(legacy.data), true, 'the legacy document stays readable by the older validator');
     });
     assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.external, [], 'external requests');
   } catch (error) { report.checks.push({ name: 'cross-check totals', pass: false, error: error.stack }); console.error('FAIL cross-check totals\n' + error.stack); }
