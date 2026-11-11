@@ -1224,7 +1224,11 @@
       publicBusy = true; publicError = ""; refreshInfo?.();
       try {
         const state = await blogSync.settlePublication(workspaceId, id);
-        if (here()) notePublication(id, state);
+        if (here()) {
+          notePublication(id, state);
+          // The server was read and the request is still neither applied nor ruled out: say so, the check did run.
+          if (state?.publicationStatus === "unknown") publicError = "아직 확인되지 않았습니다. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다.";
+        }
       } catch (e) {
         if (here()) publicError = e?.message || "공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.";
       } finally {

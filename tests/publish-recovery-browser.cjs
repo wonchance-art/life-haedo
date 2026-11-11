@@ -466,6 +466,10 @@ async function main() {
     assert.match(await statusLine(page), /지금 공개 중이 아닙니다\. 앞서 보낸 게시 요청이 늦게 반영되면 이 기기가 바로 철회합니다/);
     assert.equal(sentUnpublish(w2.remoteId).length, 0); assert.equal(publication(w2.remoteId), null);
     assert.equal(await publicStatus(page, w2.doc.id), 'unknown', 'not called 비공개 while that request can still arrive'); assert.equal((await current(page)).state, 'unknown');
+    // The check reads the server and still cannot rule the request out: it says so instead of doing nothing visible.
+    await click(page, '공개 상태 확인', panel(page));
+    assert.match(await statusLine(page), /아직 확인되지 않았습니다\. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다/);
+    assert.equal((await current(page)).state, 'unknown'); assert.equal(sentPublish(w2.remoteId).length, 0); assert.equal(sentUnpublish(w2.remoteId).length, 0);
     await click(page, '공개 검토 닫기');
     assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'stored', 'the request arrives after the withdrawal');
     const arrivedLate = publication(w2.remoteId); assert.deepEqual({ active: arrivedLate.active, photos: arrivedLate.photos }, { active: true, photos: 2 });

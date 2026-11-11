@@ -208,7 +208,7 @@
       await blogSync.settlePublication(workspaceId, row.id);
       if (!valid()) return; await refreshPublic(); if (!valid()) return; focusPost(row.id);
       const value = publicStates[row.id] || 'private';
-      announce(value === 'public' ? `“${postLabel(row)}”은 공개 중입니다.` : value === 'unknown' ? '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.' : `“${postLabel(row)}”은 공개 중이 아닙니다.`);
+      announce(value === 'public' ? `“${postLabel(row)}”은 공개 중입니다.` : value === 'unknown' ? '아직 확인되지 않았습니다. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다.' : `“${postLabel(row)}”은 공개 중이 아닙니다.`);
     }
     async function withdrawRow(row, control) {
       requireSync('unpublish');
@@ -370,7 +370,7 @@
             const state = await blogSync.settlePublication(workspaceId, doc.id);
             if (!valid() || preview?.doc.id !== doc.id) return;
             panelState = state; showCurrent(); await refreshPublic();
-            announce(state?.publicationStatus === 'public' ? '이 글은 공개 중입니다. 공개 미리보기를 갱신하면 현재 공개본을 기준으로 다시 게시할 수 있습니다.' : state?.publicationStatus === 'unknown' ? '공개 상태를 확인하지 못했습니다.' : '이 글은 공개 중이 아닙니다.');
+            announce(state?.publicationStatus === 'public' ? '이 글은 공개 중입니다. 공개 미리보기를 갱신하면 현재 공개본을 기준으로 다시 게시할 수 있습니다.' : state?.publicationStatus === 'unknown' ? '아직 확인되지 않았습니다. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다.' : '이 글은 공개 중이 아닙니다.');
           }));
         }
         const notice = panelState?.publicationNotice || (value === 'private' && panelState?.publishPending ? 'publish_unapplied' : value === 'public' && panelState?.publishPending ? 'update_unapplied' : '');
