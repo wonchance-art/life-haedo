@@ -100,8 +100,11 @@
     // The page's opening (see beginStartup); null outside it.
     let startupScope = null;
     const now = typeof options.now === 'function' ? options.now : () => Date.now();
-    const setTimer = options.setTimeout || ((run, ms) => (env.setTimeout || setTimeout)(run, ms));
-    const clearTimer = options.clearTimeout || (id => (env.clearTimeout || clearTimeout)(id));
+    // The page's timers; a host without any (an isolated script context) simply has no limit.
+    const timers = typeof env.setTimeout === 'function' && typeof env.clearTimeout === 'function' ? env
+      : typeof setTimeout === 'function' && typeof clearTimeout === 'function' ? { setTimeout, clearTimeout } : null;
+    const setTimer = options.setTimeout || (timers ? (run, ms) => timers.setTimeout(run, ms) : () => null);
+    const clearTimer = options.clearTimeout || (timers ? id => timers.clearTimeout(id) : () => {});
     const verifyLimit = Number.isFinite(options.verifyLimit) ? options.verifyLimit : VERIFY_LIMIT_MS;
     // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
     // A verification scope never reuses a result from an earlier generation.
