@@ -44,6 +44,20 @@ function feed(count = 12) {
     publishedAt: iso(10 + i * 3), fetchedAt: iso(1), summary: '', coverage: 'link_only', rights }));
   return { schemaVersion: 1, generatedAt: iso(1), sources: order.slice(0, 2).map(source), articles: rows.filter(row => row.sourceId !== 'yna-news'), extended: { sources: [source('yna-news')], articles: rows.filter(row => row.sourceId === 'yna-news') } };
 }
+// The reviewer's order probe (2026-11-11): six sources, half of the rows from 연합뉴스, so the publisher cap reorders pages.
+// `extra` newer articles are what a timed refresh brings.
+const skewNames = { 'readersnews-books': ['독서신문', 'www.readersnews.com/news/articleView.html?idxno='], 'seoul-culture': ['서울시 문화', 'news.seoul.go.kr/culture/archives/'], 'yna-news': ['연합뉴스', 'www.yna.co.kr/view/AKR'],
+  'sbs-news': ['SBS', 'news.sbs.co.kr/news/endPage.do?news_id=N'], 'nocut-news': ['노컷뉴스', 'www.nocutnews.co.kr/news/'], 'arxiv-cs-cl': ['arXiv', 'arxiv.org/abs/2611.'] };
+function skewed(count, extra = 0) {
+  const now = Date.now(), iso = minutes => new Date(now - minutes * 60000 - 30000).toISOString(), rights = { mode: 'metadata_only', label: '합성 제목·링크', url: null }, ids = Object.keys(skewNames);
+  const host = id => skewNames[id][1].split('/')[0], legacy = id => ['readersnews-books', 'seoul-culture', 'arxiv-cs-cl'].includes(id);
+  const source = id => ({ id, name: skewNames[id][0], url: 'https://' + host(id) + '/', feedUrl: 'https://' + host(id) + '/feed', language: 'ko', rights, status: 'ok', stale: false, error: null, lastSuccessAt: iso(1), lastAttemptAt: iso(1) });
+  const row = (id, key, n, minutes, title) => ({ id: key, sourceId: id, url: 'https://' + skewNames[id][1] + n, title, language: 'ko', tags: [], author: null, publishedAt: iso(minutes), fetchedAt: iso(1), summary: '', coverage: 'link_only', rights });
+  const rows = Array.from({ length: count }, (_, i) => { const id = i % 2 ? 'yna-news' : ids[(i >> 1) % ids.length]; return row(id, 'p-' + i, 90000 + i, 20 + i * 2, '합성 제목 ' + i); });
+  for (let j = 0; j < extra; j++) rows.push(row(ids[j % ids.length], 'n-' + j, 80000 + j, 1 + j * 0.1, '새 합성 ' + j));
+  return { schemaVersion: 1, generatedAt: iso(1), sources: ids.filter(legacy).map(source), articles: rows.filter(r => legacy(r.sourceId)), extended: { sources: ids.filter(id => !legacy(id)).map(source), articles: rows.filter(r => !legacy(r.sourceId)) } };
+}
+const shownIds = page => cards(page).evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
 // One found link as the server sends it.
 function item(topic, language, index, extra = {}) {
   const id = hex(topic + '\n' + language + '\n' + index);
@@ -59,10 +73,11 @@ function answer(body, { per = 2, status = 'fresh', stale = false } = {}) {
   }
   return { supplier: 'google-news-rss', items, fetchedAt, stale, topics };
 }
-// The stand-in refuses a topic the way the server does (a reduced copy of the contract's 주제 규칙 table, ab94caf):
-// quotes and brackets, the colon, * | ~ < > = ; @ $ _, a word starting with +, a - or an apostrophe that is not
-// between two letters or digits, repeated dots, an upper-case OR/AND/NOT between words.
-const refusedTopic = topic => /["“”‘()[\]「」:*|~<>=;@$_]/.test(topic) || /(^|\s)\+/.test(topic) || /(^|[^\p{L}\p{N}])[-'’]|[-'’]($|[^\p{L}\p{N}])/u.test(topic) || /\.\./.test(topic) || /\S\s+(OR|AND|NOT)\s+\S/.test(topic);
+// The stand-in refuses a topic with the server's own rule (supabase/functions/haedo-news-wide/topics.mjs), and also
+// refuses SERVER_ONLY, a topic the rule takes: a server whose Unicode tables differ from the browser's would do that.
+const SERVER_ONLY = new Set(['서버만 거절']);
+let serverRule = null;
+const refusedTopic = topic => { try { serverRule(topic); } catch (_) { return true; } return SERVER_ONLY.has(topic); };
 const cards = page => page.locator('#discoveryList > .discovery-article');
 const wideCards = page => page.locator('#discoveryList > .discovery-article[data-wide]');
 const overflow = page => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -92,6 +107,7 @@ async function refreshNow(page) { await page.locator('#discoveryFilterToggle').c
 
 async function main() {
   await fs.mkdir(out, { recursive: true });
+  serverRule = (await import('../supabase/functions/haedo-news-wide/topics.mjs')).normalizeTopic;
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   async function check(name, run, { width = 1440, catalog = feed() } = {}) {
     if (only && !name.includes(only)) return;
@@ -139,6 +155,8 @@ async function main() {
   async function start(page, wide, topics = ['동네 도서관', '기후 정책'], expected = 1) {
     for (const topic of topics) await addTopic(page, topic);
     await setWide(page, true); await settled(async () => wide.requests.length, expected, 'one request after turning on');
+    // The answer arrives while settings cover the list, so it takes its place in the order (a list looked at keeps its cards).
+    await until(page, () => { const notes = [...document.querySelectorAll('#discoveryWideTopics .discovery-wide-topic-note')]; return notes.length && !notes.some(note => note.textContent === '받는 중'); }, null, 'answer received in settings');
     await closeSettings(page); await until(page, () => !document.querySelector('#discoveryWideNotice')?.textContent.includes('찾는 중'), null, 'answer drawn');
   }
   try {
@@ -197,28 +215,55 @@ async function main() {
       assert.equal(await wideCards(page).count(), 0);
     });
 
-    await check('a topic the server refuses is named in settings and left out; the first eight are sent', async ({ page, wide }) => {
-      const typed = ['주제 하나', 'site:example.com', '주제 둘', '빼기 -제외', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯', '주제 일곱', '주제 여덟', '주제 아홉'];
+    await check('topics outside the server rule are never sent and say so as typed; a server refusal is kept across openings', async ({ page, wide }) => {
+      const typed = ['주제 하나', 'site:example.com', '주제 둘', '빼기 -제외', '서버만 거절', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯', '주제 일곱', '주제 여덟', '주제 아홉'];
       for (const topic of typed) await addTopic(page, topic);
-      // The screen does not judge characters: the first eight typed topics go; the server refuses the request
-      // (invalid_topic), each topic is then asked once alone, and the two refused ones are left out from then on.
+      // The screen checks the rule first (contract ab94caf, item 10): the first eight topics that pass it go.
+      // Safety net: the server still refuses one of them; each is asked alone once and the refused one is left out.
       await setWide(page, true); await settled(async () => wide.requests.length, 10, 'one request, eight single ones, then the eight topics taken');
-      assert.deepEqual(wide.requests[0].body.topics, ['주제 하나', 'site:example.com', '주제 둘', '빼기 -제외', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯']);
-      assert.deepEqual(wide.requests.slice(1, 9).map(request => request.body.topics), wide.requests[0].body.topics.map(topic => [topic]));
-      assert.deepEqual(wide.requests[9].body, { topics: ['주제 하나', '주제 둘', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯', '주제 일곱', '주제 여덟'], languages: ['ko', 'en'] });
+      const first = ['주제 하나', '주제 둘', '서버만 거절', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯', '주제 일곱'];
+      assert.deepEqual(wide.requests[0].body.topics, first);
+      assert.deepEqual(wide.requests.slice(1, 9).map(request => request.body.topics), first.map(topic => [topic]));
+      const taken = { topics: ['주제 하나', '주제 둘', '주제 셋', '주제 넷', '주제 다섯', '주제 여섯', '주제 일곱', '주제 여덟'], languages: ['ko', 'en'] };
+      assert.deepEqual(wide.requests[9].body, taken);
       await page.waitForTimeout(400); assert.equal(wide.requests.length, 10, 'nothing more is asked');
+      // A topic outside the rule never left the device, not even in a single request.
+      for (const request of wide.requests) for (const topic of request.body.topics) assert.ok(!['site:example.com', '빼기 -제외'].includes(topic), 'sent: ' + topic);
       const rows = await page.locator('#discoveryWideTopics > li').evaluateAll(nodes => nodes.map(node => [node.querySelector('.discovery-wide-topic').textContent, node.dataset.wideSent, node.querySelector('.discovery-wide-topic-note').textContent]));
       assert.equal(rows.length, typed.length, 'every typed topic is listed');
       const unsent = rows.filter(row => row[1] === 'false');
-      assert.deepEqual(unsent.map(row => row[0]), ['site:example.com', '빼기 -제외', '주제 아홉']);
+      assert.deepEqual(unsent.map(row => row[0]), ['site:example.com', '빼기 -제외', '서버만 거절', '주제 아홉']);
       for (const row of unsent) assert.match(row[2], /^보내지 않음 · .{4,}/, 'a reason in words: ' + row[0]);
-      assert.match(unsent[2][2], /8개/, 'the ninth says the limit');
+      assert.match(unsent[0][2], /받지 않는 글자나 기호/); assert.match(unsent[1][2], /받지 않는 글자나 기호/);
+      assert.match(unsent[2][2], /서버가 받지 않는 주제/); assert.match(unsent[3][2], /8개/, 'the ninth says the limit');
       assert.match(await page.locator('.discovery-wide-settings').innerText(), /위에서부터 8개까지/, 'the order rule is on the screen');
-      assert.match(unsent[0][2], /서버가 받지 않는 주제/); assert.match(unsent[1][2], /서버가 받지 않는 주제/);
       // The help names the examples of the contract.
       const help = await page.locator('.discovery-wide-settings').innerText();
       for (const example of ['K-pop', '3-1', '.NET', '10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR', '"기후"', 'site:example.com', '50:50', '-날씨', 'a,-b', '1..10', '기후 OR 날씨', '기후*']) assert(help.includes(example), 'example ' + example);
       await capture(page, 'wide-settings-1440');
+      // The refusal is kept in the account's news settings as a key, not as the topic's text.
+      const kept = await until(page, async () => { const ids = (await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())).disabledSourceIds.filter(id => id.startsWith('option-wide-refused-')); return ids.length ? ids : null; }, null, 'refusal kept');
+      assert.equal(kept.length, 1); assert.match(kept[0], /^option-wide-refused-[0-9a-f]{16}$/);
+      // As the topic is typed: the same rule, said under the input. A topic the rule takes says nothing.
+      const note = page.locator('#discoveryTopicWideNote');
+      assert.equal(await note.isVisible(), false);
+      await page.locator('#discoveryTopicInput').fill('기후 OR 날씨');
+      assert.equal(await note.isVisible(), true); assert.equal(await note.getAttribute('role'), 'status');
+      assert.match(await note.innerText(), /^넓게 찾기에는 보내지 않습니다 · 받지 않는 글자나 기호가 있습니다/);
+      await page.locator('#discoveryTopicInput').fill('기후 or 날씨'); assert.equal(await note.isVisible(), false, 'lower-case or is a word');
+      await page.locator('#discoveryTopicInput').fill('가'.repeat(41)); assert.match(await note.innerText(), /40자까지/);
+      await page.locator('#discoveryTopicDiscard').click(); assert.equal(await note.isVisible(), false);
+      // The app opened again: the kept refusal is not asked again (one request, not 1 + 8 + 1).
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await settled(async () => wide.requests.length, 11, 'one request after opening again');
+      await page.waitForTimeout(400); assert.equal(wide.requests.length, 11, 'no single-topic requests after opening again');
+      assert.deepEqual(wide.requests[10].body, taken);
+      // Turning 넓게 찾기 off takes the kept refusal away: a new choice asks again.
+      await setWide(page, false);
+      await until(page, async () => !(await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())).disabledSourceIds.some(id => id.startsWith('option-wide-refused-')), null, 'refusal removed with off');
+      assert.equal(await note.isVisible(), false, 'nothing is said while 넓게 찾기 is off');
+      await page.locator('#discoveryTopicInput').fill('site:example.com'); assert.equal(await note.isVisible(), false, 'off: nothing is sent, nothing to say');
+      await page.locator('#discoveryTopicDiscard').click();
     });
 
     await check('found links join 전체: marked in words, de-duplicated, at most three of one publisher on a page', async ({ page, wide, state }) => {
@@ -511,6 +556,49 @@ async function main() {
       await last.locator('.discovery-card-more > summary').click(); const keep = last.locator('[data-discovery-import]'); assert.equal(await keep.innerText(), '링크를 자료에 보관'); await keep.click();
       await page.locator('#lifeImportTitle').waitFor();
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), lastTitle); assert.equal(await page.locator('#lifeImportUrl').inputValue(), lastHref);
+    });
+
+    await check('a list looked at keeps every drawn card: a late 넓게 찾기 answer joins after them; 새 글 n건 puts it in place', async ({ page, wide, state }) => {
+      wide.reply = body => { const base = answer(body, { per: 0 }); base.items = Array.from({ length: 12 }, (_, i) => item(body.topics[0], 'ko', i, { sourceName: '넓은 매체 ' + i, publishedAt: new Date(Date.now() - (i + 2) * 60000).toISOString() }));
+        base.topics = [{ topic: body.topics[0], language: 'ko', status: 'fresh', fetchedAt: base.fetchedAt, count: 12 }]; return { status: 200, body: base }; };
+      state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await addTopic(page, '합성 주제');
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await setWide(page, true); await settled(async () => wide.requests.length, 1, 'asked');
+      await closeSettings(page); await page.locator('#discoveryShowMore').click(); await frames(page);
+      const before = await shownIds(page); assert.equal(before.length, 40);
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 12건/);
+      assert.deepEqual(await shownIds(page), before, 'the 40 cards looked at keep their order and places');
+      // To the end: the links joined right after the drawn cards, every row exactly once.
+      while (await page.locator('#discoveryShowMore').count()) { await page.locator('#discoveryShowMore').click(); await frames(page); }
+      const all = await shownIds(page), wideAt = await cards(page).evaluateAll(nodes => nodes.map((node, index) => node.dataset.wide === 'true' ? index : -1).filter(index => index >= 0));
+      assert.deepEqual(all.slice(0, 40), before); assert.equal(all.length, 92); assert.equal(new Set(all).size, 92, 'no card twice');
+      assert.equal(wideAt.length, 12); assert.ok(wideAt[0] >= 40 && wideAt[0] < 60, 'the links start on the next page: ' + wideAt[0]);
+      // 새 글 n건 is a refresh the person asks for: the order is computed again and the newest links come first.
+      await page.locator('#discoveryNewArticles').click(); await idle(page); await frames(page);
+      assert.equal(await page.locator('#discoveryNewArticles').count(), 0);
+      const first = await cards(page).evaluateAll(nodes => nodes.map(node => node.dataset.wide === 'true'));
+      assert.equal(first.length, 20); assert.ok(first.slice(0, 3).every(Boolean), 'the newest links lead the recomputed first page');
+    });
+    await check('a list looked at keeps every drawn card through the 15-minute refresh; the new articles join after them', async ({ page, wide, state }) => {
+      state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await page.clock.install({ time: new Date() });
+      await page.locator('#discoveryNewsSettings').click();
+      if (!await page.locator('#discoveryOptions').evaluate(node => node.open)) await page.locator('#discoveryOptions > summary').click();
+      await page.locator('#discoveryAutoRefresh').setChecked(true); await idle(page);
+      await until(page, async () => (await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())).autoRefresh === true, null, 'auto refresh saved');
+      await closeSettings(page); await page.locator('#discoveryShowMore').click(); await frames(page);
+      const before = await shownIds(page), requests = state.catalogRequests; assert.equal(before.length, 40);
+      state.catalog = skewed(80, 6);
+      await page.clock.fastForward(15 * 60000 + 2000); await settled(async () => state.catalogRequests > requests, true, 'timed refresh'); await idle(page); await frames(page);
+      await page.locator('#discoveryNewArticles').waitFor(); assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 6건/);
+      assert.deepEqual(await shownIds(page), before, 'the 40 cards looked at keep their order and places');
+      while (await page.locator('#discoveryShowMore').count()) { await page.locator('#discoveryShowMore').click(); await frames(page); }
+      const all = await shownIds(page), fresh = all.map((id, index) => id.startsWith('n-') ? index : -1).filter(index => index >= 0);
+      assert.equal(all.length, 86); assert.equal(new Set(all).size, 86); assert.equal(fresh.length, 6); assert.ok(fresh[0] >= 40 && fresh[0] < 60, 'new articles start on the next page: ' + fresh[0]);
+      assert.equal(wide.requests.length, 0);
     });
 
     for (const width of [820, 390]) await check('found links at ' + width + 'px: full-width text cards, 44px targets, no overflow', async ({ page, wide }) => {

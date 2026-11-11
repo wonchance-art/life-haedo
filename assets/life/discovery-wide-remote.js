@@ -23,30 +23,74 @@
   const check = (value, code = 'wide_invalid') => { if (!value) throw fault(code); };
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
-  // --- topics. Which characters a topic may hold is the server's rule (supabase/functions/haedo-news-wide/topics.mjs,
-  // contract ab94caf) and is not written a second time here: the server's `invalid_topic` answer is asked for each
-  // topic and shown as it is (see refused below). This side only brings a topic to the server's own spelling (NFC,
-  // single spaces, trimmed) and keeps the two counts a request must respect: 1 to 40 characters, at most 8 topics.
+  // --- topics. The characters a topic may hold are the server's rule (supabase/functions/haedo-news-wide/topics.mjs,
+  // contract ab94caf, item 10: "the screen checks first and gives the same result as normalizeTopic"). The function
+  // below is that rule copied line for line, so a topic outside it is never sent and settings say so as it is typed.
+  // tests/news-wide-topic-rule.test.cjs runs both on the same corpus (the server test's lists, thousands of random
+  // topics and every code point in a few places) and requires the same answer. The Unicode classes (\p{L}, \p{Cn}, ...)
+  // are the browser's own tables, which can be a different Unicode version than the server's; for such a character
+  // the server's `invalid_topic` answer stays as the safety net (each topic asked once alone, the refused ones kept in
+  // the account's news settings so a new opening does not ask again).
   const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  // Control, format (zero-width, bidi), line/paragraph separators, private use, unassigned.
+  const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}͏ᅟᅠ឴឵᠋-᠏ㅤ︀-️ﾠ\u{e0100}-\u{e01ef}]/u;
+  const WORD_CHAR = /[\p{L}\p{N}]/u;
+  const ALLOWED = /^[\p{L}\p{N}\p{M} .&+#'’·/,%!?-]+$/u;
+  const OPERATOR_WORDS = new Set(['OR', 'AND', 'NOT']);
+  // Allowed only between two letters or digits (O'Reilly, O’Reilly, K-pop, 3-1).
+  const JOINERS = new Set(["'", '’', '-']);
+  const topicFailure = code => Object.assign(new Error(code), { code });
+  /** One topic, normalized (NFC, single spaces, trimmed), or an invalid_topic failure. Same as the server's. */
+  function normalizeTopic(raw) {
+    if (typeof raw !== 'string') throw topicFailure('invalid_request');
+    if (raw.length > LIMITS.topicLength * 8 || LONE_SURROGATE.test(raw) || INVISIBLE.test(raw)) throw topicFailure('invalid_topic');
+    const topic = raw.normalize('NFC').replace(/\p{Zs}+/gu, ' ').trim();
+    const length = [...topic].length;
+    if (length < 1 || length > LIMITS.topicLength || !ALLOWED.test(topic) || !WORD_CHAR.test(topic)) throw topicFailure('invalid_topic');
+    const words = topic.split(' ');
+    if (words.some(word => word.startsWith('+'))) throw topicFailure('invalid_topic');
+    // A boolean operator needs a word on both sides; alone, first or last it is a plain word.
+    if (words.slice(1, -1).some(word => OPERATOR_WORDS.has(word))) throw topicFailure('invalid_topic');
+    // An apostrophe is part of a word (O'Reilly), never an opening or closing quote. A hyphen
+    // joins two parts of a word (K-pop); after a space or a mark it reads as "exclude".
+    const chars = [...topic];
+    chars.forEach((char, at) => {
+      if (JOINERS.has(char) && !(WORD_CHAR.test(chars[at - 1] || '') && WORD_CHAR.test(chars[at + 1] || ''))) throw topicFailure('invalid_topic');
+    });
+    if (topic.includes('..')) throw topicFailure('invalid_topic'); // 1..10 is a number range
+    return topic;
+  }
   const REASONS = Object.freeze({
     empty: '빈 주제는 보내지 않습니다.', too_long: '40자까지 보낼 수 있습니다.',
-    refused: '서버가 받지 않는 주제입니다. 아래 받지 않는 예를 확인해 주세요.',
+    rule: '받지 않는 글자나 기호가 있습니다. 아래 받지 않는 예를 확인해 주세요.',
+    refused: '서버가 받지 않는 주제입니다.',
     duplicate: '같은 주제를 이미 보냅니다.', over_limit: '위에서부터 8개까지만 보냅니다.'
   });
   // Examples for the settings help, as the contract lists them (news-wide-feed.md, contract ab94caf, item 10).
   const EXAMPLES = Object.freeze({ accepted: Object.freeze(['K-pop', '3-1', '.NET', '10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR']), refused: Object.freeze(['"기후"', 'site:example.com', '50:50', '-날씨', 'a,-b', '1..10', '기후 OR 날씨', '기후*']) });
+  // The rule's answer with the reason settings show: empty, too long, or a character or sign outside the rule.
   function checkTopic(raw) {
-    if (typeof raw !== 'string' || LONE_SURROGATE.test(raw)) return { ok: false, reason: 'empty' };
-    if (raw.length > LIMITS.topicLength * 8) return { ok: false, reason: 'too_long' };
-    const topic = raw.normalize('NFC').replace(/\p{Zs}+/gu, ' ').trim(), length = [...topic].length;
-    if (length < 1) return { ok: false, reason: 'empty' };
-    if (length > LIMITS.topicLength) return { ok: false, reason: 'too_long' };
+    let topic;
+    try { topic = normalizeTopic(raw); } catch (_) {
+      if (typeof raw !== 'string') return { ok: false, reason: 'empty' };
+      if (raw.length > LIMITS.topicLength * 8) return { ok: false, reason: 'too_long' };
+      if (LONE_SURROGATE.test(raw) || INVISIBLE.test(raw)) return { ok: false, reason: 'rule' };
+      const length = [...raw.normalize('NFC').replace(/\p{Zs}+/gu, ' ').trim()].length;
+      return { ok: false, reason: length < 1 ? 'empty' : length > LIMITS.topicLength ? 'too_long' : 'rule' };
+    }
     return { ok: true, topic };
   }
   const topicKey = topic => topic.toLowerCase();
-  // Which of the typed topics are sent, in the order they are listed in settings: the first eight.
+  // What the account's news settings keep for a topic the server refused: 16 hex digits (FNV-1a, 64 bits) of the
+  // topic's key, never the topic itself. A changed topic has another key and is asked again.
+  function refusalKey(topic) {
+    let hash = 0xcbf29ce484222325n;
+    for (const byte of new TextEncoder().encode(topicKey(topic))) hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * 0x100000001b3n);
+    return hash.toString(16).padStart(16, '0');
+  }
+  // Which of the typed topics are sent, in the order they are listed in settings: the first eight that pass the rule.
   // `manual` is the list of { id, label } the person typed and left checked; nothing else can be passed in.
-  // `refused` holds the topics the server answered `invalid_topic` for; they are not sent again.
+  // `refused` holds the refusalKey of each topic the server answered `invalid_topic` for; they are not sent again.
   function plan(manual, { refused = new Set() } = {}) {
     check(Array.isArray(manual) && manual.every(item => plain(item) && typeof item.id === 'string' && typeof item.label === 'string') && refused instanceof Set);
     const topics = [], rows = [], seen = new Set();
@@ -54,7 +98,7 @@
       const result = checkTopic(item.label);
       if (!result.ok) { rows.push({ id: item.id, label: item.label, sent: false, reason: result.reason }); continue; }
       const key = topicKey(result.topic);
-      if (refused.has(key)) { rows.push({ id: item.id, label: item.label, sent: false, reason: 'refused' }); continue; }
+      if (refused.has(refusalKey(result.topic))) { rows.push({ id: item.id, label: item.label, sent: false, reason: 'refused' }); continue; }
       if (seen.has(key)) { rows.push({ id: item.id, label: item.label, sent: false, reason: 'duplicate' }); continue; }
       if (topics.length >= LIMITS.topics) { rows.push({ id: item.id, label: item.label, sent: false, reason: 'over_limit' }); continue; }
       seen.add(key); topics.push(result.topic); rows.push({ id: item.id, label: item.label, sent: true, topic: result.topic });
@@ -195,5 +239,5 @@
     }
     return Object.freeze({ load, clear, cancel, dispose() { if (disposed) return; disposed = true; cancel(); unlisten?.(); } });
   }
-  return Object.freeze({ SUPPLIER, SUPPLIER_LABEL, LINK_PREFIX, LIMITS, LANGUAGES, REASONS, EXAMPLES, TIMEOUT_MS, checkTopic, topicKey, plan, merge, languages, requestKey, link, validate, toArticle, create, messages });
+  return Object.freeze({ SUPPLIER, SUPPLIER_LABEL, LINK_PREFIX, LIMITS, LANGUAGES, REASONS, EXAMPLES, TIMEOUT_MS, normalizeTopic, checkTopic, topicKey, refusalKey, plan, merge, languages, requestKey, link, validate, toArticle, create, messages });
 });

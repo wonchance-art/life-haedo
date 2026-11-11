@@ -27,17 +27,20 @@ function harness(fetcher = async () => response(answer())) {
 }
 const fails = async (promise, code) => assert.rejects(promise, error => error.code === code);
 
-test('plan: only the typed topics, in their order, the first eight; the characters are the server\'s to judge', () => {
-  const typed = ['동네 도서관', '  기후   정책 ', 'site:example.com', '동네 도서관', 'CLIMATE', 'climate', '', '가'.repeat(41), '10%', 'Portland OR', 'K-pop', 'C++', 'R&D', '왜?'];
+test('plan: only the typed topics that pass the server\'s rule, in their order, the first eight', () => {
+  const typed = ['동네 도서관', '  기후   정책 ', 'site:example.com', '동네 도서관', 'CLIMATE', 'climate', '', '가'.repeat(41), '10%', 'Portland OR', 'K-pop', '기후 -날씨', 'C++', 'R&D', '왜?'];
   const { topics, rows } = Wide.plan(typed.map((label, index) => ({ id: 'interest-' + index, label })));
-  assert.deepEqual(topics, ['동네 도서관', '기후 정책', 'site:example.com', 'CLIMATE', '10%', 'Portland OR', 'K-pop', 'C++']);
-  assert.deepEqual(rows.filter(row => !row.sent).map(row => [row.label, row.reason]), [['동네 도서관', 'duplicate'], ['climate', 'duplicate'], ['', 'empty'], ['가'.repeat(41), 'too_long'], ['R&D', 'over_limit'], ['왜?', 'over_limit']]);
+  // The rule is checked here first (contract ab94caf, item 10): a topic outside it is never sent and makes no room.
+  assert.deepEqual(topics, ['동네 도서관', '기후 정책', 'CLIMATE', '10%', 'Portland OR', 'K-pop', 'C++', 'R&D']);
+  assert.deepEqual(rows.filter(row => !row.sent).map(row => [row.label, row.reason]), [['site:example.com', 'rule'], ['동네 도서관', 'duplicate'], ['climate', 'duplicate'], ['', 'empty'], ['가'.repeat(41), 'too_long'], ['기후 -날씨', 'rule'], ['왜?', 'over_limit']]);
   assert.equal(rows.length, typed.length, 'every typed topic has a row');
   for (const reason of new Set(rows.filter(row => !row.sent).map(row => row.reason))) assert.ok(Wide.REASONS[reason].length > 5, 'reason in words: ' + reason);
-  // A topic the server refused is not sent again and makes room for the next typed one.
-  const again = Wide.plan(typed.map((label, index) => ({ id: 'interest-' + index, label })), { refused: new Set(['site:example.com']) });
-  assert.deepEqual(again.topics, ['동네 도서관', '기후 정책', 'CLIMATE', '10%', 'Portland OR', 'K-pop', 'C++', 'R&D']);
-  assert.equal(again.rows.find(row => row.label === 'site:example.com').reason, 'refused');
+  // Safety net: a topic the server refused anyway (its refusal key) is not sent again and makes room for the next typed one.
+  const again = Wide.plan(typed.map((label, index) => ({ id: 'interest-' + index, label })), { refused: new Set([Wide.refusalKey('CLIMATE')]) });
+  assert.deepEqual(again.topics, ['동네 도서관', '기후 정책', '10%', 'Portland OR', 'K-pop', 'C++', 'R&D', '왜?']);
+  assert.deepEqual(again.rows.filter(row => row.reason === 'refused').map(row => row.label), ['CLIMATE', 'climate']);
+  // The refused keys come as a Set only.
+  assert.throws(() => Wide.plan(typed.map((label, index) => ({ id: 'interest-' + index, label })), { refused: ['x'] }), { code: 'wide_invalid' });
   // Nothing but { id, label } rows can be given; a liked article or a profile object is refused.
   for (const bad of [null, 'topics', [{ id: 'x' }], [{ id: 'x', label: 1 }]]) assert.throws(() => Wide.plan(bad), { code: 'wide_invalid' });
   assert.deepEqual(Wide.plan([]), { topics: [], rows: [] });
@@ -112,6 +115,8 @@ test('the request is exactly the topics and the languages, with the session; not
   await fails(h.remote.load({ topics: [], languages: ['ko'], workspaceId }), 'wide_invalid_topic');
   await fails(h.remote.load({ topics: Array.from({ length: 9 }, (_, n) => '주제 ' + n), languages: ['ko'], workspaceId }), 'wide_invalid_topic');
   await fails(h.remote.load({ topics: [' 공백 '], languages: ['ko'], workspaceId }), 'wide_invalid_topic');
+  // A topic outside the server's rule is refused here, before the session is read or anything is sent.
+  for (const topic of ['site:example.com', '기후 -날씨', '"기후"', '1..10', '기후 OR 날씨', '기\u200b후']) await fails(h.remote.load({ topics: ['동네 도서관', topic], languages: ['ko'], workspaceId }), 'wide_invalid_topic');
   await fails(h.remote.load({ topics: ['합성'], languages: ['ja'], workspaceId }), 'wide_refused');
   await fails(h.remote.load({ topics: ['합성'], languages: ['ko', 'ko'], workspaceId }), 'wide_refused');
   assert.equal(calls.length, 1);

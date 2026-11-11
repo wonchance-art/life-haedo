@@ -417,6 +417,27 @@ test('A1: a short list lifts the cap to fill the page; a found link counts by it
   assert.throws(() => Discovery.spreadLatest([], { perPublisher: 0 })); assert.throws(() => Discovery.spreadLatest([], { size: 1.5 }));
 });
 
+test('A1: rows that arrive after a list was drawn join after the drawn rows under the same cap; every row once', () => {
+  const rows = measuredRows(), spread = Discovery.spreadLatest(rows);
+  for (const drawnCount of [20, 33, 40]) {
+    const newest = Math.max(...rows.map(row => Date.parse(row.article.sortDate))), drawn = spread.slice(0, drawnCount), at = minutes => new Date(newest + (minutes + 1) * 60000).toISOString();
+    // Newer than everything drawn: twelve links of twelve publishers and six of one.
+    const fresh = [...Array.from({ length: 12 }, (_, i) => ({ article: { sourceId: 'google-news', sourceName: '넓은 매체 ' + i, canonicalUrl: 'https://news.google.com/rss/articles/F' + i, sortDate: at(i) } })),
+      ...Array.from({ length: 6 }, (_, i) => ({ article: { sourceId: 'yna-news', canonicalUrl: 'https://www.yna.co.kr/view/FRESH' + i, sortDate: at(20 + i) } }))];
+    const tail = Discovery.spreadAfter(drawn, [...spread.slice(drawnCount), ...fresh]), all = [...drawn, ...tail];
+    assert.equal(all.length, rows.length + fresh.length); assert.equal(new Set(all.map(row => row.article.canonicalUrl)).size, all.length, 'no row twice, none lost');
+    // The page the drawn rows end in is completed within the cap, counting the drawn rows of that page.
+    const open = drawnCount % 20, page = all.slice(drawnCount - open, drawnCount - open + 20);
+    if (open) assert.ok(Math.max(...publishers(page).values()) <= 3, drawnCount + ': completed page holds ' + Math.max(...publishers(page).values()));
+    assert.ok(newestFirst(tail.slice(0, 20 - open)), 'the fill reads newest first');
+    // The fresh rows come right after the drawn ones, not at the end.
+    const firstFresh = all.findIndex(row => fresh.includes(row));
+    assert.ok(firstFresh >= drawnCount && firstFresh < drawnCount + 20, drawnCount + ': first fresh row at ' + firstFresh);
+  }
+  assert.deepEqual(Discovery.spreadAfter([], rows).map(row => row.article.canonicalUrl), spread.map(row => row.article.canonicalUrl), 'nothing drawn: the plain spread');
+  assert.throws(() => Discovery.spreadAfter(null, [])); assert.throws(() => Discovery.spreadAfter([], [], { perPublisher: 0 }));
+});
+
 test('A1: only the news list asks for the spread order; 관심순 and the default stay as they were', () => {
   const input = catalog(), options = { now: LATER, mode: 'latest', profile: { manual: [] }, feedback: [], knownUrls: [], limit: Discovery.LIMITS.articles };
   const plain = Discovery.rank(input, options).items.map(item => item.article.canonicalUrl), spread = Discovery.rank(input, { ...options, spread: true }).items.map(item => item.article.canonicalUrl);

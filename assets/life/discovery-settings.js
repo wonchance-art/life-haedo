@@ -25,6 +25,11 @@
     wideClear: Object.freeze({ on: 'option-wide-clear', off: null, initial: false })
   });
   const OPTION_IDS = Object.freeze(Object.values(OPTIONS).flatMap(option => [option.on, option.off]).filter(Boolean));
+  // 넓게 찾기 topics the server refused although the screen's copy of its rule took them (a safety net: the two
+  // rules are the same, a browser's Unicode tables may not be). One reserved entry per topic, holding a 16-hex-digit
+  // key of the topic (DiscoveryWideRemote.refusalKey), never its text, so a new opening does not ask again.
+  const WIDE_REFUSED_PREFIX = 'option-wide-refused-', WIDE_REFUSED_MAX = 8;
+  const wideRefusedEntry = value => typeof value === 'string' && value.startsWith(WIDE_REFUSED_PREFIX);
   const isOption = value => typeof value === 'string' && value.startsWith('option-');
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -59,7 +64,7 @@
     return { ...copy(current), revision: current.revision + 1, deleted: false, updatedAt };
   }
   function update(current, patch, options = {}) {
-    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds', ...Object.keys(OPTIONS)]);
+    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds', 'wideRefused', ...Object.keys(OPTIONS)]);
     const result = next(current, options);
     for (const key of ['autoRefresh', 'disabledInterestIds']) if (Object.hasOwn(patch, key)) result[key] = copy(patch[key]);
     // A new source selection never carries options in or out: the stored options stay unless this patch names them.
@@ -71,6 +76,10 @@
     for (const [name, option] of Object.entries(OPTIONS)) if (Object.hasOwn(patch, name)) {
       check(typeof patch[name] === 'boolean');
       sources = [...sources.filter(value => value !== option.on && value !== option.off), ...(patch[name] ? [option.on] : option.off ? [option.off] : [])];
+    }
+    if (Object.hasOwn(patch, 'wideRefused')) {
+      check(Array.isArray(patch.wideRefused) && patch.wideRefused.length <= WIDE_REFUSED_MAX && patch.wideRefused.every(key => typeof key === 'string' && /^[0-9a-f]{16}$/.test(key)) && new Set(patch.wideRefused).size === patch.wideRefused.length);
+      sources = [...sources.filter(value => !wideRefusedEntry(value)), ...patch.wideRefused.map(key => WIDE_REFUSED_PREFIX + key)];
     }
     result.disabledSourceIds = sources;
     validate(result); return result;
@@ -102,8 +111,10 @@
   const showImages = settings => option(settings, 'showImages');
   const wideSearch = settings => option(settings, 'wideSearch');
   const wideClear = settings => option(settings, 'wideClear');
+  // The refusal keys kept for 넓게 찾기 (see WIDE_REFUSED_PREFIX).
+  const wideRefused = settings => (Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : []).filter(wideRefusedEntry).map(value => value.slice(WIDE_REFUSED_PREFIX.length)).filter(key => /^[0-9a-f]{16}$/.test(key));
   // The sources actually turned off, without the reserved option entries.
   const disabledSources = settings => (Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : []).filter(value => !isOption(value));
-  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, DEFAULT_WIDE_SEARCH, OPTION_IDS, showImages, wideSearch, wideClear, disabledSources,
+  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, DEFAULT_WIDE_SEARCH, OPTION_IDS, WIDE_REFUSED_MAX, showImages, wideSearch, wideClear, wideRefused, disabledSources,
     empty, validate, update, clear, effectiveProfile, filterFeed });
 });

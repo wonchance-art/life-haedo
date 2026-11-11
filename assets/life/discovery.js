@@ -362,6 +362,24 @@
     }
     return result;
   }
+  // The rows that arrive after a list was drawn (a timed refresh, a 넓게 찾기 answer), placed after the `drawn` rows
+  // without moving them. The page the drawn rows end in is completed under the same publisher cap; later pages are
+  // spreadLatest of the rest. Every row appears exactly once.
+  function spreadAfter(drawn, rows, { size = PAGE.size, perPublisher = PAGE.perPublisher } = {}) {
+    check(Array.isArray(drawn) && Array.isArray(rows) && Number.isInteger(size) && size >= 1 && Number.isInteger(perPublisher) && perPublisher >= 1);
+    const rest = [...rows].sort(compareLatest), open = drawn.length % size, fill = [];
+    if (open) {
+      const count = new Map();
+      for (const row of drawn.slice(drawn.length - open)) { const key = publisherKey(row.article); count.set(key, (count.get(key) || 0) + 1); }
+      for (let at = 0; at < rest.length && open + fill.length < size;) {
+        const key = publisherKey(rest[at].article), used = count.get(key) || 0;
+        if (used < perPublisher) { count.set(key, used + 1); fill.push(rest.splice(at, 1)[0]); } else at++;
+      }
+      if (open + fill.length < size) fill.push(...rest.splice(0, size - open - fill.length));
+      fill.sort(compareLatest);
+    }
+    return [...fill, ...spreadLatest(rest, { size, perPublisher })];
+  }
   function rankPool(prepared) {
     const { feed, pool, excluded, coverage, mode, limit } = prepared;
     const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b))
@@ -407,5 +425,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, PUBLISHERS, PAGE, WIDE_SOURCE, SNAPSHOT_SOURCES, publisherKey, spreadLatest, LEGACY_SOURCE_IDS: Object.freeze(Object.keys(LEGACY_SOURCES)), EXTENDED_SOURCE_IDS: Object.freeze(Object.keys(EXTENDED_SOURCES)), IMAGE_HOSTS, imageUrl, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, PUBLISHERS, PAGE, WIDE_SOURCE, SNAPSHOT_SOURCES, publisherKey, spreadLatest, spreadAfter, LEGACY_SOURCE_IDS: Object.freeze(Object.keys(LEGACY_SOURCES)), EXTENDED_SOURCE_IDS: Object.freeze(Object.keys(EXTENDED_SOURCES)), IMAGE_HOSTS, imageUrl, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });
