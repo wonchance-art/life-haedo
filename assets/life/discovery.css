@@ -237,8 +237,8 @@
   .discovery-news .discovery-meta { gap: 6px; }
 }
 
-/* 2026-11-03 부드러운 판 묶음 C: 왼쪽 목록과 읽기 칸.
- * 행: 관심 주제 칸 · 제목 두 줄 · 출처·날짜 시간·언어 · 담기. 1101px 이상은 오른쪽에서 원문을 읽고,
+/* 2026-11-03 부드러운 판 묶음 C: 왼쪽 목록과 읽기 칸. 목록은 2026-11-11부터 카드다(아래 "목록 카드").
+ * 1101px 이상은 오른쪽에서 원문을 읽고,
  * 761–1100px은 읽기가 내용 영역을 쓰며, 760px 이하는 전체 화면으로 읽는다. */
 .discovery-news .discovery-reaction-header { margin: 0; }
 .discovery-news .discovery-status-row { display: flex; align-items: center; gap: 8px; min-height: 44px; }
@@ -256,10 +256,6 @@
 .discovery-news .discovery-tab-scroller { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .discovery-news .discovery-tab-scroller::-webkit-scrollbar { display: none; }
 .discovery-news .discovery-tab-scroller[data-more=true] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-.discovery-news .discovery-list[data-topics=none] > .discovery-article { grid-template-columns: minmax(0, 1fr) 44px; }
-.discovery-news .discovery-list[data-topics=none] > .discovery-article > .discovery-topic { display: none; }
-.discovery-news .discovery-list[data-topics=none] > .discovery-excluded-article { grid-template-columns: 76px minmax(0, 1fr) auto; }
-.discovery-news .discovery-list[data-topics=none] > .discovery-excluded-article > .discovery-topic { display: block; }
 .discovery-news .discovery-collection-tabs { display: flex; flex-wrap: nowrap; gap: 4px; width: max-content; margin: 0; }
 .discovery-news .discovery-collection-tabs .discovery-mode {
   display: inline-block; flex: none; width: auto; height: 44px; min-width: 0; min-height: 44px; padding: 0 12px; border: 0; border-radius: 0;
@@ -284,25 +280,41 @@
 .discovery-news .discovery-filter .discovery-sort { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--field-line, #86968d); border-radius: 12px; background: #fff; color: #182522; font: inherit; font-size: 16px; }
 .discovery-news .discovery-filter-body > .life-button { justify-content: flex-start; gap: 6px; min-height: 44px; padding-inline: 0; }
 
-/* 목록 행 */
-.discovery-news .discovery-list { min-width: 0; }
-.discovery-news .discovery-article { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr) 44px; column-gap: 12px; align-items: start; padding: 4px 0; border-bottom: 1px solid var(--news-line); scroll-margin-block: 96px; }
+/* 목록 카드 (2026-11-11 소유자 요청): [대표 이미지 16:9] · 제목 두 줄 · 출처 · 경과 시간 · 담기 · 글 옵션.
+ * 평평한 흰 면과 구분선만 쓴다. 이미지는 기사 이미지 보기를 켰고 출처 피드가 준 경우에만 있으며,
+ * 없으면 같은 구조의 글 카드다. 카드 폭은 680px까지(이미지 최대 680×383). */
+.discovery-news .discovery-list { min-width: 0; max-width: 680px; }
+.discovery-news .discovery-article { position: relative; display: block; padding: 0 0 4px; border-bottom: 1px solid var(--news-line); scroll-margin-block: 96px; }
+.discovery-news .discovery-article[data-discovery-id] { cursor: pointer; }
 .discovery-news .discovery-article[data-selected=true]::before { content: ""; position: absolute; inset: 0 -12px; border-radius: 12px; box-shadow: inset 0 0 0 2px #145b50; pointer-events: none; }
-.discovery-news .discovery-topic { min-width: 0; padding-top: 10px; }
-.discovery-news .discovery-topic-badge { display: inline-block; max-width: 100%; min-height: 22px; padding: 0 7px; border-radius: 6px; background: #f4f7f5; color: #5d6b65; font-size: 12px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
-.discovery-news .discovery-row-open { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 0; border: 0; border-radius: 0; background: none; color: #182522; font: inherit; text-align: left; }
+.discovery-news .discovery-row-open { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 12px 0 8px; border: 0; border-radius: 0; background: none; color: #182522; font: inherit; text-align: left; }
 .discovery-news div.discovery-row-open { cursor: default; }
-.discovery-news button.discovery-row-open::after { content: ""; position: absolute; inset: 0; }
-.discovery-news .discovery-article > :is(.discovery-reaction,.discovery-restore) { position: relative; z-index: 1; }
-.discovery-news .discovery-row-open .discovery-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: 15px; font-weight: 650; line-height: 1.45; letter-spacing: -.01em; text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
-.discovery-news button.discovery-row-open:hover .discovery-title { color: #145b50; }
-.discovery-news .discovery-row-open .discovery-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; color: var(--news-muted); font-size: 13px; line-height: 1.5; }
-.discovery-news .discovery-meta .discovery-source-name { color: var(--news-muted); font-size: 13px; font-weight: 400; }
+.discovery-news .discovery-card-media { display: block; width: 100%; aspect-ratio: 16 / 9; margin: 4px 0 12px; border-radius: 14px; overflow: hidden; background: #f4f7f5; }
+.discovery-news .discovery-card-media > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.discovery-news .discovery-row-open .discovery-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: 650; line-height: 1.45; letter-spacing: -.01em; text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
+@media (hover: hover) { .discovery-news .discovery-article[data-discovery-id]:hover .discovery-title { color: #145b50; } }
+.discovery-news .discovery-card-foot { display: flex; align-items: center; min-width: 0; min-height: 44px; }
+.discovery-news .discovery-card-foot > .discovery-meta { display: flex; flex: 1; flex-wrap: nowrap; align-items: center; gap: 4px; min-width: 0; margin: 0; overflow: hidden; color: var(--news-muted); font-size: var(--haedo-text-meta, 13px); line-height: 1.5; white-space: nowrap; }
+.discovery-news .discovery-card-foot .discovery-source-name { flex: 0 1 auto; min-width: 0; color: var(--news-muted); font-size: inherit; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.discovery-news .discovery-card-foot .discovery-meta > time { flex: none; }
+.discovery-news .discovery-card-foot .discovery-meta > time::before { content: "·"; content: "·" / ""; margin-right: 4px; }
+.discovery-news .discovery-card-foot .discovery-meta > :is(.discovery-language, .discovery-liked-mark) { flex: none; margin-left: 4px; }
+.discovery-news .discovery-card-foot .discovery-meta > .discovery-topic-badge { margin-left: 4px; }
+.discovery-news .discovery-card-foot .discovery-meta > .discovery-topic-badge:first-child { margin: 0 4px 0 0; }
+.discovery-news .discovery-topic-badge { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 40%; min-height: 22px; padding: 0 7px; border-radius: 6px; background: #f4f7f5; color: #5d6b65; font-size: 12px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
 .discovery-news .discovery-language { color: var(--news-muted); font-size: 12px; text-decoration: none; }
 .discovery-news .discovery-liked-mark { color: #145b50; fill: currentColor; }
-.discovery-news .discovery-article > .discovery-reaction { margin-top: 0; }
-.discovery-news .discovery-excluded-article { grid-template-columns: 76px minmax(0, 1fr) auto; }
-.discovery-news .discovery-restore { min-height: 44px; margin: 0; padding: 0 0 0 12px; font-size: 15px; }
+.discovery-news .discovery-card-foot > .discovery-reaction { flex: none; margin: 0; }
+/* 글 옵션: the reader's menu, opened from the card's ⋯ as a panel under the card's right edge. */
+.discovery-news .discovery-card-more { position: static; flex: none; margin: 0; }
+.discovery-news .discovery-card-more > summary { margin: 0; }
+.discovery-news .discovery-card-more > .discovery-more-body { position: absolute; z-index: 30; top: calc(100% - 4px); right: 0; flex-direction: column; align-items: stretch; flex-wrap: nowrap; width: min(320px, 100%); max-height: 70vh; overflow-y: auto; padding: 12px; border: 1px solid var(--news-line); border-radius: 16px; background: #fff; box-shadow: 0 10px 32px rgb(24 24 27 / .09); cursor: default; }
+.discovery-news .discovery-card-more > .discovery-more-body .life-button { justify-content: flex-start; }
+.discovery-news .discovery-restore { flex: none; min-height: 44px; margin: 0; padding: 0 0 0 12px; font-size: 15px; }
+/* 20건 뒤의 더 보기 */
+.discovery-news .discovery-page-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 680px; min-height: 44px; padding: 8px 0 16px; }
+.discovery-news .discovery-page-count { margin: 0; color: var(--news-muted); font-size: var(--haedo-text-meta, 13px); line-height: 1.5; font-variant-numeric: tabular-nums; }
+.discovery-news .discovery-show-more { min-height: 44px; margin: 0; padding: 0 12px; font-size: var(--haedo-text-control, 15px); }
 .discovery-news .discovery-new-articles { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: #145b50; font-size: 15px; text-align: left; }
 .discovery-news .discovery-new-articles:hover { text-decoration: underline; text-underline-offset: 4px; }
 .discovery-news .discovery-empty { padding-top: 32px; }
@@ -371,6 +383,11 @@
   #lifeMain[data-split=news] .discovery-list-pane { grid-column: 1; grid-row: 1; min-width: 0; }
   #lifeMain[data-split=news] .discovery-layout > .haedo-split-handle { grid-column: 2; grid-row: 1; }
   #lifeMain[data-split=news] .discovery-reader-host { grid-column: 3; grid-row: 1; position: sticky; top: 16px; height: calc(100vh - 32px); min-height: 480px; }
+  /* Beside the reader the list is narrow (280px and up): the image becomes a 96px thumbnail next to the title. */
+  #lifeMain[data-split=news] .discovery-card[data-image] > .discovery-row-open { display: grid; grid-template-columns: minmax(0, 1fr) 96px; column-gap: 12px; align-items: start; }
+  #lifeMain[data-split=news] .discovery-card[data-image] .discovery-card-media { grid-column: 2; grid-row: 1; margin: 4px 0 0; border-radius: 8px; }
+  #lifeMain[data-split=news] .discovery-card[data-image] .discovery-title { grid-column: 1; grid-row: 1; }
+  #lifeMain[data-split=news] .discovery-row-open .discovery-title { font-size: var(--haedo-text-control, 15px); }
   .discovery-news .discovery-reader { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; height: 100%; }
   /* ‹ closes the reading column and returns to the list alone (icon only; its name stays 뉴스로 돌아가기). */
   .discovery-news .discovery-reader-back { position: relative; display: inline-flex; grid-column: 1; grid-row: 1; justify-content: center; width: 44px; height: 44px; padding: 0; }
@@ -389,8 +406,6 @@
   .discovery-news .discovery-reader-tools .discovery-more-body { right: auto; left: 0; }
 }
 @media (max-width: 760px) {
-  .discovery-news .discovery-article { grid-template-columns: 68px minmax(0, 1fr) 44px; column-gap: 8px; }
-  .discovery-news .discovery-excluded-article { grid-template-columns: 68px minmax(0, 1fr) auto; }
   .discovery-news .discovery-undo-toast { bottom: calc(var(--haedo-dock-clearance, 84px) + 8px); }
   body[data-haedo-immersive=news] { overflow: hidden; }
   /* 전체 화면 읽기: 위 막대(‹ 뉴스 · 제목 · 더보기), 원문, 아래 도구 막대(담기·좋아요·번역·새 탭). */

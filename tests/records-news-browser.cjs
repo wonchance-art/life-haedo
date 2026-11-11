@@ -164,7 +164,9 @@ async function main() {
       await nav(page, 'news'); await idle(page);
       const row = page.locator('#discoveryList [data-discovery-id="frame-ok"]');
       const shape = await row.evaluate(node => ({ cells: [...node.children].map(child => child.className), title: node.querySelector('.discovery-title').textContent, meta: node.querySelector('.discovery-meta').textContent }));
-      assert.deepEqual(shape.cells, ['discovery-topic', 'discovery-row-open', 'life-button discovery-reaction']); assert.match(shape.meta, /독서신문/);
+      // 2026-11-11 owner request: the row became a card (title control, then 출처 · 시간 · 담기 · 글 옵션).
+      assert.deepEqual(shape.cells, ['discovery-row-open', 'discovery-card-foot']); assert.match(shape.meta, /독서신문/);
+      assert.deepEqual(await row.locator('.discovery-card-foot').evaluate(node => [...node.children].map(child => child.className)), ['discovery-meta', 'life-button discovery-reaction', 'discovery-more discovery-card-more']);
       assert.match(await page.locator('#discoveryList [data-discovery-id="english"] .discovery-meta').innerText(), /EN/);
       assert.equal(await page.locator('#discoveryFailedSources').isVisible(), true); assert.match(await page.locator('#discoveryFailedSources').innerText(), /출처 1곳 갱신 실패/);
       assert.match(await page.locator('#discoveryDiscover').innerText(), /전체 3/);
