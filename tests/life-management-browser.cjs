@@ -59,16 +59,14 @@ async function enable(page) {
 // Rule change (2026-11-11, originals merge): a difference between this device and the server is
 // merged by the next sync run, so a recorded conflict no longer waits for the person. The manual
 // comparison is reached only when the merge is unavailable. These journeys keep exercising that
-// screen on a page that still runs an older shared module without the merge (mixed versions
-// during an update); their assertions are unchanged.
+// screen on a page that still runs the shared module of the version before the merge (a cache
+// that kept it during an update; the file is that commit's, unchanged); their assertions are unchanged.
 const olderPages = new WeakSet();
+const previousModule = require('node:fs').readFileSync(require('node:path').resolve(__dirname, 'fixtures/source-merge/sync-common-a423773.js'), 'utf8');
 async function withoutMerge(page) {
   const context = page.context();
   if (olderPages.has(context)) return; olderPages.add(context);
-  await context.route(base + '/assets/life/sync-common.js', async route => {
-    const response = await route.fetch(), body = await response.text(), changed = body.replace('canonical, mergeWorkspace, mergeBase,', 'canonical, mergeBase,');
-    assert.notEqual(changed, body, 'the served module exports the merge'); return route.fulfill({ response, body: changed });
-  });
+  await context.route(base + '/assets/life/sync-common.js', async route => route.fulfill({ response: await route.fetch(), body: previousModule }));
   await page.reload(); await ready(page); await syncing(page);
   assert.equal(await page.evaluate(() => typeof HaedoLife.SyncCommon.mergeWorkspace), 'undefined');
 }

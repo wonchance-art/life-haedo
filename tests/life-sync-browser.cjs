@@ -404,12 +404,11 @@ async function main() {
       assert.deepEqual(await b.page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w=>w.workspaceId)),beforeIds,'no copy workspace: nothing was chosen');
     });
     // The manual comparison stays for what cannot be merged. The two checks below keep their
-    // assertions and run on a page that still has an older shared module without the merge
-    // (mixed versions during an update): there the difference is recorded as before.
-    const olderModule = async route => {
-      const response = await route.fetch(), body = await response.text(), changed = body.replace('canonical, mergeWorkspace, mergeBase,','canonical, mergeBase,');
-      assert.notEqual(changed,body,'the served module exports the merge'); return route.fulfill({response,body:changed});
-    };
+    // assertions and run on a page that still has the shared module of the version before the
+    // merge (a cache that kept it during an update; the file is that commit's, unchanged): there
+    // the difference is recorded as before.
+    const previousModule = require('node:fs').readFileSync(require('node:path').resolve(__dirname,'fixtures/source-merge/sync-common-a423773.js'),'utf8');
+    const olderModule = async route => route.fulfill({response:await route.fetch(),body:previousModule});
     const reopen = async page => { await page.reload(); await ready(page); await page.waitForFunction(() => HaedoLife.Shell.sync.getAccount()?.userId === '11111111-1111-4111-8111-111111111111'); };
     await b.context.route(`${base}/assets/life/sync-common.js`,olderModule); await reopen(b.page);
     assert.equal(await b.page.evaluate(() => typeof HaedoLife.SyncCommon.mergeWorkspace),'undefined');

@@ -9,6 +9,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const out = path.resolve(__dirname, '../.local/source-merge');
@@ -65,10 +66,36 @@ const snap = page => page.evaluate(async () => {
   HaedoLife.Core.validateWorkspace(b);
   return { workspaceId: w, revision: b.revision, bundle: b, titles: b.sources.map(source => source.title),
     sync: { status: state.status, remoteRevision: state.remoteRevision, conflict: state.conflict ? { missing: state.conflict.missing } : null, error: state.error?.code || null },
-    notice: await s.getSyncNotice(w), seen: [...(window.__merge?.statuses || [])], band: [...(window.__merge?.band || [])] };
+    notice: typeof s.getSyncNotice === 'function' ? await s.getSyncNotice(w) : null, seen: [...(window.__merge?.statuses || [])], band: [...(window.__merge?.band || [])] };
 });
 const content = bundle => JSON.stringify({ ...bundle, revision: 0 });
 const kick = page => page.evaluate(() => { dispatchEvent(new Event('online')); dispatchEvent(new Event('focus')); });
+// The same without the workspace itself (for a library of many megabytes).
+const light = page => page.evaluate(async () => {
+  const s = HaedoLife.Shell.storage, w = await s.getActive(), b = await s.read(w), state = await HaedoLife.Shell.sync.getState(w);
+  return { status: state.status, conflict: state.conflict ? { missing: state.conflict.missing } : null, error: state.error?.code || null, sources: b.sources.length, revision: b.revision };
+});
+// This device's database, read and changed behind the application (what an earlier version left, or did not leave).
+//   base: the stored merge base (its revision and size) · dropBase: remove it · dropAll: remove it and every commit receipt.
+const idb = (page, action, workspaceId) => page.evaluate(({ action, workspaceId }) => new Promise((resolve, reject) => {
+  const open = indexedDB.open('life-tools-v1');
+  open.onerror = () => reject(open.error);
+  open.onsuccess = () => {
+    const db = open.result, tx = db.transaction(['meta', 'operations'], action === 'base' ? 'readonly' : 'readwrite'), meta = tx.objectStore('meta'); let value = null;
+    if (action === 'base') meta.get('syncBase:' + workspaceId).onsuccess = event => { const stored = event.target.result?.value; value = stored ? { remoteRevision: stored.remoteRevision, records: stored.base.records.length } : null; };
+    else meta.delete('syncBase:' + workspaceId);
+    if (action === 'dropAll') tx.objectStore('operations').delete(IDBKeyRange.bound([workspaceId], [workspaceId, []]));
+    tx.oncomplete = () => { db.close(); resolve(value); }; tx.onerror = () => reject(tx.error);
+  };
+}), { action, workspaceId });
+// A file of the version before the originals merge (commit a423773), exactly as it was served then.
+// The shared module is kept as a fixture; the other files are read from the Git history.
+const PREVIOUS = 'a423773';
+function previousFile(name) {
+  if (name === 'sync-common.js') return fs.readFileSync(path.join(__dirname, 'fixtures/source-merge/sync-common-' + PREVIOUS + '.js'), 'utf8');
+  try { return execFileSync('git', ['show', PREVIOUS + ':assets/life/' + name], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
+  catch (_) { throw new Error('this check needs commit ' + PREVIOUS + ' in the Git history (a full clone)'); }
+}
 
 async function main() {
   fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out, { recursive: true });
@@ -76,8 +103,8 @@ async function main() {
   const server = new FakeCloud().enableAccountLibrary();
   const devices = [];
   // Requests of one device that the test answers itself (a failing or delayed upload).
-  async function device(name, { viewport = { width: 1280, height: 900 }, prepare = null } = {}) {
-    const context = await makeContext(browser, server, name, accounts.a, { viewport });
+  async function device(name, { viewport = { width: 1280, height: 900 }, prepare = null, cloud = server } = {}) {
+    const context = await makeContext(browser, cloud, name, accounts.a, { viewport });
     if (prepare) await prepare(context);
     // Every sync status this device's storage announces and every state of the account band.
     await context.addInitScript(() => {
@@ -100,14 +127,17 @@ async function main() {
   const row = () => server.row(owner, workspaceId);
   let workspaceId;
   // Every device holds exactly the server snapshot, synced, with no difference recorded.
-  async function converged(list, label) {
+  async function converged(list, label, read = row) {
     await until(async () => {
       for (const item of list) await kick(item.page);
       const states = []; for (const item of list) states.push(await snap(item.page));
       return states;
-    }, states => states.every(state => state.sync.status === 'synced' && !state.sync.conflict && content(state.bundle) === content(row().data)), label, 60000, 500);
+    }, states => states.every(state => state.sync.status === 'synced' && !state.sync.conflict && content(state.bundle) === content(read().data)), label, 60000, 500);
   }
-  const offline = (item, on) => { if (on) server.offline.add(item.name); else server.offline.delete(item.name); };
+  const offline = (item, on, cloud = server) => { if (on) cloud.offline.add(item.name); else cloud.offline.delete(item.name); };
+  const acknowledge = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; await s.dismissSyncNotice(await s.getActive()); });
+  const records = async page => { await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); };
+  const syncView = async page => { await page.goto(base + '/index.html?section=manage&view=sync'); await ready(page); await settle(page); };
 
   try {
     const mac = await device('mac'), phone = await device('phone', { viewport: { width: 390, height: 844 } });
@@ -152,7 +182,7 @@ async function main() {
 
     await check('the same source edited on both devices: both exact versions stay, the later is current, the excerpt keeps its exact version; the earlier one is findable', async () => {
       offline(phone, true);
-      await imp(mac.page, '맥에서 고친 제목', '맥에서 고친 본문', [], { sourceId: shared.sourceId });
+      const earlier = await imp(mac.page, '맥에서 고친 제목', '맥에서 고친 본문', [], { sourceId: shared.sourceId });
       await sleep(30);
       await imp(phone.page, '폰에서 나중에 고친 제목', '폰에서 나중에 고친 본문', [], { sourceId: shared.sourceId });
       await until(() => snap(mac.page), state => state.sync.status === 'synced' && row().data.sourceVersions.filter(version => version.sourceId === shared.sourceId).length === 2, 'mac stored its version');
@@ -166,16 +196,20 @@ async function main() {
         const record = bundle.records.find(value => value.id === shared.recordIds[0]), ref = record.sourceRefs[0];
         assert.equal(ref.sourceVersionId, shared.versionId, 'the excerpt still points at the exact version it was taken from');
         assert.equal(versions[0].contentText.slice(ref.locator.start, ref.locator.end), record.text);
+        // The title that lost is kept on every device, on the exact version its device saved.
+        assert.deepEqual(bundle.links.filter(link => link.kind === 'source_previous_title').map(link => [link.note, link.sourceRefs[0].sourceVersionId]), [['맥에서 고친 제목', earlier.versionId]], item.name);
       }
       assert.deepEqual((await snap(phone.page)).notice?.sourceIds, [shared.sourceId], 'the merging device keeps a notice');
-      // The notice names the source and stays until acknowledged, also after a reload.
-      await phone.page.goto(base + '/index.html?section=manage&view=sync'); await ready(phone.page); await settle(phone.page);
+      // The notice names the source, leads to the earlier version and stays until acknowledged, also after a reload.
+      await syncView(phone.page);
       const notice = phone.page.locator('#lifeSyncMergeNotice'); await notice.waitFor();
-      const text = await notice.innerText();
-      assert.match(text, /나중에 고친 쪽을 남겼습니다/); assert.match(text, /이전 버전/); assert.match(text, /폰에서 나중에 고친 제목/);
+      assert.match(await notice.innerText(), /나중에 고친 쪽이 현재 버전이고, 먼저 고친 본문은 이전 버전으로 남았습니다/);
+      const open = notice.locator('[data-merge-source="' + shared.sourceId + '"]');
+      assert.equal((await open.innerText()).trim(), '폰에서 나중에 고친 제목 · 이전 버전 열기');
       for (const [width, height] of [[390, 844], [820, 1000], [1440, 900]]) {
         await phone.page.setViewportSize({ width, height }); await settle(phone.page);
         assert.ok(await notice.isVisible());
+        assert.ok(await open.evaluate(control => control.getBoundingClientRect().height) >= 44, 'the link to the earlier version is at least 44px tall at ' + width);
         assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no horizontal overflow at ' + width);
         // Measured through the locator: the panel may be redrawn by a sync event between two reads.
         const tall = await phone.page.locator('#lifeSyncMergeNoticeDone').evaluate(control => control.getBoundingClientRect().height);
@@ -186,10 +220,27 @@ async function main() {
         await phone.page.screenshot({ path: path.join(out, 'merge-notice-' + width + '.png'), fullPage: true });
       }
       await phone.page.setViewportSize({ width: 390, height: 844 });
+      // The link opens the exact earlier version, which says what the other device had called the source.
+      const kept = '이 버전을 보관한 기기에서의 제목: 맥에서 고친 제목';
+      await open.click(); await phone.page.locator('#lifeSourceText').waitFor();
+      assert.match(await phone.page.locator('#lifeSourceText').innerText(), /맥에서 고친 본문/);
+      assert.equal((await phone.page.locator('[data-previous="source_previous_title"]').innerText()).trim(), kept);
+      assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no horizontal overflow in the earlier version');
+      await phone.page.screenshot({ path: path.join(out, 'earlier-version-390.png'), fullPage: true });
+      // Reading it does not acknowledge the notice.
+      await syncView(phone.page); await notice.waitFor();
       await phone.page.locator('#lifeSyncMergeNoticeDone').click();
       await notice.waitFor({ state: 'detached' });
       await phone.page.reload(); await ready(phone.page); await settle(phone.page);
       assert.equal(await phone.page.locator('#lifeSyncMergeNotice').count(), 0); assert.equal((await snap(phone.page)).notice, null);
+      // The device that did not merge has no notice; the same line is on the earlier version there.
+      assert.equal((await snap(mac.page)).notice, null);
+      await mac.page.goto(base + '/index.html?section=records&view=sources'); await ready(mac.page); await settle(mac.page);
+      await mac.page.locator('.life-source-card[data-source-id="' + shared.sourceId + '"] .life-source-open').first().click(); await mac.page.locator('#lifeSourceText').waitFor();
+      await mac.page.locator('#lifeVersion').selectOption(earlier.versionId);
+      await mac.page.locator('[data-previous="source_previous_title"]').waitFor();
+      assert.equal((await mac.page.locator('[data-previous="source_previous_title"]').innerText()).trim(), kept);
+      await records(mac.page); await records(phone.page);
     });
 
     await check('the same excerpt edited on both devices: the later edit stays and the other is a 복구 사본 excerpt on both devices', async () => {
@@ -204,6 +255,31 @@ async function main() {
         assert.deepEqual(records.map(record => [record.note, record.topic]), [['폰에서 나중에 고친 메모', '주제'], ['맥에서 고친 메모', '복구 사본 · 주제']], item.name);
         assert.deepEqual(records[1].sourceRefs, records[0].sourceRefs); assert.equal(records[1].text, records[0].text);
       }
+      // The merging device's notice leads to the copy, with the topic as it is really named.
+      assert.equal((await snap(phone.page)).notice?.recordIds.length, 1);
+      await syncView(phone.page);
+      const notice = phone.page.locator('#lifeSyncMergeNotice'); await notice.waitFor();
+      assert.ok((await notice.innerText()).includes('먼저 고친 발췌 1개는 주제 이름 앞에 ‘복구 사본’이 붙어 있습니다(예: 복구 사본 · 주제)'), await notice.innerText());
+      assert.ok(await phone.page.locator('#lifeSyncMergeCopies').evaluate(control => control.getBoundingClientRect().height) >= 44);
+      await phone.page.locator('#lifeSyncMergeCopies').click();
+      await phone.page.locator('[data-topic-kind="recovery"][aria-pressed="true"]').waitFor();
+      assert.match(await phone.page.locator('#lifeSearchCount').innerText(), /발췌 1개 · 복구 사본/);
+      assert.deepEqual(await phone.page.locator('.life-excerpt-card .life-note').allInnerTexts(), ['맥에서 고친 메모']);
+      assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no horizontal overflow in the copies');
+      await phone.page.screenshot({ path: path.join(out, 'recovery-copies-390.png'), fullPage: true });
+      await syncView(phone.page); await phone.page.locator('#lifeSyncMergeNoticeDone').click(); await notice.waitFor({ state: 'detached' });
+      // Every device finds them under one filter, also the one that did not merge and has no notice.
+      await mac.page.goto(base + '/index.html?section=records&view=sources'); await ready(mac.page); await settle(mac.page);
+      await mac.page.getByRole('button', { name: '검색 필터', exact: true }).click();
+      await mac.page.getByRole('button', { name: '저장한 문장 주제로 찾기', exact: true }).click();
+      await mac.page.locator('#lifeSearchCount').waitFor();
+      const filter = mac.page.locator('[data-topic-kind="recovery"]');
+      if (!await filter.isVisible()) await mac.page.getByRole('button', { name: '검색 필터', exact: true }).click();
+      await filter.waitFor();
+      assert.equal(await filter.getAttribute('aria-label'), '복구 사본'); await filter.click();
+      await mac.page.locator('[data-topic-kind="recovery"][aria-pressed="true"]').waitFor();
+      assert.deepEqual(await mac.page.locator('.life-excerpt-card .life-note').allInnerTexts(), ['맥에서 고친 메모']);
+      await records(mac.page); await records(phone.page);
     });
 
     await check('deleted on one device and edited on the other → the edit stays; deleted and untouched → deleted; trashed while the other kept writing → not left in the trash', async () => {
@@ -225,6 +301,13 @@ async function main() {
         assert.equal(await item.page.evaluate(async id => { const s = HaedoLife.Shell.storage; return HaedoLife.Core.sourceState(await s.read(await s.getActive()), id).status; }, trashed.sourceId), 'active', item.name);
         assert.equal(bundle.sourceVersions.filter(version => version.sourceId === trashed.sourceId).length, 2);
       }
+      // The device that merged says which deletion did not stand.
+      const notice = (await snap(phone.page)).notice;
+      assert.deepEqual([notice.restoredIds, notice.recordIds, notice.uncertain], [[kept.recordIds[0]], [], false]);
+      await syncView(phone.page);
+      assert.match(await phone.page.locator('#lifeSyncMergeNotice').innerText(), /한 기기에서 지운 발췌 1개는 .* 남겼습니다/);
+      await phone.page.locator('#lifeSyncMergeNoticeDone').click(); await phone.page.locator('#lifeSyncMergeNotice').waitFor({ state: 'detached' });
+      await records(phone.page);
     });
 
     await check('both devices move the same source to the trash while apart → one trash row, and the device whose row was replaced takes the result', async () => {
@@ -288,28 +371,126 @@ async function main() {
       assert.equal(row().revision, revision + 1, 'one upload of the merged snapshot');
     });
 
-    await check('a device without a stored base (diverged before this version) deletes nothing in its first merge', async () => {
-      const fixture = await imp(mac.page, '기준 없는 병합', '기준 없는 병합의 본문', [{ start: 0, end: 5, topic: '기준 없음', note: '' }]);
+    // ---- a device that carries data from before this version: no stored merge base ----
+    await check('no stored base, equal to the server: the base is kept when the page opens and again before the first change → a deletion made elsewhere stands', async () => {
+      await acknowledge(phone.page);
+      const fixture = await imp(mac.page, '기준을 지키는 병합', '기준을 지키는 병합의 본문', [{ start: 0, end: 3, topic: '기준', note: '' }, { start: 4, end: 7, topic: '기준', note: '' }]);
       await converged([mac, phone], 'fixture on both');
+      // As after an update while synced: no base record.
+      await idb(phone.page, 'dropBase', workspaceId);
+      assert.equal(await idb(phone.page, 'base', workspaceId), null);
+      await phone.page.reload(); await ready(phone.page); await settle(phone.page);
+      const kept = await until(() => idb(phone.page, 'base', workspaceId), value => value !== null, 'the page kept the base when it opened', 20000);
+      assert.equal(kept.remoteRevision, row().revision);
+      // And when the page had already looked: in the transaction of the first change.
       offline(phone, true);
-      await phone.page.evaluate(workspaceId => new Promise((resolve, reject) => {
-        const open = indexedDB.open('life-tools-v1');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => { const db = open.result, tx = db.transaction('meta', 'readwrite'); tx.objectStore('meta').delete('syncBase:' + workspaceId);
-          tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error); };
-      }), workspaceId);
-      await imp(phone.page, '기준 없이 폰에서 가져온 자료', '폰 본문');
+      await idb(phone.page, 'dropBase', workspaceId);
+      await imp(phone.page, '기준을 지킨 뒤 폰에서 가져온 자료', '폰 본문');
+      assert.deepEqual(await idb(phone.page, 'base', workspaceId), kept, 'the snapshot from before the change');
       await removeRecord(mac.page, fixture.recordIds[0]);
-      await imp(mac.page, '기준 없이 맥에서 가져온 자료', '맥 본문');
+      await imp(mac.page, '기준을 지킨 뒤 맥에서 가져온 자료', '맥 본문');
       await until(() => snap(mac.page), state => state.sync.status === 'synced' && row().data.tombstones.some(mark => mark.entityId === fixture.recordIds[0]), 'mac stored its deletion');
       offline(phone, false);
-      await converged([mac, phone], 'joined without a base');
+      await converged([mac, phone], 'merged with the kept base');
       for (const item of [mac, phone]) {
         const { bundle, titles } = await snap(item.page);
-        assert.ok(['기준 없이 폰에서 가져온 자료', '기준 없이 맥에서 가져온 자료'].every(title => titles.includes(title)), item.name);
-        assert.ok(bundle.records.some(record => record.id === fixture.recordIds[0]), item.name + ': the excerpt this device still held is not deleted');
-        assert.ok(!bundle.tombstones.some(mark => mark.entityId === fixture.recordIds[0]));
+        assert.ok(['기준을 지킨 뒤 폰에서 가져온 자료', '기준을 지킨 뒤 맥에서 가져온 자료'].every(title => titles.includes(title)), item.name);
+        assert.equal(bundle.records.some(record => record.id === fixture.recordIds[0]), false, item.name + ': the deletion stands');
+        assert.ok(bundle.tombstones.some(mark => mark.entityId === fixture.recordIds[0]) && bundle.records.some(record => record.id === fixture.recordIds[1]));
       }
+      assert.equal((await snap(phone.page)).notice, null, 'nothing came back, nothing to announce');
+    });
+
+    await check('no stored base, already changed: the commit receipts decide → untouched items follow the server, both devices\' deletions stand, only the real double edit makes a 복구 사본', async () => {
+      await acknowledge(phone.page);
+      const fixture = await imp(mac.page, '영수증으로 합치는 자료', '가나다라마바사아자차카타파하거너더러머버', [0, 1, 2, 3, 4, 5].map(index => ({ start: index * 2, end: index * 2 + 2, topic: '영수증', note: '처음 ' + index })));
+      await converged([mac, phone], 'fixture on both');
+      const [a, b, c, d, e, f] = fixture.recordIds;
+      offline(phone, true);
+      await editNote(phone.page, a, '폰만 고친 메모'); await removeRecord(phone.page, b); await editNote(phone.page, e, '폰이 먼저 고친 메모');
+      await imp(phone.page, '영수증으로 합칠 때 폰 자료', '폰 본문');
+      // As if those changes had been made on the previous version, which kept no base.
+      await idb(phone.page, 'dropBase', workspaceId); await sleep(30);
+      await editNote(mac.page, c, '맥만 고친 메모'); await removeRecord(mac.page, d); await editNote(mac.page, e, '맥이 나중에 고친 메모');
+      await until(() => snap(mac.page), state => state.sync.status === 'synced' && row().data.tombstones.some(mark => mark.entityId === d), 'mac stored');
+      offline(phone, false);
+      await converged([mac, phone], 'merged by receipts');
+      for (const item of [mac, phone]) {
+        const { bundle } = await snap(item.page), note = id => bundle.records.find(record => record.id === id)?.note;
+        assert.deepEqual([note(a), note(b), note(c), note(d), note(e), note(f)], ['폰만 고친 메모', undefined, '맥만 고친 메모', undefined, '맥이 나중에 고친 메모', '처음 5'], item.name);
+        const marks = bundle.tombstones.map(mark => mark.entityId);
+        assert.ok(marks.includes(b) && marks.includes(d), item.name + ': both deletions stand');
+        const copies = bundle.records.filter(record => record.topic.startsWith('복구 사본') && record.sourceRefs[0].sourceVersionId === fixture.versionId);
+        assert.deepEqual(copies.map(record => record.note), ['폰이 먼저 고친 메모'], item.name);
+      }
+      const notice = (await snap(phone.page)).notice;
+      assert.deepEqual([notice.recordIds.length, notice.restoredIds, notice.uncertain], [1, [], false]);
+      await acknowledge(phone.page);
+    });
+
+    await check('neither a base nor commit receipts: nothing is deleted, and the notice says what came back and that it could not tell', async () => {
+      await acknowledge(phone.page);
+      const fixture = await imp(mac.page, '확인할 수 없는 병합', '가나다라마바사아자차', [{ start: 0, end: 2, topic: '확인 불가', note: '처음 0' }, { start: 2, end: 4, topic: '확인 불가', note: '처음 1' }]);
+      await converged([mac, phone], 'fixture on both');
+      offline(phone, true);
+      await imp(phone.page, '확인할 수 없을 때 폰 자료', '폰 본문');
+      await idb(phone.page, 'dropAll', workspaceId); await sleep(30);
+      await removeRecord(mac.page, fixture.recordIds[0]); await editNote(mac.page, fixture.recordIds[1], '맥에서 고친 메모');
+      await until(() => snap(mac.page), state => state.sync.status === 'synced' && row().data.tombstones.some(mark => mark.entityId === fixture.recordIds[0]), 'mac stored');
+      offline(phone, false);
+      await converged([mac, phone], 'joined without a base');
+      let copy = null;
+      for (const item of [mac, phone]) {
+        const { bundle } = await snap(item.page), mine = bundle.records.filter(record => record.sourceRefs[0].sourceVersionId === fixture.versionId);
+        assert.ok(mine.some(record => record.id === fixture.recordIds[0]) && !bundle.tombstones.some(mark => mark.entityId === fixture.recordIds[0]), item.name + ': the excerpt this device held is not deleted');
+        assert.equal(mine.find(record => record.id === fixture.recordIds[1]).note, '맥에서 고친 메모', item.name);
+        const copies = mine.filter(record => record.topic.startsWith('복구 사본'));
+        assert.deepEqual(copies.map(record => [record.note, record.topic]), [['처음 1', '복구 사본 · 확인 불가']], item.name + ': the copy this device held, which may be the text before the edit');
+        copy = copies[0].id;
+      }
+      const notice = (await snap(phone.page)).notice;
+      assert.deepEqual([notice.restoredIds, notice.recordIds, notice.uncertain], [[fixture.recordIds[0]], [copy], true]);
+      await syncView(phone.page);
+      const text = await phone.page.locator('#lifeSyncMergeNotice').innerText();
+      assert.match(text, /한 기기에서 지운 발췌 1개는 .* 남겼습니다/); assert.match(text, /무엇이 바뀌었는지 확인하지 못했습니다\. 지운 것은 지우지 않았고, 복구 사본 중에는 고치기 전 내용도 있습니다/);
+      assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no horizontal overflow');
+      await phone.page.screenshot({ path: path.join(out, 'merge-notice-uncertain-390.png'), fullPage: true });
+      await phone.page.locator('#lifeSyncMergeNoticeDone').click(); await phone.page.locator('#lifeSyncMergeNotice').waitFor({ state: 'detached' });
+      await records(phone.page);
+    });
+
+    await check('a device that changed its workspace on the real previous version, then loads this version: both devices\' deletions stand, nothing comes back, no 복구 사본', async () => {
+      // The seven files this change touches, as commit a423773 served them (index.html and the rest are the same).
+      const files = new Map(['account-library.js', 'composition-sync.js', 'storage.js', 'sync-common.js', 'sync.js', 'ui.js', 'writing-sync.js'].map(name => [name, previousFile(name)]));
+      const serve = async route => { const name = new URL(route.request().url()).pathname.split('/').pop(); return files.has(name) ? route.fulfill({ response: await route.fetch(), body: files.get(name) }) : route.fallback(); };
+      const ipad = await device('ipad', { viewport: { width: 820, height: 1180 }, prepare: context => context.route(base + '/assets/life/*.js', serve) });
+      assert.deepEqual(await ipad.page.evaluate(() => [typeof HaedoLife.SyncCommon.mergeWorkspace, typeof HaedoLife.Shell.storage.mergeSyncRemote]), ['undefined', 'undefined'], 'the page runs the previous version');
+      const fixture = await imp(mac.page, '이전 판에서 갈라진 자료', '가나다라마바사아자차카타파하거너더러머버', Array.from({ length: 10 }, (_, index) => ({ start: index * 2, end: index * 2 + 2, topic: '이전 판', note: '처음 ' + index })));
+      await converged([mac, ipad], 'the previous version holds the fixture');
+      const ids = fixture.recordIds;
+      offline(ipad, true);
+      await editNote(ipad.page, ids[0], 'iPad에서 고친 메모'); await removeRecord(ipad.page, ids[1]);
+      for (let index = 2; index <= 6; index++) await editNote(mac.page, ids[index], 'Mac에서 고친 메모 ' + index);
+      await removeRecord(mac.page, ids[7]);
+      await until(() => snap(mac.page), state => state.sync.status === 'synced' && row().data.tombstones.some(mark => mark.entityId === ids[7]), 'mac stored');
+      offline(ipad, false);
+      await until(async () => { await kick(ipad.page); return snap(ipad.page); }, state => state.sync.status === 'conflict', 'the previous version recorded the difference and waits', 40000, 500);
+      assert.equal(await idb(ipad.page, 'base', workspaceId), null, 'the previous version kept no base');
+      // The update arrives: the same device and database, this version's files.
+      await ipad.context.unroute(base + '/assets/life/*.js', serve);
+      await ipad.page.reload(); await ready(ipad.page); await settle(ipad.page);
+      assert.equal(await ipad.page.evaluate(() => typeof HaedoLife.Shell.storage.mergeSyncRemote), 'function');
+      await converged([mac, ipad], 'merged after the update');
+      for (const item of [mac, ipad]) {
+        const { bundle } = await snap(item.page), mine = bundle.records.filter(record => record.sourceRefs[0].sourceVersionId === fixture.versionId);
+        assert.deepEqual(mine.map(record => record.note), ['iPad에서 고친 메모', 'Mac에서 고친 메모 2', 'Mac에서 고친 메모 3', 'Mac에서 고친 메모 4', 'Mac에서 고친 메모 5', 'Mac에서 고친 메모 6', '처음 8', '처음 9'], item.name);
+        assert.equal(mine.filter(record => record.topic.startsWith('복구 사본')).length, 0, item.name);
+        const marks = bundle.tombstones.map(mark => mark.entityId);
+        assert.ok(marks.includes(ids[1]) && marks.includes(ids[7]), item.name + ': both deletions stand');
+      }
+      assert.equal((await snap(ipad.page)).notice, null);
+      assert.deepEqual(ipad.errors.filter(text => !/ERR_INTERNET_DISCONNECTED|ERR_FAILED|net::ERR_/.test(text)), []);
+      await ipad.context.close(); devices.splice(devices.indexOf(ipad), 1);
     });
 
     await check('a difference recorded by the previous version is merged at the next run without a choice', async () => {
@@ -348,15 +529,51 @@ async function main() {
       console.log('     hidden page: ' + afterSend + ' requests until the draft was stored, ' + (requests.length - afterSend) + ' in the following 20 s');
       assert.ok(afterSend <= 12, 'sending one draft from a hidden page took ' + afterSend + ' requests: ' + requests.slice(0, afterSend).join(', '));
       assert.ok(requests.length - afterSend <= 6, 'a hidden page with nothing to send stays quiet: ' + requests.slice(afterSend).join(', '));
+      // m3: another tab of this device saves a draft while this tab stays hidden. That tab sends its
+      // own draft; the hidden tab makes no request for it.
+      const other = await phone.context.newPage(); other.setDefaultTimeout(25000);
+      await other.goto(base + '/index.html?section=records&view=write'); await ready(other); await other.locator('#lifeWritingBody').waitFor(); await sleep(4000);
+      const quiet = []; const recordQuiet = request => { if (request.url().includes('supabase.co')) quiet.push(request.method() + ' ' + new URL(request.url()).pathname); };
+      phone.page.on('request', recordQuiet);
+      await other.locator('#lifeWritingTitle').fill('다른 탭에서 쓴 초안'); await other.locator('#lifeWritingBody').fill('다른 탭이 스스로 올린다');
+      await until(async () => [...server.drafts.values()].some(value => value.data.text === '다른 탭이 스스로 올린다'), value => value, 'the other tab sent its own draft', 20000, 200);
+      await other.locator('#lifeWritingBody').fill('다른 탭이 스스로 올린다 · 한 번 더');
+      await until(async () => [...server.drafts.values()].some(value => value.data.text === '다른 탭이 스스로 올린다 · 한 번 더'), value => value, 'the other tab sent its second save', 20000, 200);
+      await sleep(6000);
+      phone.page.off('request', recordQuiet);
+      console.log('     hidden tab while another tab saved a draft twice: ' + quiet.length + ' requests (' + quiet.filter(text => /life_writing_draft/.test(text)).length + ' for drafts)');
+      assert.deepEqual(quiet.filter(text => /life_writing_draft/.test(text)), [], 'a hidden tab starts no draft run for another tab\'s save');
+      await other.close();
       await phone.page.evaluate(() => { delete document.visibilityState; delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
+      // A page closed while it still reads "visible" (no visibilitychange first): pagehide is not an
+      // upload. The platform suspends the session and blanks the private screen at that moment, so
+      // nothing is sent with it; the draft stays on this device and the next page sends it.
+      // The editor is opened again first: the other tab may have changed the draft this tab had open.
+      await phone.page.goto(base + '/index.html?section=records&view=write'); await ready(phone.page); await phone.page.locator('#lifeWritingBody').waitFor(); await sleep(4000);
+      const stored = () => [...server.drafts.values()].some(value => value.data.text === '닫는 순간에 고친 초안');
+      const closing = []; const recordClosing = request => { if (request.url().includes('supabase.co')) closing.push(new URL(request.url()).pathname.split('/').pop()); };
+      phone.page.on('request', recordClosing);
+      await phone.page.evaluate(async () => {
+        // Typed and closed at once: the save lands, and pagehide follows before any timer of the sync runs.
+        const body = document.querySelector('#lifeWritingBody'); body.value = '닫는 순간에 고친 초안'; body.dispatchEvent(new Event('input', { bubbles: true }));
+        for (let n = 0; n < 200 && document.querySelector('#lifeWritingStatus')?.dataset.state !== 'draft'; n++) await new Promise(resolve => setTimeout(resolve, 10));
+        dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+      });
+      await sleep(6000); phone.page.off('request', recordClosing);
+      const atClose = closing.filter(name => /life_writing_draft/.test(name));
+      console.log('     pagehide while visible with one unsent draft: ' + atClose.length + ' draft requests (' + closing.length + ' requests in all); stored on the server: ' + stored());
+      assert.deepEqual(atClose, [], 'pagehide starts no draft upload');
+      await phone.page.goto(base + '/index.html?section=records&view=write'); await ready(phone.page);
+      await until(async () => stored(), value => value, 'the next page sent the draft that was left', 30000, 200);
+      await records(phone.page);
     });
 
-    // ---- what is left for the person: the merge is not available (a page still on an older shared module) ----
-    await check('when the merge is unavailable the difference is recorded: band, manual comparison and choice still work; an unrelated draft is sent meanwhile, a draft of an unsent original waits', async () => {
-      const older = await device('older', { prepare: context => context.route(base + '/assets/life/sync-common.js', async route => {
-        const response = await route.fetch(), body = await response.text(), changed = body.replace('canonical, mergeWorkspace, mergeBase,', 'canonical, mergeBase,');
-        assert.notEqual(changed, body, 'the served module exports the merge'); return route.fulfill({ response, body: changed });
-      }) });
+    // ---- what is left for the person: the merge is not available. The page still has the shared
+    // module of the previous version (a cache that kept that one file during an update; the file is
+    // commit a423773's, unchanged) next to this version's other modules. ----
+    await check('when the merge is unavailable (the previous shared module) the difference is recorded: band, manual comparison and choice still work; an unrelated draft is sent meanwhile, a draft of an unsent original waits', async () => {
+      const older = await device('older', { prepare: context => context.route(base + '/assets/life/sync-common.js', async route => route.fulfill({ response: await route.fetch(), body: previousFile('sync-common.js') })) });
+      assert.deepEqual(await older.page.evaluate(() => [typeof HaedoLife.SyncCommon.mergeWorkspace, typeof HaedoLife.Shell.storage.mergeSyncRemote]), ['undefined', 'function']);
       await converged([mac, older], 'third device synced');
       offline(older, true);
       const own = await imp(older.page, '아직 올라가지 않은 내 글', '서버에 없는 원문', [], { own: true });
@@ -382,6 +599,7 @@ async function main() {
       // Every later run tries the merge again, without announcing the same recorded difference again.
       const announced = await older.page.evaluate(() => __merge.changes);
       for (let n = 0; n < 3; n++) { await kick(older.page); await sleep(1500); }
+      for (let run = 0; run < 3; run++) assert.equal(await older.page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await HaedoLife.Shell.sync.syncNow(await s.getActive(), { headIfClean: true })).status; }), 'conflict');
       assert.equal(await older.page.evaluate(() => __merge.changes), announced, 'the recorded difference was announced again');
       // The manual comparison still resolves it.
       await older.page.locator('#lifeAccountStorageReview').click(); await settle(older.page);
@@ -394,6 +612,97 @@ async function main() {
       // The server copy this device did not choose is kept as a copy on it, and the other device receives the chosen snapshot.
       assert.ok((await older.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length >= 2);
       await converged([mac], 'mac receives the chosen snapshot');
+    });
+
+    // ---- what still reaches the manual comparison, by its real cause. A library of its own
+    // (another anonymous cloud): the 16 MiB case leaves megabytes behind. ----
+    const second = new FakeCloud().enableAccountLibrary();
+    let big = null, small = null, secondId = null;
+    const row2 = () => second.row(owner, secondId);
+    const pair2 = async () => {
+      if (big) return;
+      big = await device('big', { cloud: second }); small = await device('small', { cloud: second, viewport: { width: 390, height: 844 } });
+      secondId = (await snap(big.page)).workspaceId; assert.equal((await snap(small.page)).workspaceId, secondId);
+      await converged([big, small], 'second library synced', row2);
+    };
+    await check('a merged snapshot the server would refuse (half of a character pair) is recorded for the comparison; once the text is whole the same device merges by itself', async () => {
+      await pair2();
+      const fixture = await imp(big.page, '끊긴 글자', '끊긴 글자의 본문입니다', [{ start: 0, end: 2, topic: '글자', note: '처음' }]);
+      await converged([big, small], 'fixture on both', row2);
+      offline(small, true, second);
+      await small.page.evaluate(async id => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = await s.getActive(), b = await s.read(w), record = b.records.find(value => value.id === id);
+        const result = await s.commitLocal({ workspaceId: w, baseRevision: b.revision, operationId: c.id(),
+          changes: { put: { records: [{ ...record, note: '끊긴 메모 ' + String.fromCharCode(0xd83d), revision: record.revision + 1, updatedAt: new Date().toISOString() }] } } });
+        if (result.status !== 'stored') throw new Error('edit ' + result.status);
+      }, fixture.recordIds[0]);
+      await imp(big.page, '끊긴 글자와 함께 온 자료', '큰 화면 본문');
+      await until(() => snap(big.page), state => state.sync.status === 'synced' && row2().data.sources.length === 2, 'the other device stored');
+      const stored = row2().revision;
+      offline(small, false, second);
+      const recorded = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'conflict', 'recorded for the comparison', 40000, 500);
+      assert.equal(recorded.conflict.missing, false); assert.equal(row2().revision, stored, 'nothing was sent');
+      await small.page.locator('#lifeAccountStorage[data-state="conflict"]').waitFor();
+      assert.ok(await small.page.locator('#lifeAccountStorageReview').isVisible(), 'the band offers the comparison');
+      await editNote(small.page, fixture.recordIds[0], '고친 메모 😀');
+      await converged([big, small], 'merged once the text was whole', row2);
+      assert.deepEqual([row2().data.records[0].note, row2().data.sources.length], ['고친 메모 😀', 2]);
+    });
+
+    await check('a merged snapshot over 16 MiB is recorded for the comparison; later runs ask for the revision only; the manual choice resolves it', async () => {
+      await pair2();
+      // Nine originals of 1 MB on each device, saved by one commit each: 18 MB together.
+      const many = (page, label) => page.evaluate(async label => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = await s.getActive(), b = await s.read(w), put = {};
+        for (let index = 0; index < 9; index++) {
+          const prepared = await c.prepareImport({ origin: 'other', title: label + ' 큰 자료 ' + index, text: (label + index + ' ').padEnd(1000 * 1000, 'x'), authorRelation: 'self', coverage: 'full_text', forceSeparate: true }, b);
+          for (const [name, items] of Object.entries(c.buildImportChanges(b, prepared, []).put)) put[name] = (put[name] || []).concat(items);
+        }
+        const result = await s.commitLocal({ workspaceId: w, baseRevision: b.revision, operationId: c.id(), changes: { put } });
+        if (result.status !== 'stored') throw new Error('import ' + result.status + ' ' + (result.error?.code || ''));
+      }, label);
+      const before = row2().data.sources.length;
+      offline(small, true, second);
+      await many(small.page, '작은 화면'); await many(big.page, '큰 화면');
+      await until(() => light(big.page), state => state.status === 'synced' && row2().data.sources.length === before + 9, 'the other device stored its nine', 120000, 500);
+      const stored = row2().revision, own = (await light(small.page)).sources;
+      const reads = []; const record = request => { const url = new URL(request.url()); if (url.pathname === '/rest/v1/life_workspaces' && url.searchParams.get('id')) reads.push(url.searchParams.get('select')?.split(',').includes('data') ? 'full' : 'revision'); };
+      small.page.on('request', record);
+      offline(small, false, second);
+      const recorded = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'conflict', 'recorded for the comparison', 120000, 1000);
+      assert.equal(recorded.conflict.missing, false); assert.equal(recorded.sources, own, 'this device\'s originals are untouched'); assert.equal(row2().revision, stored, 'nothing was sent');
+      // The band follows once the account library's pass over this large library has finished.
+      await until(() => small.page.evaluate(() => document.querySelector('#lifeAccountStorage')?.dataset.state + ' / ' + [...(window.__merge?.band || [])].join(',')), value => value.startsWith('conflict '), 'the band shows the difference', 120000, 1000);
+      await sleep(3000); const first = reads.length;
+      // Six further runs of the engine, as the account library starts them (focus and online events are joined and spaced).
+      for (let run = 0; run < 6; run++) assert.equal(await small.page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await HaedoLife.Shell.sync.syncNow(await s.getActive(), { headIfClean: true })).status; }), 'conflict');
+      const later = reads.slice(first); small.page.off('request', record);
+      console.log('     over 16 MiB: ' + reads.slice(0, first).filter(kind => kind === 'full').length + ' full download(s) until it was recorded; in six further runs ' + later.filter(kind => kind === 'full').length + ' full and ' + later.filter(kind => kind === 'revision').length + ' revision-only reads');
+      assert.equal(later.filter(kind => kind === 'full').length, 0, 'the megabytes are not downloaded again');
+      assert.ok(later.filter(kind => kind === 'revision').length >= 6, 'each run asks whether the server moved (the page\'s own runs in the same seconds do too)');
+      // The comparison still resolves it: the server side is taken, this device's side stays as a copy.
+      const spaces = (await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length;
+      await small.page.locator('#lifeAccountStorageReview').click(); await settle(small.page);
+      await small.page.getByRole('button', { name: '양쪽 자료 비교', exact: true }).click(); await settle(small.page);
+      await small.page.getByRole('button', { name: '서버 변경 받기 · 내 변경은 사본 보관', exact: true }).click();
+      const resolved = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced' && !state.conflict, 'resolved by hand', 120000, 1000);
+      assert.equal(resolved.sources, before + 9);
+      assert.equal((await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length, spaces + 1, 'this device\'s side is kept as a copy');
+    });
+
+    await check('a deleted server copy is recorded as missing: never merged, never created again', async () => {
+      await pair2();
+      await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'synced', 'synced before the deletion', 120000, 1000);
+      offline(small, true, second);
+      await imp(small.page, '서버 사본이 지워진 뒤의 자료', '본문');
+      const writes = second.writes(owner, secondId).length;
+      second.rows.delete(second.key(owner, secondId));
+      offline(small, false, second);
+      await until(async () => { await kick(small.page); return light(small.page); }, state => state.conflict?.missing === true, 'recorded as missing', 60000, 1000);
+      for (let run = 0; run < 3; run++) { await kick(small.page); await sleep(1500); }
+      assert.equal(second.rows.has(second.key(owner, secondId)), false, 'the server copy was not created again');
+      assert.deepEqual(second.writes(owner, secondId).slice(writes).filter(request => request.device === 'small').map(request => request.expected).filter(expected => expected === 0), [], 'no first upload was tried');
+      assert.equal((await light(small.page)).conflict.missing, true);
     });
 
     await check('no unexpected console or page errors on any device', async () => {
