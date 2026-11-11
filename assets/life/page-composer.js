@@ -49,19 +49,44 @@
     const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
     // Account sync (2026-11-01): drafts from another device arrive as
-    // account_doc_applied. A clean, unfocused composer shows them; otherwise the
-    // existing comparison ("최신 초안과 비교") keeps this input.
+    // account_doc_applied. A composer with nothing unsaved takes them, also while
+    // a field only has the cursor: calling that a conflict left every later input
+    // unsaved until the manual comparison (core review M5, 2026-11-11). Unsaved
+    // input keeps the existing comparison ("최신 초안과 비교").
+    const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === "object"
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
+    const sameDraft = (a, b) => JSON.stringify(stable(a)) === JSON.stringify(stable(b));
     const unsubscribe = storage.subscribe?.(workspaceId, (event) => {
       if (event.type !== "account_doc_applied" || event.key !== `page-drafts:${workspaceId}` || !valid() || !state) return;
-      const focused = !!host?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
       const unsaved = () => !!saving || busy || edit !== stored || !!attachmentReview || composing || !!dialogClose;
-      if (unsaved() || focused) { message(Object.assign(new Error("draft changed elsewhere"), { code: "page_draft_conflict" })); return; }
+      if (unsaved()) { message(Object.assign(new Error("draft changed elsewhere"), { code: "page_draft_conflict" })); return; }
       const token = epoch;
       storage.readPageDrafts(workspaceId).then((latest) => {
         if (!valid() || token !== epoch || unsaved()) return;
+        const editing = active ? state.posts.find((d) => d.id === active) : null;
+        const at = editing ? latest.posts.findIndex((d) => d.id === active) : -1;
+        const form = host?.querySelector(":scope > .pp-composer");
         adopt(latest);
-        if (active && !latest.posts.some((d) => d.id === active)) active = null;
-        if (host) render();
+        if (form && at >= 0 && sameDraft(latest.posts[at], editing)) {
+          // The open draft is the same there: its editor stays as it is (focus, caret) and keeps
+          // writing to the same draft object. Only the list of the other drafts is redrawn.
+          state.posts[at] = editing;
+          const bar = host.querySelector(":scope > .pp-toolbar"), old = bar?.querySelector(":scope > .pp-drafts"), next = draftList();
+          const held = old?.contains(document.activeElement) ? document.activeElement.getAttribute("aria-describedby") : null;
+          if (next && old) { next.open = old.open; old.replaceWith(next); }
+          else if (old) old.remove();
+          else if (next && bar) bar.insertBefore(next, bar.querySelector(":scope > .pp-draft-tools, :scope > .pp-media-options"));
+          if (held) [...(next?.querySelectorAll("button") || [])].find((row) => row.getAttribute("aria-describedby") === held)?.focus({ preventScroll: true });
+        } else {
+          // The open draft changed or was deleted there and nothing here is unsaved: show the
+          // latest, with the cursor back in the same field.
+          if (active && at < 0) active = null;
+          const field = host?.contains(document.activeElement) && document.activeElement.id ? document.activeElement : null;
+          const mark = field && { id: field.id, start: field.selectionStart, end: field.selectionEnd };
+          if (host) render();
+          const again = mark && host?.querySelector("#" + mark.id);
+          if (again) { again.focus({ preventScroll: true }); if (typeof mark.start === "number") again.setSelectionRange(Math.min(mark.start, again.value.length), Math.min(mark.end, again.value.length)); }
+        }
         onDirty();
       }).catch(message);
     });
@@ -390,6 +415,23 @@
       }
       active = null; readId = null; render();
     }
+    // The other drafts (not the one being edited), newest first. null: nothing to list.
+    function draftList() {
+      const drafts = state.posts.filter((p) => p.id !== active).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      if (!drafts.length || standalone) return null;
+      const list = node("details", null, "pp-drafts");
+      list.append(node("summary", "초안 " + drafts.length));
+      for (const d of drafts) {
+        const name = draftTitle(d), row = button(name, () => {
+          requireAppliedAttachment(); active = d.id; render();
+          host?.querySelector("#ppBody")?.focus();
+        });
+        row.classList.add("pp-draft-row"); row.setAttribute("aria-label", name); row.replaceChildren(node("strong", name));
+        const meta = node("span", draftDescription(d), "life-meta"); meta.id = "ppDraftMeta-" + d.id;
+        row.setAttribute("aria-describedby", meta.id); row.append(meta); list.append(row);
+      }
+      return list;
+    }
     function render() {
       if (!host || !state || !valid()) return;
       dialogClose?.();
@@ -407,21 +449,8 @@
         legacy.append(node("summary", "기존 글·첨부"), button("대상 첨부 글쓰기", () => begin()));
         bar.append(legacy);
       }
-      const drafts = state.posts.filter((p) => p.id !== active).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      if (drafts.length && !standalone) {
-        const list = node("details", null, "pp-drafts");
-        list.append(node("summary", "초안 " + drafts.length));
-        for (const d of drafts) {
-          const name = draftTitle(d), row = button(name, () => {
-            requireAppliedAttachment(); active = d.id; render();
-            host?.querySelector("#ppBody")?.focus();
-          });
-          row.classList.add("pp-draft-row"); row.setAttribute("aria-label", name); row.replaceChildren(node("strong", name));
-          const meta = node("span", draftDescription(d), "life-meta"); meta.id = "ppDraftMeta-" + d.id;
-          row.setAttribute("aria-describedby", meta.id); row.append(meta); list.append(row);
-        }
-        bar.append(list);
-      }
+      const list = draftList();
+      if (list) bar.append(list);
       const tools = node("details", null, "pp-draft-tools");
       tools.append(node("summary", "초안 파일"));
       tools.append(button("초안 파일 받기", backup));
