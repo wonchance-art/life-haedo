@@ -40,7 +40,7 @@ export function checkSupplier(supplier) {
 /** The adapter's address for one topic, accepted only as https://<host><path>?<query>. */
 export function upstreamURL(supplier, topic, language) {
   const address = supplier.url(topic, language), prefix = 'https://' + supplier.host + supplier.path + '?';
-  if (typeof address !== 'string' || address.length > 2048 || !address.startsWith(prefix) || /[\s\\#\u0000-\u001f\u007f-￿]/u.test(address)) throw failure('blocked');
+  if (typeof address !== 'string' || address.length > 2048 || !address.startsWith(prefix) || /[\s\\#\u0000-\u001f\u007f-\uffff]/u.test(address)) throw failure('blocked');
   let url; try { url = new URL(address); } catch (_) { throw failure('blocked'); }
   if (url.protocol !== 'https:' || url.hostname !== supplier.host || url.port || url.username || url.password || url.hash ||
     url.pathname !== supplier.path || url.href !== address) throw failure('blocked');

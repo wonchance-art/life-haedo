@@ -11,7 +11,12 @@
  *   3. claim/finish/clear: input validation, lease, TTL, retry delay, hourly and daily
  *      allowance, retention, row cap, owner isolation, concurrency;
  *   4. the real Edge handler (supabase/functions/haedo-news-wide) against these
- *      functions, with a fixture supplier: fresh -> cached -> stale -> limited.
+ *      functions, with a fixture supplier: fresh -> cached -> stale -> limited;
+ *   5. the allow list: empty means nobody; only the operations SQL
+ *      (supabase/operations/20261111-news-wide-allow-first-account.sql) fills it, and
+ *      only when exactly one non-anonymous account exists;
+ *   6. md5(prosrc) of the installed functions equals the table in
+ *      docs/design-review/news-wide-feed.md (--hashes prints the current table).
  * --mutation=<name> weakens one guard in memory (no file is rewritten); the unchanged
  * checks must then fail. Names: MUTATIONS below.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -25,8 +30,28 @@ const pgStub = require('./helpers/supabase-pg-stub.cjs');
 
 const ROOT = pgStub.ROOT, NAME = '20261111130000_news_wide_feed.sql';
 const FILE = path.join(ROOT, 'supabase/migrations', NAME);
+const OPS = path.join(ROOT, 'supabase/operations/20261111-news-wide-allow-first-account.sql');
+const DOC = path.join(ROOT, 'docs/design-review/news-wide-feed.md');
 const SUPPLIER = 'google-news-rss';
+const ALLOWED_CHECK = " if not exists (select 1 from haedo_news_wide_private.allowed_accounts a where a.owner_id = who) then\n  return jsonb_build_object('status', 'not_allowed'); end if;\n";
+// Mutations of the operations SQL instead of the migration.
+const OPS_MUTATIONS = {
+  'ops-two-accounts': sql => sql.replace('if accounts <> 1 then', 'if accounts < 1 then').replace('if listed_after <> 1 or not exists (', 'if not exists ('),
+  'ops-count-not-exact': sql => sql.replace('if accounts <> 1 then', 'if accounts < 1 then'),
+  'ops-anonymous-counted': sql => sql.replaceAll('where not coalesce(u.is_anonymous, false)', 'where true'),
+  'ops-prints-account': sql => sql.replace("raise notice 'news-wide allow list: % account(s) before, % after; % existing tables unchanged',\n    listed_before,", "raise notice 'news-wide allow list: % account(s) before, % after; % existing tables unchanged',\n    (select owner_id from haedo_news_wide_private.allowed_accounts limit 1),"),
+};
 const MUTATIONS = {
+  // The allow list: removed from one function, or open while the table is empty.
+  'allow-check-removed-claim': sql => sql.replace(ALLOWED_CHECK, ''),
+  'allow-check-removed-finish': sql => sql.replace(" if not exists (select 1 from haedo_news_wide_private.allowed_accounts a where a.owner_id = p_owner_id) then\n  return jsonb_build_object('status', 'not_allowed', 'stored', 0, 'failed', 0, 'stale', 0); end if;\n", ''),
+  'empty-list-allows': sql => sql.replace(ALLOWED_CHECK, ALLOWED_CHECK.replace(' if not exists (', ' if exists (select 1 from haedo_news_wide_private.allowed_accounts) and not exists (')),
+  'allow-list-writable': sql => sql.replace('notify pgrst', "grant insert on haedo_news_wide_private.allowed_accounts to authenticated;\nnotify pgrst"),
+  'allow-list-self-service': sql => sql.replace(" delete from haedo_news_wide_private.feeds where owner_id = who;\n get diagnostics removed = row_count;", " insert into haedo_news_wide_private.allowed_accounts(owner_id) values (who) on conflict do nothing;\n delete from haedo_news_wide_private.feeds where owner_id = who;\n get diagnostics removed = row_count;"),
+  'escape-typo': sql => sql.replace('u2000-', 'u200-'),
+  'row-cap-once': sql => sql.replace("    while (select count(*) from haedo_news_wide_private.feeds where owner_id = who) >= 64 loop", "    if (select count(*) from haedo_news_wide_private.feeds where owner_id = who) >= 64 then").replace("     exit when not found;\n    end loop;", "    end if;"),
+  'boolean-word-allowed': sql => sql.replace("  and p_topic !~ ' (OR|AND|NOT) '\n", ''),
+  'minus-word-allowed': sql => sql.replace("  and p_topic !~ '(^| )[-+]'\n", ''),
   // RLS/grant relaxation: the owner could read the table (and everybody's rows) directly.
   'table-grant': sql => sql.replace('notify pgrst', "grant select on haedo_news_wide_private.feeds to authenticated;\ndrop policy if exists leak on haedo_news_wide_private.feeds;\ncreate policy leak on haedo_news_wide_private.feeds for select to authenticated using (true);\nnotify pgrst"),
   'no-rls': sql => sql.replace('alter table haedo_news_wide_private.feeds enable row level security;', ''),
@@ -41,20 +66,31 @@ const MUTATIONS = {
   'no-lease': sql => sql.replace("elsif present and r.lease_until > stamp then state := 'busy';", ''),
   'no-backoff': sql => sql.replace("elsif present and r.next_attempt_at > stamp then state := 'backoff';", ''),
   'any-link': sql => sql.replace("and i->>'link' ~ '^https://news[.]google[.]com/[!-~]*$'", ''),
-  'any-topic': sql => sql.replace(/  and p_topic !~ '\["[^\n]+\n/, '  , false)\n'),
+  'any-topic': sql => sql.replace(/  and p_topic !~ '\["[^\n]+\n/, ''),
   'lease-not-checked': sql => sql.replace("if not found or r.lease_token is distinct from (e->>'leaseToken')::uuid or r.lease_until <= stamp then", 'if not found then'),
   'clear-everyone': sql => sql.replace('delete from haedo_news_wide_private.feeds where owner_id = who;', 'delete from haedo_news_wide_private.feeds;'),
   'no-retention': sql => sql.replace(/ delete from haedo_news_wide_private\.feeds where owner_id = who and touched_at < stamp - interval '7 days'\n  and \(lease_until is null or lease_until <= stamp\);\n/, ''),
 };
-const args = process.argv.slice(2);
-if (args.length > 1 || args.length && !(/^--mutation=[a-z-]+$/.test(args[0]) && Object.hasOwn(MUTATIONS, args[0].slice(11)))) throw Error('Only --mutation=' + Object.keys(MUTATIONS).join('|') + ' is accepted.');
-const mutation = args[0]?.slice(11);
-function migration() {
-  const original = fs.readFileSync(FILE, 'utf8');
-  if (!mutation) return original;
-  const changed = MUTATIONS[mutation](original);
-  if (changed === original) throw Error('Mutation ' + mutation + ' no longer matches the migration text.');
+const args = process.argv.slice(2), printHashes = args.length === 1 && args[0] === '--hashes';
+if (!printHashes && (args.length > 1 || args.length && !(/^--mutation=[a-z-]+$/.test(args[0]) && (Object.hasOwn(MUTATIONS, args[0].slice(11)) || Object.hasOwn(OPS_MUTATIONS, args[0].slice(11))))))
+  throw Error('Only --hashes or --mutation=' + [...Object.keys(MUTATIONS), ...Object.keys(OPS_MUTATIONS)].join('|') + ' is accepted.');
+const mutation = printHashes ? undefined : args[0]?.slice(11);
+function mutated(file, set) {
+  const original = fs.readFileSync(file, 'utf8');
+  if (!mutation || !Object.hasOwn(set, mutation)) return original;
+  const changed = set[mutation](original);
+  if (changed === original) throw Error('Mutation ' + mutation + ' no longer matches ' + path.basename(file) + '.');
   return changed;
+}
+const migration = () => mutated(FILE, MUTATIONS), operations = () => mutated(OPS, OPS_MUTATIONS);
+const UUID_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const HASH_QUERY = "select p.proname, md5(p.prosrc) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_news_wide_private' order by 1;";
+// The expected md5(prosrc) table in the operations guide: | `name` | `32 hex` | between the two markers.
+function documentedHashes() {
+  const text = fs.readFileSync(DOC, 'utf8'), start = text.indexOf('<!-- news-wide-function-hashes:start -->'), end = text.indexOf('<!-- news-wide-function-hashes:end -->');
+  assert(start >= 0 && end > start, 'the function hash table markers are in ' + path.basename(DOC));
+  assert(text.includes(HASH_QUERY), 'the guide shows the exact hash query');
+  return [...text.slice(start, end).matchAll(/^\| `([a-z_]+)` \| `([a-f0-9]{32})` \|$/gm)].map(match => [match[1], match[2]]);
 }
 
 // Same shape as run-sql-replay-postgres: functions, columns, constraints, indexes, policies,
@@ -120,12 +156,17 @@ async function main() {
       assert.deepEqual(await catalog(db), after, 'applying it again changes nothing');
       const text = fs.readFileSync(FILE, 'utf8');
       assert.match(text, /^--[^\n]+\n/); assert.equal((text.match(/^begin;$/gm) || []).length, 1); assert.match(text, /\ncommit;\s*$/);
-      assert(!/\b(drop|truncate|alter\s+(?!table haedo_news_wide_private\.(feeds|limits) enable row level security))\b/i.test(text.replace(/^\s*--.*$/gm, '')), 'no drop, truncate or alter of anything else');
+      assert(!/\b(drop|truncate|alter\s+(?!table haedo_news_wide_private\.(feeds|limits|allowed_accounts) enable row level security))\b/i.test(text.replace(/^\s*--.*$/gm, '')), 'no drop, truncate or alter of anything else');
+      assert(!/[^\x00-\x7f]/.test(text) && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text), 'the migration is plain ASCII: nothing invisible can be lost when it is copied');
+      assert(!UUID_TEXT.test(text) && !UUID_TEXT.test(fs.readFileSync(OPS, 'utf8')), 'no account ID in the migration or the operations SQL');
+      const hashes = (await db.query(HASH_QUERY)).rows.map(row => [row.proname, row.md5]);
+      if (printHashes) { console.log(hashes.map(([name, md5]) => '| `' + name + '` | `' + md5 + '` |').join('\n')); return; }
+      if (!mutation) assert.deepEqual(hashes, documentedHashes(), 'md5(prosrc) differs from the table in docs/design-review/news-wide-feed.md (node tests/run-news-wide-postgres.cjs --hashes prints the current one)');
       pass(`migration adds ${own.length} catalog entries of its own, leaves the other ${before.length} unchanged, and re-applies to the same catalog`);
 
       // 2. Closed by default (catalog).
       const privilege = (role, kind, object, right) => db.query(`select has_${kind}_privilege($1, $2, $3) ok`, [role, object, right]).then(result => result.rows[0].ok);
-      for (const table of ['haedo_news_wide_private.feeds', 'haedo_news_wide_private.limits']) {
+      for (const table of ['haedo_news_wide_private.feeds', 'haedo_news_wide_private.limits', 'haedo_news_wide_private.allowed_accounts']) {
         for (const role of ['anon', 'authenticated', 'service_role'])
           for (const right of ['select', 'insert', 'update', 'delete', 'truncate']) assert.equal(await privilege(role, 'table', table, right), false, `${role} ${right} ${table}`);
         const state = (await db.query(`select relrowsecurity rls, (select count(*)::int from pg_policy where polrelid = c.oid) policies from pg_class c where oid = $1::regclass`, [table])).rows[0];
@@ -146,12 +187,14 @@ async function main() {
         assert.deepEqual(row.config, ['search_path=pg_catalog'], signature + ' search_path');
         assert.equal(row.definer, /private\.(claim|finish|clear|owner)\(/.test(signature), signature + ' definer');
       }
-      pass('tables: RLS on, no policy, no table right for anon/authenticated/service_role; 9 functions with a fixed search_path and exactly the intended role each');
+      // The allow list has no writer among the functions: only the operations SQL fills it.
+      const writers = (await db.query(`select count(*)::int n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where (n.nspname = 'haedo_news_wide_private' or p.proname like 'life_news_wide_%') and p.prosrc ~* '(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate)[[:space:]]+(only[[:space:]]+)?haedo_news_wide_private[.]allowed_accounts'`)).rows[0].n;
+      assert.equal(writers, 0, 'no function writes allowed_accounts');
+      pass('tables: RLS on, no policy, no table right for anon/authenticated/service_role; 9 functions with a fixed search_path and exactly the intended role each; none writes the allow list; md5(prosrc) matches the operations guide');
 
       // Accounts and sessions (synthetic).
-      const A = randomUUID(), B = randomUUID(), ANON = randomUUID(), SA = randomUUID(), SB = randomUUID(), SANON = randomUUID(), EXPIRED = randomUUID();
-      await db.query('insert into auth.users(id, is_anonymous) values ($1, false), ($2, null), ($3, true)', [A, B, ANON]);
-      await db.query(`insert into auth.sessions(id, user_id, not_after) values ($1, $2, null), ($3, $4, now() + interval '1 hour'), ($5, $6, null), ($7, $2, now() - interval '1 minute')`, [SA, A, SB, B, SANON, ANON, EXPIRED]);
+      const A = randomUUID(), B = randomUUID(), C = randomUUID(), ANON = randomUUID(), SA = randomUUID(), SB = randomUUID(), SC = randomUUID(), SANON = randomUUID(), EXPIRED = randomUUID();
       const as = async (client, role, claims, query, values = []) => {
         await client.query('begin');
         try {
@@ -161,12 +204,89 @@ async function main() {
         } catch (error) { await client.query('rollback'); throw error; }
       };
       const user = (sub, session) => ({ sub, role: 'authenticated', session_id: session });
-      const claim = (who, session, requests, client = db) => as(client, 'authenticated', user(who, session), 'select public.life_news_wide_claim($1, $2::jsonb) value', [SUPPLIER, JSON.stringify(requests)]).then(value => value.entries);
-      const finish = (owner, results) => as(db, 'service_role', { role: 'service_role' }, 'select public.life_news_wide_finish($1, $2, $3::jsonb) value', [owner, SUPPLIER, JSON.stringify(results)]);
+      // An allowed account gets its entries; anything else comes back whole ({status:'not_allowed'}).
+      const claim = (who, session, requests, client = db) => as(client, 'authenticated', user(who, session), 'select public.life_news_wide_claim($1, $2::jsonb) value', [SUPPLIER, JSON.stringify(requests)])
+        .then(value => value.status === 'ok' && Object.keys(value).length === 2 ? value.entries : value);
+      const finish = (owner, results) => as(db, 'service_role', { role: 'service_role' }, 'select public.life_news_wide_finish($1, $2, $3::jsonb) value', [owner, SUPPLIER, JSON.stringify(results)])
+        .then(value => { if (value.status !== 'ok') return value; const { status, ...counts } = value; return counts; });
       const one = (topic, language = 'ko') => [{ topic, language }];
       const refused = (promise, pattern, label) => assert.rejects(promise, error => pattern.test(error.message), label);
       const feed = (owner, topic, language = 'ko') => db.query('select * from haedo_news_wide_private.feeds where owner_id = $1 and topic = $2 and language = $3', [owner, topic, language]).then(result => result.rows[0]);
       const quota = owner => db.query('select hour_count, day_count from haedo_news_wide_private.limits where owner_id = $1', [owner]).then(result => result.rows[0]);
+
+      // 5. The allow list. Nobody is allowed until the operations SQL has run, and that SQL adds
+      // an account only when exactly one non-anonymous account exists.
+      const said = [];
+      db.on('notice', notice => said.push(String(notice.message)));
+      const allowList = () => db.query(`select count(*)::int n, coalesce(min(added_at)::text, '') first from haedo_news_wide_private.allowed_accounts`).then(result => result.rows[0]);
+      const install = async () => { const results = [].concat(await db.query(operations())); return results.at(-1).rows; };
+      const installRefused = async (pattern, label) => {
+        const state = await allowList();
+        await assert.rejects(install(), error => { said.push(String(error.message)); return pattern.test(error.message); }, label);
+        assert.deepEqual(await allowList(), state, label + ': nothing changed');
+      };
+      {
+        const bare = await pg.connect();
+        try { await bare.query('create database news_wide_bare'); } finally { await bare.end(); }
+        const empty = await pg.connect('news_wide_bare');
+        try { await pgStub.replayMigrations(empty, { files: [] }); await assert.rejects(empty.query(fs.readFileSync(OPS, 'utf8')), /apply migration 20261111130000_news_wide_feed\.sql first/); } finally { await empty.end(); }
+      }
+      await installRefused(/found 0\b/, 'no account at all');
+      await db.query('insert into auth.users(id, is_anonymous) values ($1, true)', [ANON]);
+      await db.query('insert into auth.sessions(id, user_id) values ($1, $2)', [SANON, ANON]);
+      await installRefused(/found 0\b/, 'only an anonymous account');
+      await db.query('insert into auth.users(id, is_anonymous) values ($1, false)', [A]);
+      await db.query(`insert into auth.sessions(id, user_id, not_after) values ($1, $2, null), ($3, $2, now() - interval '1 minute')`, [SA, A, EXPIRED]);
+      // Before the install even the only real account is refused, and nothing is created for it.
+      assert.deepEqual(await claim(A, SA, [{ topic: '기후', language: 'ko' }]), { status: 'not_allowed' }, 'an empty allow list allows nobody');
+      assert.deepEqual(await claim(A, SA, 'not even valid input'), { status: 'not_allowed' }, 'refused before the input is looked at');
+      assert.deepEqual(await finish(A, [{ topic: '기후', language: 'ko', leaseToken: randomUUID(), items: [], error: null }]), { status: 'not_allowed', stored: 0, failed: 0, stale: 0 });
+      assert.deepEqual(await as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_clear() value'), { status: 'not_allowed', removed: 0 });
+      assert.deepEqual([await rows('haedo_news_wide_private.feeds'), await rows('haedo_news_wide_private.limits'), await rows('haedo_news_wide_private.allowed_accounts')], [0, 0, 0]);
+      // A list that already holds some other account is not silently extended.
+      await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [ANON]);
+      await installRefused(/must hold exactly the one non-anonymous account/, 'the list already holds another account');
+      await db.query('delete from haedo_news_wide_private.allowed_accounts');
+      // Exactly one non-anonymous account (an anonymous one beside it does not count): added.
+      const counts = { feeds: await rows('haedo_news_wide_private.feeds'), users: await rows('auth.users') };
+      let report = await install();
+      assert.deepEqual(report.map(row => [row.check_name, row.ok, row.n === null ? null : Number(row.n)]), [['exactly one allowed account', true, 1], ['it is the only non-anonymous account', true, 1],
+        ['no API role can read or write the allow list', true, 0], ['row level security is on', true, null]]);
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.allowed_accounts where owner_id = $1', [A])).rows[0].n, 1, 'the one real account, not the anonymous one');
+      const installed = await allowList();
+      report = await install();
+      assert(report.every(row => row.ok === true)); assert.deepEqual(await allowList(), installed, 'running it again changes nothing (same row, same time)');
+      assert.deepEqual({ feeds: await rows('haedo_news_wide_private.feeds'), users: await rows('auth.users') }, counts);
+      // A second and third real account appear: the install stops and adds nobody.
+      await db.query('insert into auth.users(id, is_anonymous) values ($1, null)', [B]); // no flag at all counts as a real account
+      await installRefused(/found 2\b.*Ask the owner/, 'two real accounts');
+      await db.query('insert into auth.users(id, is_anonymous) values ($1, false)', [C]);
+      await db.query(`insert into auth.sessions(id, user_id, not_after) values ($1, $2, now() + interval '1 hour'), ($3, $4, null)`, [SB, B, SC, C]);
+      await installRefused(/found 3\b.*Ask the owner/, 'three real accounts');
+      // With two real accounts and an empty list the install adds neither.
+      await db.query('delete from haedo_news_wide_private.allowed_accounts');
+      await installRefused(/found 3\b/, 'an empty list and several accounts');
+      assert.equal((await allowList()).n, 0);
+      await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id, added_at) values ($1, $2)', [A, installed.first]); // put the installed row back
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.allowed_accounts where owner_id = any($1)', [[B, C]])).rows[0].n, 0);
+      // What the operations SQL says (notices, errors, result rows) holds counts only.
+      for (const line of [...said, JSON.stringify(report)]) assert(!UUID_TEXT.test(line) && !line.includes('@'), 'no account ID or e-mail in the output');
+      assert(said.length >= 6 && said.some(line => /1 account\(s\) before, 1 after/.test(line)), 'notices were captured');
+      // C is a real, signed-in account that is not on the list: refused, and nothing exists for it.
+      assert.deepEqual(await claim(C, SC, [{ topic: '기후', language: 'ko' }]), { status: 'not_allowed' });
+      assert.deepEqual(await finish(C, [{ topic: '기후', language: 'ko', leaseToken: randomUUID(), items: [], error: null }]), { status: 'not_allowed', stored: 0, failed: 0, stale: 0 });
+      assert.deepEqual(await as(db, 'authenticated', user(C, SC), 'select public.life_news_wide_clear() value'), { status: 'not_allowed', removed: 0 });
+      assert.deepEqual([await rows('haedo_news_wide_private.feeds'), await rows('haedo_news_wide_private.limits')], [0, 0], 'no row, no counter for an account that is not allowed');
+      // No API role can put itself on the list.
+      for (const role of ['anon', 'authenticated', 'service_role'])
+        for (const statement of [`insert into haedo_news_wide_private.allowed_accounts(owner_id) values ('${C}')`, 'select count(*) value from haedo_news_wide_private.allowed_accounts',
+          'delete from haedo_news_wide_private.allowed_accounts', `update haedo_news_wide_private.allowed_accounts set owner_id = '${C}'`, 'truncate haedo_news_wide_private.allowed_accounts'])
+          await assert.rejects(as(db, role, role === 'authenticated' ? user(C, SC) : { role }, statement), /permission denied for (table|schema)/, role + ': ' + statement);
+      assert.deepEqual((await allowList()).n, 1);
+      // Test setup only: the isolation checks below need a second allowed account. In production
+      // the operations SQL above is the only way onto the list.
+      await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [B]);
+      pass('allow list: empty allows nobody; the operations SQL adds the account only when exactly one non-anonymous account exists (0, anonymous-only, 2, 3 and a pre-filled list refused; re-run unchanged; counts only in its output); a real account that is not listed gets not_allowed and no row; no API role can write the list');
 
       // 2b. Closed by default (real calls).
       await refused(as(db, 'anon', { role: 'anon' }, 'select public.life_news_wide_claim($1, $2::jsonb) value', [SUPPLIER, JSON.stringify(one('기후'))]), /permission denied for function life_news_wide_claim/, 'anon claim');
@@ -199,15 +319,46 @@ async function main() {
         'extra key': [{ topic: '기후', language: 'ko', owner: B }], 'missing language': [{ topic: '기후' }], 'language': one('기후', 'ja'), 'number topic': [{ topic: 1, language: 'ko' }],
         'duplicate': [...one('기후'), ...one('기후')], 'empty topic': one(''), '41 characters': one('가'.repeat(41)), 'untrimmed': one(' 기후'), 'double space': one('기후  변화'),
         'NFD': one('기후'.normalize('NFD')), 'quote': one('"기후"'), 'curly quote': one('“기후”'), 'colon': one('site:example.com'), 'when': one('when:1d'), 'star': one('기후*'), 'paren': one('(기후)'),
-        'pipe': one('a|b'), 'angle': one('a<b'), 'backslash': one('a\\b'), 'newline': one('기후\n변화'), 'tab': one('기후\t변화'), 'escape': one('기후\u001b'), 'zero width': one('기​후'),
-        'bidi override': one('‮기후'), 'line separator': one('기후 '), 'null item': [null] };
+        'pipe': one('a|b'), 'angle': one('a<b'), 'backslash': one('a\\b'), 'newline': one('기후\n변화'), 'tab': one('기후\t변화'), 'escape': one('기후\u001b'), 'zero width': one('기\u200b후'),
+        'bidi override': one('\u202e기후'), 'line separator': one('기후\u2028'), 'null item': [null] };
       for (const [name, requests] of Object.entries(badRequests)) await refused(claim(A, SA, requests), /life_news_wide_invalid_request/, name);
       await refused(as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_claim($1, $2::jsonb) value', ['other-supplier', JSON.stringify(one('기후'))]), /life_news_wide_invalid_request/, 'unknown supplier');
       await refused(as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_claim($1, null) value', [SUPPLIER]), /life_news_wide_invalid_request/, 'null requests');
       assert.equal(await rows('haedo_news_wide_private.feeds'), 0); assert.equal(await rows('haedo_news_wide_private.limits'), 0);
-      for (const topic of ['기후', 'climate change', 'K-pop', 'C++', 'C#', '.NET', 'R&D', 'AI/ML', "O'Reilly", 'O’Reilly', '3·1 운동', '𠀀'.repeat(40)])
-        assert.equal((await db.query('select haedo_news_wide_private.topic_valid($1) ok', [topic])).rows[0].ok, true, 'a topic the Edge function accepts: ' + topic);
-      pass(`claim refuses ${Object.keys(badRequests).length + 2} malformed inputs with life_news_wide_invalid_request and stores nothing; 12 Edge-valid topics are valid here too`);
+      // The same rule on both sides. Listed cases first, then 20,000 random topics that the Edge
+      // rule accepts: every one must pass here too (otherwise that topic would always answer 500).
+      const { normalizeTopic } = await import(pathToFileURL(path.join(ROOT, 'supabase/functions/haedo-news-wide/topics.mjs')).href);
+      const edgeAccepts = topic => { try { return normalizeTopic(topic) === topic; } catch (_) { return false; } };
+      const sqlAccepts = list => db.query('select t, haedo_news_wide_private.topic_valid(t) ok from unnest($1::text[]) t', [list]).then(result => new Map(result.rows.map(row => [row.t, row.ok])));
+      const acceptedTopics = ['기후', 'climate change', 'K-pop', 'C++', 'C#', '.NET', 'R&D', 'AI/ML', "O'Reilly", 'O’Reilly', '3·1 운동', '𠀀'.repeat(40), '10%', '10,000', '1,000원', 'Yahoo!', '왜?',
+        'Oregon OR', 'Portland OR', 'OR 연산', 'OR', 'NOT 기후', 'AND', 'Rock AND', 'São Paulo', '日本 経済', 'Node.js 22'];
+      const cp = (...points) => String.fromCodePoint(...points);
+      const refusedTopics = ['"기후"', cp(0x201c) + '기후' + cp(0x201d), cp(0x2018) + '기후' + cp(0x2019), cp(0xab) + '기후' + cp(0xbb), cp(0xff02) + '기후', "'기후'", "기후'", "rock 'n' roll", '`기후`',
+        'site:example.com', 'when:1d', '50:50', '기후' + cp(0xff1a) + '변화', '-기후', '기후 -날씨', '+기후', '기후 +날씨', '기후 OR 날씨', '기후 AND 날씨', 'a NOT b', 'x OR OR y', 'a|b', '기후*', '(기후)',
+        '기후~', 'a<b', 'a=b', '[기후]', '{기후}', 'a;b', '@handle', '$100', 'a\\b', 'a_b', 'a^b', '...', '& &', '#', '?!', cp(0x1f33f), '기후 ' + cp(0x1f33f), cp(0x2764), cp(0x2192),
+        cp(0x115f), '기' + cp(0x3164) + '후', cp(0xffa0) + 'a', 'a' + cp(0x034f), 'a' + cp(0xfe0f), 'a' + cp(0x200d) + 'b', 'a' + cp(0xad) + 'b', 'a' + cp(0x61c), 'a' + cp(0xe0001), cp(0x3000) + 'a',
+        'a' + cp(0xa0) + 'b', cp(0x300c) + '기후' + cp(0x300d), '기후' + cp(0x3002)];
+      const listed = await sqlAccepts([...acceptedTopics, ...refusedTopics]);
+      for (const topic of acceptedTopics) assert.deepEqual([edgeAccepts(topic), listed.get(topic)], [true, true], 'accepted by both: ' + JSON.stringify(topic));
+      for (const topic of refusedTopics) assert.deepEqual([edgeAccepts(topic), listed.get(topic)], [false, false], 'refused by both: ' + JSON.stringify(topic));
+      // Characters the Edge rule can accept (letters, digits and marks of many kinds, spaces that
+      // normalize, the allowed punctuation). The always-refused ones are in refusedTopics above.
+      const pool = [...'abzAZ09 .&+#\'/-,%!?', ' ', ' ', 'OR', 'AND', 'NOT', ...[0x2019, 0xb7, 0xac00, 0xd7a3, 0x3131, 0x65e5, 0xe9, 0x65, 0x301, 0x300, 0x3099, 0xfb01, 0xff21, 0xff11, 0xb2, 0xbd, 0x2163, 0x663, 0x1d49c, 0x1d7d8,
+        0xaa, 0x1c5, 0x2b0, 0xa0, 0x3000, 0x2002, 0x2009, 0x202f, 0xe33, 0xf73, 0x1100, 0x1161, 0x20dd, 0x488, 0x130, 0xdf, 0x17f, 0x212a, 0x212b,
+        0x958, 0xfb1d, 0x2126, 0xf900, 0x2f800, 0x344, 0x1e9b, 0x323, 0xa9c0, 0xff2f, 0xff32, 0x3005, 0x3007, 0x2460, 0x2776, 0x1f101].map(point => cp(point))];
+      // Fixed-seed generator (mulberry32): the same 20,000 topics on every run.
+      let seed = 20261111;
+      const random = n => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) % n; };
+      const accepted = new Set();
+      for (let tries = 0; tries < 400000 && accepted.size < 20000; tries++) {
+        let text = ''; for (let n = 1 + random(12); n > 0; n--) text += pool[random(pool.length)];
+        try { accepted.add(normalizeTopic(text)); } catch (_) { /* refused by the Edge rule */ }
+      }
+      assert(accepted.size >= 20000, 'enough random topics: ' + accepted.size);
+      const disagreed = [];
+      for (let at = 0, all = [...accepted]; at < all.length; at += 2000) for (const [topic, ok] of await sqlAccepts(all.slice(at, at + 2000))) if (!ok) disagreed.push(topic);
+      assert.deepEqual(disagreed.slice(0, 5).map(topic => [...topic].map(char => 'U+' + char.codePointAt(0).toString(16)).join(' ')), [], 'accepted by the Edge rule but refused by SQL');
+      pass(`claim refuses ${Object.keys(badRequests).length + 2} malformed inputs with life_news_wide_invalid_request and stores nothing; ${acceptedTopics.length} topics accepted and ${refusedTopics.length} refused by both rules; ${accepted.size} random Edge-accepted topics all pass SQL`);
 
       // 3b. Lease, storing, owner isolation.
       let [entry] = await claim(A, SA, one('기후'));
@@ -348,6 +499,13 @@ async function main() {
       assert.equal((await claim(A, SA, one('예순다섯째')))[0].status, 'claimed');
       assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [A])).rows[0].n, 64, 'at most 64 topics per account');
       assert.equal(await feed(A, '채움1'), undefined, 'the least recently used row made room'); assert(await feed(A, '채움2'));
+      // Rows that were being fetched can push the count past 64; the next new topic brings it back.
+      await db.query(`insert into haedo_news_wide_private.feeds(owner_id, supplier, language, topic, touched_at) select $1, $2, 'en', 'overflow' || n, clock_timestamp() - make_interval(mins => 200 - n) from generate_series(1, 30) n`, [A, SUPPLIER]);
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [A])).rows[0].n, 94);
+      assert.equal((await claim(A, SA, one('다시예순넷')))[0].status, 'claimed');
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [A])).rows[0].n, 64, 'an overflow is trimmed back to 64 at once, oldest first');
+      assert.equal((await db.query(`select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1 and topic like 'overflow%'`, [A])).rows[0].n, 0);
+      assert(await feed(A, '예순다섯째') && await feed(A, '다시예순넷'));
       const before2 = { b: (await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [B])).rows[0].n, quota: await quota(A) };
       assert(before2.b >= 2);
       assert.deepEqual(await as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_clear() value'), { status: 'cleared', removed: 64 });
@@ -355,9 +513,21 @@ async function main() {
       assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [B])).rows[0].n, before2.b, "clearing removes only the caller's rows");
       assert.deepEqual(await quota(A), before2.quota, 'clearing does not return the allowance');
       assert.deepEqual(await as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_clear() value'), { status: 'cleared', removed: 0 });
+      // Taken off the list while a fetch is running: the result is not stored and nothing new starts.
+      await setQuota(A, 0, 0);
+      const [running] = await claim(A, SA, one('도중제거'));
+      await db.query('delete from haedo_news_wide_private.allowed_accounts where owner_id = $1', [A]);
+      assert.deepEqual(await finish(A, [result('도중제거', running.leaseToken, { items: [item(7)], error: null })]), { status: 'not_allowed', stored: 0, failed: 0, stale: 0 });
+      assert.equal((await feed(A, '도중제거')).items, null);
+      assert.deepEqual(await claim(A, SA, one('기후')), { status: 'not_allowed' });
+      assert.deepEqual(await quota(A), { hour_count: 1, day_count: 1 }, 'a refused claim counts nothing');
+      assert.deepEqual(await as(db, 'authenticated', user(A, SA), 'select public.life_news_wide_clear() value'), { status: 'not_allowed', removed: 1 }, 'its old rows can still be removed');
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.feeds where owner_id = $1', [B])).rows[0].n, before2.b, "another account's rows are not touched");
+      await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [A]);
+      assert.equal((await claim(A, SA, one('기후')))[0].status, 'claimed', 'back on the list: starts from an empty cache');
       await db.query('delete from auth.users where id = $1', [B]);
       assert.equal((await db.query('select (select count(*) from haedo_news_wide_private.feeds where owner_id = $1)::int + (select count(*) from haedo_news_wide_private.limits where owner_id = $1)::int n', [B])).rows[0].n, 0, 'deleting the account removes its cache and counters');
-      pass('retention 7 days on the same account only, 64 topics per account, clear removes only the caller\'s rows and keeps the counters, account deletion cascades');
+      pass('retention 7 days on the same account only, 64 topics per account (an overflow is trimmed at once), clear removes only the caller\'s rows and keeps the counters, an account taken off the list mid-fetch stores nothing, account deletion cascades');
 
       // 3g. Two requests of one account at the same moment: one fetches, the other waits and sees busy.
       await setQuota(A, 0, 0);
@@ -382,11 +552,12 @@ async function main() {
       await db.query('delete from haedo_news_wide_private.feeds'); await db.query('delete from haedo_news_wide_private.limits');
       const B2 = randomUUID(), SB2 = randomUUID();
       await db.query('insert into auth.users(id) values ($1)', [B2]); await db.query('insert into auth.sessions(id, user_id) values ($1, $2)', [SB2, B2]);
+      await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [B2]); // test setup only
       const { createHandler } = await import(pathToFileURL(path.join(ROOT, 'supabase/functions/haedo-news-wide/handler.mjs')).href);
       const xml = await import(pathToFileURL(path.join(ROOT, 'supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs')).href);
       const fixture = name => fs.readFileSync(path.join(ROOT, 'tests/fixtures/news-wide', name));
       const PROJECT = 'https://project-fixture.supabase.co', SECRET = 'sb_secret_fixture_news_sql', PUBLIC = 'sb_publishable_fixture_news_sql';
-      const tokens = { 'aaa.bbb.ccc': user(A, SA), 'ddd.eee.fff': user(B2, SB2), 'ggg.hhh.iii': user(A, EXPIRED) };
+      const tokens = { 'aaa.bbb.ccc': user(A, SA), 'ddd.eee.fff': user(B2, SB2), 'ggg.hhh.iii': user(A, EXPIRED), 'jjj.kkk.lll': user(C, SC) };
       let supplierCalls = [], supplierFails = false;
       const reply = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
       // Stands in for Auth and PostgREST: the user token becomes the authenticated role with its
@@ -399,7 +570,7 @@ async function main() {
         }
         assert(url.startsWith(PROJECT + '/'), 'unexpected address ' + url);
         const bearer = /^Bearer (.+)$/.exec(init.headers.Authorization || '')?.[1];
-        if (url.endsWith('/auth/v1/user')) return tokens[bearer] && init.headers.apikey === PUBLIC ? reply({ id: tokens[bearer].sub, role: 'authenticated' }) : reply({ message: 'invalid' }, 401);
+        if (url.endsWith('/auth/v1/user')) return tokens[bearer] && init.headers.apikey === PUBLIC ? reply({ id: tokens[bearer].sub, role: 'authenticated', is_anonymous: false }) : reply({ message: 'invalid' }, 401);
         const name = url.split('/rpc/')[1], body = JSON.parse(init.body);
         try {
           if (name === 'life_news_wide_claim') {
@@ -449,9 +620,15 @@ async function main() {
       assert.deepEqual([answer.status, answer.body, answer.calls], [401, { error: 'unauthorized' }, 0], 'the database checks the live session itself');
       answer = await call('zzz.zzz.zzz', ask);
       assert.deepEqual([answer.status, answer.calls], [401, 0]);
+      // A real, signed-in account that is not on the allow list: 403, no supplier call, no row, no counter.
+      const beforeC = [await rows('haedo_news_wide_private.feeds'), await rows('haedo_news_wide_private.limits')];
+      answer = await call('jjj.kkk.lll', ask);
+      assert.deepEqual([answer.status, answer.body, answer.calls], [403, { error: 'not_enabled_for_account' }, 0]);
+      assert.deepEqual([await rows('haedo_news_wide_private.feeds'), await rows('haedo_news_wide_private.limits')], beforeC);
+      assert.equal((await db.query('select count(*)::int n from haedo_news_wide_private.limits where owner_id = $1', [C])).rows[0].n, 0);
       const kept = (await db.query(`select bool_and(haedo_news_wide_private.items_valid(supplier, items)) ok, count(*)::int n from haedo_news_wide_private.feeds where items is not null`)).rows[0];
       assert.deepEqual(kept, { ok: true, n: 5 });
-      pass('handler + SQL: fresh (4 calls) -> cached (0 calls) -> stale on supplier failure -> backoff (0 calls) -> 2 calls left then limited; other account isolated; dead session refused by the database');
+      pass('handler + SQL: fresh (4 calls) -> cached (0 calls) -> stale on supplier failure -> backoff (0 calls) -> 2 calls left then limited; other account isolated; dead session refused by the database; an account that is not listed gets 403 and no supplier call');
     } finally { await db.end().catch(() => {}); await rival.end().catch(() => {}); }
     console.log(`news wide SQL: ${passed} groups passed`);
   } finally { await pg.stop(); }

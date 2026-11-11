@@ -12,7 +12,7 @@ const fail = () => Object.assign(new Error('invalid_response'), { code: 'invalid
 const need = ok => { if (!ok) throw fail(); };
 
 function checkEntities(xml) {
-  need(!/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/u.test(xml));
+  need(!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/u.test(xml));
   need(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(xml));
   for (let at = 0; at < xml.length; at++) {
     if (xml.startsWith('<![CDATA[', at) || xml.startsWith('<!--', at)) {

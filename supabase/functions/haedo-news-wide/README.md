@@ -14,7 +14,9 @@
 | `xml.mjs` | DOCTYPE·엔티티 선언·처리 명령을 거절하는 XML 읽기 |
 | `items.mjs` | 링크만 남기는 항목 정규화, 중복 제거, 상한, 캐시 재검증 |
 
-SQL은 `supabase/migrations/20261111130000_news_wide_feed.sql`(`haedo_news_wide_private`)이다.
+SQL은 `supabase/migrations/20261111130000_news_wide_feed.sql`(`haedo_news_wide_private`)이다. **허용 계정 목록(`allowed_accounts`)에 있는 계정만** 쓸 수 있고, 마이그레이션은 그 표를 비운 채 만든다. 목록에 계정을 넣는 길은 `supabase/operations/20261111-news-wide-allow-first-account.sql` 하나뿐이다. 목록에 없는 계정에는 403 `not_enabled_for_account`로 답하고 공급원을 부르지 않는다.
+
+배포 파일과 SQL에는 보이지 않는 문자를 글자 그대로 넣지 않는다(`\u` 표기만). `npm test`가 이를 검사하고, 운영 문서의 SHA-256·`md5(prosrc)` 표와 실제 파일을 대조한다. 파일을 고치면 그 표도 함께 고친다.
 
 ## 검사
 

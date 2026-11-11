@@ -12,10 +12,14 @@
  * cookies, Referer and project name are never part of that request; the
  * upstream module is not given them.
  *
- * Who: a signed-in, non-anonymous account, checked with Auth (/auth/v1/user)
- * before the body is read; the cache RPC checks the live session again and is
- * bound to auth.uid(). Deploy with verify_jwt=false: the handler refuses any
- * Bearer value that is not JWT-shaped (API keys included) by itself.
+ * Who: a signed-in, non-anonymous account that is on the allow list
+ * (haedo_news_wide_private.allowed_accounts, filled only by the reviewed
+ * operations SQL; empty means nobody). The session is checked with Auth
+ * (/auth/v1/user); the cache RPC checks the live session again, is bound to
+ * auth.uid() and answers not_allowed for every other account, in which case
+ * this handler answers 403 not_enabled_for_account and never calls the
+ * supplier. Deploy with verify_jwt=false: the handler refuses any Bearer value
+ * that is not JWT-shaped (API keys included) by itself.
  *
  * Cache and allowance live in haedo_news_wide_private (migration
  * 20261111130000_news_wide_feed.sql): 30-minute TTL, 60 upstream calls per
@@ -37,7 +41,10 @@ const JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const BASE_HEADERS = Object.freeze({ 'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
   'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', Vary: 'Origin' });
-const STATUS = Object.freeze({ invalid_request: 400, invalid_topic: 400, unauthorized: 401, origin_not_allowed: 403, setup_required: 503, server_error: 500 });
+const STATUS = Object.freeze({ invalid_request: 400, invalid_topic: 400, unauthorized: 401, origin_not_allowed: 403, not_enabled_for_account: 403,
+  setup_required: 503, auth_unavailable: 503, server_error: 500 });
+// A supplier that refuses (429, 401/403, redirect) is not asked again in the same request.
+const SUPPLIER_REFUSALS = Object.freeze(['rate_limited', 'blocked']);
 const UPSTREAM_ERRORS = Object.freeze(['network_error', 'rate_limited', 'blocked', 'invalid_response']);
 const CLAIM_STATES = Object.freeze(['fresh', 'claimed', 'busy', 'backoff', 'limited']);
 const RPC_LIMIT = 5 * 1024 * 1024;
@@ -59,6 +66,15 @@ async function readBounded(message, limit) {
   } finally { try { await reader.cancel(); } catch (_) { /* already finished */ } reader.releaseLock(); }
 }
 
+/** What a log line may hold: the time, a known status word and non-negative whole numbers.
+ * Every other field and every other kind of value is dropped, whatever the caller passes. */
+export function logFields(entry, at) {
+  const number = name => count(entry?.[name]) ? entry[name] : null;
+  return { at, fn: 'haedo-news-wide', status: entry?.status === 'ok' || typeof entry?.status === 'string' && Object.hasOwn(STATUS, entry.status) ? entry.status : 'server_error',
+    topics: number('topics'), languages: number('languages'), upstream: number('upstream'), fresh: number('fresh'), cached: number('cached'),
+    stale: number('stale'), failed: number('failed'), limited: number('limited'), items: number('items'), ms: number('ms') };
+}
+
 /** @param {{ fetcher?: typeof fetch, environment?: (name: string) => string | undefined, XMLParser?: any, XMLValidator?: any,
  *   supplier?: any, origins?: ReadonlyArray<string>, log?: (entry: object) => void, now?: () => number }} [options]
  * `supplier` and `origins` are construction-time configuration, never request fields. */
@@ -67,13 +83,9 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
   const allowedOrigins = new Set(origins);
   let upstream = null;
   try { upstream = createUpstream({ supplier, XMLParser, XMLValidator, fetcher, now }); } catch (_) { /* every request answers setup_required */ }
-  // The only log writer. It accepts these fields and nothing else: numbers and fixed words.
+  // The only log writer: whatever it is given, only logFields() of it is written.
   const record = entry => {
-    const number = name => count(entry[name]) ? entry[name] : null;
-    const safe = { at: new Date(now()).toISOString(), fn: 'haedo-news-wide', status: String(entry.status),
-      topics: number('topics'), languages: number('languages'), upstream: number('upstream'), fresh: number('fresh'), cached: number('cached'),
-      stale: number('stale'), failed: number('failed'), limited: number('limited'), items: number('items'), ms: number('ms') };
-    try { log(safe); } catch (_) { /* logging never changes the answer */ }
+    try { log(logFields(entry, new Date(now()).toISOString())); } catch (_) { /* logging never changes the answer */ }
   };
   return async request => {
     const started = now(), deadline = started + BUDGET.deadline;
@@ -106,11 +118,17 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       try {
         authenticated = await fetcher(origin + '/auth/v1/user', { method: 'GET', redirect: 'error', credentials: 'omit',
           signal: within(BUDGET.auth), headers: { apikey: publicKey, Authorization: 'Bearer ' + token } });
-      } catch (_) { throw failure('server_error'); }
-      if (!authenticated.ok) { await authenticated.body?.cancel(); throw failure('unauthorized'); }
+      } catch (_) { throw failure('auth_unavailable'); }
+      if (!authenticated.ok) {
+        // Only Auth saying "no" (401/403) is a sign-in problem. 429, 5xx and anything
+        // else is a temporary failure: the client must not sign the person out for it.
+        const refused = authenticated.status === 401 || authenticated.status === 403;
+        await authenticated.body?.cancel().catch(() => {});
+        throw failure(refused ? 'unauthorized' : 'auth_unavailable');
+      }
       let user;
-      try { user = JSON.parse(await readBounded(authenticated, 16384)); } catch (_) { throw failure('unauthorized'); }
-      need(object(user) && typeof user.id === 'string' && UUID.test(user.id) && user.is_anonymous !== true && user.role !== 'anon', 'unauthorized');
+      try { user = JSON.parse(await readBounded(authenticated, 16384)); } catch (_) { throw failure('auth_unavailable'); }
+      need(object(user) && typeof user.id === 'string' && UUID.test(user.id) && user.role === 'authenticated' && user.is_anonymous === false, 'unauthorized');
 
       const rpc = async (name, args, { service = false, detached = false } = {}) => {
         let result;
@@ -130,7 +148,9 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       // One {topic, language} pair is one cache row and at most one upstream call.
       const pairs = input.topics.flatMap(topic => input.languages.map(language => ({ topic, language })));
       const claim = await rpc('life_news_wide_claim', { p_supplier: supplier.id, p_requests: pairs });
-      need(object(claim) && Array.isArray(claim.entries) && claim.entries.length === pairs.length);
+      // Not on the allow list: nothing was created or counted, and the supplier is never called.
+      if (object(claim) && claim.status === 'not_allowed') throw failure('not_enabled_for_account');
+      need(object(claim) && claim.status === 'ok' && Array.isArray(claim.entries) && claim.entries.length === pairs.length);
       const entries = pairs.map((pair, at) => {
         const entry = claim.entries[at];
         need(object(entry) && entry.topic === pair.topic && entry.language === pair.language && CLAIM_STATES.includes(entry.status));
@@ -143,15 +163,18 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       });
 
       const jobs = entries.filter(entry => entry.state === 'claimed');
-      let next = 0, calls = 0;
+      let next = 0, calls = 0, refusedBySupplier = false;
       const worker = async () => {
         for (;;) {
           const job = jobs[next++]; if (!job) return;
           const remaining = deadline - BUDGET.reserve - now();
-          if (remaining < BUDGET.minimumCall || request.signal.aborted) { job.error = 'not_attempted'; continue; }
+          if (refusedBySupplier || remaining < BUDGET.minimumCall || request.signal.aborted) { job.error = 'not_attempted'; continue; }
           calls++;
           try { job.fresh = await upstream(job.topic, job.language, { signal: request.signal, timeout: remaining }); }
-          catch (error) { job.error = UPSTREAM_ERRORS.includes(error?.code) ? error.code : 'network_error'; }
+          catch (error) {
+            job.error = UPSTREAM_ERRORS.includes(error?.code) ? error.code : 'network_error';
+            if (SUPPLIER_REFUSALS.includes(job.error)) refusedBySupplier = true; // calls already in flight finish; no new one starts
+          }
         }
       };
       await Promise.all(Array.from({ length: Math.min(UPSTREAM.concurrency, jobs.length) }, worker));
@@ -171,7 +194,8 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
           for (const job of jobs) if (job.fresh) { job.fresh = null; job.error = 'invalid_response'; }
           stored = await store();
         }
-        need(object(stored) && count(stored.stored) && count(stored.failed) && count(stored.stale) &&
+        if (object(stored) && stored.status === 'not_allowed') throw failure('not_enabled_for_account'); // removed from the list meanwhile
+        need(object(stored) && stored.status === 'ok' && count(stored.stored) && count(stored.failed) && count(stored.stale) &&
           stored.stored + stored.failed + stored.stale === jobs.length);
       }
 

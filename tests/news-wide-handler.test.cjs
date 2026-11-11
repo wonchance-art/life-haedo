@@ -31,17 +31,17 @@ async function fixture(options = {}) {
   let clock = options.startAt ?? Date.parse('2026-11-11T13:00:00Z'), inFlight = 0, peak = 0;
   const fetcher = async (url, init = {}) => {
     calls.push({ url, init });
-    if (url === PROJECT + '/auth/v1/user') return options.auth ? options.auth() : json('user' in options ? options.user : { id: OWNER, email: EMAIL, role: 'authenticated' });
+    if (url === PROJECT + '/auth/v1/user') return options.auth ? options.auth() : json('user' in options ? options.user : { id: OWNER, email: EMAIL, role: 'authenticated', is_anonymous: false });
     if (url === PROJECT + '/rest/v1/rpc/life_news_wide_claim') {
       if (options.claimResponse) return options.claimResponse(JSON.parse(init.body));
       const pairs = JSON.parse(init.body).p_requests;
-      return json({ entries: pairs.map((pair, index) => ({ topic: pair.topic, language: pair.language, items: null, fetchedAt: null, expired: false, leaseToken: null, limit: null,
+      return json({ status: 'ok', entries: pairs.map((pair, index) => ({ topic: pair.topic, language: pair.language, items: null, fetchedAt: null, expired: false, leaseToken: null, limit: null,
         ...(options.claim ? options.claim(pair, index) : { status: 'claimed', leaseToken: LEASE(index) }) })) });
     }
     if (url === PROJECT + '/rest/v1/rpc/life_news_wide_finish') {
       if (options.finishResponse) return options.finishResponse(JSON.parse(init.body), calls.filter(call => call.url === url).length);
       const results = JSON.parse(init.body).p_results;
-      return json({ stored: results.filter(row => row.items).length, failed: results.filter(row => !row.items).length, stale: 0 });
+      return json({ status: 'ok', stored: results.filter(row => row.items).length, failed: results.filter(row => !row.items).length, stale: 0 });
     }
     if (url.startsWith('https://news.google.com/')) {
       inFlight++; peak = Math.max(peak, inFlight);
@@ -191,10 +191,21 @@ test('only a signed-in, non-anonymous account: everything else is refused before
   // Auth decides: an expired or forged session, a server key shaped like a JWT, anonymous sign-ins.
   await refused(await fixture({ auth: () => new Response('PRIVATE auth text', { status: 401 }) }), [], 1);
   await refused(await fixture({ auth: () => new Response('PRIVATE auth text', { status: 403 }) }), [], 1);
-  await refused(await fixture({ auth: () => new Response('not json') }), [], 1);
   // A refusal is a refusal whatever its body says.
-  for (const status of [401, 403, 500]) await refused(await fixture({ auth: () => json({ id: OWNER, role: 'authenticated' }, status) }), [], 1);
-  for (const user of [{ id: OWNER, is_anonymous: true }, { id: OWNER, role: 'anon' }, { id: 'not-a-uuid' }, {}, null, [OWNER], { id: 1 }]) await refused(await fixture({ user }), [], 1);
+  for (const status of [401, 403]) await refused(await fixture({ auth: () => json({ id: OWNER, role: 'authenticated', is_anonymous: false }, status) }), [], 1);
+  // The account must be an ordinary signed-in one: role exactly "authenticated", is_anonymous exactly false.
+  const ordinary = { id: OWNER, role: 'authenticated', is_anonymous: false };
+  for (const user of [{ ...ordinary, is_anonymous: true }, { ...ordinary, is_anonymous: undefined }, { ...ordinary, is_anonymous: null }, { ...ordinary, is_anonymous: 'false' }, { ...ordinary, is_anonymous: 0 },
+    { ...ordinary, role: 'anon' }, { ...ordinary, role: 'service_role' }, { ...ordinary, role: undefined }, { ...ordinary, role: 'Authenticated' }, { ...ordinary, id: 'not-a-uuid' }, { ...ordinary, id: 1 },
+    { id: OWNER }, {}, null, [OWNER]]) await refused(await fixture({ user }), [], 1);
+  // Auth being busy or down is not a sign-in problem: 503, so the client does not sign the person out.
+  const down = [() => new Response('PRIVATE auth text', { status: 500 }), () => new Response('', { status: 502 }), () => new Response('', { status: 503 }), () => new Response('PRIVATE', { status: 429 }),
+    () => json(ordinary, 500), () => json(ordinary, 429), () => new Response('', { status: 404 }), () => new Response('not json'), () => { throw new Error('PRIVATE network text'); }];
+  for (const auth of down) {
+    const f = await fixture({ auth }), { reply, body } = await f.run();
+    assert.equal(reply.status, 503); assert.deepEqual(body, { error: 'auth_unavailable' });
+    assert.equal(f.calls.length, 1); for (const part of none) assert.equal(f.to(part).length, 0);
+  }
   // The database has the last word on the session (claim -> 401/403).
   for (const status of [401, 403]) {
     const late = await fixture({ claimResponse: () => json({ message: 'life_news_wide_auth_required' }, status) });
@@ -312,10 +323,10 @@ test('setup and key formats: new keys, legacy keys or both; a missing key, parse
 });
 
 test('cache answers are not trusted blindly: a changed echo, a bad lease or unsafe cached links never reach the client or the supplier', async () => {
-  const wrong = [() => json({ entries: [] }), () => json({ entries: [{ topic: '다른주제', language: 'ko', status: 'claimed', leaseToken: LEASE(1) }] }),
-    () => json({ entries: [{ topic: '기후', language: 'en', status: 'claimed', leaseToken: LEASE(1) }] }), () => json({ entries: [{ topic: '기후', language: 'ko', status: 'claimed', leaseToken: 'not-a-lease' }] }),
-    () => json({ entries: [{ topic: '기후', language: 'ko', status: 'unknown' }] }), () => json({ entries: [{ topic: '기후', language: 'ko', status: 'fresh', items: null }] }),
-    () => json({ entries: [{ topic: '기후', language: 'ko', status: 'fresh', items: [cachedItem(1)], fetchedAt: 'not a time' }] }), () => json([]), () => json(null), () => new Response('not json')];
+  const wrong = [() => json({ status: 'ok', entries: [] }), () => json({ entries: [{ topic: '기후', language: 'ko', status: 'claimed', leaseToken: LEASE(1) }] }), () => json({ status: 'other', entries: [] }), () => json({ status: 'ok', entries: [{ topic: '다른주제', language: 'ko', status: 'claimed', leaseToken: LEASE(1) }] }),
+    () => json({ status: 'ok', entries: [{ topic: '기후', language: 'en', status: 'claimed', leaseToken: LEASE(1) }] }), () => json({ status: 'ok', entries: [{ topic: '기후', language: 'ko', status: 'claimed', leaseToken: 'not-a-lease' }] }),
+    () => json({ status: 'ok', entries: [{ topic: '기후', language: 'ko', status: 'unknown' }] }), () => json({ status: 'ok', entries: [{ topic: '기후', language: 'ko', status: 'fresh', items: null }] }),
+    () => json({ status: 'ok', entries: [{ topic: '기후', language: 'ko', status: 'fresh', items: [cachedItem(1)], fetchedAt: 'not a time' }] }), () => json([]), () => json(null), () => new Response('not json')];
   for (const claimResponse of wrong) {
     const f = await fixture({ claimResponse }), { reply, body } = await f.run();
     assert.equal(reply.status, 500); assert.deepEqual(body, { error: 'server_error' }); assert.equal(supplierCalls(f).length, 0);
@@ -326,19 +337,19 @@ test('cache answers are not trusted blindly: a changed echo, a bad lease or unsa
   assert.deepEqual((await f.run()).body.items.map(item => item.title), ['보관된 글 1']);
   // The database refusing the items (HTTP 400) gets exactly one error-only report; the refused items are not served.
   const refused = await fixture({ finishResponse: (body, attempt) => attempt === 1 ? json({ message: 'life_news_wide_invalid_items' }, 400)
-    : json({ stored: 0, failed: body.p_results.length, stale: 0 }), claim: (pair, index) => ({ status: 'claimed', leaseToken: LEASE(index), ...(index === 0 ? { items: [cachedItem(9)], fetchedAt: '2026-11-11T09:00:00Z' } : {}) }) });
+    : json({ status: 'ok', stored: 0, failed: body.p_results.length, stale: 0 }), claim: (pair, index) => ({ status: 'claimed', leaseToken: LEASE(index), ...(index === 0 ? { items: [cachedItem(9)], fetchedAt: '2026-11-11T09:00:00Z' } : {}) }) });
   const answer = await refused.run({ topics: ['기후', '날씨'], languages: ['ko'] });
   assert.equal(answer.reply.status, 200);
   assert.deepEqual(answer.body.topics.map(topic => [topic.status, topic.reason, topic.count]), [['stale', 'invalid_response', 1], ['failed', 'invalid_response', 0]]);
   const writes = refused.to('life_news_wide_finish').map(call => JSON.parse(call.init.body).p_results.map(row => [row.items === null, row.error]));
   assert.deepEqual(writes, [[[false, null], [false, null]], [[true, 'invalid_response'], [true, 'invalid_response']]]);
   // Any other storing failure is an error: nothing unconfirmed is presented as stored.
-  for (const finishResponse of [() => new Response('PRIVATE', { status: 500 }), () => json({ stored: 5, failed: 0, stale: 0 }), () => json({ stored: 'x' }), () => { throw new Error('PRIVATE network'); }]) {
+  for (const finishResponse of [() => new Response('PRIVATE', { status: 500 }), () => json({ status: 'ok', stored: 5, failed: 0, stale: 0 }), () => json({ status: 'ok', stored: 'x' }), () => json({ stored: 1, failed: 0, stale: 0 }), () => { throw new Error('PRIVATE network'); }]) {
     const f = await fixture({ finishResponse }), { reply, body } = await f.run();
     assert.equal(reply.status, 500); assert.deepEqual(body, { error: 'server_error' }); assert.equal(f.to('life_news_wide_finish').length, 1);
   }
   // A lease that expired meanwhile ("stale" in the database) still returns what was fetched.
-  const late = await fixture({ finishResponse: () => json({ stored: 0, failed: 0, stale: 1 }) });
+  const late = await fixture({ finishResponse: () => json({ status: 'ok', stored: 0, failed: 0, stale: 1 }) });
   assert.deepEqual((await late.run()).body.topics.map(topic => [topic.status, topic.count]), [['fresh', 6]]);
 });
 
@@ -359,4 +370,60 @@ test('work is bounded: at most 4 supplier calls in flight, and a spent time budg
   assert(attempted >= 1 && attempted < 16, 'some calls, not all: ' + attempted);
   assert.equal(reported.length, 16); assert.equal(reported.filter(row => row.error === 'not_attempted').length, 16 - attempted);
   assert.deepEqual(answer.body.topics.filter(topic => topic.reason === 'not_attempted').map(topic => topic.status), Array(16 - attempted).fill('failed'));
+});
+
+test('the allow list: an account that is not on it gets 403 and the supplier is never called; request headers cannot name another owner', async () => {
+  for (const response of [() => json({ status: 'not_allowed' }), () => json({ status: 'not_allowed', entries: [{ topic: '기후', language: 'ko', status: 'claimed', leaseToken: LEASE(1) }] })]) {
+    const f = await fixture({ claimResponse: response }), { reply, body } = await f.run({ topics: ['기후', '날씨'], languages: ['ko', 'en'] });
+    assert.equal(reply.status, 403); assert.deepEqual(body, { error: 'not_enabled_for_account' });
+    assert.equal(supplierCalls(f).length, 0, 'not one supplier call'); assert.equal(f.to('life_news_wide_finish').length, 0);
+    assert.deepEqual(f.calls.map(call => call.url), [PROJECT + '/auth/v1/user', PROJECT + '/rest/v1/rpc/life_news_wide_claim'], 'after Auth and after the body was validated');
+    assert.deepEqual([f.logs.length, f.logs[0].status, f.logs[0].upstream], [1, 'not_enabled_for_account', null]);
+  }
+  // Taken off the list between the claim and the storing: the answer is refused, nothing fetched is returned.
+  const removed = await fixture({ finishResponse: () => json({ status: 'not_allowed', stored: 0, failed: 0, stale: 0 }) }), late = await removed.run();
+  assert.equal(late.reply.status, 403); assert.deepEqual(late.body, { error: 'not_enabled_for_account' });
+  // Invalid input is still answered as invalid input before the list is consulted (no call at all).
+  const invalid = await fixture({ claimResponse: () => json({ status: 'not_allowed' }) });
+  assert.equal((await invalid.run({ topics: ['site:example.com'], languages: ['ko'] })).reply.status, 400); assert.equal(invalid.calls.length, 0);
+  // The owner is the account Auth named. Nothing in the request can name another one, and none of it travels on.
+  const OTHER = '99999999-9999-4999-8999-999999999999';
+  const f = await fixture();
+  const { reply } = await f.run(undefined, { 'x-owner-id': OTHER, 'x-user-id': OTHER, 'x-supabase-user': OTHER, 'x-forwarded-user': OTHER, 'x-client-info': 'owner=' + OTHER, Cookie: 'owner=' + OTHER, apikey: 'client-' + OTHER });
+  assert.equal(reply.status, 200);
+  assert.equal(JSON.parse(f.to('life_news_wide_finish')[0].init.body).p_owner_id, OWNER);
+  assert.equal(f.calls.length, 4);
+  for (const call of f.calls) assert(!(call.url + JSON.stringify(call.init.headers) + String(call.init.body || '')).includes(OTHER), 'the forged owner reaches no outgoing call: ' + call.url.slice(0, 60));
+  const forgedBody = await fixture();
+  assert.equal((await forgedBody.run({ topics: ['기후'], languages: ['ko'], owner: OTHER })).reply.status, 400); assert.equal(forgedBody.calls.length, 0);
+});
+
+test('a supplier that refuses is not asked again in the same request: the remaining pairs are not attempted', async () => {
+  const topics = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  for (const [status, reason] of [[429, 'rate_limited'], [403, 'blocked'], [302, 'blocked']]) {
+    const f = await fixture({ supplier: () => new Response(null, { status, headers: status === 302 ? { location: 'https://consent.google.com/' } : {} }) });
+    const { reply, body } = await f.run({ topics, languages: ['ko', 'en'] });
+    assert.equal(reply.status, 200);
+    assert.equal(supplierCalls(f).length, 4, status + ': only the calls already in flight');
+    assert.deepEqual(body.topics.map(topic => topic.reason), [...Array(4).fill(reason), ...Array(12).fill('not_attempted')]);
+    assert.deepEqual(JSON.parse(f.to('life_news_wide_finish')[0].init.body).p_results.map(row => row.error), [...Array(4).fill(reason), ...Array(12).fill('not_attempted')]);
+  }
+  // An ordinary failure (timeout, 5xx, bad XML) of one topic does not stop the others.
+  const flaky = await fixture({ supplier: url => new URL(url).searchParams.get('q') === 'a' ? new Response('', { status: 500 }) : new Response(ko, { headers: { 'content-type': 'application/xml' } }) });
+  await flaky.run({ topics, languages: ['ko', 'en'] });
+  assert.equal(supplierCalls(flaky).length, 16);
+});
+
+test('log fields: a known status word and whole numbers only, whatever is passed in', async () => {
+  const [{ logFields }] = await modules;
+  const at = '2026-11-11T13:00:00.000Z';
+  const empty = { at, fn: 'haedo-news-wide', status: 'server_error', topics: null, languages: null, upstream: null, fresh: null, cached: null, stale: null, failed: null, limited: null, items: null, ms: null };
+  assert.deepEqual(logFields({ status: 'ok', topics: 2, languages: 1, upstream: 3, fresh: 1, cached: 0, stale: 0, failed: 1, limited: 0, items: 12, ms: 40 }, at),
+    { ...empty, status: 'ok', topics: 2, languages: 1, upstream: 3, fresh: 1, cached: 0, stale: 0, failed: 1, limited: 0, items: 12, ms: 40 });
+  // Text never passes: not as an extra field, not in a number's place, not as the status.
+  assert.deepEqual(logFields({ status: '비밀주제하나', topics: ['비밀주제하나'], languages: '비밀', upstream: { topic: '비밀' }, items: 'SecretTopicTwo', ms: -1, fresh: 1.5, cached: NaN,
+    first: '비밀주제하나', topic: '비밀', title: '제목', link: 'https://news.google.com/x', owner: OWNER, token: TOKEN, error: new Error('비밀') }, at), empty);
+  for (const status of ['constructor', 'toString', '__proto__', 'hasOwnProperty', '', null, undefined, 1, {}, ['ok']]) assert.equal(logFields({ status }, at).status, 'server_error', String(status));
+  for (const status of ['ok', 'invalid_request', 'invalid_topic', 'unauthorized', 'origin_not_allowed', 'not_enabled_for_account', 'setup_required', 'auth_unavailable', 'server_error']) assert.equal(logFields({ status }, at).status, status);
+  assert.deepEqual(logFields(null, at), empty); assert.deepEqual(logFields(undefined, at), empty);
 });

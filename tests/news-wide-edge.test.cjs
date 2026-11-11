@@ -40,19 +40,24 @@ const parse = async xml => (await upstream(() => answer(xml))).run('기후', 'ko
 
 test('topics: words pass and are normalized; nothing a search service reads as an instruction passes', async () => {
   const [{ normalizeTopic }] = await modules;
-  for (const topic of ['기후', 'climate change', 'K-pop', 'C++', 'C#', '.NET', 'R&D', 'AI/ML', "O'Reilly", 'O’Reilly', '3·1 운동', 'Node.js 22', '日本 経済', 'São Paulo'])
+  for (const topic of ['기후', 'climate change', 'K-pop', 'C++', 'C#', '.NET', 'R&D', 'AI/ML', "O'Reilly", 'O’Reilly', '3·1 운동', 'Node.js 22', '日本 経済', 'São Paulo',
+    // Ordinary punctuation is not a search instruction and is sent encoded inside q.
+    '10%', '10,000', '1,000원', 'Yahoo!', '왜?', '기후, 날씨', 'a,b', '50% 할인!',
+    // OR, AND, NOT are operators only between two other words.
+    'Oregon OR', 'Portland OR', 'OR 연산', 'OR', 'AND', 'NOT', 'NOT 기후', 'Rock AND', 'or', '기후 or 날씨', 'ORegon', 'a ORb c'])
     assert.equal(normalizeTopic(topic), topic, topic);
-  assert.equal(normalizeTopic('  기후   변화　정책 '), '기후 변화 정책', 'spaces collapse, including the ideographic space');
+  assert.equal(normalizeTopic('  기후   변화\u3000정책 '), '기후 변화 정책', 'spaces collapse, including the ideographic space');
   assert.equal(normalizeTopic('기후'.normalize('NFD')), '기후', 'NFC');
   assert.equal(normalizeTopic('𠀀'.repeat(40)), '𠀀'.repeat(40), '40 code points, not UTF-16 units');
   const refused = {
     'over 40 code points': ['𠀀'.repeat(41), '가'.repeat(41)],
-    'empty': ['', '   ', '　'],
+    'empty': ['', '   ', '\u3000'],
     'quotes': ['"기후"', '“기후”', '기후"', "'기후'", "기후'", '‘기후’', '«기후»', '＂기후＂', '`기후`'],
     'field operators': ['site:example.com', 'site:example.com 기후', 'when:1d', '기후 when:7d', 'intitle:기후', 'allintitle:기후', 'inurl:x', 'source:x', 'after:2026-01-01', 'before:2026-01-01', '기후：변화'],
-    'exclude, require, boolean, wildcard, grouping': ['-기후', '기후 -날씨', '+기후', '기후 +날씨', '기후 OR 날씨', '기후 AND 날씨', 'NOT 기후', 'OR', '기후|날씨', '기후*', '(기후)', '기후~', '기후<1', 'a=b', '[기후]', '{기후}', '기후;날씨', '기후,날씨', '기후?', '기후!', '100%', '@handle', '$100', 'a\\b', 'a_b', 'a^b'],
-    'control, line break, invisible': ['기후\n변화', '기후\r\n변화', '기후\t변화', '기후\u0000', '기후\u001b[31m', '기​후', '기‍후', '‮기후', '기후 변화', '기후 ', '﻿기후', '기후\u0085', '기­후'],
-    'not words': ['...', '& &', '#', '🌿', '기후 🌿', '\ud800기후', '기후\udfff'],
+    'exclude, require, boolean, wildcard, grouping': ['-기후', '기후 -날씨', '+기후', '기후 +날씨', '기후 OR 날씨', '기후 AND 날씨', 'a NOT b', 'x OR OR y', 'OR OR OR', 'a AND b OR', '기후|날씨', '기후*', '(기후)', '기후~', '기후<1', 'a=b', '[기후]', '{기후}', '기후;날씨', '50:50', '@handle', '$100', 'a\\b', 'a_b', 'a^b', '-', 'a - b', '+ a'],
+    'invisible letters and selectors': [0x115f, 0x1160, 0x3164, 0xffa0, 0x034f, 0x17b4, 0x180b, 0xfe0f, 0xe0101, 0xe0001, 0x061c, 0xfff9].flatMap(point => [String.fromCodePoint(point), '기' + String.fromCodePoint(point) + '후']),
+    'control, line break, invisible': ['기후\n변화', '기후\r\n변화', '기후\t변화', '기후\u0000', '기후\u001b[31m', '기\u200b후', '기\u200d후', '\u202e기후', '기후\u2028변화', '기후\u2029', '\ufeff기후', '기후\u0085', '기\u00ad후'],
+    'not words': ['...', '& &', '#', '?!', ',', '% !', '🌿', '기후 🌿', '❤', '→', '「기후」', '기후。', '\ud800기후', '기후\udfff'],
   };
   for (const [group, values] of Object.entries(refused))
     for (const value of values) assert.throws(() => normalizeTopic(value), code('invalid_topic'), group + ': ' + JSON.stringify(value));
@@ -93,7 +98,9 @@ test('supplier address: host and path are fixed, the topic is one encoded q valu
       assert.match(address, /^https:\/\/news\.google\.com\/rss\/search\?q=[A-Za-z0-9%._~-]+&hl=[A-Za-z-]+&gl=[A-Z]+&ceid=[A-Z]+:[a-z]+$/, 'ASCII only, nothing unencoded');
     }
   }
-  assert.throws(() => googleNews.url('기후', 'ja'), code('invalid_request'));
+  for (const language of ['ja', 'KO', '', 'constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', null, undefined, 0, ['ko']])
+    assert.throws(() => googleNews.url('기후', language), code('invalid_request'), 'only the two listed editions: ' + String(language));
+  assert.throws(() => googleNews.url(null, 'ko'), code('invalid_request'));
 });
 
 test('adapter contract: an adapter cannot move the request to another host, scheme, port, path or user', async () => {
@@ -204,6 +211,7 @@ test('item normalization: unsafe links are dropped, text is plain and bounded, m
   const titles = async xml => (await parse(xml)).map(row => row.title);
   // Links: only https on news.google.com, exactly.
   const links = ['javascript:alert(1)', 'data:text/html,x', 'http://news.google.com/rss/articles/a', 'https://evil.example/rss/articles/a',
+    'https://xnews.google.com/a', 'https://evilnews.google.com/a', 'https://a.news.google.com/a', 'https://google.com/a', 'https://news.google.com./a',
     'https://news.google.com@evil.example/a', 'https://news.google.com.evil.example/a', 'https://NEWS.GOOGLE.COM/rss/articles/a', 'https://news.google.com:444/a',
     'https://user@news.google.com/a', '//news.google.com/a', '/rss/articles/a', 'https://news.google.com\\@evil.example/a', 'https://news.google.com/' + 'a'.repeat(2100),
     'https://news.google.com/a b', ''];
@@ -215,7 +223,7 @@ test('item normalization: unsafe links are dropped, text is plain and bounded, m
   assert.deepEqual(await titles(rss([
     item({ link: link(1), title: '<![CDATA[CDATA 제목 <b>굵게</b> & 기호 - 매체]]>' }),
     item({ link: link(2), title: '&lt;script&gt;alert(1)&lt;/script&gt; &#44592;&#x1F33F; - 매체' }),
-    item({ link: link(3), title: '줄\n바꿈\t탭 ‮뒤집기​ - 매체' }),
+    item({ link: link(3), title: '줄\n바꿈\t탭 \u202e뒤집기\u200b - 매체' }),
     item({ link: link(4), title: '매체 - 매체' }),
     item({ link: link(5), title: ' - 매체' }),
     item({ link: link(6), title: '꼬리 - 다른매체' }),
@@ -252,6 +260,13 @@ test('broken, hostile and unexpected XML is an invalid answer, never a partial o
   const bad = {
     'not xml': 'plain text', 'unclosed': '<rss version="2.0"><channel><item><title>x', 'mismatched': '<rss version="2.0"><channel></rss></channel>',
     'doctype': '<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>' + rss(item({ title: '&b;' })).replace(/^<\?xml[^>]*\?>/, ''),
+    // A DOCTYPE is refused as such, also when nothing in the document refers to an entity it declares.
+    'bare doctype': '<!DOCTYPE rss><rss version="2.0"><channel><item><title>T &lt; x</title><link>https://news.google.com/a</link></item></channel></rss>',
+    'doctype with a system id': '<!DOCTYPE rss SYSTEM "https://evil.example/rss.dtd"><rss version="2.0"><channel></channel></rss>',
+    'doctype that redefines lt': '<!DOCTYPE rss [<!ENTITY lt "' + 'Z'.repeat(1000) + '">]><rss version="2.0"><channel><item><title>' + '&lt;'.repeat(900) + '</title><link>https://news.google.com/a</link></item></channel></rss>',
+    'doctype that redefines amp as markup': '<!DOCTYPE rss [<!ENTITY amp "<script>x</script>">]><rss version="2.0"><channel><item><title>a &amp; b</title><link>https://news.google.com/a</link></item></channel></rss>',
+    'doctype that redefines apos': '<!DOCTYPE rss [<!ENTITY apos "INJECTED">]><rss version="2.0"><channel><item><title>a &apos; b</title><link>https://news.google.com/a</link></item></channel></rss>',
+    'lower-case doctype': '<!doctype rss><rss version="2.0"><channel></channel></rss>',
     'external entity': '<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><rss version="2.0"><channel><item><title>&xxe;</title></item></channel></rss>',
     'undeclared entity': rss(item({ title: '&nbsp;제목' })), 'unterminated entity': rss(item({ title: 'R&D' })),
     'invalid character reference': rss(item({ title: '&#0;' })), 'surrogate reference': rss(item({ title: '&#xD800;' })),
@@ -313,4 +328,54 @@ test('no new dependency: the function reuses the pinned haedo-rss parser bundle 
     const code = fs.readFileSync(path.join(DIR, name), 'utf8').replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '');
     assert(!/authorization|apikey|cookie|referer|supabase|environment|console\.|Deno|process\.env/i.test(code), name);
   }
+});
+
+test('headlines: invisible and direction characters become a space, joiners that scripts and emoji need stay', async () => {
+  const [, , { cleanText }] = await modules;
+  const point = value => String.fromCodePoint(value);
+  for (const hidden of [0x00ad, 0x061c, 0x115f, 0x1160, 0x180e, 0x200b, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2028, 0x2029, 0x2060, 0x2066, 0x2067, 0x2068, 0x2069, 0x3164, 0xfeff, 0xffa0,
+    0xfff9, 0xfffa, 0xfffb, 0xe0000, 0xe0001, 0xe0020, 0xe007f, 0x0000, 0x0007, 0x001b, 0x007f, 0x0085, 0x009f]) {
+    assert.equal(cleanText('가' + point(hidden) + '나', 300), '가 나', 'U+' + hidden.toString(16));
+    assert.equal(cleanText(point(hidden) + '가나' + point(hidden), 300), '가나', 'at the edges: U+' + hidden.toString(16));
+    assert.equal(cleanText(point(hidden), 300), null, 'nothing visible left: U+' + hidden.toString(16));
+  }
+  const family = point(0x1f468) + point(0x200d) + point(0x1f469) + point(0x200d) + point(0x1f467), persian = point(0x645, 0x6cc, 0x200c, 0x62e, 0x648, 0x627, 0x647, 0x645);
+  assert.equal(cleanText(family + ' ' + persian, 300), family + ' ' + persian, 'ZWJ and ZWNJ are kept');
+  assert.equal(cleanText('heart ' + point(0x2764, 0xfe0f), 300), 'heart ' + point(0x2764, 0xfe0f), 'an emoji presentation selector is kept');
+  // The same through the whole path: a headline with hidden characters comes out as plain words.
+  const items = await parse(rss(item({ title: '숨' + point(0x061c) + '은' + point(0xe0001) + ' 글' + point(0x00ad) + '자' + point(0x3164) + ' - 매체' })));
+  assert.deepEqual(items.map(row => row.title), ['숨 은 글 자']);
+});
+
+test('deploy targets hold no literal invisible character, and their hashes are the ones in the operations guide', () => {
+  const root = path.join(__dirname, '..');
+  const deployed = ['supabase/functions/haedo-news-wide/index.ts', 'supabase/functions/haedo-news-wide/handler.mjs', 'supabase/functions/haedo-news-wide/topics.mjs',
+    'supabase/functions/haedo-news-wide/upstream.mjs', 'supabase/functions/haedo-news-wide/items.mjs', 'supabase/functions/haedo-news-wide/xml.mjs',
+    'supabase/functions/haedo-news-wide/suppliers/google-news.mjs', 'supabase/functions/_shared/supabase-keys.mjs', 'supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs'];
+  const sql = ['supabase/migrations/20261111130000_news_wide_feed.sql', 'supabase/operations/20261111-news-wide-allow-first-account.sql'];
+  // Format, line/paragraph separator, private-use, unassigned and non-characters, controls other
+  // than tab and newline, and any space other than U+0020: all must be written as escapes, so
+  // that copying the text through a tool cannot silently drop them.
+  const hiddenLiteral = /[\p{Cf}\p{Zl}\p{Zp}\p{Co}\p{Cn}]|(?![\t\n])\p{Cc}|(?! )\p{Zs}/u;
+  for (const file of [...deployed.filter(name => !name.includes('/vendor/')), ...sql, 'supabase/functions/haedo-news-wide/README.md']) {
+    const lines = fs.readFileSync(path.join(root, file), 'utf8').split('\n');
+    lines.forEach((line, at) => {
+      const found = [...line].filter(char => hiddenLiteral.test(char)).map(char => 'U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'));
+      assert.deepEqual(found, [], file + ':' + (at + 1) + ' holds a literal invisible character');
+    });
+  }
+  // The migration is plain ASCII: its security patterns use \\uXXXX escapes only.
+  const migration = fs.readFileSync(path.join(root, sql[0]), 'utf8');
+  assert(!/[^\x00-\x7f]/.test(migration), 'non-ASCII character in the migration');
+  assert(!/\r/.test(migration) && !/\r/.test(fs.readFileSync(path.join(root, sql[1]), 'utf8')), 'no carriage return: md5(prosrc) depends on the exact text');
+  // The detector itself: it sees what it must see and leaves ordinary text alone.
+  for (const hidden of [0x200b, 0x200e, 0x202e, 0x2028, 0x2060, 0xfeff, 0x00ad, 0x00a0, 0x3000, 0xfffe, 0xffff, 0xe000, 0x0001, 0x000d, 0x007f, 0x061c, 0xe0001]) assert(hiddenLiteral.test(String.fromCodePoint(hidden)), 'detected: ' + hidden.toString(16));
+  for (const plain of ['a', ' ', '\t', '가', '’', '·', '𠀀', 'é', '🌿']) assert(!hiddenLiteral.test(plain), 'not flagged: ' + JSON.stringify(plain));
+  // SHA-256 of every file the guide tells the orchestrator to deploy or apply.
+  const guide = fs.readFileSync(path.join(root, 'docs/design-review/news-wide-feed.md'), 'utf8');
+  const start = guide.indexOf('<!-- news-wide-file-hashes:start -->'), end = guide.indexOf('<!-- news-wide-file-hashes:end -->');
+  assert(start >= 0 && end > start, 'the file hash table markers are in the guide');
+  const listed = [...guide.slice(start, end).matchAll(/^\| `([^`]+)` \| `([a-f0-9]{64})` \|$/gm)].map(match => [match[1], match[2]]);
+  const actual = [...deployed, ...sql].map(file => [file, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex')]);
+  assert.deepEqual(listed, actual, 'the SHA-256 table in docs/design-review/news-wide-feed.md differs from the files');
 });

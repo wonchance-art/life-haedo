@@ -14,7 +14,8 @@ const encoder = new TextEncoder();
 export function cleanText(value, max) {
   if (typeof value !== 'string') return null;
   const cleaned = value.normalize('NFC')
-    .replace(/[\p{Cc}\p{Zl}\p{Zp}​‎‏‪-‮⁠-⁩﻿￾￿]/gu, ' ')
+    // Invisible and direction characters become a space; ZWNJ/ZWJ (U+200C/200D) stay: scripts and emoji need them.
+    .replace(/[\p{Cc}\p{Zl}\p{Zp}\u00ad\u061c\u115f\u1160\u180e\u200b\u200e\u200f\u202a-\u202e\u2060-\u2069\u3164\ufeff\uffa0\ufff9-\ufffb\ufffe\uffff\u{e0000}-\u{e007f}]/gu, ' ')
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, ' ')
     .replace(/[\p{Zs} ]+/gu, ' ').trim();
   if (!cleaned) return null;

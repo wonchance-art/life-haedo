@@ -46,7 +46,7 @@ export const googleNews = Object.freeze({
   arrays: Object.freeze(['rss.channel.item']),
   languages: Object.freeze(Object.keys(EDITIONS)),
   url(topic, language) {
-    const edition = EDITIONS[language];
+    const edition = typeof language === 'string' && Object.hasOwn(EDITIONS, language) ? EDITIONS[language] : null;
     if (!edition || typeof topic !== 'string') throw Object.assign(new Error('invalid_request'), { code: 'invalid_request' });
     // encodeURIComponent leaves ! ' ( ) * as they are; they are encoded too, so the
     // topic is one opaque q value and the address is already in its final form.
