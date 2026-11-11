@@ -169,7 +169,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-dock > .life-reader-sheet { position: absolute; top: 100%; left: 0; right: 0; max-height: calc(100dvh - 76px - var(--haedo-dock-clearance, 0px)); margin: 0; padding: 16px 12px 20px; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); }
 .life-reader-dock > .life-reader-sheet[hidden] { display: none; }
 .life-reader-dock > .life-reader-sheet > .life-button { margin: 8px 8px 0 0; }
-/* 읽는 자리에서 보이는 짧은 안내(예: 서식 보기에서 고른 구절을 원문 한 곳으로 정하지 못함). 흐름에 자리를 차지하지 않는다. */
+/* 읽는 자리에서 보이는 짧은 안내(예: 발췌할 구절은 원문 텍스트에서 고르라는 안내). 흐름에 자리를 차지하지 않는다. */
 .life-reader-dock > .life-reader-notice { position: absolute; top: 100%; left: 0; right: 0; margin: 0; padding: 12px; color: var(--ink); background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); font-size: var(--haedo-text-control); line-height: 1.7; }
 .life-reader-dock > .life-reader-notice[hidden] { display: none; }
 .life-reader-tools > :first-child { margin-right: auto; }
