@@ -52,6 +52,12 @@ const patchHappinessWrite = page => page.evaluate(() => {
 const held = page => page.evaluate(() => { const notice = document.querySelector('.schedule-day-held'); return { shown: !!notice && !notice.hidden, text: notice?.querySelector('p')?.innerText || '', buttons: [...(notice?.querySelectorAll('button') || [])].map(node => node.innerText),
   inert: document.querySelector('.schedule-entry-body')?.inert === true, checked: [...document.querySelectorAll('.schedule-happiness input:checked')].map(node => node.value) }; });
 
+// How the entry block looks: its opacity, whether the habit box and a 행복도 choice sit inside the dimmed block, and the held notice's own opacity.
+const dimmed = page => page.evaluate(() => {
+  const body = document.querySelector('.schedule-entries .schedule-entry-body'), notice = document.querySelector('.schedule-day-held');
+  const inside = selector => { const node = document.querySelector(selector); return node ? body.contains(node) : null; };
+  return { body: getComputedStyle(body).opacity, habit: inside('.schedule-entries input[type=checkbox]'), choice: inside('.schedule-entries input[aria-label="행복도 9"]'), notice: notice && !notice.hidden ? getComputedStyle(notice).opacity : null };
+});
 async function main() {
   await fs.mkdir(output, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -239,8 +245,10 @@ async function main() {
         await overnight(page, '2026-11-12T07:30:00+09:00');
         await page.waitForFunction(() => { const notice = document.querySelector('.schedule-day-held'); return notice && !notice.hidden; });
         const morning = await held(page);
-        assert.deepEqual(morning, { shown: true, text: '날짜가 바뀌었습니다. 이 화면(11월 11일 수요일)의 행복도 3을 저장하지 못했습니다. 다시 저장하거나 취소하면 오늘 화면으로 옮깁니다.', buttons: ['다시 저장', '선택 취소'], inert: true, checked: ['3'] });
+        assert.deepEqual(morning, { shown: true, text: '날짜가 바뀌었습니다. 이 화면(11월 11일 수요일)의 행복도 3을 저장하지 못했습니다. 다시 저장하거나 선택을 취소해 주세요.', buttons: ['다시 저장', '선택 취소'], inert: true, checked: ['3'] });
         assert.equal((await snap(page)).title, '11월 11일 수요일');
+        // What takes no input looks so (the habit box, the 행복도 choices); the notice above it stays at full strength.
+        assert.deepEqual(await dimmed(page), { body: '0.5', habit: true, choice: true, notice: '1' });
         // The earlier day takes no other input: neither a 행복도 choice nor a habit check lands on it by mistake.
         // (Read from the DOM and by a real pointer press: role queries do not see an inert subtree reliably.)
         assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.schedule-entries input[aria-label="행복도 9"], .schedule-entries input[type=checkbox]')].map(node => !!node.closest('[inert]'))), [true, true]);
@@ -268,6 +276,7 @@ async function main() {
         assert.deepEqual(await happiness(page), action === '다시 저장' ? [['2026-11-11', -0.4]] : [], action === '다시 저장' ? 'the failed choice was stored for its own day' : 'nothing was stored');
         const today = await held(page);
         assert.deepEqual([today.shown, today.inert, today.checked], [false, false, []]);
+        assert.equal((await dimmed(page)).body, '1', 'today looks as usual');
         // Focus goes to the title that names the new day, not to the page (the notice's button is gone).
         await page.waitForFunction(() => document.activeElement?.tagName === 'H1');
         await page.waitForTimeout(300); assert.equal(await focused(page), 'H1');
@@ -278,6 +287,34 @@ async function main() {
         assert.deepEqual((await happiness(page)).filter(([date]) => date === '2026-11-12'), [['2026-11-12', 0.8]]);
       });
     }
+
+    await check('a held day left with 오늘 and opened again with ‹: its warning shows on that day only, and 선택 취소 there keeps that day on screen (the notice promises no move)', async ({ page }) => {
+      await at(page, '2026-11-11T23:50:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day'); await ready(page); await shown(page, 'day'); await entries(page);
+      await patchHappinessWrite(page); await page.evaluate(() => { window.__fail = true; });
+      await page.getByRole('radio', { name: '행복도 3', exact: true }).check();
+      const warning = () => page.evaluate(() => { const notice = document.querySelector('.schedule-happiness-error'); return notice && !notice.hidden ? notice.innerText : null; });
+      await page.waitForFunction(() => { const notice = document.querySelector('.schedule-happiness-error'); return notice && !notice.hidden; });
+      const said = await warning();
+      await overnight(page, '2026-11-12T07:30:00+09:00');
+      await page.waitForFunction(() => { const notice = document.querySelector('.schedule-day-held'); return notice && !notice.hidden; });
+      assert.equal(await warning(), said, 'the held day still says why its choice is not stored');
+      // 오늘: the new day. The failed choice of the day before is still kept, and nothing about it is said here.
+      await todayButton(page).click(); await titled(page, '11월 12일 목요일'); await entries(page);
+      assert.deepEqual([await page.evaluate(() => HaedoLife.ScheduleEntries.failed()), await warning(), (await held(page)).shown, (await dimmed(page)).body], [['2026-11-11'], null, false, '1']);
+      // Back on the day before: the notice, the warning and the dimmed inputs again.
+      await step(page, -1); await titled(page, '11월 11일 수요일'); await entries(page);
+      await page.waitForFunction(() => { const notice = document.querySelector('.schedule-day-held'); return notice && !notice.hidden; });
+      const back = await held(page);
+      assert.deepEqual([back.text, back.inert, await warning(), (await dimmed(page)).body], ['날짜가 바뀌었습니다. 이 화면(11월 11일 수요일)의 행복도 3을 저장하지 못했습니다. 다시 저장하거나 선택을 취소해 주세요.', true, said, '0.5']);
+      await page.locator('.schedule-day-held').getByRole('button', { name: '선택 취소', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('.schedule-day-held')?.hidden !== false);
+      await page.waitForTimeout(600);
+      // The owner chose this day with ‹: it stays, and takes input again.
+      const after = await held(page);
+      assert.deepEqual([(await snap(page)).title, after.shown, after.inert, after.checked, await warning(), (await dimmed(page)).body, await page.evaluate(() => HaedoLife.ScheduleEntries.failed()), await happiness(page)],
+        ['11월 11일 수요일', false, false, [], null, '1', [], []]);
+    });
 
     await check('keyboard focus follows the day: the same habit’s box, the same 행복도 choice; focus that was nowhere stays nowhere', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'habit-1', kind: 'habit', data: habit([]) });

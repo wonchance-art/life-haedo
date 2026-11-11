@@ -32,13 +32,15 @@
     current?.stop();
     // pending: the choices not stored yet (date → score). writing: the days whose write is on its way now
     // (date → count); a pending day without one is a choice that failed and stays selected.
-    const m = { storage, entries: null, refresh: false, error: null, sync: 'ok', pending: new Map(), writing: new Map(), stops: [], loading: null, again: false,
+    // errorDate: the day whose failed choice m.error is about (shown on that day's screen only); null for an
+    // error of the whole document (reading it, moving the timeline's days).
+    const m = { storage, entries: null, refresh: false, error: null, errorDate: null, sync: 'ok', pending: new Map(), writing: new Map(), stops: [], loading: null, again: false,
       absorbing: null, absorbAgain: false };
     // Repaint only when what the panel shows changed (values, notices, save state): a repaint
     // rebuilds the panel, so status notices alone must not churn it.
     let shown = null;
     const repaint = () => {
-      const now = JSON.stringify([m.entries, m.refresh, m.error, m.sync, [...m.pending], [...m.writing.keys()], heldDay]);
+      const now = JSON.stringify([m.entries, m.refresh, m.error, m.errorDate, m.sync, [...m.pending], [...m.writing.keys()], heldDay]);
       if (now === shown) return;
       shown = now; document.dispatchEvent(new Event('haedo:happiness'));
     };
@@ -60,7 +62,7 @@
           } catch (error) {
             if (!same()) return;
             if (error?.code === 'app_refresh_required') m.refresh = true;
-            else if (!['storage_scope_closed', 'auth_scope_required'].includes(error?.code)) m.error = error?.message || '행복도를 읽지 못했습니다.';
+            else if (!['storage_scope_closed', 'auth_scope_required'].includes(error?.code)) { m.error = error?.message || '행복도를 읽지 못했습니다.'; m.errorDate = null; }
           }
           await m.syncState();
         } while (m.again && same());
@@ -94,7 +96,7 @@
         if (!same() || ['storage_scope_closed', 'auth_scope_required', 'account_changed'].includes(error?.code)) return;
         // Said on the 일정 (one line), not swallowed: e.g. a full 행복도 document stops moving timeline days.
         if (error?.code === 'app_refresh_required') m.refresh = true;
-        else m.error = '연표의 하루 행복도를 옮기지 못했습니다. 연표의 값은 그대로 있습니다. ' + (error?.message || '');
+        else { m.error = '연표의 하루 행복도를 옮기지 못했습니다. 연표의 값은 그대로 있습니다. ' + (error?.message || ''); m.errorDate = null; }
         repaint();
       }).finally(() => { m.absorbing = null; });
     };
@@ -112,7 +114,7 @@
       } catch (error) {
         if (!same()) return;
         if (error?.code === 'app_refresh_required') m.refresh = true;
-        else m.error = error?.message || '행복도를 저장하지 못했습니다. 다시 시도해 주세요.';
+        else { m.error = error?.message || '행복도를 저장하지 못했습니다. 다시 시도해 주세요.'; m.errorDate = date; }
       } finally {
         // The write ended (stored, failed or left behind by an account change): the shell hears it and checks the day again.
         const left = (m.writing.get(date) || 1) - 1;
@@ -431,7 +433,7 @@
           heldSaid = said;
           const keep = host.contains(document.activeElement) && dayNotice.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
           const title = life.ScheduleData?.dayTitle ? life.ScheduleData.dayTitle(date) : date;
-          const text = el('p', '날짜가 바뀌었습니다. 이 화면(' + title + ')의 ' + (score === null ? '행복도 지우기를' : '행복도 ' + score + ([2, 4, 5, 9].includes(score) ? '를' : '을')) + ' 저장하지 못했습니다. 다시 저장하거나 취소하면 오늘 화면으로 옮깁니다.');
+          const text = el('p', '날짜가 바뀌었습니다. 이 화면(' + title + ')의 ' + (score === null ? '행복도 지우기를' : '행복도 ' + score + ([2, 4, 5, 9].includes(score) ? '를' : '을')) + ' 저장하지 못했습니다. 다시 저장하거나 선택을 취소해 주세요.');
           const again = el('button', '다시 저장', 'life-button'); again.type = 'button'; again.dataset.focusKey = 'schedule:held:retry';
           const drop = el('button', '선택 취소', 'life-button'); drop.type = 'button'; drop.dataset.focusKey = 'schedule:held:discard';
           // aria-disabled while the write runs (a focused button that turns disabled drops keyboard focus).
@@ -480,8 +482,10 @@
       status.querySelector('[data-focus-key="schedule:entry:retry"]')?.setAttribute('aria-disabled', String(retrying));
       // A newer app wrote the 행복도 document, or this page mixes module versions: nothing is written.
       // Also an alert: its text is set only when it changes.
-      moodNotice.hidden = !(days?.refresh && moodShown) && !(days?.error && kind === 'day');
-      const notice = days?.refresh && moodShown ? REFRESH : days?.error && kind === 'day' ? days.error : null;
+      // A failed choice is said on its own day's screen only (the next day's screen has nothing to store again).
+      const moodError = days?.error && kind === 'day' && (days.errorDate == null || days.errorDate === date) ? days.error : null;
+      moodNotice.hidden = !(days?.refresh && moodShown) && moodError === null;
+      const notice = days?.refresh && moodShown ? REFRESH : moodError;
       if (notice !== null && moodNotice.textContent !== notice) moodNotice.textContent = notice;
       if (notice === REFRESH) moodNotice.dataset.code = 'app_refresh_required'; else if (notice !== null) delete moodNotice.dataset.code;
       const byKey = key => key ? [...host.querySelectorAll('[data-focus-key]')].find(node => node.dataset.focusKey === key) : null;
