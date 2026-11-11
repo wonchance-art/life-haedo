@@ -5028,10 +5028,9 @@
       keyboardReader.input.autocomplete = 'off'; keyboardReader.input.setAttribute('autocorrect', 'off'); keyboardReader.input.setAttribute('autocapitalize', 'off');
       const keepKeyboardText = () => {
         const input = keyboardReader.input;
-        if (input.value === keyboardText) return false;
+        if (input.value === keyboardText) return;
         const caret = Math.min(input.selectionStart ?? 0, keyboardText.length);
         input.value = keyboardText; input.setSelectionRange(caret, caret);
-        return true;
       };
       for (const name of ['beforeinput', 'paste', 'cut', 'drop']) keyboardReader.input.addEventListener(name, event => event.preventDefault());
       for (const name of ['input', 'compositionend', 'change']) keyboardReader.input.addEventListener(name, keepKeyboardText);
@@ -5041,10 +5040,10 @@
         if (!keyboardReader.input.isConnected) return;
         selectionOrigin = 'keyboard';
         // The offsets below are offsets into the original only while the field holds exactly the original. Text put
-        // in by a script fires no event to undo it at; check here, put the original back and drop that selection.
-        const changed = keepKeyboardText();
-        const start = displayToRaw(version.contentText, keyboardReader.input.selectionStart);
-        remember(start, changed ? start : displayToRaw(version.contentText, keyboardReader.input.selectionEnd));
+        // in by a script fires no event to undo it at; check here first. Putting the original back leaves only a
+        // caret, so a selection that was made in other text is dropped.
+        keepKeyboardText();
+        remember(displayToRaw(version.contentText, keyboardReader.input.selectionStart), displayToRaw(version.contentText, keyboardReader.input.selectionEnd));
       };
       ['select', 'keyup', 'pointerup'].forEach(name => keyboardReader.input.addEventListener(name, captureKeyboard));
       keyboard.append(node('p', 'Shift + 화살표로 구절을 선택하세요. 원문 내용은 바뀌지 않습니다.', 'life-help'),

@@ -252,8 +252,9 @@ async function m4() {
     await area.evaluate(element => { element.setRangeText('X', 0, 3); element.dispatchEvent(new Event('input', { bubbles: true })); }); await unchanged('a script edit');
     // 2026-11-11 독립 검수: a script that changes the field without any event leaves nothing to undo it at. The next
     // selection must not be read as offsets into the original while the field holds other text.
-    await area.evaluate(element => { element.setRangeText('스크립트가 끼워 넣은 글 ', 0, 0); element.setSelectionRange(2, 2); });
-    assert.notEqual((await text()).value, display, 'the field really holds other text now');
+    // (Read in the same task as the change: the app may put the original back at the very next selection event.)
+    const held = await area.evaluate(element => { element.setRangeText('스크립트가 끼워 넣은 글 ', 0, 0); element.setSelectionRange(2, 2); return element.value; });
+    assert.notEqual(held, display, 'the field really held other text');
     for (let step = 0; step < 4; step++) await page.keyboard.press('Shift+ArrowRight');
     await unchanged('a script edit without an event, at the next selection');
     let after = await page.evaluate(() => ({ picked: document.querySelector('#lifeSelectedQuote').textContent, save: !document.querySelector('#lifeSourceExcerptSave').disabled, selection: [document.querySelector('#lifeSourceSelectionText').selectionStart, document.querySelector('#lifeSourceSelectionText').selectionEnd] }));
@@ -261,7 +262,8 @@ async function m4() {
     if (after.save) assert.equal(after.picked, display.slice(after.selection[0], after.selection[1]).replace(/\n/g, '\r\n'), 'the offered passage is the one selected in the original: ' + JSON.stringify(after));
     else assert.equal(after.selection[0], after.selection[1], 'the selection made in the changed text was dropped: ' + JSON.stringify(after));
     // The same when the buttons of this panel are used right after such a change.
-    await area.evaluate(element => { element.setRangeText('또 끼워 넣은 글\n', 0, 0); });
+    // (Assigned, not setRangeText: no selection event comes with it, so nothing has put the original back before the press.)
+    await area.evaluate(element => { element.value = '또 끼워 넣은 글\n' + element.value; });
     await page.getByRole('button', { name: '첫 줄 선택', exact: true }).click(); await unchanged('첫 줄 선택 after a script edit');
     after = await page.evaluate(() => ({ picked: document.querySelector('#lifeSelectedQuote').textContent, selection: [document.querySelector('#lifeSourceSelectionText').selectionStart, document.querySelector('#lifeSourceSelectionText').selectionEnd] }));
     // (첫 줄 선택 takes the line with its line break, as before.)
@@ -270,6 +272,12 @@ async function m4() {
     // The selection still works after all that, and the saved excerpt is the exact raw range.
     await page.keyboard.press('Control+Home'); for (let step = 0; step < 3; step++) await page.keyboard.press('Shift+ArrowRight');
     assert.equal(await page.locator('#lifeSelectedQuote').textContent(), '첫 줄');
+    // Closed, changed by a script while hidden, opened again: the passage that was picked is still the one shown.
+    const toggle = page.getByRole('button', { name: '키보드로 구절 선택', exact: true });
+    await toggle.click(); assert.equal(await area.isHidden(), true);
+    await area.evaluate(element => { element.value = '숨은 동안 바뀐 글\n' + element.value; });
+    await toggle.click(); await unchanged('opened again after a script edit while hidden');
+    assert.deepEqual((await text()).selection, [0, 3]); assert.equal(await page.locator('#lifeSelectedQuote').textContent(), '첫 줄');
     await page.locator('#lifeSourceTopic').fill('키보드'); await page.locator('#lifeSourceExcerptSave').click(); await settle(page);
     const bundle = await R.bundle(page), record = bundle.records.find(item => item.topic === '키보드');
     assert.deepEqual(record.sourceRefs[0].locator, { start: 0, end: 3 }); assert.equal(record.text, '첫 줄');

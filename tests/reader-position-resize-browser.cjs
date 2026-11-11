@@ -127,18 +127,24 @@ async function main() {
       await R.wheel(page, 9000); await page.waitForTimeout(500);
       const start = await at(page);
       // 60 scrolled frames in a row: count the character measurements (Range rectangles) made meanwhile.
+      // `one` is what a single measurement costs on this text (one scroll, then rest). A measurement may only
+      // happen where the scrolling paused for the settle time; on a busy machine some frames are that far apart
+      // (`slow`, counted in the same loop), so the bound follows the machine instead of a fixed number.
       const counted = await page.evaluate(async () => {
         const real = Range.prototype.getBoundingClientRect; let calls = 0;
         Range.prototype.getBoundingClientRect = function () { calls++; return real.call(this); };
-        for (let frame = 0; frame < 60; frame++) { scrollBy(0, 40); await new Promise(resolve => requestAnimationFrame(resolve)); }
+        scrollBy(0, 40); await new Promise(resolve => setTimeout(resolve, 600));
+        const one = calls; calls = 0;
+        let slow = 0, last = performance.now();
+        for (let frame = 0; frame < 60; frame++) { scrollBy(0, 40); await new Promise(resolve => requestAnimationFrame(resolve)); const now = performance.now(); if (now - last >= 100) slow++; last = now; }
         const during = calls;
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 600));
         Range.prototype.getBoundingClientRect = real;
-        return { during, after: calls - during };
+        return { one, during, after: calls - during, slow };
       });
-      // Measuring in every frame costs about 17 rectangles a frame on this text (over 1000 here). A stalled frame
-      // (longer than the 120ms wait) may let one measurement through; a quarter of the frames is far above that.
-      assert(counted.during <= 15 * 17, 'no character measurement in every scrolled frame: ' + JSON.stringify(counted));
+      assert(counted.one > 0, 'a measurement at rest was seen: ' + JSON.stringify(counted));
+      // Measuring in every frame would be 60 measurements here.
+      assert(counted.during <= (counted.slow + 1) * counted.one, 'no character measurement in every scrolled frame: ' + JSON.stringify(counted));
       assert(counted.after > 0, 'the line is measured once the scrolling has stopped: ' + JSON.stringify(counted));
       // Real wheel input, and the column changes width at once: in the frame the scroll arrives, before anything was measured.
       const viewport = page.viewportSize(); await page.mouse.move(viewport.width - 300, 450);
@@ -155,6 +161,20 @@ async function main() {
       await frames(page); await frames(page); await page.waitForTimeout(250);
       same(again, await at(page, again), 'the line read one frame after a scroll');
       assert.equal(await page.evaluate(() => HaedoLife.SplitResize.adjusting()), false);
+      // What the measurement at rest is for: once the scrolling has rested, the remembered line is the one that was
+      // on screen then, also when it is asked for after the page has started to move again (a reader closing).
+      // keepLine itself, with an adapter that only counts.
+      const rested = await page.evaluate(async () => {
+        let calls = 0;
+        const keeper = HaedoLife.SplitResize.keepLine(document.querySelector('#lifeSourceText'), { capture: () => { calls++; return { offset: Math.round(scrollY), top: 100, viewport: innerHeight }; }, top: () => 100 });
+        scrollBy({ top: 200, behavior: 'instant' }); await new Promise(resolve => setTimeout(resolve, 600));
+        const atRest = calls, y = Math.round(scrollY);
+        scrollBy({ top: -150, behavior: 'instant' });
+        const line = keeper.peek(); keeper.dispose();
+        return { atRest, y, line, moved: Math.round(scrollY) };
+      });
+      assert.equal(rested.atRest, 1, 'one measurement once the scrolling rested: ' + JSON.stringify(rested));
+      assert.equal(rested.line?.offset, rested.y, 'the line measured at rest stands after the page moved: ' + JSON.stringify(rested)); assert.equal(rested.moved, rested.y - 150);
       await context.close();
     });
 
