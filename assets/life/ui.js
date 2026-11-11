@@ -1781,6 +1781,23 @@
     function historyClone(value) {
       try { return value == null ? null : JSON.parse(JSON.stringify(value)); } catch (_) { return null; }
     }
+    // 글쓰기 opened by the link of another page of the app (목표·습관·연표 목록·연표, 2026-11-11 m3): that page
+    // is where 닫기 returns. Only these page names with the parameters their own return address may carry
+    // (HaedoAuth.safeNext) are kept; anything else means the 일정 list as before.
+    const returnPagePattern = /^(?:goals|habits|workspace|timeline)\.html(?:\?[A-Za-z0-9_=&-]{1,200})?$/;
+    function composeOriginPage() {
+      try {
+        // A reload or a history move is not an arrival from that page (the entry itself records it, see mount).
+        const arrival = global.performance?.getEntriesByType?.('navigation')[0]?.type;
+        if (!document.referrer || arrival && arrival !== 'navigate') return null;
+        const from = new URL(document.referrer), here = global.location;
+        const page = from.pathname.split('/').pop();
+        // The same folder of the same origin only.
+        if (from.origin !== here.origin || from.pathname.slice(0, -page.length) !== here.pathname.slice(0, here.pathname.lastIndexOf('/') + 1)) return null;
+        const safe = global.HaedoAuth?.safeNext?.(page + from.search);
+        return typeof safe === 'string' && returnPagePattern.test(safe) && safe.split('?')[0] === page ? safe : null;
+      } catch (_) { return null; }
+    }
     // What reopens a screen: its mode, exact reader version or blog task and
     // the in-app return origin. The full entry stays in memory (historyDetails);
     // history.state receives only historyPublic(entry).
@@ -1816,6 +1833,7 @@
       if (global.HaedoLife.ScheduleData?.valid(value.scheduleDate)) out.scheduleDate = value.scheduleDate;
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
       for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      if (returnPagePattern.test(value.returnPage || '')) out.returnPage = value.returnPage;
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
       if (value.homeState && typeof value.homeState === 'object') {
@@ -2226,12 +2244,31 @@
       if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
+      // A post saved here is shown in the list (below); otherwise 글쓰기 from another page returns to that page.
+      if (state.mode === 'page' && blogPageTask && !blogCommitted && returnPagePattern.test(origin.returnPage || '')) return returnToPage(origin);
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget,
         ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
       if (origin.postTarget) return;
       restoreOriginView(origin, anchor);
+    }
+
+    // 닫기 of a 글쓰기 opened from another page of the app (2026-11-11 m3). This entry first becomes the 일정
+    // list through the ordinary navigation (the same flush as any exit: a failed save stays here with the
+    // input), so neither it nor a later Forward reopens an empty editor. Then the browser goes back to the
+    // page the link was on; when this entry is not the one right after it, that page is opened instead.
+    async function returnToPage(origin) {
+      const direct = historyIndex === 0 && global.history.length > 1;
+      // The list is not flashed on the way out. It is shown again if this page is still (or again) in front.
+      const show = () => { root.style.visibility = ''; };
+      root.style.visibility = 'hidden';
+      try {
+        if (await navigate('home', { preserveContext: true, homeState: origin.homeState, navigationMotion: 'back', historyAction: 'replace', restoresFocus: true }) === false) { show(); return; }
+      } catch (cause) { show(); throw cause; }
+      global.addEventListener('pageshow', show, { once: true });
+      global.setTimeout(show, 1500);
+      if (direct) global.history.back(); else global.location.assign(origin.returnPage);
     }
 
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
@@ -6142,7 +6179,9 @@
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit'; blogRoute = 'new'; blogComposing = true;
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
-      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+      // 닫기 returns to the app page whose 글쓰기 link opened this document (m3); otherwise to the list.
+      const returnPage = composeOriginPage();
+      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
       global.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
@@ -6165,7 +6204,9 @@
           blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);
           blogRoute = blogRouteFrom(opened);
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
-          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+          // A reload of a 글쓰기 opened from another page keeps that page as its return (the entry recorded it).
+          const returnPage = recorded?.viewOrigin?.workspaceId === active && returnPagePattern.test(recorded.viewOrigin.returnPage || '') ? recorded.viewOrigin.returnPage : null;
+          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
         } else state.mode = 'home';
       }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
