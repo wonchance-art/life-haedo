@@ -264,6 +264,39 @@ async function main() {
       await f.context.close();
     });
 
+    // 2026-11-11 독립 검수: 버리기가 저장소 오류로 실패한 뒤에도 그 초안은 이 화면의 초안이다. (이전에는 실패해도
+    // 버린 것으로 표시해, 그 뒤의 입력이 보관되지 않고 떠날 때 묻지도 않아 조용히 사라졌다.)
+    await S.check('초안 버리기 that fails in storage: the message shows, and input typed afterwards is still kept and guarded', async () => {
+      const f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
+      // One failing removal of the draft row, as a storage error would cause.
+      await f.page.evaluate(() => {
+        const real = IDBObjectStore.prototype.delete; window.__failedDeletes = 0;
+        IDBObjectStore.prototype.delete = function (...args) { if (this.name === 'staging' && !window.__failedDeletes) { window.__failedDeletes = 1; throw new DOMException('주입한 삭제 실패', 'UnknownError'); } return real.apply(this, args); };
+      });
+      accept(f.page); await f.page.locator('#lifeSourceEditDiscard').click(); await f.page.locator('#lifeSourceEditError:not([hidden])').waitFor(); await frames(f.page);
+      assert.equal(await f.page.evaluate(() => window.__failedDeletes), 1, 'the removal really failed');
+      let state = await editorState(f.page);
+      assert.equal(state.text, typed, 'the input stays on screen'); assert(state.error, 'the failure is told');
+      assert.equal((await drafts(f.page))[0].text, typed, 'the draft row is still there');
+      // Typed after the failed discard: kept like any other input.
+      const later = typed + '\n\n버리기 실패 뒤에 쓴 문장.';
+      await f.page.locator('#lifeSourceEditText').fill(later);
+      assert.equal(await f.page.evaluate(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; }), true, 'leaving before it is kept asks first');
+      await f.page.waitForFunction(() => document.querySelector('#lifeSourceEditStatus')?.dataset.state === 'draft');
+      state = await editorState(f.page); assert.equal(state.error, null);
+      const rows = await drafts(f.page); assert.equal(rows.length, 1); assert.equal(rows[0].text, later, 'the later sentence is in the kept draft');
+      await f.page.locator('#lifeSourceEditClose').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      await openEditor(f.page);
+      assert.equal((await editorState(f.page)).text, later, 'reopened with the later sentence');
+      // A discard that succeeds is still a discard.
+      accept(f.page); await f.page.locator('#lifeSourceEditDiscard').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      assert.deepEqual(await R.stages(f.page), []);
+      await openEditor(f.page); assert.equal((await editorState(f.page)).text, original);
+      await preserved(f.page, f, 1);
+      await f.context.close();
+    });
+
     await S.check('이 버전으로 복원 still saves without any typing, and an unchanged 저장 makes no version', async () => {
       const f = await fixture();
       const head = await R.addVersion(f.page, f.sourceId, remote);

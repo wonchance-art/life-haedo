@@ -108,13 +108,13 @@
     }
     function schedule(session) {
       clearTimeout(session.timer); session.timer = null;
-      if (!scope(session) || session.discarded || session.composing.size || session.error?.code === 'stage_conflict') return;
+      if (!scope(session) || session.discarded || session.dropping || session.composing.size || session.error?.code === 'stage_conflict') return;
       session.timer = global.setTimeout(() => { session.timer = null; if (scope(session)) flushSession(session).catch(() => {}); }, 400);
     }
     async function flushSession(session, { force = false } = {}) {
       clearTimeout(session.timer); session.timer = null;
       if (!scope(session)) throw fault('source_edit_scope_changed');
-      if (session.stage.state === 'applied' || session.discarded) return;
+      if (session.stage.state === 'applied' || session.discarded || session.dropping) return;
       if (session.invalidInput) throw session.invalidInput;
       if (session.composing.size) throw fault('source_edit_composing', '입력 중인 글자를 완료한 뒤 다시 시도해 주세요.');
       if (session.saving) { await session.saving; return flushSession(session, { force }); }
@@ -187,10 +187,19 @@
       return result;
     }
     // Remove a draft: its stage row (when one was ever stored) and the live session. The material is untouched.
+    // The session counts as discarded only once the row is really gone. If the removal fails, the draft is still
+    // this screen's draft: its input (and whatever is typed next) keeps being saved and guarded.
     async function drop(session) {
-      session.discarded = true; clearTimeout(session.timer); session.timer = null;
-      if (session.saving) await session.saving.catch(() => {});
-      if (session.stage.state === 'draft' && session.stage.revision > 0) { await storage.deleteStage(session.stage.stageId); Promise.resolve().then(onDraftsChanged).catch(() => {}); }
+      clearTimeout(session.timer); session.timer = null; session.dropping = true;
+      try {
+        if (session.saving) await session.saving.catch(() => {});
+        if (session.stage.state === 'draft' && session.stage.revision > 0) { await storage.deleteStage(session.stage.stageId); Promise.resolve().then(onDraftsChanged).catch(() => {}); }
+      } catch (error) {
+        session.dropping = false;
+        if (dirtySession(session)) schedule(session);
+        throw error;
+      }
+      session.dropping = false; session.discarded = true;
       const key = keyFor(session.workspaceId, session.account);
       if (sessions.get(key) === session) sessions.delete(key);
       if (current === session) current = null;
