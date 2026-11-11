@@ -38,7 +38,11 @@ for name in ['account-library', 'composition-sync', 'storage', 'sync-common', 's
 
 ## `previous-version-device.json` — 이전 판이 쓴 기기 DB
 
-이전 판의 `storage.js`·`sync.js`를 실제로 돌려, 자료를 바꾼 뒤 충돌을 기록하고 멈춘 기기의 IndexedDB 내용(동기화 기록, 저장 영수증 포함)과 그때의 서버 행을 담았다. 경우는 둘이다: 서로 다른 발췌만 바꾼 `apart`, 같은 발췌 수정·삭제가 섞인 `mixed`. `tests/source-merge-devices.test.cjs`가 새 판으로 열어 병합 결과를 대조한다.
+이전 판의 `storage.js`·`sync.js`를 실제로 돌려, 자료를 바꾼 뒤 충돌을 기록하고 멈춘 기기의 IndexedDB 내용(동기화 기록, 저장 영수증 포함)과 그때의 서버 행을 담았다. `tests/source-merge-devices.test.cjs`가 새 판으로 열어 병합 결과를 대조한다. 경우는 다음과 같다.
+
+- `apart`: 두 기기가 서로 다른 발췌만 바꿨다.
+- `mixed`: 같은 발췌 수정, 삭제, 추가가 섞였다.
+- `same-number-*` 넷: 두 기기가 같은 항목을 같은 번호에서 고쳤다(서버에 "같은 번호, 다른 내용"). 다시 고침, 다시 고친 뒤 삭제, 삭제만, 자료 제목. 이 넷에서 Mac은 현재 판으로 돌려 서버 묶음을 만들고, 고정본에는 이전 판 iPad의 DB와 그 서버 묶음이 들어간다.
 
 다시 만들기(Git 기록 불필요, 식별자와 시각은 매번 새로 생긴다):
 

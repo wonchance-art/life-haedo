@@ -62,7 +62,8 @@ function memoryIdb(seed = null) {
 const exportRows = rows => Object.fromEntries([...rows].map(([name, map]) => [name, [...map].map(([key, value]) => [key, structuredClone(value)])]));
 
 function createServer() {
-  const server = { row: null, receipts: new Map(), calls: { read: 0, write: 0, head: 0, stored: 0, refused: 0 }, beforeWrite: null };
+  // history: every stored snapshot by revision (what a device last agreed on, for a comparison with the true base).
+  const server = { row: null, receipts: new Map(), calls: { read: 0, write: 0, head: 0, stored: 0, refused: 0 }, beforeWrite: null, history: new Map() };
   server.adapter = device => ({
     async getAccount() { return account(device.user); },
     async signIn() { return account(device.user); },
@@ -78,7 +79,7 @@ function createServer() {
       const current = server.row ? server.row.revision : 0;
       if (current !== request.expectedRevision) { server.calls.refused++; return { status: 'conflict', revision: current }; }
       server.row = { id: request.workspaceId, title: request.data.title, revision: current + 1, data: clone(request.data), updated_at: '2026-11-01T00:00:00Z' };
-      server.receipts.set(request.operationId, server.row.revision); server.calls.stored++;
+      server.receipts.set(request.operationId, server.row.revision); server.calls.stored++; server.history.set(server.row.revision, clone(request.data));
       return { status: 'stored', revision: server.row.revision };
     },
     dispose() {},

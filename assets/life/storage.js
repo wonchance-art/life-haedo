@@ -544,11 +544,14 @@
     // the revision the server last acknowledged:
     //   - an item it did not touch is still what both sides agreed on, so the server's change or
     //     deletion of it is taken as it is;
-    //   - an item it changed started from the revision before its first change here; the server
-    //     still holding that revision means only this device changed it;
-    //   - an excerpt it deleted is deleted when the server still holds the excerpt as it was
-    //     first made, or exactly as this device last wrote it. Anything else cannot be confirmed
-    //     and is kept (mergeWorkspace keeps what the base does not show as unchanged).
+    //   - an item it changed or deleted counts as changed by this device alone only when the
+    //     server's copy is shown, by content, to be what this device started from: the item as
+    //     first made (revision 1 on the server: there is one such item), or exactly what this
+    //     device itself had written under the revision before its first change (its older
+    //     receipts). A revision number alone proves nothing: two devices that edit the same item
+    //     at the same time give their edits the same number, and a merge keeps that number.
+    //     Anything else is a change on both devices (the later one stays, the other is kept as a
+    //     recovery copy or title row; a deletion is not applied and is announced).
     // Every revision since the acknowledged one must have its receipt; a gap (something else wrote
     // the workspace) or a receipt this cannot read means no base at all.
     async function receiptBase(operations, bundle, sync, remote) {
@@ -557,7 +560,8 @@
       const range = typeof root.IDBKeyRange?.bound === 'function' ? root.IDBKeyRange.bound([workspaceId], [workspaceId, []]) : null;
       const receipts = (range ? await operations.getAll(range) : await operations.getAll()).filter(receipt => receipt?.workspaceId === workspaceId);
       const names = ['sources', 'records', 'links', 'resumeHints'];
-      const steps = new Map(), written = new Map();
+      // written: what this device itself wrote before the acknowledged revision, by item and revision.
+      const steps = new Map(), written = Object.fromEntries(names.map(name => [name, new Map()]));
       for (const receipt of receipts) {
         if (receipt.result?.status !== 'stored' || !Number.isSafeInteger(receipt.result.revision)) continue;
         let payload = null; try { payload = JSON.parse(receipt.payload); } catch (_) { /* Not a receipt this version reads. */ }
@@ -566,8 +570,7 @@
           (changes.put === undefined || plain(changes.put) && names.every(name => changes.put[name] === undefined || Array.isArray(changes.put[name]) && changes.put[name].every(item => plain(item) && typeof item.id === 'string'))) &&
           (changes.remove === undefined || plain(changes.remove) && (changes.remove.records === undefined || Array.isArray(changes.remove.records) && changes.remove.records.every(id => typeof id === 'string')));
         if (receipt.result.revision <= from) {
-          // What this device itself last wrote of an excerpt, before the acknowledged revision.
-          if (readable) for (const record of changes.put?.records || []) if (Number.isSafeInteger(record.revision) && !(written.get(record.id)?.revision > record.revision)) written.set(record.id, record);
+          if (readable) for (const name of names) for (const item of changes.put?.[name] || []) if (Number.isSafeInteger(item.revision)) written[name].set(item.id + '\n' + item.revision, item);
           continue;
         }
         if (!readable) return null;
@@ -582,23 +585,29 @@
         for (const name of names) for (const item of changes.put?.[name] || []) if (!first[name].has(item.id)) first[name].set(item.id, item.revision);
         for (const id of changes.remove?.records || []) removed.add(id);
       }
+      // The server's copy is the one this device started from: shown by content, never by the number alone.
+      const started = (name, other, before) => {
+        if (!other || !Number.isSafeInteger(other.revision) || before !== null && other.revision !== before) return false;
+        if (other.revision === 1) return true;
+        const own = written[name].get(other.id + '\n' + other.revision);
+        return !!own && stablePayload(own) === stablePayload(other);
+      };
       const base = { title: bundle.title, sources: [], records: [], links: [], resumeHints: [] };
       for (const name of names) {
         const theirs = new Map(remote[name].map(item => [item.id, item]));
         for (const item of bundle[name]) {
           if (!first[name].has(item.id)) { base[name].push(item); continue; }
           const before = first[name].get(item.id) - 1, other = theirs.get(item.id);
-          if (Number.isSafeInteger(before) && before >= 1 && other?.revision === before) base[name].push(other);
+          if (Number.isSafeInteger(before) && before >= 1 && started(name, other, before)) base[name].push(other);
         }
       }
       const held = new Set(bundle.records.map(record => record.id)), theirs = new Map(remote.records.map(record => [record.id, record]));
       for (const id of removed) {
         const other = theirs.get(id);
         if (!other || held.has(id)) continue;
-        const before = first.records.has(id) ? first.records.get(id) - 1 : null, own = written.get(id);
-        const unchanged = before !== null ? Number.isSafeInteger(before) && before >= 1 && other.revision === before
-          : other.revision === 1 || !!own && stablePayload(own) === stablePayload(other);
-        if (unchanged) base.records.push(other);
+        // Edited here and then deleted: the revision before the first edit. Only deleted: whatever revision the server holds.
+        const before = first.records.has(id) ? first.records.get(id) - 1 : null;
+        if (before === null ? started('records', other, null) : Number.isSafeInteger(before) && before >= 1 && started('records', other, before)) base.records.push(other);
       }
       return base;
     }

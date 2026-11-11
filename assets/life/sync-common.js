@@ -188,13 +188,15 @@
       // The losing title and file path stay beside the version that was current on the losing side
       // when it changed the source (the last one kept by then). The row's identifier comes from
       // the source and the text alone: whichever device merges, and in whatever order, the same
-      // losing text is one row. Announced once, when the row is first made.
+      // losing text is one row. Its times are the source's own creation time (the same on every
+      // device); only the version it is kept beside can differ with the order devices meet in.
+      // Announced once, when the row is first made.
       const theirs = [...(loser === l ? L : R).sourceVersions.values()].filter(version => version.sourceId === id);
       const last = theirs.filter(version => stamp(version.importedAt) <= stamp(loser.updatedAt)).at(-1) || theirs[0];
       const keep = (kind, text) => {
         if (!last) return;
         const row = { id: derivedId(canonical([kind, id, text])), kind, note: text,
-          sourceRefs: [{ sourceId: id, sourceVersionId: last.id, locator: null }], revision: 1, createdAt: loser.updatedAt, updatedAt: loser.updatedAt };
+          sourceRefs: [{ sourceId: id, sourceVersionId: last.id, locator: null }], revision: 1, createdAt: loser.createdAt, updatedAt: loser.createdAt };
         if (L.links.has(row.id) || R.links.has(row.id)) return;
         made.push(row);
         if (known && !notice.sourceIds.includes(id)) notice.sourceIds.push(id);

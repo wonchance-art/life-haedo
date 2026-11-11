@@ -2081,6 +2081,23 @@ test('mergeSyncRemote joins both sides, replaces the refused request and keeps t
   assert.ok(sourceTitles(local).includes('이 기기 두 번째 자료'));
 });
 
+// A device carried over from the previous version: a difference is recorded, this device changed
+// nothing since the acknowledged revision, and no base was ever stored. Its own workspace is the
+// base: the server's deletion and edit are taken, nothing comes back, nothing is sent.
+test('a recorded difference on a device that changed nothing and has no stored base: the server\'s deletion is applied', async t => {
+  const { storage, rows, id, binding, agreed } = await syncedWithoutBase(t, secondExcerpt);
+  const [first, second] = agreed.records;
+  const server = Core.applyChanges(Core.applyChanges({ ...agreed, revision: 0 }, { remove: { records: [first.id] } }),
+    { put: { records: [{ ...second, note: '다른 기기가 고친 메모', revision: second.revision + 1, updatedAt: new Date(Date.now() + 60000).toISOString() }] } });
+  const row = serverRow(server, 2);
+  await storage.setSyncConflict(id, binding, row); assert.equal((await storage.getSyncState(id)).status, 'conflict'); assert.equal(baseRow(rows, id), null);
+  const result = await storage.mergeSyncRemote(id, binding, row);
+  assert.deepEqual([result.pending, result.based, result.notice], [false, true, false]);
+  const local = await storage.read(id);
+  assert.deepEqual({ ...local, revision: 0 }, { ...server, revision: 0 }, 'exactly the server snapshot: the deleted excerpt is gone');
+  assert.equal((await storage.getSyncState(id)).status, 'synced'); assert.equal(await storage.getSyncNotice(id), null);
+});
+
 test('a recorded difference whose local side did not change is taken exactly as the server snapshot and is synced', async t => {
   const { storage } = syncFixture(); t.after(() => storage.close());
   const base = await initialImport(storage), id = base.workspaceId, binding = await uploaded(storage, base);
@@ -2332,6 +2349,27 @@ test('a draft saved by this page is announced as its own; one written by sync is
   const draft = Writing.createDraft(bundle); draft.title = '초안'; draft.text = '본문';
   await storage.saveStage(draft);
   assert.deepEqual(events, [true]);
+});
+
+// The proof by content covers every kind the receipts hold, not only excerpts: a title this device
+// itself had sent is the title it started from, so its second rename is its change alone.
+test('receipts: this device\'s own earlier write of a source shows the server has not changed it (no title row, nothing announced)', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  let bundle = await initialImport(storage); const id = bundle.workspaceId, binding = await uploaded(storage, bundle);
+  const rename = async title => { bundle = await storage.read(id); const source = bundle.sources[0];
+    assert.equal((await storage.commitLocal({ workspaceId: id, operationId: Core.id(), baseRevision: bundle.revision,
+      changes: { put: { sources: [{ ...source, title, revision: source.revision + 1, updatedAt: new Date(Date.parse(source.updatedAt) + 1000).toISOString() }] } } })).status, 'stored'); };
+  await rename('이 기기가 먼저 보낸 제목');
+  const sent = await storage.prepareSyncUpload(id, binding); await storage.ackSync(id, binding, sent.operationId, 2);
+  const agreed = await storage.read(id);
+  await rename('이 기기가 다시 고친 제목');
+  rows.get('meta').delete(baseKeyOf(id));                 // as if that change had been made on the version that kept no base
+  const server = await withSource({ ...agreed, revision: 0 }, '다른 기기 자료');   // the server still holds this device's first title
+  const result = await storage.mergeSyncRemote(id, binding, serverRow(server, 3));
+  assert.deepEqual([result.based, result.notice, result.pending], [true, false, true]);
+  const local = await storage.read(id);
+  assert.deepEqual(local.sources.map(source => source.title), ['이 기기가 다시 고친 제목', '다른 기기 자료']);
+  assert.deepEqual(local.links, [], 'no title lost: none is kept beside the source');
 });
 
 // Cascade (2026-11-11): a draft that points at no original is connected while the originals are

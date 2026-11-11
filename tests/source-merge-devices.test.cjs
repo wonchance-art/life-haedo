@@ -7,7 +7,9 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { Core, createServer, createDevice, content, clone } = require('./helpers/sync-devices.cjs');
 const SyncCommon = require('../assets/life/sync-common.js');
 const previous = require('./fixtures/source-merge/previous-version-device.json');
-const { COMMIT: PREVIOUS_COMMIT, FILES: PREVIOUS_FILES, previousFile } = require('./helpers/previous-version.cjs');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { exportRows } = require('./helpers/sync-devices.cjs');
+const { COMMIT: PREVIOUS_COMMIT, FILES: PREVIOUS_FILES, previousFile, previousTree } = require('./helpers/previous-version.cjs');
 const tick = () => new Promise(resolve => setTimeout(resolve, 3));
 const titles = bundle => bundle.sources.map(source => source.title).sort();
 const copies = bundle => bundle.records.filter(record => record.topic.startsWith(SyncCommon.RECOVERY_TOPIC));
@@ -42,6 +44,8 @@ test('the fixtures of the previous version are that commit\'s files (length and 
 });
 
 // ---- A device that carries the previous version's data (the fixture was written by that version's code) ----
+// The same-number cases: the server item has the number this device started from and another
+// device's content. Only content shows who changed what (the device's own older receipts).
 for (const fixture of previous.cases) {
   test('a device that changed its workspace on the previous version merges by its commit receipts: ' + fixture.name, async t => {
     const server = createServer(); server.row = clone(fixture.server);
@@ -61,10 +65,13 @@ for (const fixture of previous.cases) {
     assert.deepEqual(final.tombstones.map(mark => fixture.ids.indexOf(mark.entityId)).sort(), expected.deleted, 'each device\'s deletions stand');
     for (const [index, text] of Object.entries(expected.notes)) assert.equal(noteOf(final, id(Number(index))), text, 'excerpt ' + index);
     if (expected.copy) assert.equal(copies(final)[0].note, expected.copy);
+    if (expected.copyNotes) assert.deepEqual(copies(final).map(record => record.note).sort(), [...expected.copyNotes].sort(), 'what each device wrote and lost is a recovery copy');
     if (expected.sources) assert.equal(final.sources.length, expected.sources);
+    if (expected.title) assert.equal(final.sources[0].title, expected.title);
+    if (expected.previousTitles) assert.deepEqual(final.links.filter(link => link.kind === SyncCommon.PREVIOUS_TITLE).map(link => link.note).sort(), [...expected.previousTitles].sort(), 'every title that lost is kept');
     for (const version of before.sourceVersions) assert.deepEqual(final.sourceVersions.find(value => value.id === version.id), version);
     const notice = await device.storage.getSyncNotice(device.ws);
-    assert.deepEqual([(notice?.recordIds || []).length, (notice?.restoredIds || []).map(value => fixture.ids.indexOf(value)), !!notice?.uncertain], [expected.copies, expected.restored, false]);
+    assert.deepEqual([(notice?.recordIds || []).length, (notice?.restoredIds || []).map(value => fixture.ids.indexOf(value)), !!notice?.uncertain], [expected.announced ?? expected.copies, expected.restored, false]);
     assert.equal(device.base().remoteRevision, server.row.revision, 'from here on the device keeps a base');
   });
 }
@@ -270,4 +277,76 @@ test('random edits and syncs on three devices: every note survives (on its excer
       }
     } finally { for (const device of devices) device.close(); }
   }
+});
+
+// ---- Devices that diverged on the previous version (its real storage and engine wrote their
+// receipts), random edits, fixed seeds. The same starting state is settled on this version twice:
+//   receipts: as the application does it (no stored base, the commit receipts decide);
+//   truth:    each device is handed the server snapshot it last agreed on as its stored base.
+// The receipts may keep more than the true base (a deletion they cannot confirm, a recovery copy
+// of text the device had in fact seen). They must never keep less or choose another winner.
+test('devices that diverged on the previous version: merging by receipts never keeps less than the true base', async t => {
+  const old = previousTree(fs.mkdtempSync(path.join(os.tmpdir(), 'haedo-previous-')));
+  t.after(() => fs.rmSync(old, { recursive: true, force: true }));
+  const facts = record => JSON.stringify([record.text, record.topic, record.note, record.sourceRefs]);
+  let merged = 0;
+  async function settle(snapshot, truth) {
+    const server = createServer(); server.row = clone(snapshot.row); server.receipts = new Map(snapshot.receipts); server.history = snapshot.history;
+    const devices = [];
+    try {
+      for (const saved of snapshot.devices) {
+        const rows = clone(saved.rows);
+        if (truth && saved.old) {
+          const state = rows.meta.find(([, row]) => row.key === 'sync:' + snapshot.ws)?.[1].value, agreed = state && state.remoteRevision >= 1 && state.syncedLocalRevision >= 0 && snapshot.history.get(state.remoteRevision);
+          if (agreed) rows.meta.push([JSON.stringify('syncBase:' + snapshot.ws), { key: 'syncBase:' + snapshot.ws, value: { format: 'life-sync-base-v1', remoteRevision: state.remoteRevision, base: SyncCommon.mergeBase(agreed), notice: null } }]);
+        }
+        const device = createDevice(saved.name, server, { rows }); device.ws = snapshot.ws; devices.push(device); await device.login();
+      }
+      for (let round = 0; round < 6; round++) for (const device of devices) { const result = await device.sync(); assert.ok(!result.error && !result.conflict, 'settle: ' + JSON.stringify(result.error || result.status)); }
+      const final = server.row.data; Core.validateWorkspace(final);
+      for (const device of devices) assert.equal(content(await device.read()), content(final), device.name + ' holds the server snapshot');
+      return final;
+    } finally { for (const device of devices) device.close(); }
+  }
+  for (let seed = 1; seed <= 36; seed++) {
+    const next = random(seed * 7919), server = createServer();
+    // Device 0 runs this version (its merges move the server meanwhile); the others the previous one.
+    const devices = [createDevice('new', server), createDevice('previous 1', server, { tree: old }), createDevice('previous 2', server, { tree: old })];
+    let snapshot;
+    try {
+      for (const device of devices) await device.login();
+      const [first] = devices; first.ws = (await first.storage.createWorkspace('익명 자료')).workspaceId;
+      const start = await first.read(), body = '가나다라마바사아자차카타파하 발췌를 위한 본문입니다';
+      await first.commit(Core.buildImportChanges(start, await Core.prepareImport({ origin: 'other', title: '공통 자료', text: body, authorRelation: 'self', forceSeparate: true }, start),
+        Array.from({ length: 5 }, (_, index) => ({ start: index, end: index + 2, topic: '주제', note: '처음 ' + index }))));
+      await first.manager.enable(first.ws);
+      for (const device of devices.slice(1)) { device.ws = first.ws; await device.manager.download(first.ws); }
+      let stamp = Date.now(), serial = 0;
+      for (let step = 0; step < 26; step++) {
+        const device = devices[next(3)], bundle = await device.read(), kind = next(10), at = new Date(stamp += [1, 1, 1000][next(3)]).toISOString();
+        if (kind < 4 && bundle.records.length) {
+          const record = bundle.records[next(bundle.records.length)];
+          await device.commit({ put: { records: [{ ...clone(record), note: seed + '-' + (++serial), revision: record.revision + 1, updatedAt: at }] } });
+        } else if (kind === 4 && bundle.records.length) {
+          await device.commit({ remove: { records: [bundle.records[next(bundle.records.length)].id] } });
+        } else if (kind === 5) {
+          const source = bundle.sources[0];
+          await device.commit({ put: { sources: [{ ...clone(source), title: '제목 ' + seed + '-' + (++serial), revision: source.revision + 1, updatedAt: at }] } });
+        } else await device.sync();          // a device on the previous version stops at a difference and waits
+      }
+      snapshot = { ws: first.ws, row: clone(server.row), receipts: new Map(server.receipts), history: server.history,
+        devices: devices.map((device, index) => ({ name: device.name, old: index > 0, rows: exportRows(device.rows) })) };
+    } finally { for (const device of devices) device.close(); }
+    const receipts = await settle(snapshot, false), truth = await settle(snapshot, true);
+    if (content(receipts) !== content(truth)) merged++;
+    const mine = new Map(receipts.records.map(record => [record.id, record]));
+    for (const record of truth.records) {
+      assert.ok(mine.has(record.id), 'seed ' + seed + ': the true base keeps ' + JSON.stringify([record.topic, record.note]) + ', the receipts do not');
+      assert.equal(facts(mine.get(record.id)), facts(record), 'seed ' + seed + ': another winner than with the true base');
+    }
+    assert.equal(receipts.sources[0].title, truth.sources[0].title, 'seed ' + seed + ': another title than with the true base');
+    const rows = new Set(receipts.links.map(link => link.id));
+    for (const link of truth.links) if ([SyncCommon.PREVIOUS_TITLE, SyncCommon.PREVIOUS_KEY].includes(link.kind)) assert.ok(rows.has(link.id), 'seed ' + seed + ': the title that lost (' + link.note + ') is kept with the true base only');
+  }
+  assert.ok(merged > 0, 'some seeds must reach a case where the receipts keep more');
 });
