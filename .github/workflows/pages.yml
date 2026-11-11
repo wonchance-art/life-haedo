@@ -239,6 +239,15 @@ jobs:
       - name: Verify source sync at size limits falls back to manual comparison and keeps the account storage status truthful
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/source-merge-limits-browser.cjs
+      - name: Verify the news card feed pages twenty, caps one publisher at three per page and loads images only when turned on
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-card-feed-browser.cjs
+      - name: Verify wide news search sends only typed topics, opens results in a new tab and handles refusals and outages
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-wide-search-browser.cjs
+      - name: Verify an earlier-release device keeps news settings, reactions and reading comparisons across the account
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-old-shell-sync-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -763,6 +772,9 @@ jobs:
             .local/daily-entry-browser/
             .local/source-merge/
             .local/source-merge-limits/
+            .local/news-card-feed/
+            .local/news-wide-search/
+            .local/news-old-shell-sync/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/

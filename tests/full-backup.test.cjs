@@ -1104,3 +1104,49 @@ test('M2: a createdAt before 1900 is not kept: both times become the restore tim
   const report = (await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, createdAt: '0999-06-01T00:00:00.000Z', updatedAt: '0999-06-02T00:00:00.000Z' }))]))).report;
   assert.deepEqual([report.items[0].status, report.items[0].times], ['restored', 'adjusted']);
 });
+
+// Review MAJOR-1 (2026-11-11): reactions and the reading comparison are pairs of account documents. The second
+// document of each pair rides in account-documents.json's `extended` list, which the earlier release does not read.
+test('news pair: the backup carries the extended documents in `extended`; the earlier release still opens it; a restore holds both', async t => {
+  const Discovery = require('../assets/life/discovery.js'), Actions = require('../assets/life/discovery-actions.js');
+  require('../assets/life/discovery-reading.js');
+  const memory = memoryIdb(), storage = createStorage({ idb: memory.idb, core: Core, channelFactory: null, account: owner });
+  const ws = (await storage.createWorkspace('반응 두 문서')).workspaceId;
+  await addSource(storage, ws, '원문', '보존할 원문.');
+  const capture = (sourceId, n) => Actions.capture({ id: `b-${sourceId}-${n}`, sourceId, url: `https://${Discovery.ALLOWED_SOURCES[sourceId][0]}/post/${n}`, title: '합성 ' + sourceId, author: null, language: 'ko', tags: [], publishedAt: null, updatedAt: null,
+    fetchedAt: '2026-11-11T09:00:00.000Z', coverage: 'link_only', rights: { label: '합성', url: null, mode: 'metadata_only' } }, { id: sourceId, name: '합성 ' + sourceId });
+  let profile = await storage.readDiscoveryActions(ws), minute = 0;
+  for (const snapshot of [capture('seoul-culture', 1), capture('yna-news', 2)]) {
+    const next = Actions.setReaction(profile, snapshot, 'bookmarked', true, { expectedRevision: profile.revision, now: `2026-11-11T09:0${++minute}:00.000Z` });
+    profile = (await storage.saveDiscoveryActions(ws, next, profile.revision)).profile;
+  }
+  const { built } = await fullBundle(storage);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer())), docs = JSON.parse(Buffer.from(files['account-documents.json']).toString());
+  assert.deepEqual(docs.documents.filter(doc => doc.prefix.startsWith('discoveryActions')).map(doc => [doc.prefix, doc.value.entries.length]), [['discoveryActions', 1]]);
+  assert.deepEqual(docs.extended.map(doc => [doc.prefix, doc.value.entries[0].snapshot.sourceId]), [['discoveryActionsExtended', 'yna-news']]);
+  // The earlier release (tests/fixtures/discovery-old-client/full-backup.js.gz) opens the same file.
+  const raw = require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures/discovery-old-client/full-backup.js.gz')));
+  assert.equal(sha(raw), '8c0e5d698686466ba707c64e225e11af320c2c285c0ecbfa793475609c4828a4');
+  const Module = require('node:module'), file = path.join(__dirname, '../assets/life/full-backup-earlier.js'), earlier = new Module(file, module);
+  const current = globalThis.HaedoLife.FullBackup; earlier.filename = file; earlier.paths = Module._nodeModulePaths(path.dirname(file));
+  try { earlier._compile(raw.toString('utf8'), file); } finally { globalThis.HaedoLife.FullBackup = current; }
+  // List version 3 (2026-11-11 글 시각, docs/design-review/full-backup.md "목록 버전 3") is refused by the earlier
+  // release before any preview, on purpose: its post ZIP reader rejects the new time fields. The `extended` field is
+  // checked on the same files labelled version 2, which is what the earlier release reads.
+  await assert.rejects(earlier.exports.open(new Blob([await built.blob.arrayBuffer()])), { code: 'unsupported_version' });
+  const relabelled = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...JSON.parse(Buffer.from(files['manifest.json']).toString()), version: 2 })) };
+  const older = await earlier.exports.open(new Blob([Z.zipSync(relabelled, { level: 0 })]));
+  assert.equal(older.type, 'bundle', 'the earlier release opens the version 2 bundle with the extended list');
+  assert.equal(older.entries.find(entry => entry.kind === 'accountDocuments').data.documents.some(doc => doc.prefix.endsWith('Extended')), false);
+  // This release restores both documents into the new copy; the copy reads both reactions.
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const opened = await Full.open(new Blob([await built.blob.arrayBuffer()]));
+  assert.equal(Full.summarize(opened).find(row => row.kind === 'accountDocuments').counts.documents, docs.documents.length + 1);
+  const report = await Full.restore(opened, { storage: target, kinds: new Set(['library', 'accountDocuments']), verifyPhoto: null });
+  const restored = report.items.find(item => item.kind === 'accountDocuments');
+  assert.equal(restored.status, 'restored', JSON.stringify(report.items));
+  const copied = await target.readDiscoveryActions(restored.targetId);
+  assert.deepEqual(copied.entries.map(entry => entry.snapshot.sourceId).sort(), ['seoul-culture', 'yna-news']);
+  // A file with something else in `extended` is refused before anything is written.
+  await assert.rejects(Full.open(new Blob([JSON.stringify({ ...docs, extended: [{ prefix: 'discoverySettings', workspaceId: ws, value: {} }] })])), { code: 'invalid_backup' });
+});

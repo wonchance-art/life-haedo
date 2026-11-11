@@ -105,11 +105,11 @@
     const c = session.conditions;
     fields(c, ['contentLanguages', 'translationTarget', 'manual', 'sourceIds', 'knownUrlCount', 'feedbackCount', 'profileRevision', 'feedbackRevision', 'actionsRevision', 'personalAllowed', 'personalOptIn', 'baselineMode']);
     check(c.contentLanguages === null || Array.isArray(c.contentLanguages)); dep('Discovery').languageAllowed(null, c.contentLanguages);
-    check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(c.translationTarget)); manual(c.manual); ids(c.sourceIds, 20);
+    check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(c.translationTarget)); manual(c.manual); ids(c.sourceIds, limits().sources);
     check(c.sourceIds.every(value => Object.hasOwn(dep('Discovery').ALLOWED_SOURCES, value)) && integer(c.knownUrlCount) && c.knownUrlCount <= 500 && integer(c.feedbackCount) && c.feedbackCount <= 500);
     for (const key of ['profileRevision', 'feedbackRevision', 'actionsRevision']) check(c[key] === null || integer(c[key]));
     check(typeof c.personalAllowed === 'boolean' && typeof c.personalOptIn === 'boolean' && ['latest', 'related'].includes(c.baselineMode));
-    array(session.sources, 20);
+    array(session.sources, limits().sources);
     for (const source of session.sources) { fields(source, ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'status', 'lastSuccessAt', 'lastAttemptAt', 'error', 'freshnessMaxAgeDays', 'stale']); fields(source.rights, ['label', 'url', 'mode']); }
     dep('Discovery').validateFeed({ schemaVersion: 1, generatedAt: session.generatedAt, sources: session.sources, articles: [] }, { now: session.createdAt });
     check(JSON.stringify(session.sources.map(source => source.id)) === JSON.stringify(c.sourceIds));
@@ -166,15 +166,17 @@
     return { ...copy(profile), revision: profile.revision + 1, deleted: false, updatedAt: options.now };
   }
   function finish(value) { validate(value); return value; }
+  // The comparison holds the catalog's own bounds (sources and candidate articles), not a smaller copy of them.
+  const limits = () => dep('Discovery').LIMITS;
   function projectedInput(input, workspaceId, now) {
     tree(input); fields(input, ['feed', 'profile', 'feedback', 'knownUrls', 'contentLanguages', 'actions', 'translationTarget', 'personalAllowed'], ['baselineMode']);
     fields(input.feed, ['schemaVersion', 'generatedAt', 'sources', 'articles'], ['stale', 'validation']);
-    array(input.feed.sources, 20); array(input.feed.articles, 500);
+    array(input.feed.sources, limits().sources); array(input.feed.articles, limits().articles);
     for (const source of input.feed.sources) { fields(source, ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'status', 'lastSuccessAt', 'lastAttemptAt', 'error', 'stale'], ['freshnessMaxAgeDays']); fields(source.rights, ['label', 'url', 'mode']); }
     for (const article of input.feed.articles) { fields(article, ['id', 'sourceId', 'url', 'title', 'author', 'language', 'publishedAt', 'fetchedAt', 'coverage', 'summary', 'rights'], ['canonicalUrl', 'tags', 'updatedAt', 'dateStatus', 'dateBasis', 'sortDate', 'bodyText']); fields(article.rights, ['label', 'url', 'mode']); }
     if (Object.hasOwn(input.feed, 'validation')) {
-      fields(input.feed.validation, ['invalid', 'suppliedArticles']); array(input.feed.validation.invalid, 500);
-      check(integer(input.feed.validation.suppliedArticles) && input.feed.validation.suppliedArticles <= 500);
+      fields(input.feed.validation, ['invalid', 'suppliedArticles']); array(input.feed.validation.invalid, limits().articles);
+      check(integer(input.feed.validation.suppliedArticles) && input.feed.validation.suppliedArticles <= limits().articles);
       for (const row of input.feed.validation.invalid) { fields(row, ['id', 'reason']); check((row.id === null || id(row.id)) && row.reason === 'invalid_article'); }
     }
     const feed = dep('Discovery').validateFeed(input.feed, { now });
@@ -202,7 +204,7 @@
     const contentLanguages = copy(input.contentLanguages);
     check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(input.translationTarget) && typeof input.personalAllowed === 'boolean');
     const baselineMode = input.baselineMode === undefined ? 'related' : input.baselineMode; check(['latest', 'related'].includes(baselineMode));
-    if (input.actions !== null) { dep('DiscoveryActions').validate(input.actions); check(input.actions.workspaceId === workspaceId); }
+    if (input.actions !== null) { dep('DiscoveryActions').validate(input.actions, { totals: false }); check(input.actions.workspaceId === workspaceId); }
     const personalOptIn = !!input.actions && !input.actions.deleted && input.actions.personalizationEnabled;
     return { feed, profile, feedback, knownUrls: copy(input.knownUrls), contentLanguages, actions: input.personalAllowed && personalOptIn ? copy(input.actions) : null,
       personalAllowed: input.personalAllowed, personalOptIn, translationTarget: input.translationTarget, baselineMode,
@@ -264,5 +266,59 @@
   }
   function setPreference(profile, value, options) { const result = next(profile, options); check(result.session !== null); result.session.preference = value; return finish(result); }
   function clear(profile, options) { return finish({ ...next(profile, options), deleted: true, session: null }); }
-  return Object.freeze({ MAX_BYTES, INTENTS, READINGS, REASONS, PREFERENCES, empty, validate, createComparison, setReview, setPreference, clear });
+  // --- Two account documents (review MAJOR-1, 2026-11-11), as for reactions (discovery-actions.js). The shell shipped
+  // before the added sources reads `discoveryReading` with at most twenty sources from its nine-source registry and holds
+  // back a comparison over more. Its next own edit then replaced the account copy. So a comparison that validator
+  // cannot read lives in `discoveryReadingExtended`, which that shell does not know; `discoveryReading` only ever holds
+  // one it can read. The pair reads as one profile: the comparison of the document changed last (a tie: the extended).
+  function legacyIds() { const value = dep('Discovery'); return new Set(Array.isArray(value.LEGACY_SOURCE_IDS) ? value.LEGACY_SOURCE_IDS : Object.keys(value.ALLOWED_SOURCES)); }
+  function legacySession(session) {
+    if (session === null) return true;
+    const ids = legacyIds(), sources = session.conditions.sourceIds;
+    return sources.length <= (dep('Discovery').LIMITS.legacySources ?? 20) && sources.every(value => ids.has(value));
+  }
+  function legacyCompatible(profile) { validate(profile); return legacySession(profile.session); }
+  const later = (a, b) => Date.parse(a) >= Date.parse(b) ? a : b;
+  function shownFrom(legacy, extended) {
+    if (!legacy.session) return extended.session ? 'extended' : null;
+    if (!extended.session) return 'legacy';
+    return Date.parse(extended.updatedAt) >= Date.parse(legacy.updatedAt) ? 'extended' : 'legacy';
+  }
+  function combine(legacy, extended) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId);
+    const from = shownFrom(legacy, extended), session = from ? copy((from === 'legacy' ? legacy : extended).session) : null;
+    const stamps = [legacy.updatedAt, extended.updatedAt].filter(Boolean), revision = legacy.revision + extended.revision;
+    return finish({ schemaVersion: 1, workspaceId: legacy.workspaceId, revision, deleted: revision > 0 && !session && (legacy.deleted || extended.deleted),
+      updatedAt: stamps.length ? stamps.reduce(later) : null, session });
+  }
+  // A saved profile back to the document it belongs to; the other one is left as it is (`null`). An edit of the shown
+  // comparison stays in its document; a new comparison goes to the legacy document only when that shell can read it.
+  function separate(profile, legacy, extended) {
+    validate(profile); validate(legacy); validate(extended); check(profile.workspaceId === legacy.workspaceId && legacy.workspaceId === extended.workspaceId);
+    const from = shownFrom(legacy, extended), shown = from ? (from === 'legacy' ? legacy : extended).session : null;
+    let target = profile.session === null ? from || 'legacy' : shown && profile.session.id === shown.id ? from : legacySession(profile.session) ? 'legacy' : 'extended';
+    if (target === 'legacy' && !legacySession(profile.session)) target = 'extended';
+    const doc = target === 'legacy' ? legacy : extended;
+    const next = finish({ ...copy(doc), revision: doc.revision + 1, deleted: profile.deleted, updatedAt: profile.updatedAt, session: copy(profile.session) });
+    return { legacy: target === 'legacy' ? next : null, extended: target === 'extended' ? next : null };
+  }
+  // A legacy document holding a comparison that shell cannot read (written before this split): the comparison moves
+  // to the extended document unless that one holds a newer comparison. The replaced or older one is returned as `lost`
+  // ({ from, value }) for a recovery copy. Nothing happens when there is nothing to move.
+  function migrate(legacy, extended, now) {
+    validate(legacy); validate(extended); check(legacy.workspaceId === extended.workspaceId && stamp(now));
+    if (legacySession(legacy.session)) return null;
+    const time = [now, legacy.updatedAt, extended.updatedAt].filter(Boolean).reduce(later), lost = [];
+    const moves = !extended.session || Date.parse(legacy.updatedAt) >= Date.parse(extended.updatedAt);
+    let extendedNext = null;
+    if (moves) {
+      if (extended.session) lost.push({ from: 'extended', value: copy(extended) });
+      extendedNext = finish({ ...copy(extended), revision: extended.revision + 1, deleted: false, updatedAt: time, session: copy(legacy.session) });
+      check(extendedNext.session.id === legacy.session.id);
+    } else lost.push({ from: 'legacy', value: copy(legacy) });
+    const legacyNext = finish({ ...copy(legacy), revision: legacy.revision + 1, deleted: true, updatedAt: time, session: null });
+    return { legacy: legacyNext, extended: extendedNext, lost };
+  }
+  return Object.freeze({ MAX_BYTES, INTENTS, READINGS, REASONS, PREFERENCES, empty, validate, createComparison, setReview, setPreference, clear,
+    legacySession, legacyCompatible, combine, separate, migrate });
 });

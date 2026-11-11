@@ -331,10 +331,14 @@ async function main() {
           const main = document.querySelector('#lifeMain'), css = getComputedStyle(main), host = document.querySelector('#discoveryReaderHost'), list = document.querySelector('#discoveryListPane');
           return { split: main.dataset.split || null, wide: main.dataset.wide || null, handles: document.querySelectorAll('.haedo-split-handle').length, reading: document.querySelector('#discoveryReview').dataset.reading,
             host: host.checkVisibility(), hostChildren: host.childElementCount, placeholder: document.querySelectorAll('.discovery-reader-empty').length, text: document.body.innerText.includes('목록에서 글을 고르면'),
-            content: main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), list: list.getBoundingClientRect().width, app: document.querySelector('.life-app').getBoundingClientRect().width };
+            content: main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), list: list.getBoundingClientRect().width, app: document.querySelector('.life-app').getBoundingClientRect().width,
+            start: Math.round(list.getBoundingClientRect().left - main.getBoundingClientRect().left - parseFloat(css.paddingLeft)) };
         });
         assert.deepEqual([layout.split, layout.wide, layout.handles, layout.reading, layout.host, layout.hostChildren, layout.placeholder, layout.text], [null, 'news', 0, 'false', false, 0, 0, false], label + ': list only');
-        assert(Math.abs(layout.list - layout.content) <= 1, label + ': the list fills the content width');
+        // 2026-11-11 (카드 피드, 총괄 결정): the card list alone is one 680px column on the 자료 list's start line; the
+        // 960px frame below stays the frame it sits in (was: the list fills that frame, for the row list).
+        assert(Math.abs(layout.list - Math.min(680, layout.content)) <= 1, label + ': the card list is one 680px column: ' + layout.list);
+        assert(Math.abs(layout.start) <= 1, label + ': same start line as the 자료 list');
         assert.equal(Math.round(layout.content), Math.min(960, Math.round(layout.app - 48)), label + ': same frame as the 자료 list');
       };
       for (const width of [1101, 1440, 1920]) {

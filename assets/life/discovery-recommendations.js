@@ -55,7 +55,7 @@
     return result;
   }
   function signalsFor(actions, options, now, equivalences) {
-    if (actions != null) actionsApi().validate(actions);
+    if (actions != null) actionsApi().validate(actions, { totals: false }); // the pair may hold more than one document's bound
     // Validate even empty selections/actions, and use the core's exact same
     // publisher-language rule for past prototypes and new candidate articles.
     discovery().languageAllowed(undefined, options.contentLanguages);

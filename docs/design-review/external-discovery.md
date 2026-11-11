@@ -33,7 +33,7 @@
 
 | 경계 | 구현과 확인 |
 | --- | --- |
-| 공개 요청 | 같은 출처의 고정 `assets/life/discovery-feed.json` GET만 사용. query·body·cookie·Authorization·referrer를 보내지 않는다. (공개 목록에 한함. 계정 전용 넓게 찾기는 2026-11-11 소유자 승인으로 직접 적은 관심 주제를 Google 뉴스에 보내는 별도 경로다 — [넓게 찾기 서버](news-wide-feed.md).) 모듈 로드·목록 표시만으로 원문 사이트에 접속하지 않는다. 원문 링크는 사용자 클릭의 native 새 탭과 `noopener noreferrer`를 사용한다. |
+| 공개 요청 | 같은 출처의 고정 `assets/life/discovery-feed.json` GET만 사용. query·body·cookie·Authorization·referrer를 보내지 않는다. (공개 목록에 한함. 계정 전용 넓게 찾기는 2026-11-11 소유자 승인으로 직접 적은 관심 주제를 Google 뉴스에 보내는 별도 경로다 — [넓게 찾기 서버](news-wide-feed.md).) 모듈 로드·목록 표시만으로 원문 사이트에 접속하지 않는다(2026-11-11부터 예외 하나: 뉴스 설정의 `기사 이미지 보기`를 켠 계정은 목록을 열 때 각 매체의 이미지 서버에서 기사 이미지를 받는다. 기본은 꺼짐이고 그때 이미지 요청은 0건이다. [카드 피드 1단계](news-card-feed.md)). 원문 링크는 사용자 클릭의 native 새 탭과 `noopener noreferrer`를 사용한다. |
 | URL 정체성 | HTTPS·등록 호스트·기본 포트만 허용. fragment·알려진 추적 키만 제거하며 필수 query의 원래 순서/중복/인코딩은 유지한다. 기존 `bundle.sources[].url`을 기준으로 보관 여부를 판정한다. 피드 ID가 재사용돼도 canonical URL이 다르면 피드백·되돌리기 대상을 바꾸지 않는다. |
 | 관심·피드백 | 계정·작업공간별 IndexedDB meta의 독립 revision CAS. 원문/workbench revision·자료/구성/사진 백업·서버 동기화·공개 사본에는 넣지 않는다. 다른 탭 충돌은 입력 의도를 보존하고 최신 상태 확인 후 재시도한다. 초기화는 revision/tombstone을 유지한다. |
 | 명시 보관 | 새 발견 화면도 기존 Core 가져오기·원자 저장을 그대로 사용한다. `toImportInput`은 항상 빈 본문·link_only로 전달한다. 합성 summary/full_text 공급도 허락 없이 본문을 가져오지 않는다. 취소는 미적용 검토만 지우고 원문을 보존한다. |
