@@ -1694,7 +1694,7 @@
         // refs, identity/receipt transfers and material output moves share tx.
         const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
         const kept = await writePhotoPost(tx, workspaceId, recovery, 0,
-          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);
+          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs, null, true);
         await meta.put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } });
         effects.evidence = !!originalEvidence;
         return { post, recoveryId, replayed: false };
@@ -1706,8 +1706,10 @@
       }
       return result;
     }
-    // `received`: the write stores what account sync brought (another device's post, or the copy a
-    // sync conflict keeps). The 200 cap below does not apply to it.
+    // `received`: the write stores a post that already exists and is not one the person starts here:
+    // what account sync brought (another device's post, the copies a sync conflict keeps), a backup
+    // restored into its restore copy, the recovery copy of a format transition. The 200 cap below
+    // does not apply to it.
     async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null, received = false) {
         // The bundle's content is read (and the whole bundle validated) only by
         // the source checks below; a plain post write checks the workspace only.
@@ -1789,15 +1791,31 @@
         value.revision = baseRevision + 1; photoPost().validate(value);
         const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
         const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
-        // The cap stops a new post or draft made on this device. It never stops a post that already
-        // exists on another device, a sync conflict's recovery copy, or saving a post that is already
-        // here: a device that refused those kept a different list from the account for good, and with
-        // a list above the cap (two devices' posts together) could not save its own posts either.
-        if (!received && index.length > 200 && index.length > countBefore) throw fault('photo_post_limit', '글과 초안은 합계 200개까지입니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
+        // The cap stops a new post or draft the person starts on this device, and only a write that
+        // makes the list longer. It never stops `received` writes (a device that refused those kept a
+        // different list from the account for good), saving a post or draft that is already here, or
+        // the one editing draft of a saved post that is here: the editor edits a saved post through a
+        // new draft that names it (`replaces`), and finishing that draft takes the list back to its
+        // length. A second editing draft of the same post, or one naming a post or revision that is
+        // not here, is a new draft like any other.
+        if (!received && index.length > 200 && index.length > countBefore && !(await editsStoredPost(meta, workspaceId, value, index)))
+          throw fault('photo_post_limit', '글과 초안은 합계 200개까지입니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
         if (naver) naver.assertCurrent();
         return clone(value);
+    }
+    // True for a new draft that edits a saved post stored here at exactly the named revision, when no
+    // other draft here already edits that post. Read only when the cap would refuse the write.
+    async function editsStoredPost(meta, workspaceId, value, index) {
+      if (value.status !== 'draft' || !value.replaces) return false;
+      const target = (await meta.get(`photo-post:${workspaceId}:${value.replaces.id}`))?.value;
+      if (!target || target.status !== 'saved' || target.revision !== value.replaces.revision) return false;
+      for (const row of index) {
+        if (row.status !== 'draft' || row.id === value.id) continue;
+        if ((await meta.get(`photo-post:${workspaceId}:${row.id}`))?.value?.replaces?.id === target.id) return false;
+      }
+      return true;
     }
     function checkedEvidence(refs, workspaceId) {
       if (!Array.isArray(refs) || refs.length > 64) throw fault('invalid_source_reference', '원문 근거는 64개까지 보관할 수 있습니다.');
@@ -1862,6 +1880,23 @@
       const assertCurrent = () => { scopeGuard(); if (isCurrent && isCurrent() === false) throw fault('request_cancelled', '화면이 바뀌어 사진 글 만들기를 중단했습니다.'); };
       assertCurrent();
       return savePhotoPost(workspaceId, input, 0, null, null, { request, assertCurrent });
+    }
+    // A post brought back from a backup into the copy its restore made (full-backup.js). It existed
+    // before, so the 200 cap for posts started on this device does not apply. Only a workspace a
+    // restore marked as its copy takes it, and only as a new post there.
+    async function restorePhotoPost(workspaceId, input, evidenceRefs = null) {
+      collectionScope(workspaceId); photoPost().validate(input);
+      const value = photoPost().compact(input);
+      if (value.revision !== 0) throw fault('photo_post_conflict', '복원하는 글은 새 사본으로만 저장합니다.');
+      const evidence = evidenceRefs === null ? null : { refs: checkedEvidence(evidenceRefs, workspaceId), baseRevision: 0 };
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        if (!(await restoredCopyValue(tx.objectStore('meta'), workspaceId))) throw fault('restored_copy_invalid', '복원으로 만든 사본에만 글을 되살릴 수 있습니다.');
+        return writePhotoPost(tx, workspaceId, value, 0, evidence, null, effects, [], null, true);
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      return result;
     }
     const materialWriting = () => root.HaedoLife?.MaterialWriting || (typeof require === 'function' && require('./material-writing.js'));
     const materialOutputKey = (workspaceId, planId) => `material-writing-output:${workspaceId}:${planId}`;
@@ -3142,7 +3177,7 @@
         }
         const receiptKey = `blog-received:${workspaceId}:${state.remoteId}`, receipt = (await meta.get(receiptKey))?.value; assertCurrent();
         if (receipt) { checkBlogReceipt(receipt, state.remoteId); throw fault('photo_post_missing', '전에 받은 글의 연결을 확인하지 못했습니다. 새 사본을 자동 생성하지 않았습니다.'); }
-        const saved = await writePhotoPost(tx, workspaceId, post, 0, null, null, effects, [], null, true); assertCurrent();
+        const saved = await writePhotoPost(tx, workspaceId, post, 0, null, null, effects); assertCurrent();
         await meta.put({ key: `blog-sync:${workspaceId}:${saved.id}`, value: { ...state, revision: 1, localRevision: saved.revision } });
         assertCurrent();
         await meta.put({ key: receiptKey, value: { owner: clone(account), remoteId: state.remoteId, localPostId: saved.id } });
@@ -6036,7 +6071,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, readMaterialContinuityOutputDeletion, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,

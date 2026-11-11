@@ -355,6 +355,24 @@ test('automatic receive adopts a server preparation into the same workspace with
   f.close();
 });
 
+// Core review M6 (2026-11-11): a finished post that arrives with a preparation already exists on
+// another device, so the 200 posts+drafts cap for posts started on this device does not refuse it.
+test('automatic receive stores a preparation\'s finished post at the 200-post cap; a post started here is still refused', async () => {
+  const f = await fixture(), output = { ...writing(), state: 'saved', revision: 3, refs: [f.reference] }, row = rowFor(f, output), post = savedPost(f, output);
+  const blogRow = { id: output.postId, workspace_id: f.ws, revision: 3, data: Blog.pack(post), publication: null };
+  await f.a.saveMaterialWriting(f.ws, { ...M.empty(f.ws), revision: f.state.revision, plans: [] }, f.state.revision);
+  const own = n => { const doc = P.create(Core.id); doc.title = '이 기기의 글 ' + n; doc.ops = [{ insert: '본문\n' }]; doc.status = 'saved'; return doc; };
+  for (let n = 0; n < 200; n++) await f.a.savePhotoPost(f.ws, own(n), 0);
+  await assert.rejects(f.a.savePhotoPost(f.ws, own(200), 0), { code: 'photo_post_limit' });
+  const result = await f.a.adoptMaterialContinuity(row, { post, blogRow });
+  assert.equal(result.workspaceId, f.ws); assert.equal(result.adopted, true);
+  const posts = await f.a.listPhotoPosts(f.ws); assert.equal(posts.length, 201);
+  const plan = (await f.a.readMaterialWriting(f.ws)).plans.find(value => value.id === f.plan.id), doc = await f.a.readPhotoPost(f.ws, plan.output.postId);
+  assert.equal(doc.title, '기존 완성 글'); assert.deepEqual(doc.ops, post.ops);
+  assert.equal((await f.a.readBlogSyncState(f.ws, doc.id)).remoteId, output.postId);
+  await assert.rejects(f.a.savePhotoPost(f.ws, own(201), 0), { code: 'photo_post_limit' });
+  f.close();
+});
 test('automatic receive never replaces a local preparation with the same ID or a changed exact source version', async () => {
   const f = await fixture(), row = rowFor(f);
   await assert.rejects(f.a.adoptMaterialContinuity(row), { code: 'material_continuity_exists' });
