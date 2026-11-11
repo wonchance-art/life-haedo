@@ -4,6 +4,7 @@
  * through the same storage API. The Korean IME is driven with CDP Input.imeSetComposition, not a real keyboard. */
 'use strict';
 const R = require('./helpers/records-reader.cjs');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const { assert, frames, settle } = R;
 const S = R.suite('records-reader-small', 'Local Chromium, synthetic Auth, anonymous records. Small reader defects m1–m6.');
 const only = process.argv.slice(2);
@@ -321,7 +322,7 @@ async function m5() {
     await page.waitForTimeout(700);
     assert.deepEqual(await kept(), [], 'with its timer held back, nothing has been kept yet');
     await page.evaluate(leave => window.dispatchEvent(new Event(leave, { cancelable: true })), leave);
-    await page.waitForFunction(async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).some(stage => stage.input?.text === '떠나기 직전에 친 마지막 문장.'); });
+    await awaitCondition(page, async () => { const storage = HaedoLife.Shell.storage; return (await storage.listStages(await storage.getActive())).some(stage => stage.input?.text === '떠나기 직전에 친 마지막 문장.'); }, undefined, { timeout: 10000, label: 'the import input kept on ' + leave });
     assert.deepEqual(await kept(), [['방금 붙인 글', '떠나기 직전에 친 마지막 문장.']]);
     await context.close();
   });
