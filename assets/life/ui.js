@@ -534,9 +534,7 @@
     // back. One entry, for one account and one space: another account or space never reads it and removes it.
     const SOURCE_DRAFTS_KEY = 'caeyeon_life_reader_drafts';
     const sourceDraftOwner = () => storage.account?.userId || 'local';
-    let sourceDraftStoreClosed = false;
     function storeSourceDrafts() {
-      if (sourceDraftStoreClosed) return;
       try {
         const drafts = {};
         for (const [versionId, draft] of state.sourceDrafts) {
@@ -4476,14 +4474,10 @@
           .filter(item => item.tabIndex >= 0 && !item.disabled && (item.checkVisibility ? item.checkVisibility() : item.getClientRects().length > 0));
         const next = stops[stops.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1)];
         // Tab past the last control of an open panel: what follows it in the document is the top of the text, far
-        // above the line being read, and the open panel would cover it. The panel closes and focus returns to its
-        // button (as Escape does); from there Tab goes on along the tool row.
+        // above the line being read, and the open panel would cover it. The panel closes, which returns focus to
+        // its button (disclosure does that when focus was inside); from there Tab goes on along the tool row.
         const openSheet = dock.querySelector(':scope > .life-reader-sheet:not([hidden])');
-        if (!event.shiftKey && openSheet?.contains(document.activeElement) && (!next || !dock.contains(next))) {
-          event.preventDefault(); openSheet.closeSheet?.();
-          dock.querySelector('[aria-controls="' + openSheet.id + '"]')?.focus({ preventScroll: true });
-          return;
-        }
+        if (!event.shiftKey && openSheet?.contains(document.activeElement) && (!next || !dock.contains(next))) { event.preventDefault(); openSheet.closeSheet?.(); return; }
         if (!stops.includes(document.activeElement) || !next || !dock.contains(next)) return;
         event.preventDefault(); next.focus({ preventScroll: true });
         const sheet = next.closest('.life-reader-sheet');
@@ -5014,8 +5008,6 @@
         sourceDraft.topic = topic.input.value;
         sourceDraft.note = note.input.value;
         sourceDraft.range = state.sourceSelection && { ...state.sourceSelection };
-        // (Typing here again after a logout that did not complete: this tab keeps its copy again.)
-        sourceDraftStoreClosed = false;
         state.sourceDrafts.set(version.id, sourceDraft); storeSourceDrafts();
         announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.');
       };
@@ -6543,7 +6535,7 @@
       await persistDrafts();
       // Logging out: the unsaved excerpt notes were just kept as review drafts in this account's storage. Their
       // copy in this tab's session storage is plain text and must not stay behind after the account has left.
-      sourceDraftStoreClosed = true;
+      // (If the logout does not complete, the next key typed in a note keeps the tab copy again.)
       try { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); } catch (_) { /* unavailable */ }
     }
 
