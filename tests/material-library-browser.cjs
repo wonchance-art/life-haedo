@@ -25,7 +25,9 @@ const snapshot = page => page.evaluate(async () => {
   return { bundle: await s.read(id), stages: await s.listStages(id) };
 });
 async function records(page) {
-  await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page);
+  // 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+  // 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+  await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page);
   await page.locator('#lifeSearch').waitFor();
 }
 async function reveal(control) {
@@ -273,17 +275,22 @@ async function main() {
       assert.equal(after.sourceVersions.length, 2); assert.deepEqual(after.sourceVersions.find(v => v.id === f.version.id), f.version);
       report.observations.push({ actualIDBAbort: true, faultHookRemovedBeforeRetry: true, inputRetained: true, oldGraphAtomic: true });
     });
-    await check('Two actual tabs reject a late source edit after trash and explicit restoration without losing its draft', async ({ page, context }) => {
+    // 2026-11-11 소유자 지시(자료 수정 초안이 어긋나면 영영 못 고침): 휴지통 왕복은 본문과 무관하므로 충돌이 아니다.
+    // 휴지통에 있는 동안의 늦은 저장은 계속 거절하고(자동 복원 없음), 명시 복원 뒤에는 같은 입력이 새 판으로 저장된다.
+    // 이전 단언은 복원 뒤에도 거절(새 편집 기준 필요)을 요구했고, 그 초안은 버릴 길이 없었다.
+    await check('Two actual tabs reject a late source edit while trashed and save the kept draft after explicit restoration', async ({ page, context }) => {
       const f = await importMarkdown(page); await beginEdit(page); await page.locator('#lifeSourceEditText').fill(edited);
       const other = await context.newPage(); other.setDefaultTimeout(15000); observe(other, report, 'two-tab companion');
       await openSource(other, f.source.id); await trash(other);
       assert.equal(await page.evaluate(async id => { const s = HaedoLife.Shell.storage; return HaedoLife.Core.sourceState(await s.read(await s.getActive()), id).status; }, f.source.id), 'trash');
       assert.equal(await page.locator('#lifeSourceEditText').inputValue(), edited); await click(page, '#lifeSourceEditSave'); await errorVisible(page);
       assert.equal((await snapshot(page)).bundle.sourceVersions.length, 1); assert.equal(await page.locator('#lifeSourceEditText').inputValue(), edited);
+      assert.equal(await page.evaluate(async id => { const s = HaedoLife.Shell.storage; return HaedoLife.Core.sourceState(await s.read(await s.getActive()), id).status; }, f.source.id), 'trash', 'the refused save did not restore the material');
       await openTrash(other); await click(other, `[data-source-restore="${f.source.id}"]`);
-      await click(page, '#lifeSourceEditSave'); await errorVisible(page); const final = await snapshot(page);
-      assert.equal(final.bundle.sourceVersions.length, 1); assert.deepEqual(final.bundle.sourceVersions[0], f.version); assert.equal(await page.locator('#lifeSourceEditText').inputValue(), edited);
-      await other.close(); report.observations.push({ tabs: 2, staleEditCouldNotRestoreTrash: true, restoredLifecycleStillRequiresFreshEditBase: true, draftInputPreserved: true, faultHooks: 0 });
+      await click(page, '#lifeSourceEditSave'); await page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor(); const final = await snapshot(page);
+      assert.equal(final.bundle.sourceVersions.length, 2); assert.deepEqual(final.bundle.sourceVersions[0], f.version); assert.equal(final.bundle.sourceVersions[1].contentText, edited);
+      assert.equal(final.bundle.sources.length, 1); assert.match(await page.locator('.life-reader').textContent(), /버전 2\/2 · 해도에서 수정한 사본/);
+      await other.close(); report.observations.push({ tabs: 2, staleEditCouldNotRestoreTrash: true, restoredMaterialSavesKeptDraftAsNewVersion: true, draftInputPreserved: true, faultHooks: 0 });
     });
   } finally {
     await browser.close(); report.browserClosed = true;

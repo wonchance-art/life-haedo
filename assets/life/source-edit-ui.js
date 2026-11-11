@@ -221,7 +221,9 @@
           const bundle = await storage.read(session.workspaceId);
           if (!showing(session, token) || session.stage.state !== 'draft' || session.discarded) return;
           const base = model.baseState(bundle, session.stage);
-          if (base.status !== 'current') { remember(session); renderBase(session, base); }
+          // A material in the trash can come back: the editor stays, with its message and 다시 저장, which
+          // works again once the material is restored. A newer version or a missing material needs a choice.
+          if (base.status === 'moved' || base.status === 'missing') { remember(session); renderBase(session, base); }
         } catch (_) { /* The plain error with 입력 파일 받기 stays. */ }
         finally { session.rechecking = null; }
       })();

@@ -217,11 +217,16 @@ async function main() {
       const f = await fixture();
       await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
       await trash(f.page, f.sourceId);
-      await f.page.locator('#lifeSourceEditSave').click(); await f.page.locator('#lifeSourceEditBase').waitFor();
+      await f.page.locator('#lifeSourceEditSave').click(); await f.page.locator('#lifeSourceEditError:not([hidden])').waitFor(); await f.page.waitForTimeout(300);
       let state = await editorState(f.page);
-      assert.equal(state.panel, 'trashed'); assert.deepEqual(state.buttons, ['lifeSourceEditDownload', 'lifeSourceEditDiscard']);
+      // The editor stays (the material can be restored): the message, 다시 저장 and 입력 파일 받기, and the input as typed.
+      assert.equal(state.panel, null); assert.equal(state.text, typed); assert.match(state.error, /휴지통의 자료는 복원한 뒤 수정해 주세요/);
+      assert.deepEqual(await f.page.locator('#lifeSourceEditError button').evaluateAll(buttons => buttons.map(button => button.id)), ['lifeSourceEditRetry', 'lifeSourceEditDownload']);
+      assert.equal(await f.page.locator('#lifeSourceEditDiscard').isDisabled(), false);
       assert.equal((await versions(f.page, f.sourceId)).length, 1, 'no version was saved into a trashed material');
       assert.equal((await drafts(f.page))[0].text, typed);
+      await f.page.locator('#lifeSourceEditRetry').click(); await f.page.waitForTimeout(300);
+      assert.equal((await versions(f.page, f.sourceId)).length, 1, 'still refused while it is in the trash'); assert.equal((await editorState(f.page)).text, typed);
       // Opened again from the list of drafts: the same explanation, not an editor that cannot save.
       await R.list(f.page); await f.page.locator('#lifeImportDrafts summary').click(); await f.page.locator('[data-source-edit-stage-id]').click(); await f.page.locator('#lifeSourceEditBase').waitFor();
       state = await editorState(f.page); assert.equal(state.panel, 'trashed'); assert.equal(state.editor, false);
