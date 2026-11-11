@@ -84,7 +84,11 @@
   }
   // How readBackup set the times of the document it returned: "kept" (from the
   // backup), "missing" (an older backup without times: the restore time) or
-  // "adjusted" (a time later than now was replaced by the restore time).
+  // "adjusted" (a time later than now, or before the years 일정 handles, was
+  // replaced by the restore time).
+  // 일정 handles civil days of 1900–2199 (ScheduleData.valid). One day inside,
+  // so no device time zone carries a kept time out of that range.
+  const EARLIEST_TIME = "1900-01-02T00:00:00.000Z";
   const restoredTimes = new WeakMap();
   const backupTimes = (d) =>
     (d && typeof d === "object" && restoredTimes.get(d)) || null;
@@ -988,10 +992,14 @@
         throw fault("사진 글 날짜 순서를 확인해 주세요.");
       // A time later than now (a device clock that ran ahead) cannot be kept:
       // it becomes the restore time. The order above still holds.
-      const now = d.createdAt;
-      restoredTimes.set(d, m.updatedAt > now ? "adjusted" : "kept");
-      d.createdAt = m.createdAt > now ? now : m.createdAt;
-      d.updatedAt = m.updatedAt > now ? now : m.updatedAt;
+      // A createdAt before the years 일정 handles is not kept either (a post
+      // dated in the year 999 stopped the first screen's list, on every device
+      // of the account once it was uploaded): both times become the restore
+      // time, because updatedAt may not precede createdAt.
+      const now = d.createdAt, early = m.createdAt < EARLIEST_TIME;
+      restoredTimes.set(d, early || m.updatedAt > now ? "adjusted" : "kept");
+      d.createdAt = early || m.createdAt > now ? now : m.createdAt;
+      d.updatedAt = early || m.updatedAt > now ? now : m.updatedAt;
     } else restoredTimes.set(d, "missing");
     if (md) {
       d.format = "life-post-md-v1";

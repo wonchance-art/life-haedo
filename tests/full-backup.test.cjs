@@ -1076,3 +1076,31 @@ test('m5: no backup or export file name is cut from a UTC timestamp', () => {
     assert.equal(exportName('png'), '연표-2026-11-11.png');
   } finally { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; }
 });
+
+// ── 2026-11-11 review MAJOR-2: times before the years 일정 handles ──
+test('M2: a createdAt before 1900 is not kept: both times become the restore time and the result says adjusted', async () => {
+  const { docs } = await datedPosts();
+  const bytes = new Uint8Array(await (await Photo.backup(docs[0])).arrayBuffer());
+  const read = change => Photo.readBackup(new Blob([rewritePost(bytes, change)]), Core.id);
+  for (const [createdAt, updatedAt] of [['0000-06-01T00:00:00.000Z', '0000-06-02T00:00:00.000Z'], ['0001-01-01T00:00:00.000Z', '0001-01-02T00:00:00.000Z'],
+    ['0999-06-01T00:00:00.000Z', '0999-06-02T00:00:00.000Z'], ['1000-06-01T00:00:00.000Z', '1000-06-02T00:00:00.000Z'], ['1899-12-31T14:59:59.999Z', '1899-12-31T15:00:00.000Z'],
+    ['1900-01-01T23:59:59.999Z', '1900-01-01T23:59:59.999Z'], ['0999-06-01T00:00:00.000Z', docs[0].updatedAt], ['0999-06-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z']]) {
+    const startedAt = new Date().toISOString(), doc = await read(m => ({ ...m, createdAt, updatedAt }));
+    assert.equal(Photo.backupTimes(doc), 'adjusted', createdAt);
+    assert.ok(doc.createdAt >= startedAt && doc.createdAt <= new Date().toISOString(), createdAt + ' → the restore time');
+    assert.equal(doc.updatedAt, doc.createdAt, 'updatedAt may not precede createdAt');
+    Photo.validate(doc);
+  }
+  // The first kept instant, and ordinary old dates, stay as they are.
+  for (const createdAt of ['1900-01-02T00:00:00.000Z', '1969-07-20T20:17:00.000Z']) {
+    const doc = await read(m => ({ ...m, createdAt }));
+    assert.equal(Photo.backupTimes(doc), 'kept'); assert.deepEqual(postTimes(doc), { createdAt, updatedAt: docs[0].updatedAt });
+  }
+  // Years after the range are later than now: adjusted by the existing rule.
+  for (const year of ['2200', '9999']) {
+    const doc = await read(m => ({ ...m, createdAt: year + '-01-01T00:00:00.000Z', updatedAt: year + '-12-31T23:59:59.999Z' }));
+    assert.equal(Photo.backupTimes(doc), 'adjusted'); assert.equal(doc.createdAt, doc.updatedAt); assert.ok(doc.createdAt <= new Date().toISOString());
+  }
+  const report = (await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, createdAt: '0999-06-01T00:00:00.000Z', updatedAt: '0999-06-02T00:00:00.000Z' }))]))).report;
+  assert.deepEqual([report.items[0].status, report.items[0].times], ['restored', 'adjusted']);
+});

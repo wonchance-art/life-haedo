@@ -56,3 +56,20 @@ test('records group by the local civil day of their time; plans by their own dat
   assert.equal(D.countLabel(D.summary(days, D.weekOf('2026-10-28'))), '글 1편, 발췌 1개');
   assert.equal(D.lead(days, ['2026-10-28']).id, 'a');
 });
+
+// ── 2026-11-11 review MAJOR-2: a record whose time lies outside the days 일정 handles ──
+test('a time outside 1900–2199 has no day (the list says 날짜 미확인, calendars leave it out) and never breaks parts()', () => {
+  const D = require('../assets/life/schedule-data.js');
+  for (const iso of ['0000-06-01T00:00:00.000Z', '0001-01-01T00:00:00.000Z', '0999-06-02T00:00:00.000Z', '1000-06-01T00:00:00.000Z', '1899-06-01T12:00:00.000Z', '2200-06-01T12:00:00.000Z', '9999-12-31T23:59:59.999Z'])
+    assert.equal(D.dayOf(iso), null, iso);
+  for (const iso of ['1900-06-01T12:00:00.000Z', '2026-11-11T03:00:00.000Z', '2199-06-01T12:00:00.000Z']) {
+    const day = D.dayOf(iso); assert.ok(D.valid(day), iso); assert.equal(typeof D.parts(day).year, 'number'); assert.ok(D.dayTitle(day));
+  }
+  assert.equal(D.dayOf('not a time'), null); assert.equal(D.dayOf(undefined), null);
+  // civil() always writes four year digits, so parts() reads what civil() wrote.
+  for (const [date, text] of [[new Date(999, 5, 2, 12), '0999-06-02'], [new Date(2026, 10, 11, 12), '2026-11-11']]) { assert.equal(D.civil(date), text); assert.deepEqual(D.parts(D.civil(date)), { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() }); }
+  const early = new Date(2000, 0, 1, 12); early.setFullYear(7); assert.equal(D.civil(early), '0007-01-01');
+  // Grouping keeps the readable records and skips the one without a day.
+  const days = D.group({ posts: [{ id: 'a', at: '0999-06-02T00:00:00.000Z' }, { id: 'b', at: '2026-11-11T03:00:00.000Z' }] });
+  assert.deepEqual([...days.values()].flatMap(entry => entry.posts.map(post => post.id)), ['b']);
+});

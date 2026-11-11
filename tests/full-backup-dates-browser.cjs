@@ -166,12 +166,73 @@ async function main() {
       const failed = page.locator('#fbRestoreReport [data-kind="photoPosts"][data-status="failed"]');
       assert.match(await failed.innerText(), /익명 샘플 글 3: 사진 글 날짜 순서를 확인해 주세요\./);
       // 글 4 names a time fifteen minutes after this device's clock: it is set to the restore time, and said.
-      assert.equal(await page.locator('#fbRestoreDates').innerText(), '글 1개는 날짜가 지금보다 늦어 복원한 시각으로 맞췄습니다.');
+      assert.equal(await page.locator('#fbRestoreDates').innerText(), '글 1개는 백업의 날짜가 지금보다 늦거나 1900년보다 앞서 복원한 시각으로 맞췄습니다.');
       await openCopy(page);
       const restored = await storedPosts(page);
       assert.deepEqual(restored.posts.map(post => post.title), POSTS.filter(post => post.title !== '익명 샘플 글 3').map(post => post.title));
       const four = restored.posts.find(post => post.title === '익명 샘플 글 4');
       assert.deepEqual([four.createdAt, four.updatedAt], [POSTS[3].createdAt, new Date(RESTORE_DAY).toISOString()]);
+    }, RESTORE_DAY);
+
+    // ── review MAJOR-2: times outside the years 일정 handles ──
+    const EXTREME = { '익명 샘플 글 1': ['0001-01-01T00:00:00.000Z', '0001-01-02T00:00:00.000Z'], '익명 샘플 글 2': ['0999-06-01T00:00:00.000Z', '0999-06-02T00:00:00.000Z'],
+      '익명 샘플 글 3': ['2200-01-01T00:00:00.000Z', '2200-01-02T00:00:00.000Z'], '익명 샘플 글 4': ['9999-12-31T23:59:59.000Z', '9999-12-31T23:59:59.999Z'] };
+    const views = async page => {
+      for (const view of ['tools', 'month', 'day']) { await page.goto(base + '/index.html?section=schedule&view=' + view); await ready(page); await shown(page, view); }
+      await page.goto(base + '/index.html'); await ready(page); await list(page);
+    };
+    await check('posts dated in the years 0001, 0999, 2200 and 9999 restore with the restore time and a notice; the list, Y, M and D open and the copies reach the account', async ({ page, server }) => {
+      const extreme = rewriteBundle(state.archive, { version: 3, post: manifest => EXTREME[manifest.title] ? { ...manifest, createdAt: EXTREME[manifest.title][0], updatedAt: EXTREME[manifest.title][1] } : manifest });
+      await page.goto(base + '/index.html'); await ready(page); await list(page);
+      await restore(page, extreme);
+      assert.equal(await page.locator('#fbRestoreReport [data-kind="photoPosts"][data-status="failed"]').count(), 0, 'no post is dropped');
+      assert.equal(await page.locator('#fbRestoreDates').innerText(), '글 4개는 백업의 날짜가 지금보다 늦거나 1900년보다 앞서 복원한 시각으로 맞췄습니다.');
+      await page.screenshot({ path: path.join(output, 'restore-result-adjusted.png'), fullPage: true });
+      await openCopy(page);
+      const restored = await storedPosts(page), now = new Date(RESTORE_DAY).toISOString();
+      assert.deepEqual(restored.posts.map(post => [post.title, post.createdAt, post.updatedAt]), POSTS.map(post => EXTREME[post.title] ? [post.title, now, now] : [post.title, post.createdAt, post.updatedAt]));
+      await views(page);
+      assert.equal((await listTitles(page)).length, 6, 'the first screen lists every restored post');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-20'); await ready(page); await shown(page, 'day');
+      assert.equal(await page.locator('#lifeSchedule [data-schedule-item]').count(), 4, 'the four adjusted posts are on the restore day');
+      await page.goto(base + '/index.html'); await ready(page); await list(page);
+      await blogSyncSettled(page, restored.ws);
+      const years = [...server.posts.values()].filter(row => !row.deleted_at).map(row => row.data.createdAt.slice(0, 4)).sort();
+      assert.deepEqual(years, ['2026', '2026', '2026', '2026', '2026', '2026'], 'no out-of-range time reaches the account');
+    }, RESTORE_DAY);
+
+    await check('the same times in a single post ZIP opened in the editor (사진 글 백업 열기): the new draft has the restore time and the list opens', async ({ page }) => {
+      const files = Z.unzipSync(new Uint8Array(state.archive)), manifest = JSON.parse(Buffer.from(files['manifest.json']).toString());
+      const inner = Z.unzipSync(files[manifest.files.find(item => item.kind === 'photoPosts' && item.title === '익명 샘플 글 2').path]), post = JSON.parse(Buffer.from(inner['manifest.json']).toString());
+      const zip = Buffer.from(Z.zipSync({ ...inner, 'manifest.json': Z.strToU8(JSON.stringify({ ...post, createdAt: '0999-06-01T00:00:00.000Z', updatedAt: '0999-06-02T00:00:00.000Z' })) }, { level: 0 }));
+      await page.goto(base + '/index.html?section=records&view=page'); await ready(page);
+      const retained = page.locator('.wb-page-compatibility'); if (!await retained.evaluate(node => node.open)) await retained.locator(':scope > summary').click();
+      await page.locator('.wb-post-feed').waitFor();
+      const filesMenu = page.locator('.photo-files'); if (!await filesMenu.evaluate(node => node.open)) await filesMenu.locator(':scope > summary').click();
+      await page.getByLabel('사진 글 ZIP 백업', { exact: true }).setInputFiles({ name: 'post.zip', mimeType: 'application/zip', buffer: zip });
+      await page.getByRole('button', { name: '새 초안으로 복원', exact: true }).click(); await page.locator('#photoTitle').waitFor();
+      const stored = await storedPosts(page), now = new Date(RESTORE_DAY).toISOString();
+      assert.deepEqual(stored.posts.map(post => [post.title, post.status, post.createdAt.slice(0, 4)]), [['익명 샘플 글 2', 'draft', '2026']]);
+      assert.ok(stored.posts[0].createdAt >= now);
+      await views(page);
+    }, RESTORE_DAY);
+
+    await check('a post already stored with a time in the year 999 (an earlier restore, or another device): the list opens, shows it under 날짜 미확인, and Y·M·D open', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await list(page);
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+        for (const [title, createdAt, updatedAt] of [['범위 안의 글', '2026-11-10T13:10:00.000Z', '2026-11-10T13:10:00.000Z'], ['서기 999년의 글', '0999-06-01T00:00:00.000Z', '0999-06-02T00:00:00.000Z'],
+          ['서기 1년의 글', '0001-01-01T00:00:00.000Z', '0001-01-02T00:00:00.000Z']]) {
+          const doc = m.create(c.id, createdAt); doc.title = title; doc.status = 'saved'; doc.updatedAt = updatedAt; doc.ops = [{ insert: '천변을 따라 걸었다.\n' }];
+          await s.savePhotoPost(ws, doc, 0);
+        }
+      });
+      await views(page);
+      assert.deepEqual((await listTitles(page)).sort(), ['범위 안의 글', '서기 1년의 글', '서기 999년의 글']);
+      assert.deepEqual(await page.locator('#homePosts .home-day-heading').allInnerTexts(), ['11월 10일 화요일', '날짜 미확인']);
+      // The same day of other years (D's 다른 해) and the month hold only the readable post.
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-06-02'); await ready(page); await shown(page, 'day');
+      assert.equal(await page.locator('#lifeSchedule').getByText('서기 999년의 글').count(), 0);
     }, RESTORE_DAY);
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
