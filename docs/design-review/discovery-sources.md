@@ -175,7 +175,7 @@ article {…기존 필드, imageUrl?}
 
 ## 데이터 계약과 날짜
 
-파일은 `assets/life/discovery-feed.json` 하나다. 브라우저는 같은 출처의 고정 경로만 GET하고, 개인 본문·관심·검색어를 이 갱신 스크립트나 원천 사이트에 보내지 않는다. 갱신기는 미리 고정한 공개 피드를 받으며 개인 입력 인자가 없다.
+파일은 `assets/life/discovery-feed.json` 하나다. 브라우저는 같은 출처의 고정 경로만 GET하고, 개인 본문·관심·검색어를 이 갱신 스크립트나 원천 사이트에 보내지 않는다. (공개 수집기에 한함. 계정 전용 넓게 찾기는 2026-11-11 소유자 승인으로 별도 경로다 — [넓게 찾기 서버](news-wide-feed.md).) 갱신기는 미리 고정한 공개 피드를 받으며 개인 입력 인자가 없다.
 
 ```text
 catalog {schemaVersion:1, generatedAt, sources:[], articles:[]}
