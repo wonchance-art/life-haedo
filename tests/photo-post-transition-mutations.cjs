@@ -5,11 +5,11 @@ const root = path.resolve(__dirname, '..'), temp = fs.mkdtempSync(path.join(os.t
 const mutants = [
   { name: 'split-transaction', pattern: 'failure at recovery rolls back', edits: [
     ["const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);", "await tx.done; const post = await transaction(['bundles', 'meta'], 'readwrite', part => writePhotoPost(part, workspaceId, value, baseRevision, null, null, effects));"],
-    ["const kept = await writePhotoPost(tx, workspaceId, recovery, 0,\n          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);", "const kept = await transaction(['bundles', 'meta'], 'readwrite', part => writePhotoPost(part, workspaceId, recovery, 0, originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs));"],
+    ["const kept = await writePhotoPost(tx, workspaceId, recovery, 0,\n          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs, null, true);", "const kept = await transaction(['bundles', 'meta'], 'readwrite', part => writePhotoPost(part, workspaceId, recovery, 0, originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs, null, true));"],
     ["await meta.put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } });", "await transaction(['meta'], 'readwrite', part => part.objectStore('meta').put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } }));"]
   ] },
   { name: 'drop-recovery-evidence', pattern: '^explicit replacement preserves', edits: [
-    ["originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);", "null, null, effects, refs);"]
+    ["originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs, null, true);", "null, null, effects, refs, null, true);"]
   ] }
 ];
 try {
