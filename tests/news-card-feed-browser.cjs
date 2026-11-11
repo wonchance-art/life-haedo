@@ -63,7 +63,7 @@ async function setImages(page, on) {
   await page.locator('#discoveryNewsSettings').click();
   if (!await page.locator('#discoveryOptions').evaluate(node => node.open)) await page.locator('#discoveryOptions > summary').click();
   await page.locator('#discoveryShowImages').setChecked(on); await idle(page);
-  await until(page, async on => (await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())).showImages === on, on, 'image setting saved');
+  await until(page, async on => HaedoLife.DiscoverySettings.showImages(await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())) === on, on, 'image setting saved');
   await page.locator('#discoveryNewsSettingsBack').click(); await idle(page); await frames(page);
 }
 const sizes = { 1440: 960, 820: 1180, 390: 844 };
@@ -135,9 +135,20 @@ async function main() {
       assert.equal(await cards(page).count(), 57); assert.equal(await page.locator('#discoveryShowMore').count(), 0, 'no button when nothing is left');
       assert.equal(await page.locator('.discovery-page-count').count(), 0);
       assert.equal(await page.evaluate(() => { const card = document.activeElement.closest('#discoveryList > .discovery-article'); return [...card.parentElement.children].indexOf(card); }), 40);
-      // Newest first across the six sources: no publisher holds the page.
-      const order = await cards(page).evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
-      assert.deepEqual(order, Array.from({ length: 57 }, (_, i) => 'card-' + i));
+      // A1: to the end every article exactly once; each page of 20 newest first with at most three of one publisher
+      // (a page is filled past that only when too few publishers are left to fill it).
+      const shown = await cards(page).evaluateAll(nodes => nodes.map(node => ({ id: node.dataset.discoveryId, time: node.querySelector('time')?.getAttribute('datetime'), url: node.dataset.discoveryUrl })));
+      assert.equal(shown.length, 57); assert.deepEqual(new Set(shown.map(card => card.id)), new Set(Array.from({ length: 57 }, (_, i) => 'card-' + i)), 'no card missing or twice');
+      const publisherOf = await page.evaluate(urls => urls.map(url => { const article = [...document.querySelectorAll('#discoveryList > .discovery-article')].find(node => node.dataset.discoveryUrl === url); return article.querySelector('.discovery-source-name').textContent; }), shown.map(card => card.url));
+      for (let at = 0; at < 57; at += 20) {
+        const page_ = shown.slice(at, at + 20), names_ = publisherOf.slice(at, at + 20), tally = {};
+        for (const name of names_) tally[name] = (tally[name] || 0) + 1;
+        assert.deepEqual(page_.map(card => card.time), [...page_.map(card => card.time)].sort().reverse(), 'page ' + at / 20 + ' newest first');
+        const left = {}; for (const name of publisherOf.slice(at)) left[name] = (left[name] || 0) + 1;
+        if (Object.values(left).reduce((sum, count) => sum + Math.min(3, count), 0) >= page_.length) assert(Math.max(...Object.values(tally)) <= 3, 'page ' + at / 20 + ': ' + JSON.stringify(tally));
+      }
+      assert.deepEqual(shown.map(card => card.id), await page.evaluate(() => HaedoLife.Discovery.spreadLatest([...document.querySelectorAll('#discoveryList > .discovery-article')]
+        .map(node => ({ id: node.dataset.discoveryId, article: { sourceId: node.dataset.sourceId || '', sourceName: node.querySelector('.discovery-source-name').textContent, canonicalUrl: node.dataset.discoveryUrl, sortDate: node.querySelector('time')?.getAttribute('datetime') || null } }))).map(row => row.id)), 'the shared rule');
     });
     await check('S1 a short list has no 더 보기', async ({ page }) => {
       assert.equal(await cards(page).count(), 20); assert.equal(await page.locator('#discoveryShowMore').count(), 0); assert.equal(await page.locator('.discovery-page-count').count(), 0);
@@ -166,17 +177,21 @@ async function main() {
     });
     await check('S1 담기 and 읽음 keep the opened count, the scroll position and focus', async ({ page }) => {
       await page.locator('#discoveryShowMore').click(); await frames(page);
+      const ids = () => cards(page).evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+      const drawn = await ids(), targetId = drawn[30], nextId = drawn[31];
       const target = cards(page).nth(30); await target.scrollIntoViewIfNeeded(); await frames(page);
       const before = await page.evaluate(() => scrollY);
       await target.locator('[data-discovery-reaction=bookmarked]').click(); await idle(page); await frames(page);
       assert.equal(await cards(page).count(), 40); assert(Math.abs(await page.evaluate(() => scrollY) - before) <= 2, 'scroll kept after 담기');
-      assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.discoveryReaction, document.activeElement.closest('[data-discovery-id]').dataset.discoveryId, document.activeElement.getAttribute('aria-pressed')]), ['bookmarked', 'card-30', 'true']);
+      assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.discoveryReaction, document.activeElement.closest('[data-discovery-id]').dataset.discoveryId, document.activeElement.getAttribute('aria-pressed')]), ['bookmarked', targetId, 'true']);
+      assert.deepEqual(await ids(), drawn, 'A1: 담기 moves no card');
       assert.match(await page.locator('#discoveryBookmarked').innerText(), /^담은 글\s*1$/);
       await target.locator('.discovery-card-more > summary').click(); await frames(page);
       await target.locator('[data-discovery-feedback=already_read]').click(); await idle(page); await frames(page);
-      assert.equal(await cards(page).count(), 40, 'the next article fills the page'); assert.equal(await page.locator('#discoveryList [data-discovery-id="card-30"]').count(), 0);
+      assert.equal(await cards(page).count(), 40, 'the next article fills the page'); assert.equal(await page.locator('#discoveryList [data-discovery-id="' + targetId + '"]').count(), 0);
+      assert.deepEqual((await ids()).slice(0, 39), drawn.filter(id => id !== targetId), 'A1: the cards already drawn keep their places after 읽음');
       assert(Math.abs(await page.evaluate(() => scrollY) - before) <= 2, 'scroll kept after 읽음');
-      assert.equal(await page.evaluate(() => document.activeElement.closest('#discoveryList > .discovery-article')?.dataset.discoveryId), 'card-31', 'focus moves to the card now in that place');
+      assert.equal(await page.evaluate(() => document.activeElement.closest('#discoveryList > .discovery-article')?.dataset.discoveryId), nextId, 'focus moves to the card now in that place');
       assert.equal(await page.locator('#discoveryUndoToast').count(), 1);
     });
     for (const width of [1440, 820, 390]) {
@@ -287,6 +302,22 @@ async function main() {
         assert.deepEqual(await targets(), [], 'text cards'); await capture(page, 'cards-off-' + width);
         const columns = await page.evaluate(() => { const first = document.querySelector('#discoveryList > .discovery-article').getBoundingClientRect(); return { width: Math.round(first.width), lefts: new Set([...document.querySelectorAll('#discoveryList > .discovery-article')].map(node => Math.round(node.getBoundingClientRect().left))).size }; });
         assert.equal(columns.lefts, 1, 'one column'); assert(columns.width <= 680, 'card width up to 680px');
+        // A2: with the list alone, the tabs and tools, the cards and 더 보기 share one column; at 1440 it is 680px and
+        // the last header icon and a card's ⋯ end on the same line. 820 and 390 use the screen width.
+        const a2 = await page.evaluate(() => {
+          const visible = nodes => [...nodes].filter(node => node.getClientRects().length).map(node => node.getBoundingClientRect());
+          const pane = document.querySelector('#discoveryListPane').getBoundingClientRect(), toolbar = document.querySelector('.discovery-news-toolbar').getBoundingClientRect();
+          const controls = visible(document.querySelectorAll('.discovery-news-toolbar button, .discovery-news-toolbar summary'));
+          const card = document.querySelector('#discoveryList > .discovery-article').getBoundingClientRect(), more = document.querySelector('#discoveryList .discovery-card-more > summary').getBoundingClientRect();
+          const row = document.querySelector('.discovery-page-row').getBoundingClientRect(), layout = document.querySelector('.discovery-layout').getBoundingClientRect();
+          return { pane: Math.round(pane.width), layout: Math.round(layout.width), toolbar: [Math.round(toolbar.left), Math.round(toolbar.right)], card: [Math.round(card.left), Math.round(card.right)], row: [Math.round(row.left), Math.round(row.right)],
+            iconRight: Math.round(Math.max(...controls.map(rect => rect.right))), moreRight: Math.round(more.right) };
+        });
+        (report.columns ||= {})[width] = a2;
+        assert.deepEqual(a2.toolbar, a2.card, 'the header row and the cards share both edges'); assert.deepEqual(a2.row, a2.card, '더 보기 row in the same column');
+        assert(Math.abs(a2.iconRight - a2.moreRight) <= 1, 'header icon and card ⋯ on one vertical line: ' + a2.iconRight + ' / ' + a2.moreRight);
+        if (width === 1440) assert.equal(a2.pane, 680, 'one 680px column');
+        else assert.equal(a2.pane, a2.layout, 'the screen width is used');
         await setImages(page, true); await page.waitForLoadState('networkidle'); await frames(page);
         assert.deepEqual(await targets(), [], 'image cards');
         const media = await page.locator('#discoveryList .discovery-card-media').first().evaluate(node => { const rect = node.getBoundingClientRect(), card = node.closest('.discovery-article').getBoundingClientRect(); return { ratio: rect.width / rect.height, width: Math.round(rect.width), card: Math.round(card.width), radius: getComputedStyle(node).borderRadius, fit: getComputedStyle(node.firstElementChild).objectFit }; });
@@ -367,7 +398,7 @@ async function main() {
       assert.equal(state.images.filter(request => request.url === broken).length, 1, 'a failed image is not retried');
       // The choice is the account's news setting (same document as the other news options).
       const stored = await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readDiscoverySettings(await s.getActive()); });
-      assert.equal(stored.showImages, true); assert.equal(stored.schemaVersion, 1); assert.equal(stored.autoRefresh, false);
+      assert.deepEqual(stored.disabledSourceIds, ["option-images-on"]); assert.deepEqual(Object.keys(stored).sort(), ["autoRefresh", "deleted", "disabledInterestIds", "disabledSourceIds", "revision", "schemaVersion", "updatedAt", "workspaceId"]); assert.equal(stored.schemaVersion, 1); assert.equal(stored.autoRefresh, false);
       report.settingsUploads = server.writes().filter(write => /discoverySettings/.test(JSON.stringify(write))).length;
       await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
       await until(page, () => document.querySelectorAll('#discoveryList .discovery-card-media > img').length > 0, null, 'images after reload');
@@ -381,7 +412,7 @@ async function main() {
       const after = state.images.length;
       await page.locator('#discoveryShowMore').click(); await frames(page); await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await page.waitForTimeout(400);
       assert.equal(state.images.length, after, 'no image request after turning it off');
-      assert.equal(await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).showImages; }), false);
+      assert.deepEqual(await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).disabledSourceIds; }), ["option-images-off"]);
     }, { width: 390 });
     await check('S3 a catalog without image fields shows text cards with the setting on', async ({ page, state }) => {
       await setImages(page, true); await page.waitForTimeout(300);

@@ -28,7 +28,8 @@
     fields(value, ['id', 'sourceId', 'sourceName', 'url', 'canonicalUrl', 'title', 'author', 'language', 'tags', 'publishedAt', 'updatedAt', 'fetchedAt', 'coverage', 'rights']);
     check(id(value.id) && id(value.sourceId) && text(value.sourceName, 200) && text(value.title, 500) && (value.author === null || text(value.author, 200)) && text(value.language, 30));
     check(key(value.url) === value.canonicalUrl && key(value.canonicalUrl) === value.canonicalUrl);
-    const hosts = api().ALLOWED_SOURCES[value.sourceId]; check(Array.isArray(hosts) && hosts.includes(new URL(value.canonicalUrl).hostname));
+    // A saved reaction may also hold a 넓게 찾기 link (the supplier's host); the public catalog registry stays as it is.
+    const hosts = (api().SNAPSHOT_SOURCES || api().ALLOWED_SOURCES)[value.sourceId]; check(Array.isArray(hosts) && hosts.includes(new URL(value.canonicalUrl).hostname));
     check(Array.isArray(value.tags) && value.tags.length <= 50 && Array.from(value.tags).every(tag => text(tag, 200)) && new Set(value.tags).size === value.tags.length);
     check(nullableStamp(value.publishedAt) && nullableStamp(value.updatedAt) && stamp(value.fetchedAt) && value.coverage === 'link_only');
     fields(value.rights, ['label', 'url', 'mode']); check(text(value.rights.label, 500) && (value.rights.url === null || key(value.rights.url)) && value.rights.mode === 'metadata_only');

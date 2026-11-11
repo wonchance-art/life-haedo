@@ -14,6 +14,9 @@
   const icon = (name, size) => root.HaedoLife.Icons.create(name, size ? { size } : undefined);
   // The list shows this many cards and 더 보기 adds as many again. Nothing loads by scrolling.
   const PAGE = 20;
+  // 넓게 찾기 answers for the same topics are reused for this long when the news tab is opened again; a requested
+  // refresh and a changed topic always ask. The timed catalog refresh never asks (server cache 30 minutes, call limits).
+  const WIDE_REUSE_MS = 5 * 60 * 1000;
   function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderHistory, privateReader = null }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
@@ -28,6 +31,8 @@
     const readingHost = node('div', null, 'discovery-reading-host');
     let readingUI = null;
     let privateAborter = null, privateEpoch = 0;
+    let wideClient = null, wideAborter = null, wideEpoch = 0, wideClearing = null, wideUnlisten = null;
+    const wideModel = () => root.HaedoLife.DiscoveryWideRemote;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => scope() && token === generation;
     const model = () => root.HaedoLife.DiscoveryProfile;
@@ -112,8 +117,8 @@
         const all = [...surface.querySelectorAll('[data-focus-key]')];
         const articles = [...surface.querySelectorAll('[data-discovery-url]')];
         const target = all.find(el => !el.disabled && el.getClientRects().length && el.dataset.focusKey === memory.focusKey && (!el.closest('[data-discovery-url]') || !memory.articleUrl || el.closest('[data-discovery-url]').dataset.discoveryUrl === memory.articleUrl)) ||
-          articles.find(el => el.dataset.discoveryUrl === memory.articleUrl)?.querySelector('[data-discovery-select]') ||
-          articles[Math.min(memory.articleIndex || 0, articles.length - 1)]?.querySelector('[data-discovery-select]') || surface.querySelector('#discoveryUndoToast, #discoveryUndo');
+          articles.find(el => el.dataset.discoveryUrl === memory.articleUrl)?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open]') ||
+          articles[Math.min(memory.articleIndex || 0, articles.length - 1)]?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open]') || surface.querySelector('#discoveryUndoToast, #discoveryUndo');
         target?.focus({ preventScroll: true });
         root.scrollTo({ top: memory.scrollY, behavior: 'instant' });
       });
@@ -123,7 +128,7 @@
       return (getBundle()?.sources || []).map(source => source.url).filter(value => typeof value === 'string');
     }
     function rankOptions() {
-      return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, contentLanguages: desiredLanguages()?.contentLanguages ?? null, limit: engine().LIMITS.articles };
+      return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, contentLanguages: desiredLanguages()?.contentLanguages ?? null, limit: engine().LIMITS.articles, spread: true };
     }
     function readingInput() {
       if (!scope() || suspended || !current?.catalog?.feed || !current.profile || !current.feedback || !current.settings || !current.actions || !current.languageSettings ||
@@ -165,7 +170,7 @@
     function blockPersonal() { current.personalBlocked = true; current.personalStopLatched = true; current.mode = current.baselineMode; dropPersonal(); }
     function applyPersonal() {
       if (!scope() || !current.catalog?.feed || languageWrite || languageDirty() || current.languageConflict || current.personalBlocked || !current.actions?.personalizationEnabled) return;
-      capture(); current.collection = 'discover'; current.collectionUrls = null; current.visible = PAGE;
+      capture(); current.collection = 'discover'; current.collectionUrls = null; resetList();
       current.personalResult = recommendations().rank(settingsModel().filterFeed(current.catalog.feed, desiredSettings()), { ...rankOptions(), actions: current.actions, mode: 'personal', baselineMode: current.baselineMode });
       current.personalInspection = recommendations().inspectSignals(current.actions, { sourceIds: settingsModel().filterFeed(current.catalog.feed, desiredSettings()).sources.map(source => source.id), contentLanguages: desiredLanguages()?.contentLanguages ?? null });
       current.mode = 'personal'; current.personalPending = false; draw(); restore();
@@ -247,7 +252,7 @@
     }
     function selectCollection(collection) {
       const fromSettings = current.settingsScreen;
-      capture(); current.settingsScreen = false; current.collection = collection; current.collectionUrls = null; current.memory = null; current.visible = PAGE; current.confirmForget = null; current.toast = null; current.selected = null; readerHistoryClosed(); draw();
+      capture(); current.settingsScreen = false; current.collection = collection; current.collectionUrls = null; current.memory = null; resetList(); current.confirmForget = null; current.toast = null; current.selected = null; readerHistoryClosed(); draw();
       if (fromSettings) { surface.querySelector('#discoveryDiscover')?.focus(); surface.scrollIntoView({ block: 'start' }); }
     }
     function showSettings(value) {
@@ -261,7 +266,7 @@
       if (!['latest', 'related', 'personal'].includes(mode) || mode === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked)) return;
       capture(); current.collection = 'discover'; current.collectionUrls = null;
       if (mode === 'personal') applyPersonal();
-      else { current.mode = mode; current.baselineMode = mode; current.memory = null; current.visible = PAGE; draw(); }
+      else { current.mode = mode; current.baselineMode = mode; current.memory = null; resetList(); draw(); }
     }
     function startAction(intent) {
       if (!scope() || !current.actions || actionWrite || current.actionIntent) return;
@@ -341,7 +346,7 @@
     function reactionMore(article, moreBody) {
       const entry = entryFor(article);
       if (entry) {
-        const exclusion = button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(exclusion);
+        const exclusion = isWide(article) ? null : button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); if (exclusion) { exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(exclusion); }
         if (current.collection !== 'discover') {
           const forget = button('목록 정보 완전히 지우기', null, () => { current.confirmForget = entry.canonicalUrl; draw(); }, 'discovery-quiet'); forget.dataset.discoveryForget = ''; forget.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(forget);
           if (current.confirmForget === entry.canonicalUrl) moreBody.append(node('p', '좋아요·담기와 복구 정보를 모두 지웁니다. 자료 원문은 유지합니다.', 'life-meta'), button('이 글의 반응 완전히 지우기', 'discoveryForgetConfirm', () => startAction({ type: 'forget', canonicalUrl: entry.canonicalUrl })), button('지우기 취소', 'discoveryForgetCancel', () => { current.confirmForget = null; draw(); }, 'discovery-quiet'));
@@ -362,7 +367,7 @@
       progress.append(icon('refresh', 16), node('span'));
       const failed = button(null, 'discoveryFailedSources', () => { current.optionsOpen = true; showSettings(true); if (current.options) current.options.open = true; }, 'discovery-failed');
       failed.title = '출처·갱신 설정 열기'; failed.append(icon('info', 16), node('span'));
-      const refresh = button('지금 갱신', 'discoveryRefreshNow', () => { capture(null, 'refresh-now'); filter.open = false; return loadCatalog(); }, 'discovery-quiet discovery-refresh-now');
+      const refresh = button('지금 갱신', 'discoveryRefreshNow', () => { capture(null, 'refresh-now'); filter.open = false; refreshWide({ force: true }).catch(error => report(error)); return loadCatalog(); }, 'discovery-quiet discovery-refresh-now');
       refresh.dataset.focusKey = 'refresh-now'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(icon('refresh', 16));
       statusRow.append(progress, failed);
       const toolbar = node('div', null, 'discovery-news-toolbar'), scroller = node('div', null, 'discovery-tab-scroller');
@@ -422,7 +427,7 @@
     function filterChanges() {
       const languages = desiredLanguages()?.contentLanguages, settings = desiredSettings();
       return (current.mode !== 'latest' ? 1 : 0) + (Array.isArray(languages) ? 1 : 0) +
-        (settings && (settings.disabledInterestIds.length || settings.disabledSourceIds.length) ? 1 : 0);
+        (settings && (settings.disabledInterestIds.length || settingsModel().disabledSources(settings).length) ? 1 : 0);
     }
     // While an article is open, unsaved-choice recovery and errors show in its reader, where the action was taken.
     function actionsHeader(counts = {}, readerNotes = null) {
@@ -522,6 +527,7 @@
         }
         current.languageSettings = result.settings;
         for (const key of Object.keys(patch)) if (JSON.stringify(current.languagePatch[key]) === JSON.stringify(patch[key])) delete current.languagePatch[key];
+        refreshWide().catch(error => report(error));
         current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
         message('언어 설정을 계정에 자동 저장했습니다.');
       } catch (_) { if (valid(token)) current.languageError = '언어 설정을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
@@ -533,7 +539,7 @@
     function changeLanguage(key, value) {
       if (!scope() || !current.languageSettings) return;
       if (key === 'translationTarget') stopTranslation();
-      else { invalidateLanguageResults(); current.visible = PAGE; }
+      else { invalidateLanguageResults(); resetList(); }
       current.languagePatch[key] = clone(value); current.languageError = ''; draw(); persistLanguages().catch(error => report(error));
     }
     async function discardLanguages() {
@@ -653,9 +659,13 @@
       if (!settingsDirty()) return current.settings;
       return settingsModel().update(current.settings, { autoRefresh: patch.autoRefresh ?? current.settings.autoRefresh,
         disabledInterestIds: ids(current.settings.disabledInterestIds, patch.interests, liveInterests), disabledSourceIds: ids(current.settings.disabledSourceIds, patch.sources),
-        ...(patch.showImages === undefined ? {} : { showImages: patch.showImages }) }, { expectedRevision: current.settings.revision });
+        ...optionPatch(patch) }, { expectedRevision: current.settings.revision });
     }
-    function settingsDirty() { const p = current?.settingChanges; return !!p && (p.autoRefresh !== undefined || p.showImages !== undefined || Object.keys(p.interests).length > 0 || Object.keys(p.sources).length > 0); }
+    // The option choices not saved yet (기사 이미지 보기, 넓게 찾기 and its pending erase mark).
+    function optionPatch(patch) { return Object.fromEntries(['showImages', 'wideSearch', 'wideClear'].filter(name => patch[name] !== undefined).map(name => [name, patch[name]])); }
+    function settingsDirty() { const p = current?.settingChanges; return !!p && (p.autoRefresh !== undefined || Object.keys(optionPatch(p)).length > 0 || Object.keys(p.interests).length > 0 || Object.keys(p.sources).length > 0); }
+    // A new tab, order, filter or refresh starts the list again: 20 cards and a newly computed order.
+    function resetList() { current.visible = PAGE; current.order = null; }
     // 기사 이미지 보기 (default off): only then does a card ask a publisher's server for its image.
     function imagesOn() { return !!current?.settings && settingsModel().showImages(desiredSettings()); }
     function dropImages() {
@@ -690,7 +700,7 @@
         if (!suspended && root.document.getElementById('lifeApp')?.hidden === false) syncTransientControls();
       } else scheduleAuto();
     }
-    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); cancelPrivateRead(); }
+    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); cancelPrivateRead(); wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; } }
     function pageReady() {
       // The shell emits this only after revalidating the account and revealing it.
       suspended = false;
@@ -707,13 +717,13 @@
       const token = generation, epoch = ++fetchEpoch;
       aborter = new AbortController(); current.loading = true; current.error = ''; current.nextDue = Date.now() + INTERVAL; stopTimer();
       // A refresh the person asked for starts the list again; the timed one keeps the place being read.
-      if (!automatic) current.visible = PAGE;
+      if (!automatic) resetList();
       draw();
       try {
         const result = await client.load({ signal: aborter.signal });
         if (!valid(token) || epoch !== fetchEpoch || (automatic && !canAuto())) return;
         const previous = current.catalog?.feed ? new Set(current.catalog.feed.articles.map(article => article.canonicalUrl)) : null;
-        if (result.feed || !current.catalog) { current.catalog = result; if (current.personalResult) current.personalPending = true; }
+        if (result.feed || !current.catalog) { current.catalog = result; current.order = null; if (current.personalResult) current.personalPending = true; }
         if (previous && result.feed) { current.newUrls = new Set(result.feed.articles.map(article => article.canonicalUrl).filter(value => !previous.has(value))); current.newDismissed = false; }
         if (result.error || result.status === 'error') current.error = current.catalog?.feed ? '목록을 다시 받지 못해 이전 목록을 보여 줍니다.' : '공개 글 목록을 불러오지 못했습니다. 목록 다시 불러오기를 눌러 주세요.';
         else if (automatic) message('공개 목록을 자동으로 다시 확인했습니다.');
@@ -727,7 +737,7 @@
       if (!scope() || !settingsDirty() || settingsWrite || current.settingsConflict) return;
       const token = generation, changes = clone(current.settingChanges), desired = desiredSettings();
       const next = settingsModel().update(current.settings, { autoRefresh: desired.autoRefresh, disabledInterestIds: desired.disabledInterestIds, disabledSourceIds: desired.disabledSourceIds,
-        ...(changes.showImages === undefined ? {} : { showImages: changes.showImages }) }, { expectedRevision: current.settings.revision });
+        ...optionPatch(changes) }, { expectedRevision: current.settings.revision });
       current.settingsError = ''; settingsWrite = storage.saveDiscoverySettings(workspaceId, next, current.settings.revision); draw();
       try {
         const result = await settingsWrite;
@@ -735,7 +745,7 @@
         if (result.status !== 'stored') { current.settingsConflict = true; current.autoBlocked = true; stopTimer(); cancelFetch(); current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인한 뒤 남겨 둔 선택을 다시 저장해 주세요.'; return; }
         const wasAuto = current.settings.autoRefresh; current.settings = result.settings;
         if (current.settingChanges.autoRefresh === changes.autoRefresh) delete current.settingChanges.autoRefresh;
-        if (current.settingChanges.showImages === changes.showImages) delete current.settingChanges.showImages;
+        for (const name of ['showImages', 'wideSearch', 'wideClear']) if (current.settingChanges[name] === changes[name]) delete current.settingChanges[name];
         for (const group of ['interests', 'sources']) for (const [id, value] of Object.entries(changes[group])) if (current.settingChanges[group][id] === value) delete current.settingChanges[group][id];
         current.autoBlocked = !desiredSettings().autoRefresh;
         if (!wasAuto && result.settings.autoRefresh) current.nextDue = Date.now() + INTERVAL;
@@ -745,6 +755,8 @@
         settingsWrite = null;
         if (valid(token)) {
           draw(); scheduleAuto();
+          // Only a saved choice sends anything: after the save, ask (on, or a changed topic) or erase (off).
+          if (!current.settingsError && !settingsDirty()) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
           if (!current.settingsError && settingsDirty()) persistSettings().catch(error => report(error));
           else if (!current.settingsError && !current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));
         }
@@ -754,22 +766,28 @@
       if (!scope() || !current.settings) return;
       if (group === 'autoRefresh') { current.settingChanges.autoRefresh = enabled; current.autoBlocked = !enabled; if (!enabled) { stopTimer(); cancelFetch(); if (!current.catalog?.feed) current.status = '목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.'; } }
       else if (group === 'showImages') current.settingChanges.showImages = enabled;
-      else { current.settingChanges[group][id] = enabled; dropPersonal(true); current.visible = PAGE; }
+      else if (group === 'wideSearch') {
+        // Off takes the found links off the screen at once and marks the server copy for erasing; on clears that mark.
+        current.settingChanges.wideSearch = enabled; current.settingChanges.wideClear = !enabled && (settingsModel().wideSearch(current.settings) || settingsModel().wideClear(current.settings));
+        current.wide.notEnabled = false; current.wide.clearError = false; current.wide.clearTried = false; current.wide.refused.clear(); if (!enabled) dropWide();
+      }
+      else { current.settingChanges[group][id] = enabled; dropPersonal(true); resetList(); }
       current.settingsError = ''; draw(); persistSettings().catch(error => report(error));
     }
     async function reloadSettings() {
       const token = generation, result = await storage.readDiscoverySettings(workspaceId);
       if (!valid(token)) return;
       if (current.settings && current.settings.revision !== result.revision) dropPersonal(true);
-      current.settings = result; current.settingsConflict = false; current.settingsError = '';
+      current.settings = result; current.settingsConflict = false; current.settingsError = ''; current.order = null;
       current.autoBlocked = !desiredSettings().autoRefresh; if (current.autoBlocked) { stopTimer(); cancelFetch(); } draw(); scheduleAuto();
+      refreshWide().catch(error => report(error));
     }
     function focusTopicControl() {
       if (!scope() || current.editor.hidden) return;
       (current.editor.open ? current.topicInput : current.topicsSummary).focus({ preventScroll: true });
     }
     function showRelatedTopics() {
-      current.mode = 'related'; current.baselineMode = 'related'; current.collection = 'discover'; current.collectionUrls = null; current.memory = null; current.visible = PAGE;
+      current.mode = 'related'; current.baselineMode = 'related'; current.collection = 'discover'; current.collectionUrls = null; current.memory = null; resetList();
       current.settingsScreen = false;
       // The order now shows on the filter icon (적용 1); focus lands there, where 정렬 can be changed back.
       draw(); surface.querySelector('#discoveryFilterToggle')?.focus(); surface.scrollIntoView({ block: 'start' });
@@ -785,7 +803,7 @@
       try {
         const result = await topicWrite; if (!valid(token)) return;
         if (result.status !== 'stored') { current.topicConflict = true; current.topicError = '다른 탭에서 주제가 바뀌었습니다. 최신 주제를 확인한 뒤 입력을 다시 저장해 주세요.'; return; }
-        current.profile = result.profile; dropPersonal(true);
+        current.profile = result.profile; current.order = null; dropPersonal(true); refreshWide().catch(error => report(error));
         if (current.topicText === submitted) { current.topicText = ''; current.topicInput.value = ''; }
         current.topicError = ''; current.topicSaved = true; current.status = '주제를 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.topicError = '주제를 저장하지 못했습니다. 입력은 남아 있습니다. 다시 저장하거나 입력을 지워 주세요.'; }
@@ -793,7 +811,7 @@
     }
     async function reloadTopics() {
       const token = generation, profile = await storage.readInterestProfile(workspaceId);
-      if (valid(token)) { current.profile = profile; current.topicConflict = false; current.topicError = current.topicText.trim() ? '최신 주제를 확인했습니다. 남겨 둔 입력을 다시 저장해 주세요.' : ''; draw(); }
+      if (valid(token)) { current.profile = profile; current.topicConflict = false; current.topicError = current.topicText.trim() ? '최신 주제를 확인했습니다. 남겨 둔 입력을 다시 저장해 주세요.' : ''; draw(); refreshWide().catch(error => report(error)); }
     }
     function checkbox(text, id, checked, action, data, value) {
       const label = node('label', null, 'discovery-check'), input = node('input'); input.type = 'checkbox'; input.id = id; input.checked = checked;
@@ -810,6 +828,7 @@
       if (!current.profile?.manual?.length) choices.append(node('p', '주제를 하나씩 추가해 주세요. 저장하기 전에는 목록에 사용하지 않습니다.', 'life-meta'));
       const edit = button('관심 주제 편집', 'discoveryOpenInterests', () => navigate(onOpenInterests, null, 'interests'), 'discovery-quiet'); edit.dataset.focusKey = 'interests'; choices.append(edit);
       current.choiceHost.replaceChildren(choices);
+      current.wideHost.replaceChildren(wideSettings());
       const recovery = node('div', null, 'discovery-topic-recovery');
       if (current.topicError) { const error = node('p', current.topicError, 'life-error'); error.id = 'discoveryTopicError'; error.setAttribute('role', 'alert'); recovery.append(error); recovery.append(button(current.topicConflict ? '최신 주제 확인' : '주제 다시 저장', current.topicConflict ? 'discoveryTopicReload' : 'discoveryTopicRetry', current.topicConflict ? reloadTopics : saveTopic)); }
       current.topicRecovery.replaceChildren(recovery);
@@ -858,10 +877,11 @@
       for (const example of ['AI', '전시', '신간', '언어학', '언어 학습', '언어 교육']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
       const choiceHost = node('div'), topicRecovery = node('div'), options = node('details', null, 'discovery-options'); options.id = 'discoveryOptions'; options.open = current.optionsOpen;
       options.append(node('summary', '출처·갱신')); const optionsBody = node('div'), catalogControls = node('div', null, 'discovery-controls'), catalogStatus = node('div');
-      const refresh = button('목록 새로고침', 'discoveryRefresh', () => { capture(null, 'refresh'); return loadCatalog(); }, 'discovery-quiet'); refresh.dataset.focusKey = 'refresh'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(root.HaedoLife.Icons.create('refresh')); catalogControls.append(refresh);
+      const refresh = button('목록 새로고침', 'discoveryRefresh', () => { capture(null, 'refresh'); refreshWide({ force: true }).catch(error => report(error)); return loadCatalog(); }, 'discovery-quiet'); refresh.dataset.focusKey = 'refresh'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(root.HaedoLife.Icons.create('refresh')); catalogControls.append(refresh);
       options.append(optionsBody, catalogControls, catalogStatus); options.addEventListener('toggle', () => { if (scope()) current.optionsOpen = options.open; });
       const topicNextHost = node('div');
-      const topicBody = node('div', null, 'discovery-topic-body'); topicBody.append(label, form, help, examples, topicRecovery, choiceHost, topicNextHost); editor.append(topicBody);
+      const wideHost = node('div', null, 'discovery-wide-host');
+      const topicBody = node('div', null, 'discovery-topic-body'); topicBody.append(label, form, help, examples, topicRecovery, choiceHost, wideHost, topicNextHost); editor.append(topicBody);
       const reactionHost = node('div', null, 'discovery-reaction-host'), languageHost = node('div', null, 'discovery-language-host'), body = node('div', null, 'discovery-feed-body');
       const preferences = node('details', null, 'discovery-news-preferences'), preferencesBody = node('div', null, 'discovery-news-preferences-body'), recommendationBody = node('div');
       preferences.id = 'discoveryNewsPreferences'; preferences.open = !!current.preferencesOpen;
@@ -881,10 +901,194 @@
       listPane.append(reactionHost, body); layout.append(listPane, readerHost);
       surface.append(layout, settingsPanel); container.replaceChildren(surface);
       current.reader = null;
-      Object.assign(current, { editor, topicsSummary, examples, topicInput: input, topicAdd: add, topicDiscard: discard, choiceHost, topicRecovery, topicNextHost, options, optionsBody, catalogControls, catalogStatus, reactionHost, languageHost, preferences, preferencesBody, recommendationBody, body, settingsPanel, settingsBack, recoveryBody, managementBody, records, layout, listPane, readerHost });
+      Object.assign(current, { editor, topicsSummary, examples, topicInput: input, topicAdd: add, topicDiscard: discard, choiceHost, wideHost, topicRecovery, topicNextHost, options, optionsBody, catalogControls, catalogStatus, reactionHost, languageHost, preferences, preferencesBody, recommendationBody, body, settingsPanel, settingsBack, recoveryBody, managementBody, records, layout, listPane, readerHost });
     }
     function currentFeedArticle(article) {
-      return current?.catalog?.feed?.articles.find(value => value.id === article.id && value.sourceId === article.sourceId && value.canonicalUrl === article.canonicalUrl) || null;
+      return current?.catalog?.feed?.articles.find(value => value.id === article.id && value.sourceId === article.sourceId && value.canonicalUrl === article.canonicalUrl) ||
+        current?.wide?.items.find(value => value.id === article.id && value.canonicalUrl === article.canonicalUrl) || null;
+    }
+    // An article now listed (catalog or 넓게 찾기) by its address.
+    function listedArticle(canonicalUrl) {
+      return current?.catalog?.feed?.articles.find(item => item.canonicalUrl === canonicalUrl) || current?.wide?.items.find(item => item.canonicalUrl === canonicalUrl) || null;
+    }
+    const isWide = article => article?.sourceId === engine().WIDE_SOURCE.id;
+
+    // ---- 넓게 찾기 ----------------------------------------------------------------------------------------
+    // Sent: the interest topics typed in news settings and left checked, and the content language codes. Nothing
+    // from likes, saved or read articles, the recommendation profile or any derived word reaches these functions.
+    function wideRemote() {
+      if (!wideClient && storage.isAccountScoped && wideModel()?.create) {
+        try { wideClient = wideModel().create({ storage, isCurrent: id => scope() && id === workspaceId }); } catch (_) { wideClient = null; }
+        // Signing out or changing the account takes the found links out of memory at once.
+        if (wideClient) wideUnlisten ||= root.HaedoAuth?.onAccountChange?.(() => {
+          const account = root.HaedoAuth.getAccount?.(), owner = storage.account;
+          if (current?.wide && (account?.userId !== owner?.userId || account?.projectUrl !== owner?.projectUrl)) dropWide();
+        }) || null;
+      }
+      return wideClient;
+    }
+    // The saved choice only: an unsaved or conflicting toggle sends nothing.
+    function wideSaved() { return !!current?.settings && settingsModel().wideSearch(current.settings) && current.settingChanges.wideSearch === undefined && !current.settingsConflict; }
+    function widePlan() {
+      if (!wideModel() || !current?.profile || !current.settings || !current.languageSettings) return null;
+      const manual = settingsModel().effectiveProfile(current.profile, current.settings).manual.map(({ id, label }) => ({ id, label }));
+      const planned = wideModel().plan(manual, { refused: current.wide.refused }), codes = wideModel().languages(current.languageSettings.contentLanguages);
+      return { ...planned, languages: codes, key: wideModel().requestKey(planned.topics, codes) };
+    }
+    function dropWide() {
+      wideEpoch++; wideAborter?.abort(); wideAborter = null;
+      if (current?.wide) { Object.assign(current.wide, { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0 }); current.order = null; }
+    }
+    // One request for all topics. Which topic the server takes is the server's rule: when it refuses the request for
+    // a topic (`invalid_topic`), each topic is asked once on its own, the refused ones are remembered and named in
+    // settings, and they are left out from then on.
+    async function askWide(client, planned, signal, live) {
+      const ask = topics => client.load({ topics, languages: planned.languages, workspaceId, signal });
+      const refuse = topic => { if (live()) current.wide.refused.add(wideModel().topicKey(topic)); };
+      try { return await ask(planned.topics); }
+      catch (error) {
+        if (error?.code !== 'wide_invalid_topic' || !live()) throw error;
+        if (planned.topics.length === 1) { refuse(planned.topics[0]); return wideModel().merge([]); }
+        const results = [];
+        for (const topic of planned.topics) {
+          try { results.push(await ask([topic])); }
+          catch (inner) { if (inner?.code !== 'wide_invalid_topic' || !live()) throw inner; refuse(topic); }
+        }
+        return wideModel().merge(results);
+      }
+    }
+    async function refreshWide({ force = false } = {}) {
+      if (!scope() || suspended || !current?.wide) return;
+      if (!wideSaved()) { if (current.wide.items.length || current.wide.status !== 'idle') { dropWide(); draw(); } return; }
+      const planned = widePlan(), client = wideRemote();
+      if (!planned || !client || current.wide.notEnabled) return;
+      if (!planned.topics.length || !planned.languages.length) { if (current.wide.items.length || current.wide.status !== 'idle') { dropWide(); draw(); } return; }
+      if (current.wide.status === 'loading' && current.wide.pendingKey === planned.key) return; // one request at a time
+      if (!force && current.wide.key === planned.key && Date.now() - current.wide.loadedAt < WIDE_REUSE_MS) return;
+      wideEpoch++; wideAborter?.abort();
+      const epoch = wideEpoch, token = generation, controller = new AbortController(); wideAborter = controller;
+      // Links found for other topics leave the screen before the new answer arrives.
+      if (current.wide.key !== planned.key) Object.assign(current.wide, { items: [], topics: [], fetchedAt: null, stale: false, key: null });
+      Object.assign(current.wide, { status: 'loading', pendingKey: planned.key, error: null }); current.order = null; capture(); draw(); restore();
+      const refusedBefore = current.wide.refused.size;
+      try {
+        const result = await askWide(client, planned, controller.signal, () => valid(token) && epoch === wideEpoch);
+        if (!valid(token) || epoch !== wideEpoch) return;
+        if (!wideSaved()) { Object.assign(current.wide, { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', key: null }); return; }
+        const fetchedAt = result.fetchedAt || new Date().toISOString();
+        const items = result.items.map(item => wideModel().toArticle(item, { sourceId: engine().WIDE_SOURCE.id, canonicalUrl: engine().canonicalUrl, fetchedAt })).filter(article => article.canonicalUrl && wideModel().link(article.url));
+        // The answer covers the topics that were asked and taken.
+        const answered = planned.topics.filter(topic => !current.wide.refused.has(wideModel().topicKey(topic)));
+        Object.assign(current.wide, { items, topics: result.topics, fetchedAt: result.fetchedAt, stale: result.stale, status: 'ready', error: null, key: wideModel().requestKey(answered, planned.languages), loadedAt: Date.now() });
+      } catch (error) {
+        if (!valid(token) || epoch !== wideEpoch) return;
+        if (error?.code === 'wide_cancelled') current.wide.status = current.wide.key ? 'ready' : 'idle';
+        else {
+          // The fixed sources stay as they are; links already shown for these topics stay too.
+          Object.assign(current.wide, { status: 'error', error: wideModel().messages[error?.code] ? error.code : 'wide_unavailable' });
+          if (error?.code === 'wide_not_enabled') {
+            // This account is not allowed: said once, the switch goes back to off (saved) and nothing is asked again.
+            Object.assign(current.wide, { notEnabled: true, items: [], topics: [], key: null, status: 'idle', error: null });
+            if (settingsModel().wideSearch(current.settings) && current.settingChanges.wideSearch === undefined && !current.settingsConflict) {
+              current.settingChanges.wideSearch = false; current.settingChanges.wideClear = true; persistSettings().catch(error => report(error));
+            }
+          }
+        }
+      } finally {
+        if (epoch === wideEpoch) {
+          wideAborter = null;
+          if (valid(token)) {
+            current.wide.pendingKey = null; current.order = null; capture(); draw(); restore();
+            // A refused topic left the plan: a typed topic beyond the first eight may now be sent.
+            if (current.wide.refused.size > refusedBefore && current.wide.status === 'ready') refreshWide().catch(error => report(error));
+          }
+        }
+      }
+    }
+    // After 넓게 찾기 is turned off: erase the server copy. A failure keeps the mark so the next opening tries again.
+    async function clearWide({ manual = false } = {}) {
+      if (!scope() || suspended || !current?.settings || wideClearing || settingsDirty() || current.settingsConflict) return;
+      if (settingsModel().wideSearch(current.settings) || !settingsModel().wideClear(current.settings)) return;
+      const client = wideRemote(); if (!client) return;
+      if (current.wide.clearTried && !manual) return; // once per opening unless asked
+      const token = generation; current.wide.clearTried = true; current.wide.clearError = false;
+      wideClearing = client.clear({ workspaceId }); draw();
+      try {
+        await wideClearing; if (!valid(token)) return;
+        if (!settingsModel().wideSearch(current.settings) && !settingsDirty()) { current.settingChanges.wideClear = false; persistSettings().catch(error => report(error)); }
+      } catch (error) { if (valid(token) && error?.code !== 'wide_cancelled') current.wide.clearError = true; }
+      finally { wideClearing = null; if (valid(token)) draw(); }
+    }
+    const wideTime = value => { const text = stamp(value); return text ? text + ' 기준' : ''; };
+    // One line above the list when what is shown is not a fresh answer for every topic.
+    function wideNotice() {
+      const wide = current.wide; if (current.collection !== 'discover') return '';
+      if (wide.notEnabled) return '이 계정에서는 넓게 찾기를 쓸 수 없어 꺼 두었습니다.';
+      if (!wideSaved()) return '';
+      if (wide.status === 'loading') return '넓게 찾는 중';
+      if (wide.status === 'error') return { wide_not_enabled: '', wide_auth: '넓게 찾기 · 로그인 계정을 다시 확인해 주세요.', 
+        wide_invalid: '넓게 찾기 · 받은 결과를 확인하지 못했습니다. 고정 출처의 글만 보입니다.' }[wide.error] ?? '넓게 찾기 · 지금 가져오지 못했습니다. 고정 출처의 글은 그대로 보입니다.';
+      if (wide.status !== 'ready') return '';
+      const states = wide.topics.map(row => row.status), time = wideTime(wide.fetchedAt);
+      if (states.includes('limited')) return '넓게 찾기 · 받을 수 있는 횟수를 다 썼습니다.' + (time ? ' ' + time + ' 목록입니다.' : '');
+      if (states.length && states.every(state => state === 'failed')) return '넓게 찾기 · 새 글을 받지 못했습니다. 고정 출처의 글만 보입니다.';
+      if (wide.stale || states.some(state => state === 'stale' || state === 'failed')) return '넓게 찾기 · 일부 주제를 새로 받지 못했습니다.' + (time ? ' ' + time + ' 목록이 섞여 있습니다.' : '');
+      if (wide.refused.size && widePlan()?.rows.some(row => row.reason === 'refused')) return '넓게 찾기 · 서버가 받지 않는 주제가 있습니다. 뉴스 설정에서 확인해 주세요.';
+      return '';
+    }
+    // 넓게 찾기 in news settings: the switch, what it sends and where, and each typed topic's state.
+    function wideSettings() {
+      const box = node('div', null, 'discovery-wide-settings'), available = !!wideRemote(), desired = desiredSettings();
+      const on = !!desired && settingsModel().wideSearch(desired);
+      const toggle = checkbox('넓게 찾기', 'discoveryWideSearch', on, enabled => changeSetting('wideSearch', null, enabled));
+      const help = node('p', '켜면 위에서 고른 관심 주제와 콘텐츠 언어(한국어·영어)를 ' + (wideModel()?.SUPPLIER_LABEL || 'Google 뉴스') + '로 보내 여러 매체의 최신 글을 받습니다. 좋아요·담은 글·읽은 글은 보내지 않습니다. 글을 누르면 Google 주소를 거쳐 원문으로 갑니다. 받은 결과는 내 계정에만 보관되고, 끄면 지웁니다.', 'life-meta');
+      help.id = 'discoveryWideHelp'; toggle.querySelector('input').setAttribute('aria-describedby', help.id); toggle.querySelector('input').disabled = !current.settings || !available;
+      box.append(toggle, help);
+      if (!available) box.append(node('p', '로그인한 계정에서만 쓸 수 있습니다.', 'life-meta'));
+      const planned = on ? widePlan() : null;
+      if (planned) {
+        const names = { ko: '한국어', en: '영어' }, list = node('ul', null, 'discovery-wide-topics'); list.id = 'discoveryWideTopics'; list.setAttribute('aria-label', '보내는 관심 주제');
+        for (const row of planned.rows) {
+          const line = node('li'); line.dataset.wideTopic = row.id; line.dataset.wideSent = String(row.sent); line.append(node('span', row.label, 'discovery-wide-topic'));
+          if (!row.sent) line.append(node('span', '보내지 않음 · ' + wideModel().REASONS[row.reason], 'discovery-wide-topic-note'));
+          else {
+            const states = current.wide.key === planned.key ? current.wide.topics.filter(state => state.topic === row.topic) : [];
+            const text = states.map(state => names[state.language] + ' ' + ({ fresh: state.count + '건', cached: state.count + '건', stale: state.count + '건(이전 목록)', failed: '받지 못함', limited: '횟수 제한' + (state.count ? ' · ' + state.count + '건' : '') }[state.status])).join(' · ');
+            line.append(node('span', text || (current.wide.status === 'loading' ? '받는 중' : '보냄'), 'discovery-wide-topic-note'));
+          }
+          list.append(line);
+        }
+        if (planned.rows.length) box.append(node('p', '보내는 주제 · 위에서부터 ' + wideModel().LIMITS.topics + '개까지', 'life-meta'), list,
+          node('p', '주제는 글자·숫자와 일부 기호만 받습니다. 받는 예: ' + wideModel().EXAMPLES.accepted.join(', ') + ' · 받지 않는 예: ' + wideModel().EXAMPLES.refused.join(', '), 'life-meta'));
+        else box.append(node('p', '보낼 관심 주제가 없습니다. 위에서 주제를 추가하거나 고르면 그 주제로 찾습니다.', 'life-meta'));
+        if (planned.rows.length && !planned.languages.length) box.append(node('p', '콘텐츠 언어에 한국어나 영어가 없어 보내지 않습니다.', 'life-meta'));
+      }
+      if (current.wide.notEnabled) { const refused = node('p', '이 계정에서는 넓게 찾기를 쓸 수 없어 꺼 두었습니다.', 'life-error'); refused.id = 'discoveryWideNotEnabled'; refused.setAttribute('role', 'alert'); box.append(refused); }
+      if (!on && desired && settingsModel().wideClear(desired)) {
+        const pending = node('p', wideClearing ? '서버에 보관한 결과를 지우고 있습니다.' : current.wide.clearError ? '서버에 보관한 결과를 아직 지우지 못했습니다. 뉴스를 다시 열 때 다시 시도합니다.' : '서버에 보관한 결과를 지울 차례입니다.', 'life-meta'); pending.id = 'discoveryWideClearStatus'; pending.setAttribute('role', 'status'); box.append(pending);
+        if (current.wide.clearError && !wideClearing) box.append(button('지금 다시 지우기', 'discoveryWideClearRetry', () => clearWide({ manual: true }), 'discovery-quiet'));
+      }
+      return box;
+    }
+    // The rows 넓게 찾기 adds to 전체: links in the chosen content languages that are not already kept, judged or listed.
+    function wideRows(fixed) {
+      if (!wideSaved() || !current.wide.items.length) return [];
+      const languages = desiredLanguages()?.contentLanguages ?? null, known = new Set(knownUrls().map(value => engine().canonicalUrl(value)).filter(Boolean));
+      const judged = new Set((current.feedback?.feedback || []).map(entry => entry.canonicalUrl)), sources = current.catalog?.feed?.sources || [];
+      // The same article from a fixed source: only an exact title with the exact publisher name counts.
+      const listed = new Set(fixed.flatMap(item => [sourceName(item.article, sources), engine().PUBLISHERS[item.article.sourceId]].filter(Boolean).map(name => item.article.title + '\n' + name)));
+      return current.wide.items.filter(article => engine().languageAllowed(article.language, languages) && !known.has(article.canonicalUrl) && !judged.has(article.canonicalUrl) && !listed.has(article.title + '\n' + article.sourceName))
+        .map(article => ({ article, reasons: article.wide?.topic ? [{ interestLabel: article.wide.topic }] : [] }));
+    }
+    // 전체: the ranked catalog rows with the found links. Latest order spreads publishers over each page of 20
+    // (both kinds counted); 관심순 lists the found links after the matched catalog rows; 개인 추천 shows the catalog only.
+    function discoverItems(result) {
+      const mode = result.metadata?.mode, fixed = result.items, wide = mode === 'personal' ? [] : wideRows(fixed);
+      let items = !wide.length ? fixed : mode === 'latest' ? engine().spreadLatest([...fixed, ...wide]) : [...fixed, ...engine().spreadLatest(wide, { perPublisher: wide.length })];
+      // A page once drawn keeps its order while this tab, order and filter stay: a card that leaves does not move the others.
+      if (current.order) { const place = new Map(current.order.map((value, index) => [value, index])); items = [...items].sort((a, b) => (place.get(a.article.canonicalUrl) ?? Infinity) - (place.get(b.article.canonicalUrl) ?? Infinity)); }
+      else if (!current.loading) current.order = items.map(item => item.article.canonicalUrl);
+      return items;
     }
     function originalLink(article, { text = article.title, focusKey = 'open:' + article.id, currentFeedOnly = false } = {}) {
       const link = node('a', text); link.href = url(article.url) || url(article.canonicalUrl) || '#'; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer';
@@ -992,6 +1196,7 @@
     // The image and title are one control that opens the reader; 담기 and ⋯ follow it in the tab order.
     function articleCard(item, sources) {
       const { article } = item, card = node('article', null, 'discovery-article discovery-card'); card.dataset.discoveryId = article.id; card.dataset.discoveryUrl = article.canonicalUrl;
+      if (isWide(article)) return wideCard(item, card);
       const open = node('button', null, 'discovery-row-open'); open.type = 'button'; open.dataset.discoverySelect = ''; open.dataset.focusKey = 'open:' + article.id;
       const media = cardMedia(article); if (media) { open.append(media); card.dataset.image = 'true'; }
       open.append(node('span', article.title, 'discovery-title'));
@@ -1008,10 +1213,34 @@
       card.append(open, foot);
       return card;
     }
+    // The one control of a found link: a real link to the supplier's address, new tab only, never the reading column.
+    // Title and publisher name are text; the address is set as a property after it is checked again.
+    function wideOpen(article) {
+      const address = wideModel()?.link(article.url) || null, open = node(address ? 'a' : 'div', null, 'discovery-row-open');
+      if (address) {
+        open.href = address; open.target = '_blank'; open.rel = 'noopener noreferrer'; open.referrerPolicy = 'no-referrer'; open.setAttribute('referrerpolicy', 'no-referrer');
+        open.dataset.discoveryOpen = ''; open.dataset.focusKey = 'open:' + article.id; open.setAttribute('aria-label', article.title + ' · 새 탭에서 열림');
+        open.addEventListener('click', event => { if (!scope() || !wideModel().link(open.getAttribute('href'))) { event.preventDefault(); return; } capture(article.id, 'open:' + article.id); });
+      }
+      open.append(node('span', article.title, 'discovery-title'));
+      return open;
+    }
+    function wideCard(item, card) {
+      const { article } = item, open = wideOpen(article); card.dataset.wide = 'true';
+      const foot = node('div', null, 'discovery-card-foot'), meta = articleMeta(article, [], { relative: true });
+      meta.id = 'discoveryMeta-' + article.id; open.setAttribute('aria-describedby', meta.id);
+      const mark = node('span', '넓게', 'discovery-wide-mark'); mark.title = '넓게 찾기로 받은 글'; meta.append(mark);
+      const label = (item.reasons || []).find(reason => reason.interestLabel)?.interestLabel;
+      if (label) { const topic = node('span', label, 'discovery-topic-badge'); topic.title = '관심 주제 ' + label; meta.append(topic); }
+      foot.append(meta, reactionButton(article, 'bookmarked'), cardMenu(article));
+      card.append(open, foot);
+      return card;
+    }
     function excludedCard(entry, available) {
       const card = node('article', null, 'discovery-article discovery-card discovery-excluded-article'); card.dataset.discoveryUrl = entry.canonicalUrl; if (available) card.dataset.discoveryId = available.id;
-      const title = available?.title || entry.canonicalUrl, body = node(available ? 'button' : 'div', null, 'discovery-row-open');
-      if (available) {
+      const title = available?.title || entry.canonicalUrl, body = available && isWide(available) ? wideOpen(available) : node(available ? 'button' : 'div', null, 'discovery-row-open');
+      if (available && isWide(available)) body.replaceChildren();
+      else if (available) {
         body.type = 'button'; body.dataset.discoverySelect = ''; body.dataset.focusKey = 'open:' + available.id; body.addEventListener('click', () => { if (scope()) select(available); });
         card.addEventListener('click', event => { if (scope() && !event.target.closest('button, summary, details, a') && !String(root.getSelection?.() || '')) select(available); });
       }
@@ -1027,7 +1256,7 @@
     function showMore(from) {
       if (!scope()) return;
       current.visible = from + PAGE; draw();
-      const added = current.body.querySelectorAll('#discoveryList > .discovery-article')[from]?.querySelector('[data-discovery-select], button');
+      const added = current.body.querySelectorAll('#discoveryList > .discovery-article')[from]?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open], button');
       if (!added) return;
       added.focus({ preventScroll: true }); added.closest('.discovery-article').scrollIntoView({ block: 'nearest' });
       capture(added.closest('[data-discovery-id]')?.dataset.discoveryId, added.dataset.focusKey);
@@ -1065,7 +1294,7 @@
     function showArticle(id) {
       if (!scope() || !current) return false;
       if (!id) { if (current.selected) closeReader({ history: false }); current.readerPushed = false; return true; }
-      const article = findArticle(id); if (!article) return false;
+      const article = findArticle(id); if (!article || isWide(article)) return false;
       current.settingsScreen = false; select(article, { history: false }); current.readerPushed = true; return true;
     }
     function selectedArticle() {
@@ -1243,7 +1472,7 @@
         for (const evidence of item.personal.evidence || []) why.append(node('p', '좋아요한 글 ‘' + evidence.title + '’의 ' + (evidence.field === 'tags' ? '보관한 태그' : '보관한 제목') + '와 이 글의 ' + (evidence.candidateField === 'tags' ? '공개 태그' : '제목') + '의 대응 표현 · ‘' + evidence.quote + '’ / ‘' + evidence.candidateQuote + '’', 'life-meta'));
         why.append(node('p', '보관한 제목·태그와 공개 후보의 표현 유사도입니다. 태그 한 개는 한 표현으로 세며 서로 다른 표현 2개 이상이 겹쳐야 반영합니다. 본문 이해·동의·품질 확률을 뜻하지 않습니다.', 'life-meta')); information.append(why);
       }
-      if (current.collection !== 'discover' && !current.catalog?.feed?.articles.some(value => value.canonicalUrl === article.canonicalUrl)) information.append(node('p', '현재 목록에 없음 · 보관한 제목·출처', 'discovery-notice'));
+      if (current.collection !== 'discover' && !listedArticle(article.canonicalUrl)) information.append(node('p', '현재 목록에 없음 · 보관한 제목·출처', 'discovery-notice'));
       if (current.collection !== 'discover') information.append(node('p', received ? '반응 기록에는 제목·출처만 보관합니다.' : '보관한 제목·출처 정보 · 원문 본문은 보관하지 않았습니다.', 'discovery-coverage'));
       const savedEntry = entryFor(article);
       if (current.collection === 'liked' && savedEntry && !savedEntry.liked || current.collection === 'bookmarked' && savedEntry && !savedEntry.bookmarked) information.append(node('p', '반응 해제됨', 'discovery-notice'));
@@ -1255,6 +1484,7 @@
         information.append(node('p', '자료에 보관하면 읽고 있는 본문과 출처를 저장합니다. 이미지는 포함하지 않습니다.', 'life-meta'));
       } else information.append(node('p', frameAddress(article) ? '앱 안 보기는 출판사 서버에서 직접 받습니다. 원문 내용은 보관하지 않습니다.' : '원문은 새 탭에서 열 수 있습니다.', 'life-meta'));
       if (source.rights?.label) information.append(node('p', source.rights.label, 'life-meta'));
+      if (isWide(article)) information.append(node('p', '넓게 찾기로 받은 글' + (article.wide?.topic ? ' · 주제 ‘' + article.wide.topic + '’' : '') + ' · 글을 누르면 Google 주소를 거쳐 원문으로 갑니다.', 'life-meta'));
       const imageTerms = current.imageByUrl?.has(article.canonicalUrl) && current.catalog?.feed?.sources.find(value => value.id === article.sourceId)?.images?.label;
       if (imageTerms) information.append(node('p', imageTerms, 'life-meta'));
       return information;
@@ -1274,7 +1504,8 @@
       const readerOpen = !current.settingsScreen && !!selectedArticle(), readerNotes = node('div');
       const body = node('div'), recoveryHost = current.settingsScreen ? current.recoveryBody : readerOpen ? readerNotes : body;
       const feed = current.catalog?.feed, result = rank();
-      const tabCounts = { discover: result?.items.length, bookmarked: current.actions?.entries.filter(entry => entry.bookmarked).length, liked: current.actions?.entries.filter(entry => entry.liked).length, excluded: current.feedback?.feedback?.length };
+      const discover = result ? discoverItems(result) : null;
+      const tabCounts = { discover: discover?.length, bookmarked: current.actions?.entries.filter(entry => entry.bookmarked).length, liked: current.actions?.entries.filter(entry => entry.liked).length, excluded: current.feedback?.feedback?.length };
       const header = actionsHeader(tabCounts, readerOpen ? readerNotes : null); if (current.reactionHost.firstChild !== header || current.reactionHost.childNodes.length !== 1) current.reactionHost.replaceChildren(header);
       const languages = languageControls(); if (languages.parentNode !== current.languageHost) current.languageHost.replaceChildren(languages);
       current.catalogControls.querySelector('#discoveryRefresh').disabled = current.loading;
@@ -1321,7 +1552,7 @@
       if (current.collection === 'excluded') {
         const entries = current.feedback?.feedback || [];
         if (!entries.length) emptyTab('제외한 글이 없습니다', '글의 더보기에서 읽음이나 관련 없음을 고르면 여기에 모입니다.', 'more');
-        rows = entries.map(entry => () => excludedCard(entry, feed?.articles?.find(item => item.canonicalUrl === entry.canonicalUrl)));
+        rows = entries.map(entry => () => excludedCard(entry, listedArticle(entry.canonicalUrl)));
       } else if (current.collection !== 'discover') {
         const items = collectionResult();
         if (current.collection === 'cancelled') list.append(node('h2', '반응 해제 기록', 'discovery-count'));
@@ -1332,7 +1563,8 @@
         }
         rows = items.map(item => () => articleCard(item, []));
       } else if (result) {
-        const items = result.items;
+        const items = discover, notice = wideNotice();
+        if (notice) { const line = node('p', notice, 'discovery-wide-notice'); line.id = 'discoveryWideNotice'; line.setAttribute('role', 'status'); body.append(line); }
         if (!items.length) {
           const contentLanguages = desiredLanguages()?.contentLanguages, availableFeed = settingsModel().filterFeed(feed, desiredSettings());
           const languageUnavailable = Array.isArray(contentLanguages) && contentLanguages.length > 0 && !current.loading && !current.error &&
@@ -1373,7 +1605,7 @@
         excluded.addEventListener('toggle', () => { if (current) current.excludedOpen = excluded.open; });
         excluded.append(node('summary', '제외한 글 ' + current.feedback.feedback.length + '개'));
         current.feedback.feedback.forEach(entry => {
-          const available = feed?.articles?.find(item => item.canonicalUrl === entry.canonicalUrl);
+          const available = listedArticle(entry.canonicalUrl);
           const article = available || { id: entry.articleId, canonicalUrl: entry.canonicalUrl, title: entry.canonicalUrl };
           const row = node('div', null, 'discovery-excluded-row'); row.dataset.discoveryUrl = entry.canonicalUrl;
           row.append(node('p', article.title), node('small', entry.kind === 'already_read' ? '읽음' : '관련 없음', 'life-meta'));
@@ -1404,10 +1636,11 @@
     async function render(options = {}) {
       leave(); if (disposed) return;
       active = true; const next = getBundle()?.workspaceId;
-      if (next !== workspaceId) { current = null; client?.dispose(); client = null; }
+      if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; }
       workspaceId = next; const token = generation;
-      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, imageByUrl: null, imageNodes: new Map(), failedImages: new Set() };
-      current.selected = null; current.toast = null; current.readerPushed = false;
+      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
+        wide: { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0, notEnabled: false, clearError: false, clearTried: false, refused: new Set() } };
+      current.selected = null; current.toast = null; current.readerPushed = false; current.wide.clearTried = false;
       const reopen = typeof options.articleId === 'string' ? options.articleId : null;
       const retainedPersonal = { result: current.personalResult, mode: current.mode, blocked: current.personalBlocked, pending: current.personalPending, actions: current.actions?.revision, settings: current.settings?.revision, profile: current.profile?.revision, feedback: current.feedback?.revision, language: current.languageSettings?.revision };
       stopTranslation(); current.languageReadEpoch++; current.personalResult = null; current.personalBlocked = true; if (current.mode === 'personal') current.mode = current.baselineMode;
@@ -1444,7 +1677,7 @@
           }
           if (event.type === 'interest_profile_changed' && current.profile && event.revision > current.profile.revision && !topicWrite) {
             capture();
-            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); } }).catch(error => report(error));
+            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; current.order = null; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); refreshWide().catch(error => report(error)); } }).catch(error => report(error));
           }
         });
       try {
@@ -1465,6 +1698,8 @@
           if (!valid(token)) return;
         }
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
+        // Opening the news tab with 넓게 찾기 on asks once; a pending erase from an earlier switch-off is tried again.
+        if (valid(token)) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
         if (reopen && valid(token) && !current.selected) showArticle(reopen);
       } catch (error) {
         if (valid(token)) { current.initialReading = false; current.loading = false; current.languageConflict = true; current.languageError = '언어 설정을 확인하지 못했습니다. 최신 언어 설정 확인을 눌러 주세요.'; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
@@ -1491,6 +1726,7 @@
     function leave() {
       disposeSplit();
       readingUI?.leave(); cancelPrivateRead(); disposeReaderView();
+      wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; }
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
       setImmersive(false); for (const element of inerted) element.inert = false; inerted = [];
       generation++; active = false; if (current) { current.languageReadEpoch++; stopTranslation(); } stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
@@ -1498,7 +1734,7 @@
     }
     root.document.addEventListener('pointerdown', closeCardMenus, true);
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); root.document.removeEventListener('pointerdown', closeCardMenus, true); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });
