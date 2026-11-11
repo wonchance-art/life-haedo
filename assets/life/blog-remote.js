@@ -45,13 +45,13 @@
     publish_unsent: '공개 게시 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 게시해 주세요.',
     publish_unconfirmed: '공개 게시 결과를 받지 못했습니다. 서버에는 반영됐을 수 있습니다. 공개 상태를 확인하거나 같은 내용으로 다시 게시해 주세요.',
     unpublish_unsent: '공개 철회 요청을 보내지 못했습니다. 공개 상태는 바뀌지 않았습니다. 연결을 확인한 뒤 다시 철회해 주세요.',
-    unpublish_unconfirmed: '공개 철회 결과를 받지 못했습니다. 연결되면 철회 요청을 다시 보냅니다. 그때까지 공개 상태일 수 있습니다.',
+    unpublish_unconfirmed: '공개 철회 결과를 받지 못했습니다. 연결되면 같은 철회 요청을 다시 보냅니다. 그때까지 공개 상태일 수 있습니다. 그사이 다른 게시가 반영되면 그 공개본은 철회하지 않고 공개 중으로 알리니, 그때는 다시 철회해 주세요.',
     // This attempt sent nothing; an earlier request of this device is still unanswered.
     publish_unsent_prior: '이번 공개 게시 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
     unpublish_unsent_prior: '이번 공개 철회 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
     // 게시 요청 취소 (BlogSync cancelPublish): the withdrawal that ends an unapplied publish request.
     cancel_unsent: '게시 요청 취소를 보내지 못했습니다. 바뀐 것은 없습니다. 연결을 확인한 뒤 다시 시도해 주세요.',
-    cancel_unconfirmed: '게시 요청 취소 결과를 받지 못했습니다. 연결되면 다시 보냅니다. 그때까지 공개 상태는 확인 못 함으로 표시합니다.',
+    cancel_unconfirmed: '게시 요청 취소 결과를 받지 못했습니다. 연결되면 다시 보냅니다. 그때까지 공개 상태는 확인 못 함으로 표시합니다. 그사이 그 게시가 반영되면 취소하지 않고 공개 중으로 알립니다.',
     settle_failed: '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.'
   };
   // What a screen says next to a known public state while a request of this device is still
@@ -61,10 +61,18 @@
   const publicationNotes = Object.freeze({
     update_unapplied: '앞서 보낸 공개 갱신은 아직 반영되지 않았습니다. 이전 공개본이 그대로 공개 중입니다. 늦게 반영될 수 있으니, 바꾸려면 미리보기를 갱신해 다시 게시해 주세요.',
     publish_unapplied: '앞서 보낸 공개 게시 요청은 아직 반영되지 않았습니다. 늦게 반영될 수 있습니다. 공개하려면 다시 게시하고, 공개하지 않으려면 공개 검토에서 게시 요청을 취소해 주세요.',
+    earlier_choice_public: '마지막으로 고른 내용은 게시되지 않았습니다. 먼저 보낸 게시가 반영되어 공개 중입니다. 미리보기를 갱신해 다시 게시하거나 철회해 주세요.',
     copy_unverified: '공개 중인 사본이 마지막으로 검토한 내용인지 확인하지 못했습니다. 미리보기를 갱신해 다시 게시하면 그 내용으로 바뀝니다.',
     withdrawal_resent: '받지 못했던 철회 요청을 이 기기가 다시 보내 공개를 철회했습니다.',
     withdrawal_overtaken: '철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다. 비공개로 두려면 다시 철회해 주세요.'
   });
+  // The text of one note for a post's state (BlogSync getState): 'earlier_choice_public' says how
+  // many photos the public copy shows when that was read.
+  function publicationNote(code, state = null) {
+    const text = publicationNotes[code] || '', photos = state?.publicationEarlier?.photos;
+    if (code !== 'earlier_choice_public' || !Number.isSafeInteger(photos) || photos < 0) return text;
+    return text.replace('공개 중입니다.', `공개 중입니다(사진 ${photos}장).`);
+  }
   const publicationFault = kind => Object.assign(new Error(publicationMessages[kind] || publicationMessages.settle_failed), { code: 'network_error' });
   const id = value => typeof value === 'string' && UUID.test(value);
   const rev = value => Number.isSafeInteger(value) && value >= 0;
@@ -385,5 +393,5 @@
     return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
-  return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, checkViews, PUBLICATION_TIMEOUT, MARKDOWN_PUBLICATION_TIMEOUT });
+  return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, publicationNote, checkViews, PUBLICATION_TIMEOUT, MARKDOWN_PUBLICATION_TIMEOUT });
 });

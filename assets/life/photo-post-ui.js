@@ -501,7 +501,7 @@
         // settlement did by itself (an old withdrawal sent again, a withdrawal overtaken by a publication).
         const notes = life.BlogRemote?.publicationNotes || {};
         if (known && saved && notes[publicState?.notice]) {
-          const said = el("p", notes[publicState.notice], "photo-info-note photo-public-unapplied");
+          const said = el("p", life.BlogRemote?.publicationNote ? life.BlogRemote.publicationNote(publicState.notice, { publicationEarlier: publicState.earlier }) : notes[publicState.notice], "photo-info-note photo-public-unapplied");
           said.dataset.notice = publicState.notice;
           visibility.append(said);
         }
@@ -1211,7 +1211,7 @@
         // Older engines report no notice: an unanswered publish request is then named from the request itself.
         const published = state.publication?.active === true,
           notice = Object.hasOwn(state, "publicationNotice") ? state.publicationNotice : state.publishPending ? (published ? "update_unapplied" : "publish_unapplied") : null;
-        publicState = { id, published, notice, log: state.publicationLog || null };
+        publicState = { id, published, notice, log: state.publicationLog || null, earlier: state.publicationEarlier || null };
         publicError = "";
       }
     }

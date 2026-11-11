@@ -132,8 +132,9 @@
     // An unanswered request is named next to the status for as long as it is kept (never
     // silently): short in the list, in full in the review and 글 정보. None of these says the
     // request failed for good, because it can still arrive.
-    const noticeLabels = { update_unapplied: '앞서 보낸 갱신 미반영', publish_unapplied: '앞서 보낸 게시 미반영', copy_unverified: '공개본 확인 필요' };
+    const noticeLabels = { update_unapplied: '앞서 보낸 갱신 미반영', publish_unapplied: '앞서 보낸 게시 미반영', earlier_choice_public: '마지막 선택 미반영', copy_unverified: '공개본 확인 필요' };
     const noticeTexts = life.BlogRemote?.publicationNotes || {};
+    const noteText = (code, state) => life.BlogRemote?.publicationNote ? life.BlogRemote.publicationNote(code, state) : noticeTexts[code] || '';
     const logTexts = { withdrawal_resent: noticeTexts.withdrawal_resent, withdrawal_overtaken: noticeTexts.withdrawal_overtaken };
     // A withdrawal of a post that was not public: `ended` says it ended an unanswered publish request.
     const notPublic = outcome => outcome?.ended ? '앞서 보낸 공개 게시 요청을 끝냈습니다. 이 글은 공개 중이 아닙니다.' : '이 글은 공개 중이 아닙니다.';
@@ -359,6 +360,8 @@
       // What is public now, from this device's record of the server (settled above when unknown).
       const currentLine = el('p', '', 'life-meta blog-manager-current'); panel.append(currentLine);
       let panelState = capturedState;
+      // Set once the preview controls exist: ends a preview that is not what became public.
+      let dropPreview = null;
       const showCurrent = () => {
         const value = panelState?.publicationStatus || (panelState?.publication?.active ? 'public' : panelState ? 'private' : 'unknown');
         const had = currentLine.contains(document.activeElement);
@@ -377,7 +380,9 @@
         }
         const notice = panelState?.publicationNotice || (value === 'private' && panelState?.publishPending ? 'publish_unapplied' : value === 'public' && panelState?.publishPending ? 'update_unapplied' : '');
         currentLine.dataset.notice = notice || '';
-        if (noticeTexts[notice]) currentLine.append(el('span', ' · ' + noticeTexts[notice], 'blog-manager-current-notice'));
+        if (noticeTexts[notice]) currentLine.append(el('span', ' · ' + noteText(notice, panelState), 'blog-manager-current-notice'));
+        // The last choice was not sent and an earlier one is public: a preview made before that is over.
+        if (notice === 'earlier_choice_public' && preview?.snapshot && preview.publicRevision !== (panelState.publication?.revision || 0)) dropPreview?.();
         // The owner ends a publish request that is not applied: the server then refuses it for
         // good and this notice ends. An update of a public post is not ended this way.
         if (notice === 'publish_unapplied' && blogSync?.cancelPublish) currentLine.append(document.createTextNode(' '), button('게시 요청 취소', async () => {
@@ -445,6 +450,7 @@
       // Copies made for this review, reused while the same photos stay selected.
       const copies = new Map();
       function invalidate() { changed = true; consent.checked = false; result.replaceChildren(meta('공개할 내용을 바꿨습니다. 미리보기를 갱신해 확인해 주세요.')); preview.snapshot = null; }
+      dropPreview = () => { changed = true; consent.checked = false; preview.snapshot = null; result.replaceChildren(meta('이 미리보기는 게시되지 않았습니다. 미리보기를 갱신해 현재 공개 상태를 확인해 주세요.')); };
       author.addEventListener('input', invalidate); intro.addEventListener('input', invalidate); selected.forEach(check => check.addEventListener('change', invalidate));
       showProfile(true);
       footer.append(button('공개 미리보기 갱신', async () => {
@@ -612,9 +618,10 @@
         if (event?.type === 'status') { if (!event.status?.running) void refreshSync(); }
         else if (event?.type === 'delete_refused') { if (event.workspaceId === workspaceId) refusedDelete = true; }
         else if (event?.type === 'publication_notice') {
-          if (event.workspaceId !== workspaceId || !logTexts[event.code]) return;
+          const said = logTexts[event.code] || (event.code === 'earlier_choice_public' ? noticeTexts.earlier_choice_public : '');
+          if (event.workspaceId !== workspaceId || !said) return;
           const row = rows.find(item => item.kind === 'photo' && item.id === event.localPostId);
-          if (!busy) announce((row ? `“${postLabel(row)}”: ` : '') + logTexts[event.code]);
+          if (!busy) announce((row ? `“${postLabel(row)}”: ` : '') + said);
           void refreshPublic();
         }
         // One post's connection state changed (a settled publication included).

@@ -516,6 +516,9 @@ async function main() {
     assert.deepEqual(published(w2.remoteId), { active: false, revision: 1 }, 'a withdrawn row at revision 1');
     assert.equal(await publicStatus(page, w2.doc.id), 'private', 'settled as 비공개 at once: the request can no longer be applied');
     assert.deepEqual({ state: (await current(page)).state, notice: await panel(page).locator('.blog-manager-current').getAttribute('data-notice') }, { state: 'private', notice: '' });
+    // r3-m5(b): pressing again sends nothing and says the post was not public.
+    await click(page, '공개 철회', panel(page));
+    assert.equal(await statusLine(page), '이 글은 공개 중이 아닙니다.'); assert.equal(sentUnpublish(w2.remoteId).length, 1, 'no second request');
     const bindingW2 = await state(page, w2.doc.id); assert.equal(bindingW2.publishPending, null); assert.equal(bindingW2.unpublishPending, null); assert.equal(Object.hasOwn(bindingW2, 'publishRevoked'), false);
     await click(page, '공개 검토 닫기');
     assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict', 'the first publication arriving after the withdrawal is refused');
@@ -667,6 +670,59 @@ async function main() {
     assert.equal(sentUnpublish(v.remoteId).length, 1, 'a public post is never withdrawn to end an update');
     await visit(visitor.page, await publishedLink(page).getAttribute('href'), 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 1);
     await click(page, '공개 검토 닫기');
+    // ---- R3-M1 (review probe A4): the new choice was not sent and the earlier request became public --------
+    const a4 = await savedPost(page, '빼려던 사진이 공개된 글', files);
+    await manager(page); await openReview(page, a4.doc.id); await preview(page, { selected: a4.doc.photos.map(photo => photo.id), name: '익명 검수' });
+    replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
+    // The owner takes the photos out and publishes again; the withdrawal that ends the first request never arrives.
+    await preview(page, { selected: [] });
+    const endingA4 = await neverArrives(owner.context, 'life_blog_unpublish'); await publish(page); await endingA4.stop();
+    assert.match(await statusLine(page), /이번 공개 게시 요청은 보내지 못했습니다\. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다/);
+    assert.equal(endingA4.count, 1); assert.equal(sentPublish(a4.remoteId).length, 0, 'the new choice was not sent'); assert.equal((await current(page)).state, 'unknown');
+    const consentA4 = page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true });
+    assert.equal(await consentA4.isChecked(), true, 'a connection failure keeps the reviewed preview');
+    // The first request reaches the server.
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', replacedRequest.bodies[0]).status, 'stored');
+    assert.deepEqual({ active: publication(a4.remoteId).active, photos: publication(a4.remoteId).photos, revision: publication(a4.remoteId).revision }, { active: true, photos: 2, revision: 1 });
+    await kick(page); await until(() => publicStatus(page, a4.doc.id), value => value === 'public', 'the cycle reads the publication');
+    // The open review says what is public, and the preview that was not published is over.
+    await until(() => panel(page).locator('.blog-manager-current').getAttribute('data-notice'), value => value === 'earlier_choice_public', 'the open review names it');
+    const noticeA4 = /마지막으로 고른 내용은 게시되지 않았습니다\. 먼저 보낸 게시가 반영되어 공개 중입니다\(사진 2장\)\. 미리보기를 갱신해 다시 게시하거나 철회해 주세요/;
+    assert.match((await current(page)).text, /현재 공개 상태: 공개 중/); assert.match((await current(page)).text, noticeA4);
+    assert.equal(await consentA4.isChecked(), false, 'the consent ends with the preview');
+    assert.match(await panel(page).locator('.blog-manager-public-preview').innerText(), /이 미리보기는 게시되지 않았습니다\. 미리보기를 갱신해 현재 공개 상태를 확인해 주세요/);
+    assert.match(await statusLine(page), /“빼려던 사진이 공개된 글”: 마지막으로 고른 내용은 게시되지 않았습니다\. 먼저 보낸 게시가 반영되어 공개 중입니다/);
+    await panel(page).locator('.blog-manager-current').scrollIntoViewIfNeeded(); await shot(page, 'r3m1-earlier-choice-review-1440');
+    for (const [width, height] of [[820, 1180], [390, 844]]) {
+      await page.setViewportSize({ width, height }); await panel(page).locator('.blog-manager-current').scrollIntoViewIfNeeded();
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no sideways scroll at ' + width); await shot(page, 'r3m1-earlier-choice-review-' + width);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    // Publishing without a new preview sends nothing.
+    await consentA4.check(); await publish(page);
+    assert.equal(await statusLine(page), '공개 미리보기를 먼저 갱신해 주세요.'); assert.equal(sentPublish(a4.remoteId).length, 0);
+    await click(page, '공개 검토 닫기');
+    // It stays in the list and in 글 정보 until the owner acts; the device sends nothing by itself.
+    assert.equal(await mark(page, a4.doc.id), '공개 중 · 마지막 선택 미반영');
+    await cycle(page); await cycle(page);
+    assert.equal(await mark(page, a4.doc.id), '공개 중 · 마지막 선택 미반영'); assert.equal(sentPublish(a4.remoteId).length, 0); assert.equal(sentUnpublish(a4.remoteId).length, 0);
+    await shot(page, 'r3m1-earlier-choice-list-1440');
+    await openPost(page, a4.doc.id, a4.doc.title); assert.equal((await settledPill(page)).state, 'public');
+    sheet = await openInfo(page); assert.match(await sheet.locator('.photo-public-unapplied[data-notice="earlier_choice_public"]').innerText(), noticeA4);
+    await page.setViewportSize({ width: 390, height: 844 }); await shot(page, 'r3m1-earlier-choice-info-390'); await page.setViewportSize({ width: 1440, height: 1000 });
+    await closeInfo(page);
+    await visit(visitor.page, new URL('blog.html?post=' + publication(a4.remoteId).token, base + '/').href, 'published');
+    assert.equal(await visitor.page.locator('#blogContent img').count(), 2, 'visitors read the earlier choice meanwhile');
+    // The owner reviews against what is public and publishes the choice without photos: the notice ends.
+    await manager(page); await openReview(page, a4.doc.id);
+    assert.equal(await panel(page).locator('.blog-manager-current').getAttribute('data-notice'), 'earlier_choice_public');
+    await preview(page, { selected: [] }); await publish(page); await publishedLink(page).waitFor();
+    assert.deepEqual({ active: publication(a4.remoteId).active, photos: publication(a4.remoteId).photos, revision: publication(a4.remoteId).revision }, { active: true, photos: 0, revision: 2 });
+    assert.equal(await panel(page).locator('.blog-manager-current').getAttribute('data-notice'), ''); await click(page, '공개 검토 닫기');
+    assert.equal(await mark(page, a4.doc.id), '공개 중');
+    await visit(visitor.page, new URL('blog.html?post=' + publication(a4.remoteId).token, base + '/').href, 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 0);
+    pass('R3-M1: when the withdrawal that ends the earlier request fails and that request becomes public, the review, the list and 글 정보 keep saying so with the photo count, the stale preview and consent end, and the next publication ends it');
+
     // A conflict that is not this device's earlier request: nothing is sent again, and the screen says what is public.
     const x = await savedPost(page, '다른 기기 경합 글', files);
     await manager(page); await openReview(page, x.doc.id); await preview(page, { selected: [], name: '익명 검수' });

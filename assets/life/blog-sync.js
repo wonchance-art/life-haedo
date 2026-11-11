@@ -54,11 +54,16 @@
   // 'publish_unapplied' (not public; a publish request is not applied yet; the owner can end it,
   //   cancelPublish),
   // 'update_unapplied' (public; an update is not applied yet, the earlier copy is what is public),
+  // 'earlier_choice_public' (public; the owner's last choice was never sent because ending the
+  //   request before it failed, and that earlier request is what became public. It stays until
+  //   the owner publishes again or withdraws, or the public copy changes: publicationEarlier
+  //   names the public revision it is about and how many photos that copy shows),
   // 'copy_unverified' (public; whether the copy is the last reviewed choice could not be told).
   function publicationNotice(state) {
     const status = publicationStatus(state);
     if (status === 'unknown') return null;
     if (state?.publishPending) return status === 'public' ? 'update_unapplied' : 'publish_unapplied';
+    if (status === 'public' && state?.publicationEarlier && state.publicationEarlier.revision === state.publication.revision) return 'earlier_choice_public';
     if (status === 'public' && state?.publicationDoubt === true) return 'copy_unverified';
     return null;
   }
@@ -523,6 +528,10 @@
     //   direction and the server receipt makes it idempotent. A publication that appeared at
     //   another revision is never withdrawn from here: it may be another device's deliberate
     //   one. The post is then public and says so (withdrawal_overtaken).
+    // - The withdrawal that was to end a request before a new choice (`replacing`) met a
+    //   publication instead: the new choice was not sent and the earlier one is public. That is
+    //   kept on the post (publicationEarlier, notice 'earlier_choice_public') until the owner
+    //   publishes again or withdraws.
     // A failed read or request leaves the state as it was (still "unknown") and throws.
     const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
       selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}) });
@@ -584,6 +593,13 @@
         const row = await readHead(state.remoteId);
         return { row, stuck: !stored && !!row && !row.publication?.active && publicRevision(row.publication) === expectedRevision };
       };
+      // The new choice of the owner was not sent and an earlier publication is public instead.
+      const earlier = async row => {
+        let photos = null;
+        try { photos = (await publicFacts(c, row.publication))?.photos.length ?? null; } catch (error) { if (explain(error)?.code === 'request_cancelled') throw error; }
+        changes.publicationEarlier = { revision: row.publication.revision, photos, at: new Date(now()).toISOString() };
+        notes.push('earlier_choice_public');
+      };
       let publication = null;
       // Nothing was stored on the server under this identity yet: nothing can be public.
       if (!(state.remoteRevision > 0)) { differs('publishPending', null); differs('unpublishPending', null); publication = state.publication ?? null; }
@@ -607,6 +623,8 @@
           if (!deferred) changes.unpublishPending = null;
           // The owner asked for a withdrawal and the post is public at another revision: said, never withdrawn from here.
           if (!replace && !withdrawing.replacing && row?.publication?.active) { notes.push('withdrawal_overtaken'); Object.assign(changes, logged('withdrawal_overtaken')); }
+          // It was to end the request before a new choice, and that request is public now.
+          if (withdrawing.replacing && row?.publication?.active) await earlier(row);
         }
         if (publishing) {
           if (!row || publicRevision(row.publication) > (publishing.expectedPublicRevision || 0)) {
@@ -634,10 +652,13 @@
             Object.assign(changes, keep); changes.unpublishPending = null;
             // `moved`: the revision this request moved, with nothing public before or after.
             if (row?.publication && publicRevision(row.publication) > expectedRevision) { replaced = null; if (!row.publication.active && row.publication.revision === expectedRevision + 1) moved = { from: expectedRevision, to: row.publication.revision }; }
+            // The request this was to end arrived right before it: the new choice is not what is public.
+            if (replace === 'publish' && row?.publication?.active) await earlier(row);
           }
         }
         publication = row?.publication ?? null;
         if (!publication?.active && state.publicationDoubt) changes.publicationDoubt = null;
+        if (!publication?.active && state.publicationEarlier && !changes.publicationEarlier) changes.publicationEarlier = null;
       }
       differs('publication', publication);
       if (changes.publicationDoubt === undefined) delete changes.publicationDoubt;
@@ -1104,7 +1125,7 @@
       // A withdrawal still recorded for an earlier publication revision can only end in conflict now
       // (the same choice was published again before that withdrawal got an answer): it is over.
       const overtaken = stored => stored?.unpublishPending && stored.unpublishPending.expectedRevision < result.revision;
-      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { publishPending: null } : {}), ...(overtaken(stored) ? { unpublishPending: null } : {}) }));
+      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationEarlier: null, publicationLog: null, ...(mine(stored) ? { publishPending: null } : {}), ...(overtaken(stored) ? { unpublishPending: null } : {}) }));
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
@@ -1244,10 +1265,14 @@
         // always sends a withdrawal that moves the publication revision (from 0 when there is no
         // row), so that request can only end in conflict; one that already arrived is withdrawn
         // below together with the public copy.
+        // An earlier withdrawal of a public copy that this call finds applied, or sends again, is this withdrawal.
+        const earlierWithdrawal = (await readState(c))?.unpublishPending, wasPublic = !!earlierWithdrawal && !earlierWithdrawal.ending;
         const settled = await settleLocked(c, { replace: 'withdraw', sent }); let state = settled.state;
         if (settled.deferred) throw fault('blog_withdrawal_unsupported');
-        // `ended`: nothing was public; this withdrawal ended an unanswered publish request.
-        if (!state?.publication?.active) return settled.moved ? { status: 'not_published', revision: settled.moved.to, ended: true } : { status: state?.publication ? 'unpublished' : 'not_published', revision: publicRevision(state?.publication) };
+        // Nothing is public. `ended`: this withdrawal ended an unanswered publish request. 'unpublished': the
+        // earlier withdrawal of a public copy is confirmed. Otherwise the post was not public (also when only a
+        // withdrawn row exists) and nothing was sent.
+        if (!state?.publication?.active) return settled.moved ? { status: 'not_published', revision: settled.moved.to, ended: true } : { status: wasPublic ? 'unpublished' : 'not_published', revision: publicRevision(state?.publication) };
         if (expected !== undefined && state.publication.revision !== expected) throw fault('local_changed');
         const pending = { operationId: makeId(), expectedRevision: state.publication.revision };
         state = await writeState(c, state, { unpublishPending: pending });
@@ -1260,7 +1285,7 @@
           throw error;
         }
         const latest = await readHead(state.remoteId); guard(c);
-        await patch(c, stored => ({ publication: latest?.publication || { ...state.publication, active: false, revision: result.revision }, publicationDoubt: null, publicationLog: null, ...(mine(stored) ? { unpublishPending: null } : {}) }));
+        await patch(c, stored => ({ publication: latest?.publication || { ...state.publication, active: false, revision: result.revision }, publicationDoubt: null, publicationEarlier: null, publicationLog: null, ...(mine(stored) ? { unpublishPending: null } : {}) }));
         if (latest?.publication?.active || latest?.publication?.revision !== result.revision) throw fault('blog_conflict');
         return result;
       });
