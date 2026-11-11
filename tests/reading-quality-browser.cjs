@@ -81,13 +81,23 @@ async function main() {
           const rect = range.getBoundingClientRect(); scrollTo(0, scrollY + rect.top - innerHeight / 3);
           el.dispatchEvent(new Event('pointerup', { bubbles: true })); window.__readingSelectedY = scrollY;
         }, quote);
-        await page.locator('#lifeExcerptToggle').evaluate(el => el.addEventListener('pointerdown', () => { window.__readingSelectedY = scrollY; }, { once: true }));
+        // 2026-11-11 (자료 읽기 M3): 발췌를 저장한 뒤에는 읽던 줄이 화면의 같은 높이로 돌아온다. 저장 알림 줄처럼 본문 위의
+        // 높이가 달라져도 줄은 그대로여야 하므로, 본문이 읽는 줄(화면 높이 1/3)에 걸쳐 있었으면 scrollY 값이 아니라 고른 구절이
+        // 화면에 놓인 높이를 비교한다. 본문 시작보다 위(문서 맨 위)에서는 잡을 줄이 없으므로 이전처럼 scrollY를 비교한다.
+        // (Playwright의 click은 누르기 전에 스스로 스크롤할 수 있어, 그때의 실제 상태를 pointerdown에서 기록한다.)
+        await page.locator('#lifeExcerptToggle').evaluate(el => el.addEventListener('pointerdown', () => {
+          const body = document.querySelector('#lifeSourceText').getBoundingClientRect();
+          window.__readingSelectedY = scrollY; window.__readingSelectedTop = getSelection().getRangeAt(0).getBoundingClientRect().top;
+          window.__readingOnLine = body.top < innerHeight / 3 && body.bottom > innerHeight / 3;
+        }, { once: true }));
         await page.locator('#lifeExcerptToggle').click(); await page.locator('#lifeSourceTopic').fill('산책'); await page.locator('#lifeSourceNote').fill('두 번째로 만난 문장을 보관한다.');
         assert.equal(await page.locator('#lifeSelectedQuote').textContent(), quote); assert.equal(await save.isEnabled(), true);
         await page.screenshot({ path: path.join(out, 'excerpt-' + size.width + '.png') });
         await save.click(); await settle(page); await page.locator('#lifeSourceText').waitFor();
-        report.observations.at(-1).savedPosition = await page.evaluate(() => ({ expected: __readingSelectedY, actual: scrollY }));
-        await page.waitForFunction(() => Math.abs(scrollY - __readingSelectedY) <= 2);
+        await page.waitForFunction(() => getSelection().rangeCount === 1 && (__readingOnLine ? Math.abs(getSelection().getRangeAt(0).getBoundingClientRect().top - __readingSelectedTop) <= 2 : Math.abs(scrollY - __readingSelectedY) <= 2)).catch(() => {});
+        const saved = report.observations.at(-1).savedPosition = await page.evaluate(() => ({ onLine: __readingOnLine, expectedTop: __readingSelectedTop, actualTop: getSelection().rangeCount ? getSelection().getRangeAt(0).getBoundingClientRect().top : null, scrollBefore: __readingSelectedY, scrollAfter: scrollY }));
+        if (saved.onLine) assert(Math.abs(saved.actualTop - saved.expectedTop) <= 2, 'the selected passage is back at the same height on screen: ' + JSON.stringify(saved));
+        else assert(Math.abs(saved.scrollAfter - saved.scrollBefore) <= 2, 'the page is back at the same scroll position: ' + JSON.stringify(saved));
         assert.equal(await page.evaluate(() => getSelection().toString()), quote);
         const after = await current(page), added = after.records.find(record => !before.records.some(old => old.id === record.id));
         assert.deepEqual(after.sources, before.sources); assert.deepEqual(after.sourceVersions, before.sourceVersions);

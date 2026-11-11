@@ -130,6 +130,8 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    // The open reader's keeper of the reading line across width changes (SplitResize.keepLine), or null.
+    let readerLineKeeper = null;
     let splitCleanup = null;
     let readerMatchRefresh = null;
     let readerWatch = null;
@@ -3875,7 +3877,8 @@
       main.dataset.split = 'records';
       // The list width is chosen by dragging the line between the columns (this device only).
       splitCleanup = global.HaedoLife.SplitResize?.attach(main, { key: 'caeyeon_life_split_records', before: readerColumn, controls: pane.id,
-        min: 280, readerMin: 420, defaultWidth: 400, keepVisible: () => readerColumn.querySelector('#lifeSourceText') || readerColumn.querySelector('.life-reader') }) || null;
+        min: 280, readerMin: 420, defaultWidth: 400, keepVisible: () => readerColumn.querySelector('#lifeSourceText') || readerColumn.querySelector('.life-reader'),
+        lineKept: () => !!readerLineKeeper }) || null;
       const saved = state.recordsPaneScroll?.workspaceId === workspaceId ? state.recordsPaneScroll.top : 0;
       requestAnimationFrame(() => {
         if (!pane.isConnected) return;
@@ -4691,10 +4694,59 @@
       let readingScrollY = global.scrollY;
       let readerInteracted = false;
       let selectionOrigin = 'dom';
-      const savePosition = () => {
+      // The point on the reading line (a third down the screen) and where it is on screen. Raw text: one exact
+      // character. Formatted Markdown: a parser-mapped block and how far down it (block level; never a raw locator).
+      // window.scrollY alone names a different paragraph as soon as the reading column's width changes.
+      const charTop = offset => {
+        if (!Number.isInteger(offset) || offset < 0 || offset >= version.contentText.length) return null;
+        const range = document.createRange();
+        range.setStart(originalText, offset); range.setEnd(originalText, Math.min(version.contentText.length, offset + (version.contentText.codePointAt(offset) > 0xFFFF ? 2 : 1)));
+        const rect = range.getBoundingClientRect();
+        return rect.height ? rect.top : null;
+      };
+      const readingLine = {
+        capture() {
+          if (!reader.isConnected) return null;
+          const box = reader.getBoundingClientRect(), y = global.innerHeight / 3;
+          // Above the text or past its end there is no line to keep; the plain scroll position is used.
+          if (box.top >= y || box.bottom <= y) return null;
+          if (formattedView) {
+            const blocks = markdown.blocks; let low = 0, high = blocks.length;
+            while (low < high) { const mid = (low + high) >>> 1; if (blocks[mid].element.getBoundingClientRect().bottom <= y) low = mid + 1; else high = mid; }
+            if (!blocks[low]) return null;
+            const rect = blocks[low].element.getBoundingClientRect(), ratio = rect.height ? Math.min(1, Math.max(0, (y - rect.top) / rect.height)) : 0;
+            return { mode: 'formatted', offset: blocks[low].start, ratio, top: rect.top + ratio * rect.height, viewport: global.innerHeight };
+          }
+          const offset = rawVisibleOffset(), top = charTop(offset);
+          return top === null ? null : { mode: 'raw', offset, top, viewport: global.innerHeight };
+        },
+        top(anchor) {
+          if (!reader.isConnected || !anchor) return null;
+          if (!formattedView) return charTop(anchor.offset);
+          const block = markdown.blocks.find(item => anchor.mode === 'formatted' ? item.start === anchor.offset : anchor.offset >= item.start && anchor.offset < item.end);
+          if (!block) return null;
+          const rect = block.element.getBoundingClientRect();
+          return rect.top + (anchor.mode === 'formatted' ? anchor.ratio : 0) * rect.height;
+        }
+      };
+      // Scroll so that the remembered point is back at its height (the same share of the screen after a rotation).
+      const placeLine = anchor => {
+        const now = readingLine.top(anchor);
+        if (!Number.isFinite(now)) return false;
+        const want = anchor.viewport && anchor.viewport !== global.innerHeight ? anchor.top * global.innerHeight / anchor.viewport : anchor.top;
+        global.scrollTo({ top: Math.max(0, global.scrollY + now - want), behavior: 'instant' });
+        return true;
+      };
+      const lineKeeper = readerLineKeeper = global.HaedoLife.SplitResize?.keepLine?.(readerHost, readingLine) || null;
+      // The line read before the excerpt panel took the screen (the page then shows the panel at the end).
+      let readingAnchor = null;
+      const savePosition = final => {
         const previous = state.readerPositions.get(version.id), offset = formattedView ? markdown.adapter?.visibleOffset() ?? previous?.start ?? 0 : null;
+        // Scroll events keep this cheap; the reading line is taken once when the reader closes. It is the line last
+        // measured while reading (peek): by then the page may already be scrolling for the next screen.
+        const anchor = final === true ? (panel.hidden ? lineKeeper?.peek() || null : readingAnchor) : previous?.anchor || null;
         state.readerPositions.set(version.id, { ...(formattedView ? { start: offset, end: offset } : state.sourceSelection || { start: 0, end: 0 }),
-          mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY });
+          mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY, anchor });
       };
       const remember = (start, end) => {
         state.sourceSelection = { start, end };
@@ -4753,7 +4805,8 @@
       document.addEventListener('selectionchange', capture);
       global.addEventListener('scroll', savePosition, { passive: true });
       readerCleanup = () => {
-        savePosition();
+        savePosition(true);
+        lineKeeper?.dispose(); if (readerLineKeeper === lineKeeper) readerLineKeeper = null;
         readerWatch?.close();
         readerWatch = null;
         document.removeEventListener('selectionchange', capture);
@@ -4767,11 +4820,15 @@
         if (open) {
           capture();
           readingScrollY = global.scrollY;
+          readingAnchor = lineKeeper?.get() || null; lineKeeper?.pause();
           topic.input.focus({ preventScroll: true });
           panel.scrollIntoView({ block: 'start', behavior: 'instant' });
         } else {
           quote.focus({ preventScroll: true });
           global.scrollTo({ top: readingScrollY, behavior: 'instant' });
+          // The column may have been resized while the panel was open: return to the line, not only the offset.
+          if (readingAnchor) placeLine(readingAnchor);
+          lineKeeper?.resume(); lineKeeper?.set(readingAnchor);
         }
       } });
       const panelHeading = node('div', null, 'life-panel-heading');
@@ -4899,16 +4956,21 @@
       if (locator) requestAnimationFrame(() => {
         // A fresh user choice takes priority over a navigation restore queued before it.
         if (!reader.isConnected || readerInteracted) return;
+        // This session's own position returns to the line that was being read (locator.anchor); the column may be
+        // a different width now. Without one (the top of the text, an exact match or excerpt) the earlier rules apply.
         if (formattedView) {
           readerWatch?.suppress(); markdown.adapter.scrollToOffset(locator.start);
-          if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+          if (locator.anchor && placeLine(locator.anchor)) { /* placed */ }
+          else if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
         } else {
           const range = restoreSelection(locator);
           matchIndex = found.findIndex(item => item.start === locator.start && item.end === locator.end); showMatchCount();
-          if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+          if (locator.anchor && placeLine(locator.anchor)) { /* placed */ }
+          else if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
           else { const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         }
         readingScrollY = global.scrollY;
+        lineKeeper?.set(readingLine.capture());
       });
       refreshMatches();
       state.locator = null;

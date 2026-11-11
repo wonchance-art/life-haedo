@@ -8,7 +8,16 @@
  *   before     구분선을 넣을 자리(읽기 칸 요소). 구분선은 그 앞에 들어간다.
  *   key        localStorage 키. min/readerMin/defaultWidth는 px. controls는 목록 요소 id.
  *   keepVisible 너비가 바뀌는 동안 읽던 줄을 같은 높이에 둘 읽기 본문 요소(또는 그것을 돌려주는 함수).
- * 구분선이 보이지 않는 폭(CSS가 숨김)에서는 아무것도 바꾸지 않는다. */
+ *   lineKept   읽기 본문이 keepLine으로 읽던 줄을 스스로 잡고 있으면 true를 돌려주는 함수. 그때는 여기서 다시 잡지 않는다.
+ * 구분선이 보이지 않는 폭(CSS가 숨김)에서는 아무것도 바꾸지 않는다.
+ *
+ * keepLine(host, { capture, top }) → { get(), peek(), set(anchor), restore(), pause(), resume(), dispose() }
+ *   읽기 본문(host)의 너비가 어떤 이유로든 바뀔 때(창 크기·기기 회전·목록이 옆에 열림·구분선) 읽던 줄을 같은 화면
+ *   높이에 둔다. 이런 변화는 배치가 끝난 뒤에야 알 수 있어서, 사람이 스크롤하는 동안 읽던 줄을 기억해 둔다.
+ *   capture()  지금 읽는 줄의 한 점과 그 화면 높이 { top, viewport, … } 또는 null(본문이 읽는 줄에 걸치지 않음).
+ *   top(anchor) 그 점이 지금 있는 화면 높이.
+ *   기억한 점은 이 모듈이 아닌 것이 스크롤했을 때만 바뀐다. 그래서 너비가 여러 번 바뀌어도(끌기) 같은 글자로
+ *   돌아오고 줄 단위로 밀리지 않으며, 사람이 스크롤하는 동안에는 보정이 끼어들지 않는다(너비가 바뀐 그때 한 번뿐). */
 (function (root) {
   'use strict';
   const STEP = 16, LARGE_STEP = 64;
@@ -93,7 +102,7 @@
       if (disposed || !visible()) return;
       const range = bounds();
       const next = clamp(value ?? preferred ?? defaultWidth, range);
-      const restore = next !== width && width !== null ? holdReading() : null;
+      const restore = next !== width && width !== null && !options.lineKept?.() ? holdReading() : null;
       width = next;
       container.style.setProperty(cssVar, width + 'px');
       restore?.();
@@ -192,6 +201,73 @@
       container.style.removeProperty(cssVar);
     };
   }
+  function keepLine(host, adapter) {
+    const doc = host.ownerDocument, view = doc.defaultView || root;
+    let anchor = null, width = null, dirty = false, frame = 0, paused = 0, expected = null, seenY = null, disposed = false;
+    const hostWidth = () => host.getBoundingClientRect().width;
+    function measure() {
+      dirty = false;
+      if (disposed || paused || !host.isConnected) return;
+      // A width that differs from the last one seen means the layout already reflowed: what is on the reading
+      // line now is not what the person was reading. The observer below puts the remembered line back first.
+      if (width !== null && Math.abs(hostWidth() - width) >= 0.5) return;
+      anchor = adapter.capture(); seenY = view.scrollY;
+    }
+    function scrolled() {
+      if (disposed) return;
+      // This module's own correction is not a new place to read from.
+      if (expected !== null && Math.abs(view.scrollY - expected) < 1.5) { expected = null; return; }
+      expected = null;
+      if (paused) return;
+      dirty = true;
+      if (!frame) frame = view.requestAnimationFrame(() => { frame = 0; if (dirty) measure(); });
+    }
+    function restore() {
+      if (disposed || paused || !anchor || !host.isConnected) return false;
+      const now = adapter.top(anchor);
+      if (!Number.isFinite(now)) return false;
+      // The same height on screen; after a rotation, the same share of the new screen height.
+      const want = anchor.viewport && anchor.viewport !== view.innerHeight ? anchor.top * view.innerHeight / anchor.viewport : anchor.top;
+      const limit = Math.max(0, doc.documentElement.scrollHeight - view.innerHeight);
+      const target = Math.min(limit, Math.max(0, view.scrollY + now - want));
+      if (Math.abs(target - view.scrollY) < 1) return false;
+      expected = target;
+      // A program scroll, not reading (see holdReading): the scroll event fires in the next frame before its animation callbacks.
+      holdingScroll++; view.requestAnimationFrame(() => { holdingScroll--; });
+      view.scrollTo({ top: target, behavior: 'instant' });
+      return true;
+    }
+    function resized() {
+      if (disposed || !host.isConnected) return;
+      const now = hostWidth();
+      if (width !== null && Math.abs(now - width) >= 0.5) { dirty = false; restore(); }
+      width = now;
+    }
+    const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(resized) : null;
+    let resizeFrame = 0;
+    const windowResized = () => { if (!resizeFrame) resizeFrame = view.requestAnimationFrame(() => { resizeFrame = 0; resized(); }); };
+    if (observer) observer.observe(host); else view.addEventListener('resize', windowResized);
+    view.addEventListener('scroll', scrolled, { passive: true });
+    return {
+      // The line being read now. A scroll whose event has not arrived yet (it fires in the next frame) is measured here.
+      get() { if (dirty || view.scrollY !== seenY) measure(); return anchor ? { ...anchor } : null; },
+      // The last line that was measured, without looking at the page again (for when the screen is already changing).
+      peek() { return anchor ? { ...anchor } : null; },
+      set(value) { anchor = value ? { ...value } : null; dirty = false; seenY = view.scrollY; if (host.isConnected) width = hostWidth(); },
+      restore,
+      pause() { if (dirty || view.scrollY !== seenY) measure(); paused++; },
+      resume() { paused = Math.max(0, paused - 1); },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        if (frame) view.cancelAnimationFrame(frame);
+        if (resizeFrame) view.cancelAnimationFrame(resizeFrame);
+        observer?.disconnect();
+        view.removeEventListener('resize', windowResized);
+        view.removeEventListener('scroll', scrolled);
+      }
+    };
+  }
   root.HaedoLife ||= {};
-  root.HaedoLife.SplitResize = Object.freeze({ attach, adjusting });
+  root.HaedoLife.SplitResize = Object.freeze({ attach, adjusting, keepLine });
 })(typeof window !== 'undefined' ? window : globalThis);
