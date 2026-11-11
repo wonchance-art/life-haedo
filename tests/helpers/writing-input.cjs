@@ -43,7 +43,9 @@ const records = page => page.evaluate(async () => {
   const s = HaedoLife.Shell.storage, w = await s.getActive(), rows = await s.listPhotoPosts(w);
   return Promise.all(rows.map(async r => { const d = await s.readPhotoPost(w, r.id); return { id: d.id, title: d.title, status: d.status, revision: d.revision, archived: d.archived, replaces: d.replaces, text: HaedoLife.PhotoPost.plainText(d), photos: d.photos.length, ops: d.ops }; }));
 });
-const status = page => page.evaluate(() => ({ text: document.querySelector('.photo-status-text')?.textContent ?? null, state: document.querySelector('.photo-status')?.dataset.state ?? null }));
+// `detail` is the longer reason shown on its own line under the command row.
+const status = page => page.evaluate(() => ({ text: document.querySelector('.photo-status-text')?.textContent ?? null, state: document.querySelector('.photo-status')?.dataset.state ?? null,
+  detail: [...document.querySelectorAll('.photo-recovery-reason')].find(node => node.getClientRects().length)?.textContent ?? '' }));
 const mode = page => page.evaluate(() => document.querySelector('.photo-posts')?.dataset.mode ?? null);
 const quill = (page, fn, arg) => page.evaluate(({ fn, arg }) => (0, eval)('(' + fn + ')')(Quill.find(document.querySelector('.ql-container')), arg), { fn: fn.toString(), arg });
 const contents = page => quill(page, q => q.getContents().ops);

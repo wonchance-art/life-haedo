@@ -173,7 +173,18 @@
   color: var(--ink, #1f2a26);
   overflow-wrap: anywhere;
 }
-.photo-recovered > button { flex: none; min-height: 44px; font-size: 13px; padding: 8px 14px; }
+.photo-recovered-actions { display: flex; flex: none; gap: 8px; }
+.photo-recovered-actions > button { min-height: 44px; font-size: 13px; padding: 8px 14px; }
+/* The reason of an error too long for the one-line status: its own line above the recovery actions. */
+.photo-recovery-reason {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--haedo-text-meta, 13px);
+  line-height: 1.6;
+  color: #a52b3b;
+  overflow-wrap: anywhere;
+}
+.photo-recovery-reason[hidden] { display: none; }
 .ql-tooltip input[aria-invalid="true"] { border-color: var(--color-error, #a3243d); outline-color: var(--color-error, #a3243d); }
 .photo-commandbar .photo-status {
   flex: 1;
@@ -769,6 +780,10 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
      (the button's name still says both), so the one-line save status keeps its room. */
   .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
   .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
+  /* The same in the editor when a draft could not be uploaded: the icon keeps the visibility and
+     the problem takes the word's place, so the save status beside it is not squeezed out. */
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-problem) > .photo-privacy-label { display: none; }
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child) > .photo-privacy-problem::before { content: none; }
   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
   .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
   /* Keep the caret and the block being typed between the sticky bar and the floating tools. */

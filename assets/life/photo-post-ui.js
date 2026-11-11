@@ -337,7 +337,9 @@
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
         if (statusText.textContent !== message) statusText.textContent = message;
-        const detail = !e && authorText === AI_PENDING ? AI_PENDING_DETAIL
+        // An error may carry a longer reason (`detail`): the one-line status
+        // keeps the short message and the reason gets its own line below.
+        const detail = e?.detail ? " " + e.detail : !e && authorText === AI_PENDING ? AI_PENDING_DETAIL
           : !e && !authorText && message === "자동 저장됨" && draftState() === "error" ? " · 계정에 올리지 못함" : "";
         if (statusDetail && statusDetail.textContent !== detail) statusDetail.textContent = detail;
         status.dataset.state = state;
@@ -352,6 +354,9 @@
         recoveryActions.hidden = !e;
         recoveryActions.querySelector(".photo-recovery-copy").hidden =
           recoveryActions.dataset.conflict !== "true";
+        const reason = recoveryActions.querySelector(".photo-recovery-reason");
+        if (reason.textContent !== (e?.detail || "")) reason.textContent = e?.detail || "";
+        reason.hidden = !e?.detail;
       }
       refreshInfo?.();
       onDirty();
@@ -917,7 +922,10 @@
       if (!recoveryStore.write(workspaceId, doc))
         throw Object.assign(new Error(cause.message + " 이 기기에도 임시 보관하지 못했습니다. 더 보기의 HTML 읽기 파일 받기로 내려받아 주세요."), { code: "photo_post_unkept" });
       keptTick = tick;
-      unstored = Object.assign(new Error(cause.message + " 그때까지 이 기기에만 임시 보관합니다."), { code: "photo_post_local_only" });
+      unstored = Object.assign(new Error("이 기기에만 임시 보관 중"), {
+        code: "photo_post_local_only",
+        detail: cause.message + " 그때까지는 계정에 올리지 않고 이 기기에만 임시 보관합니다.",
+      });
       if (current(epoch)) showStatus();
     }
     // The screen follows what was stored. Never during an IME composition (the
@@ -1323,7 +1331,13 @@
       payload.status = "saved";
       payload.updatedAt = new Date().toISOString();
       // The strict check, naming what to fix, belongs to this explicit save.
-      M.validate(payload);
+      try {
+        M.validate(payload);
+      } catch (cause) {
+        // A long reason reads on its own line; short ones stay in the status.
+        if (cause?.code !== "invalid_photo_post" || String(cause.message).length <= 30) throw cause;
+        throw Object.assign(new Error("저장하지 못했습니다"), { code: cause.code, detail: cause.message });
+      }
       setBusy(true);
       try {
         const saved = await storage.savePhotoPost(
@@ -2001,8 +2015,11 @@
       // A single file keeps its own reason, as before.
       if (total === 1) return Object.assign(new Error(failed[0].message), { code: "invalid_photo_post" });
       const reasons = [...new Set(failed.map((item) => item.message))];
-      return Object.assign(new Error("사진 " + total + "장 중 " + failed.length + "장을 넣지 못했습니다: " +
-        failed.map((item) => item.name).join(", ") + ". " + reasons.join(" ")), { code: "photo_files_refused" });
+      return Object.assign(new Error("사진 " + failed.length + "장을 넣지 못했습니다"), {
+        code: "photo_files_refused",
+        detail: "사진 " + total + "장 중 " + failed.length + "장을 넣지 못했습니다: " +
+          failed.map((item) => item.name).join(", ") + ". " + reasons.join(" "),
+      });
     }
     function selectPhoto(node) {
       guard();
@@ -2203,7 +2220,10 @@
       }
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
+      const recoveryReason = el("p", "", "photo-recovery-reason");
+      recoveryReason.hidden = true;
       recoveryActions.append(
+        recoveryReason,
         button("다시 보관", persist),
         button("현재 입력 백업", backup),
       );
@@ -2219,13 +2239,14 @@
           apart = !(doc.revision === 0 || (offer.id === doc.id && offer.revision === doc.revision));
         bar.setAttribute("role", "group");
         bar.setAttribute("aria-label", "이 기기에 남아 있는 입력");
+        const choices = el("div", null, "photo-recovered-actions");
+        choices.append(button(apart ? "새 초안으로 복구" : "복구", restoreCopy), button("버리기", discardCopy));
+        choices.firstChild.classList.add("photo-recovered-restore");
         bar.append(
           el("p", "보관하지 못한 입력이 이 기기에 남아 있습니다" + (taken ? " · " + taken : "") +
             (apart ? " · 이 초안은 그 뒤에 바뀌어 새 초안으로 복구합니다" : ""), "photo-recovered-text"),
-          button(apart ? "새 초안으로 복구" : "복구", restoreCopy),
-          button("버리기", discardCopy),
+          choices,
         );
-        bar.querySelector("button").classList.add("photo-recovered-restore");
         sticky.append(bar);
         title.readOnly = true;
       }

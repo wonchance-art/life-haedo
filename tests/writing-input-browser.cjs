@@ -159,8 +159,9 @@ H.run(__filename, {
     await page.keyboard.type('맨 끝에 쓴 꼬리 문장.');
     const length = (await H.bodyText(page)).length;
     assert(length > 50000);
-    const said = await H.until(() => H.status(page), value => value.state === 'error' && /맨|본문은 50,000자까지/.test(value.text) && value.text.includes(length.toLocaleString('ko-KR')), 'the limit and the current length are said');
-    assert(/이 기기에만 임시 보관/.test(said.text), 'where the input is kept is said');
+    const said = await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('본문은 50,000자까지 쓸 수 있습니다') && value.detail.includes(length.toLocaleString('ko-KR')), 'the limit and the current length are said');
+    assert.equal(said.text, '이 기기에만 임시 보관 중', 'where the input is kept is said');
+    assert(/계정에 올리지 않고 이 기기에만 임시 보관/.test(said.detail));
     const kept = await H.records(page);
     assert.equal(kept[0].text, first[0].text, 'nothing over the limit is stored (or synced)');
     const copies = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('haedo_life_post_recovery_v1:')).map(([key, value]) => ({ key, value: JSON.parse(value) })));
@@ -169,7 +170,7 @@ H.run(__filename, {
     assert(copies[0].value.ops.map(op => op.insert).join('').includes('맨 끝에 쓴 꼬리 문장.'), 'the device copy holds all of the input');
     // Explicit save: refused with what to fix; the input stays.
     await page.getByRole('button', { name: '글 저장', exact: true }).click();
-    await H.until(() => H.status(page), value => value.state === 'error' && value.text.includes('본문은 50,000자까지 쓸 수 있습니다') && value.text.includes('줄여 주세요'), 'save names what to fix');
+    await H.until(() => H.status(page), value => value.state === 'error' && value.text === '저장하지 못했습니다' && value.detail.startsWith('본문은 50,000자까지 쓸 수 있습니다') && value.detail.endsWith('줄여 주세요.'), 'save names what to fix');
     assert.equal(await H.mode(page), 'edit');
     // Files of the current input do not depend on validation.
     const archive = await H.download(page, () => page.getByRole('button', { name: '현재 입력 백업' }).click());
@@ -191,7 +192,7 @@ H.run(__filename, {
     await page.getByRole('button', { name: '복구', exact: true }).click();
     await H.until(() => H.bodyText(page), text => text.length === length && text.includes('맨 끝에 쓴 꼬리 문장.'), 'the kept input is back');
     assert.equal(await page.locator('.photo-recovered').count(), 0);
-    await H.until(() => H.status(page), value => value.state === 'error' && value.text.includes('50,000자'), 'still over the limit, still said');
+    await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('50,000자'), 'still over the limit, still said');
     // Reload in this state: no data is lost and the offer comes back.
     await reloaded(page);
     await page.locator('.photo-recovered').waitFor();
@@ -212,7 +213,7 @@ H.run(__filename, {
     await page.locator('.ql-editor').click();
     const chunk = '한 번도 보관되지 않은 새 글의 긴 붙여넣기 문장입니다. '.repeat(40) + '\n';
     await H.pasteBody(page, { text: chunk.repeat(Math.ceil(51000 / chunk.length)) });
-    await H.until(() => H.status(page), value => value.state === 'error' && value.text.includes('50,000자'), 'said');
+    await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('50,000자'), 'said');
     assert.deepEqual(await H.records(page), [], 'no draft was stored');
     await page.getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('#homeComposition[aria-busy="false"]').waitFor();

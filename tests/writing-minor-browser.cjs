@@ -71,8 +71,9 @@ H.run(__filename, {
       await good('둘째.jpg', '#884466'), { name: '가짜.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('JPEG가 아닌 내용') }]);
     await H.until(() => blocks(page), count => count === 2, 'the two usable photos are inserted');
     const said = await H.until(() => H.status(page), value => value.state === 'error', 'the failure is said');
-    assert(said.text.includes('메모.txt') && said.text.includes('가짜.jpg') && /2장/.test(said.text), 'the files that failed are named: ' + said.text);
-    assert(!said.text.includes('첫째.jpg') && !said.text.includes('둘째.jpg'));
+    assert.equal(said.text, '사진 2장을 넣지 못했습니다');
+    assert(said.detail.includes('메모.txt') && said.detail.includes('가짜.jpg') && said.detail.startsWith('사진 4장 중 2장'), 'the files that failed are named: ' + said.detail);
+    assert(!said.detail.includes('첫째.jpg') && !said.detail.includes('둘째.jpg'));
     const rows = await H.stored(page, list => list[0]?.photos === 2, 'the usable photos are stored');
     assert.deepEqual(await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, (await s.listPhotoPosts(w))[0].id); return d.ops.filter(op => op.insert?.photo).map(op => d.photos.find(p => p.id === op.insert.photo.id).name); }), ['첫째.jpg', '둘째.jpg'], 'in the order chosen');
     assert.equal(rows.length, 1);
