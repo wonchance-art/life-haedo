@@ -245,7 +245,7 @@ SQL을 먼저 적용하고 앱(Pages)을 나중에 내보낸다. 순서가 뒤�
 
    - 격리 PostgreSQL에서 이전 정의의 `md5(prosrc)`는 `ec59cc1e58b1f5db02093ec138116744`였다. 운영 값이 다르면(줄바꿈 차이 포함) 적용하지 않고 `pg_get_functiondef`로 본문을 저장소 310–327행과 대조한다.
    - definer `true`, config `{search_path=pg_catalog}`, 실행 권한은 `authenticated`.
-2. **적용.** `supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql` 파일 전체(한 문장)를 그대로 적용한다. 다른 SQL은 없다. Edge 함수 배포도 없다.
+2. **적용.** `supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql` 파일 전체(한 문장)를 그대로 적용한다. 다른 SQL은 없다. 이 마이그레이션에는 Edge 함수 배포가 없다(같은 출시의 `haedo-blog-media` 재배포는 아래 절).
    - 적용 문장은 전후 행 수·해시가 다르면 예외로 되돌린다. 적용 중 블로그 표에 쓰기가 끼면(기기의 저장·동기화) 예외가 날 수 있으니, 기기 동기화가 쉬는 때 적용한다. 예외가 나면 데이터와 정의는 그대로이므로 다시 실행한다.
    - 이 SQL의 검증은 PostgreSQL 16.15에서 했다. CI는 17에서 같은 계약을 돌린다(`npm run test:sql-replay` 4.8 단계). 운영 판과 다르면 CI 결과를 먼저 본다.
 3. **적용 후 확인.**
@@ -304,3 +304,12 @@ notify pgrst,'reload schema';
 - 이 환경에는 PostgreSQL 16만 있다. SQL 검사는 16.15에서 돌렸다. CI는 17이다.
 - Docker가 없어 `scripts/check-blog-backend.mjs`와 `tests/integrated-release-installation.cjs`는 실행하지 못했다. 뒤의 것은 고정 목록·해시 부분만 따로 계산해 맞췄다.
 - 실제 기기와 실제 끊긴 연결에서의 동작은 확인하지 않았다. 브라우저 검사는 요청을 가로채 끊김을 만들었다.
+
+## 2026-11-11 공개 사본 ICC 조각 검사 (Edge `haedo-blog-media` 재배포, 운영 미적용)
+
+공개 사본 허용 목록에 ICC 프로필 조각 묶음(JPEG APP2 `ICC_PROFILE`)의 순번·개수·총 길이 검사를 더했다(커밋 `620b480`). 클라이언트(`blog-sync.js` 공개 사본 검사)와 Edge가 같은 규칙을 쓴다. 클라이언트만 먼저 나가도 공개는 더 엄격해질 뿐이라 순서 제약은 없다. Edge가 옛 판이면 서버 쪽 검사만 옛 규칙으로 남는다.
+
+1. **적용 전 기록.** 현재 Edge 버전 번호와 `verify_jwt`(꺼짐이어야 한다)를 적는다.
+2. **배포.** 파일은 `supabase/functions/haedo-blog-media/index.ts` 하나다(가져오는 공유 모듈 없음). SHA-256 `266b045617f757af21f9917b03a483506ea04e26f4d434c026125f7a1bbba232`(main `c767df3` 판은 `c2dc755a87d1cd156772c7205bd2de8746105ba7adfb2f783196fef255788249`). JWT 게이트 끔을 유지한다. 비밀값은 바꾸지 않는다.
+3. **배포 후 확인.** 버전 번호가 1 올랐는지, 존재하지 않는 공개 사진 요청이 404·`no-store`·`nosniff`인지(위 "Edge `haedo-blog-media` 배포" 확인과 같다). 실제 공개 사진의 읽기는 소유자 기기에서 기존 공개 글 하나를 열어 본다(에이전트가 공개 글을 새로 만들지 않는다).
+4. **되돌리기.** main 판(`c2dc755a…`)을 같은 방법으로 다시 배포한다. 데이터 변경이 없다.
