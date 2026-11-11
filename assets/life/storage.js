@@ -495,29 +495,112 @@
         core().assertSourceLinkPreservation(replaced?.size ? { ...local, links: local.links.filter(link => !replaced.has(link.id)) } : local, incoming);
       }
     }
-    // The last server snapshot this device agreed on (after an upload was stored or a server
-    // snapshot was applied), in its own key: the sync record keeps its format for older pages.
-    // It is the common ancestor of a later merge and is used only while it still describes the
-    // acknowledged server revision; an older page that moves the revision leaves it unused.
+    // The last server snapshot this device agreed on, in its own key: the sync record keeps its
+    // format for older pages. It is the common ancestor of a later merge and is used only while
+    // it still describes the acknowledged server revision; an older page that moves the revision
+    // leaves it unused. It is written when this device stops being equal to that snapshot:
+    //   - before the first local change of a workspace that is equal to it (keepSyncBase, in the
+    //     same transaction as the change), and when a page first sees such a workspace (captureSyncBase);
+    //   - when an upload is acknowledged (what was sent), when a merge is stored (the server row
+    //     merged with), and when a first upload or a manual choice leaves local changes to send.
     const syncBaseKey = workspaceId => `syncBase:${workspaceId}`;
     async function readSyncBase(meta, workspaceId) {
       const value = (await meta.get(syncBaseKey(workspaceId)))?.value;
       if (!plain(value) || value.format !== 'life-sync-base-v1' || !Number.isSafeInteger(value.remoteRevision) || !plain(value.base)) return null;
       return value;
     }
+    // sourceIds: both devices changed the source. recordIds: 복구 사본 excerpts a merge made.
+    // restoredIds: excerpts one device deleted that a merge kept. uncertain: a merge ran without
+    // any base (it could not tell an edit from an older copy, nor confirm a deletion).
     function syncNoticeValue(value) {
       const ids = list => Array.isArray(list) ? list.filter(id => typeof id === 'string' && id) : [];
       if (!plain(value) || typeof value.at !== 'string' || !Number.isFinite(Date.parse(value.at))) return null;
-      const notice = { at: value.at, sourceIds: ids(value.sourceIds), recordIds: ids(value.recordIds) };
-      return notice.sourceIds.length || notice.recordIds.length ? notice : null;
+      const notice = { at: value.at, sourceIds: ids(value.sourceIds), recordIds: ids(value.recordIds), restoredIds: ids(value.restoredIds), uncertain: value.uncertain === true };
+      return notice.sourceIds.length || notice.recordIds.length || notice.restoredIds.length ? notice : null;
     }
     async function writeSyncBase(meta, workspaceId, remoteRevision, data, added = null) {
       const merge = syncCommon();
       if (typeof merge?.mergeBase !== 'function') return;
       const previous = syncNoticeValue((await readSyncBase(meta, workspaceId))?.notice);
-      const notice = !added ? previous : { at: new Date().toISOString(),
-        sourceIds: [...new Set([...(previous?.sourceIds || []), ...added.sourceIds])], recordIds: [...new Set([...(previous?.recordIds || []), ...added.recordIds])] };
+      const join = name => [...new Set([...(previous?.[name] || []), ...(added[name] || [])])];
+      const notice = !added ? previous : { at: new Date().toISOString(), sourceIds: join('sourceIds'), recordIds: join('recordIds'), restoredIds: join('restoredIds'),
+        uncertain: !!previous?.uncertain || added.uncertain === true };
       await meta.put({ key: syncBaseKey(workspaceId), value: { format: 'life-sync-base-v1', remoteRevision, base: merge.mergeBase(data), notice } });
+    }
+    // Inside the transaction that is about to change a workspace's originals, with the workspace
+    // as it is stored now: if it is still exactly the snapshot the server acknowledged (no local
+    // change since, nothing waiting to be sent), that snapshot is kept as the merge base before
+    // the change lands. The sync record is read as stored; a record this cannot read keeps nothing.
+    async function keepSyncBase(meta, bundle) {
+      const sync = (await meta.get(`sync:${bundle.workspaceId}`))?.value;
+      if (!plain(sync) || !Number.isSafeInteger(sync.remoteRevision) || sync.remoteRevision < 1 || sync.outbox ||
+          !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision !== bundle.revision) return;
+      if ((await readSyncBase(meta, bundle.workspaceId))?.remoteRevision === sync.remoteRevision) return;
+      await writeSyncBase(meta, bundle.workspaceId, sync.remoteRevision, bundle);
+    }
+    // A device that had already changed its workspace before it got this version has no stored
+    // base. Its own commit receipts (the operations store keeps every local commit: the revision
+    // it was made on, the revision it produced and the exact changes) say what it touched since
+    // the revision the server last acknowledged:
+    //   - an item it did not touch is still what both sides agreed on, so the server's change or
+    //     deletion of it is taken as it is;
+    //   - an item it changed started from the revision before its first change here; the server
+    //     still holding that revision means only this device changed it;
+    //   - an excerpt it deleted is deleted when the server still holds the excerpt as it was
+    //     first made, or exactly as this device last wrote it. Anything else cannot be confirmed
+    //     and is kept (mergeWorkspace keeps what the base does not show as unchanged).
+    // Every revision since the acknowledged one must have its receipt; a gap (something else wrote
+    // the workspace) or a receipt this cannot read means no base at all.
+    async function receiptBase(operations, bundle, sync, remote) {
+      const workspaceId = bundle.workspaceId, from = sync.syncedLocalRevision;
+      if (sync.remoteRevision < 1 || from < 0 || bundle.revision <= from) return null;
+      const range = typeof root.IDBKeyRange?.bound === 'function' ? root.IDBKeyRange.bound([workspaceId], [workspaceId, []]) : null;
+      const receipts = (range ? await operations.getAll(range) : await operations.getAll()).filter(receipt => receipt?.workspaceId === workspaceId);
+      const names = ['sources', 'records', 'links', 'resumeHints'];
+      const steps = new Map(), written = new Map();
+      for (const receipt of receipts) {
+        if (receipt.result?.status !== 'stored' || !Number.isSafeInteger(receipt.result.revision)) continue;
+        let payload = null; try { payload = JSON.parse(receipt.payload); } catch (_) { /* Not a receipt this version reads. */ }
+        const changes = payload?.changes;
+        const readable = plain(payload) && payload.workspaceId === workspaceId && Number.isSafeInteger(payload.baseRevision) && plain(changes) &&
+          (changes.put === undefined || plain(changes.put) && names.every(name => changes.put[name] === undefined || Array.isArray(changes.put[name]) && changes.put[name].every(item => plain(item) && typeof item.id === 'string'))) &&
+          (changes.remove === undefined || plain(changes.remove) && (changes.remove.records === undefined || Array.isArray(changes.remove.records) && changes.remove.records.every(id => typeof id === 'string')));
+        if (receipt.result.revision <= from) {
+          // What this device itself last wrote of an excerpt, before the acknowledged revision.
+          if (readable) for (const record of changes.put?.records || []) if (Number.isSafeInteger(record.revision) && !(written.get(record.id)?.revision > record.revision)) written.set(record.id, record);
+          continue;
+        }
+        if (!readable) return null;
+        if (payload.baseRevision === receipt.result.revision) continue; // a registration that changed nothing
+        if (payload.baseRevision + 1 !== receipt.result.revision || steps.has(receipt.result.revision)) return null;
+        steps.set(receipt.result.revision, changes);
+      }
+      const first = Object.fromEntries(names.map(name => [name, new Map()])), removed = new Set();
+      for (let revision = from + 1; revision <= bundle.revision; revision++) {
+        const changes = steps.get(revision);
+        if (!changes) return null;
+        for (const name of names) for (const item of changes.put?.[name] || []) if (!first[name].has(item.id)) first[name].set(item.id, item.revision);
+        for (const id of changes.remove?.records || []) removed.add(id);
+      }
+      const base = { title: bundle.title, sources: [], records: [], links: [], resumeHints: [] };
+      for (const name of names) {
+        const theirs = new Map(remote[name].map(item => [item.id, item]));
+        for (const item of bundle[name]) {
+          if (!first[name].has(item.id)) { base[name].push(item); continue; }
+          const before = first[name].get(item.id) - 1, other = theirs.get(item.id);
+          if (Number.isSafeInteger(before) && before >= 1 && other?.revision === before) base[name].push(other);
+        }
+      }
+      const held = new Set(bundle.records.map(record => record.id)), theirs = new Map(remote.records.map(record => [record.id, record]));
+      for (const id of removed) {
+        const other = theirs.get(id);
+        if (!other || held.has(id)) continue;
+        const before = first.records.has(id) ? first.records.get(id) - 1 : null, own = written.get(id);
+        const unchanged = before !== null ? Number.isSafeInteger(before) && before >= 1 && other.revision === before
+          : other.revision === 1 || !!own && stablePayload(own) === stablePayload(other);
+        if (unchanged) base.records.push(other);
+      }
+      return base;
     }
     function validateSyncState(state, workspaceId) {
       try {
@@ -2742,6 +2825,7 @@
           immutableVersions(bundle, mapped.data.bundle, { partial: true });
           // The chosen local plan and source metadata stay authoritative, while
           // the winning output's exact evidence dependencies become available.
+          await keepSyncBase(meta, bundle);
           for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
           if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle); }
           state.revision++; state.remoteRevision = row.revision; state.head = clone(row); state.output = clone(row.data.output); state.pending = null; state.conflict = null; state.error = null;
@@ -2756,6 +2840,7 @@
         const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null), bundle = clone(await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta));
         if (mapped.data.plan.id !== target.planId) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자가 바뀌었습니다.');
         immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        await keepSyncBase(meta, bundle);
         for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) {
           const at = bundle[name].findIndex(existing => existing.id === item.id); if (at < 0) bundle[name].push(item); else bundle[name][at] = item;
         }
@@ -2808,6 +2893,7 @@
         if (await meta.get(materialContinuityKey(workspaceId, planId))) throw fault('material_continuity_exists', '같은 준비 연결이 이미 있습니다.');
         const mapped = materialRemapped(row.data, workspaceId, null, true);
         immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        await keepSyncBase(meta, bundle);
         let appended = false;
         for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
         if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await bundles.put(bundle); }
@@ -3917,6 +4003,7 @@
           const stored = { status: 'stored', revision: updated.revision, operationId };
           const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
           if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
+          await keepSyncBase(tx.objectStore('meta'), bundle);
           await tx.objectStore('bundles').put(updated);
           if (stage) {
             const applied = { ...stage, state: 'applied', revision: stage.revision + 1,
@@ -3948,7 +4035,7 @@
         if (wrote) changed(workspaceId, result.revision);
         if (wrote && naverAttachment) naverMediaChanged(workspaceId, naverAttachment.sourceVersionId);
         if (updatedSync) syncChanged(updatedSync);
-        if (appliedWriting) writingChanged(appliedWriting);
+        if (appliedWriting) writingChanged(appliedWriting, true);
         if (updatedWriting) writingSyncChanged(updatedWriting);
         return result;
       } catch (error) {
@@ -3993,7 +4080,7 @@
           syncedLocalRevision: exact ? bundle.revision : -1, outbox: null,
           conflict: !exact && !pristine ? { missing: false, row, remoteRevision: row.revision, localRevision: bundle.revision } : null,
           status: exact ? 'synced' : pristine ? 'pending' : 'conflict', error: null };
-        if (exact || pristine) await writeSyncBase(meta, workspaceId, row.revision, row.data);
+        if (pristine && !exact) await writeSyncBase(meta, workspaceId, row.revision, row.data);
         return writeSyncState(meta, sync);
       });
       syncChanged(state); return state;
@@ -4060,13 +4147,11 @@
           if (stablePayload({ ...row.data, revision: bundle.revision }) !== stablePayload(bundle)) {
             throw fault('remote_revision_mismatch', '같은 서버 버전의 내용이 달라졌습니다. 로컬 자료를 보존했습니다.');
           }
-          if ((await readSyncBase(tx.objectStore('meta'), workspaceId))?.remoteRevision !== row.revision) await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
           return { status: 'stored', revision: bundle.revision };
         }
         const updated = nextLocalSnapshot(bundle, row);
         sync.remoteRevision = row.revision; sync.syncedLocalRevision = updated.revision;
         sync.status = 'synced'; sync.error = null;
-        await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
         await tx.objectStore('bundles').put(updated);
         event = await writeSyncState(tx.objectStore('meta'), sync);
         return { status: 'stored', revision: updated.revision };
@@ -4089,7 +4174,6 @@
         await tx.objectStore('bundles').add(bundle);
         await saveOwner(tx.objectStore('meta'), bundle.workspaceId);
         await writeSyncState(tx.objectStore('meta'), state);
-        await writeSyncBase(tx.objectStore('meta'), bundle.workspaceId, row.revision, row.data);
         if (activate) await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
       });
       changed(bundle.workspaceId, bundle.revision); syncChanged(state);
@@ -4104,12 +4188,18 @@
       const merge = syncCommon();
       if (typeof merge?.mergeWorkspace !== 'function') throw fault('merge_unavailable', '자료를 자동으로 합치는 모듈을 불러오지 못했습니다. 새로고침해 주세요. 양쪽 자료는 보존했습니다.');
       let wrote = false;
-      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+      const result = await transaction(['bundles', 'meta', 'operations'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const sync = authorizedSync(await readSyncState(meta, workspaceId, bundle), binding);
         if (row.revision < revisionFloor(sync)) throw fault('stale_sync_result', '더 최신 서버 상태를 이미 확인했습니다. 다시 동기화하세요.');
+        // The common ancestor, in this order: the stored base while it describes the acknowledged
+        // revision; this workspace itself while it has not changed since that revision; what this
+        // device's commit receipts show. Otherwise none: nothing is deleted and the notice says so.
         const stored = await readSyncBase(meta, workspaceId);
-        const base = stored && sync.remoteRevision > 0 && stored.remoteRevision === sync.remoteRevision ? stored.base : null;
+        const base = sync.remoteRevision < 1 ? null
+          : stored && stored.remoteRevision === sync.remoteRevision ? stored.base
+            : bundle.revision === sync.syncedLocalRevision ? merge.mergeBase(bundle)
+              : await receiptBase(tx.objectStore('operations'), bundle, sync, row.data);
         const exact = stablePayload({ ...row.data, revision: bundle.revision }) === stablePayload(bundle);
         let merged, updated;
         try {
@@ -4118,6 +4208,8 @@
           updated = exact || (merged.equalsLocal && !merged.equalsRemote) ? bundle
             : { ...(merged.equalsRemote ? clone(row.data) : merged.bundle), revision: bundle.revision + 1 };
           core().validateWorkspace(updated);
+          // Text the server would refuse (half of a surrogate pair) is not sent as a merge.
+          if (updated !== bundle && typeof merge.wellFormed === 'function' && !merge.wellFormed({ ...updated, sourceVersions: null })) throw fault('merge_invalid', '합친 자료에 저장할 수 없는 문자가 있습니다.');
           // Every device must be able to take the result over what it holds: both sides' exact
           // versions, sources and edit history are in it.
           for (const side of [bundle, row.data]) {
@@ -4139,8 +4231,8 @@
         if (wrote) await tx.objectStore('bundles').put(updated);
         sync.outbox = null; sync.conflict = null; sync.error = null; sync.remoteRevision = row.revision;
         sync.syncedLocalRevision = clean ? updated.revision : -1; sync.status = clean ? 'synced' : 'pending';
-        await writeSyncBase(meta, workspaceId, row.revision, row.data, merged.notice);
-        return { status: 'merged', revision: updated.revision, pending: !clean, notice: !!merged.notice, metadata: await writeSyncState(meta, sync) };
+        await writeSyncBase(meta, workspaceId, row.revision, row.data, merged.notice && { ...merged.notice, uncertain: base === null });
+        return { status: 'merged', revision: updated.revision, pending: !clean, notice: !!merged.notice, based: base !== null, metadata: await writeSyncState(meta, sync) };
       });
       if (wrote) changed(workspaceId, result.revision);
       syncChanged(result.metadata);
@@ -4150,10 +4242,16 @@
     async function captureSyncBase(workspaceId, input) {
       const binding = bindingValue(input, workspaceId);
       return transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
-        const sync = authorizedSync(await readSyncState(meta, workspaceId, bundle), binding);
-        if (sync.remoteRevision < 1 || sync.outbox || sync.conflict || bundle.revision !== sync.syncedLocalRevision) return false;
-        if ((await readSyncBase(meta, workspaceId))?.remoteRevision !== sync.remoteRevision) await writeSyncBase(meta, workspaceId, sync.remoteRevision, bundle);
+        const meta = tx.objectStore('meta');
+        const sync = authorizedSync(await readSyncState(meta, workspaceId), binding);
+        if (sync.remoteRevision < 1 || sync.outbox) return false;
+        // Already kept for this acknowledged revision: the workspace itself is not read.
+        if ((await readSyncBase(meta, workspaceId))?.remoteRevision === sync.remoteRevision) return true;
+        const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        // Equal to the acknowledged snapshot: no local change since, nothing waiting to be sent.
+        // (A recorded difference does not change that: the acknowledged revision has not moved.)
+        if (bundle.revision !== sync.syncedLocalRevision) return false;
+        await writeSyncBase(meta, workspaceId, sync.remoteRevision, bundle);
         return true;
       });
     }
@@ -4283,7 +4381,7 @@
           copyWorkspaceId: request.copy.workspaceId, choice: request.choice, localRevision: bundle.revision,
           remoteRevision: row.revision, createdAt: new Date().toISOString() });
         if (request.choice === 'remote') await tx.objectStore('bundles').put(updated);
-        await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
+        else await writeSyncBase(tx.objectStore('meta'), workspaceId, row.revision, row.data);
         const metadata = await writeSyncState(tx.objectStore('meta'), sync);
         return { bundle: clone(updated), metadata, copyWorkspaceId: request.copy.workspaceId };
       });
@@ -5077,9 +5175,12 @@
       if (!value?.validateDraft || !value?.recoverDraft) throw fault('dependency_unavailable', '글쓰기 모듈을 불러오지 못했습니다.');
       return value;
     }
-    function writingChanged(stage) {
+    // own: this page itself saved the draft (typing, or saving it as a record). Its listeners get
+    // `local: true`; other tabs hear the same change through the channel without it, as do changes
+    // that sync wrote here. A hidden tab sends only what it saved itself (writing-sync.js).
+    function writingChanged(stage, own = false) {
       const event = { type: 'writing_draft_changed', workspaceId: stage.workspaceId, stageId: stage.stageId };
-      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      notify(own ? { ...event, local: true } : event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
     }
     function writingSyncChanged(state) {
       const event = { type: 'writing_sync_changed', workspaceId: state.workspaceId, stageId: state.draftId, status: state.status, enabled: state.enabled };
@@ -5445,7 +5546,7 @@
         await stages.put(saved);
         return clone(saved);
       });
-      if (stage.kind === 'writing') writingChanged(result); if (event) writingSyncChanged(event); return result;
+      if (stage.kind === 'writing') writingChanged(result, true); if (event) writingSyncChanged(event); return result;
     }
     async function getStage(stageId) {
       requireId(stageId, '가져오기');

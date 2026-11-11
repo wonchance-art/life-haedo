@@ -222,8 +222,8 @@ test('Storage size failure is normalized without exposing server detail or repla
   assert.equal(f.state.errors.at(-1).code, 'payload_too_large');
 });
 
-async function acknowledgedFixture(t) {
-  const f = fixture(t); await f.login('a'); f.bind();
+async function acknowledgedFixture(t, options = {}) {
+  const f = fixture(t, options); await f.login('a'); f.bind();
   f.state.meta.remoteRevision = 1; f.state.meta.syncedLocalRevision = f.state.local.revision;
   f.state.meta.status = 'synced';
   f.state.row = { id: f.state.local.workspaceId, title: f.state.local.title, revision: 1,
@@ -258,15 +258,21 @@ test('automatic sync checks equal-revision snapshots before clearing errors; a c
   f.state.applyError = null;
   assert.equal((await f.manager.syncNow(before.workspaceId)).error, null);
   assert.equal(f.state.applied.length, 2); assert.equal(f.state.errors.at(-1), null);
-  // The save lands between the engine's read and the storage's atomic check.
-  f.state.applyConflict = true;
-  const apply = f.storage.applySyncRemote, prepared = [];
-  f.storage.applySyncRemote = async (...args) => { const result = await apply(...args); if (f.state.applyConflict) { f.state.applyConflict = false; f.state.local.revision++; } return result; };
-  f.storage.prepareSyncUpload = async () => { prepared.push(f.state.local.revision); f.state.meta.syncedLocalRevision = f.state.local.revision; return null; };
-  const result = await f.manager.syncNow(before.workspaceId);
-  assert.notEqual(result.status, 'conflict'); assert.equal(result.conflict, null); assert.equal(f.state.meta.conflict, null);
-  assert.deepEqual(prepared, [before.revision + 1], 'the next pass prepares the concurrent save for upload');
-  assert.deepEqual({ ...f.state.local, revision: before.revision }, before);
+  // The save lands between the engine's read and the storage's atomic check: it is sent to the
+  // server by the same run (the request, its content and the stored row are checked).
+  const g = await acknowledgedFixture(t, { merge: true, successfulWrites: true, cas: true }), start = copy(g.state.local);
+  g.state.applyConflict = true;
+  const apply = g.storage.applySyncRemote;
+  let saved = null;
+  g.storage.applySyncRemote = async (...args) => {
+    const result = await apply(...args);
+    if (g.state.applyConflict) { g.state.applyConflict = false; g.state.local = saved = await append(g.state.local, '확인하는 사이에 저장한 원문'); }
+    return result;
+  };
+  const result = await g.manager.syncNow(start.workspaceId);
+  assert.equal(result.conflict, null); assert.equal(g.state.meta.conflict, null); assert.equal(g.state.merges, undefined, 'nothing to merge: the server did not move');
+  assert.deepEqual(g.state.sent.map(request => [request.expectedRevision, request.data.revision]), [[1, saved.revision]]);
+  assert.deepEqual(g.state.row.data, saved); assert.equal(g.state.row.revision, 2); assert.equal(g.state.meta.status, 'synced');
 });
 
 // ---- Originals merge: both sides changed -----------------------------------------------------
@@ -329,6 +335,34 @@ test('what cannot be merged is recorded for the manual comparison and tried agai
   const { f, id } = await divergedFixture(t); f.state.mergeError = 'immutable_source_version';
   await assert.rejects(f.manager.syncNow(id), code('immutable_source_version'));
   assert.equal(f.state.meta.conflict, null); assert.equal(f.state.errors.at(-1).code, 'immutable_source_version'); assert.equal(f.state.writes, 0);
+});
+
+// m2 (2026-11-11 review): what could not be merged is megabytes when the reason is the size limit.
+// Until the server or this device changes, a run asks for the server's revision only.
+test('a difference that could not be merged is not downloaded again until the server or this device changes', async t => {
+  const { f, id } = await divergedFixture(t, { head: true }); f.state.mergeError = 'snapshot_too_large';
+  assert.equal((await f.manager.syncNow(id)).status, 'conflict');
+  const reads = f.state.readCalls, heads = f.state.headCalls;
+  for (let run = 0; run < 5; run++) assert.equal((await f.manager.syncNow(id, { headIfClean: run % 2 === 0 })).status, 'conflict');
+  assert.deepEqual([f.state.readCalls - reads, f.state.headCalls - heads, f.state.merges.length, f.state.writes], [0, 5, 1, 0]);
+  // This device changed: one more attempt with the full row.
+  f.state.local = await append(f.state.local, '합치지 못한 뒤에 가져온 원문');
+  assert.equal((await f.manager.syncNow(id)).status, 'conflict'); assert.equal(f.state.merges.length, 2);
+  await f.manager.syncNow(id); assert.equal(f.state.merges.length, 2, 'and then head only again');
+  // The server changed: one more attempt, which now succeeds.
+  f.state.row = { ...f.state.row, revision: f.state.row.revision + 1 }; f.state.mergeError = null;
+  assert.equal((await f.manager.syncNow(id)).conflict, null); assert.equal(f.state.merges.length, 3);
+  // A deleted server copy is seen by the head check.
+  const gone = await divergedFixture(t, { head: true }); gone.f.state.mergeError = 'merge_invalid';
+  await gone.f.manager.syncNow(gone.id); gone.f.state.row = null;
+  assert.equal((await gone.f.manager.syncNow(gone.id)).conflict.missing, true);
+});
+
+test('a page that opens a synced workspace keeps the merge base at once, before any run or change', async t => {
+  const f = fixture(t, { shared: true, automatic: false, merge: true }); f.bind();
+  f.state.meta.remoteRevision = 4; f.state.meta.syncedLocalRevision = 0; f.state.meta.status = 'synced';
+  await f.manager.start();
+  assert.equal(f.state.captures, 1); assert.equal(f.state.readCalls, 0); assert.equal(f.state.writes, 0);
 });
 
 test('a difference recorded by an older version is merged by the next run; a deleted server copy is never merged or recreated', async t => {

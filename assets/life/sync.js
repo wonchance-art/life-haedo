@@ -64,6 +64,9 @@
     const loadConfig = remoteFactory?.loadConfig || support?.loadConfig;
     const saveConfig = remoteFactory?.saveConfig || support?.saveConfig;
     const listeners = new Set(), watches = new Map(), timers = new Map(), locks = new Map(), spaceEpochs = new Map(), closingAdapters = new Set();
+    // based: acknowledged revisions whose merge base this page has seen kept. unmerged: the
+    // recorded difference (server revision:local revision) of the last merge attempt that failed.
+    const based = new Set(), unmerged = new Map();
     let adapter = null, config = null, account = null, epoch = 0, disposed = false, authUnsubscribe = null, wiring = null, lifecycle = false;
     let pendingReconnect = null, reconnecting = null;
     const connectionCandidates = new Set();
@@ -171,6 +174,13 @@
         if (disposed || generation !== epoch || !account) return;
         if (state?.enabled && sameBinding(state.binding, { projectUrl: account.projectUrl, userId: account.userId, remoteId: workspace.workspaceId })) {
           watch(workspace.workspaceId);
+          // A page that opens a workspace still equal to the acknowledged snapshot keeps that
+          // snapshot as the merge base now, before anything is changed (no network involved).
+          const key = workspace.workspaceId + ':' + state.remoteRevision;
+          if (!based.has(key) && typeof storage.captureSyncBase === 'function') {
+            try { if (await storage.captureSyncBase(workspace.workspaceId, state.binding)) based.add(key); } catch (_) { /* The first change keeps it instead. */ }
+            if (disposed || generation !== epoch || !account) return;
+          }
           // A recorded difference is merged by the next run; only a deleted server copy waits.
           if (run && !state.conflict?.missing) schedule(workspace.workspaceId, 0);
         }
@@ -429,6 +439,7 @@
       if (typeof storage.mergeSyncRemote === 'function') {
         try {
           await storage.mergeSyncRemote(context.workspaceId, expected, row); guard(context);
+          unmerged.delete(context.workspaceId);
           emit('state', context.workspaceId); return true;
         } catch (error) {
           guard(context);
@@ -438,12 +449,13 @@
       // Every later run tries the merge again. A difference that is already recorded for this
       // server revision is not announced again: an open comparison is not redrawn by each attempt
       // (the storage announces it itself when the record really changes).
-      if (!recorded || recorded.missing || recorded.remoteRevision !== row.revision) { await observeConflict(context, expected, row); return false; }
-      await storage.setSyncConflict(context.workspaceId, expected, row); guard(context);
+      const next = !recorded || recorded.missing || recorded.remoteRevision !== row.revision ? await observeConflict(context, expected, row)
+        : await storage.setSyncConflict(context.workspaceId, expected, row);
+      guard(context);
+      if (next?.conflict) unmerged.set(context.workspaceId, next.conflict.remoteRevision + ':' + next.conflict.localRevision);
       return false;
     }
     // A device that synced before the merge base existed stores it once per acknowledged revision.
-    const based = new Set();
     async function rememberBase(context, expected, state) {
       const key = context.workspaceId + ':' + state.remoteRevision;
       if (based.has(key) || typeof storage.captureSyncBase !== 'function') return;
@@ -474,6 +486,19 @@
           const state = await storage.getSyncState(context.workspaceId); guard(context);
           const expected = checkedBinding(context, state);
           if (state.conflict) {
+            // This page already tried to merge exactly this difference and could not. Until the
+            // server or this device changes, a run asks only for the server's revision (no full
+            // snapshot, which may be megabytes). A reload tries the merge once more.
+            if (!state.conflict.missing && remote(context).head &&
+                unmerged.get(context.workspaceId) === state.conflict.remoteRevision + ':' + state.conflict.localRevision) {
+              const local = await storage.read(context.workspaceId); guard(context);
+              if (local.revision === state.conflict.localRevision) {
+                const head = await remote(context).head(expected.remoteId); guard(context); await verified(context);
+                if (head === null) return observeConflict(context, expected, null);
+                if (head?.id !== expected.remoteId || !Number.isSafeInteger(head.revision) || head.revision < 1) throw fault('remote_invalid');
+                if (head.revision === state.conflict.remoteRevision) return getState(context.workspaceId);
+              }
+            }
             // A difference recorded earlier (by an older version, or one that could not be merged then).
             const row = await readRemote(context, expected.remoteId); await verified(context);
             if (!row) return observeConflict(context, expected, null);

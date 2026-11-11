@@ -23,11 +23,15 @@
   //     stays as a separate `복구 사본` excerpt;
   //   - a deletion never removes something the other side changed meanwhile.
   // The result depends only on the three inputs, not on which side is called local: every device
-  // computes the same content. Without a base (a device that was already diverged before it
-  // stored one) nothing is deleted.
+  // computes the same content. Without a base nothing is deleted (the storage stands in for a
+  // missing base with this device's own commit receipts whenever it can; see mergeSyncRemote).
   const STATE_KINDS = ['source_trash', 'source_active'];
   const IMMUTABLE_KINDS = ['source_edited_copy', 'source_edit_base'];
   const RECOVERY_TOPIC = '복구 사본';
+  // Kept beside the source when both devices changed it and one title or file path lost: the
+  // losing device's text, on the exact version that device last saved. Ordinary link rows of the
+  // existing workspace format (kind, note, sourceRefs), so every device and version carries them.
+  const PREVIOUS_TITLE = 'source_previous_title', PREVIOUS_KEY = 'source_previous_key';
   const COLLECTIONS = ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'];
   const fault = (code, message) => Object.assign(new Error(message), { code });
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -40,6 +44,37 @@
     const a = stamp(left.updatedAt), b = stamp(right.updatedAt);
     if (a !== b) return a > b ? left : right;
     return canonical(withoutRevision(left)) >= canonical(withoutRevision(right)) ? left : right;
+  }
+  // A source's file path is filled in from the losing side when the winner has none (below), so
+  // equal times are decided without it first: the merged source then compares like the side
+  // that won, and merging the result again with either side changes nothing.
+  function newerSource(left, right) {
+    const a = stamp(left.updatedAt), b = stamp(right.updatedAt);
+    if (a !== b) return a > b ? left : right;
+    const plain = item => { const value = withoutRevision(item); delete value.sourceKey; return canonical(value); };
+    const x = plain(left), y = plain(right);
+    if (x !== y) return x > y ? left : right;
+    return (left.sourceKey || '') >= (right.sourceKey || '') ? left : right;
+  }
+  // Cut at a code point boundary: half of a surrogate pair is not text a server stores.
+  function clip(text, max) {
+    if (text.length <= max) return text;
+    const last = text.charCodeAt(max - 1);
+    return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+  }
+  // No unpaired surrogate in any string of the value (objects and arrays are walked).
+  function wellFormed(value) {
+    if (typeof value === 'string') {
+      for (let index = 0; index < value.length; index++) {
+        const unit = value.charCodeAt(index);
+        if (unit >= 0xd800 && unit <= 0xdbff) { const next = value.charCodeAt(++index); if (!(next >= 0xdc00 && next <= 0xdfff)) return false; }
+        else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+      }
+      return true;
+    }
+    if (Array.isArray(value)) return value.every(wellFormed);
+    if (value && typeof value === 'object') return Object.keys(value).every(key => wellFormed(key) && wellFormed(value[key]));
+    return true;
   }
   const maxRevision = (left, right) => left.revision === undefined && right.revision === undefined ? undefined : Math.max(left.revision || 1, right.revision || 1);
   // 128 bits of the text as a UUID-shaped identifier. Not a security hash: it only gives the
@@ -57,13 +92,15 @@
     return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-4' + hex.slice(13, 16) + '-8' + hex.slice(17, 20) + '-' + hex.slice(20, 32);
   }
   // What a later merge needs from the last agreed server snapshot. Source versions are
-  // immutable and never deleted, so their text is not kept twice.
+  // immutable and never deleted, so their text is not kept twice. deleted: the excerpts that
+  // snapshot already counted as deleted (a deletion that is not news to a later merge).
   function mergeBase(bundle) {
-    return { title: bundle.title, sources: copy(bundle.sources), records: copy(bundle.records), links: copy(bundle.links), resumeHints: copy(bundle.resumeHints) };
+    return { title: bundle.title, sources: copy(bundle.sources), records: copy(bundle.records), links: copy(bundle.links), resumeHints: copy(bundle.resumeHints),
+      deleted: (bundle.tombstones || []).map(mark => mark.entityId) };
   }
   function baseIndex(base) {
     if (!base) return null;
-    const index = { title: base.title };
+    const index = { title: base.title, deleted: new Set(Array.isArray(base.deleted) ? base.deleted : []) };
     for (const name of ['sources', 'records', 'links', 'resumeHints']) {
       if (!Array.isArray(base[name])) return null;
       index[name] = new Map(base[name].map(item => [item.id, canonical(item)]));
@@ -122,11 +159,14 @@
         if (lSame && !rSame) return { winner: r, loser: l, both: false };
         if (rSame && !lSame) return { winner: l, loser: r, both: false };
       }
-      const winner = newer(l, r);
+      const winner = name === 'sources' ? newerSource(l, r) : newer(l, r);
       return { winner, loser: winner === l ? r : l, both: true };
     }
-    const notice = { sourceIds: [], recordIds: [] };
-    const result = {};
+    // sourceIds: both devices changed the source (the earlier body is a previous version).
+    // recordIds: recovery copies made now. restoredIds: excerpts one device had deleted and
+    // that stay because the other device's side could not be shown unchanged.
+    const notice = { sourceIds: [], recordIds: [], restoredIds: [] };
+    const result = {}, made = [];
 
     // Exact source versions: the union. The same identifier with other content is damage, not a merge.
     const versions = new Map();
@@ -145,7 +185,22 @@
       const merged = { ...winner, revision: Math.max(l.revision, r.revision) };
       if (merged.sourceKey === undefined && loser.sourceKey !== undefined) merged.sourceKey = loser.sourceKey;
       sources.set(id, merged);
-      if (known && winner.title !== loser.title) notice.sourceIds.push(id);
+      // The losing title and file path stay beside the version that was current on the losing side
+      // when it changed the source (the last one kept by then). The row's identifier comes from
+      // the source and the text alone: whichever device merges, and in whatever order, the same
+      // losing text is one row. Announced once, when the row is first made.
+      const theirs = [...(loser === l ? L : R).sourceVersions.values()].filter(version => version.sourceId === id);
+      const last = theirs.filter(version => stamp(version.importedAt) <= stamp(loser.updatedAt)).at(-1) || theirs[0];
+      const keep = (kind, text) => {
+        if (!last) return;
+        const row = { id: derivedId(canonical([kind, id, text])), kind, note: text,
+          sourceRefs: [{ sourceId: id, sourceVersionId: last.id, locator: null }], revision: 1, createdAt: loser.updatedAt, updatedAt: loser.updatedAt };
+        if (L.links.has(row.id) || R.links.has(row.id)) return;
+        made.push(row);
+        if (known && !notice.sourceIds.includes(id)) notice.sourceIds.push(id);
+      };
+      if (loser.title !== merged.title) keep(PREVIOUS_TITLE, loser.title);
+      if (loser.sourceKey !== undefined && loser.sourceKey !== merged.sourceKey) keep(PREVIOUS_KEY, loser.sourceKey);
     }
     // Both sides added a version to the same source: the earlier one is now a previous version.
     const added = side => new Set([...side.sourceVersions.values()].filter(version => !(side === L ? R : L).sourceVersions.has(version.id)).map(version => version.sourceId));
@@ -176,14 +231,17 @@
       const deletedElsewhere = l ? tombR.has(id) : tombL.has(id);
       // A deletion stands only when the other side still holds exactly what the deleting side saw.
       if (deletedElsewhere && known && known.records.get(id) === canonical(present)) keepTombstone(id);
-      else records.set(id, present);
+      // Said once: the snapshot this merge leaves as the base already counts the excerpt as
+      // deleted, and a later merge that meets the same deletion again has nothing new to say.
+      else { records.set(id, present); if (deletedElsewhere && !known?.deleted.has(id)) notice.restoredIds.push(id); }
     }
+    notice.restoredIds.sort();
     const copies = new Map();
     for (const loser of recoveries) {
       const id = derivedId(canonical([loser.id, loser.text, loser.topic, loser.note, loser.sourceRefs]));
       // Already kept by an earlier merge, or the person already deleted that recovery copy.
       if (records.has(id) || copies.has(id) || tombL.has(id) || tombR.has(id)) continue;
-      const topic = loser.topic.startsWith(RECOVERY_TOPIC) ? loser.topic : (RECOVERY_TOPIC + (loser.topic ? ' · ' + loser.topic : '')).slice(0, 500);
+      const topic = loser.topic.startsWith(RECOVERY_TOPIC) ? loser.topic : clip(RECOVERY_TOPIC + (loser.topic ? ' · ' + loser.topic : ''), 500);
       copies.set(id, { of: loser.id, record: { ...copy(loser), id, topic, revision: 1 } });
       notice.recordIds.push(id);
     }
@@ -201,19 +259,20 @@
       const revision = maxRevision(link, other);
       links.set(id, both && revision !== undefined ? { ...winner, revision } : winner);
     }
-    const dominates = (a, b) => a.revision > b.revision && stamp(a.updatedAt) >= stamp(b.updatedAt);
+    // A row with a higher revision and no earlier time is a later state of the other row: every
+    // device takes it as it is (the storage's history check), and merging it again changes nothing.
+    const covers = (a, b) => a.revision > b.revision && stamp(a.updatedAt) >= stamp(b.updatedAt);
     for (const [target, { l, r }] of states) {
       let link = l || r;
       if (l && r && !same(l, r)) {
-        if (l.id === r.id) {
-          // Every device must be able to take the result as a later state of its own row.
-          const { winner, loser } = pick('links', l.id, l, r);
-          link = dominates(winner, loser) ? winner
-            : { ...winner, revision: Math.max(l.revision, r.revision) + 1, updatedAt: laterTime(l.updatedAt, r.updatedAt) };
-        } else {
-          // Each device made its own row for the same source: keep the earlier identifier, the later state.
-          const keeper = stamp(l.createdAt) !== stamp(r.createdAt) ? (stamp(l.createdAt) < stamp(r.createdAt) ? l : r) : l.id <= r.id ? l : r;
-          link = { ...keeper, kind: newer(l, r).kind, revision: Math.max(l.revision, r.revision) + 1, updatedAt: laterTime(l.updatedAt, r.updatedAt) };
+        // Each device may have made its own row for the same source: the earlier identifier stays.
+        const keeper = l.id === r.id ? null : stamp(l.createdAt) !== stamp(r.createdAt) ? (stamp(l.createdAt) < stamp(r.createdAt) ? l : r) : l.id <= r.id ? l : r;
+        const later = keeper ? (covers(keeper, keeper === l ? r : l) ? keeper : null) : covers(l, r) ? l : covers(r, l) ? r : null;
+        if (later) link = later;
+        else {
+          // Neither is a later state of the other: the later change decides, as a new state of the row.
+          const winner = newer(l, r);
+          link = { ...(keeper || winner), kind: winner.kind, revision: Math.max(l.revision, r.revision) + 1, updatedAt: laterTime(l.updatedAt, r.updatedAt) };
         }
       }
       if (link.kind === 'source_trash') {
@@ -223,11 +282,12 @@
         const active = trashed(l) !== trashed(r) ? (trashed(l) ? R : L) : null, other = active === L ? R : L;
         if (active) {
           const times = [];
-          for (const version of active.sourceVersions.values()) if (version.sourceId === target && !other.sourceVersions.has(version.id)) times.push(version.importedAt);
+          for (const version of active.sourceVersions.values()) if (version.sourceId === target && !other.sourceVersions.has(version.id)) times.push(version.id);
           const gone = active === L ? tombR : tombL;
-          for (const record of active.records.values()) if (!other.records.has(record.id) && !gone.has(record.id) && records.has(record.id) && record.sourceRefs.some(ref => ref.sourceId === target)) times.push(record.updatedAt);
-          if (times.length) link = { ...link, kind: 'source_active', revision: Math.max(l?.revision || 0, r?.revision || 0, link.revision) + 1,
-            updatedAt: times.reduce(laterTime, link.updatedAt) };
+          for (const record of active.records.values()) if (!other.records.has(record.id) && !gone.has(record.id) && records.has(record.id) && record.sourceRefs.some(ref => ref.sourceId === target)) times.push(record.id);
+          // The row keeps its own time: the other device's clock (which may be ahead) must not
+          // decide when this source can be moved to the trash again.
+          if (times.length) link = { ...link, kind: 'source_active', revision: link.revision + 1 };
         }
       }
       links.set(link.id, link);
@@ -254,7 +314,9 @@
     result.sourceVersions = ordered('sourceVersions', versions, version => stamp(version.importedAt));
     // A recovery copy sits right after the excerpt it lost to, wherever the merge happens.
     result.records = ordered('records', records, created).flatMap(record => [record, ...notice.recordIds.filter(id => copies.get(id).of === record.id).map(id => copies.get(id).record)]);
-    result.links = ordered('links', links, created);
+    // Rows made above come after the rows both devices already had, in one order on every device.
+    made.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    result.links = ordered('links', links, created).concat(made.filter((row, index) => made.findIndex(other => other.id === row.id) === index));
     result.resumeHints = ordered('resumeHints', hints, created);
     const marks = new Map([...tombstones.values()].map(item => [item.id, item]));
     result.tombstones = mergeOrder(remote.tombstones.filter(item => marks.has(item.id)), local.tombstones.filter(item => marks.has(item.id)), item => stamp(item.deletedAt)).map(id => marks.get(id));
@@ -272,7 +334,7 @@
     const kept = equalsRemote ? remote : equalsLocal ? local : null;
     if (kept) { bundle.createdAt = kept.createdAt; bundle.updatedAt = kept.updatedAt; }
     // The items are the inputs' own objects (no second copy of up to 16 MiB of text).
-    return { bundle, equalsLocal, equalsRemote, notice: notice.sourceIds.length || notice.recordIds.length ? notice : null };
+    return { bundle, equalsLocal, equalsRemote, notice: notice.sourceIds.length || notice.recordIds.length || notice.restoredIds.length ? notice : null };
   }
-  return Object.freeze({ canonical, mergeWorkspace, mergeBase, replacedSourceLinks, RECOVERY_TOPIC });
+  return Object.freeze({ canonical, mergeWorkspace, mergeBase, replacedSourceLinks, wellFormed, RECOVERY_TOPIC, PREVIOUS_TITLE, PREVIOUS_KEY });
 });
