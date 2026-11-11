@@ -65,6 +65,8 @@ jobs:
         env:
           SQL_REPLAY_REQUIRED: "1"
         run: node tests/run-news-wide-postgres.cjs
+      - name: Verify withdrawal before any publication, owner-only receipts and the advisory lock between two connections
+        run: node tests/run-blog-unpublish-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -938,6 +940,9 @@ jobs:
       - name: Verify legacy Markdown publication requests recover with the same operation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_pending" node tests/blog-publish-pending-browser.cjs --prepare-database
+      - name: Verify publication state recovery, withdrawal before publication and unsent choices against the real backend
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_publish_recovery" node tests/publish-recovery-browser.cjs --prepare-database
       - name: Verify Markdown capacity packing keeps the canonical text and the rendered post against the fixed baseline codec
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-packing-browser.cjs
@@ -1028,6 +1033,7 @@ jobs:
             .local/blog-backend/
             .local/blog-completion/
             .local/blog-publish-pending/
+            .local/publish-recovery/
             .local/b2-independent/
             .local/account-blog-continuity/
             .local/account-wide-home/

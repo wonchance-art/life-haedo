@@ -394,7 +394,13 @@
     // publicState: { id, published } once read; { id, checking } while the first read
     // runs; { id, failed } when it could not be read. Until it is known the pill and
     // 글 정보 say nothing about visibility (a public post must never look private).
-    let publicState = null;
+    // { id, unsettled }: this device sent a publish or withdrawal whose result it does not
+    // know (BlogSync publicationStatus "unknown"); the server may differ from what is
+    // recorded here, so neither 공개 nor 비공개 is shown until 공개 상태 확인 settles it.
+    // `notice`: what BlogSync says is still unanswered (publicationNotice). `log`: what the
+    // settlement did by itself. A newly opened post starts unread (mount), never from a value
+    // read before it was left: its publication may have changed meanwhile.
+    let publicState = null, publicBusy = false, publicError = "";
     const publicTarget = () =>
       mode === "read" ? (doc?.status === "saved" ? doc.id : null) : doc?.replaces?.id || null;
     function publication() {
@@ -402,6 +408,7 @@
       if (!id) return "private"; // a new or unsaved draft cannot have a public copy
       if (publicState?.id !== id || publicState.failed) return "unknown";
       if (publicState.checking) return "checking";
+      if (publicState.unsettled) return "unsettled";
       return publicState.published ? "public" : "private";
     }
     const isPublished = () => publication() === "public";
@@ -411,8 +418,8 @@
     function updatePill() {
       if (!pill) return;
       const state = publication(), problem = PILL_PROBLEMS[serverState()] || "",
-        label = state === "public" ? "공개" : state === "private" ? "비공개" : "글 정보",
-        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" ? "공개 여부 확인 못 함" : label;
+        label = state === "public" ? "공개" : state === "private" ? "비공개" : state === "unsettled" ? "공개 확인 못 함" : "글 정보",
+        spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" || state === "unsettled" ? "공개 여부 확인 못 함" : label;
       pill.dataset.state = problem ? "problem" : state;
       // The button is the 44px target; the drawn pill is its inner face.
       const face = el("span", null, "photo-privacy-face");
@@ -425,7 +432,7 @@
       face.append(glyph("forward", 16));
       pill.replaceChildren(face);
       pill.setAttribute("aria-label", spoken + (problem ? " · " + problem : "") + (revising ? " · 기존 글 수정 중" : "") +
-        (state === "public" || state === "private" ? " · 글 정보" : ""));
+        (state === "public" || state === "private" || state === "unsettled" ? " · 글 정보" : ""));
     }
     function privacyPill() {
       const b = el("button", null, "photo-privacy");
@@ -482,18 +489,45 @@
         if (known) shown.append(glyph(published ? "globe" : "lock", 16));
         shown.append(el("span", published ? "공개 중" : state === "private" ? "비공개" : state === "checking" ? "확인 중" : "확인하지 못함", "photo-info-value"));
         const visibility = row("공개", shown);
+        visibility.dataset.publication = state;
         visibility.append(el("p", published
           ? "공개 사본은 이 글과 따로 있습니다. 고친 내용은 공개 설정에서 갱신해야 공개 화면에 반영됩니다."
+          : state === "unsettled" ? "이 기기에서 보낸 공개 게시나 철회의 결과를 받지 못했습니다. 서버에서는 공개 중일 수 있습니다."
           : !known ? "공개 여부를 아직 확인하지 못했습니다. 글 공개·보관에서 확인할 수 있습니다."
           : saved ? "공개는 미리보기를 확인한 뒤 따로 선택합니다. 사진은 고른 것만, 촬영·위치 정보를 뺀 사본으로 공개합니다."
             : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
+        // A request of this device that is still unanswered is said for as long as it is kept, next
+        // to either state (never as failed for good: it can still arrive), and so is what the
+        // settlement did by itself (an old withdrawal sent again, a withdrawal overtaken by a publication).
+        const notes = life.BlogRemote?.publicationNotes || {};
+        if (known && saved && notes[publicState?.notice]) {
+          const said = el("p", life.BlogRemote?.publicationNote ? life.BlogRemote.publicationNote(publicState.notice, { publicationEarlier: publicState.earlier }) : notes[publicState.notice], "photo-info-note photo-public-unapplied");
+          said.dataset.notice = publicState.notice;
+          visibility.append(said);
+        }
+        if (known && saved && notes[publicState?.log?.code]) {
+          const done = el("p", notes[publicState.log.code], "photo-info-note photo-public-log");
+          if (Number.isFinite(Date.parse(publicState.log.at))) done.append(" (" + when(publicState.log.at) + ")");
+          visibility.append(done);
+        }
+        if (publicError && !known) {
+          const failed = el("p", publicError, "photo-info-note photo-public-error");
+          failed.setAttribute("role", "alert");
+          visibility.append(failed);
+        }
         if (saved && typeof onManageServer === "function") {
-          const manage = button(published ? "공개 설정" : known ? "공개하기" : "공개 상태 확인", () => {
+          // Not known: one exact server check here (BlogSync settles what this device sent).
+          // Without that check (an older engine) the review screen is the place to look.
+          const inPlace = !known && state !== "checking" && typeof blogSync?.settlePublication === "function";
+          const manage = button(published ? "공개 설정" : known ? "공개하기" : publicBusy ? "공개 상태 확인 중" : "공개 상태 확인", () => {
+            if (inPlace) return confirmPublication();
             sheet.close();
             return openPostTask(onManageServer, origin.dataset.focusKey);
           });
           manage.classList.add("photo-info-action");
           manage.dataset.infoFocus = "manage";
+          // Kept focusable while the check runs, so focus stays in the sheet.
+          if (inPlace && publicBusy) manage.setAttribute("aria-disabled", "true");
           visibility.append(manage);
         }
         // A new draft not yet stored has no saved time to show.
@@ -1170,8 +1204,37 @@
     // Publication is shown, never changed, from the state BlogSync reports.
     function notePublication(id, state) {
       // A result without the field (e.g. a push receipt) says nothing about it.
-      if (state && typeof state === "object" && Object.hasOwn(state, "publication"))
-        publicState = { id, published: state.publication?.active === true };
+      if (!state || typeof state !== "object") return;
+      // An unacknowledged publish or withdrawal: the recorded value may not be the server's.
+      if (state.publicationStatus === "unknown") publicState = { id, unsettled: true };
+      else if (Object.hasOwn(state, "publication")) {
+        // Older engines report no notice: an unanswered publish request is then named from the request itself.
+        const published = state.publication?.active === true,
+          notice = Object.hasOwn(state, "publicationNotice") ? state.publicationNotice : state.publishPending ? (published ? "update_unapplied" : "publish_unapplied") : null;
+        publicState = { id, published, notice, log: state.publicationLog || null, earlier: state.publicationEarlier || null };
+        publicError = "";
+      }
+    }
+    // 공개 상태 확인: one exact server check. BlogSync adopts the server's publication, ends its
+    // own applied requests and sends an unanswered withdrawal again; it never publishes here.
+    async function confirmPublication() {
+      if (publicBusy || mode !== "read" || doc?.status !== "saved" || !valid()) return;
+      const token = epoch, id = doc.id;
+      const here = () => current(token) && mode === "read" && doc?.id === id;
+      publicBusy = true; publicError = ""; refreshInfo?.();
+      try {
+        const state = await blogSync.settlePublication(workspaceId, id);
+        if (here()) {
+          notePublication(id, state);
+          // The server was read and the request is still neither applied nor ruled out: say so, the check did run.
+          if (state?.publicationStatus === "unknown") publicError = "아직 확인되지 않았습니다. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다.";
+        }
+      } catch (e) {
+        if (here()) publicError = e?.message || "공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.";
+      } finally {
+        publicBusy = false;
+        if (here()) { updatePill(); refreshInfo?.(); }
+      }
     }
     // A read of the publication starts: a value already read for this post stays shown.
     function checkPublication(id) {
@@ -2561,6 +2624,8 @@
       { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록", standalone: isolated = false } = {},
     ) {
       if ((reset || postId) && doc) await flush();
+      // The publication shown before this view was left may be out of date: read it again first.
+      publicState = null; publicError = "";
       host = target;
       standalone = isolated;
       feedListener = onFeed;

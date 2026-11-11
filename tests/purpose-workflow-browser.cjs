@@ -121,7 +121,14 @@ async function main() {
     const staticURL = raw => { const u = new URL(raw); return u.origin === new URL(base).origin && (/\.(html|js|css|woff2?|json|svg)$/.test(u.pathname) || u.pathname.endsWith('/')) ? u : null; };
     const beginStatic = request => { const url = staticURL(request.url()); if (url) staticRequests.set(request, { ...deferred(), url }); };
     const finishStatic = request => { const entry = staticRequests.get(request); if (entry) { staticRequests.delete(request); entry.resolve(); } };
-    const failStatic = request => { const entry = staticRequests.get(request); if (entry) report.staticErrors.push({ device, path: entry.url.pathname, message: request.failure()?.errorText || 'Static request failed' }); finishStatic(request); };
+    // Chromium fetches <link rel="icon"> by itself a few milliseconds after the load event
+    // (resource type "other"), outside what drainStatic() can wait for: the drain condition is
+    // already true when that request starts, and a navigation right then drops its response body
+    // or aborts it (2026-11-11: "Response body is not available for a response that was navigated
+    // away from", /icon.svg). The page never depends on that fetch, so its bytes are verified
+    // through the context's own request instead, which no navigation can interrupt.
+    const browserIcon = request => request.resourceType() === 'other' && /\/icon\.svg$/.test(new URL(request.url()).pathname);
+    const failStatic = request => { const entry = staticRequests.get(request); if (entry && !browserIcon(request)) report.staticErrors.push({ device, path: entry.url.pathname, message: request.failure()?.errorText || 'Static request failed' }); finishStatic(request); };
     context.on('request', beginStatic); context.on('requestfinished', finishStatic); context.on('requestfailed', failStatic);
     context.on('request', request => {
       const url = new URL(request.url()), method = request.method(); if (url.origin !== cloud || method === 'OPTIONS') return;
@@ -138,7 +145,9 @@ async function main() {
     });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.external.push({ device, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient'); });
     const verifyStatic = response => { const u = staticURL(response.url()); if (!u) return;
-      const task = (async () => { const bytes = await response.body(), file = u.pathname.slice(1) || 'index.html', row = { device, file, status: response.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: file === 'assets/platform-config.js' }; if (!row.configFixture) assert.equal(row.sha256, sha(await fs.readFile(path.join(sourceRoot, file))), 'Actual response differs: ' + file); report.staticResponses.push(row); })(); pending.add(task); task.catch(error => report.staticErrors.push({ device, path: u.pathname, message: error.message })).finally(() => pending.delete(task));
+      const direct = browserIcon(response.request());
+      const task = (async () => { const answer = direct ? await context.request.get(u.href) : response; if (direct) assert.equal(answer.status(), 200, 'The icon is served: ' + u.pathname);
+        const bytes = await answer.body(), file = u.pathname.slice(1) || 'index.html', row = { device, file, status: response.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: file === 'assets/platform-config.js' }; if (!row.configFixture) assert.equal(row.sha256, sha(await fs.readFile(path.join(sourceRoot, file))), 'Actual response differs: ' + file); report.staticResponses.push(row); })(); pending.add(task); task.catch(error => report.staticErrors.push({ device, path: u.pathname, message: error.message })).finally(() => pending.delete(task));
     };
     context.on('response', verifyStatic);
     const page = await context.newPage(); page.setDefaultTimeout(20000);
