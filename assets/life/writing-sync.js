@@ -162,7 +162,9 @@
     // One pass per workspace: one metadata list (100 per page) decides which draft bodies to fetch.
     // A draft whose local text is unchanged since its last exchange and whose listed server revision
     // equals the acknowledged one is skipped: no body read on cellular for unchanged drafts.
-    async function workspacePass(ws, epoch) {
+    // uploadOnly (a hidden page): what this device holds is sent; the server list is not read and
+    // nothing new is installed.
+    async function workspacePass(ws, epoch, uploadOnly = false) {
       // An originals event that lands while this read is in flight may already be past: check again.
       const seen = sourceEvents, wait = () => { waiting.add(ws); if (sourceEvents !== seen) onSource({ type: 'state', workspaceId: ws }); };
       let source;
@@ -173,7 +175,7 @@
       let listed = null;
       // The list needs the originals' connection, not their being up to date: each draft and row
       // that points at an original is still held by its own check until the originals arrive.
-      if (source.remoteRevision >= 1) {
+      if (!uploadOnly && source.remoteRevision >= 1) {
         listed = new Map();
         try {
           let after = null;
@@ -223,22 +225,36 @@
     let suspended = false, parked = false;
     const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
     const resume = () => { if (!suspended) return; suspended = false; automatic(); };
-    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
+    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } else flush(); };
     const pageshow = event => { if (event?.persisted) parked = false; };
-    function automatic() {
-      if (disposed || suspended || parked || root.document?.visibilityState === 'hidden') return Promise.resolve();
+    const hidden = () => root.document?.visibilityState === 'hidden';
+    function begin() {
       if (refreshing) { again = true; return refreshing; }
       refreshing = passes().finally(() => { refreshing = null; });
       return refreshing;
     }
+    function automatic() {
+      if (disposed || suspended || parked || hidden()) return Promise.resolve();
+      return begin();
+    }
+    // A page that is being hidden or closed sends what it holds once (typed, then switched
+    // away): an upload-only pass, no list and no installs. Later changes on the hidden page go
+    // through the same pass by the nudge below; the poll stays quiet while hidden.
+    function flush() {
+      if (disposed || suspended || parked) return Promise.resolve();
+      root.clearTimeout(soon); soon = null;
+      return begin();
+    }
+    const wake = () => hidden() ? flush() : automatic();
     async function passes() {
       if (Date.now() < availability.until) return;
       try {
         do {
           again = false;
           guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
+          const uploadOnly = hidden();
           for (const workspace of workspaces) {
-            try { await workspacePass(workspace.workspaceId, epoch); }
+            try { await workspacePass(workspace.workspaceId, epoch, uploadOnly); }
             catch (error) { guard(epoch); if (Date.now() < availability.until) return; /* Other workspaces still sync. */ }
           }
         } while (again && !disposed);
@@ -246,7 +262,7 @@
     }
     function nudge() {
       if (disposed || suspended || parked || soon) return;
-      soon = root.setTimeout(() => { soon = null; automatic(); }, 3000); soon?.unref?.();
+      soon = root.setTimeout(() => { soon = null; wake(); }, 3000); soon?.unref?.();
     }
     // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
     // reads no body for drafts that did not change on either side.
@@ -256,7 +272,7 @@
     }
     function start() { guard(); if (started) return; started = true;
       wiring = syncLifecycle()?.attach(root, {
-        listen: [['window', 'online', automatic], ['window', 'focus', automatic], ['document', 'visibilitychange', automatic],
+        listen: [['window', 'online', wake], ['window', 'focus', automatic], ['document', 'visibilitychange', wake],
           ['document', 'haedo:page-suspend', suspend], ['document', 'haedo:page-ready', resume],
           ['window', 'pagehide', pagehide], ['window', 'pageshow', pageshow]],
         poll: [every, automatic],

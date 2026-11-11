@@ -89,6 +89,8 @@ test('CompositionSync: online, focus, visibility, back/forward cache and a 30 s 
   assert.deepEqual(r.table(), EMPTY);
 });
 
+// 2026-11-11 (m1): online and visibilitychange go through `wake`, which sends what a hidden page
+// holds (upload only) and otherwise runs the usual pass; focus and the poll stay visible-only.
 test('WritingSync: online, focus, visibility, page suspend/ready, back/forward cache and its poll', async t => {
   const r = record(t);
   const auth = { getAccount: () => owner, epoch: 1 };
@@ -96,7 +98,7 @@ test('WritingSync: online, focus, visibility, page suspend/ready, back/forward c
   const sync = WritingSync.create({ storage, sourceSync: { subscribe: () => () => {} }, auth, remote: { dispose() {} }, engine: {}, materials: null, interval: 45000 });
   sync.start(); await settle();
   assert.deepEqual(r.table(), {
-    events: [['window', 'online', 'automatic'], ['window', 'focus', 'automatic'], ['document', 'visibilitychange', 'automatic'],
+    events: [['window', 'online', 'wake'], ['window', 'focus', 'automatic'], ['document', 'visibilitychange', 'wake'],
       ['document', 'haedo:page-suspend', 'suspend'], ['document', 'haedo:page-ready', 'resume'],
       ['window', 'pagehide', 'pagehide'], ['window', 'pageshow', 'pageshow']],
     polls: [[45000, 'automatic']],

@@ -185,6 +185,42 @@ test('pending originals do not stop drafts: local drafts are enabled and sent, s
   assert.deepEqual(f.calls.filter(call => call[0] === 'install').map(call => call[1]), [id(5)]);
 });
 
+// m1 (2026-11-11): typed, then switched away. The page that is being hidden sends what it holds
+// once; it does not read the server list or install anything, and its poll stays quiet.
+test('a hidden page sends its changed drafts once (upload only); the poll stays quiet and a visible page lists again', async t => {
+  const win = new Map(), doc = new Map(), previous = { add: globalThis.addEventListener, remove: globalThis.removeEventListener, interval: globalThis.setInterval,
+    document: Object.getOwnPropertyDescriptor(globalThis, 'document') };
+  let poll = null;
+  globalThis.addEventListener = (name, fn) => win.set(name, fn); globalThis.removeEventListener = name => win.delete(name);
+  globalThis.setInterval = handler => { poll = handler; return { unref() {} }; };
+  const page = { visibilityState: 'visible', addEventListener: (name, fn) => doc.set(name, fn), removeEventListener: name => doc.delete(name) };
+  globalThis.document = page;
+  const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }, { draft_id: id(1), state: 'draft', title: '', revision: 3 }, { draft_id: id(2), state: 'draft', title: '', revision: 3 }];
+  const synced = n => ({ draftId: id(n), enabled: true, status: 'synced', remoteRevision: 3, syncedLocalRevision: 1, outbox: null, conflict: null, error: null });
+  const f = fixture({ stages: [draft(1), draft(2)], states: [synced(1), synced(2)], rows });
+  t.after(() => { f.manager.dispose(); globalThis.addEventListener = previous.add; globalThis.removeEventListener = previous.remove; globalThis.setInterval = previous.interval;
+    if (previous.document) Object.defineProperty(globalThis, 'document', previous.document); else delete globalThis.document; });
+  f.hooks.installError = 'writing_source_pending'; // keeps the server-only draft uninstalled: every full pass would try the list
+  f.manager.start(); await f.manager.refresh(); await settled();
+  const sent = () => f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]);
+  assert.deepEqual(sent(), [], 'nothing to send yet'); const listed = lists(f); assert.ok(listed >= 1);
+  // The person types (the draft is saved locally) and switches away at once.
+  f.local.get(id(1)).revision = 2; page.visibilityState = 'hidden';
+  doc.get('visibilitychange')(); await settled();
+  assert.deepEqual(sent(), [id(1)], 'the changed draft is sent while hidden; the unchanged one is not touched');
+  assert.equal(lists(f), listed, 'no server list while hidden');
+  const quiet = f.calls.length; poll(); win.get('focus')(); await settled();
+  assert.equal(f.calls.length, quiet, 'the poll and focus start nothing on a hidden page');
+  // Closing the page (not the back/forward cache) sends once more; the cache parks instead.
+  win.get('pagehide')({ persisted: false }); await settled();
+  assert.deepEqual(sent(), [id(1), id(1)]); assert.equal(lists(f), listed);
+  win.get('pagehide')({ persisted: true }); const parked = f.calls.length;
+  doc.get('visibilitychange')(); win.get('online')(); await settled();
+  assert.equal(f.calls.length, parked, 'nothing starts while parked');
+  win.get('pageshow')({ persisted: true }); page.visibilityState = 'visible'; doc.get('visibilitychange')(); await settled();
+  assert.equal(lists(f), listed + 1, 'a visible page runs the full pass again');
+});
+
 test('originals that become ready while the pass reads their state still start a pass', async t => {
   const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }];
   const f = fixture({ rows, source: { enabled: false, status: 'auth_required' } }); t.after(() => f.manager.dispose());
