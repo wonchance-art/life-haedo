@@ -432,4 +432,75 @@ H.run(__filename, {
     assert.equal(parseFloat(after.offset), Math.max(72, after.tools + 12), 'the caret offset follows the tools\' real height: ' + after.offset);
     assert((await H.bodyText(page)).includes('가'), 'the input is intact');
   },
+  // 3rd review MINOR-A: while the store keeps refusing, every autosave attempt used to take the error line away
+  // ("자동 저장 중…") and bring it back, so the line being typed jumped by its height (56px at 1440, 100px at 390,
+  // also while composing). The refusal stays said until a store succeeds: the caret holds its place on screen.
+  async 'a-lasting-store-error-holds-the-caret-in-place'({ open }) {
+    for (const [width, height, options] of [[1440, 1000, {}], [390, 844, { hasTouch: true, isMobile: true }]]) {
+      const { page, context } = await open({ viewport: { width, height }, options });
+      await H.home(page); await H.writer(page);
+      await page.locator('#photoTitle').fill('계속 저장을 거부당하는 글');
+      await page.locator('.ql-editor').click();
+      await H.pasteBody(page, { text: Array.from({ length: 40 }, (_, i) => '문단 ' + i + ' 가나다라마바사아자차카타파하.').join('\n') });
+      await H.stored(page, rows => rows.length === 1 && rows[0].text.includes('문단 39'), 'stored');
+      // A line in the upper part of the view, the title partly scrolled away (as in the review's measure), and
+      // far enough below the tools that keeping the caret clear of the grown tools does not scroll.
+      await page.evaluate(() => {
+        scrollTo({ top: 120, behavior: 'instant' });
+        const q = Quill.find(document.querySelector('.ql-container')), tools = document.querySelector('.photo-editor-tools').getBoundingClientRect().bottom;
+        const line = [...document.querySelectorAll('.ql-editor > *')].find(node => node.getBoundingClientRect().top > tools + 160);
+        q.setSelection(q.getIndex(Quill.find(line)) + Quill.find(line).length() - 1, 0, 'silent');
+      });
+      await page.evaluate(() => {
+        window.__refused = 0;
+        const put = window.__put = IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put = function (value, ...rest) { if (this.name === 'meta' && String(value?.key).startsWith('photo-post:')) { window.__refused++; throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); } return put.call(this, value, ...rest); };
+      });
+      const caret = () => page.evaluate(() => {
+        const range = getSelection().getRangeAt(0), rect = range.getBoundingClientRect();
+        const node = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+        const tools = document.querySelector('.photo-editor-tools').getBoundingClientRect();
+        // The line being typed in (its block: a wrap inside it is not a move) and the caret itself.
+        return { line: Math.round(node.closest('.ql-editor > *').getBoundingClientRect().top), top: Math.round(rect.height ? rect.top : node.getBoundingClientRect().top), tools: Math.round(tools.height), scrollY: Math.round(scrollY),
+          state: document.querySelector('.photo-status')?.dataset.state, text: document.querySelector('.photo-status-text')?.textContent };
+      });
+      await page.keyboard.type('가');
+      await H.until(() => H.status(page), value => value.state === 'error', width + ': the store refuses');
+      await H.sleep(300);
+      const first = await caret(), refusedBefore = await page.evaluate(() => window.__refused), seen = [first];
+      // Four more attempts, each measured right after the key (the attempt is pending) and after it failed again.
+      for (const key of ['나', '다', '라', '마']) {
+        await page.keyboard.type(key);
+        seen.push({ ...(await caret()), at: key + ' typed' });
+        await H.sleep(600);
+        seen.push({ ...(await caret()), at: key + ' refused' });
+      }
+      // A composition, and its commit, while the store still refuses.
+      const cdp = await context.newCDPSession(page);
+      for (const text of ['ㅎ', '하', '한', '한ㄱ', '한그', '한글']) { await cdp.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length }); await H.sleep(40); }
+      seen.push({ ...(await caret()), at: 'composing' });
+      await H.sleep(1200);
+      seen.push({ ...(await caret()), at: 'still composing' });
+      await cdp.send('Input.insertText', { text: '한글' });
+      seen.push({ ...(await caret()), at: 'committed' });
+      await H.sleep(900);
+      seen.push({ ...(await caret()), at: 'committed and refused' });
+      // The caret moved only along its line (a wrap at most): not by the error line's height.
+      const tops = seen.map(item => item.top);
+      assert(Math.max(...tops) - Math.min(...tops) < 40, 'the caret holds its place on screen: ' + width + ': ' + JSON.stringify(seen));
+      const report = width + ': ' + JSON.stringify(seen);
+      assert(await page.evaluate(() => window.__refused) >= refusedBefore + 5, 'every input was another store attempt: ' + report);
+      const lines = seen.map(item => item.line);
+      assert(Math.max(...lines) - Math.min(...lines) <= 2, 'the line being typed holds its place on screen: ' + report);
+      assert(seen.every(item => item.tools === first.tools && item.scrollY === first.scrollY), 'the tools keep their height and the page its scroll: ' + report);
+      assert(seen.every(item => item.state === 'error' && item.text === first.text), 'the refusal stays said: ' + report);
+      assert((await H.bodyText(page)).includes('가나다라마한글'), 'the input is intact');
+      // The store accepts again: the next attempt stores it and the error goes.
+      await page.evaluate(() => { IDBObjectStore.prototype.put = window.__put; });
+      await page.keyboard.type('.');
+      await H.until(() => H.status(page), value => value.text === '자동 저장됨', width + ': stored once the store accepts');
+      await H.stored(page, rows => rows[0].text.includes('가나다라마한글.'), 'all of it is stored');
+      await context.close();
+    }
+  },
 });

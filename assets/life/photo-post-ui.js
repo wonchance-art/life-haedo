@@ -217,6 +217,10 @@
       // what the post holds is removed on leaving. `baseline` is the saved
       // post's content when the revision was opened.
       baseline = null;
+    // The last store refusal of the open document ({ doc, error }). While the
+    // same input waits for the next attempt the refusal stays said: the line
+    // (and the height of the tools) does not blink off on every attempt.
+    let failedStore = null;
     const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
     // Device copies belong to the signed-in account (and its workspace and draft).
     const recoveryStore = M.recovery(localStore, storage.account?.userId || "local");
@@ -309,15 +313,19 @@
       if (!item || !doc || mode !== "edit" || offer) return;
       guard(true);
       const token = epoch, copy = item.copy;
-      await flush();
-      if (!current(token) || strays[0] !== item) return;
-      // Photo bytes can only come from the post this copy's draft became.
+      // Photo bytes can only come from the post this copy's draft became. Read
+      // before the editor's input is kept: input typed while this waits is
+      // kept by that same flush, and nothing waits between it and the swap.
       let photos = [];
       if (item.kind === "saved" || item.kind === "hidden") {
         const home = await storage.readPhotoPost(workspaceId, copy.id).catch(() => null);
         if (!current(token) || strays[0] !== item) return;
         photos = home?.photos || [];
       }
+      do {
+        await flush();
+        if (!current(token) || strays[0] !== item) return;
+      } while (!settled());
       const reuse = !doc.replaces && M.isEmpty(doc) && settled();
       const next = reuse ? doc : M.create(life.Core.id);
       next.photos = [...photos];
@@ -341,9 +349,7 @@
         resetTicks(1);
         storedBase = "";
       }
-      // The input stays on this device until the new draft is stored.
-      writeCopy();
-      if (copy.id !== doc.id) recoveryStore.clear(workspaceId, copy.id);
+      handOverCopy(copy);
       error = null;
       render();
       authorNote = wanted > kept
@@ -352,6 +358,21 @@
       authorNoteKept = true;
       showStatus();
       focusEditing();
+    }
+    // A restored copy now in `doc` (under another id): the original copy goes
+    // only once the input is kept again, by the device copy of `doc` now or by
+    // its first store. A full device store never loses both.
+    let handedOver = null;
+    function handOverCopy(copy) {
+      handedOver = null;
+      if (writeCopy() || copy.id === doc.id) {
+        if (copy.id !== doc.id) recoveryStore.clear(workspaceId, copy.id);
+      } else handedOver = { doc, id: copy.id, savedAt: copy.savedAt };
+    }
+    function storedHandedOver(target) {
+      if (handedOver?.doc !== target) return;
+      if (recoveryStore.read(workspaceId, handedOver.id)?.savedAt === handedOver.savedAt) recoveryStore.clear(workspaceId, handedOver.id);
+      handedOver = null;
     }
     function discardStray() {
       const item = strays[0];
@@ -476,6 +497,7 @@
     function showStatus(e) {
       // Input kept on this device only stays said until the draft is stored.
       if (!e && unstored && mode === "edit") e = unstored;
+      if (!e && mode === "edit" && failedStore && failedStore.doc === doc && error === failedStore.error) e = error;
       error = e || null;
       if (status) {
         status.hidden = mode === "read" && !e && !committed;
@@ -1011,6 +1033,8 @@
           storedTick = tick;
           keptTick = -1;
           unstored = null;
+          failedStore = null;
+          storedHandedOver(target);
           storedBase = M.contentHash(payload);
           storedAt = Date.now();
           // The stored draft now holds everything: the device copy is done.
@@ -1035,7 +1059,10 @@
       } catch (cause) {
         // The store refused (quota, another tab): the input also goes to the
         // device copy. Leaving stays blocked exactly as before.
-        if (valid() && doc === target && mode === "edit") writeCopy();
+        if (valid() && doc === target && mode === "edit") {
+          writeCopy();
+          failedStore = { doc: target, error: cause };
+        }
         throw cause;
       }
       if (valid() && doc === target && dirtyTick !== storedTick) return persist(modelOnly || busy || composing, target);
@@ -1103,8 +1130,12 @@
     // is stored or synced; the input stays whole on this device and the reason
     // is shown. If even that fails the caller is refused and nothing moves.
     function keepLocally(tick, cause) {
-      if (!writeCopy())
-        throw Object.assign(new Error(cause.message + " 이 기기에도 임시 보관하지 못했습니다. 더 보기의 HTML 읽기 파일 받기로 내려받아 주세요."), { code: "photo_post_unkept" });
+      if (!writeCopy()) {
+        const unkept = Object.assign(new Error(cause.message + " 이 기기에도 임시 보관하지 못했습니다. 더 보기의 HTML 읽기 파일 받기로 내려받아 주세요."), { code: "photo_post_unkept" });
+        failedStore = { doc, error: unkept };
+        throw unkept;
+      }
+      failedStore = null;
       keptTick = tick;
       unstored = Object.assign(new Error("이 기기에만 임시 보관 중"), {
         code: "photo_post_local_only",
@@ -1493,9 +1524,7 @@
         storedBase = "";
         baseline = null;
       }
-      // The copy stays on this device until the restored input is stored.
-      writeCopy();
-      if (copy.id !== doc.id) recoveryStore.clear(workspaceId, copy.id);
+      handOverCopy(copy);
       error = null;
       render();
       authorNote = wanted > kept
