@@ -32,3 +32,13 @@
 2026-11-07T15:16:19.1276554Z ##[error]Process completed with exit code 1.
 2026-11-07T15:16:19.1322027Z ##[group]Run BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material" node tests/material-writing-browser.cjs --prepare-database
 ```
+
+## 2026-11-11 덧붙임: 같은 검사의 다른 지점(233행)에서 난 실패는 별건이다
+
+- 위 205행 시간 초과(방문자 화면 로드가 느렸던 건)는 그대로 **재현 안 됨, 미해결**이다. 아래는 그 건의 원인이 아니다.
+- 별건: 2026-11-11 로컬 실행에서 233행 단언(`#ninePublicContent`에 새 제목 포함)이 한 번 실패했다. 원인은 검사의 대기 조건이다.
+  - `assets/life/nine-public-view.js`의 `load()`는 이미 그린 화면이 있으면 상태를 `loading`으로 바꾸지 않는다. 그래서 `공개 상태 다시 확인`을 누른 직후에도 `#ninePublicStatus`는 `published`이고, `publicState('published')`가 응답 전에 통과했다.
+  - 기준 커밋 `a423773`에서 방문자의 `life_public_page_read`를 25ms만 늦춰도 결정적으로 실패했다(독립 검수 기록).
+  - 같은 형태였던 222·250행은 응답 전에 읽으면 단언이 내용을 보지 않고 통과했다.
+- 고친 것(검사만, 제품 코드 무변경): 읽기가 시작될 때 걸리는 `#ninePublicRefresh` 비활성과 `#ninePublicContent`의 `aria-busy`가 풀릴 때까지 기다린다(`armVisitorRead`·`visitorRead`). 제한시간은 늘리지 않았다.
+- 확인: 고친 검사는 읽기 지연 0·25·400ms에서 모두 종료 코드 0이다.

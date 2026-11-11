@@ -5,6 +5,12 @@
 // one shared count, start with a profile header, and together hold exactly the size that
 // header declares. The client filter (PhotoPost.publicBytes/metadataFree) and the media
 // handler (supabase/functions/haedo-blog-media) apply the same rule.
+// What this rule does not do (2026-11-11 review m4, left as it is): the allow list checks
+// structure, not content. Bytes inside the declared size of a profile (for example its
+// description text), extra DQT/DHT tables, DRI, an unused SOF and text inside a second scan
+// are not inspected. A copy is always a new canvas encoding of the pixels, so such bytes
+// could only come from the encoder itself; the cases below cover what the review found
+// passing unchecked, not every place a JPEG can carry bytes.
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), { stripTypeScriptTypes } = require('node:module');
 const edge = import('data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, '../supabase/functions/haedo-blog-media/index.ts'), 'utf8'))).toString('base64'));

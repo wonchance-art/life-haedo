@@ -90,10 +90,10 @@ function browserLocks() {
   } };
 }
 // One tab: its own BlogSync over the device's storage (tabs of one browser share IndexedDB).
-function tab(cloud, net, dev, name, { locks = null } = {}) {
+function tab(cloud, net, dev, name, { locks = null, storage = dev.storage } = {}) {
   const remote = cloud.client(name), view = { name, remote, storage: dev.storage, ws: dev.ws, auth: dev.auth };
   net.attach(view);
-  view.sync = Sync.create({ storage: dev.storage, auth: dev.auth, blog: Blog, photoPost: Photo, remote, makeId: Core.id, locks, now: () => dev.time.now,
+  view.sync = Sync.create({ storage, auth: dev.auth, blog: Blog, photoPost: Photo, remote, makeId: Core.id, locks, now: () => dev.time.now,
     timers: { setTimeout: () => 0, clearTimeout() {} }, interval: 30000, publicReader: net.reader });
   return view;
 }
@@ -106,7 +106,7 @@ async function saved(t, { photos = 0, locks = null } = {}) {
   const state = () => a.storage.readBlogSyncState(a.ws, doc.id), row = () => cloud.rows.get(doc.id);
   const view = async (from = a) => { const value = await from.sync.getState(a.ws, doc.id); return { status: value.publicationStatus, notice: value.publicationNotice }; };
   const status = async from => (await view(from)).status;
-  const open = name => { const next = tab(cloud, net, dev, name, { locks }); tabs.push(next); return next; };
+  const open = (name, options = {}) => { const next = tab(cloud, net, dev, name, { locks, ...options }); tabs.push(next); return next; };
   const publish = (options = {}, from = a) => from.sync.publish(a.ws, doc.id, { expectedLocalRevision: doc.revision, ...options });
   // Replays a request exactly as the page sent it: the same request reaching the server late.
   const late = call => net.apply[call.kind](call.id, call.revision, call.operation, call.options);
@@ -531,6 +531,21 @@ test('M1: a successful publish or withdrawal is not reported as an error when an
   held.release.resolve();
   assert.equal((await withdrawing).status, 'stored');
   const after = await f.state(); assert.equal(after.unpublishPending, null); assert.equal(after.publication.active, false); assert.equal(after.otherTab, true, 'the other tab\'s write is kept');
+  // The other tab writes exactly between the answer's own read and its write: the answer is applied on top of it.
+  let racing = false, raced = 0;
+  const c = f.open('tab-c', { storage: { ...f.dev.storage, async readBlogSyncState(...args) {
+    const value = await f.dev.storage.readBlogSyncState(...args);
+    if (racing && value) { racing = false; raced++; await f.dev.storage.writeBlogSyncState(args[0], args[1], { ...value, racedTab: raced }, value.revision); }
+    return value;
+  } } });
+  const third = f.net.holdNext('publish'), republishing = f.publish({ expectedPublicRevision: 2 }, c); republishing.catch(() => {});
+  await third.entered.promise; racing = true; third.release.resolve();
+  assert.equal((await republishing).revision, 3); assert.equal(raced, 1);
+  let merged = await f.state(); assert.equal(merged.publishPending, null); assert.equal(merged.publication.active, true); assert.equal(merged.racedTab, 1);
+  const fourth = f.net.holdNext('unpublish'), again = c.sync.unpublish(f.a.ws, f.doc.id); again.catch(() => {});
+  await fourth.entered.promise; racing = true; fourth.release.resolve();
+  assert.equal((await again).status, 'stored'); assert.equal(raced, 2);
+  merged = await f.state(); assert.equal(merged.unpublishPending, null); assert.equal(merged.publication.active, false); assert.equal(merged.racedTab, 2);
 });
 
 test('two unanswered requests and a copy that is not provably the last choice: said as unverified', async t => {
