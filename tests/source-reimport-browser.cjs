@@ -19,7 +19,9 @@ const state = page => page.evaluate(async () => { const s = HaedoLife.Shell.stor
 const click = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 const frames = page => page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Source reimport::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
-async function records(page) { await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
+// 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
+// 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
+async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); }
 async function field(page, name, value) {
   const control = page.locator('#lifeImport' + name);
   if (!await control.isVisible()) await control.locator('xpath=ancestor::details[1]').locator(':scope > summary').click();

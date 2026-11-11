@@ -5509,8 +5509,9 @@
           result.baseSourceRevision = copy.sources.find(item => item.id === result.baseSourceId).revision;
           result.restoreVersionId = stage.restoreVersionId === null ? null : versionIds.get(stage.restoreVersionId);
           result.lifecycleRevision = core().sourceState(copy, result.baseSourceId).revision;
-          if (stage.baseChanged || sourceRow.revision !== stage.baseSourceRevision || head.id !== stage.baseSourceVersionId ||
-              baseVersion.contentHash !== stage.baseHash || core().sourceState(source.bundle, stage.baseSourceId).revision !== stage.lifecycleRevision) {
+          // Same rule as SourceEdit.baseState: only a moved latest version makes the draft stale,
+          // not the source row or trash revision (a trash round trip keeps the same text).
+          if (stage.baseChanged || head.id !== stage.baseSourceVersionId || baseVersion.contentHash !== stage.baseHash) {
             result.baseChanged = true;
           }
         }

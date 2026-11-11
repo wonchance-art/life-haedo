@@ -133,7 +133,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-arrange-actions { margin-top: 12px; gap: 8px; }
 .life-arrange-actions .life-glyph { width: 20px; height: 20px; }
 .life-selection-bar > .life-button { margin-top: 8px; border-color: transparent; color: var(--ink-soft); }
-.life-reader-arrange { padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.life-reader-arrange > .life-meta { margin-bottom: 12px; }
 .life-excerpt-note { display: grid; grid-template-columns: 16px minmax(0,1fr); column-gap: 12px; align-items: start; padding: 12px 16px; border-radius: var(--control-radius); background: #f3f8f5; }
 .life-excerpt-note > .life-glyph { margin-top: 8px; color: var(--mint-ink); }
 .life-excerpt-note > .life-note { font-size: var(--haedo-text-control); color: #4e6359; }
@@ -161,7 +161,17 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reading-resume-copy ~ .life-reading-resume-status { order: 1; }
 .life-reading-position-status { margin-bottom: 16px; }
 .life-reader { max-width: 700px; margin: 0 auto; }
-.life-reader-tools { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px 0; margin: -8px -12px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
+/* 읽기 도구 줄과 그 아래에 뜨는 두 패널(출처 정보·이 원문 담기)은 한 묶음으로 화면 위에 붙는다.
+ * 패널은 문서 흐름에 자리를 차지하지 않는 층이라, 긴 글을 읽다가 열어도 누른 자리에서 보이고 읽던 줄이 밀리지 않는다.
+ * 최대 높이는 열 때 보이는 높이(도구 줄 아래 ~ 하단 탭 위)로 맞추고(assets/life/ui.js), 아래 값은 그 전의 기본값이다. */
+.life-reader-dock { position: sticky; top: 0; z-index: 10; margin: -8px -12px 24px; background: var(--paper); }
+.life-reader-tools { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); background: var(--paper); }
+.life-reader-dock > .life-reader-sheet { position: absolute; top: 100%; left: 0; right: 0; max-height: calc(100dvh - 76px - var(--haedo-dock-clearance, 0px)); margin: 0; padding: 16px 12px 20px; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); }
+.life-reader-dock > .life-reader-sheet[hidden] { display: none; }
+.life-reader-dock > .life-reader-sheet > .life-button { margin: 8px 8px 0 0; }
+/* 읽는 자리에서 보이는 짧은 안내(예: 발췌할 구절은 원문 텍스트에서 고르라는 안내). 흐름에 자리를 차지하지 않는다. */
+.life-reader-dock > .life-reader-notice { position: absolute; top: 100%; left: 0; right: 0; margin: 0; padding: 12px; color: var(--ink); background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 16px 24px -20px rgba(24, 37, 34, .45); font-size: var(--haedo-text-control); line-height: 1.7; }
+.life-reader-dock > .life-reader-notice[hidden] { display: none; }
 .life-reader-tools > :first-child { margin-right: auto; }
 .life-reader-tools > :first-child .life-tooltip { left: 0; transform: none; }
 .life-reader-tools > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
@@ -268,7 +278,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
   .life-reading-resume-copy { flex-basis: 100%; }
   .life-card { padding-block: 28px; }
   .life-reader-heading { font-size: 25px; }
-  .life-reader-tools { margin-bottom: 28px; }
+  .life-reader-dock { margin-bottom: 28px; }
   div.life-source-text { font-size: 17px; }
   .life-reader-meta + .life-reader-meta { margin-bottom: 28px; }
   .life-management { padding-top: 12px; }
@@ -382,7 +392,8 @@ body.haedo-shell .haedo-account-host { top: calc(env(safe-area-inset-top, 0px) +
   .life-app { margin-block: 8px; padding-top: 4px; min-height: calc(100svh - 16px); }
   .life-toolbar.haedo-page-heading { min-height: 44px; margin-bottom: 0; }
   .life-main { padding-top: 0; }
-  .life-reader-tools { padding-block: 4px; margin-bottom: 16px; }
+  .life-reader-tools { padding-block: 4px; }
+  .life-reader-dock { margin-bottom: 16px; }
   .life-reader-heading { font-size: 24px; margin-bottom: 8px; }
   .life-reader-meta + .life-reader-meta { margin-bottom: 16px; }
   .life-reader-layout { margin-top: 16px; }
@@ -537,14 +548,30 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
 .life-source-edit-controls > label { flex:1; max-width:12rem; min-width:0; margin:0; }
 .life-source-edit-controls select { width:100%; min-height:44px; font-size:16px; }
 .life-source-edit-controls > button { margin-left:auto; }
+.life-source-edit-controls > button + button { margin-left:0; }
 .life-source-edit .life-writing-field { display:block; margin:0; }
 .life-source-edit .life-writing-title { font-size:30px; line-height:1.5; letter-spacing:-.035em; border-bottom:0; }
 .life-source-edit .life-writing-body { min-height:45dvh; max-height:none; overflow:hidden; resize:none; }
 .life-source-edit-preview > .life-heading { margin-block:20px 28px; font-size:30px; line-height:1.5; }
 .life-source-edit-error { margin-block:12px 20px; color:var(--danger,var(--ink)); }
 .life-source-edit-error p { margin-bottom:8px; }
+/* 수정 초안이 자료의 현재 판과 어긋났을 때: 일어난 일, 내 입력, 고를 수 있는 일. */
+.life-source-edit-base > .life-heading { margin-block:20px 12px; font-size:var(--haedo-text-title,22px); line-height:1.5; }
+.life-source-edit-base > .life-heading:focus { outline:none; }
+.life-source-edit-mine { margin-block:16px; }
+.life-source-edit-mine-text { max-height:40dvh; overflow:auto; padding:12px 0; font-size:var(--haedo-text-body); line-height:1.9; white-space:pre-wrap; word-break:keep-all; overflow-wrap:anywhere; }
+.life-source-edit-choices { align-items:stretch; }
+.life-source-edit-choices > .life-button { min-height:44px; }
 .life-source-trash-confirm { padding-block:16px; margin-top:16px; border-top:1px solid var(--line); }
 .life-source-trash-confirm > button + button { margin-left:8px; }
+/* 자료 휴지통: 좁은 화면의 큰 제목 크기에서는 '자료 휴지통'이 두 줄로 꺾여 머리줄 위에 붙었다. 한 줄 크기로 둔다.
+ * 360px 이하에서는 머리줄 단추와 함께 한 줄에 들어가지 않으므로, 머리줄 높이 안에 들어가는 두 줄 크기로 낮춘다. */
+@media (max-width: 760px) {
+  .life-app:has(> #lifeMain[data-mode=source-trash]) .life-toolbar.haedo-page-heading h1 { font-size: var(--haedo-text-title); line-height: 1.5; white-space: nowrap; }
+}
+@media (max-width: 360px) {
+  .life-app:has(> #lifeMain[data-mode=source-trash]) .life-toolbar.haedo-page-heading h1 { font-size: var(--haedo-text-body); line-height: 1.3; white-space: normal; }
+}
 #lifeSourceTrashList > article { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px; }
 #lifeSourceTrashList .life-source-open { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:760px) {

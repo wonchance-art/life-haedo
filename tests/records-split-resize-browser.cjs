@@ -384,7 +384,15 @@ async function main() {
         assert.equal(await page.evaluate(() => document.querySelector('.haedo-split-handle')?.checkVisibility() ?? false), false, width + ': no separator');
         assert.equal(await horizontalOverflow(page), false, width + ': horizontal overflow');
       }
-      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page); await nav(page, 'records');
+      await page.setViewportSize({ width: 1440, height: 960 }); await frames(page);
+      // 미해결(2026-11-11): 이 nav 안의 aria-current 단언이 한 번 null로 실패했고 다시 재현되지 않았다. 단언은 그대로 두고,
+      // 다시 실패하면 그 순간의 화면 상태를 실패 메시지에 남긴다(원인 판정용 계측).
+      await nav(page, 'records').catch(async error => {
+        const seen = await page.evaluate(() => ({ mode: document.querySelector('#lifeMain')?.dataset.mode ?? null, mainBusy: document.querySelector('#lifeMain')?.getAttribute('aria-busy') ?? null,
+          appBusy: document.querySelector('#lifeApp')?.getAttribute('aria-busy') ?? null, appHidden: document.querySelector('#lifeApp')?.hidden ?? null, address: location.pathname + location.search + location.hash, historyLength: history.length,
+          current: [...document.querySelectorAll('[data-haedo-navigation] [aria-current]')].map(item => item.dataset.haedoSection + '=' + item.getAttribute('aria-current')), width: innerWidth })).catch(failure => ({ unreadable: String(failure) }));
+        throw new Error(error.message + ' · state at the failure: ' + JSON.stringify(seen), { cause: error });
+      });
       assert.deepEqual(await page.evaluate(() => ({ handles: document.querySelectorAll('.haedo-split-handle').length, observers: window.__splitObservers.size })), { handles: 0, observers: 0 }, 'leaving news removes its separator');
     }, { width: 1440, height: 960 });
   } finally {

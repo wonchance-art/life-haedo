@@ -81,6 +81,11 @@ async function folder(page, name, parentId = '', id = '') {
 async function edit(page, f) {
   await reader(page, f.source.id, f.version.id); const toggle = page.locator('#lifeSourceInfoToggle'); if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   await click(page, '#lifeSourceEdit'); await page.locator('#lifeSourceEditText').fill(edited); await click(page, '#lifeSourceEditSave'); await page.locator('#lifeSourceInfoToggle').waitFor();
+  // 2026-11-11: 이 화면이 방금 저장한 수정은 "다른 곳에서 변경"이 아니다. 저장한 기기에서는 `최신 내용 확인`이 뜨지 않는다.
+  // (아래 freshFolderView의 '보이면 누른다'는 다른 기기의 수정을 받은 쪽에서 쓰이므로 그대로 둔다.)
+  await page.waitForFunction(() => /버전 2\/2/.test(document.querySelector('.life-reader')?.textContent || ''));
+  assert.equal(await page.getByRole('button', { name: '최신 내용 확인', exact: true }).isVisible(), false, 'This device\'s own material edit must not ask to review the latest content');
+  assert.doesNotMatch(await page.locator('#lifeSaveStatus').textContent().catch(() => ''), /보관한 자료가 변경되었습니다/);
 }
 async function collectionNote(page, id, note) { await page.evaluate(async ({ id, note }) => { const s = HaedoLife.Shell.storage, value = await s.readCollection(id); value.items[0].note = note; await s.saveCollection(id, value, value.revision); }, { id, note }); }
 async function freshFolderView(page) {

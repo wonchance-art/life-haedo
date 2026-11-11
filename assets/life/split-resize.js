@@ -8,7 +8,18 @@
  *   before     구분선을 넣을 자리(읽기 칸 요소). 구분선은 그 앞에 들어간다.
  *   key        localStorage 키. min/readerMin/defaultWidth는 px. controls는 목록 요소 id.
  *   keepVisible 너비가 바뀌는 동안 읽던 줄을 같은 높이에 둘 읽기 본문 요소(또는 그것을 돌려주는 함수).
- * 구분선이 보이지 않는 폭(CSS가 숨김)에서는 아무것도 바꾸지 않는다. */
+ *   lineKept   읽기 본문이 keepLine으로 읽던 줄을 스스로 잡고 있으면 true를 돌려주는 함수. 그때는 여기서 다시 잡지 않는다.
+ * 구분선이 보이지 않는 폭(CSS가 숨김)에서는 아무것도 바꾸지 않는다.
+ *
+ * keepLine(host, { capture, top }) → { get(), peek(), set(anchor), restore(), pause(), resume(), dispose() }
+ *   읽기 본문(host)의 너비가 어떤 이유로든 바뀔 때(창 크기·기기 회전·목록이 옆에 열림·구분선) 읽던 줄을 같은 화면
+ *   높이에 둔다. 이런 변화는 배치가 끝난 뒤에야 알 수 있어서, 사람이 스크롤하는 동안 읽던 줄을 기억해 둔다.
+ *   capture()  지금 읽는 줄의 한 점과 그 화면 높이 { top, viewport, … } 또는 null(본문이 읽는 줄에 걸치지 않음).
+ *   top(anchor) 그 점이 지금 있는 화면 높이.
+ *   기억한 점은 이 모듈이 아닌 것이 스크롤했을 때만 바뀐다. 그래서 너비가 여러 번 바뀌어도(끌기) 같은 글자로
+ *   돌아오고 줄 단위로 밀리지 않으며, 사람이 스크롤하는 동안에는 보정이 끼어들지 않는다(너비가 바뀐 그때 한 번뿐).
+ *   줄은 스크롤이 멎은 뒤(120ms) 한 번만 잰다. 긴 원문 한 덩이에서 글자 위치를 재는 일은 스크롤 프레임마다 하기에는
+ *   비싸다. 아직 재지 않은 스크롤 뒤에 너비가 바뀌면, 본문을 잠깐 이전 너비로 되돌려 그때 화면에 있던 줄을 잰다. */
 (function (root) {
   'use strict';
   const STEP = 16, LARGE_STEP = 64;
@@ -93,7 +104,7 @@
       if (disposed || !visible()) return;
       const range = bounds();
       const next = clamp(value ?? preferred ?? defaultWidth, range);
-      const restore = next !== width && width !== null ? holdReading() : null;
+      const restore = next !== width && width !== null && !options.lineKept?.() ? holdReading() : null;
       width = next;
       container.style.setProperty(cssVar, width + 'px');
       restore?.();
@@ -192,6 +203,97 @@
       container.style.removeProperty(cssVar);
     };
   }
+  function keepLine(host, adapter) {
+    const doc = host.ownerDocument, view = doc.defaultView || root;
+    const SETTLE = 120;
+    let anchor = null, width = null, dirty = false, timer = null, paused = 0, expected = null, seenY = null, lastY = null, disposed = false;
+    const hostWidth = () => host.getBoundingClientRect().width;
+    function measure() {
+      dirty = false; view.clearTimeout(timer); timer = null;
+      if (disposed || paused || !host.isConnected) return;
+      // A width that differs from the last one seen means the layout already reflowed: what is on the reading
+      // line now is not what the person was reading. The observer below takes the line at the earlier width.
+      if (width !== null && Math.abs(hostWidth() - width) >= 0.5) return;
+      anchor = adapter.capture(); seenY = view.scrollY;
+    }
+    // The line that was on screen before the reflow: lay the text out at its earlier width for one measurement.
+    // Used only when the page was scrolled after the last measurement and the width changed before the next one.
+    function measureAt(previous) {
+      dirty = false; view.clearTimeout(timer); timer = null;
+      const style = host.style, saved = { boxSizing: style.boxSizing, width: style.width, minWidth: style.minWidth, maxWidth: style.maxWidth };
+      Object.assign(style, { boxSizing: 'border-box', width: previous + 'px', minWidth: previous + 'px', maxWidth: previous + 'px' });
+      try { anchor = adapter.capture(); } finally { Object.assign(style, saved); }
+      seenY = view.scrollY;
+    }
+    function scrolled() {
+      if (disposed) return;
+      // This module's own correction is not a new place to read from.
+      if (expected !== null && Math.abs(view.scrollY - expected) < 1.5) { expected = null; return; }
+      expected = null; lastY = view.scrollY;
+      if (paused) return;
+      // Measured once the scrolling has stopped, not in every scrolled frame.
+      dirty = true; view.clearTimeout(timer); timer = view.setTimeout(() => { timer = null; if (dirty) measure(); }, SETTLE);
+    }
+    function restore() {
+      if (disposed || paused || !anchor || !host.isConnected) return false;
+      const now = adapter.top(anchor);
+      if (!Number.isFinite(now)) return false;
+      // The same height on screen; after a rotation, the same share of the new screen height.
+      const want = anchor.viewport && anchor.viewport !== view.innerHeight ? anchor.top * view.innerHeight / anchor.viewport : anchor.top;
+      const limit = Math.max(0, doc.documentElement.scrollHeight - view.innerHeight);
+      const target = Math.min(limit, Math.max(0, view.scrollY + now - want));
+      if (Math.abs(target - view.scrollY) < 1) return false;
+      expected = target;
+      // A program scroll, not reading (see holdReading): the scroll event fires in the next frame before its animation callbacks.
+      holdingScroll++; view.requestAnimationFrame(() => { holdingScroll--; });
+      view.scrollTo({ top: target, behavior: 'instant' });
+      seenY = view.scrollY;
+      return true;
+    }
+    function resized() {
+      if (disposed || !host.isConnected) return;
+      const now = hostWidth();
+      if (width !== null && Math.abs(now - width) >= 0.5 && !paused) {
+        // Only a line that was measured where the page still is can be put back. If the page was scrolled since
+        // (by the person a moment ago, or by the app in this very frame), the remembered line is another place and
+        // moving the page there would undo that scroll: the line is taken where the page is now, as it was laid
+        // out before this reflow. (A reflow that shortened the page and pulled the scroll back to its end is not such a scroll.)
+        const limit = Math.max(0, doc.documentElement.scrollHeight - view.innerHeight);
+        const still = seenY !== null && (Math.abs(view.scrollY - seenY) < 1.5 || view.scrollY < seenY && view.scrollY >= limit - 1.5);
+        if (!still) measureAt(width);
+        dirty = false; view.clearTimeout(timer); timer = null;
+        restore();
+      }
+      width = now;
+    }
+    const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(resized) : null;
+    let resizeFrame = 0;
+    const windowResized = () => { if (!resizeFrame) resizeFrame = view.requestAnimationFrame(() => { resizeFrame = 0; resized(); }); };
+    if (observer) observer.observe(host); else view.addEventListener('resize', windowResized);
+    view.addEventListener('scroll', scrolled, { passive: true });
+    return {
+      // The line being read now. A scroll that has not been measured yet (or whose event has not arrived) is measured here.
+      get() { if (dirty || view.scrollY !== seenY) measure(); return anchor ? { ...anchor } : null; },
+      // The line last read, for when the screen may already be changing (a reader closing): a pending measurement is
+      // taken only if the page is still where the last scroll left it; otherwise the last measured line stands.
+      peek() { if (dirty && lastY !== null && Math.abs(view.scrollY - lastY) < 1.5) measure(); return anchor ? { ...anchor } : null; },
+      // The caller has just put the page where this line is: the scroll event of that move (it arrives in the next
+      // frame) is not a new place to read from, so the given point stays the remembered one.
+      set(value) { anchor = value ? { ...value } : null; dirty = false; view.clearTimeout(timer); timer = null; seenY = lastY = expected = view.scrollY; if (host.isConnected) width = hostWidth(); },
+      restore,
+      pause() { if (dirty || view.scrollY !== seenY) measure(); paused++; },
+      resume() { paused = Math.max(0, paused - 1); },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        view.clearTimeout(timer);
+        if (resizeFrame) view.cancelAnimationFrame(resizeFrame);
+        observer?.disconnect();
+        view.removeEventListener('resize', windowResized);
+        view.removeEventListener('scroll', scrolled);
+      }
+    };
+  }
   root.HaedoLife ||= {};
-  root.HaedoLife.SplitResize = Object.freeze({ attach, adjusting });
+  root.HaedoLife.SplitResize = Object.freeze({ attach, adjusting, keepLine });
 })(typeof window !== 'undefined' ? window : globalThis);

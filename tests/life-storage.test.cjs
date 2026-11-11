@@ -1806,8 +1806,16 @@ test('trash wins over prepared source edits and late original imports without er
   const restoredChanges = Core.buildSourceStateChanges(trashed, sourceId, 'active', { expectedRevision: 1, expectedStatus: 'trash' });
   assert.equal((await f.storage.commitLocal({ workspaceId: trashed.workspaceId, baseRevision: trashed.revision, operationId: Core.id(), changes: restoredChanges })).status, 'stored');
   const restored = await f.storage.read(trashed.workspaceId), oldStage = await f.storage.commitLocal({ ...f.request, operationId: Core.id(), baseRevision: restored.revision, stageRevision: draftAgain.revision });
-  assert.equal(oldStage.status, 'rejected'); assert.equal(oldStage.error.code, 'source_edit_conflict');
+  // The changes were prepared for the earlier input, so the transaction still refuses them (not the base).
+  assert.equal(oldStage.status, 'rejected'); assert.equal(oldStage.error.code, 'source_edit_mismatch');
   assert.equal(Core.sourceState(restored, sourceId).revision, 2); assert.equal(restored.sources[0].id, sourceId);
+  // 2026-11-11 소유자 지시: 휴지통 왕복은 본문과 무관하므로 복원한 뒤에는 같은 초안을 그대로 저장한다.
+  const again = await f.model.prepare(restored, draftAgain), stored = await f.storage.commitLocal({ workspaceId: restored.workspaceId, baseRevision: restored.revision,
+    operationId: Core.id(), stageId: draftAgain.stageId, stageRevision: draftAgain.revision, changes: again.changes, stageResult: again.stageResult });
+  assert.equal(stored.status, 'stored');
+  const after = await f.storage.read(restored.workspaceId);
+  assert.equal(after.sourceVersions.at(-1).contentText, '휴지통에서도 보존할 입력'); assert.deepEqual(after.sourceVersions.slice(0, -1), f.bundle.sourceVersions);
+  assert.deepEqual(after.records, f.bundle.records); assert.equal((await f.storage.getStage(draftAgain.stageId)).state, 'applied');
 });
 test('whole snapshot sync cannot lose known edited-copy/base history or reset a source lifecycle after a clean upload', async t => {
   const f = await sourceEditStorageFixture(t); assert.equal((await f.storage.commitLocal(f.request)).status, 'stored');
@@ -1823,7 +1831,22 @@ test('whole snapshot sync cannot lose known edited-copy/base history or reset a 
     assert.deepEqual(f.rows, before);
   }
 });
+// 2026-11-11 소유자 지시: 낡은 초안의 기준은 최신 판 id·해시뿐이다(이전 단언은 휴지통 왕복만으로 낡았다고 보았다).
 test('new account copies remap source-edit bases and preserve an already stale edit instead of making it current', async t => {
+  const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
+  // A newer version from elsewhere makes the stored draft stale.
+  const newer = await Core.prepareImport({ origin: f.bundle.sources[0].origin, title: f.bundle.sources[0].title, text: '다른 곳에서 생긴 최신 판', existingSourceId: sourceId }, f.bundle);
+  assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildImportChanges(f.bundle, newer, []) })).status, 'stored');
+  const account = f.storage.forAccount(accountA), result = await account.importUnownedWorkspace(f.bundle.workspaceId);
+  const stages = await account.listStages(result.workspaceId), bundle = await account.read(result.workspaceId), stage = stages.find(value => value.kind === 'source-edit');
+  assert(stage.baseChanged); assert.notEqual(stage.stageId, f.stage.stageId); assert.notEqual(stage.baseSourceId, sourceId);
+  assert.equal(stage.baseSourceId, bundle.sources[0].id); assert.equal(stage.baseSourceVersionId, bundle.sourceVersions[0].id);
+  assert.equal(stage.lifecycleRevision, 0); assert.equal(stage.input.text, f.stage.input.text);
+  assert.throws(() => f.model.validateCurrent(bundle, stage), { code: 'source_edit_conflict' });
+  assert.equal(f.model.baseState(bundle, stage).status, 'moved');
+});
+test('new account copies keep a source-edit draft current across a trash round trip', async t => {
   const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
   assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(),
     changes: Core.buildSourceStateChanges(f.bundle, sourceId, 'trash') })).status, 'stored');
@@ -1832,10 +1855,8 @@ test('new account copies remap source-edit bases and preserve an already stale e
     changes: Core.buildSourceStateChanges(trashed, sourceId, 'active') })).status, 'stored');
   const account = f.storage.forAccount(accountA), result = await account.importUnownedWorkspace(f.bundle.workspaceId);
   const stages = await account.listStages(result.workspaceId), bundle = await account.read(result.workspaceId), stage = stages.find(value => value.kind === 'source-edit');
-  assert(stage.baseChanged); assert.notEqual(stage.stageId, f.stage.stageId); assert.notEqual(stage.baseSourceId, sourceId);
-  assert.equal(stage.baseSourceId, bundle.sources[0].id); assert.equal(stage.baseSourceVersionId, bundle.sourceVersions[0].id);
-  assert.equal(stage.lifecycleRevision, 1); assert.equal(stage.input.text, f.stage.input.text);
-  assert.throws(() => f.model.validateCurrent(bundle, stage), { code: 'source_edit_conflict' });
+  assert.equal(Object.hasOwn(stage, 'baseChanged'), false); assert.equal(stage.lifecycleRevision, 1); assert.equal(stage.input.text, f.stage.input.text);
+  assert.equal(f.model.validateCurrent(bundle, stage).head.id, bundle.sourceVersions[0].id);
 });
 test('preservation final selection CAS notices an edited-copy marker disappearing while exact text and post evidence stay unchanged', async t => {
   const f = await preservationFixture(t), Edit = require('../assets/life/source-edit.js'), Refs = require('../assets/life/source-reference.js'), Preserve = require('../assets/life/preservation-references.js');

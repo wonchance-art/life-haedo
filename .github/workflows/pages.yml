@@ -197,6 +197,21 @@ jobs:
       - name: Verify page drafts and the public cover accept remote changes while only focused
         if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/account-doc-focus-sync-browser.cjs
+      - name: Verify source edit drafts keep input when discarding fails, another tab discards and the title changed elsewhere
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-edit-draft-browser.cjs
+      - name: Verify reader tool panels stay with the text, close on Tab out and keep the reading position
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-panels-browser.cjs
+      - name: Verify the reading line survives width changes and reloads without per-scroll measuring
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-position-resize-browser.cjs
+      - name: Verify excerpts are chosen only in the original text and the formatted view switches with a notice
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reader-markdown-excerpt-browser.cjs
+      - name: Verify keyboard selection, logout clearing of tab copies and small reader fixes
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/records-reader-small-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
