@@ -635,7 +635,12 @@
   // IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, iCCP (name/method/zlib
   // header), pHYs. Everything else (EXIF/XMP/IPTC/comments, Apple iDOT and
   // minimal Exif from ImageIO, text, time, animation, trailing bytes) is
-  // removed. ICC profile contents are checked structurally only.
+  // removed. ICC profile contents are checked structurally only: the APP2
+  // ICC segments of a file must be numbered 1..count in file order with one
+  // shared count, start with a profile header, and together hold exactly the
+  // profile size that header declares (2026-11-11: a continuation segment
+  // alone, or bytes beyond the declared profile, could carry any text). A
+  // file whose ICC segments fail this loses all of them.
   const JPEG_SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
   const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "pHYs"]);
   const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -646,18 +651,33 @@
     if (JPEG_SOF.has(marker) || [0xc4, 0xdb, 0xdd, 0xda].includes(marker)) return true;
     if (marker === 0xe0) return length === 16 && bytesAre(b, body, "JFIF\0") && b[body + 12] === 0 && b[body + 13] === 0;
     if (marker === 0xee) return length === 14 && bytesAre(b, body, "Adobe");
-    if (marker === 0xe2) {
-      if (length < 16 || !bytesAre(b, body, "ICC_PROFILE\0")) return false;
-      const seq = b[body + 12], count = b[body + 13];
-      if (seq < 1 || seq > count) return false;
-      return seq > 1 || (length >= 16 + 40 && bytesAre(b, body + 14 + 36, "acsp"));
-    }
+    // One ICC segment on its own; the whole set is checked by iccSetValid.
+    if (marker === 0xe2) return length >= 16 && bytesAre(b, body, "ICC_PROFILE\0");
     return false;
+  }
+  // `chunks`: every APP2 ICC_PROFILE segment in file order, as [at, length]
+  // (at: the offset of the segment's length field, as in jpegSegment).
+  function iccSetValid(b, chunks) {
+    if (!chunks.length) return true;
+    const count = b[chunks[0][0] + 2 + 13];
+    if (count !== chunks.length) return false;
+    let total = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      const body = chunks[i][0] + 2;
+      if (b[body + 12] !== i + 1 || b[body + 13] !== count) return false;
+      total += chunks[i][1] - 16;
+    }
+    // The first chunk starts the profile: a 128-byte header with its size and the "acsp" signature.
+    const profile = chunks[0][0] + 2 + 14;
+    if (chunks[0][1] - 16 < 128 || !bytesAre(b, profile + 36, "acsp")) return false;
+    const declared = ((b[profile] << 24) | (b[profile + 1] << 16) | (b[profile + 2] << 8) | b[profile + 3]) >>> 0;
+    return declared === total;
   }
   function jpegParts(b) {
     if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
-    const keep = [b.subarray(0, 2)];
+    let keep = [b.subarray(0, 2)];
     let at = 2, dropped = false;
+    const icc = [], iccParts = new Set();
     while (at < b.length) {
       if (b[at] !== 0xff) return null;
       const start = at;
@@ -666,13 +686,19 @@
       const marker = b[at++];
       if (marker === 0xd9) {
         keep.push(b.subarray(start, at));
+        // An ICC set that is not one whole, exactly sized profile is removed entirely.
+        if (!iccSetValid(b, icc)) { keep = keep.filter((part) => !iccParts.has(part)); dropped = true; }
         return { keep, dropped: dropped || at !== b.length };
       }
       if (at + 2 > b.length) return null;
       const length = (b[at] << 8) | b[at + 1];
       if (length < 2 || at + length > b.length) return null;
       const end = at + length;
-      if (jpegSegment(b, marker, at, length)) keep.push(b.subarray(start, end));
+      if (jpegSegment(b, marker, at, length)) {
+        const part = b.subarray(start, end);
+        keep.push(part);
+        if (marker === 0xe2) { icc.push([at, length]); iccParts.add(part); }
+      }
       else if (marker === 0xda) return null;
       else dropped = true;
       at = end;
