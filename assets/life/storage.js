@@ -1706,7 +1706,9 @@
       }
       return result;
     }
-    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
+    // `received`: the write stores what account sync brought (another device's post, or the copy a
+    // sync conflict keeps). The 200 cap below does not apply to it.
+    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null, received = false) {
         // The bundle's content is read (and the whole bundle validated) only by
         // the source checks below; a plain post write checks the workspace only.
         const meta = tx.objectStore('meta'); let checked = null;
@@ -1746,6 +1748,7 @@
         if (previous) photoPost().validate(previous);
         assertPostFormatUpgrade(previous, value);
         let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        const countBefore = index.length;
         if (value.status === 'saved' && value.replaces) {
           const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
           if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
@@ -1786,7 +1789,11 @@
         value.revision = baseRevision + 1; photoPost().validate(value);
         const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
         const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
-        if (index.length > 200) throw fault('photo_post_limit', '사진 글과 초안은 합계 200개까지 보관할 수 있습니다.');
+        // The cap stops a new post or draft made on this device. It never stops a post that already
+        // exists on another device, a sync conflict's recovery copy, or saving a post that is already
+        // here: a device that refused those kept a different list from the account for good, and with
+        // a list above the cap (two devices' posts together) could not save its own posts either.
+        if (!received && index.length > 200 && index.length > countBefore) throw fault('photo_post_limit', '글과 초안은 합계 200개까지 만들 수 있습니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
         if (naver) naver.assertCurrent();
@@ -2593,7 +2600,7 @@
         }
         throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
       }
-      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
+      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs, null, true);
       const blog = root.HaedoLife?.Blog || require('./blog.js');
       const state = materialBlogState(output.postId, blogRow?.workspace_id || remoteWorkspaceId, output.revision, blog.pack(original), saved.revision);
       state.publication = clone(blogRow?.publication || null);
@@ -2960,7 +2967,7 @@
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const bundle = await preservationBundle(tx, workspaceId, settings.unowned), meta = tx.objectStore('meta');
         const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-        if (!Array.isArray(index) || index.length > 200 || index.some(row => !plain(row) || typeof row.id !== 'string' || !['saved', 'draft'].includes(row.status)) || new Set(index.map(row => row.id)).size !== index.length) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다. 기존 자료를 보존했습니다.');
+        if (!Array.isArray(index) || index.some(row => !plain(row) || typeof row.id !== 'string' || !['saved', 'draft'].includes(row.status)) || new Set(index.map(row => row.id)).size !== index.length) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다. 기존 자료를 보존했습니다.');
         const posts = index.filter(row => row.status === 'saved').map(row => {
           if (typeof row.title !== 'string' || typeof row.body !== 'string' || typeof row.updatedAt !== 'string' || !Number.isSafeInteger(row.revision) || row.revision < 1 || !Number.isSafeInteger(row.photos) || row.photos < 0) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다.');
           return { id: row.id, title: row.title, status: row.status, revision: row.revision, updatedAt: row.updatedAt,
@@ -3135,7 +3142,7 @@
         }
         const receiptKey = `blog-received:${workspaceId}:${state.remoteId}`, receipt = (await meta.get(receiptKey))?.value; assertCurrent();
         if (receipt) { checkBlogReceipt(receipt, state.remoteId); throw fault('photo_post_missing', '전에 받은 글의 연결을 확인하지 못했습니다. 새 사본을 자동 생성하지 않았습니다.'); }
-        const saved = await writePhotoPost(tx, workspaceId, post, 0, null, null, effects); assertCurrent();
+        const saved = await writePhotoPost(tx, workspaceId, post, 0, null, null, effects, [], null, true); assertCurrent();
         await meta.put({ key: `blog-sync:${workspaceId}:${saved.id}`, value: { ...state, revision: 1, localRevision: saved.revision } });
         assertCurrent();
         await meta.put({ key: receiptKey, value: { owner: clone(account), remoteId: state.remoteId, localPostId: saved.id } });
@@ -3269,7 +3276,7 @@
           const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
           await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
         } else {
-          if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects); assertCurrent(); }
+          if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects, [], null, true); assertCurrent(); }
           if (binding) {
             const value = { ...binding, revision: bindingRevision + 1, localRevision: saved ? saved.revision : binding.localRevision };
             if (!blogBindingShape(value)) throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.');
@@ -3277,8 +3284,8 @@
           }
         }
         let copied = null;
-        for (const copy of copies) { const written = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects); copied ||= written; assertCurrent(); }
-        if (edit) { await writePhotoPost(tx, workspaceId, edit, edit.revision, null, null, effects); assertCurrent(); }
+        for (const copy of copies) { const written = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects, [], null, true); copied ||= written; assertCurrent(); }
+        if (edit) { await writePhotoPost(tx, workspaceId, edit, edit.revision, null, null, effects, [], null, true); assertCurrent(); }
         return { postId, revision: remove ? 0 : saved ? saved.revision : current?.revision || 0, copyId: copied?.id || null, removed: remove };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
