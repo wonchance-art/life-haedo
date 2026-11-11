@@ -444,6 +444,14 @@
         list.append(item);
       }
       restoreResult.append(list);
+      // Posts whose own 작성일·수정일 could not be restored (2026-11-11): said once, with the number of posts.
+      const posts = report.items.filter(item => item.kind === 'photoPosts' && item.status === 'restored');
+      const undated = posts.filter(item => item.times === 'missing').length, adjusted = posts.filter(item => item.times === 'adjusted').length;
+      if (undated || adjusted) {
+        const dates = node('p', [undated ? '글 ' + undated + '개는 백업에 작성일·수정일이 없어 복원한 시각으로 저장했습니다.' : '',
+          adjusted ? '글 ' + adjusted + '개는 날짜가 지금보다 늦어 복원한 시각으로 맞췄습니다.' : ''].filter(Boolean).join(' '), 'life-help');
+        dates.id = 'fbRestoreDates'; restoreResult.append(dates);
+      }
       const actions = node('div', null, 'life-actions');
       for (const copy of copies) {
         const open = button(copy.title + ' 열기', () => onOpenWorkspace(copy.workspaceId));

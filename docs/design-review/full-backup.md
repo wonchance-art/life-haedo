@@ -25,14 +25,14 @@ ZIP 안의 파일은 모두 기존 형식이다. 예외는 계정 문서 파일 
 | `workspaces/NN/library.json` | 자료·구성 | 폴더가 있으면 `life-material-library-backup-v1`, 없으면 `life-workbench-backup-v1`. 자료·구성 화면과 같은 선택이다 |
 | `workspaces/NN/collection.json` | 컬렉션 | `life-collection-backup-v1` |
 | `workspaces/NN/nine-boards.json` | 9칸 구성 | `life-nine-board-backup-v1/v2` |
-| `workspaces/NN/photo-posts/<글ID>.zip` | 사진 글(초안·보관 포함 전부) | `life-photo-post-backup-v1/v2`. 원본 바이트 그대로이며 HEIC는 보기용 JPEG를 함께 담는다 |
+| `workspaces/NN/photo-posts/<글ID>.zip` | 사진 글(초안·보관 포함 전부) | `life-photo-post-backup-v1/v2`, `life-post-md-backup-v1`. 원본 바이트 그대로이며 HEIC는 보기용 JPEG를 함께 담는다. 2026-11-11부터 글의 `createdAt`·`updatedAt`도 담는다(아래 "글의 작성·수정 시각") |
 | `workspaces/NN/blog-series/<모음ID>.zip` | 연재 모음 | `life-blog-series-package-v1`(`BlogSeriesPackage.pack`) |
 | `workspaces/NN/material-writing.json` | 자료로 글쓰기 준비(질문·자료 메모·개요) | 저장소 값 형식 `life-material-writing-v1`(`MaterialWriting.validate`) |
 | `workspaces/NN/naver-captures/<원문버전ID>.zip` | 네이버 원문 사진 | `haedo.naver.capture.v1`(`NaverMedia.pack`) |
 | `account-documents.json` | 계정 설정·기록 문서 | `haedo-account-documents-v1`(신규) |
 | `original-attachments/<파트ID>.zip` | 원본 첨부 | `haedo-private-originals-part-v1`(원본 첨부 서비스 `archive`) |
 | `timeline-goals-habits.json` | 연표·목표·습관 | `haedo-platform-backup-v1`(`platform-store.backup()`과 같은 모양) |
-| `README.txt`·`manifest.json` | 목록(ZIP의 **마지막** 두 항목) | `haedo-full-backup-v1`, `version: 2` |
+| `README.txt`·`manifest.json` | 목록(ZIP의 **마지막** 두 항목) | `haedo-full-backup-v1`, `version: 3` |
 
 JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.parse`라서 그대로 읽는다.
 
@@ -94,7 +94,7 @@ JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.
    - JSON은 `format`으로 정한다. 자료, 자료·구성, 컬렉션, 9칸, 글쓰기 준비, 계정 문서, 연표·목표·습관, 연간 계획을 구분한다.
 2. **전체 백업 검증**: 미리보기 전에 확인하고, 하나라도 맞지 않으면 아무것도 쓰지 않는다.
    - `manifest.json` CRC
-   - 버전은 1·2만 받는다. 모르는 버전·형식은 `unsupported_version`.
+   - 버전은 1·2·3만 받는다. 모르는 버전·형식은 `unsupported_version`.
    - 목록 밖 파일이나 빠진 파일은 `tampered`
    - 각 파일의 크기·SHA-256. 다르면 `tampered`로 거부하고 경로를 표시한다.
    - JSON 내부 형식, ZIP 종류별 형식, 경로·종류·자료공간 일치
@@ -122,7 +122,7 @@ JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.
    - 내용·해시는 바꾸지 않고 최신 버전으로 치환하지 않는다.
    - 자료·구성 없이 복원한 9칸은 옛 원문이나 함께 오지 않은 글을 가리키는 근거를 지우고, 그 개수를 결과에 적는다. 사진 글 인용 근거와 같은 처리다. 선택 이유·제목은 남긴다.
    - 9칸의 저장 글 참조는 새 글 ID로 옮긴다. 복원한 글 본문의 해시가 참조한 해시와 같을 때만 `postRevision`을 복원한 글의 revision으로 바꾼다. 다르면 원래 값을 그대로 두고, 다른 판으로 바꾸지 않는다.
-6. **글 상태**: 전체 백업에서는 manifest의 저장/초안·보관 상태로 복원한다. 사진 글 ZIP 하나만 고르면 편집기와 같이 새 초안이 된다.
+6. **글 상태**: 전체 백업에서는 manifest의 저장/초안·보관 상태로 복원한다. 사진 글 ZIP 하나만 고르면 편집기와 같이 새 초안이 된다. 글의 작성·수정 시각은 글 ZIP에 적힌 값으로 복원한다(아래 "글의 작성·수정 시각").
 7. **복원하지 않는 것**
    - 공개 표지 설정
    - 연표·목표·습관
@@ -144,7 +144,7 @@ JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.
    - `listAccountLibraries`는 표시가 있는 공간에만 `restoredCopy: {sourceWorkspaceId, restoredAt}`를 더한다. `eligible`은 바꾸지 않으므로 사본도 그대로 동기화(BlogSync 포함)·백업된다.
    - 홈 "내 글"은 공간이 아니라 **글 단위**로 겹침을 뺀다(`home.js` `restoredDuplicates`). 모든 eligible 공간의 글을 읽는다.
      - 사본의 글은 표시에 적힌 원래 공간이 목록에 있고 eligible일 때만 그 공간의 글과 짝을 짓는다. 복구 사본(eligible 아님)을 복원한 사본은 짝을 짓지 않는다.
-     - "같은 글"은 복원이 바꾸지 않는 내용으로 정한다: 제목·저장/초안·보관 상태, 본문(사진 자리는 순번으로 바꿔 비교), 사진의 이름·형식·크기·해상도·SHA-256(보기용 JPEG 포함) 순서, 첨부. 글 ID·revision·시각·사진 ID는 복원 때 새로 만들어지므로 비교하지 않는다. 옛 ID→새 ID 대응표는 저장하지 않아 다른 기기에서 쓸 수 없으므로 근거로 쓰지 않았다.
+     - "같은 글"은 복원이 바꾸지 않는 내용으로 정한다: 제목·저장/초안·보관 상태, 본문(사진 자리는 순번으로 바꿔 비교), 사진의 이름·형식·크기·해상도·SHA-256(보기용 JPEG 포함) 순서, 첨부. 글 ID·revision·사진 ID는 복원 때 새로 만들어지므로 비교하지 않는다. 시각도 비교하지 않는다(2026-11-11부터 복원한 글이 원래 시각을 갖지만, 그 전에 만든 사본은 복원 시각을 갖는다). 옛 ID→새 ID 대응표는 저장하지 않아 다른 기기에서 쓸 수 없으므로 근거로 쓰지 않았다.
      - 짝은 일대일이다. 원래 공간에서 지운 글, 백업 뒤 고친 글(내용이 다르면 다른 글), 백업 뒤 원래 공간에 쓴 글은 모두 그대로 보인다. 같은 내용의 글 묶음마다 하나만 남긴다. 현재 공간의 글이 있으면 그 글을, 없으면 원래 공간에 가까운 글을 남긴다. 현재 공간의 글은 빼지 않는다. 글을 읽지 못하면 짝을 짓지 않는다. 그래서 어떤 글도 홈에서 아예 사라지지 않는다.
      - 원래 공간이 없는 계정(다른 계정에 복원)에서는 사본 글이 그대로 보인다.
    - 모두 받기는 이 표시 문서를 `account-documents.json`에 넣지 않는다. 다시 복원할 때마다 새 사본에 새 표시를 쓴다.
@@ -159,6 +159,30 @@ JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.
      - 같은 기기에 이전 버전으로 열린 탭이 남아 있으면 그 탭의 홈에는 사본 글이 겹쳐 보일 수 있다. 받기 위치는 같은 기기의 탭들이 함께 쓰므로, 새 버전 탭이 한 번 다시 받은 뒤에 도착한 표시를 이전 버전 탭이 먼저 건너뛰면 그 표시는 이 기기에 오지 않는다(번호가 이미 올라 있어 다시 받지 않는다). 이전 버전 탭을 닫거나 새로 고치면 더 생기지 않는다.
      - 스키마 번호가 오른 뒤 기존 기기는 계정 문서 변경 목록 전체를 한 번 다시 받는다. 이미 받은 행은 revision 비교만 하고 쓰지 않으므로 계정 문서 수만큼의 요청과 비교 비용이 한 번 든다.
      - 홈의 짝짓기 비용: 목록 행(제목·상태·본문·사진 수)이 같은 글만 읽고, 공간마다 한 번의 읽기(`readPhotoPosts`)로 읽는다. 홈 화면은 읽은 글의 비교 내용을 글 ID·revision·수정 시각으로 기억해 바뀌지 않은 글은 다시 읽지 않는다. 검수 측정 조건(글 100개·공간당 원문 약 1 MB, Node 메모리 IDB)에서 수정 전 2.3~3.3초가 73~115 ms로 줄었다(표시 없는 목록과 같은 수준).
+
+## 글의 작성·수정 시각 (2026-11-11)
+
+검수에서 재현한 결함: 날짜가 다른 글을 모두 받기로 백업해 빈 브라우저·빈 계정에 복원하면 모든 글의 `createdAt`·`updatedAt`이 복원 시각이 됐다. 원래 날짜의 일정 D는 비고, M 달력은 복원한 날 칸에만 글이 모이고, 목록 순서도 섞였다. 글 ZIP의 `manifest.json`에 시각이 없었고 `readBackup`이 새 글을 만들 때의 시각을 썼기 때문이다.
+
+- **담는 값**: 글 ZIP(`PhotoPost.backup`)의 `manifest.json`에 `createdAt`·`updatedAt`을 넣는다. 저장소의 값 그대로다(`YYYY-MM-DDTHH:MM:SS.mmmZ`). 형식 이름(`life-photo-post-backup-v1/v2`, `life-post-md-backup-v1`)은 그대로이고 두 값은 **선택 필드**다. 저장 검증이 재는 목록 크기(`inspect`)에는 넣지 않으므로 글 크기 한도는 바뀌지 않는다.
+- **읽는 규칙**(`PhotoPost.readBackup`):
+  - 두 값은 함께 있어야 한다. 하나만 있으면 거절한다.
+  - 저장 검증과 같은 형식 검사를 한다(정규 UTC ISO 시각, 실제 날짜). `updatedAt < createdAt`이면 거절한다. 거절 문구는 기존 `사진 글 날짜를 확인해 주세요.`·`사진 글 날짜 순서를 확인해 주세요.`다.
+  - 지금보다 늦은 시각(시계가 앞서간 기기에서 쓴 글)은 그 값만 복원 시각으로 맞춘다. 순서 규칙은 그대로 성립한다. 글을 버리지 않는 이유는, 전체를 잃은 뒤 복원할 때 시계 오차 때문에 글 자체를 못 살리면 안 되기 때문이다.
+  - 두 값이 없는 옛 ZIP은 이전처럼 복원 시각을 쓴다.
+  - `PhotoPost.backupTimes(doc)`가 그 결과를 알려 준다: `kept`·`missing`·`adjusted`.
+- **결과 화면**: 복원 결과의 글 항목에 `times`를 남기고, 시각을 살리지 못한 글이 있으면 한 줄로 알린다(`#fbRestoreDates`).
+  - `글 N개는 백업에 작성일·수정일이 없어 복원한 시각으로 저장했습니다.`
+  - `글 N개는 날짜가 지금보다 늦어 복원한 시각으로 맞췄습니다.`
+- **목록 버전 3**: 묶음의 파일 구성은 2와 같다. 이전 앱의 글 ZIP 판독기는 모르는 필드를 거절하므로, 버전을 올려 이전 앱이 묶음을 **미리보기 전에** `unsupported_version`("앱을 새로 고친 뒤 다시 시도")으로 거절하게 했다. 버전을 그대로 두면 이전 앱이 글만 빼고 나머지를 복원한 사본을 만든다. 새 앱은 1·2·3을 모두 읽는다.
+  - 한계: 글 ZIP 하나(편집기의 사진 포함 백업)와 연재 모음 ZIP(`life-blog-series-package-v1`, 안에 글 ZIP을 담는다)은 형식 이름이 그대로라서, 새 앱에서 받은 파일을 이전 앱에서 열면 `사진 글 형식을 확인해 주세요.`로 거절된다. 아무것도 쓰지 않는 거절이고 앱을 새로 고치면 읽힌다.
+- **단일 글 ZIP·연재 모음**: 같은 판독기를 쓰므로 같은 필드를 받는다. 편집기에서 복원한 새 초안과 복원한 연재 모음의 글도 원래 시각을 갖는다.
+- **복원 규칙과의 관계**: 복원은 여전히 새 사본(새 글 ID, revision 1)만 만들고 기존 글을 덮지 않는다. 바뀐 것은 사본의 두 시각뿐이다.
+- **계정 동기화(최신 채택)와의 관계**: 확인한 내용이다.
+  - 사본은 새 글 ID라서 계정에 같은 글이 없다. 올릴 때 비교할 상대가 없으므로 과거 `updatedAt` 때문에 충돌이 나거나 지는 일이 없다(`tests/full-backup-dates-browser.cjs`: 6편이 충돌·복구 사본 없이 올라가고 계정 행의 `createdAt`·`updatedAt`이 원래 값이다).
+  - 그 뒤의 충돌 판정(`blog-sync.js` `remoteIsLater`)은 문서의 `updatedAt`을 비교한다. 복원한 글을 고치면 `updatedAt`이 지금이 되므로 다른 기기의 옛 내용을 이긴다. 복원만 하고 고치지 않은 글은 보낼 변경이 없어서 판정 대상이 아니다.
+  - 초안 올리기 대기(`draftWaiting`)는 `updatedAt`이 최근일 때만 기다린다. 과거 시각의 복원 초안은 기다리지 않고 바로 올라간다.
+  - 홈의 사본 접기(`restoredDuplicates`)는 시각을 비교하지 않으므로 그대로다.
 
 ## 진행 중 이동
 
@@ -223,6 +247,10 @@ JSON 파일은 들여쓰기 없이 쓴다. 기존 복원 파서는 모두 `JSON.
 - 빈 계정 B에 복원: 버전·바이트·디코딩 픽셀 일치
 - 새 공간 열기
 - 390px·1440px 캡처
+
+**글 시각(2026-11-11)**
+- `tests/full-backup.test.cjs` 3개: 모두 받기와 글 ZIP이 시각을 담고 복원 사본이 그대로 갖는다(v1·v2 글, 초안, 단독 ZIP). 시각 없는 옛 글 ZIP과 목록 v2 묶음은 복원 시각 + `missing`. 형식이 틀린 값·한쪽만 있는 값·뒤집힌 순서 거절, 미래 시각은 복원 시각 + `adjusted`.
+- `tests/full-backup-dates-browser.cjs` 4개: 날짜가 다른 글 6편을 받아 9일 뒤 빈 브라우저·빈 계정에 복원 → 저장소의 시각, 목록 순서, 일정 D·M의 날짜가 원래와 같고 계정에 충돌 없이 올라간다. 목록 v2 묶음은 복원 시각과 안내 한 줄. 시각을 바꾼 글은 거절되고 나머지는 복원된다.
 
 **기존 브라우저 검사**: 설정 행을 누르던 검사는 백업·복원을 거치도록 진입 단계만 바꿨다. 공통 도우미는 `openBackupCenter`(`tests/life-sync-browser.cjs`)다.
 

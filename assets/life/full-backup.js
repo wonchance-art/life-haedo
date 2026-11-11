@@ -14,7 +14,10 @@
   // Version 1: first release (manifest/README first, no notIncluded).
   // Version 2: adds blog series, preparations, Naver captures, originals,
   // `notIncluded`, missing reasons; manifest/README are written last.
-  const FORMAT = 'haedo-full-backup-v1', VERSION = 2, DOCS_FORMAT = 'haedo-account-documents-v1';
+  // VERSION 3 (2026-11-11): the same files as 2; each post ZIP also carries the post's createdAt·updatedAt, which an
+  // app before this change cannot read. It refuses version 3 up front (unsupported_version) instead of restoring
+  // everything but the posts.
+  const FORMAT = 'haedo-full-backup-v1', VERSION = 3, DOCS_FORMAT = 'haedo-account-documents-v1';
   const MiB = 1024 * 1024, GiB = 1024 * MiB;
   // ZIP32 without ZIP64: every offset must stay below 4 GiB. The same limit
   // applies to the whole file when it is written and when it is opened.
@@ -620,7 +623,7 @@
   }
   async function verifyBundle(manifest, entries, onProgress) {
     const invalid = text => fault('invalid_backup', text);
-    if (!plain(manifest) || ![1, 2].includes(manifest.version)) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
+    if (!plain(manifest) || ![1, 2, 3].includes(manifest.version)) throw fault('unsupported_version', '이 앱이 모르는 전체 백업 버전입니다. 앱을 새로 고친 뒤 다시 시도해 주세요.');
     const v1 = manifest.version === 1;
     const keys = ['format', 'version', 'createdAt', 'appVersion', 'complete', 'workspaces', 'files', 'missing', ...(v1 ? [] : ['notIncluded'])];
     if (Object.keys(manifest).some(key => !keys.includes(key)) || keys.some(key => !Object.hasOwn(manifest, key))) throw invalid('전체 백업 목록의 항목을 확인해 주세요.');
@@ -872,8 +875,9 @@
             } else if (evidence?.value?.refs?.length) evidenceNote = '자료·구성을 함께 복원하지 않아 인용 근거 ' + evidence.value.refs.length + '개를 연결하지 않았습니다.';
             if (!saved) saved = await storage.savePhotoPost(id, candidate, 0);
             if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); target.postDocs.set(saved.id, saved); }
+            // times: 'kept' | 'missing' (a backup without the post's times: the restore time) | 'adjusted' (a time later than now).
             record('photoPosts', ws, 'restored', { targetId: id, postId: entry.postId, newPostId: saved.id, title: saved.title, postStatus: saved.status,
-              counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
+              times: P.backupTimes?.(candidate) || 'missing', counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
           } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('photoPosts', ws, 'failed', { postId: entry.postId, title: entry.title, message: message(error) }); }
         }
         for (const entry of own.filter(item => item.kind === 'nineBoards')) {
