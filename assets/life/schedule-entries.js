@@ -462,5 +462,8 @@
     paint();
     return () => { document.removeEventListener('haedo:store', onStore); document.removeEventListener('haedo:happiness', onMood); };
   }
-  life.ScheduleEntries = Object.freeze({ render, saveState, STATE_TEXT });
+  // A 행복도 choice still on its way to this device's store (or one that failed and stays selected): the shell
+  // does not move the shown day under it (2026-11-11 M1).
+  const unsaved = () => !!current?.pending.size;
+  life.ScheduleEntries = Object.freeze({ render, saveState, STATE_TEXT, unsaved });
 })(globalThis);

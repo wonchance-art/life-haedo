@@ -197,7 +197,27 @@
     const findSections = new Set(['news', 'schedule', 'records', 'manage']);
     // 일정's calendar units (2026-11-02): Y is the former tools (계획) view; Q·M·W·D are new.
     const calendarModes = new Set(['tools', 'quarter', 'month', 'week', 'day']);
-    const scheduleDate = () => { const sd = global.HaedoLife.ScheduleData; return !sd ? null : sd.valid(state.scheduleDate) ? state.scheduleDate : sd.today(); };
+    // The date 일정 shows (2026-11-11 M1). `scheduleDay` is the today the shown schedule was drawn with: a
+    // date never chosen means that day, not the clock at each call, so the title, the address, 오늘, ‹ › and
+    // the day's checks all use the one date on screen. scheduleRollover() moves it when the day changes.
+    let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null;
+    const scheduleDate = () => {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return null;
+      if (!scheduleDay) scheduleDay = sd.today();
+      return sd.valid(state.scheduleDate) ? state.scheduleDate : scheduleDay;
+    };
+    // The day changed since the schedule was drawn: a screen that showed today follows the new today, a
+    // chosen past or future date stays. True when the day moved.
+    function scheduleRollover() {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return false;
+      const now = sd.today();
+      if (scheduleDay === now) return false;
+      if (scheduleDay && state.scheduleDate === scheduleDay) state.scheduleDate = now;
+      scheduleDay = now;
+      return true;
+    }
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
@@ -1521,6 +1541,8 @@
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
+      // A navigation is drawn with the current day (the date an option names is applied after it).
+      scheduleRollover();
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1769,7 +1791,8 @@
       if (mode === 'external-discovery' && state.newsArticle) entry.newsArticle = state.newsArticle;
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
-      if (calendarModes.has(mode) && scheduleDate()) entry.scheduleDate = scheduleDate();
+      // scheduleToday: the entry showed today. A tab reopened on a later day (reload) opens that day's today.
+      if (calendarModes.has(mode) && scheduleDate()) { entry.scheduleDate = scheduleDate(); if (entry.scheduleDate === scheduleDay) entry.scheduleToday = true; }
       if (mode === 'find' && findSection) entry.findSection = findSection;
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
@@ -1792,7 +1815,7 @@
       if (findSections.has(value.findSection)) out.findSection = value.findSection;
       if (global.HaedoLife.ScheduleData?.valid(value.scheduleDate)) out.scheduleDate = value.scheduleDate;
       if (Number.isFinite(value.scrollY)) out.scrollY = Math.max(0, Math.round(value.scrollY));
-      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday']) if (typeof value[key] === 'boolean') out[key] = value[key];
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
       if (value.homeState && typeof value.homeState === 'object') {
@@ -1997,8 +2020,9 @@
       return switchScheduleView(mode, { date, motion: 'push' });
     }
     // ‹ › and 오늘 update the same screen: the entry is replaced, not added.
+    // The same date is drawn again only when the day changed after this screen was drawn (its 오늘 marks are old).
     async function scheduleMove(date) {
-      if (!calendarModes.has(state.mode) || date === scheduleDate()) return;
+      if (!calendarModes.has(state.mode) || date === scheduleDate() && scheduleDay === global.HaedoLife.ScheduleData.today()) return;
       const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
       if (await navigate(state.mode, { preserveContext: true, scheduleDate: date, historyAction: 'replace', navigationMotion: 'tab', sectionPosition: { scrollY: global.scrollY } }) === false) return;
       if (disposed || !focusKey) return;
@@ -2011,6 +2035,38 @@
     function scheduleToday() {
       if (state.mode === 'home') { global.scrollTo({ top: 0, behavior: 'instant' }); return; }
       return scheduleMove(global.HaedoLife.ScheduleData.today());
+    }
+    // The app stayed open over midnight (2026-11-11 M1). Checked when the page is shown again, on focus and
+    // right after midnight: a calendar screen is drawn again with the new day (scheduleRollover in navigate).
+    // While a control is in use or a choice is not stored yet it waits, so nothing typed or chosen is lost.
+    function scheduleInUse() {
+      if (state.busy || navigationRender !== null || historyWait || historyPending || document.querySelector('dialog[open]')) return true;
+      const active = document.activeElement;
+      if (active && root.contains(active) && (active.isContentEditable || active.matches('textarea,select,input:not([type=checkbox]):not([type=radio]):not([type=button])') && (active.type !== 'range' || active.matches(':active')))) return true;
+      return !!global.HaedoLife.ScheduleEntries?.unsaved?.();
+    }
+    function scheduleDayCheck() {
+      const sd = global.HaedoLife.ScheduleData;
+      if (disposed || !sd || !state.bundle || document.hidden || !scheduleDay || scheduleDay === sd.today()) return;
+      // Another screen shows no schedule date: only the kept date follows, for the next schedule screen.
+      if (!calendarModes.has(state.mode)) { scheduleRollover(); return; }
+      if (scheduleInUse()) {
+        if (!scheduleDayRetry) scheduleDayRetry = global.setTimeout(() => { scheduleDayRetry = null; scheduleDayCheck(); }, 1000);
+        return;
+      }
+      guarded(async () => {
+        const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
+        if (await navigate(state.mode, { preserveContext: true, historyAction: 'replace', navigationMotion: 'tab', restoresFocus: true, sectionPosition: { scrollY: global.scrollY } }) === false) return;
+        if (disposed || !focusKey) return;
+        [...root.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey && item.checkVisibility?.())?.focus({ preventScroll: true });
+      })();
+    }
+    // One timer to the next local midnight (a hidden page is checked when it is shown again).
+    function armScheduleDayTimer() {
+      if (scheduleDayTimer) global.clearTimeout(scheduleDayTimer);
+      if (disposed) return;
+      const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      scheduleDayTimer = global.setTimeout(() => { scheduleDayTimer = null; scheduleDayCheck(); armScheduleDayTimer(); }, Math.max(1000, next - now + 250));
     }
     // Links to the existing editors that own goals, habits and happiness (B1 shows no copy of their data).
     function scheduleLinks(items) {
@@ -6043,6 +6099,11 @@
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
+    scheduleDayWatch = () => scheduleDayCheck();
+    document.addEventListener('visibilitychange', scheduleDayWatch);
+    global.addEventListener('pageshow', scheduleDayWatch);
+    global.addEventListener('focus', scheduleDayWatch);
+    armScheduleDayTimer();
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
       if (event && event.type === 'error' && event.error) failure(event.error);
@@ -6072,6 +6133,11 @@
     state.mode = routeMode();
     if (state.mode === 'find') findSection = addressFindSection();
     syncHistoryPosition();
+    // An entry that showed today reopens on today (a tab the browser reloads on a later day), not on the day it was written.
+    if (calendarModes.has(state.mode)) {
+      const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
+      if (recorded?.mode === state.mode && recorded.scheduleToday === true && recorded.scheduleDate === state.scheduleDate) state.scheduleDate = null;
+    }
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit'; blogRoute = 'new'; blogComposing = true;
@@ -6278,6 +6344,8 @@
       cleanup(() => global.removeEventListener('beforeunload', beforeUnload));
       cleanup(() => document.removeEventListener('visibilitychange', visibility));
       cleanup(() => global.removeEventListener('pagehide', pagehideReading));
+      cleanup(() => { document.removeEventListener('visibilitychange', scheduleDayWatch); global.removeEventListener('pageshow', scheduleDayWatch); global.removeEventListener('focus', scheduleDayWatch); });
+      cleanup(() => { global.clearTimeout(scheduleDayTimer); global.clearTimeout(scheduleDayRetry); scheduleDayTimer = scheduleDayRetry = null; });
       downloadUrls.forEach(url => cleanup(() => URL.revokeObjectURL(url)));
       downloadUrls.clear();
       cleanup(() => signal?.removeEventListener('abort', dispose));
