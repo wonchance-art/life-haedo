@@ -66,6 +66,25 @@ async function bothOpen(a, b, server) {
 async function addMonth(page, date, text) {
   await page.locator('[data-ap-add-month="' + date + '"]').click(); await month(page, date).last().fill(text);
 }
+// Another tab of the same device stores a change computed from the stored plan (a patch for AnnualPlan.update).
+const otherTab = (page, source, argument) => page.evaluate(async ({ source, argument }) => {
+  const s = HaedoLife.Shell.storage, w = await s.getActive(), M = HaedoLife.AnnualPlan, old = await s.readAnnualPlan(w);
+  const next = M.update(old, new Function('plan', 'a', 'return (' + source + ')(plan, a)')(old, argument), { expectedRevision: old.revision });
+  if ((await s.saveAnnualPlan(w, next, old.revision)).status !== 'stored') throw Error('other tab fixture');
+}, { source: source.toString(), argument });
+const recoveryRows = page => page.evaluate(async () => {
+  const s = HaedoLife.Shell.storage, w = await s.getActive(), row = (await s.listAccountDocs()).find(item => item.prefix === 'annualPlan' && item.workspaceId === w);
+  return row ? (await s.listAccountDocRecoveries(row.key)).map(item => ({ reason: item.reason, value: item.value })) : [];
+});
+const saveLine = async page => (await page.locator('.ap-save-line').textContent()).replace(/\s+/g, ' ').trim();
+async function twoTabs(device) {
+  const { context, page } = await device('mac'), second = await context.newPage();
+  await open(page); await open(second); await page.bringToFront();
+  return { page, second, year: (await stored(page)).rows[0].year };
+}
+const hold = page => page.evaluate(() => { window.__holdAnnualSave = true; window.__annualSaveEntered = false; });
+const held = page => until(() => page.evaluate(() => window.__annualSaveEntered), Boolean, 'the save is in flight');
+const clean = page => until(() => page.evaluate(() => document.querySelector('.annual-plan').dataset.dirty), value => value === 'false', 'nothing unsaved');
 async function holdSaves(context) {
   await context.route(base + '/assets/life/storage.js', async route => {
     const response = await route.fetch();
@@ -240,6 +259,93 @@ async function main() {
       await until(() => texts(serverPlan(server)), value => value.rows.includes(year + ':저장 실패 중의 입력') && value.entries.includes(year + '-03-01:폰의 3월 계획'), 'the retry stores A\'s input on top of B\'s entry');
       await settled(a, 'A after the retry'); assert.equal(await a.locator('#apError').isVisible(), false); assert.equal(await a.locator('#apRetry').isVisible(), false);
       await quiet(b, 'B');
+    });
+
+    await check('the other side\'s text is stored as a recovery copy before the save that replaces it; if that copy cannot be stored, nothing is replaced', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device), date = year + '-03-01';
+      await otherTab(second, (plan, date) => ({ entries: [{ id: 'e-march', date, text: '3월 원문' }] }), date);
+      await until(() => month(page, date).count(), count => count === 1, 'the entry is shown'); await clean(page);
+      // This device cannot store recovery copies (and only those).
+      await page.evaluate(() => {
+        window.__apAdd = IDBObjectStore.prototype.add;
+        IDBObjectStore.prototype.add = function (...args) { const request = __apAdd.apply(this, args); if (this.name === 'meta' && typeof args[0]?.key === 'string' && args[0].key.startsWith('accountDocRecovery:')) this.transaction.abort(); return request; };
+      });
+      await hold(page); await month(page, date).fill('이 탭이 고친 3월'); await held(page);
+      await otherTab(second, plan => ({ entries: plan.entries.map(item => ({ ...item, text: '다른 탭이 고친 3월' })) }));
+      await page.evaluate(() => __annualSaveRelease());
+      await page.locator('#apRetry').waitFor({ state: 'visible' });
+      assert.equal(await saveLine(page), '저장하지 못함 · 다시 시도');
+      assert.equal((await stored(page)).entries[0].text, '다른 탭이 고친 3월', 'the other side\'s text was not replaced while its copy could not be stored');
+      assert.deepEqual(await recoveryRows(page), []);
+      assert.equal(await month(page, date).inputValue(), '이 탭이 고친 3월', 'this input is still on screen');
+      assert.match(await page.locator('#apKeptText').textContent(), /다른 탭이 고친 3월/, 'and the other side\'s text is readable here');
+      await page.evaluate(() => { IDBObjectStore.prototype.add = __apAdd; }); await page.locator('#apRetry').click();
+      await until(() => stored(page), plan => plan.entries[0].text === '이 탭이 고친 3월', 'the retry stores this input');
+      assert.deepEqual(await recoveryRows(page), [{ reason: 'merge_conflict', value: { items: [{ id: 'e-march', date, text: '다른 탭이 고친 3월' }] } }]);
+      await clean(page); assert.equal(await page.locator('#apError').isVisible(), false);
+    });
+
+    await check('an undo that ends because a plan arrived leaves what it could bring back as a recovery copy (deletion and restore)', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device);
+      await otherTab(second, (plan, year) => ({ rows: [{ year, text: '올해' }], entries: [{ id: 'e-march', date: year + '-03-01', text: '지울 3월 계획 원문' }, { id: 'e-may', date: year + '-05-01', text: '5월' }] }), year);
+      await until(() => month(page, year + '-03-01').count(), count => count === 1, 'the entries are shown'); await clean(page);
+      await page.locator('[data-ap-remove-entry="e-march"]').click(); await page.locator('#apConfirmation').getByRole('button', { name: '삭제', exact: true }).click();
+      await until(() => stored(page), plan => plan.entries.length === 1, 'the deletion is stored');
+      assert.equal(await page.locator('#apUndo button').textContent(), '삭제 되돌리기');
+      await otherTab(second, plan => ({ entries: plan.entries.map(item => item.id === 'e-may' ? { ...item, text: '다른 탭이 고친 5월' } : item) }));
+      await until(() => month(page, year + '-05-01').inputValue(), value => value === '다른 탭이 고친 5월', 'the other tab\'s change is shown');
+      assert.equal(await page.locator('#apUndo').isVisible(), false, 'the whole-plan undo would remove what arrived, so it ended');
+      await until(() => recoveryRows(page), rows => rows.length === 1, 'the deleted entry is kept on this device');
+      assert.deepEqual(await recoveryRows(page), [{ reason: 'undo_discarded', value: { items: [{ id: 'e-march', date: year + '-03-01', text: '지울 3월 계획 원문' }] } }]);
+      assert.equal(await page.locator('#apKept > summary').textContent(), '복구 사본 1개');
+      const shownText = await page.locator('#apKeptText').textContent(); assert.match(shownText, /되돌리기를 닫았습니다/); assert.match(shownText, /지울 3월 계획 원문/);
+      assert.deepEqual(texts(await stored(page)).entries, [year + '-05-01:다른 탭이 고친 5월']); await quiet(page, 'after the deletion\'s undo ended');
+      // A restore's undo holds the whole plan from before the restore.
+      await page.locator('#apKept > summary').click(); await page.locator('#apKeptClose').click(); await page.locator('#apSettings > summary').click();
+      const backup = await page.evaluate(async year => { const s = HaedoLife.Shell.storage, value = HaedoLife.AnnualPlan.exportBackup(await s.readAnnualPlan(await s.getActive())); value.plan.rows = [{ year, text: '백업에서 온 계획' }]; value.plan.entries = []; return value; }, year);
+      await page.locator('#apImport').setInputFiles({ name: 'synthetic-plan.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+      await page.locator('#apImportPreview').waitFor(); await page.locator('#apImportApply').click();
+      await until(() => stored(page), plan => plan.rows[0].text === '백업에서 온 계획' && plan.entries.length === 0, 'the restore is stored');
+      assert.equal(await page.locator('#apUndo button').textContent(), '적용 되돌리기');
+      await otherTab(second, (plan, year) => ({ entries: [{ id: 'e-july', date: year + '-07-01', text: '다른 탭의 7월' }] }), year);
+      await until(() => month(page, year + '-07-01').count(), count => count === 1, 'the other tab\'s entry is shown');
+      assert.equal(await page.locator('#apUndo').isVisible(), false);
+      await until(() => recoveryRows(page), rows => rows.length === 2, 'the plan from before the restore is kept');
+      const whole = (await recoveryRows(page))[1]; assert.equal(whole.reason, 'undo_discarded');
+      assert.deepEqual(texts(whole.value), { rows: [year + ':올해'], entries: [year + '-05-01:다른 탭이 고친 5월'] });
+      assert.match(await page.locator('#apKeptText').textContent(), /다른 탭이 고친 5월/); await quiet(page, 'after the restore\'s undo ended');
+    });
+
+    await check('one side\'s birthday basis meeting the other side\'s cleared birth date is settled as year basis; the other side\'s unrelated edit stays in the plan', async ({ device }) => {
+      const { page, second, year } = await twoTabs(device), date = year + '-03-01';
+      await otherTab(second, (plan, a) => ({ birthDate: '1990-07-15', rows: [{ year: a.year, text: '올해 원문' }], entries: [{ id: 'e-march', date: a.date, text: '3월 원문' }] }), { year, date });
+      await until(() => month(page, date).count(), count => count === 1, 'the entry is shown'); await clean(page);
+      await page.locator('#apSettings > summary').click(); await hold(page);
+      await page.locator('#apBasis').selectOption('birthday'); await held(page);
+      await otherTab(second, plan => ({ birthDate: '', basis: 'year', entries: plan.entries.map(item => ({ ...item, text: '다른 탭이 고친 3월' })) }));
+      await page.evaluate(() => __annualSaveRelease());
+      await until(() => page.locator('[data-ap-entry="e-march"]').inputValue(), value => value === '다른 탭이 고친 3월', 'the other tab\'s unrelated edit is in this plan');
+      await clean(page);
+      const plan = await stored(page);
+      assert.deepEqual({ birthDate: plan.birthDate, basis: plan.basis, ...texts(plan) }, { birthDate: '', basis: 'year', rows: [year + ':올해 원문'], entries: [date + ':다른 탭이 고친 3월'] });
+      assert.equal(await page.locator('#apBasis').inputValue(), 'year'); assert.equal(await page.locator('#apBirthDate').inputValue(), '');
+      assert.equal(await page.locator('#apKept').isVisible(), false, 'nothing had to be set aside'); assert.deepEqual(await recoveryRows(page), []); await quiet(page, 'after the settings met');
+    });
+
+    await check('two plans that together pass the year limit: this plan stays whole, the other plan is kept whole and the note says so', async ({ device }) => {
+      const { page, second } = await twoTabs(device);
+      await otherTab(second, () => ({ rows: Array.from({ length: 199 }, (_, n) => ({ year: 2000 + n, text: '' })), entries: [] }));
+      await until(() => page.locator('[data-ap-annual]').count(), count => count === 199, '199 years are shown'); await clean(page);
+      // Held before the year is added, so the other tab still sees 199 years.
+      await hold(page); await page.locator('#apAddYear').click(); await annual(page, 2199).fill('이 탭의 200번째 연도'); await held(page);
+      await otherTab(second, plan => ({ rows: [{ year: 1999, text: '다른 탭의 200번째 연도' }, ...plan.rows] }));
+      await page.evaluate(() => __annualSaveRelease());
+      await until(() => stored(page), plan => plan.rows.some(row => row.year === 2199 && row.text === '이 탭의 200번째 연도'), 'this plan is stored');
+      const plan = await stored(page); assert.equal(plan.rows.length, 200); assert.equal(plan.rows.some(row => row.year === 1999), false, 'the two plans could not be stored together');
+      const rows = await recoveryRows(page); assert.equal(rows.length, 1); assert.equal(rows[0].reason, 'conflict_remote');
+      assert.equal(rows[0].value.rows.length, 200); assert.deepEqual(rows[0].value.rows[0], { year: 1999, text: '다른 탭의 200번째 연도' }, 'the other plan is kept whole');
+      const note = await page.locator('#apKeptText').textContent(); assert.match(note, /보관 한도를 넘어/); assert.match(note, /다른 탭의 200번째 연도/); assert.doesNotMatch(note, /같은 칸을/);
+      await quiet(page, 'after the limit');
     });
   } finally {
     await browser.close(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');

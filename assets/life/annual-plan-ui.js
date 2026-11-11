@@ -390,40 +390,68 @@
       let next = theirs, lost = [];
       if (!equal(before, base) && !equal(before, theirs)) {
         const merged = root.HaedoLife.AccountDocsSync?.mergeDocument('annualPlan', base, before, theirs, true);
-        next = before; lost = [{ plan: theirs }];
+        next = before; lost = [{ why: 'plan', plan: theirs }];
         if (merged) try {
-          // The merged plan must be storable (both sides adding years can pass the limits).
-          next = payload(model().update(latest, payload(merged.value), { expectedRevision: latest.revision })); lost = merged.lost.map(item => ({ item }));
-        } catch (_) { next = before; /* Not storable: this input stays whole and the other plan is kept whole. */ }
+          const plan = payload(merged.value);
+          // Settings merge one by one, so one side's birthday basis can meet the other side's cleared birth
+          // date. As when the date is cleared on this screen, the plan then goes by calendar year.
+          if (plan.basis === 'birthday' && !plan.birthDate) plan.basis = 'year';
+          next = payload(model().update(latest, plan, { expectedRevision: latest.revision })); lost = merged.lost.map(item => ({ why: 'field', item }));
+        } catch (_) { next = before; /* Above a storage limit together: this plan stays whole and the other plan is kept whole. */ }
       }
       // A composition that has not reached the plan yet still owns its field.
       for (const input of composing) {
         const item = input.dataset.apAnnual ? next.rows.find(row => String(row.year) === input.dataset.apAnnual) : next.entries.find(entry => entry.id === input.dataset.apEntry);
-        if (item && item.text !== input.value) { lost.push({ item: copy(item) }); item.text = input.value; }
+        if (item && item.text !== input.value) { lost.push({ why: 'field', item: copy(item) }); item.text = input.value; }
+      }
+      if (slot.undo && !equal(next, before)) {
+        // A whole-plan undo from before this arrival would remove what just arrived, so it ends here.
+        // What only that undo could still bring back is kept as a recovery copy.
+        const gone = slot.undoLabel === '적용 되돌리기' ? [{ why: 'undo', plan: slot.undo }]
+          : [...slot.undo.rows.filter(row => row.text && !next.rows.some(other => other.year === row.year)),
+            ...slot.undo.entries.filter(entry => !next.entries.some(other => other.id === entry.id))].map(item => ({ why: 'undo', item }));
+        if (gone.length) lost.push(...gone);
+        slot.undo = null; drawUndo();
       }
       slot.saved = latest; slot.draft = next;
       if (lost.length) { slot.recovery.push(...lost); slot.kept.push(...lost); }
-      if (!equal(next, before)) { slot.undo = null; drawUndo(); }   // An older whole-plan undo would remove what just arrived.
       syncSettings(before); drawGrid(); drawKept(); readAccountState();
+      // Stored now when no save follows (nothing unsaved). A failure keeps them listed here and the next save tries again.
+      if (lost.length) keepRecovery(slot).catch(() => {});
       schedule();   // Merged input is saved on top of the plan just taken (not while composing or after a real failure).
     }
     // Recovery copies go where the account sync keeps its own (bounded per document, on this device).
-    async function keepRecovery(slot) {
-      const key = accountDocKey();
-      while (key && slot.recovery.length) {
-        const batch = slot.recovery.slice(), items = batch.filter(row => row.item).map(row => row.item);
-        for (const row of batch) if (row.plan) await storage.saveAccountDocRecovery(key, row.plan, 'conflict_remote');
-        if (items.length) await storage.saveAccountDocRecovery(key, { items }, 'merge_conflict');
-        slot.recovery.splice(0, batch.length);
-      }
+    // One writer at a time; a copy leaves the list only after it is stored.
+    function keepRecovery(slot) {
+      const run = (slot.keeping || Promise.resolve()).catch(() => {}).then(async () => {
+        const key = accountDocKey();
+        while (key && slot.recovery.length) {
+          const batch = slot.recovery.slice();
+          for (const why of ['field', 'undo']) {
+            const items = batch.filter(row => row.why === why && row.item).map(row => row.item);
+            if (items.length) await storage.saveAccountDocRecovery(key, { items }, why === 'undo' ? 'undo_discarded' : 'merge_conflict');
+          }
+          for (const row of batch) if (row.plan) await storage.saveAccountDocRecovery(key, row.plan, row.why === 'undo' ? 'undo_discarded' : 'conflict_remote');
+          slot.recovery.splice(0, batch.length);
+        }
+      });
+      slot.keeping = run; return run;
     }
+    const KEPT_NOTES = [
+      ['field', '같은 칸을 다른 탭이나 기기에서도 고쳤습니다. 이 화면의 입력을 남겼고, 다른 쪽 내용은 아래에 있습니다.'],
+      ['plan', '두 쪽의 계획을 합친 결과가 보관 한도를 넘어 저장할 수 없습니다. 이 화면의 계획을 남겼고, 다른 쪽 계획 전체는 아래에 있습니다.'],
+      ['undo', '다른 탭이나 기기의 변경을 받으면서 되돌리기를 닫았습니다. 되돌릴 수 있던 내용은 아래에 있습니다.']];
     const keptText = row => row.plan ? latestText(row.plan) : (Object.hasOwn(row.item, 'year') ? row.item.year + '년 연간 계획' : row.item.date) + '\n' + row.item.text;
     function drawKept() {
       if (!surface) return;
-      const host = surface.querySelector('#apKept'), list = current.kept; host.hidden = !list.length;
+      const host = surface.querySelector('#apKept'), list = current.kept, body = host.querySelector('#apKeptText'); host.hidden = !list.length;
+      body.replaceChildren();
       if (!list.length) { host.open = false; return; }
       host.querySelector('summary').textContent = '복구 사본 ' + list.length + '개';
-      host.querySelector('#apKeptText').textContent = list.map(keptText).join('\n\n');
+      for (const [why, note] of KEPT_NOTES) {
+        const rows = list.filter(row => row.why === why); if (!rows.length) continue;
+        body.append(node('p', note, 'ap-meta'), node('pre', rows.map(keptText).join('\n\n'), 'ap-copy-text'));
+      }
     }
     async function refresh() {
       if (!inScope() || !current?.saved) return;
@@ -500,11 +528,10 @@
       saveLine.append(saveStatus, ' ', retry);
       toolbar.append(button('다음 연도', 'apAddYear', () => addYear(nextYear())), saveLine); surface.append(toolbar);
       const recovery = node('div', null, 'ap-recovery'), error = node('p', '', 'ap-error'); error.id = 'apError'; error.setAttribute('role', 'alert'); error.hidden = true;
-      // The same field changed here and elsewhere: this input stayed, the other version is listed here.
+      // What an arriving plan could not keep in the plan itself (see rebase), readable here.
       const kept = node('details', null, 'ap-kept'); kept.id = 'apKept'; kept.hidden = true; kept.append(node('summary', '복구 사본'));
-      const keptContent = node('pre', '', 'ap-copy-text'); keptContent.id = 'apKeptText';
-      kept.append(node('p', '같은 칸을 다른 탭이나 기기에서도 고쳤습니다. 이 화면의 입력을 남겼고, 다른 쪽 내용은 아래에 있습니다.', 'ap-meta'), keptContent,
-        button('닫기', 'apKeptClose', () => { current.kept = []; drawKept(); }));
+      const keptContent = node('div'); keptContent.id = 'apKeptText';
+      kept.append(keptContent, button('닫기', 'apKeptClose', () => { current.kept = []; drawKept(); }));
       recovery.append(error, kept); surface.append(recovery);
       const confirm = node('div', null, 'ap-confirm'); confirm.id = 'apConfirmation'; confirm.hidden = true; confirm.setAttribute('role', 'group'); confirm.setAttribute('aria-label', '계획 삭제 확인'); surface.append(confirm);
       const undo = node('div'); undo.id = 'apUndo'; undo.hidden = true; surface.append(undo);
@@ -547,7 +574,7 @@
       const nextWorkspace = getBundle()?.workspaceId; if (!nextWorkspace) return;
       const token = ++generation; active = true; workspaceId = nextWorkspace; composing.clear(); unsubscribe?.(); unsubscribe = null; unwatchEngine(); engineLooks = 0;
       current = sessions.get(workspaceId);
-      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', recovery: [], kept: [], redraw: false, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
+      if (!current) { current = { saved: null, draft: null, editRevision: 0, error: '', recovery: [], kept: [], keeping: null, redraw: false, reading: true, settingsOpen: false, imported: null, importSequence: 0, importError: '', undo: null, confirm: null, account: null }; sessions.set(workspaceId, current); }
       const slot = current;
       if (!slot.saved) {
         const loading = node('p', '연간 계획을 불러옵니다.', 'ap-meta'); container.replaceChildren(loading);
