@@ -7,6 +7,9 @@
 })(globalThis, function () {
   'use strict';
   const MAX_BYTES = 32 * 1024, MAX_INTERESTS = 40, MAX_SOURCES = 100;
+  // 기사 이미지 보기: the list asks each publisher's server for article images only when this is on.
+  // The one place that sets what an account sees before it has chosen (2026-11-11: off).
+  const DEFAULT_SHOW_IMAGES = false;
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
   const copy = value => structuredClone(value);
@@ -17,11 +20,13 @@
   function fields(value, allowed) { check(plain(value) && Object.keys(value).every(key => allowed.includes(key))); }
   function ids(value, max) { check(Array.isArray(value) && value.length <= max && Array.from(value).every(id) && new Set(value).size === value.length); }
   function validate(settings) {
-    fields(settings, ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'autoRefresh', 'disabledInterestIds', 'disabledSourceIds']);
+    fields(settings, ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'autoRefresh', 'disabledInterestIds', 'disabledSourceIds', 'showImages']);
+    // Optional: absent until the account chooses, so settings saved before this option keep their exact shape.
+    check(settings.showImages === undefined || typeof settings.showImages === 'boolean');
     check(settings.schemaVersion === 1 && id(settings.workspaceId) && Number.isSafeInteger(settings.revision) && settings.revision >= 0 && typeof settings.deleted === 'boolean' && typeof settings.autoRefresh === 'boolean');
     check(settings.revision === 0 ? settings.updatedAt === null && !settings.deleted : timestamp(settings.updatedAt));
     ids(settings.disabledInterestIds, MAX_INTERESTS); ids(settings.disabledSourceIds, MAX_SOURCES);
-    if (settings.deleted || settings.revision === 0) check(!settings.autoRefresh && settings.disabledInterestIds.length === 0 && settings.disabledSourceIds.length === 0);
+    if (settings.deleted || settings.revision === 0) check(!settings.autoRefresh && settings.disabledInterestIds.length === 0 && settings.disabledSourceIds.length === 0 && settings.showImages === undefined);
     check(new TextEncoder().encode(JSON.stringify(settings)).length < MAX_BYTES, 'discovery_settings_too_large');
     return true;
   }
@@ -37,13 +42,14 @@
     return { ...copy(current), revision: current.revision + 1, deleted: false, updatedAt };
   }
   function update(current, patch, options = {}) {
-    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds']);
+    fields(patch, ['autoRefresh', 'disabledInterestIds', 'disabledSourceIds', 'showImages']);
     const result = next(current, options);
     for (const key of Object.keys(patch)) result[key] = copy(patch[key]);
     validate(result); return result;
   }
   function clear(current, options = {}) {
     const result = { ...next(current, options), deleted: true, autoRefresh: false, disabledInterestIds: [], disabledSourceIds: [] };
+    delete result.showImages;
     validate(result); return result;
   }
   // These helpers only project explicit selections. Unknown disabled IDs are retained
@@ -62,5 +68,6 @@
     result.articles = result.articles.filter(article => !disabled.has(article.sourceId));
     return result;
   }
-  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, empty, validate, update, clear, effectiveProfile, filterFeed });
+  function showImages(settings) { return typeof settings?.showImages === 'boolean' ? settings.showImages : DEFAULT_SHOW_IMAGES; }
+  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, showImages, empty, validate, update, clear, effectiveProfile, filterFeed });
 });

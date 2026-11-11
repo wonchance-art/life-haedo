@@ -105,11 +105,11 @@
     const c = session.conditions;
     fields(c, ['contentLanguages', 'translationTarget', 'manual', 'sourceIds', 'knownUrlCount', 'feedbackCount', 'profileRevision', 'feedbackRevision', 'actionsRevision', 'personalAllowed', 'personalOptIn', 'baselineMode']);
     check(c.contentLanguages === null || Array.isArray(c.contentLanguages)); dep('Discovery').languageAllowed(null, c.contentLanguages);
-    check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(c.translationTarget)); manual(c.manual); ids(c.sourceIds, 20);
+    check(dep('DiscoveryLanguageSettings').TRANSLATION_TARGET_CODES.includes(c.translationTarget)); manual(c.manual); ids(c.sourceIds, limits().sources);
     check(c.sourceIds.every(value => Object.hasOwn(dep('Discovery').ALLOWED_SOURCES, value)) && integer(c.knownUrlCount) && c.knownUrlCount <= 500 && integer(c.feedbackCount) && c.feedbackCount <= 500);
     for (const key of ['profileRevision', 'feedbackRevision', 'actionsRevision']) check(c[key] === null || integer(c[key]));
     check(typeof c.personalAllowed === 'boolean' && typeof c.personalOptIn === 'boolean' && ['latest', 'related'].includes(c.baselineMode));
-    array(session.sources, 20);
+    array(session.sources, limits().sources);
     for (const source of session.sources) { fields(source, ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'status', 'lastSuccessAt', 'lastAttemptAt', 'error', 'freshnessMaxAgeDays', 'stale']); fields(source.rights, ['label', 'url', 'mode']); }
     dep('Discovery').validateFeed({ schemaVersion: 1, generatedAt: session.generatedAt, sources: session.sources, articles: [] }, { now: session.createdAt });
     check(JSON.stringify(session.sources.map(source => source.id)) === JSON.stringify(c.sourceIds));
@@ -166,15 +166,17 @@
     return { ...copy(profile), revision: profile.revision + 1, deleted: false, updatedAt: options.now };
   }
   function finish(value) { validate(value); return value; }
+  // The comparison holds the catalog's own bounds (sources and candidate articles), not a smaller copy of them.
+  const limits = () => dep('Discovery').LIMITS;
   function projectedInput(input, workspaceId, now) {
     tree(input); fields(input, ['feed', 'profile', 'feedback', 'knownUrls', 'contentLanguages', 'actions', 'translationTarget', 'personalAllowed'], ['baselineMode']);
     fields(input.feed, ['schemaVersion', 'generatedAt', 'sources', 'articles'], ['stale', 'validation']);
-    array(input.feed.sources, 20); array(input.feed.articles, 500);
+    array(input.feed.sources, limits().sources); array(input.feed.articles, limits().articles);
     for (const source of input.feed.sources) { fields(source, ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'status', 'lastSuccessAt', 'lastAttemptAt', 'error', 'stale'], ['freshnessMaxAgeDays']); fields(source.rights, ['label', 'url', 'mode']); }
     for (const article of input.feed.articles) { fields(article, ['id', 'sourceId', 'url', 'title', 'author', 'language', 'publishedAt', 'fetchedAt', 'coverage', 'summary', 'rights'], ['canonicalUrl', 'tags', 'updatedAt', 'dateStatus', 'dateBasis', 'sortDate', 'bodyText']); fields(article.rights, ['label', 'url', 'mode']); }
     if (Object.hasOwn(input.feed, 'validation')) {
-      fields(input.feed.validation, ['invalid', 'suppliedArticles']); array(input.feed.validation.invalid, 500);
-      check(integer(input.feed.validation.suppliedArticles) && input.feed.validation.suppliedArticles <= 500);
+      fields(input.feed.validation, ['invalid', 'suppliedArticles']); array(input.feed.validation.invalid, limits().articles);
+      check(integer(input.feed.validation.suppliedArticles) && input.feed.validation.suppliedArticles <= limits().articles);
       for (const row of input.feed.validation.invalid) { fields(row, ['id', 'reason']); check((row.id === null || id(row.id)) && row.reason === 'invalid_article'); }
     }
     const feed = dep('Discovery').validateFeed(input.feed, { now });

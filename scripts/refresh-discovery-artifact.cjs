@@ -34,6 +34,14 @@ const PREVIOUS_RESEARCH_SOURCE_IDS = Object.freeze([...PREVIOUS_SOURCE_IDS, 'arx
 // Exact eight-source publication before Frontiers. Like the older registries,
 // this is a seed-only upgrade path, never a collected/installable catalog.
 const PREVIOUS_LLT_SOURCE_IDS = Object.freeze([...PREVIOUS_RESEARCH_SOURCE_IDS, 'llt-journal'].sort());
+// The first registry (nine sources), frozen on 2026-11-11. Browser validators shipped until then
+// reject a catalog whose `sources` lists any other id, so `sources`/`articles` keep exactly this
+// registry and every later source is published in `extended`. A nine-source publication without
+// `extended` is the seed-only upgrade path to the current catalog.
+const LEGACY_SOURCE_IDS = Object.freeze([...Discovery.LEGACY_SOURCE_IDS].sort());
+const EXTENDED_SOURCE_IDS = Object.freeze([...Discovery.EXTENDED_SOURCE_IDS].sort());
+// Both parts of a catalog read as one list.
+const parts = catalog => ({ sources: [...catalog.sources, ...(catalog.extended?.sources || [])], articles: [...catalog.articles, ...(catalog.extended?.articles || [])] });
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -81,25 +89,34 @@ function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   assert(Buffer.isBuffer(bytes) && bytes.length <= MAX_BYTES, 'Public catalog exceeds the size limit.');
   const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   const checked = Discovery.validateFeed(raw, { now }); // Never inject an external allowlist.
-  const sourceIds = Object.keys(Discovery.ALLOWED_SOURCES).sort();
-  const suppliedIds = raw.sources.map(source => source.id).sort();
-  assert(same(suppliedIds, sourceIds) || previousSeed &&
+  const suppliedIds = raw.sources.map(source => source.id).sort(), all = parts(raw);
+  // `sources` is the frozen first registry. An earlier, smaller registry is accepted only as a seed.
+  assert(same(suppliedIds, LEGACY_SOURCE_IDS) || previousSeed && raw.extended === undefined &&
     [PREVIOUS_SOURCE_IDS, PREVIOUS_RESEARCH_SOURCE_IDS, PREVIOUS_LLT_SOURCE_IDS].some(ids => same(suppliedIds, ids)), 'The approved source set changed.');
+  // A current catalog carries every later source in `extended`; only a seed may predate that part.
+  assert(raw.extended === undefined ? previousSeed : same(raw.extended.sources.map(source => source.id).sort(), EXTENDED_SOURCE_IDS), 'The approved source set changed.');
+  assert(raw.sources.length <= Discovery.LIMITS.legacySources && raw.articles.length <= Discovery.LIMITS.legacyArticles &&
+    raw.articles.every(article => suppliedIds.includes(article.sourceId)) &&
+    (raw.extended?.articles || []).every(article => EXTENDED_SOURCE_IDS.includes(article.sourceId)), 'An article is published in the wrong part of the catalog.');
   assert(Date.parse(raw.generatedAt) <= now, 'Public catalog generation time is in the future.');
-  assert(checked.validation.invalid.length === 0 && checked.articles.length === raw.articles.length && raw.articles.length > 0,
+  assert(checked.validation.invalid.length === 0 && checked.articles.length === all.articles.length && all.articles.length > 0,
     'Public catalog contains rejected or missing articles.');
-  for (const source of raw.sources) {
+  for (const source of all.sources) {
     assert(source.rights.mode === 'metadata_only', 'Only reviewed public metadata is allowed.');
     for (const field of ['lastSuccessAt', 'lastAttemptAt']) {
       assert(source[field] === null || Date.parse(source[field]) <= now, 'Public source receipt is in the future.');
     }
     assert(source.fetchedAt === undefined || source.fetchedAt === source.lastSuccessAt, 'Source fetch/success receipt mismatch.');
   }
-  for (const article of raw.articles) {
+  const images = new Map(checked.articles.map(article => [article.id, article.imageUrl]));
+  for (const article of all.articles) {
     assert(article.coverage === 'link_only' && article.rights.mode === 'metadata_only' && article.summary === '' &&
       !Object.hasOwn(article, 'bodyText') && !Object.hasOwn(article, 'description') && !Object.hasOwn(article, 'content'),
     'Article content exceeds the reviewed metadata scope.');
     assert(Date.parse(article.fetchedAt) <= now, 'Article fetch receipt is in the future.');
+    // An image is a link the source's own feed named, on that source's registered image host. Nothing else is published.
+    assert(!Object.hasOwn(article, 'imageUrl') || typeof article.imageUrl === 'string' && images.get(article.id) === article.imageUrl,
+      'Article image address is outside the reviewed image hosts.');
   }
   // Publisher dates marked future remain metadata; they are not fetch receipts
   // and the existing Core excludes them from publication-date ranking.
@@ -184,7 +201,8 @@ function runUpdater({ root, candidate, report }) {
   return child.status;
 }
 
-function checkCollection(seed, next, report, exitCode) {
+function checkCollection(seedCatalog, nextCatalog, report, exitCode) {
+  const seed = { generatedAt: seedCatalog.generatedAt, ...parts(seedCatalog) }, next = { generatedAt: nextCatalog.generatedAt, ...parts(nextCatalog) };
   const successes = next.sources.filter(source => source.status === 'ok').length;
   assert((exitCode === 0 || exitCode === 2) && successes > 0 && report.okSources === successes &&
     report.sourceCount === next.sources.length && report.articleCount === next.articles.length,
@@ -232,8 +250,8 @@ async function collect(options = {}) {
     checkCollection(seed, next, report, exitCode);
     assert(sha(readBounded(f.tracked)) === trackedSHA256, 'Tracked public catalog was modified.');
     Object.assign(outcome, { status: 'collected', candidateSHA256: sha(candidateBytes), generatedAt: next.generatedAt,
-      okSources: report.okSources, sourceCount: report.sourceCount, articleCount: next.articles.length,
-      partialFailure: exitCode === 2, sources: next.sources.map(source => ({ id: source.id, status: source.status,
+      okSources: report.okSources, sourceCount: report.sourceCount, articleCount: parts(next).articles.length,
+      partialFailure: exitCode === 2, sources: parts(next).sources.map(source => ({ id: source.id, status: source.status,
         lastSuccessAt: source.lastSuccessAt, lastAttemptAt: source.lastAttemptAt, stale: source.stale, error: source.error })) });
     writeJSON(f.outcome, outcome); return outcome;
   } catch (error) {
