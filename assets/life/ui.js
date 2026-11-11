@@ -133,7 +133,7 @@
     let beforeUnload = null, visibility = null, pagehideReading = null;
     let unsubscribe = null;
     let unsubscribeSync = null;
-    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, unlinkedAdoption = null;
+    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, libraryReading = null, libraryAgain = false, unlinkedAdoption = null;
     let workspaceListRefresh = 0, workspaceListApplied = 0;
     const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
@@ -246,11 +246,11 @@
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', recordKind: 'all', originFilter: '', folderFilter: 'all', returnContext: null, suppressReaderResume: false, sourceId: null,
-      sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicFilterSearch: '',
+      sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicRecovery: false, topicFilterSearch: '',
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], sourceEditStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(), readerModes: new Map(),
-      syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
+      syncAccount: null, syncState: null, syncNotice: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
       sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
@@ -835,6 +835,10 @@
     function sourceFor(sourceId) { return state.bundle.sources.find(s => s.id === sourceId); }
     function activeSource(sourceId) { return core.isSourceActive(state.bundle, sourceId); }
     function activeRecord(record) { return !record.sourceRefs.length || record.sourceRefs.some(ref => activeSource(ref.sourceId)); }
+    // Kept by a merge of two devices' edits (SyncCommon.mergeWorkspace): an excerpt whose topic
+    // starts with 복구 사본, and the rows that hold a source's losing title or file path.
+    function recoveryCopy(record) { return typeof record.topic === 'string' && record.topic.startsWith('복구 사본'); }
+    function previousKind(link) { return link.kind === 'source_previous_title' || link.kind === 'source_previous_key'; }
 
     function dirty() { return !!state.stage && state.editTick !== state.savedTick; }
 
@@ -1274,18 +1278,29 @@
       if (syncStatus) syncStatus.textContent = presentation.label;
     }
 
-    async function refreshLibrary() {
-      if (!managedLibrary || disposed) return;
-      const sequence = ++libraryRefresh, workspaceId = state.bundle?.workspaceId;
-      try {
-        const next = await accountLibrary.getState(workspaceId);
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = next;
-      } catch (cause) {
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } };
-      }
-      updateLibraryStatus();
+    // One state read at a time. Events that arrive while it runs ask for one more read after it;
+    // the finished read is shown meanwhile. (Before, every event started its own read and
+    // discarded the ones before it: with a library of megabytes a read takes longer than the
+    // events are apart while a pass runs, so the band kept an old state — "확인 필요" from a
+    // connection error long gone — and never offered the comparison that was waiting.)
+    function refreshLibrary() {
+      if (!managedLibrary || disposed) return Promise.resolve();
+      if (libraryReading) { libraryAgain = true; return libraryReading; }
+      const scope = libraryRefresh;
+      const reading = libraryReading = (async () => {
+        do {
+          libraryAgain = false;
+          const workspaceId = state.bundle?.workspaceId;
+          let next;
+          try { next = await accountLibrary.getState(workspaceId); }
+          catch (cause) { next = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } }; }
+          if (disposed || scope !== libraryRefresh) return;
+          // Another workspace was opened meanwhile: this state is not its state; read again.
+          if (workspaceId !== state.bundle?.workspaceId) { libraryAgain = true; continue; }
+          libraryState = next; updateLibraryStatus();
+        } while (libraryAgain);
+      })().finally(() => { if (libraryReading === reading) libraryReading = null; });
+      return reading;
     }
 
     async function refreshWorkspaceList() {
@@ -1360,6 +1375,10 @@
         state.syncAccount = account;
         const info = await sync.getState(workspaceId);
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
+        const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
+        if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        state.syncNotice = notice;
         state.syncState = info;
         state.syncWorkspaceId = workspaceId;
         state.syncReadError = null;
@@ -1443,6 +1462,8 @@
         }
       });
       if (sync) {
+        // state.syncNotice stays: it is shown only for the workspace it was read for (mergeNotice),
+        // so a re-mount of the same workspace does not blink it away until the next read.
         state.syncState = null;
         state.syncReadError = null;
         state.syncLoading = true;
@@ -3437,7 +3458,7 @@
       relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
-      state.topicUnassigned = false;
+      state.topicUnassigned = state.topicRecovery = false;
       state.topicFilterSearch = '';
       state.returnContext = null;
       state.suppressReaderResume = false;
@@ -3832,7 +3853,7 @@
       topicSearch.input.maxLength = 500;
       topicSearch.label.hidden = topicNames.length < 9 && !state.topicFilterSearch;
       const clearFilter = button('필터 해제', () => {
-        state.topic = ''; state.topicUnassigned = false; state.topicFilterSearch = '';
+        state.topic = ''; state.topicUnassigned = state.topicRecovery = false; state.topicFilterSearch = '';
         topicSearch.input.value = '';
         update();
         topics.querySelector('[data-topic-kind="all"]')?.focus({ preventScroll: true });
@@ -3840,7 +3861,7 @@
       clearFilter.id = 'lifeTopicFilterClear';
       const reset = () => {
         state.topic = state.topicsSearch = state.topicFilterSearch = '';
-        state.topicUnassigned = false;
+        state.topicUnassigned = state.topicRecovery = false;
         render();
         main.querySelector('#lifeSearch')?.focus({ preventScroll: true });
       };
@@ -3853,7 +3874,7 @@
         const makeFilter = (label, kind, name, total, selected) => {
           const item = button(null, () => {
             state.topic = kind === 'named' ? name : '';
-            state.topicUnassigned = kind === 'unassigned';
+            state.topicUnassigned = kind === 'unassigned'; state.topicRecovery = kind === 'recovery';
             update();
           });
           Object.assign(item.dataset, { topicKind: kind, topicName: name || '' });
@@ -3865,17 +3886,21 @@
           item.append(node('span', label), badge);
           topics.append(item);
         };
-        makeFilter('모든 주제', 'all', '', searched.length, !state.topic && !state.topicUnassigned);
+        makeFilter('모든 주제', 'all', '', searched.length, !state.topic && !state.topicUnassigned && !state.topicRecovery);
         makeFilter('주제 없음', 'unassigned', '', counts.get('') || 0, state.topicUnassigned);
+        // Excerpts a merge kept because another device's later edit won (topic 복구 사본 · …): one
+        // filter for all of them, on every device, shown while there are any.
+        const recovered = searched.filter(recoveryCopy).length;
+        if (recovered || state.topicRecovery) makeFilter('복구 사본', 'recovery', '', recovered, state.topicRecovery);
         const matchedNames = topicNames.filter(name => matchingText(name, state.topicFilterSearch));
-        matchedNames.forEach(name => makeFilter(['모든 주제', '주제 없음'].includes(name) ? '주제 이름: ' + name : name, 'named', name, counts.get(name) || 0, !state.topicUnassigned && state.topic === name));
+        matchedNames.forEach(name => makeFilter(['모든 주제', '주제 없음', '복구 사본'].includes(name) ? '주제 이름: ' + name : name, 'named', name, counts.get(name) || 0, !state.topicUnassigned && !state.topicRecovery && state.topic === name));
         if (state.topicFilterSearch.trim() && !matchedNames.length) topics.append(node('p', '일치하는 주제 이름이 없습니다. 이름 검색을 지우거나 모든 주제를 선택하세요.', 'life-help'));
-        clearFilter.hidden = !state.topic && !state.topicUnassigned && !state.topicFilterSearch;
-        const records = searched.filter(record => state.topicUnassigned ? !record.topic : !state.topic || record.topic === state.topic);
-        count.textContent = '발췌 ' + records.length + '개' + (state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
+        clearFilter.hidden = !state.topic && !state.topicUnassigned && !state.topicRecovery && !state.topicFilterSearch;
+        const records = searched.filter(record => state.topicRecovery ? recoveryCopy(record) : state.topicUnassigned ? !record.topic : !state.topic || record.topic === state.topic);
+        count.textContent = '발췌 ' + records.length + '개' + (state.topicRecovery ? ' · 복구 사본' : state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
         results.replaceChildren();
         records.forEach(record => results.append(excerptCard(record)));
-        if (!records.length && !state.bundle.records.some(activeRecord) && state.bundle.sources.some(source => activeSource(source.id)) && !state.topic && !state.topicUnassigned) {
+        if (!records.length && !state.bundle.records.some(activeRecord) && state.bundle.sources.some(source => activeSource(source.id)) && !state.topic && !state.topicUnassigned && !state.topicRecovery) {
           const sources = state.bundle.sources.filter(source => activeSource(source.id)).slice().reverse().map(source => ({ source, version: state.bundle.sourceVersions.filter(version => version.sourceId === source.id).at(-1) }))
             .filter(({ source, version }) => version && matchingText(sourceLabel(source) + ' ' + (version.contentText || ''), state.topicsSearch));
           count.textContent = '자료 ' + sources.length + '개';
@@ -3883,7 +3908,7 @@
           if (!sources.length) results.append(empty('조건에 맞는 자료가 없습니다.'), button('검색·필터 초기화', reset));
         } else if (!records.length) {
           const box = node('div', null, 'life-empty-state');
-          if (state.topicsSearch || state.topic || state.topicUnassigned) {
+          if (state.topicsSearch || state.topic || state.topicUnassigned || state.topicRecovery) {
             box.append(empty('조건에 맞는 발췌가 없습니다. 검색과 주제 조건을 지워 다시 찾아보세요.'), button('검색·필터 초기화', reset));
           } else {
             box.append(empty('아직 모아 둔 발췌가 없습니다. 보관한 원문에서 필요한 구절을 선택해 모아보세요.'));
@@ -4637,6 +4662,12 @@
       article.append(dock, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (writtenLabel(version.originalCreatedAt) || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
+      // Both devices changed this source and the other edit won: what this device called it then.
+      for (const kept of state.bundle.links) {
+        if (!previousKind(kept) || kept.sourceRefs?.[0]?.sourceVersionId !== version.id || !kept.note) continue;
+        const line = node('p', (kept.kind === 'source_previous_title' ? '이 버전을 보관한 기기에서의 제목: ' : '이 버전을 보관한 기기에서의 파일 경로: ') + kept.note, 'life-reader-meta');
+        line.dataset.previous = kept.kind; article.append(line);
+      }
       // One row for the exact version (and when it was kept) and moving between list matches.
       const versionRow = node('div', null, 'life-reader-version-row'); versionRow.id = 'lifeReaderVersionRow';
       article.append(versionRow);
@@ -6081,12 +6112,69 @@
       return details;
     }
 
+    // Both devices' changes were merged by themselves. Only when both had changed the same item is
+    // there something to find, and each line leads to it: the earlier body is a previous version
+    // of that source, the earlier excerpt a separate excerpt whose topic starts with 복구 사본.
+    // The version of a source that the other device last saved before the later edit won.
+    function earlierVersion(sourceId) {
+      const versions = state.bundle.sourceVersions.filter(version => version.sourceId === sourceId);
+      const kept = state.bundle.links.filter(link => previousKind(link) && link.sourceRefs?.[0]?.sourceId === sourceId).at(-1);
+      return versions.find(version => version.id === kept?.sourceRefs[0].sourceVersionId) || versions.at(-2) || null;
+    }
+    function mergeNotice(panel) {
+      const notice = state.syncNotice, workspaceId = state.bundle?.workspaceId;
+      if (!notice || state.syncWorkspaceId !== workspaceId) return false;
+      const host = node('div', null, 'life-sync-merge-notice'); host.id = 'lifeSyncMergeNotice';
+      const sources = notice.sourceIds.map(id => state.bundle.sources.find(source => source.id === id)).filter(Boolean);
+      if (sources.length) {
+        host.append(node('p', '다른 기기와 같은 자료를 함께 고쳤습니다. 나중에 고친 쪽이 현재 버전이고, 먼저 고친 본문은 이전 버전으로 남았습니다.', 'life-help'));
+        const list = node('div', null, 'life-actions');
+        sources.slice(0, 5).forEach(source => {
+          const version = earlierVersion(source.id);
+          if (!version) return;
+          const open = button(sourceLabel(source) + ' · 이전 버전 열기', guarded(() => navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null })));
+          open.dataset.mergeSource = source.id; list.append(open);
+        });
+        if (list.childElementCount) host.append(list);
+        if (sources.length > 5) host.append(node('p', '그 밖의 자료 ' + (sources.length - 5) + '개도 각 자료의 이전 버전에 있습니다.', 'life-help'));
+      }
+      const copies = state.bundle.records.filter(record => notice.recordIds.includes(record.id));
+      if (copies.length) {
+        host.append(node('p', '같은 발췌를 함께 고쳐 나중에 고친 쪽을 남겼습니다. 먼저 고친 발췌 ' + copies.length + '개는 주제 이름 앞에 ‘복구 사본’이 붙어 있습니다(예: ' + copies[0].topic + ').', 'life-help'));
+        // The filter panel opens with it: the person sees which filter is on and can clear it.
+        const open = button('복구 사본 발췌 보기', guarded(() => navigate('topics', { topicRecovery: true, topic: '', topicUnassigned: false, topicsFiltersOpen: true })));
+        open.id = 'lifeSyncMergeCopies'; host.append(open);
+      }
+      const restored = state.bundle.records.filter(record => notice.restoredIds.includes(record.id));
+      if (restored.length) host.append(node('p', '한 기기에서 지운 발췌 ' + restored.length + '개는 다른 기기에서 고쳤거나 그대로인지 확인할 수 없어 남겼습니다(예: ' + restored[0].text.slice(0, 30) + '). 필요 없으면 다시 지워 주세요.', 'life-help'));
+      if (notice.uncertain) host.append(node('p', '이 기기에 마지막으로 맞춘 기록이 없어 무엇이 바뀌었는지 확인하지 못했습니다. 지운 것은 지우지 않았고, 복구 사본 중에는 고치기 전 내용도 있습니다.', 'life-help'));
+      if (!host.childElementCount) host.append(node('p', '다른 기기의 변경과 이 기기의 변경을 합쳤습니다.', 'life-help'));
+      const done = button('확인', guarded(async () => {
+        await storage.dismissSyncNotice(workspaceId);
+        if (state.bundle?.workspaceId === workspaceId) state.syncNotice = null;
+        await refreshSync();
+      })); done.id = 'lifeSyncMergeNoticeDone';
+      panel.append(host, done);
+      return true;
+    }
+
     function fillSyncState(panel) {
       if (disposed) return;
       if (managedLibrary) {
-        panel.hidden = false;
+        // Account and sync events arrive several times a second while engines verify. The panel is
+        // redrawn only when what it shows changed: a control replaced between press and release
+        // would lose the click (the comparison button and the notice's 확인).
+        const noticed = state.syncNotice && state.syncWorkspaceId === state.bundle?.workspaceId ? state.syncNotice : null;
+        const shows = JSON.stringify([state.bundle?.workspaceId, !!state.syncReadError, state.syncState?.conflict ? [state.syncState.conflict.remoteRevision, state.syncState.conflict.missing] : null,
+          noticed && [noticed.at, noticed.uncertain, noticed.sourceIds.map(id => [state.bundle.sources.find(source => source.id === id)?.title || '', earlierVersion(id)?.id || '']),
+            state.bundle.records.filter(record => noticed.recordIds.includes(record.id) || noticed.restoredIds.includes(record.id)).map(record => record.id + record.topic)]]);
+        if (panel.dataset.shows === shows) return;
+        panel.dataset.shows = shows;
+        const focused = panel.contains(document.activeElement) ? document.activeElement.id : '';
         panel.replaceChildren(node('h3', '자료'));
+        let shown = true;
         if (state.syncReadError) panel.append(node('p', '자료의 보관 상태를 확인하지 못했습니다.', 'life-error'));
+        // Only what could not be merged automatically is compared by hand.
         else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
           await persistDrafts(); await refreshData(); await refreshSync();
           if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
@@ -6094,7 +6182,10 @@
             remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
           renderConflict();
         }), 'life-primary'));
-        else panel.hidden = true;
+        else shown = false;
+        if (mergeNotice(panel)) shown = true;
+        panel.hidden = !shown;
+        if (focused) panel.querySelector('#' + focused)?.focus({ preventScroll: true });
         return;
       }
       const active = panel.contains(document.activeElement) ? document.activeElement : null;
@@ -6158,6 +6249,7 @@
       if (presentation.key === 'auth_required') actions.append(button('계정 확인', guarded(() => navigate('manage'))));
       if (presentation.key === 'mismatch' || info?.conflict?.missing) actions.append(button('자료 백업·복원', guarded(() => navigate('transfer'))));
       panel.append(actions);
+      mergeNotice(panel);
       if (state.conflictCopyId) {
         const copy = state.workspaces.find(item => item.workspaceId === state.conflictCopyId);
         panel.append(node('p', '선택하지 않은 쪽의 사본: ' + (copy ? copy.title : '작업공간 목록에서 확인'), 'life-help'));
@@ -6758,7 +6850,7 @@
       cleanup(() => { document.title = pageTitle; });
       disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
-      libraryRefresh++; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
+      libraryRefresh++; libraryReading = null; libraryAgain = false; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
       cleanup(() => sourceFoldersMount?.dispose()); sourceFoldersMount = null; sourceFoldersUpdate = null;
       cleanup(() => sourceFoldersUI?.dispose()); sourceFoldersUI = null; sourceFoldersWorkspace = null;
       accountMaterialsSequence += 1;

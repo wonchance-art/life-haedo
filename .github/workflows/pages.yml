@@ -233,6 +233,12 @@ jobs:
       - name: Verify device recovery copies stay until restored or discarded and never overwrite a newer post
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-recovery-browser.cjs
+      - name: Verify source sync merges both devices' changes, keeps losing sides as recovery copies and never resurrects deletions
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-merge-browser.cjs
+      - name: Verify source sync at size limits falls back to manual comparison and keeps the account storage status truthful
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-merge-limits-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -755,6 +761,8 @@ jobs:
             .local/schedule-day-change-browser/
             .local/full-backup-dates-browser/
             .local/daily-entry-browser/
+            .local/source-merge/
+            .local/source-merge-limits/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/

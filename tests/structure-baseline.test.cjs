@@ -285,6 +285,7 @@ const FOR_ACCOUNT_API = [
   "bindLibraryMetaSync:function",
   "bindSync:function",
   "bindWritingSync:function",
+  "captureSyncBase:function", // originals merge (2026-11-11): the last agreed server snapshot
   "clearBlogTombstone:function",
   "clearReadingPosition:function",
   "close:function",
@@ -297,6 +298,7 @@ const FOR_ACCOUNT_API = [
   "deleteStage:function",
   "dismissCompositionNotice:function",
   "dismissLibraryMetaNotice:function",
+  "dismissSyncNotice:function", // originals merge
   "dismissWritingNotice:function",
   "dispose:function",
   "findMaterialContinuity:function",
@@ -306,6 +308,7 @@ const FOR_ACCOUNT_API = [
   "getCompositionState:function",
   "getLibraryMetaState:function",
   "getStage:function",
+  "getSyncNotice:function", // originals merge
   "getSyncState:function",
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
@@ -338,6 +341,7 @@ const FOR_ACCOUNT_API = [
   "listUnownedWorkspaces:function",
   "listWorkspaces:function",
   "listWritingSyncStates:function",
+  "mergeSyncRemote:function", // originals merge: both sides joined in one transaction
   "open:function",
   "pauseCompositionSync:function",
   "pauseLibraryMetaSync:function",
@@ -471,6 +475,7 @@ const STORAGE_API = [
   "bindLibraryMetaSync:function",
   "bindSync:function",
   "bindWritingSync:function",
+  "captureSyncBase:function", // originals merge (2026-11-11): the last agreed server snapshot
   "clearAccount:function",
   "clearBlogTombstone:function",
   "clearReadingPosition:function",
@@ -484,6 +489,7 @@ const STORAGE_API = [
   "deleteStage:function",
   "dismissCompositionNotice:function",
   "dismissLibraryMetaNotice:function",
+  "dismissSyncNotice:function", // originals merge
   "dismissWritingNotice:function",
   "dispose:function",
   "findMaterialContinuity:function",
@@ -494,6 +500,7 @@ const STORAGE_API = [
   "getCompositionState:function",
   "getLibraryMetaState:function",
   "getStage:function",
+  "getSyncNotice:function", // originals merge
   "getSyncState:function",
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
@@ -526,6 +533,7 @@ const STORAGE_API = [
   "listUnownedWorkspaces:function",
   "listWorkspaces:function",
   "listWritingSyncStates:function",
+  "mergeSyncRemote:function", // originals merge: both sides joined in one transaction
   "open:function",
   "pauseCompositionSync:function",
   "pauseLibraryMetaSync:function",

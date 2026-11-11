@@ -9,6 +9,7 @@ const id = n => `33333333-3333-4333-8333-${String(n).padStart(12, '0')}`;
 const copy = value => structuredClone(value);
 
 function fixture({ stages = [], states = [], rows = [], source = { enabled: true, status: 'synced' }, listError = null } = {}) {
+  const hooks = {};
   const calls = [], created = new Map(), local = new Map(stages.map(stage => [stage.stageId, copy(stage)]));
   const stateMap = new Map(states.map(state => [state.draftId, copy(state)]));
   const storage = {
@@ -19,21 +20,24 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
     async getStage(stageId) { return copy(local.get(stageId) || null); },
     async getWritingSyncState(_, draftId) { return copy(stateMap.get(draftId) || null); },
     async installWritingRemote(ws, binding, row) {
+      if (hooks.installError) throw Object.assign(new Error('held'), { code: hooks.installError });
       calls.push(['install', row.draft_id]); const stage = { ...copy(row.data), revision: 1 }; local.set(row.draft_id, stage);
       stateMap.set(row.draft_id, { draftId: row.draft_id, enabled: true, status: 'synced' }); return { stage };
     },
-    subscribe() { return () => {}; }, subscribeAll() { return () => {}; }
+    // Per-workspace listeners (each connected draft's engine listens here through its adapter).
+    subscribe(_, listener) { (hooks.listeners ||= new Set()).add(listener); return () => hooks.listeners.delete(listener); },
+    subscribeAll(listener) { hooks.storage = listener; return () => { hooks.storage = null; }; }
   };
   // `source` stays mutable so a test can move the originals between states and emit their events.
   const sourceListeners = new Set();
   // hooks.afterRead runs after a state snapshot is taken and before it is returned (an event in flight).
-  const hooks = {};
+  // hooks.installError makes the storage refuse an install (a draft that points at an original not here yet).
   const sourceSync = { async getState() { calls.push(['sourceState']); const value = { ...source, binding: { ...OWNER, remoteId: WS }, remoteRevision: 3 }; const after = hooks.afterRead; hooks.afterRead = null; after?.(); return value; }, async syncNow() { calls.push(['sourceSync']); },
     subscribe(listener) { sourceListeners.add(listener); return () => sourceListeners.delete(listener); } };
   const emitSource = event => { for (const listener of [...sourceListeners]) listener(event); };
   const remote = {
     async list(ws, after) { calls.push(['list', after]); if (listError) throw Object.assign(new Error('schema'), listError); return copy(rows); },
-    async read(ws, draftId) { const row = rows.find(value => value.draft_id === draftId); return row ? { ...copy(row), source_revision: 1, data: { stageId: draftId, workspaceId: ws, kind: 'writing', state: 'draft', revision: 2 } } : null; },
+    async read(ws, draftId) { calls.push(['read', draftId]); const row = rows.find(value => value.draft_id === draftId); return row ? { ...copy(row), source_revision: 1, data: { stageId: draftId, workspaceId: ws, kind: 'writing', state: 'draft', revision: 2 } } : null; },
     write() { throw new Error('unexpected write'); }, dispose() {}
   };
   const engine = { create(options) {
@@ -48,7 +52,8 @@ function fixture({ stages = [], states = [], rows = [], source = { enabled: true
   let signedIn = copy(OWNER);
   const auth = { epoch: 1, getAccount: () => copy(signedIn) };
   const manager = WritingSync.create({ storage, sourceSync, auth, remote, engine, materials: null, interval: 3600000 });
-  return { manager, calls, created, local, stateMap, source, sourceListeners, emitSource, hooks, auth, signIn: value => { signedIn = value; } };
+  // emitStorage: a storage event as the page's storage hands it out (`local: true` on this page's own saves).
+  return { manager, calls, created, local, stateMap, source, sourceListeners, emitSource, emitStorage: event => { hooks.storage?.(event); for (const listener of [...(hooks.listeners || [])]) listener(event); }, hooks, auth, signIn: value => { signedIn = value; } };
 }
 const draft = (n, extra = {}) => ({ stageId: id(n), workspaceId: WS, kind: 'writing', state: 'draft', revision: 1, updatedAt: '2026-10-01T00:00:00.000Z', ...extra });
 
@@ -145,14 +150,98 @@ test('a pass that found the originals not ready runs again as soon as the origin
   assert.equal(f.calls.length, reads, 'no state read or pass for a workspace that is not waiting');
 });
 
+// Rule change (2026-11-11): the list no longer waits for synced originals. Connected originals
+// (an acknowledged server revision) are enough, so a pending or failing originals sync does not
+// stop drafts that point at no original. (Before: `lists === 0` while the originals were pending.)
 test('a burst of originals events becomes one check and one pass; pending originals that finish uploading also start one', async t => {
   const f = fixture({ rows: [], source: { enabled: true, status: 'pending' } }); t.after(() => f.manager.dispose());
-  f.manager.start(); await f.manager.refresh(); await settled(); assert.equal(lists(f), 0, 'listing waits for synced originals');
+  f.manager.start(); await f.manager.refresh(); await settled();
+  const before = lists(f), states = f.calls.filter(call => call[0] === 'sourceState').length;
+  assert.ok(before >= 1, 'connected originals are enough for the list');
   f.source.status = 'synced';
   for (let n = 0; n < 20; n++) f.emitSource(n % 2 ? { type: 'account' } : { type: 'state', workspaceId: WS });
   await settled();
-  assert.equal(lists(f), 1, 'one pass for the whole burst');
-  assert.ok(f.calls.filter(call => call[0] === 'sourceState').length <= 4, 'events during a check join it');
+  assert.equal(lists(f), before + 1, 'one pass for the whole burst');
+  assert.ok(f.calls.filter(call => call[0] === 'sourceState').length - states <= 4, 'events during a check join it');
+});
+
+test('pending originals do not stop drafts: local drafts are enabled and sent, server drafts installed; a held one is read once', async t => {
+  const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }];
+  const f = fixture({ stages: [draft(1), draft(2, { revision: 2 })], states: [{ draftId: id(2), enabled: true, status: 'pending', syncedLocalRevision: 1 }], rows,
+    source: { enabled: true, status: 'pending' } });
+  t.after(() => f.manager.dispose());
+  f.hooks.installError = 'writing_source_pending';
+  await f.manager.refresh();
+  assert.deepEqual(f.calls.filter(call => call[0] === 'enable').map(call => call[1]), [id(1)]);
+  assert.deepEqual(f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]), [id(2)]);
+  assert.deepEqual(f.calls.filter(call => call[0] === 'read').map(call => call[1]), [id(5)], 'the server draft was tried');
+  // It points at an original that has not arrived: the same server revision is not read again every pass.
+  await f.manager.refresh(); await f.manager.refresh();
+  assert.equal(f.calls.filter(call => call[0] === 'read').length, 1);
+  rows[0].revision = 3; await f.manager.refresh();
+  assert.equal(f.calls.filter(call => call[0] === 'read').length, 2, 'a new server revision is tried once');
+  // A failure that is not about the originals (the network) is not held: the next pass tries again.
+  f.hooks.installError = 'network_error'; rows[0].revision = 4; await f.manager.refresh(); await f.manager.refresh();
+  assert.equal(f.calls.filter(call => call[0] === 'read').length, 4);
+  // Once the originals are ready it is installed.
+  f.hooks.installError = null; f.source.status = 'synced'; await f.manager.refresh();
+  assert.deepEqual(f.calls.filter(call => call[0] === 'install').map(call => call[1]), [id(5)]);
+});
+
+// m1 (2026-11-11): typed, then switched away. A page that is being hidden or closed sends the drafts
+// it saved itself and has not sent yet, once. It reads no server list and installs nothing, its
+// poll stays quiet, and another tab's saves (which that tab sends itself) start nothing here.
+test('a hidden page sends only its own unsent drafts, once (upload only); other tabs\' saves, the poll and focus start nothing', async t => {
+  const win = new Map(), doc = new Map(), previous = { add: globalThis.addEventListener, remove: globalThis.removeEventListener, interval: globalThis.setInterval, timeout: globalThis.setTimeout,
+    document: Object.getOwnPropertyDescriptor(globalThis, 'document') };
+  let poll = null, nudges = [];
+  globalThis.addEventListener = (name, fn) => win.set(name, fn); globalThis.removeEventListener = name => win.delete(name);
+  globalThis.setInterval = handler => { poll = handler; return { unref() {} }; };
+  globalThis.setTimeout = (fn, ms, ...rest) => { if (ms === 3000) { nudges.push(fn); return { unref() {} }; } return previous.timeout(fn, ms, ...rest); }; // the 3 s nudge, run by hand
+  const page = { visibilityState: 'visible', addEventListener: (name, fn) => doc.set(name, fn), removeEventListener: name => doc.delete(name) };
+  globalThis.document = page;
+  const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }, { draft_id: id(1), state: 'draft', title: '', revision: 3 }, { draft_id: id(2), state: 'draft', title: '', revision: 3 }];
+  const synced = n => ({ draftId: id(n), enabled: true, status: 'synced', remoteRevision: 3, syncedLocalRevision: 1, outbox: null, conflict: null, error: null });
+  const f = fixture({ stages: [draft(1), draft(2)], states: [synced(1), synced(2)], rows });
+  t.after(() => { f.manager.dispose(); globalThis.addEventListener = previous.add; globalThis.removeEventListener = previous.remove; globalThis.setInterval = previous.interval; globalThis.setTimeout = previous.timeout;
+    if (previous.document) Object.defineProperty(globalThis, 'document', previous.document); else delete globalThis.document; });
+  f.hooks.installError = 'writing_source_pending'; // keeps the server-only draft uninstalled: every full pass would try the list
+  f.manager.start(); await f.manager.refresh(); await settled();
+  const sent = () => f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]);
+  const save = (n, own) => { f.local.get(id(n)).revision++; f.emitStorage({ type: 'writing_draft_changed', workspaceId: WS, stageId: id(n), ...(own ? { local: true } : {}) }); };
+  const runNudges = async () => { const timers = nudges; nudges = []; for (const fn of timers) fn(); await settled(); };
+  assert.deepEqual(sent(), [], 'nothing to send yet'); const listed = lists(f); assert.ok(listed >= 1);
+  // The person types here (this page saves draft 1) and switches away before the nudge fires.
+  save(1, true); page.visibilityState = 'hidden';
+  doc.get('visibilitychange')(); await settled();
+  assert.deepEqual(sent(), [id(1)], 'this page\'s own unsent draft is sent while hidden');
+  assert.equal(lists(f), listed, 'no server list while hidden');
+  nudges = [];
+  // The draft this page sent has its own engine now. It hears the storage through its adapter and
+  // sends a change half a second later: `told` is what it was told about.
+  const told = []; assert.equal(f.created.size, 1);
+  for (const instance of f.created.values()) instance.draft().subscribe(null, event => { if (event.type === 'workbench_changed') told.push(event.workspaceId); });
+  // Another tab saves draft 2 five times and draft 1 once: this hidden tab hears it and starts nothing; neither do the poll and focus.
+  const quiet = f.calls.length;
+  for (let n = 0; n < 5; n++) { save(2, false); await runNudges(); }
+  save(1, false); await runNudges();
+  poll(); win.get('focus')(); doc.get('visibilitychange')(); win.get('online')(); await settled();
+  assert.equal(f.calls.length, quiet, 'a hidden page with nothing of its own to send does nothing');
+  assert.deepEqual(told, [], 'the draft\'s own engine is not started for another tab\'s save either');
+  // A save of its own while hidden (an autosave that lands after the switch) goes out by the nudge: that draft only.
+  save(1, true); await runNudges();
+  assert.deepEqual(sent(), [id(1), id(1)]); assert.equal(lists(f), listed); assert.deepEqual(told, [id(1)], 'its engine hears this page\'s own save');
+  // A page closed while it still reads "visible": pagehide itself starts nothing (the platform has
+  // suspended the session by then). The unsent draft stays; the back/forward cache parks.
+  page.visibilityState = 'visible'; save(1, true); nudges = [];
+  const idle = f.calls.length; win.get('pagehide')({ persisted: false }); await settled(); assert.equal(f.calls.length, idle, 'pagehide is not an upload');
+  win.get('pagehide')({ persisted: true }); page.visibilityState = 'hidden'; doc.get('visibilitychange')(); win.get('online')(); await settled();
+  assert.equal(f.calls.length, idle, 'nothing starts while parked');
+  win.get('pageshow')({ persisted: true }); page.visibilityState = 'visible'; doc.get('visibilitychange')(); await settled();
+  assert.equal(lists(f), listed + 1, 'a visible page runs the full pass again');
+  assert.ok(sent().slice(2).includes(id(1)), 'and that pass sends the draft that was left');
+  // A visible page still sends a save it hears from another tab (that tab may be gone already).
+  const before = told.length; save(1, false); assert.deepEqual(told.slice(before), [id(1)]);
 });
 
 test('originals that become ready while the pass reads their state still start a pass', async t => {
