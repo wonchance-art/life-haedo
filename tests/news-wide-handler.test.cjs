@@ -192,6 +192,8 @@ test('only a signed-in, non-anonymous account: everything else is refused before
   await refused(await fixture({ auth: () => new Response('PRIVATE auth text', { status: 401 }) }), [], 1);
   await refused(await fixture({ auth: () => new Response('PRIVATE auth text', { status: 403 }) }), [], 1);
   await refused(await fixture({ auth: () => new Response('not json') }), [], 1);
+  // A refusal is a refusal whatever its body says.
+  for (const status of [401, 403, 500]) await refused(await fixture({ auth: () => json({ id: OWNER, role: 'authenticated' }, status) }), [], 1);
   for (const user of [{ id: OWNER, is_anonymous: true }, { id: OWNER, role: 'anon' }, { id: 'not-a-uuid' }, {}, null, [OWNER], { id: 1 }]) await refused(await fixture({ user }), [], 1);
   // The database has the last word on the session (claim -> 401/403).
   for (const status of [401, 403]) {
