@@ -391,4 +391,45 @@ H.run(__filename, {
     assert(await page.getByRole('button', { name: '다시 보관', exact: true }).isVisible());
     assert((await H.bodyText(page)).includes('보관되지 못할 문장.'));
   },
+  // The sticky tools grow by an error line while the writer is in the body with the page scrolled. The page stays
+  // where it was (the browser's scroll anchoring would scroll it and slide the title behind the tools), and the
+  // offset that keeps the caret below the tools follows their real height.
+  async 'tools-growing-keep-the-page-in-place'({ open }) {
+    const { page } = await open({ viewport: { width: 390, height: 844 }, options: { hasTouch: true, isMobile: true } });
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('상한에 걸린 글의 제목');
+    await page.locator('.ql-editor').click();
+    await H.pasteBody(page, { text: Array.from({ length: 40 }, (_, i) => (i + 1) + '번째 문단입니다. 본문을 길게 채우는 문장.').join('\n') });
+    await H.stored(page, rows => rows.length === 1 && rows[0].text.includes('40번째'), 'stored');
+    const measure = () => page.evaluate(() => {
+      const title = document.querySelector('#photoTitle').getBoundingClientRect(), tools = document.querySelector('.photo-editor-tools').getBoundingClientRect();
+      const first = [...document.querySelectorAll('.ql-editor > *')].find(node => node.getBoundingClientRect().bottom > tools.bottom);
+      return { scrollY: Math.round(scrollY), tools: Math.round(tools.height), titleHidden: Math.max(0, Math.round(Math.min(title.bottom, tools.bottom) - Math.max(title.top, tools.top))),
+        firstLine: first.textContent, firstBelowTools: Math.round(first.getBoundingClientRect().top - tools.bottom),
+        offset: getComputedStyle(document.documentElement).scrollPaddingTop, variable: document.documentElement.style.getPropertyValue('--photo-tools-height') };
+    });
+    // Scrolled a little (the title is partly under the tools, as any scrolled content is) with the caret in a visible line.
+    await page.evaluate(() => {
+      scrollTo({ top: 30, behavior: 'instant' });
+      const q = Quill.find(document.querySelector('.ql-container')), tools = document.querySelector('.photo-editor-tools').getBoundingClientRect().bottom;
+      const line = [...document.querySelectorAll('.ql-editor > *')].find(node => node.getBoundingClientRect().top > tools + 160);
+      q.setSelection(q.getIndex(Quill.find(line)) + 3, 0, 'silent');
+    });
+    const before = await measure();
+    assert.equal(before.scrollY, 30);
+    assert.equal(before.variable, before.tools + 'px', 'the tools\' height is published for the scroll offsets');
+    await page.evaluate(() => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (value, ...rest) { if (this.name === 'meta' && String(value?.key).startsWith('photo-post:')) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return put.call(this, value, ...rest); };
+    });
+    await page.keyboard.type('가');
+    await H.until(() => H.status(page), value => value.state === 'error', 'the long error line appears');
+    const after = await H.until(measure, value => value.tools > before.tools + 40 && value.variable === value.tools + 'px', 'the tools grew and their height was published again');
+    assert.equal(after.scrollY, before.scrollY, 'the page is not scrolled by the tools growing: ' + JSON.stringify({ before, after }));
+    assert.equal(after.titleHidden, before.titleHidden, 'no more of the title goes behind the tools');
+    assert.equal(after.firstLine, before.firstLine, 'the same line is first under the tools');
+    assert.equal(after.firstBelowTools, before.firstBelowTools);
+    assert.equal(parseFloat(after.offset), Math.max(72, after.tools + 12), 'the caret offset follows the tools\' real height: ' + after.offset);
+    assert((await H.bodyText(page)).includes('가'), 'the input is intact');
+  },
 });

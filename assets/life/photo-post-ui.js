@@ -2717,9 +2717,17 @@
         fitTitle();
       });
       titleSize.observe(title);
+      // The sticky tools grow (an error line, a recovery band): the offsets that
+      // keep the caret below them follow their real height (see photo-post.css).
+      const toolsSize = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--photo-tools-height", Math.round(sticky.getBoundingClientRect().height) + "px");
+      });
+      toolsSize.observe(sticky);
       releaseViewport = () => {
         releaseKeyboard?.();
         titleSize.disconnect();
+        toolsSize.disconnect();
+        document.documentElement.style.removeProperty("--photo-tools-height");
       };
       editor = new root.Quill(area, {
         theme: "snow",

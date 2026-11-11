@@ -95,6 +95,11 @@
 .pp-legacy-writing[open] {
   flex-basis: 100%;
 }
+/* When the sticky tools grow (an error line, a recovery band) the browser's
+ * scroll anchoring would scroll the page by the same amount to hold the text
+ * still, which slides the title and the lines under the tools behind them. The
+ * editor's content is not an anchor: it keeps its place under the tools. */
+.photo-editor-tools ~ * { overflow-anchor: none; }
 .photo-editor-tools {
   position: sticky;
   top: 0;
@@ -804,9 +809,10 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   .photo-commandbar .photo-status[data-state="error"][data-long="true"] { order: 9; flex: 1 0 100%; padding: 2px 4px 4px; }
   .photo-commandbar > .photo-save { min-height: 44px; padding-inline: 14px; }
   /* Keep the caret and the block being typed between the sticky bar and the floating tools. */
+  /* The tools' real height (set by the editor): 72px while they are one row. */
   .photo-posts .ql-editor,
-  .photo-posts .ql-editor > * { scroll-margin-block: 72px 88px; }
-  html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: 72px; }
+  .photo-posts .ql-editor > * { scroll-margin-block: max(72px, calc(var(--photo-tools-height, 0px) + 12px)) 88px; }
+  html:has(.photo-posts[data-mode="edit"]) { scroll-padding-top: max(72px, calc(var(--photo-tools-height, 0px) + 12px)); }
 }
 @media (max-width: 600px) {
   .photo-entry > strong { font-size: 19px; }
