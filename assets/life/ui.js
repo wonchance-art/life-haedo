@@ -5543,7 +5543,8 @@
         node('p', '네이버 원문 사진 사본도 이 JSON에는 들어가지 않습니다. 사진 사본이 있는 원문에서는 글·사진 ZIP을 따로 보관할 수 있습니다.', 'life-help'));
       main.append(scope, actionRow('폴더·묶음·내 페이지도 함께 백업', '분류와 구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
-      const stamp = new Date().toISOString().slice(0, 10);
+      // This device's civil day, not the UTC day (2026-11-11 m5).
+      const stamp = global.HaedoData.localDate();
       const includeTrash = field('Markdown에 휴지통 자료 포함', 'checkbox', 'lifeMarkdownIncludeTrash', '');
       includeTrash.input.checked = false;
       actions.append(includeTrash.label);

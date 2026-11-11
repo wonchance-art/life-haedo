@@ -1044,3 +1044,35 @@ test('M2: 형식이 틀리거나 순서가 뒤집힌 시각은 거절하고, 지
   const report = (await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, updatedAt: '2099-01-01T00:00:00.000Z' }))]))).report;
   assert.deepEqual([report.items[0].status, report.items[0].times], ['restored', 'adjusted']);
 });
+
+// ── 2026-11-11 m5: backup and export files are named by this device's day ──
+test('m5: 모두 받기 names its file by the device’s civil day, not the UTC day', async () => {
+  const { storage } = await datedPosts();
+  const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
+  const context = { storage, timeline, originals: null }, zone = process.env.TZ;
+  // 08:30 on the 11th in Seoul is 23:30 on the 10th in UTC; 23:30 on the 10th in Los Angeles is 07:30 on the 11th in UTC.
+  try {
+    for (const [tz, instant, day] of [['Asia/Seoul', '2026-11-10T23:30:00.000Z', '2026-11-11'], ['America/Los_Angeles', '2026-11-11T07:30:00.000Z', '2026-11-10'], ['UTC', '2026-11-10T23:30:00.000Z', '2026-11-10']]) {
+      process.env.TZ = tz;
+      const writer = Full.writer(await Full.plan(context), context, { now: () => instant });
+      assert.deepEqual(await writer.collect(), []);
+      const built = writer.finish();
+      assert.equal(built.fileName, 'haedo-backup-' + day + '.zip', tz);
+      assert.equal(built.manifest.createdAt, instant, 'the list still records the exact instant');
+    }
+  } finally { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; }
+});
+test('m5: no backup or export file name is cut from a UTC timestamp', () => {
+  const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  for (const file of ['assets/life/full-backup.js', 'assets/life/ui.js', 'assets/life/collection-ui.js', 'assets/app.js', 'assets/platform-ui.js', 'assets/workspace.js'])
+    assert.doesNotMatch(read(file), /toISOString\(\)\.slice\(0,\s*10\)|createdAt\.slice\(0,\s*10\)/, file);
+  // The timeline's SVG/PNG export name (app.js), evaluated with a clock that differs between UTC and the device.
+  const source = /const exportName=ext=>[^;]+;/.exec(read('assets/app.js'))[0], zone = process.env.TZ;
+  const Data = require('../assets/data.js'), RealDate = Date;
+  try {
+    process.env.TZ = 'Asia/Seoul';
+    const at = new RealDate('2026-11-10T23:30:00.000Z');
+    const exportName = new Function('HaedoData', source + ' return exportName;')({ ...Data, localDate: (date = at) => Data.localDate(date) });
+    assert.equal(exportName('png'), '연표-2026-11-11.png');
+  } finally { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; }
+});

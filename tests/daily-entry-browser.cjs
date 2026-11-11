@@ -8,6 +8,7 @@
  *      personal store is opened before the account is verified.
  *  m3  글쓰기 opened from 목표·습관·연표 목록 closes back to that page and leaves no empty editor in
  *      the browser history.
+ *  m5  backup files are named by this device's day (모두 받기 is checked in full-backup-dates-browser.cjs).
  * npm run dev; node tests/daily-entry-browser.cjs
  * Never uses real Google, production Supabase or Apple-device claims. */
 'use strict';
@@ -252,6 +253,19 @@ async function main() {
       await page.getByRole('button', { name: '닫기', exact: true }).click();
       await list(page); assert.equal(await where(page), 'index.html');
     });
+
+    // ── m5 ──
+    await check('m5: at 08:30 KST (the day before in UTC) the 자료 JSON·Markdown and the 컬렉션 backup are named for today', async ({ page }) => {
+      assert.equal(await page.evaluate(() => new Date().toISOString().slice(0, 10)), '2026-11-10', 'the clock of this check: UTC is still the 10th');
+      const received = async press => { const download = page.waitForEvent('download'); await press(); return (await download).suggestedFilename(); };
+      await page.goto(base + '/index.html?section=manage&view=transfer'); await ready(page);
+      await page.locator('#lifeMain[data-mode="transfer"]').waitFor();
+      assert.equal(await received(() => page.getByRole('button', { name: 'JSON 백업', exact: true }).click()), 'life-tools-2026-11-11.json');
+      assert.equal(await received(() => page.getByRole('button', { name: 'Markdown 내보내기', exact: true }).click()), 'life-tools-2026-11-11.md');
+      await page.goto(base + '/index.html?section=records&view=collection'); await ready(page);
+      await page.locator('.cl-files summary').click();
+      assert.equal(await received(() => page.getByRole('button', { name: '컬렉션 백업 받기', exact: true }).click()), 'haedo-collection-2026-11-11.json');
+    }, { viewport: { width: 1440, height: 960 } });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.consoleErrors, [], 'console errors');

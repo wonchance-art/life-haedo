@@ -27,6 +27,9 @@
     NaverMedia: './naver-media.js', SourceReference: './source-reference.js' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require(paths[name]));
   const zip = () => root.fflate || (typeof require === 'function' && require('../../vendor/fflate/fflate.js'));
+  // File names carry this device's civil day (HaedoData.localDate), not the UTC day: a backup received at
+  // 08:30 KST was named for the day before (2026-11-11 m5).
+  const localDate = date => (root.HaedoData || (typeof require === 'function' && require('../data.js'))).localDate(date);
   const fault = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra });
   const clone = value => structuredClone(value);
   const plain = value => !!value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -482,7 +485,7 @@
       add('manifest.json', pretty(manifest));
       archive.end(); if (error) throw error; flush(); finished = true;
       if (written > limit) throw fault('backup_too_large', '백업이 3.5 GiB를 넘어 ZIP 하나로 만들 수 없습니다. 형식별로 나눠 받아 주세요.');
-      const stamp = manifest.createdAt.slice(0, 10);
+      const stamp = localDate(new Date(manifest.createdAt));
       return { blob: new Blob(parts, { type: 'application/zip' }), manifest, bytes: written,
         fileName: 'haedo-backup-' + stamp + (missingTasks.length ? '-partial' : '') + '.zip' };
     }

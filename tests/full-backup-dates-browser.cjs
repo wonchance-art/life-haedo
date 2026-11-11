@@ -106,6 +106,8 @@ async function main() {
       assert.equal(manifest.version, 3);
       const inner = manifest.files.filter(item => item.kind === 'photoPosts').map(item => JSON.parse(Buffer.from(Z.unzipSync(files[item.path])['manifest.json']).toString()));
       assert.deepEqual(inner.map(({ title, createdAt, updatedAt }) => ({ title, createdAt, updatedAt })).sort((a, b) => a.title.localeCompare(b.title)), POSTS);
+      // The file is named by this device's day (m5): 08:30 KST on the 11th is still the 10th in UTC.
+      assert.equal(manifest.createdAt.slice(0, 10), '2026-11-10'); assert.equal(file.suggestedFilename(), 'haedo-backup-2026-11-11.zip');
     }, BACKUP_DAY);
     assert.ok(state.archive, 'the bundle was made');
 
