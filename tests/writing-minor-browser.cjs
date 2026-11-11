@@ -95,4 +95,37 @@ H.run(__filename, {
     await H.until(() => blocks(page), count => count === 1, 'a picture with no text is a photo');
     await H.stored(page, rows => rows[0]?.photos === 1, 'stored');
   },
+  // m7: a draft says whether it reached the account, in the same words as a saved post.
+  async 'draft-account-state'({ open }) {
+    const net = { down: false };
+    const { page, context, server } = await open({ page: { offline: () => true } });
+    await context.route(H.cloud + '/**', route => net.down ? route.abort('internetdisconnected') : route.fallback());
+    await H.home(page);
+    // The connection drops after sign-in, before anything is written.
+    net.down = true;
+    await H.writer(page);
+    await page.locator('#photoTitle').fill('연결 없이 쓰는 초안');
+    await page.locator('.ql-editor').click(); await page.keyboard.type('연결 없이 쓴 문장.');
+    await draftWith(page, '연결 없이 쓴 문장.');
+    assert.equal((await H.status(page)).text, '자동 저장됨', 'this device stored it');
+    await H.until(() => page.locator('.photo-privacy').getAttribute('data-state'), state => state === 'problem', 'the top line shows the upload problem', 20000);
+    assert((await page.locator('.photo-privacy').innerText()).includes('올리기 실패'));
+    const offline = await info(page);
+    assert(offline.includes('자동 저장됨 · 계정에 올리지 못함'), offline);
+    assert(!/계정에 비공개로 자동 보관되어/.test(offline), 'no claim that the account has it: ' + offline);
+    assert.equal(server.posts.size, 0);
+    // Connection back: the retry beside the state uploads it and the state follows.
+    net.down = false;
+    await page.locator('dialog.photo-info').getByRole('button', { name: '계정에 다시 올리기', exact: true }).click();
+    await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'uploaded after the retry', 20000);
+    assert.equal([...server.posts.values()].filter(row => row.data.status === 'draft').length, 1);
+    await page.keyboard.press('Escape');
+    await H.until(() => page.locator('.photo-privacy').getAttribute('data-state'), state => state !== 'problem', 'the problem mark is gone');
+    // A later change is "waiting" until it is uploaded, then "uploaded" again without a reload.
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 이어 쓴 문장.');
+    await draftWith(page, '이어 쓴 문장.');
+    const waiting = await info(page);
+    assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기') || waiting.includes('자동 저장됨 · 계정에 올림'), waiting);
+    await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'the open sheet follows the upload', 20000);
+  },
 });

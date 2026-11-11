@@ -187,6 +187,11 @@
       unstored = null,
       offer = null,
       noteHold = 0,
+      // The account state of the stored draft being edited (read from BlogSync,
+      // never changed here except by the explicit retry): { id, revision, status }.
+      draftServer = null,
+      draftBusy = false,
+      draftTimers = [],
       titleInput = null,
       // A revision of a saved post is that post's editing buffer (2026-11-11):
       // nothing is stored until the first real change, and a buffer that holds
@@ -289,6 +294,9 @@
       authorNote = "";
       authorButton = null;
       editor = null;
+      draftTimers.forEach(clearTimeout);
+      draftTimers = [];
+      draftBusy = false;
       titleInput = null;
       selected = null;
       recoveryActions = null;
@@ -320,7 +328,8 @@
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
         if (statusText.textContent !== message) statusText.textContent = message;
-        const detail = !e && authorText === AI_PENDING ? AI_PENDING_DETAIL : "";
+        const detail = !e && authorText === AI_PENDING ? AI_PENDING_DETAIL
+          : !e && !authorText && message === "자동 저장됨" && draftState() === "error" ? " · 계정에 올리지 못함" : "";
         if (statusDetail && statusDetail.textContent !== detail) statusDetail.textContent = detail;
         status.dataset.state = state;
         const role = e instanceof Error ? "alert" : "status";
@@ -440,7 +449,7 @@
       serverValue.revision === doc.revision ? serverValue.status : null;
     function updatePill() {
       if (!pill) return;
-      const state = publication(), problem = PILL_PROBLEMS[serverState()] || "",
+      const state = publication(), problem = PILL_PROBLEMS[serverState() || draftState()] || "",
         label = state === "public" ? "공개" : state === "private" ? "비공개" : "글 정보",
         spoken = state === "checking" ? "공개 여부 확인 중" : state === "unknown" ? "공개 여부 확인 못 함" : label;
       pill.dataset.state = problem ? "problem" : state;
@@ -534,8 +543,24 @@
           row(mode === "edit" ? "마지막 보관" : "저장한 시각", time);
         }
         if (mode === "edit") {
-          const state = row("저장", stateValue(statusText?.textContent || ""));
-          state.append(el("p", "초안은 계정에 비공개로 자동 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다. 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
+          // This device first, then the account, in the words a saved post uses.
+          const account = doc.revision > 0 && dirtyTick === storedTick && !error && !composing ? draftState() : null;
+          const state = row("저장", stateValue(account
+            ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ")
+            : statusText?.textContent || ""));
+          if (account) state.dataset.state = account;
+          state.append(el("p", (account === "synced"
+            ? "초안은 계정에 비공개로 보관되어 로그인한 다른 기기에서 이어 쓸 수 있습니다."
+            : account === "error" || account === "refresh"
+              ? "이 기기에는 보관했지만 계정에는 올리지 못했습니다. 다시 올리기 전에는 다른 기기에서 보이지 않습니다."
+              : "초안은 이 기기에 먼저 보관하고 곧 계정에 비공개로 올립니다. 올린 뒤에는 로그인한 다른 기기에서 이어 쓸 수 있습니다.") +
+            " 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
+          if (["not_enabled", "pending", "error"].includes(account) && !draftBusy && blogSync?.saveDefault) {
+            const retry = button("계정에 다시 올리기", uploadDraft);
+            retry.classList.add("photo-info-action");
+            retry.dataset.infoFocus = "retry";
+            state.append(retry);
+          }
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
@@ -804,6 +829,7 @@
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
           if (current(epoch)) showStatus();
+          if (current(epoch)) watchDraftState();
           if (current(token)) onSaved();
         })
         .finally(() => {
@@ -819,6 +845,61 @@
         throw cause;
       }
       if (valid() && doc === target && dirtyTick !== storedTick) return persist(modelOnly || busy || composing, target);
+    }
+    // ---- a draft's account state ---------------------------------------------
+    // A revision stored after the one that was read is waiting to be uploaded.
+    function draftState() {
+      if (mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return null;
+      if (draftServer?.id !== doc.id) return "checking";
+      return draftServer.revision === doc.revision ? draftServer.status : "pending";
+    }
+    function showDraftState() {
+      if (status) status.dataset.account = draftState() || "";
+      showStatus(error);
+      updatePill();
+    }
+    async function readDraftState() {
+      if (draftBusy || mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return;
+      const target = doc, token = epoch, revision = doc.revision;
+      let value;
+      try {
+        value = (await blogSync.getState(workspaceId, target.id)).status;
+        // Still waiting after a sync pass that could not reach the account
+        // (offline, sign-in expired): it was not uploaded.
+        if (value === "pending" && blogSync.getStatus?.()?.lastError) value = "error";
+      } catch (_) {
+        value = staleApp() ? "refresh" : "error";
+      }
+      if (!current(token) || doc !== target || mode !== "edit" || draftBusy) return;
+      draftServer = { id: target.id, revision, status: value };
+      showDraftState();
+    }
+    // Now, and again after the draft upload delay: a failed first upload has no
+    // record that would announce itself.
+    function watchDraftState() {
+      draftTimers.forEach(clearTimeout);
+      draftTimers = [];
+      if (mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.getState) return;
+      const token = epoch;
+      readDraftState();
+      draftTimers = [7000, 20000].map((ms) => setTimeout(() => { if (current(token)) readDraftState(); }, ms));
+    }
+    // The explicit retry beside the state.
+    async function uploadDraft() {
+      if (draftBusy || mode !== "edit" || !doc || doc.revision === 0 || !blogSync?.saveDefault) return;
+      const target = doc, token = epoch, revision = doc.revision;
+      const set = (value) => { if (current(token) && doc === target) draftServer = { id: target.id, revision, status: value }; };
+      draftBusy = true;
+      set("saving");
+      showDraftState();
+      try {
+        set((await blogSync.saveDefault(workspaceId, target.id, { expectedLocalRevision: revision })).status);
+      } catch (_) {
+        set(staleApp() ? "refresh" : "error");
+      } finally {
+        draftBusy = false;
+        if (current(token) && doc === target) showDraftState();
+      }
     }
     // No valid form of the input exists (it is over a limit). Nothing invalid
     // is stored or synced; the input stays whole on this device and the reason
@@ -2907,6 +2988,7 @@
       }
       dismissControls = bindDisclosureControls(host);
       showStatus(error);
+      if (mode === "edit") watchDraftState();
       scheduleAutosave();
     }
     async function mount(
@@ -2924,7 +3006,9 @@
       unsubscribe?.();
       unsubscribeServer?.();
       unsubscribeServer = blogSync?.subscribe?.(event => {
-        if (event.workspaceId === workspaceId && event.localPostId === doc?.id && !serverBusy && current(epoch)) readServerState();
+        if (event.workspaceId !== workspaceId || event.localPostId !== doc?.id || !current(epoch)) return;
+        if (mode === "edit") readDraftState();
+        else if (!serverBusy) readServerState();
       });
       unsubscribe = storage.subscribe(workspaceId, (event) => {
         if (
