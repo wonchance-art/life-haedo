@@ -230,11 +230,14 @@
     let suspended = false, parked = false;
     const suspend = () => { suspended = true; root.clearTimeout(soon); soon = null; };
     const resume = () => { if (!suspended) return; suspended = false; automatic(); };
-    // A page that is closed (pagehide, not kept in the cache) starts nothing here: the platform has
-    // suspended its session by then (platform-auth.js hides the private screen and cancels the
-    // session's generation on pagehide, and haedo:page-suspend arrives first). What it could send
-    // went out when it was hidden (visibilitychange comes before pagehide); a draft that did not
-    // make it stays on this device and the next page sends it.
+    // A page that is closed or left for another page of the application (pagehide, not kept in the
+    // cache) starts nothing here: the platform has suspended its session by then (platform-auth.js
+    // hides the private screen and cancels the session's generation on pagehide, and
+    // haedo:page-suspend arrives first). Chromium sends beforeunload, then pagehide while the
+    // document still reads "visible", and only then visibilitychange: the hidden upload does not
+    // run for a page that is going away. What was typed in the last seconds before leaving stays
+    // on this device and the next page sends it. Switching to another tab or application hides
+    // the page without pagehide, and that is the case the hidden upload covers.
     const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(soon); soon = null; } };
     const pageshow = event => { if (event?.persisted) parked = false; };
     const hidden = () => root.document?.visibilityState === 'hidden';
