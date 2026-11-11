@@ -23,7 +23,7 @@ function setup(overrides = {}) {
     history: { replaceState: (_state, _title, url) => { state.scrubbed = url; } }, Event,
     addEventListener: (name, callback) => pageHandlers.set(name, callback), removeEventListener: name => pageHandlers.delete(name),
     fetch: async (_url, options) => { state.sent = options; return state.fetchPromise || new Response('{}', { status: state.responseStatus || 200 }); },
-    localStorage: backingStorage
+    localStorage: backingStorage, ...(overrides.sessionStorage ? { sessionStorage: overrides.sessionStorage } : {})
   };
   const clientFactory = (_url, _key, options) => {
     state.options = options;
@@ -53,7 +53,7 @@ function setup(overrides = {}) {
     if (user) records.set(SESSION_KEY, JSON.stringify({ user, access_token: 'synthetic-' + user.id })); else records.delete(SESSION_KEY);
     for (const listener of [...sdkListeners]) listener(user ? 'SIGNED_IN' : 'SIGNED_OUT', user ? { user } : null);
   };
-  const auth = createAuth(env, { config, clientFactory, ...(overrides.now ? { now: overrides.now } : {}) });
+  const auth = createAuth(env, { config, clientFactory, ...(overrides.now ? { now: overrides.now } : {}), ...(overrides.authOptions || {}) });
   return { auth, state, env, pageHandlers, sdkListeners };
 }
 
@@ -801,4 +801,299 @@ test('opening: a user replaced without any event while callers wait on the runni
   for (const result of results) assert.notEqual(result.status === 'fulfilled' ? result.value?.id : null, A.id, 'no caller gets A after the silent switch');
   assert.notEqual(auth.getAccount()?.userId, A.id);
   opening.end(); auth.dispose();
+});
+
+// ── 2026-11-11 m1: the place the owner was at survives a login ──
+test('m1: 일정 calendar units with their date, 백업·복원, the open blog post and the habit month survive login', () => {
+  const kept = ['index.html?section=schedule&view=day&date=2026-10-29', 'index.html?section=schedule&view=week&date=2026-10-29',
+    'index.html?section=schedule&view=month&date=2026-09-01', 'index.html?section=schedule&view=quarter&date=2026-04-01',
+    'index.html?section=schedule&view=tools&date=2025-06-01', 'index.html?section=schedule&view=tools', 'index.html?section=tools&date=2025-06-01',
+    'life.html?section=schedule&view=day&date=2024-02-29', 'index.html?section=manage&view=backup', 'index.html?section=schedule&view=annual-plan',
+    'index.html?section=schedule&view=page&blog=photo.Ab_9-xyz', 'index.html?section=schedule&view=page&blog=draft.d1', 'index.html?section=schedule&view=page&blog=plain.p1',
+    'index.html?section=schedule&view=page&blog=new', 'index.html?section=schedule&view=page&blog=profile', 'index.html?section=records&view=page',
+    'habits.html?month=2026-09', 'habits.html', 'goals.html', 'workspace.html', 'workspace.html?section=manage'];
+  for (const address of kept) assert.equal(safeNext(address + (address.includes('?') ? '&' : '?') + 'code=discarded&next=https://evil.invalid#access_token=hidden'), address, address);
+  // Parameters come back in one fixed order whatever order they arrived in.
+  assert.equal(safeNext('index.html?date=2026-10-29&view=day&section=schedule'), 'index.html?section=schedule&view=day&date=2026-10-29');
+  assert.equal(safeNext('index.html?blog=photo.a1&view=page'), 'index.html?view=page&blog=photo.a1');
+});
+
+test('m1: a value outside its exact shape is left out, and nothing else is ever carried', () => {
+  // date: a real civil day, only for a calendar unit.
+  for (const date of ['2026-02-30', '2026-13-01', '2026-00-10', '1899-12-31', '2200-01-01', '2026-1-1', '20261029', '2026-10-29T00:00', '2026-10-29%0d%0aSet-Cookie:x', '2026-10-29<script>', '../2026-10-29', ''])
+    assert.equal(safeNext('index.html?section=schedule&view=day&date=' + date), 'index.html?section=schedule&view=day', 'date ' + date);
+  assert.equal(safeNext('index.html?section=records&view=sources&date=2026-10-29'), 'index.html?section=records&view=sources', 'date belongs to calendar units only');
+  assert.equal(safeNext('index.html?section=manage&date=2026-10-29'), 'index.html?section=manage');
+  assert.equal(safeNext('habits.html?date=2026-10-29'), 'habits.html');
+  // blog: the app's own route shape, only with view=page; without it view=page is left out (except 자료's own page).
+  for (const blog of ['photo.', 'photo.a/b', 'photo.a.b', 'photo.' + 'a'.repeat(129), 'post.a1', 'PHOTO.a1', 'photo.a1%26view%3Dsync', 'javascript:alert(1)', 'https://evil.invalid', 'photo.<script>', 'new2', ''])
+    assert.equal(safeNext('index.html?section=schedule&view=page&blog=' + blog), 'index.html?section=schedule', 'blog ' + blog);
+  assert.equal(safeNext('index.html?section=schedule&view=page'), 'index.html?section=schedule');
+  assert.equal(safeNext('index.html?view=page'), 'index.html');
+  assert.equal(safeNext('index.html?section=schedule&view=day&blog=photo.a1'), 'index.html?section=schedule&view=day', 'blog belongs to view=page only');
+  assert.equal(safeNext('index.html?section=records&view=sources&blog=photo.a1'), 'index.html?section=records&view=sources');
+  // month: YYYY-MM, on the habit page only.
+  for (const month of ['2026-13', '2026-00', '2026-9', '202609', '1899-12', '2200-01', '2026-09-01', '2026-09%26next%3Dx', '<b>', ''])
+    assert.equal(safeNext('habits.html?month=' + month), 'habits.html', 'month ' + month);
+  assert.equal(safeNext('goals.html?month=2026-09'), 'goals.html');
+  assert.equal(safeNext('index.html?month=2026-09'), 'index.html');
+  // view: the listed names only.
+  for (const view of ['day2', 'Day', 'backup/..', 'week%00', 'constructor', '__proto__', 'toString'])
+    assert.equal(safeNext('index.html?section=schedule&view=' + view), 'index.html?section=schedule', 'view ' + view);
+  // A repeated key: the first value is the one checked, and the one written.
+  assert.equal(safeNext('index.html?view=day&view=evil&date=2026-10-29&date=x'), 'index.html?view=day&date=2026-10-29');
+  assert.equal(safeNext('index.html?view=evil&view=day'), 'index.html');
+});
+
+test('m1: no open redirect and no injected parameter: other origins, schemes and unknown keys always come back as a page of this app', () => {
+  const hostile = ['https://evil.invalid/index.html?section=schedule&view=day&date=2026-10-29', '//evil.invalid/index.html?view=day', '///evil.invalid/habits.html?month=2026-09',
+    '\\\\evil.invalid\\index.html', '/\\evil.invalid/index.html', 'http://haedo.invalid/index.html?view=day', 'https://haedo.invalid:8443/index.html', 'https://haedo.invalid@evil.invalid/index.html',
+    'https://user:pw@haedo.invalid/index.html?view=day', 'javascript:alert(document.domain)', 'JaVaScRiPt:alert(1)//index.html', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)',
+    'blob:https://haedo.invalid/index.html', 'file:///index.html', 'about:blank', 'index.html/../../evil.html', 'login.html?next=https://evil.invalid', 'privacy.html', 'sw.js', 'assets/app.js',
+    'index.htmlx', 'index.html%2F..%2Fevil.html', 'sub/index.html', '%2F%2Fevil.invalid', ' https://evil.invalid/index.html', '\thttps://evil.invalid/index.html', 'https:evil.invalid/index.html', 'ht\ntps://evil.invalid'];
+  const allowed = /^(?:index|life|workspace|timeline|goals|habits)\.html(?:\?[A-Za-z0-9_.=&-]*)?$/;
+  for (const value of hostile) {
+    const next = safeNext(value);
+    assert.match(next, allowed, JSON.stringify(value) + ' -> ' + next);
+    assert.equal(new URL(next, 'https://app.invalid/dir/').origin, 'https://app.invalid', value);
+    assert.ok(!/evil|script|javascript|alert/i.test(next), value + ' -> ' + next);
+  }
+  // Unknown keys and OAuth callback values never ride along, on any page.
+  const extra = 'code=c&access_token=t&refresh_token=r&id_token=i&provider_token=p&error=e&error_description=d&next=https%3A%2F%2Fevil.invalid&redirect_to=//evil.invalid&returnTo=x&sourceId=s&q=private+words&__proto__=x&constructor=y';
+  assert.equal(safeNext('index.html?' + extra + '&section=schedule&view=month&date=2026-09-01#access_token=hidden'), 'index.html?section=schedule&view=month&date=2026-09-01');
+  for (const page of ['index.html', 'life.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html']) assert.equal(safeNext(page + '?' + extra + '#frag'), page);
+  // Non-string input.
+  for (const value of [null, undefined, 0, '', {}, [], 42, true]) assert.match(safeNext(value), allowed);
+});
+
+// ── 2026-11-11 m2: an account check that never answers ──
+const { VERIFY_LIMIT_MS } = require('../assets/platform-auth.js');
+const never = () => new Promise(() => {});
+test('m2: the limit is the first-screen budget, and the ordinary check still makes exactly one server request', async () => {
+  assert.equal(VERIFY_LIMIT_MS, 10000); assert.equal(VERIFY_LIMIT_MS, STARTUP_LIMIT_MS);
+  const { auth, state } = setup();
+  await tick(); state.calls.length = 0; // the client's own first session read
+  assert.equal((await auth.verify()).id, A.id);
+  assert.deepEqual(state.calls, ['getSession', 'getUser', 'getSession']);
+});
+
+test('m2: a server check that never answers ends as network_error after the limit; the next check asks the server again', async () => {
+  const { auth, state } = setup({ authOptions: { verifyLimit: 40 }, userPromise: never() });
+  await tick(); state.calls.length = 0;
+  const started = Date.now();
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.ok(Date.now() - started >= 35 && Date.now() - started < 2000, 'gave up at the limit');
+  assert.equal(auth.user, null, 'no account is opened by a check that did not answer');
+  assert.deepEqual(state.calls, ['getSession', 'getUser']);
+  // The connection is back: this check is a new request, not the stalled one.
+  state.userPromise = null;
+  assert.equal((await auth.verify()).id, A.id);
+  assert.equal(state.calls.filter(call => call === 'getUser').length, 2);
+  assert.equal(auth.user.id, A.id);
+});
+
+test('m2: a stalled stored-session read (a token refresh that hangs) is given up the same way', async () => {
+  const { auth, state } = setup({ authOptions: { verifyLimit: 40 } });
+  const sdk = auth.getClient().auth, read = sdk.getSession;
+  await tick(); state.calls.length = 0;
+  sdk.getSession = () => { state.calls.push('getSession'); return never(); };
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.deepEqual(state.calls, ['getSession']);
+  sdk.getSession = read;
+  assert.equal((await auth.verify()).id, A.id);
+});
+
+test('m2: an answer that arrives after the limit follows the old guards: same session yes, a changed account never', async () => {
+  const late = deferred();
+  const { auth, state } = setup({ authOptions: { verifyLimit: 30 }, userPromise: late.promise });
+  const seen = []; auth.onAccountChange(account => seen.push(account?.userId || null));
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.equal(auth.user, null);
+  late.resolve({ data: { user: A }, error: null }); await tick(); await tick();
+  assert.equal(auth.user?.id, A.id, 'the same session: the late server answer is the verification');
+  assert.deepEqual(seen, [A.id]);
+  // Another account signed in while a check was out: its late answer is dropped.
+  const other = deferred();
+  const second = setup({ authOptions: { verifyLimit: 30 }, userPromise: other.promise });
+  await assert.rejects(second.auth.verify(), errorCode('network_error'));
+  second.state.change(B);
+  other.resolve({ data: { user: A }, error: null }); await tick(); await tick();
+  assert.equal(second.auth.user, null, 'a late answer never opens an account after the session changed');
+});
+
+test('m2: only the user check request is cut short; token refresh and data requests are passed through untouched', async () => {
+  const { state, env } = setup({ authOptions: { verifyLimit: 40 } });
+  const sdkFetch = state.options.global.fetch;
+  assert.equal(typeof sdkFetch, 'function');
+  const calls = [];
+  env.fetch = (url, init) => { calls.push({ url, init }); return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))); };
+  env.AbortController = AbortController;
+  const plain = { method: 'GET', headers: {} };
+  sdkFetch(config.url + '/auth/v1/user', plain).catch(() => {});
+  const limited = calls.at(-1);
+  assert.notEqual(limited.init, plain); assert.ok(limited.init.signal, 'the user check carries a signal');
+  await assert.rejects(sdkFetch(config.url + '/auth/v1/user', { method: 'GET' }), error => error.name === 'AbortError');
+  for (const [url, init] of [[config.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: '{}' }], [config.url + '/auth/v1/user', { method: 'PUT', body: '{}' }],
+    [config.url + '/rest/v1/haedo_items', { method: 'GET' }], [config.url + '/auth/v1/user?x=1', { method: 'GET' }], ['https://elsewhere.invalid/auth/v1/user', { method: 'GET' }]]) {
+    sdkFetch(url, init);
+    assert.equal(calls.at(-1).init, init, url + ' ' + init.method + ' is passed as given');
+    assert.equal(calls.at(-1).init.signal, undefined);
+  }
+  // A caller's own signal still aborts the limited request.
+  const outer = new AbortController(), pending = sdkFetch(config.url + '/auth/v1/user', { method: 'GET', signal: outer.signal });
+  outer.abort();
+  await assert.rejects(pending, error => error.name === 'AbortError');
+});
+
+// 2026-11-11 review MAJOR-1: the limit timer was unref'd, so in Node the tests above that wait for the limit were
+// cancelled whenever nothing else kept the event loop alive (pattern runs failed 5/5).
+test('m2: the limit timer stays referenced (an awaited check is answered at the limit even when nothing else is pending)', async () => {
+  let unrefs = 0, armed = 0;
+  const timers = { setTimeout: (run, ms) => { armed++; const timer = setTimeout(run, ms), real = timer.unref.bind(timer); timer.unref = () => { unrefs++; return real(); }; return timer; }, clearTimeout };
+  const { auth, state } = setup({ authOptions: { verifyLimit: 30, ...timers }, userPromise: never() });
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.ok(armed >= 1, 'the injected timer is the one used'); assert.equal(unrefs, 0, 'never unref’d');
+  // A check that answers clears its timer (nothing is left to hold a process).
+  const cleared = []; state.userPromise = null;
+  const second = setup({ authOptions: { verifyLimit: 30, setTimeout: (run, ms) => setTimeout(run, ms), clearTimeout: id => { cleared.push(id); clearTimeout(id); } } });
+  assert.equal((await second.auth.verify()).id, A.id); assert.equal(cleared.length, 1);
+});
+
+// ── 2026-11-11 review MINOR-4·5: a slow connection is waited for longer; 다시 확인 does not join a stalled check ──
+const { VERIFY_PATIENCE } = require('../assets/platform-auth.js');
+// Timers that record the limit each check was given (and still run, on the real clock).
+const recorded = asked => ({ setTimeout: (run, ms) => { asked.push(ms); return setTimeout(run, ms); }, clearTimeout });
+const memoryStore = () => { const data = new Map(); return { data, getItem: key => data.has(key) ? data.get(key) : null, setItem: (key, value) => data.set(key, String(value)), removeItem: key => data.delete(key) }; };
+test('m2: each lapse in a row lengthens the next check (10 → 20 → 30 s, no further); a quick answer goes back to the first limit', async () => {
+  assert.equal(VERIFY_PATIENCE, 3);
+  const asked = [], { auth, state } = setup({ authOptions: { verifyLimit: 20, ...recorded(asked) }, userPromise: never() });
+  for (let i = 0; i < 4; i++) await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.deepEqual(asked, [20, 40, 60, 60]);
+  state.userPromise = null;
+  assert.equal((await auth.verify()).id, A.id); await tick();
+  await auth.verify();
+  assert.deepEqual(asked.slice(4), [60, 20], 'the check that was answered at once resets the level');
+});
+
+test('m2: a check that was answered, but slowly, keeps the limit it needed (the next check on that connection is not cut at 10 s)', async () => {
+  let clock = 1000000;
+  const asked = [], slow = deferred(), { auth, state } = setup({ now: () => clock, authOptions: { verifyLimit: 10000, ...recorded(asked) }, userPromise: slow.promise });
+  const first = auth.verify(); await tick();
+  clock += 12000; slow.resolve({ data: { user: A }, error: null });   // by this clock the answer took 12 s
+  assert.equal((await first).id, A.id); await tick();
+  state.userPromise = null; await auth.verify(); await tick();
+  assert.deepEqual(asked, [10000, 20000], 'a 12 s answer needs the 20 s limit');
+  // An answer within the first limit goes back to it; one that took 25 s keeps the longest.
+  await auth.verify(); await tick();
+  const slower = deferred(); state.userPromise = slower.promise;
+  const third = auth.verify(); await tick(); clock += 25000; slower.resolve({ data: { user: A }, error: null }); await third; await tick();
+  state.userPromise = null; await auth.verify();
+  assert.deepEqual(asked.slice(2), [10000, 10000, 30000]);
+});
+
+test('m2: 다시 확인 (patient) waits the longest at once and does not join the check that has not been answered; that check’s late answer is not used', async () => {
+  const asked = [], stalled = deferred(), { auth, state } = setup({ authOptions: { verifyLimit: 40, ...recorded(asked) }, userPromise: stalled.promise });
+  const seen = []; auth.onAccountChange(account => seen.push(account?.userId || null));
+  await tick(); state.calls.length = 0;
+  const quiet = auth.verify(); quiet.catch(() => {}); await tick();
+  assert.deepEqual(state.calls, ['getSession', 'getUser']);
+  // The owner presses 다시 확인 while that check is out: a new server request, with the longest limit.
+  state.userPromise = null;
+  assert.equal((await auth.verify({ patient: true })).id, A.id);
+  assert.equal(state.calls.filter(call => call === 'getUser').length, 2, 'a second request, not the stalled one');
+  assert.deepEqual(asked, [40, 120]);
+  assert.deepEqual(seen, [A.id]);
+  // The abandoned check ends as cancelled, and its late answer changes nothing.
+  stalled.resolve({ data: { user: B }, error: null });
+  await assert.rejects(quiet, error => ['request_cancelled', 'network_error'].includes(error.code));
+  await tick(); await tick();
+  assert.equal(auth.user.id, A.id); assert.deepEqual(seen, [A.id]);
+  // The same through the page opening (the shell's path).
+  const opening = auth.beginStartup({ patient: true });
+  assert.equal((await auth.verify({ startup: true, patient: true })).id, A.id); opening.end();
+  assert.equal(asked.at(-1), 120);
+});
+
+test('m2: the level is kept for the tab, so a page that opens again after a lapse waits longer; expectSlow() asks for the longest', async () => {
+  const sessionStorage = memoryStore(), asked = [];
+  const first = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) }, userPromise: never() });
+  await assert.rejects(first.auth.verify(), errorCode('network_error'));
+  assert.deepEqual([...sessionStorage.data.values()], ['1']);
+  // The page reloads: a new auth object in the same tab.
+  const again = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) } });
+  assert.equal((await again.auth.verify()).id, A.id); await tick();
+  assert.deepEqual(asked, [20, 40]);
+  assert.equal(sessionStorage.data.size, 0, 'an answer in time clears it');
+  again.auth.expectSlow();
+  assert.deepEqual([...sessionStorage.data.values()], ['2']);
+  const third = setup({ sessionStorage, authOptions: { verifyLimit: 20, ...recorded(asked) } });
+  await third.auth.verify();
+  assert.equal(asked.at(-1), 60);
+  // A value that is not a small whole number is ignored; storage that throws is tolerated.
+  for (const junk of ['99', '-1', '1.5', 'x', '']) {
+    const store = memoryStore(); store.data.set('caeyeon_life_platform_verify_lapses', junk); const seen = [];
+    const { auth } = setup({ sessionStorage: store, authOptions: { verifyLimit: 20, ...recorded(seen) } });
+    await auth.verify(); assert.ok([20, 60].includes(seen[0]), junk + ' → ' + seen[0]); assert.equal(seen[0], junk === '99' ? 60 : 20);
+  }
+  const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() { throw new Error('denied'); } };
+  assert.equal((await setup({ sessionStorage: broken }).auth.verify()).id, A.id);
+});
+
+test('m2: verifyWait() tells the screen how long the next check of an opening may take (10 → 20 → 30 s with the level)', async () => {
+  const sessionStorage = memoryStore(), { auth, state } = setup({ sessionStorage, authOptions: { verifyLimit: 20 }, userPromise: never() });
+  assert.equal(auth.verifyWait(), 20);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 40);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 60);
+  await assert.rejects(auth.verify(), errorCode('network_error')); assert.equal(auth.verifyWait(), 60, 'no further');
+  // A page of the same tab that opens next starts from the level that was kept.
+  assert.equal(setup({ sessionStorage, authOptions: { verifyLimit: 20 } }).auth.verifyWait(), 60);
+  state.userPromise = null; await auth.verify(); await tick();
+  assert.equal(auth.verifyWait(), 20, 'an answer in time goes back to the first limit');
+  auth.expectSlow(); assert.equal(auth.verifyWait(), 60);
+});
+
+test('m2: the opening’s budget grows with the level: a check that took 12 s is still shared at 20 s after the opening began, and no longer after that', async () => {
+  const clock = { now: 1_000_000 }, sessionStorage = memoryStore();
+  sessionStorage.data.set('caeyeon_life_platform_verify_lapses', '1');   // this tab's last check ran into its limit
+  const slow = deferred(), { auth, state } = setup({ now: () => clock.now, sessionStorage, userPromise: slow.promise });
+  const opening = auth.beginStartup();
+  const first = auth.verify({ startup: true }); await tick();
+  clock.now += 12000; slow.resolve({ data: { user: A }, error: null });
+  assert.equal((await first).id, A.id); await tick();
+  state.userPromise = null;
+  // With a budget of STARTUP_LIMIT_MS for every opening this answer would be too old at once.
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1, 'shared 12 s after the opening began');
+  clock.now += 2 * STARTUP_LIMIT_MS - 12000;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 1, 'and at exactly twice the budget');
+  clock.now += 1;
+  await auth.verify({ startup: true }); assert.equal(serverChecks(state), 2, 'past it the opening asks again');
+  opening.end(); auth.dispose();
+  // 다시 확인 (patient): three times the budget at once.
+  const pressed = setup({ now: () => clock.now });
+  const again = pressed.auth.beginStartup({ patient: true });
+  await pressed.auth.verify({ startup: true, patient: true }); clock.now += 3 * STARTUP_LIMIT_MS;
+  await pressed.auth.verify({ startup: true }); assert.equal(serverChecks(pressed.state), 1);
+  clock.now += 1;
+  await pressed.auth.verify({ startup: true }); assert.equal(serverChecks(pressed.state), 2);
+  again.end(); pressed.auth.dispose();
+});
+
+test('m2: the user check request is cut at the limit of the check that is out (20 s for a second try), and 다시 확인 cuts the earlier request at once', async () => {
+  const asked = [], { auth, state, env } = setup({ authOptions: { verifyLimit: 30, ...recorded(asked) }, userPromise: never() });
+  const sdkFetch = state.options.global.fetch, aborted = [];
+  env.AbortController = AbortController;
+  env.fetch = (url, init) => new Promise((_, reject) => init?.signal?.addEventListener('abort', () => { aborted.push(url); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }));
+  await assert.rejects(auth.verify(), errorCode('network_error'));   // one lapse: the next check is allowed 60
+  asked.length = 0;
+  const second = auth.verify(); second.catch(() => {});
+  await tick();
+  const request = sdkFetch(config.url + '/auth/v1/user', { method: 'GET' }); request.catch(() => {});
+  assert.deepEqual(asked, [60, 60], 'the check and its request share the longer limit');
+  // 다시 확인 now: the request that is out is cut at once.
+  state.userPromise = null;
+  assert.equal(aborted.length, 0);
+  const pressed = auth.verify({ patient: true });
+  assert.equal(aborted.length, 1, 'the earlier request was aborted when 다시 확인 was pressed');
+  assert.equal((await pressed).id, A.id);
+  await assert.rejects(request, error => error.name === 'AbortError');
 });

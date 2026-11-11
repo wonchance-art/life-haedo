@@ -216,7 +216,27 @@
     const findSections = new Set(['news', 'schedule', 'records', 'manage']);
     // 일정's calendar units (2026-11-02): Y is the former tools (계획) view; Q·M·W·D are new.
     const calendarModes = new Set(['tools', 'quarter', 'month', 'week', 'day']);
-    const scheduleDate = () => { const sd = global.HaedoLife.ScheduleData; return !sd ? null : sd.valid(state.scheduleDate) ? state.scheduleDate : sd.today(); };
+    // The date 일정 shows (2026-11-11 M1). `scheduleDay` is the today the shown schedule was drawn with: a
+    // date never chosen means that day, not the clock at each call, so the title, the address, 오늘, ‹ › and
+    // the day's checks all use the one date on screen. scheduleRollover() moves it when the day changes.
+    let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null, scheduleDayMoving = false, scheduleDayFocus = null;
+    const scheduleDate = () => {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return null;
+      if (!scheduleDay) scheduleDay = sd.today();
+      return sd.valid(state.scheduleDate) ? state.scheduleDate : scheduleDay;
+    };
+    // The day changed since the schedule was drawn: a screen that showed today follows the new today, a
+    // chosen past or future date stays. True when the day moved.
+    function scheduleRollover() {
+      const sd = global.HaedoLife.ScheduleData;
+      if (!sd) return false;
+      const now = sd.today();
+      if (scheduleDay === now) return false;
+      if (scheduleDay && state.scheduleDate === scheduleDay) state.scheduleDate = now;
+      scheduleDay = now;
+      return true;
+    }
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
@@ -1626,6 +1646,8 @@
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
+      // A navigation is drawn with the current day (the date an option names is applied after it).
+      scheduleRollover();
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1864,6 +1886,23 @@
     function historyClone(value) {
       try { return value == null ? null : JSON.parse(JSON.stringify(value)); } catch (_) { return null; }
     }
+    // 글쓰기 opened by the link of another page of the app (목표·습관·연표 목록·연표, 2026-11-11 m3): that page
+    // is where 닫기 returns. Only these page names with the parameters their own return address may carry
+    // (HaedoAuth.safeNext) are kept; anything else means the 일정 list as before.
+    const returnPagePattern = /^(?:goals|habits|workspace|timeline)\.html(?:\?[A-Za-z0-9_=&-]{1,200})?$/;
+    function composeOriginPage() {
+      try {
+        // A reload or a history move is not an arrival from that page (the entry itself records it, see mount).
+        const arrival = global.performance?.getEntriesByType?.('navigation')[0]?.type;
+        if (!document.referrer || arrival && arrival !== 'navigate') return null;
+        const from = new URL(document.referrer), here = global.location;
+        const page = from.pathname.split('/').pop();
+        // The same folder of the same origin only.
+        if (from.origin !== here.origin || from.pathname.slice(0, -page.length) !== here.pathname.slice(0, here.pathname.lastIndexOf('/') + 1)) return null;
+        const safe = global.HaedoAuth?.safeNext?.(page + from.search);
+        return typeof safe === 'string' && returnPagePattern.test(safe) && safe.split('?')[0] === page ? safe : null;
+      } catch (_) { return null; }
+    }
     // What reopens a screen: its mode, exact reader version or blog task and
     // the in-app return origin. The full entry stays in memory (historyDetails);
     // history.state receives only historyPublic(entry).
@@ -1878,7 +1917,8 @@
       if (mode === 'external-discovery' && state.newsArticle) entry.newsArticle = state.newsArticle;
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
-      if (calendarModes.has(mode) && scheduleDate()) entry.scheduleDate = scheduleDate();
+      // scheduleToday: the entry showed today. A tab reopened on a later day (reload) opens that day's today.
+      if (calendarModes.has(mode) && scheduleDate()) { entry.scheduleDate = scheduleDate(); if (entry.scheduleDate === scheduleDay) entry.scheduleToday = true; }
       if (mode === 'find' && findSection) entry.findSection = findSection;
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
@@ -1910,7 +1950,8 @@
           Object.assign(position, { offset: reading.offset, top: Math.round(reading.top), viewport: reading.viewport, ...(Number.isFinite(reading.ratio) ? { ratio: Math.min(1, Math.max(0, Math.round(reading.ratio * 1000) / 1000)) } : {}) });
         out.reading = position;
       }
-      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      if (returnPagePattern.test(value.returnPage || '')) out.returnPage = value.returnPage;
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
       if (value.homeState && typeof value.homeState === 'object') {
@@ -2117,8 +2158,9 @@
       return switchScheduleView(mode, { date, motion: 'push' });
     }
     // ‹ › and 오늘 update the same screen: the entry is replaced, not added.
+    // The same date is drawn again only when the day changed after this screen was drawn (its 오늘 marks are old).
     async function scheduleMove(date) {
-      if (!calendarModes.has(state.mode) || date === scheduleDate()) return;
+      if (!calendarModes.has(state.mode) || date === scheduleDate() && scheduleDay === global.HaedoLife.ScheduleData.today()) return;
       const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
       if (await navigate(state.mode, { preserveContext: true, scheduleDate: date, historyAction: 'replace', navigationMotion: 'tab', sectionPosition: { scrollY: global.scrollY } }) === false) return;
       if (disposed || !focusKey) return;
@@ -2131,6 +2173,67 @@
     function scheduleToday() {
       if (state.mode === 'home') { global.scrollTo({ top: 0, behavior: 'instant' }); return; }
       return scheduleMove(global.HaedoLife.ScheduleData.today());
+    }
+    // The app stayed open over midnight (2026-11-11 M1). Checked when the page is shown again, on focus and
+    // right after midnight: a calendar screen is drawn again with the new day (scheduleRollover in navigate).
+    // While a control is in use it waits, so nothing typed or chosen is lost.
+    function scheduleInUse() {
+      if (state.busy || navigationRender !== null || historyWait || historyPending || document.querySelector('dialog[open]')) return true;
+      const active = document.activeElement;
+      return !!active && root.contains(active) && (active.isContentEditable || active.matches('textarea,select,input:not([type=checkbox]):not([type=radio]):not([type=button])') && (active.type !== 'range' || active.matches(':active')));
+    }
+    // Keyboard focus after the day moved under it: the same control when it is still there, else the same kind
+    // of control of the new day (the same habit's box, the same 행복도 choice), else the title that names the new day.
+    // Focus that was nowhere stays nowhere.
+    function scheduleRefocus(focusKey, from) {
+      if (!focusKey) return;
+      const find = key => [...root.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === key && item.checkVisibility?.());
+      const to = scheduleDate(), moved = from && to && from !== to && focusKey.includes(from) ? focusKey.split(from).join(to) : null;
+      const target = find(focusKey) || (moved && find(moved)) ||
+        // 지우기 exists only on a day with a value; a habit not due on the new day has no box.
+        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || toolbar.querySelector('h1');
+      target?.focus({ preventScroll: true });
+    }
+    function scheduleDayCheck() {
+      const sd = global.HaedoLife.ScheduleData, entries = global.HaedoLife.ScheduleEntries;
+      if (disposed || !sd || !state.bundle || document.hidden || !scheduleDay || scheduleDay === sd.today() || scheduleDayMoving) return;
+      // Another screen shows no schedule date: only the kept date follows, for the next schedule screen.
+      if (!calendarModes.has(state.mode)) { scheduleRollover(); return; }
+      // The held day's 다시 저장 / 선택 취소 go away with their notice before the screen moves: their focus is
+      // remembered here, so it ends on the new day's title and not on the page.
+      const heldFocus = root.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+      if (heldFocus?.startsWith('schedule:held:')) scheduleDayFocus = heldFocus;
+      // A 행복도 choice on its way to the store: its end is announced (haedo:happiness) and this runs again. No timer.
+      if (entries?.saving?.()) return;
+      // The day on screen is the one that was today, and its 행복도 choice failed: the screen stays, says that the
+      // date changed and takes no other input for that day, until the owner stores the choice again or drops it
+      // (ScheduleEntries.holdDay). Nothing is polled meanwhile.
+      const shown = scheduleDate();
+      if (state.mode === 'day' && shown === scheduleDay && entries?.failed?.().includes(shown)) { entries.holdDay(shown); return; }
+      if (scheduleInUse()) {
+        if (!scheduleDayRetry) scheduleDayRetry = global.setTimeout(() => { scheduleDayRetry = null; scheduleDayCheck(); }, 1000);
+        return;
+      }
+      // One move at a time: the return fires several events at once (shown, focus), and releasing the held day announces itself.
+      scheduleDayMoving = true;
+      // Read before guarded(): it disables the fields while it runs, which drops their focus.
+      const focusKey = (root.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null) || scheduleDayFocus;
+      scheduleDayFocus = null;
+      entries?.holdDay?.(null);
+      Promise.resolve(guarded(async () => {
+        if (await navigate(state.mode, { preserveContext: true, historyAction: 'replace', navigationMotion: 'tab', restoresFocus: true, sectionPosition: { scrollY: global.scrollY } }) === false) return;
+        // The new day's controls are drawn when its records are read.
+        const drawn = renderGeneration;
+        await Promise.resolve(mainRenderPromise).catch(() => {});
+        if (!disposed && drawn === renderGeneration) scheduleRefocus(focusKey, shown);
+      })()).finally(() => { scheduleDayMoving = false; });
+    }
+    // One timer to the next local midnight (a hidden page is checked when it is shown again).
+    function armScheduleDayTimer() {
+      if (scheduleDayTimer) global.clearTimeout(scheduleDayTimer);
+      if (disposed) return;
+      const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      scheduleDayTimer = global.setTimeout(() => { scheduleDayTimer = null; scheduleDayCheck(); armScheduleDayTimer(); }, Math.max(1000, next - now + 250));
     }
     // Links to the existing editors that own goals, habits and happiness (B1 shows no copy of their data).
     function scheduleLinks(items) {
@@ -2206,7 +2309,10 @@
       const options = { preserveContext: true, historyAction: 'replace', navigationMotion: backward ? 'back' : 'push',
         restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
       if (entry.homeState) options.homeState = entry.homeState;
-      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate)) options.scheduleDate = entry.scheduleDate;
+      // An entry that showed today reopens on today, as a reload of it does (mount): back to "today's" screen on a
+      // later day is not yesterday's screen.
+      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate))
+        options.scheduleDate = entry.scheduleToday === true ? global.HaedoLife.ScheduleData.today() : entry.scheduleDate;
       if (entry.mode === 'source' && entry.sourceId) { seedReaderPosition(entry); Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null }); }
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
@@ -2299,12 +2405,31 @@
       if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
+      // A post saved here is shown in the list (below); otherwise 글쓰기 from another page returns to that page.
+      if (state.mode === 'page' && blogPageTask && !blogCommitted && returnPagePattern.test(origin.returnPage || '')) return returnToPage(origin);
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget,
         ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
       if (origin.postTarget) return;
       restoreOriginView(origin, anchor);
+    }
+
+    // 닫기 of a 글쓰기 opened from another page of the app (2026-11-11 m3). This entry first becomes the 일정
+    // list through the ordinary navigation (the same flush as any exit: a failed save stays here with the
+    // input), so neither it nor a later Forward reopens an empty editor. Then the browser goes back to the
+    // page the link was on; when this entry is not the one right after it, that page is opened instead.
+    async function returnToPage(origin) {
+      const direct = historyIndex === 0 && global.history.length > 1;
+      // The list is not flashed on the way out. It is shown again if this page is still (or again) in front.
+      const show = () => { root.style.visibility = ''; };
+      root.style.visibility = 'hidden';
+      try {
+        if (await navigate('home', { preserveContext: true, homeState: origin.homeState, navigationMotion: 'back', historyAction: 'replace', restoresFocus: true }) === false) { show(); return; }
+      } catch (cause) { show(); throw cause; }
+      global.addEventListener('pageshow', show, { once: true });
+      global.setTimeout(show, 1500);
+      if (direct) global.history.back(); else global.location.assign(origin.returnPage);
     }
 
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
@@ -5813,7 +5938,8 @@
         node('p', '네이버 원문 사진 사본도 이 JSON에는 들어가지 않습니다. 사진 사본이 있는 원문에서는 글·사진 ZIP을 따로 보관할 수 있습니다.', 'life-help'));
       main.append(scope, actionRow('폴더·묶음·내 페이지도 함께 백업', '분류와 구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
-      const stamp = new Date().toISOString().slice(0, 10);
+      // This device's civil day, not the UTC day (2026-11-11 m5).
+      const stamp = global.HaedoData.localDate();
       const includeTrash = field('Markdown에 휴지통 자료 포함', 'checkbox', 'lifeMarkdownIncludeTrash', '');
       includeTrash.input.checked = false;
       actions.append(includeTrash.label);
@@ -6417,6 +6543,13 @@
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
+    scheduleDayWatch = () => scheduleDayCheck();
+    document.addEventListener('visibilitychange', scheduleDayWatch);
+    global.addEventListener('pageshow', scheduleDayWatch);
+    global.addEventListener('focus', scheduleDayWatch);
+    // A 행복도 write that ended, or a failed choice the owner stored again or dropped.
+    document.addEventListener('haedo:happiness', scheduleDayWatch);
+    armScheduleDayTimer();
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
       if (event && event.type === 'error' && event.error) failure(event.error);
@@ -6446,11 +6579,18 @@
     state.mode = routeMode();
     if (state.mode === 'find') findSection = addressFindSection();
     syncHistoryPosition();
+    // An entry that showed today reopens on today (a tab the browser reloads on a later day), not on the day it was written.
+    if (calendarModes.has(state.mode)) {
+      const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
+      if (recorded?.mode === state.mode && recorded.scheduleToday === true && recorded.scheduleDate === state.scheduleDate) state.scheduleDate = null;
+    }
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit'; blogRoute = 'new'; blogComposing = true;
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
-      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+      // 닫기 returns to the app page whose 글쓰기 link opened this document (m3); otherwise to the list.
+      const returnPage = composeOriginPage();
+      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
       global.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
@@ -6473,7 +6613,9 @@
           blogPageTask = true; blogMode = opened.pageProfileEdit ? 'profile' : opened.pageCompose || opened.pageDraftId ? 'edit' : null; blogComposing = !!(opened.pageCompose || opened.composingPost);
           blogRoute = blogRouteFrom(opened);
           workbenchOpenOptions = { ...opened, blogContext: true, homeTab: 'posts' };
-          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+          // A reload of a 글쓰기 opened from another page keeps that page as its return (the entry recorded it).
+          const returnPage = recorded?.viewOrigin?.workspaceId === active && returnPagePattern.test(recorded.viewOrigin.returnPage || '') ? recorded.viewOrigin.returnPage : null;
+          viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
         } else state.mode = 'home';
       }
       // A reload while reading reopens the same material, exact version and line. The address stays the records
@@ -6673,6 +6815,8 @@
       cleanup(() => global.removeEventListener('beforeunload', beforeUnload));
       cleanup(() => document.removeEventListener('visibilitychange', visibility));
       cleanup(() => global.removeEventListener('pagehide', pagehideReading));
+      cleanup(() => { document.removeEventListener('visibilitychange', scheduleDayWatch); global.removeEventListener('pageshow', scheduleDayWatch); global.removeEventListener('focus', scheduleDayWatch); document.removeEventListener('haedo:happiness', scheduleDayWatch); });
+      cleanup(() => { global.clearTimeout(scheduleDayTimer); global.clearTimeout(scheduleDayRetry); scheduleDayTimer = scheduleDayRetry = null; });
       downloadUrls.forEach(url => cleanup(() => URL.revokeObjectURL(url)));
       downloadUrls.clear();
       cleanup(() => signal?.removeEventListener('abort', dispose));

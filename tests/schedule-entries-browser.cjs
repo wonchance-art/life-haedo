@@ -60,6 +60,10 @@ async function shown(page, mode) {
   await page.waitForFunction(m => document.querySelector('#lifeMain')?.dataset.mode === m && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false', mode);
 }
 async function entries(page) { await page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.dataset.happiness !== 'loading' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }); }
+// Found and measured in ONE evaluation in the page. locator.evaluateAll() resolves the nodes first and measures
+// them in a second step; right after a load the entry slot repaints several times within a few tens of ms
+// (the 행복도 document, then two store notices), so the resolved nodes were sometimes already detached: the
+// lists came back empty and this suite failed about one run in twelve (2026-11-11, traced with a mutation log).
 async function overflow(page, label) {
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   if (wide) report.overflow.push(label);

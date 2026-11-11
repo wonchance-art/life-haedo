@@ -2553,7 +2553,7 @@ function saveBlob(blob,name){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
-const exportName=ext=>'연표-'+new Date().toISOString().slice(0,10)+'.'+ext;
+const exportName=ext=>'연표-'+HaedoData.localDate()+'.'+ext;
 function exportSvgText(){
   const box=svg.viewBox.baseVal, W2=box.width||svg.clientWidth, H2=box.height||svg.clientHeight;
   const c=svg.cloneNode(true);

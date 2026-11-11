@@ -258,7 +258,7 @@ test('모두 받기: every account workspace and kind in one ZIP, existing forma
   const restore = NaverFixture.installDecoder(); t.after(restore);
   const seeded = await seed({ naver: true });
   const { built } = await fullBundle(seeded.storage, { originals: seeded.originals });
-  assert.equal(built.manifest.format, 'haedo-full-backup-v1'); assert.equal(built.manifest.version, 2);
+  assert.equal(built.manifest.format, 'haedo-full-backup-v1'); assert.equal(built.manifest.version, 3);
   assert.equal(built.manifest.complete, true); assert.equal(built.manifest.appVersion, 'haedo-v171');
   assert.match(built.fileName, /^haedo-backup-\d{4}-\d{2}-\d{2}\.zip$/);
   // Single pass: manifest/README are the last entries, after every data file.
@@ -395,7 +395,8 @@ test('tampered, unknown-version and oversized files are rejected before anything
   const manifest = JSON.parse(Buffer.from(files['manifest.json']).toString());
   const future = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, format: 'haedo-full-backup-v2', version: 3 })) };
   await assert.rejects(Full.open(new Blob([Z.zipSync(future, { level: 0 })])), error => error.code === 'unsupported_version');
-  const sameName = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, version: 3 })) };
+  // Version 3 is the current list (2026-11-11: post times); the next unknown number is refused.
+  const sameName = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, version: 4 })) };
   await assert.rejects(Full.open(new Blob([Z.zipSync(sameName, { level: 0 })])), error => error.code === 'unsupported_version');
   // Claiming completeness while a read failed is rejected.
   const lying = { ...files, 'manifest.json': Z.strToU8(JSON.stringify({ ...manifest, missing: [{ kind: 'photoPosts', workspace: 1, reason: 'read_failed', error: 'x' }] })) };
@@ -935,4 +936,171 @@ test('행복도를 읽지 못해도(새 앱의 형식 등) 연표 부분은 담�
   const missing = built.manifest.missing.filter(row => row.kind === 'timeline');
   assert.equal(missing.length, 1); assert.equal(missing[0].reason, 'skipped');
   assert.match(missing[0].error, /하루 행복도를 읽지 못해/);
+});
+
+// ── 2026-11-11 M2: a post's own 작성·수정 시각 in its backup ──
+const postTimes = doc => ({ createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+// The post ZIP with its manifest rewritten (an older ZIP without times, or changed times).
+const rewritePost = (bytes, change) => {
+  const files = Z.unzipSync(bytes), manifest = JSON.parse(Buffer.from(files['manifest.json']).toString());
+  return Z.zipSync({ ...files, 'manifest.json': Z.strToU8(JSON.stringify(change(manifest))) }, { level: 0 });
+};
+const withoutTimes = manifest => { const { createdAt, updatedAt, ...rest } = manifest; return rest; };
+async function datedPosts() {
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+  const ws = (await storage.createWorkspace('날짜가 다른 글')).workspaceId, docs = [];
+  for (const [title, status, createdAt, updatedAt, legacy] of [['시월 초 글', 'saved', '2026-10-03T01:00:00.000Z', '2026-10-05T02:30:00.000Z'],
+    ['구월 초안', 'draft', '2026-09-14T22:10:00.000Z', '2026-09-14T22:40:00.000Z'], ['작년 옛 형식 글', 'saved', '2025-12-31T15:30:00.000Z', '2026-01-02T03:00:00.000Z', true]]) {
+    const doc = postDoc({ title, status, photos: legacy ? [await jpegPhoto()] : [] }); doc.createdAt = createdAt; doc.updatedAt = updatedAt;
+    if (legacy) { doc.format = 'life-photo-post-v1'; delete doc.attachments; delete doc.archived; }
+    await storage.savePhotoPost(ws, doc, 0); docs.push(await storage.readPhotoPost(ws, doc.id));
+  }
+  return { storage, ws, docs };
+}
+async function restoredPosts(blob, account = other) {
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account });
+  const report = await Full.restore(await Full.open(blob), { storage: target, kinds: new Set(['photoPosts']), verifyPhoto: null });
+  const posts = [];
+  for (const ws of await target.listWorkspaces()) for (const row of await target.listPhotoPosts(ws.workspaceId)) posts.push(await target.readPhotoPost(ws.workspaceId, row.id));
+  return { report, posts, byTitle: title => posts.find(doc => doc.title === title) };
+}
+
+test('M2: 모두 받기와 글 ZIP은 글의 작성·수정 시각을 담고, 빈 계정에 복원한 사본이 그 시각을 그대로 갖는다', async () => {
+  const { storage, docs } = await datedPosts(), before = await snapshotAll(storage);
+  const { built, failed } = await fullBundle(storage);
+  assert.deepEqual(failed, []); assert.equal(built.manifest.version, 3);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()));
+  for (const doc of docs) {
+    const entry = built.manifest.files.find(file => file.postId === doc.id), inner = JSON.parse(Buffer.from(Z.unzipSync(files[entry.path])['manifest.json']).toString());
+    assert.deepEqual(postTimes(inner), postTimes(doc), doc.title + ': the post ZIP names its times');
+  }
+  const startedAt = new Date().toISOString();
+  const { report, posts, byTitle } = await restoredPosts(built.blob);
+  assert.equal(posts.length, 3); assert.deepEqual(report.items.map(item => [item.status, item.times]), Array(3).fill(['restored', 'kept']));
+  for (const doc of docs) {
+    const copy = byTitle(doc.title);
+    assert.notEqual(copy.id, doc.id); assert.deepEqual(postTimes(copy), postTimes(doc), doc.title + ': restored with its own times');
+    assert.ok(copy.updatedAt < startedAt, 'not the restore time');
+    assert.equal(copy.status, doc.status);
+  }
+  // The post's own ZIP (편집기의 사진 포함 백업) carries the same fields; it restores as a draft, as before.
+  const single = await restoredPosts(await Photo.backup(docs[0]));
+  assert.deepEqual(postTimes(single.posts[0]), postTimes(docs[0])); assert.equal(single.posts[0].status, 'draft'); assert.equal(single.report.items[0].times, 'kept');
+  // Reading a backup never changes the document being backed up, and validate() measures the same manifest as before.
+  assert.equal(await snapshotAll(storage), before);
+  const candidate = await Photo.readBackup(await Photo.backup(docs[0]), Core.id);
+  assert.equal(Photo.backupTimes(candidate), 'kept'); assert.equal(Photo.backupTimes({}), null);
+});
+
+test('M2: 시각이 없는 옛 글 ZIP과 목록 v2 묶음은 지금처럼 복원 시각으로 복원하고 그 사실을 결과에 남긴다', async () => {
+  const { storage, docs } = await datedPosts();
+  const { built } = await fullBundle(storage);
+  const files = Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer())), manifest = JSON.parse(Buffer.from(files['manifest.json']).toString());
+  // The bundle as the previous app wrote it: list version 2, post ZIPs without times.
+  const old = { ...files }, oldManifest = { ...manifest, version: 2, files: manifest.files.map(file => {
+    if (file.kind !== 'photoPosts') return file;
+    old[file.path] = rewritePost(files[file.path], withoutTimes);
+    return { ...file, bytes: old[file.path].length, sha256: sha(old[file.path]) };
+  }) };
+  old['manifest.json'] = Z.strToU8(JSON.stringify(oldManifest));
+  assert.equal(Object.hasOwn(JSON.parse(Buffer.from(Z.unzipSync(old[oldManifest.files.find(file => file.kind === 'photoPosts').path])['manifest.json']).toString()), 'createdAt'), false);
+  const startedAt = new Date().toISOString();
+  const { report, posts } = await restoredPosts(new Blob([Z.zipSync(old, { level: 0 })]));
+  assert.equal(posts.length, 3); assert.deepEqual(report.items.map(item => [item.status, item.times]), Array(3).fill(['restored', 'missing']));
+  for (const copy of posts) { assert.ok(copy.createdAt >= startedAt, copy.title + ': the restore time'); assert.equal(copy.updatedAt, copy.createdAt); }
+  // An older single post ZIP: the same.
+  const single = await restoredPosts(new Blob([rewritePost(new Uint8Array(await (await Photo.backup(docs[0])).arrayBuffer()), withoutTimes)]));
+  assert.equal(single.report.items[0].times, 'missing'); assert.ok(single.posts[0].createdAt >= startedAt);
+});
+
+test('M2: 형식이 틀리거나 순서가 뒤집힌 시각은 거절하고, 지금보다 늦은 시각은 복원 시각으로 맞춘다', async () => {
+  const { docs } = await datedPosts();
+  const bytes = new Uint8Array(await (await Photo.backup(docs[0])).arrayBuffer());
+  const read = change => Photo.readBackup(new Blob([rewritePost(bytes, change)]), Core.id);
+  for (const [name, change] of [
+    ['a date without a time', m => ({ ...m, createdAt: '2026-10-03' })],
+    ['no milliseconds', m => ({ ...m, updatedAt: '2026-10-05T02:30:00Z' })],
+    ['a local offset', m => ({ ...m, createdAt: '2026-10-03T10:00:00.000+09:00' })],
+    ['not a calendar day', m => ({ ...m, createdAt: '2026-02-30T01:00:00.000Z' })],
+    ['a number', m => ({ ...m, updatedAt: 1791234567890 })],
+    ['null', m => ({ ...m, createdAt: null })],
+    ['only createdAt', m => { const { updatedAt, ...rest } = m; return rest; }],
+    ['only updatedAt', m => { const { createdAt, ...rest } = m; return rest; }],
+    ['updatedAt before createdAt', m => ({ ...m, createdAt: '2026-10-06T00:00:00.000Z' })],
+    ['an unknown field', m => ({ ...m, publishedAt: m.createdAt })]]) {
+    await assert.rejects(read(change), error => error.code === 'invalid_photo_post', name);
+  }
+  // Refused inside a bundle as well: the post is recorded as failed and nothing is stored for it.
+  const tampered = await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, createdAt: '2026-10-06T00:00:00.000Z' }))]));
+  assert.equal(tampered.posts.length, 0); assert.equal(tampered.report.items[0].status, 'failed'); assert.match(tampered.report.items[0].message, /날짜/);
+  // A clock that ran ahead: a time later than now becomes the restore time, an earlier createdAt stays.
+  const startedAt = new Date().toISOString();
+  const ahead = await read(m => ({ ...m, updatedAt: '2099-01-01T00:00:00.000Z' }));
+  assert.equal(Photo.backupTimes(ahead), 'adjusted'); assert.equal(ahead.createdAt, docs[0].createdAt);
+  assert.ok(ahead.updatedAt >= startedAt && ahead.updatedAt <= new Date().toISOString());
+  const both = await read(m => ({ ...m, createdAt: '2098-01-01T00:00:00.000Z', updatedAt: '2099-01-01T00:00:00.000Z' }));
+  assert.equal(Photo.backupTimes(both), 'adjusted'); assert.equal(both.createdAt, both.updatedAt); assert.ok(both.createdAt <= new Date().toISOString());
+  Photo.validate(ahead); Photo.validate(both);
+  const report = (await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, updatedAt: '2099-01-01T00:00:00.000Z' }))]))).report;
+  assert.deepEqual([report.items[0].status, report.items[0].times], ['restored', 'adjusted']);
+});
+
+// ── 2026-11-11 m5: backup and export files are named by this device's day ──
+test('m5: 모두 받기 names its file by the device’s civil day, not the UTC day', async () => {
+  const { storage } = await datedPosts();
+  const timeline = () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: fakeLocal(owner.userId), uid: owner.userId });
+  const context = { storage, timeline, originals: null }, zone = process.env.TZ;
+  // 08:30 on the 11th in Seoul is 23:30 on the 10th in UTC; 23:30 on the 10th in Los Angeles is 07:30 on the 11th in UTC.
+  try {
+    for (const [tz, instant, day] of [['Asia/Seoul', '2026-11-10T23:30:00.000Z', '2026-11-11'], ['America/Los_Angeles', '2026-11-11T07:30:00.000Z', '2026-11-10'], ['UTC', '2026-11-10T23:30:00.000Z', '2026-11-10']]) {
+      process.env.TZ = tz;
+      const writer = Full.writer(await Full.plan(context), context, { now: () => instant });
+      assert.deepEqual(await writer.collect(), []);
+      const built = writer.finish();
+      assert.equal(built.fileName, 'haedo-backup-' + day + '.zip', tz);
+      assert.equal(built.manifest.createdAt, instant, 'the list still records the exact instant');
+    }
+  } finally { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; }
+});
+test('m5: no backup or export file name is cut from a UTC timestamp', () => {
+  const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  for (const file of ['assets/life/full-backup.js', 'assets/life/ui.js', 'assets/life/collection-ui.js', 'assets/app.js', 'assets/platform-ui.js', 'assets/workspace.js'])
+    assert.doesNotMatch(read(file), /toISOString\(\)\.slice\(0,\s*10\)|createdAt\.slice\(0,\s*10\)/, file);
+  // The timeline's SVG/PNG export name (app.js), evaluated with a clock that differs between UTC and the device.
+  const source = /const exportName=ext=>[^;]+;/.exec(read('assets/app.js'))[0], zone = process.env.TZ;
+  const Data = require('../assets/data.js'), RealDate = Date;
+  try {
+    process.env.TZ = 'Asia/Seoul';
+    const at = new RealDate('2026-11-10T23:30:00.000Z');
+    const exportName = new Function('HaedoData', source + ' return exportName;')({ ...Data, localDate: (date = at) => Data.localDate(date) });
+    assert.equal(exportName('png'), '연표-2026-11-11.png');
+  } finally { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; }
+});
+
+// ── 2026-11-11 review MAJOR-2: times before the years 일정 handles ──
+test('M2: a createdAt before 1900 is not kept: both times become the restore time and the result says adjusted', async () => {
+  const { docs } = await datedPosts();
+  const bytes = new Uint8Array(await (await Photo.backup(docs[0])).arrayBuffer());
+  const read = change => Photo.readBackup(new Blob([rewritePost(bytes, change)]), Core.id);
+  for (const [createdAt, updatedAt] of [['0000-06-01T00:00:00.000Z', '0000-06-02T00:00:00.000Z'], ['0001-01-01T00:00:00.000Z', '0001-01-02T00:00:00.000Z'],
+    ['0999-06-01T00:00:00.000Z', '0999-06-02T00:00:00.000Z'], ['1000-06-01T00:00:00.000Z', '1000-06-02T00:00:00.000Z'], ['1899-12-31T14:59:59.999Z', '1899-12-31T15:00:00.000Z'],
+    ['1900-01-01T23:59:59.999Z', '1900-01-01T23:59:59.999Z'], ['0999-06-01T00:00:00.000Z', docs[0].updatedAt], ['0999-06-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z']]) {
+    const startedAt = new Date().toISOString(), doc = await read(m => ({ ...m, createdAt, updatedAt }));
+    assert.equal(Photo.backupTimes(doc), 'adjusted', createdAt);
+    assert.ok(doc.createdAt >= startedAt && doc.createdAt <= new Date().toISOString(), createdAt + ' → the restore time');
+    assert.equal(doc.updatedAt, doc.createdAt, 'updatedAt may not precede createdAt');
+    Photo.validate(doc);
+  }
+  // The first kept instant, and ordinary old dates, stay as they are.
+  for (const createdAt of ['1900-01-02T00:00:00.000Z', '1969-07-20T20:17:00.000Z']) {
+    const doc = await read(m => ({ ...m, createdAt }));
+    assert.equal(Photo.backupTimes(doc), 'kept'); assert.deepEqual(postTimes(doc), { createdAt, updatedAt: docs[0].updatedAt });
+  }
+  // Years after the range are later than now: adjusted by the existing rule.
+  for (const year of ['2200', '9999']) {
+    const doc = await read(m => ({ ...m, createdAt: year + '-01-01T00:00:00.000Z', updatedAt: year + '-12-31T23:59:59.999Z' }));
+    assert.equal(Photo.backupTimes(doc), 'adjusted'); assert.equal(doc.createdAt, doc.updatedAt); assert.ok(doc.createdAt <= new Date().toISOString());
+  }
+  const report = (await restoredPosts(new Blob([rewritePost(bytes, m => ({ ...m, createdAt: '0999-06-01T00:00:00.000Z', updatedAt: '0999-06-02T00:00:00.000Z' }))]))).report;
+  assert.deepEqual([report.items[0].status, report.items[0].times], ['restored', 'adjusted']);
 });

@@ -65,7 +65,9 @@
   const pairs = new WeakMap();
   const pairedView = (blob) =>
     blob && typeof blob === "object" ? pairs.get(blob) : undefined;
-  function manifest(d) {
+  // `times` (backup() only): the post's own 작성·수정 시각, so a restored copy keeps its day
+  // (2026-11-11). Without it the result is what inspect() has always measured.
+  function manifest(d, times = false) {
     return {
       format:
         isMarkdown(d) ? "life-post-md-backup-v1" : d.format === "life-photo-post-v1"
@@ -77,8 +79,19 @@
       ...(d.format === "life-photo-post-v2" || isMarkdown(d)
         ? { attachments: d.attachments }
         : {}),
+      ...(times ? { createdAt: d.createdAt, updatedAt: d.updatedAt } : {}),
     };
   }
+  // How readBackup set the times of the document it returned: "kept" (from the
+  // backup), "missing" (an older backup without times: the restore time) or
+  // "adjusted" (a time later than now, or before the years 일정 handles, was
+  // replaced by the restore time).
+  // 일정 handles civil days of 1900–2199 (ScheduleData.valid). One day inside,
+  // so no device time zone carries a kept time out of that range.
+  const EARLIEST_TIME = "1900-01-02T00:00:00.000Z";
+  const restoredTimes = new WeakMap();
+  const backupTimes = (d) =>
+    (d && typeof d === "object" && restoredTimes.get(d)) || null;
   const plain = (v) =>
     v &&
     typeof v === "object" &&
@@ -922,7 +935,7 @@
       if (p.view)
         files["views/" + p.id] = new Uint8Array(await p.view.blob.arrayBuffer());
     }
-    files["manifest.json"] = zip().strToU8(JSON.stringify(manifest(d)));
+    files["manifest.json"] = zip().strToU8(JSON.stringify(manifest(d, true)));
     return new Blob([zip().zipSync(files, { level: 0 })], {
       type: "application/zip",
     });
@@ -975,12 +988,17 @@
     }
     const md = m?.format === "life-post-md-backup-v1";
     const v2 = m?.format === "life-photo-post-backup-v2" || md;
+    // createdAt·updatedAt are optional and come as a pair (backups written
+    // before 2026-11-11 have neither).
+    const timed =
+      plain(m) && (Object.hasOwn(m, "createdAt") || Object.hasOwn(m, "updatedAt"));
     fields(m, [
       "format",
       "title",
       md ? "markdown" : "ops",
       "photos",
       ...(v2 ? ["attachments"] : []),
+      ...(timed ? ["createdAt", "updatedAt"] : []),
     ]);
     if (
       !["life-photo-post-backup-v1", "life-photo-post-backup-v2", "life-post-md-backup-v1"].includes(
@@ -993,6 +1011,22 @@
     const d = create(makeId),
       ids = new Map();
     d.title = m.title;
+    if (timed) {
+      date(m.createdAt);
+      date(m.updatedAt);
+      if (m.updatedAt < m.createdAt)
+        throw fault("사진 글 날짜 순서를 확인해 주세요.");
+      // A time later than now (a device clock that ran ahead) cannot be kept:
+      // it becomes the restore time. The order above still holds.
+      // A createdAt before the years 일정 handles is not kept either (a post
+      // dated in the year 999 stopped the first screen's list, on every device
+      // of the account once it was uploaded): both times become the restore
+      // time, because updatedAt may not precede createdAt.
+      const now = d.createdAt, early = m.createdAt < EARLIEST_TIME;
+      restoredTimes.set(d, early || m.updatedAt > now ? "adjusted" : "kept");
+      d.createdAt = early || m.createdAt > now ? now : m.createdAt;
+      d.updatedAt = early || m.updatedAt > now ? now : m.updatedAt;
+    } else restoredTimes.set(d, "missing");
     if (md) {
       d.format = "life-post-md-v1";
       delete d.ops;
@@ -1067,5 +1101,6 @@
     digest,
     backup,
     readBackup,
+    backupTimes,
   });
 });

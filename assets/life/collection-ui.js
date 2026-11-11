@@ -422,7 +422,7 @@
     }
     async function backup() {
       const token = sequence; busy = true; feedback();
-      try { const latest = await storage.readCollection(workspaceId); if (!current(token)) return; download(C.makeBackup(latest), 'haedo-collection-' + new Date().toISOString().slice(0, 10) + '.json'); status = '컬렉션 백업 다운로드를 요청했습니다. 파일 보관 여부를 확인해 주세요.'; }
+      try { const latest = await storage.readCollection(workspaceId); if (!current(token)) return; download(C.makeBackup(latest), 'haedo-collection-' + root.HaedoData.localDate() + '.json'); status = '컬렉션 백업 다운로드를 요청했습니다. 파일 보관 여부를 확인해 주세요.'; }
       finally { if (current(token)) { busy = false; feedback(); } }
     }
     async function reviewFile(file) {

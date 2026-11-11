@@ -212,6 +212,15 @@ jobs:
       - name: Verify keyboard selection, logout clearing of tab copies and small reader fixes
         if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/records-reader-small-browser.cjs
+      - name: Verify the schedule keeps the rendered day across midnight, offers today and reopens today's screen on a later day
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/schedule-day-change-browser.cjs
+      - name: Verify full backups keep created and updated times and adjust out-of-range dates without breaking the list
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/full-backup-dates-browser.cjs
+      - name: Verify daily entry waits for slow account checks, retries within a cap and keeps typed input on return
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/daily-entry-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -731,6 +740,9 @@ jobs:
             .local/schedule-exits-browser/
             .local/annual-plan-sync-browser/
             .local/account-doc-focus-sync-browser/
+            .local/schedule-day-change-browser/
+            .local/full-backup-dates-browser/
+            .local/daily-entry-browser/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/

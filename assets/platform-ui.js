@@ -152,19 +152,40 @@
     };
     return;
   }
+  // The account could not be checked (yet): the notice, 다시 확인, and the page opening again by itself when
+  // the connection or the page comes back (2026-11-11 m2). Nothing has been entered on this screen yet.
+  // Each automatic try follows one event; there is no timer for it.
+  let retryOffered = false, pageOpened = false;
+  function offerRetry() {
+    if (retryOffered) return;
+    retryOffered = true;
+    byId("accessState").querySelector("p").textContent =
+      "개인 공간을 열지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 기기의 기록은 보존돼 있습니다.";
+    byId("accessRetry").hidden = false;
+    // 다시 확인: the next opening's account check waits the longest (a slow connection, platform-auth.js).
+    byId("accessRetry").onclick = () => { auth.expectSlow?.(); location.reload(); };
+    // (Never once the page has opened after all: from then on there may be input on it.)
+    const again = () => { if (!pageOpened && !document.hidden && navigator.onLine !== false) location.reload(); };
+    addEventListener("online", again);
+    document.addEventListener("visibilitychange", again);
+    addEventListener("pageshow", (event) => { if (event.persisted) again(); });
+  }
+  // A check that is allowed more than 10 s (after lapses on a slow connection) says so, and after 10 s the
+  // notice and 다시 확인 are shown while it goes on: answered after all, the page opens (2026-11-11 re-review).
+  const checkWait = Number(auth.verifyWait?.()) || 10000;
+  if (checkWait > 10000) byId("accessState").querySelector("p").textContent = "로그인을 확인하고 있습니다. 연결이 느려 평소보다 오래 걸릴 수 있습니다.";
+  const slowCheck = checkWait > 10000 ? setTimeout(offerRetry, 10000) : null;
   try {
-    const user = await auth.requireUser();
+    const user = await auth.requireUser().finally(() => clearTimeout(slowCheck));
     if (!user) return;
+    pageOpened = true;
     uid = user.id;
     setAccount(user);
     store.init(uid);
     byId("accessState").hidden = true;
     document.querySelector("[data-private]").hidden = false;
   } catch (_) {
-    byId("accessState").querySelector("p").textContent =
-      "개인 공간을 열지 못했습니다. 인터넷 연결을 확인해 주세요. 기기의 기록은 보존돼 있습니다.";
-    byId("accessRetry").hidden = false;
-    byId("accessRetry").onclick = () => location.reload();
+    offerRetry();
     return;
   }
   document.querySelectorAll("[data-close]").forEach((button) => {
@@ -497,10 +518,15 @@
     return match && Number(match[1]) >= 1900 && Number(match[1]) <= 2199 ? value : null;
   }
   let habitMonth = page === "habits" ? requestedMonth() : null;
+  // The day this page was last drawn with (2026-11-11 M1). When the page stays open over midnight a
+  // screen that showed this month follows the new month; a chosen earlier month stays, and 오늘 marks,
+  // "이번 달" and the cells that can be checked are drawn again for the new day (dayCheck below).
+  let shownDay = HaedoData.localDate();
   function renderHabits() {
     const today = HaedoData.localDate(),
       tracker = HaedoHabitTracker,
       current = tracker.monthOf(today);
+    if (shownDay !== today && habitMonth === tracker.monthOf(shownDay) && habitMonth !== current) { habitMonth = current; habitAddress(); }
     if (!habitMonth || habitMonth > current) habitMonth = current;
     const habits = store.items.filter((item) => item.kind === "habit");
     // Announced (aria-live) when the month changes; an unchanged label is not rewritten on repaints.
@@ -531,16 +557,19 @@
     }
     tracker.restoreFocus(list, focusKey);
   }
-  function showHabitMonth(month) {
-    habitMonth = month;
-    render();
-    // The same screen in another month: replace the address, so a reload keeps the month shown.
+  // The same screen in another month: replace the address, so a reload keeps the month shown.
+  function habitAddress() {
     try {
       const url = new URL(location.href);
       if (habitMonth === HaedoHabitTracker.monthOf(HaedoData.localDate())) url.searchParams.delete("month");
       else url.searchParams.set("month", habitMonth);
       if (url.href !== location.href) history.replaceState(history.state, "", url);
     } catch (_) { /* The month on screen stays; only the address is not updated. */ }
+  }
+  function showHabitMonth(month) {
+    habitMonth = month;
+    render();
+    habitAddress();
     // A month button that is now disabled or hidden would drop focus to the page: keep it on the label.
     const active = document.activeElement;
     if (!active || active === document.body || active.disabled || active.hidden) byId("habitMonthLabel").focus();
@@ -555,7 +584,19 @@
     if (page === "workspace") renderWorkspace();
     else if (page === "goals") renderGoals();
     else renderHabits();
+    shownDay = HaedoData.localDate();
     status();
+  }
+  // Drawn again when the day changed while the page was open: on return, on focus and right after midnight.
+  let dayTimer;
+  function dayCheck() {
+    if (document.hidden || auth.user?.id !== uid || shownDay === HaedoData.localDate()) return;
+    render();
+  }
+  function armDayTimer() {
+    clearTimeout(dayTimer);
+    const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    dayTimer = setTimeout(() => { dayCheck(); armDayTimer(); }, Math.max(1000, next - now + 250));
   }
   function openItem(kind, item) {
     editing = { kind, item };
@@ -875,8 +916,12 @@
   }
   document.addEventListener("haedo:store", render);
   document.addEventListener("visibilitychange", () => {
+    dayCheck();
     if (!document.hidden && auth.user?.id === uid) sync();
   });
+  addEventListener("pageshow", dayCheck);
+  addEventListener("focus", dayCheck);
+  armDayTimer();
   addEventListener("online", () => {
     if (auth.user?.id === uid) sync();
   });
