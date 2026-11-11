@@ -147,9 +147,9 @@ async function main() {
     await context.route(rpcPath(rpc), handler); return lost;
   }
   // The request never reaches the server.
-  async function neverArrives(context, rpc) {
+  async function neverArrives(context, rpc, { then = null } = {}) {
     const blocked = { count: 0, bodies: [] };
-    const handler = route => { blocked.count++; blocked.bodies.push(route.request().postDataJSON()); return route.abort('failed'); };
+    const handler = async route => { blocked.count++; blocked.bodies.push(route.request().postDataJSON()); if (then) await then(); return route.abort('failed'); };
     await context.route(rpcPath(rpc), handler);
     return { ...blocked, get count() { return blocked.count; }, bodies: blocked.bodies, stop: () => context.unroute(rpcPath(rpc), handler) };
   }
@@ -260,9 +260,22 @@ async function main() {
     const republished = publication(a.remoteId);
     assert.equal(republished.active, true); assert.equal(republished.photos, 1); assert.equal(republished.author.name, '익명 검수 둘');
     assert.equal((await current(page)).state, 'public'); assert.equal(sentPublish(a.remoteId).length, 1);
+    // m7 as reviewed: the panel that just published withdraws, withdraws again and publishes again.
+    await click(page, '공개 철회', panel(page));
+    assert.equal(await statusLine(page), '공개 철회를 확인했습니다.'); assert.equal(publication(a.remoteId).active, false);
+    const withdrawn = sentUnpublish(a.remoteId).length;
+    await click(page, '공개 철회', panel(page));
+    assert.doesNotMatch(await statusLine(page), /글이 변경됐습니다|달라졌습니다|찾을 수 없습니다/); assert.equal(sentUnpublish(a.remoteId).length, withdrawn);
+    await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
+    await publish(page);
+    assert.equal(await statusLine(page), '공개 미리보기를 먼저 갱신해 주세요.', 'after a withdrawal the next publication is reviewed again, not refused as changed');
+    assert.equal(sentPublish(a.remoteId).length, 1);
+    await preview(page); await publish(page); await publishedLink(page).waitFor();
+    assert.doesNotMatch(await statusLine(page), /글이 변경됐습니다|달라졌습니다/);
+    assert.equal(publication(a.remoteId).active, true); assert.equal(sentPublish(a.remoteId).length, 2);
     await click(page, '공개 철회', panel(page)); assert.equal(publication(a.remoteId).active, false);
     await click(page, '공개 검토 닫기');
-    pass('m7 + B1: withdrawing twice and publishing a changed selection in the same panel work without 글이 변경됐습니다');
+    pass('m7 + B1: withdrawing twice and publishing again or with a changed selection in the same panel work without 글이 변경됐습니다');
 
     // ---- B1: without any check in between ----------------------------------------------------
     const b = await savedPost(page, '유실 직후 철회 글', files);
@@ -329,10 +342,15 @@ async function main() {
     // ---- No implicit publication; a withdrawal is sent again ---------------------------------
     const n = await savedPost(page, '자동 재전송 없음 글');
     await manager(page); await openReview(page, n.doc.id); await preview(page, { name: '익명 검수' });
-    const unsentText = await neverArrives(owner.context, 'life_blog_publish');
+    const unsentText = await neverArrives(owner.context, 'life_blog_publish', { then: () => reads.start() });
     await publish(page); await unsentText.stop(); await click(page, '공개 검토 닫기');
     assert.equal(await publicStatus(page, n.doc.id), 'unknown');
+    // m8: the list follows the settlement while it is on screen (publishing changes no post document).
+    assert.match(await homeMeta(page, n.doc.id), /공개 확인 못 함 · 원본은 비공개/);
+    await reads.stop();
     await kick(page); await until(() => publicStatus(page, n.doc.id), value => value === 'private', 'the cycle settles a request that never arrived');
+    await page.waitForFunction(id => document.querySelector('#homePosts [data-photo-post-id="' + id + '"] .home-post-visibility')?.dataset.publication === 'private', n.doc.id);
+    assert.match(await page.locator('#homePosts [data-photo-post-id="' + n.doc.id + '"] .home-post-meta').innerText(), /비공개 원본/);
     await kick(page); await new Promise(done => setTimeout(done, 1500));
     assert.equal(publication(n.remoteId), null, 'nothing became public by itself'); assert.equal(sentPublish(n.remoteId).length, 0);
     await openPost(page, n.doc.id, n.doc.title); assert.equal((await settledPill(page)).state, 'private');
