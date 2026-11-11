@@ -278,9 +278,15 @@
       heading.id = 'lifeSourceEditBaseTitle'; heading.tabIndex = -1; panel.setAttribute('aria-labelledby', heading.id);
       panel.append(heading, node('p', base.status === 'moved' ? '이 초안은 이전 판에서 시작했습니다. 입력은 그대로 있습니다. 이어서 할 일을 골라 주세요.'
         : base.status === 'trashed' ? '자료를 복원한 뒤 다시 수정할 수 있습니다. 입력은 그대로 있습니다.' : '입력은 그대로 있습니다. 파일로 받아 둘 수 있습니다.', 'life-help'));
+      // The title was changed here and is different from the material's title now: say which one a save keeps.
+      // (A title the person did not touch follows the material's current title; see SourceEdit.rebase.)
+      if (base.status === 'moved' && base.titleDiffers) {
+        const titles = node('p', '자료 제목도 다릅니다. 지금 제목: ' + (base.source.title || '제목 없는 자료') + ' · 내 입력의 제목: ' + (input.title || '제목 없는 자료') + '. 내 입력을 저장하면 제목도 내 입력으로 바뀝니다.', 'life-help');
+        titles.id = 'lifeSourceEditTitleDiff'; panel.append(titles);
+      }
       const mine = node('details', null, 'life-details life-source-edit-mine'); mine.id = 'lifeSourceEditMine';
       const body = node('div', input.text, 'life-source-edit-mine-text'); body.tabIndex = 0; body.setAttribute('role', 'group'); body.setAttribute('aria-label', '내 입력 본문');
-      mine.append(node('summary', '내 입력 보기'), node('p', input.title || '제목 없는 자료', 'life-meta'), body);
+      mine.append(node('summary', '내 입력 보기'), node('p', (base.source && !base.titleEdited ? base.source.title : input.title) || '제목 없는 자료', 'life-meta'), body);
       const choices = node('div', null, 'life-actions life-source-edit-choices');
       if (base.status === 'moved') {
         choices.append(choice(restoring ? '이 버전 복원을 다시 시작' : '최신 판에서 다시 시작', 'lifeSourceEditRestart', async () => {
@@ -292,7 +298,7 @@
           await flushSession(session);
           const bundle = await storage.read(session.workspaceId);
           if (!showing(session, token)) return;
-          session.stage = model.rebase(bundle, session.stage); session.edit++; session.pendingCommit = null; session.error = null;
+          session.stage = model.rebase(bundle, session.stage); if (session.rawInput) session.rawInput.title = session.stage.input.title; session.edit++; session.pendingCommit = null; session.error = null;
           try { await save(session); }
           catch (error) {
             // The base is current now; anything else (an empty body, storage) is fixed in the editor.

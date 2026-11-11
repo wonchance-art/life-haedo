@@ -349,6 +349,48 @@ async function main() {
       await f.context.close();
     });
 
+    // 2026-11-11 독립 검수: 내 입력을 최신 판 위에 저장할 때, 내가 건드리지 않은 제목은 다른 곳에서 바꾼 지금 제목을 따른다.
+    await S.check('V2 with the title changed elsewhere: an untouched title keeps the new title; a title I changed is shown as a difference', async () => {
+      const elsewhere = '다른 곳에서 바꾼 제목';
+      let f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
+      await f.page.locator('#lifeSourceEditClose').click(); await settle(f.page); await f.page.locator('#lifeSourceText').waitFor();
+      let head = await R.addVersion(f.page, f.sourceId, remote, elsewhere);
+      await readerEdit(f.page, head);
+      assert.equal((await editorState(f.page)).panel, 'moved');
+      assert.equal(await f.page.locator('#lifeSourceEditTitleDiff').count(), 0, 'the title was not changed here: nothing to choose');
+      await f.page.locator('#lifeSourceEditMine summary').click();
+      assert.equal(await f.page.locator('#lifeSourceEditMine .life-meta').textContent(), elsewhere);
+      await f.page.locator('#lifeSourceEditRebase').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      let bundle = (await preserved(f.page, f, 3)).bundle;
+      assert.equal(bundle.sources.find(source => source.id === f.sourceId).title, elsewhere, 'the title changed elsewhere is not put back');
+      assert.equal(await f.page.locator('#lifeSourceText').textContent(), typed);
+      await f.context.close();
+      // The same, noticed while the editor is open (저장 → the choices).
+      f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page); await type(f.page, typed);
+      await R.addVersion(f.page, f.sourceId, remote, elsewhere);
+      await f.page.locator('#lifeSourceEditSave').click(); await f.page.locator('#lifeSourceEditBase').waitFor();
+      await f.page.locator('#lifeSourceEditRebase').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      bundle = (await preserved(f.page, f, 3)).bundle;
+      assert.equal(bundle.sources.find(source => source.id === f.sourceId).title, elsewhere);
+      await f.context.close();
+      // The title was changed here too: the difference is shown, and saving my input keeps my title.
+      f = await fixture();
+      await R.openSource(f.page, f.versionId); await openEditor(f.page);
+      await f.page.locator('#lifeSourceEditTitle').fill('내가 바꾼 제목'); await type(f.page, typed);
+      await f.page.locator('#lifeSourceEditClose').click(); await settle(f.page); await f.page.locator('#lifeSourceText').waitFor();
+      head = await R.addVersion(f.page, f.sourceId, remote, elsewhere);
+      await readerEdit(f.page, head);
+      const difference = await f.page.locator('#lifeSourceEditTitleDiff').textContent();
+      assert(difference.includes('지금 제목: ' + elsewhere) && difference.includes('내 입력의 제목: 내가 바꾼 제목'), difference);
+      await S.capture(f.page, 'draft-moved-title');
+      await f.page.locator('#lifeSourceEditRebase').click(); await settle(f.page); await f.page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor();
+      bundle = (await preserved(f.page, f, 3)).bundle;
+      assert.equal(bundle.sources.find(source => source.id === f.sourceId).title, '내가 바꾼 제목');
+      await f.context.close();
+    });
+
     await S.check('이 버전으로 복원 still saves without any typing, and an unchanged 저장 makes no version', async () => {
       const f = await fixture();
       const head = await R.addVersion(f.page, f.sourceId, remote);

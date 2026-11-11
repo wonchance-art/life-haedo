@@ -32,7 +32,7 @@
   function core() { const value = root.HaedoLife?.Core || (typeof require === 'function' && require('./core.js')); assert(value?.sourceState && value?.prepareImport, 'dependency_unavailable', '자료 모듈을 불러오지 못했습니다.'); return value; }
   function validate(stage) {
     fields(stage, ['kind', 'format', 'stageId', 'workspaceId', 'revision', 'state', 'baseSourceId', 'baseSourceRevision',
-      'baseSourceVersionId', 'baseHash', 'lifecycleRevision', 'restoreVersionId', 'input', 'createdAt', 'updatedAt'], ['appliedResult', 'baseChanged']);
+      'baseSourceVersionId', 'baseHash', 'lifecycleRevision', 'restoreVersionId', 'input', 'createdAt', 'updatedAt'], ['appliedResult', 'baseChanged', 'baseTitle']);
     assert(stage.kind === 'source-edit' && stage.format === FORMAT);
     for (const key of ['stageId', 'workspaceId', 'baseSourceId', 'baseSourceVersionId']) identifier(stage[key]);
     revision(stage.revision); revision(stage.baseSourceRevision, 1); revision(stage.lifecycleRevision);
@@ -44,6 +44,8 @@
     assert(new TextEncoder().encode(stage.input.text).length <= LIMITS.bytes, 'text_too_large', '본문은 UTF-8 기준 1 MiB까지 보관할 수 있습니다.');
     assert(['text/plain', 'text/markdown'].includes(stage.input.format));
     if (stage.baseChanged !== undefined) assert(stage.baseChanged === true);
+    // The material's title when the draft began (drafts from before 2026-11-11 do not have it).
+    if (stage.baseTitle !== undefined) text(stage.baseTitle, LIMITS.title);
     if (stage.appliedResult !== undefined) {
       assert(stage.state === 'applied'); fields(stage.appliedResult, ['sourceId', 'sourceVersionId']);
       identifier(stage.appliedResult.sourceId); identifier(stage.appliedResult.sourceVersionId); assert(stage.appliedResult.sourceId === stage.baseSourceId);
@@ -64,11 +66,14 @@
     const base = source ? bundle.sourceVersions.find(value => value.id === stage.baseSourceVersionId && value.sourceId === source.id) : null;
     const selected = !source ? null : stage.restoreVersionId === null ? base : bundle.sourceVersions.find(value => value.id === stage.restoreVersionId && value.sourceId === source.id);
     if (!source || !head || !selected || managedWriting(source)) return { status: 'missing', source: source || null, head: head || null, selected: selected || null, untouched: false };
+    // Did the person change the title? Known exactly when the draft recorded the title it began with; an older
+    // draft can only be compared with the title as it is now.
+    const titleEdited = stage.input.title !== (stage.baseTitle ?? source.title);
     // Nothing of the person's own in it: exactly what opening the editor on that version shows.
-    const untouched = stage.input.title === source.title && stage.input.text === (selected.contentText ?? '') && stage.input.format === selected.format;
+    const untouched = !titleEdited && stage.input.text === (selected.contentText ?? '') && stage.input.format === selected.format;
     const moved = !!stage.baseChanged || head.id !== stage.baseSourceVersionId || head.contentHash !== stage.baseHash;
     const status = core().sourceState(bundle, source.id).status !== 'active' ? 'trashed' : moved ? 'moved' : 'current';
-    return { status, source, head, selected, untouched };
+    return { status, source, head, selected, untouched, titleEdited, titleDiffers: titleEdited && stage.input.title !== source.title };
   }
   function validateCurrent(bundle, stage) {
     core().validateWorkspace(bundle); validate(stage);
@@ -92,7 +97,10 @@
     assert(state.status !== 'missing', 'missing_reference', '수정할 자료를 찾을 수 없습니다. 입력은 남아 있습니다.');
     assert(state.status !== 'trashed', 'source_trashed', '휴지통의 자료는 복원한 뒤 수정해 주세요. 입력은 남아 있습니다.');
     const result = copy(stage); delete result.baseChanged;
-    Object.assign(result, { baseSourceRevision: state.source.revision, baseSourceVersionId: state.head.id, baseHash: state.head.contentHash,
+    // A title the person did not touch follows the material's title as it is now (changed elsewhere meanwhile);
+    // saving the body must not put the earlier title back. A title they did change stays theirs.
+    if (!state.titleEdited) result.input.title = state.source.title;
+    Object.assign(result, { baseSourceRevision: state.source.revision, baseSourceVersionId: state.head.id, baseHash: state.head.contentHash, baseTitle: state.source.title,
       lifecycleRevision: core().sourceState(bundle, state.source.id).revision, updatedAt: new Date().toISOString() });
     validateCurrent(bundle, result); return result;
   }
@@ -107,7 +115,7 @@
     const time = new Date().toISOString(), lifecycle = core().sourceState(bundle, sourceId);
     const stage = { kind: 'source-edit', format: FORMAT, stageId: core().id(), workspaceId: bundle.workspaceId, revision: 0, state: 'draft',
       baseSourceId: sourceId, baseSourceRevision: source.revision, baseSourceVersionId: head.id, baseHash: head.contentHash,
-      lifecycleRevision: lifecycle.revision, restoreVersionId: options.restore ? selected.id : null,
+      lifecycleRevision: lifecycle.revision, restoreVersionId: options.restore ? selected.id : null, baseTitle: source.title,
       input: { title: source.title, text: selected.contentText ?? '', format: selected.format }, createdAt: time, updatedAt: time };
     validateCurrent(bundle, stage); return stage;
   }

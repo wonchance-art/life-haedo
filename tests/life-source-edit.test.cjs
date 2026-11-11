@@ -123,6 +123,38 @@ test('rebase moves only the base facts to the latest version so the kept input s
   assert.equal(moved.restoreVersionId, f.version.id); assert.equal(moved.baseSourceVersionId, third.version.id);
   assert.equal((await E.prepare(third.bundle, moved)).version.contentText, raw + '복원하며 고침');
 });
+// 2026-11-11 독립 검수 수정: 사용자가 건드리지 않은 제목은 다른 곳에서 바꾼 지금 제목을 따른다(본문만 고친 저장이 옛 제목을 되돌리지 않는다).
+test('rebase keeps a title changed elsewhere unless the person changed the title too', async () => {
+  const f = await fixture(), opened = E.begin(f.bundle, f.source.id);
+  assert.equal(opened.baseTitle, '원문 제목');
+  const body = E.edit(opened, { text: '내가 고친 본문' }), both = E.edit(opened, { title: '내가 바꾼 제목', text: '내가 고친 본문' });
+  assert.equal(body.baseTitle, '원문 제목'); assert.equal(E.validate(body), true);
+  const renamed = await edited(f, { title: '다른 곳에서 바꾼 제목', text: raw + '\n다른 곳의 판' }), before = clone([renamed.bundle, body, both]);
+  let state = E.baseState(renamed.bundle, body);
+  assert.deepEqual([state.status, state.untouched, state.titleEdited, state.titleDiffers], ['moved', false, false, false]);
+  const kept = E.rebase(renamed.bundle, body);
+  assert.equal(kept.input.title, '다른 곳에서 바꾼 제목'); assert.equal(kept.baseTitle, '다른 곳에서 바꾼 제목'); assert.equal(kept.input.text, '내가 고친 본문');
+  assert.equal(C.applyChanges(renamed.bundle, (await E.prepare(renamed.bundle, kept)).changes).sources[0].title, '다른 곳에서 바꾼 제목');
+  state = E.baseState(renamed.bundle, both);
+  assert.deepEqual([state.untouched, state.titleEdited, state.titleDiffers], [false, true, true]);
+  const mine = E.rebase(renamed.bundle, both);
+  assert.equal(mine.input.title, '내가 바꾼 제목'); assert.equal(mine.baseTitle, '다른 곳에서 바꾼 제목');
+  assert.equal(C.applyChanges(renamed.bundle, (await E.prepare(renamed.bundle, mine)).changes).sources[0].title, '내가 바꾼 제목');
+  // After the rebase the title counts as the person's own against the new base.
+  assert.deepEqual([E.baseState(renamed.bundle, mine).status, E.baseState(renamed.bundle, mine).titleEdited], ['current', true]);
+  // The person chose the very title the other place chose: theirs, but no difference to show.
+  state = E.baseState(renamed.bundle, E.edit(opened, { title: '다른 곳에서 바꾼 제목' }));
+  assert.deepEqual([state.untouched, state.titleEdited, state.titleDiffers], [false, true, false]);
+  // Only the title was renamed elsewhere, under a draft that holds nothing: still untouched (removed quietly on open).
+  assert.equal(E.baseState(renamed.bundle, opened).untouched, true);
+  // A draft from before this field existed cannot tell: its title is compared with the title now and kept as the person's.
+  const older = clone(body); delete older.baseTitle; assert.equal(E.validate(older), true);
+  assert.equal(E.baseState(f.bundle, older).titleEdited, false);
+  assert.deepEqual([E.baseState(renamed.bundle, older).titleEdited, E.baseState(renamed.bundle, older).titleDiffers], [true, true]);
+  assert.equal(E.rebase(renamed.bundle, older).input.title, '원문 제목');
+  assert.throws(() => E.validate({ ...body, baseTitle: 7 })); assert.throws(() => E.validate({ ...body, baseTitle: '가'.repeat(501) }));
+  assert.deepEqual([renamed.bundle, body, both], before);
+});
 test('checkPrepared rejects extra records, different input/source/author/result and missing marker or base edges before the transaction', async () => {
   const f = await fixture(), result = await edited(f), p = result.prepared;
   assert.equal(E.checkPrepared(f.bundle, result.stage, p.changes, p.stageResult), true);
