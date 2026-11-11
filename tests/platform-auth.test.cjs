@@ -802,3 +802,66 @@ test('opening: a user replaced without any event while callers wait on the runni
   assert.notEqual(auth.getAccount()?.userId, A.id);
   opening.end(); auth.dispose();
 });
+
+// ── 2026-11-11 m1: the place the owner was at survives a login ──
+test('m1: 일정 calendar units with their date, 백업·복원, the open blog post and the habit month survive login', () => {
+  const kept = ['index.html?section=schedule&view=day&date=2026-10-29', 'index.html?section=schedule&view=week&date=2026-10-29',
+    'index.html?section=schedule&view=month&date=2026-09-01', 'index.html?section=schedule&view=quarter&date=2026-04-01',
+    'index.html?section=schedule&view=tools&date=2025-06-01', 'index.html?section=schedule&view=tools', 'index.html?section=tools&date=2025-06-01',
+    'life.html?section=schedule&view=day&date=2024-02-29', 'index.html?section=manage&view=backup', 'index.html?section=schedule&view=annual-plan',
+    'index.html?section=schedule&view=page&blog=photo.Ab_9-xyz', 'index.html?section=schedule&view=page&blog=draft.d1', 'index.html?section=schedule&view=page&blog=plain.p1',
+    'index.html?section=schedule&view=page&blog=new', 'index.html?section=schedule&view=page&blog=profile', 'index.html?section=records&view=page',
+    'habits.html?month=2026-09', 'habits.html', 'goals.html', 'workspace.html', 'workspace.html?section=manage'];
+  for (const address of kept) assert.equal(safeNext(address + (address.includes('?') ? '&' : '?') + 'code=discarded&next=https://evil.invalid#access_token=hidden'), address, address);
+  // Parameters come back in one fixed order whatever order they arrived in.
+  assert.equal(safeNext('index.html?date=2026-10-29&view=day&section=schedule'), 'index.html?section=schedule&view=day&date=2026-10-29');
+  assert.equal(safeNext('index.html?blog=photo.a1&view=page'), 'index.html?view=page&blog=photo.a1');
+});
+
+test('m1: a value outside its exact shape is left out, and nothing else is ever carried', () => {
+  // date: a real civil day, only for a calendar unit.
+  for (const date of ['2026-02-30', '2026-13-01', '2026-00-10', '1899-12-31', '2200-01-01', '2026-1-1', '20261029', '2026-10-29T00:00', '2026-10-29%0d%0aSet-Cookie:x', '2026-10-29<script>', '../2026-10-29', ''])
+    assert.equal(safeNext('index.html?section=schedule&view=day&date=' + date), 'index.html?section=schedule&view=day', 'date ' + date);
+  assert.equal(safeNext('index.html?section=records&view=sources&date=2026-10-29'), 'index.html?section=records&view=sources', 'date belongs to calendar units only');
+  assert.equal(safeNext('index.html?section=manage&date=2026-10-29'), 'index.html?section=manage');
+  assert.equal(safeNext('habits.html?date=2026-10-29'), 'habits.html');
+  // blog: the app's own route shape, only with view=page; without it view=page is left out (except 자료's own page).
+  for (const blog of ['photo.', 'photo.a/b', 'photo.a.b', 'photo.' + 'a'.repeat(129), 'post.a1', 'PHOTO.a1', 'photo.a1%26view%3Dsync', 'javascript:alert(1)', 'https://evil.invalid', 'photo.<script>', 'new2', ''])
+    assert.equal(safeNext('index.html?section=schedule&view=page&blog=' + blog), 'index.html?section=schedule', 'blog ' + blog);
+  assert.equal(safeNext('index.html?section=schedule&view=page'), 'index.html?section=schedule');
+  assert.equal(safeNext('index.html?view=page'), 'index.html');
+  assert.equal(safeNext('index.html?section=schedule&view=day&blog=photo.a1'), 'index.html?section=schedule&view=day', 'blog belongs to view=page only');
+  assert.equal(safeNext('index.html?section=records&view=sources&blog=photo.a1'), 'index.html?section=records&view=sources');
+  // month: YYYY-MM, on the habit page only.
+  for (const month of ['2026-13', '2026-00', '2026-9', '202609', '1899-12', '2200-01', '2026-09-01', '2026-09%26next%3Dx', '<b>', ''])
+    assert.equal(safeNext('habits.html?month=' + month), 'habits.html', 'month ' + month);
+  assert.equal(safeNext('goals.html?month=2026-09'), 'goals.html');
+  assert.equal(safeNext('index.html?month=2026-09'), 'index.html');
+  // view: the listed names only.
+  for (const view of ['day2', 'Day', 'backup/..', 'week%00', 'constructor', '__proto__', 'toString'])
+    assert.equal(safeNext('index.html?section=schedule&view=' + view), 'index.html?section=schedule', 'view ' + view);
+  // A repeated key: the first value is the one checked, and the one written.
+  assert.equal(safeNext('index.html?view=day&view=evil&date=2026-10-29&date=x'), 'index.html?view=day&date=2026-10-29');
+  assert.equal(safeNext('index.html?view=evil&view=day'), 'index.html');
+});
+
+test('m1: no open redirect and no injected parameter: other origins, schemes and unknown keys always come back as a page of this app', () => {
+  const hostile = ['https://evil.invalid/index.html?section=schedule&view=day&date=2026-10-29', '//evil.invalid/index.html?view=day', '///evil.invalid/habits.html?month=2026-09',
+    '\\\\evil.invalid\\index.html', '/\\evil.invalid/index.html', 'http://haedo.invalid/index.html?view=day', 'https://haedo.invalid:8443/index.html', 'https://haedo.invalid@evil.invalid/index.html',
+    'https://user:pw@haedo.invalid/index.html?view=day', 'javascript:alert(document.domain)', 'JaVaScRiPt:alert(1)//index.html', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)',
+    'blob:https://haedo.invalid/index.html', 'file:///index.html', 'about:blank', 'index.html/../../evil.html', 'login.html?next=https://evil.invalid', 'privacy.html', 'sw.js', 'assets/app.js',
+    'index.htmlx', 'index.html%2F..%2Fevil.html', 'sub/index.html', '%2F%2Fevil.invalid', ' https://evil.invalid/index.html', '\thttps://evil.invalid/index.html', 'https:evil.invalid/index.html', 'ht\ntps://evil.invalid'];
+  const allowed = /^(?:index|life|workspace|timeline|goals|habits)\.html(?:\?[A-Za-z0-9_.=&-]*)?$/;
+  for (const value of hostile) {
+    const next = safeNext(value);
+    assert.match(next, allowed, JSON.stringify(value) + ' -> ' + next);
+    assert.equal(new URL(next, 'https://app.invalid/dir/').origin, 'https://app.invalid', value);
+    assert.ok(!/evil|script|javascript|alert/i.test(next), value + ' -> ' + next);
+  }
+  // Unknown keys and OAuth callback values never ride along, on any page.
+  const extra = 'code=c&access_token=t&refresh_token=r&id_token=i&provider_token=p&error=e&error_description=d&next=https%3A%2F%2Fevil.invalid&redirect_to=//evil.invalid&returnTo=x&sourceId=s&q=private+words&__proto__=x&constructor=y';
+  assert.equal(safeNext('index.html?' + extra + '&section=schedule&view=month&date=2026-09-01#access_token=hidden'), 'index.html?section=schedule&view=month&date=2026-09-01');
+  for (const page of ['index.html', 'life.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html']) assert.equal(safeNext(page + '?' + extra + '#frag'), page);
+  // Non-string input.
+  for (const value of [null, undefined, 0, '', {}, [], 42, true]) assert.match(safeNext(value), allowed);
+});

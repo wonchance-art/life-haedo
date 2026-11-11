@@ -8,17 +8,42 @@
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
   const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
+  // 일정's calendar units and 백업·복원 are screens of their own with an address (2026-11-11 m1).
+  const calendarViews = new Set(['tools', 'quarter', 'month', 'week', 'day']);
+  const homeViews = new Set([...materialViews, ...calendarViews, 'backup']);
+  // The values below are the only ones a return address may carry besides the names above; each has one exact shape.
+  function civilDate(value) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value : '');
+    if (!m) return false;
+    const year = +m[1], month = +m[2], day = +m[3];
+    return year >= 1900 && year <= 2199 && month >= 1 && month <= 12 && day >= 1 && day <= new Date(year, month, 0).getDate();
+  }
+  const civilMonth = value => { const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(typeof value === 'string' ? value : ''); return !!m && +m[1] >= 1900 && +m[1] <= 2199; };
+  // The open blog task as the app writes it (ui.js blogRoutePattern): new, profile, photo.<id>, plain.<id>, draft.<id>.
+  const blogRoute = /^(?:new|profile|(?:photo|plain|draft)\.[A-Za-z0-9_-]{1,128})$/;
+  // Allow-list only: a page of this app by exact name, and for each page the parameters it reads, each
+  // checked against its exact shape. Anything else (another origin or scheme, an unknown key or value,
+  // OAuth callback values, the fragment) is left out.
   function safeNext(value) {
     try {
       const url = new URL(value || 'index.html', 'https://haedo.invalid/');
       if (url.origin !== 'https://haedo.invalid' || !(url.pathname === '/index.html' || privatePages.has(url.pathname.slice(1)))) return 'index.html';
       const params = new URLSearchParams();
       if (url.pathname === '/index.html' || url.pathname === '/life.html') {
-        if (homeSections.has(url.searchParams.get('section'))) params.set('section', url.searchParams.get('section'));
-        if (materialViews.has(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
+        const section = url.searchParams.get('section'), view = url.searchParams.get('view'), blog = url.searchParams.get('blog'), date = url.searchParams.get('date');
+        if (homeSections.has(section)) params.set('section', section);
+        if (view === 'page') {
+          // The blog editor or reader is `page` with its post named. Without one `page` is only 자료's own
+          // 선택 자료 페이지; under another section it would open that unrelated screen, so it is left out.
+          if (typeof blog === 'string' && blogRoute.test(blog)) { params.set('view', 'page'); params.set('blog', blog); }
+          else if (section === 'records') params.set('view', 'page');
+        } else if (homeViews.has(view)) params.set('view', view);
+        // 일정 reads `date` for its calendar units (and for the old section=tools address).
+        if ((calendarViews.has(view) || section === 'tools') && civilDate(date)) params.set('date', date);
       }
       if (url.pathname === '/index.html' && url.searchParams.get('compose') === '1') params.set('compose', '1');
       if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');
+      if (url.pathname === '/habits.html' && civilMonth(url.searchParams.get('month'))) params.set('month', url.searchParams.get('month'));
       if (url.pathname === '/timeline.html') {
         if (['records', 'map'].includes(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
         const doc = url.searchParams.get('doc');
