@@ -118,7 +118,7 @@
     let beforeUnload = null, visibility = null, pagehideReading = null;
     let unsubscribe = null;
     let unsubscribeSync = null;
-    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, unlinkedAdoption = null;
+    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0, libraryReading = null, libraryAgain = false, unlinkedAdoption = null;
     let workspaceListRefresh = 0, workspaceListApplied = 0;
     const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
@@ -1154,18 +1154,29 @@
       if (syncStatus) syncStatus.textContent = presentation.label;
     }
 
-    async function refreshLibrary() {
-      if (!managedLibrary || disposed) return;
-      const sequence = ++libraryRefresh, workspaceId = state.bundle?.workspaceId;
-      try {
-        const next = await accountLibrary.getState(workspaceId);
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = next;
-      } catch (cause) {
-        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
-        libraryState = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } };
-      }
-      updateLibraryStatus();
+    // One state read at a time. Events that arrive while it runs ask for one more read after it;
+    // the finished read is shown meanwhile. (Before, every event started its own read and
+    // discarded the ones before it: with a library of megabytes a read takes longer than the
+    // events are apart while a pass runs, so the band kept an old state — "확인 필요" from a
+    // connection error long gone — and never offered the comparison that was waiting.)
+    function refreshLibrary() {
+      if (!managedLibrary || disposed) return Promise.resolve();
+      if (libraryReading) { libraryAgain = true; return libraryReading; }
+      const scope = libraryRefresh;
+      const reading = libraryReading = (async () => {
+        do {
+          libraryAgain = false;
+          const workspaceId = state.bundle?.workspaceId;
+          let next;
+          try { next = await accountLibrary.getState(workspaceId); }
+          catch (cause) { next = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } }; }
+          if (disposed || scope !== libraryRefresh) return;
+          // Another workspace was opened meanwhile: this state is not its state; read again.
+          if (workspaceId !== state.bundle?.workspaceId) { libraryAgain = true; continue; }
+          libraryState = next; updateLibraryStatus();
+        } while (libraryAgain);
+      })().finally(() => { if (libraryReading === reading) libraryReading = null; });
+      return reading;
     }
 
     async function refreshWorkspaceList() {
@@ -6285,7 +6296,7 @@
       cleanup(() => { document.title = pageTitle; });
       disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
-      libraryRefresh++; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
+      libraryRefresh++; libraryReading = null; libraryAgain = false; cleanup(() => unsubscribeLibrary?.()); cleanup(() => metadataCleanup?.()); metadataCleanup = null;
       cleanup(() => sourceFoldersMount?.dispose()); sourceFoldersMount = null; sourceFoldersUpdate = null;
       cleanup(() => sourceFoldersUI?.dispose()); sourceFoldersUI = null; sourceFoldersWorkspace = null;
       accountMaterialsSequence += 1;

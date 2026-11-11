@@ -88,8 +88,15 @@ async function main() {
       const recorded = await until(async () => { await kick(small.page); return light(small.page); }, state => state.status === 'conflict', 'recorded for the comparison', 120000, 1000);
       phase('this device downloads, tries the merge and records the difference'); assert.equal(recorded.conflict.missing, false); assert.equal(recorded.sources, own, 'this device\'s originals are untouched'); assert.equal(row2().revision, stored, 'nothing was sent');
       // The band follows once the account library's pass over this large library has finished.
+      // On a timeout the message also carries what the account library itself reports (read once, after
+      // the wait: a state read of this large library is itself slow, so the poll stays the band alone).
       await until(() => small.page.evaluate(() => document.querySelector('#lifeAccountStorage')?.dataset.state + ' / ' + [...(window.__merge?.band || [])].join(',') + ' / ' + document.querySelector('#lifeAccountStorage')?.innerText.replace(/\s+/g, ' ').slice(0, 120)),
-        value => value.startsWith('conflict '), 'the band shows the difference', 120000, 1000);
+        value => value.startsWith('conflict '), 'the band shows the difference', 120000, 1000).catch(async error => {
+        const library = await small.page.evaluate(() => HaedoLife.Shell.accountLibrary.getState().then(state => ({ status: state.status, error: state.error?.code || null,
+          domains: Object.fromEntries(Object.entries(state.domains).map(([name, value]) => [name, value && { status: value.status, conflict: value.conflict ? { missing: value.conflict.missing } : null, unmergeable: value.unmergeable === true, error: value.error?.code || null }])) }),
+          failure => ({ thrown: failure.code || failure.message }))).catch(failure => ({ evaluate: failure.message }));
+        throw new Error(error.message + ' / library ' + JSON.stringify(library));
+      });
       phase('the band shows it'); await sleep(3000); const first = reads.length;
       // Two further runs of the engine, as the account library starts them (focus and online events are joined and spaced).
       // Each still reads this device's 9 MB from IndexedDB, which is what takes the time here.
@@ -102,7 +109,11 @@ async function main() {
       // The comparison still resolves it: the server side is taken, this device's side stays as a copy.
       const spaces = (await small.page.evaluate(() => HaedoLife.Shell.storage.listWorkspaces())).length;
       // The band offers the comparison between the account library's passes over this large library (it reads "working" during one).
-      await until(async () => { try { await small.page.locator('#lifeAccountStorageReview').click({ timeout: 2000 }); return true; } catch (_) { return false; } }, value => value, 'the comparison is offered', 120000, 500);
+      // When a click does not land, the value says what the band showed and how long the page took to answer.
+      await until(async () => { try { await small.page.locator('#lifeAccountStorageReview').click({ timeout: 2000 }); return true; } catch (_) {
+        const asked = Date.now(), band = await small.page.evaluate(() => { const node = document.querySelector('#lifeAccountStorage'), review = document.querySelector('#lifeAccountStorageReview');
+          return (node?.dataset.state || 'none') + (review ? review.hidden ? ' (button hidden)' : ' (button shown)' : ' (no button)') + ' busy=' + (document.querySelector('.life-app')?.getAttribute('aria-busy') || 'false'); }).catch(failure => 'unreadable: ' + failure.message.slice(0, 80));
+        return band + ', page answered in ' + (Date.now() - asked) + ' ms'; } }, value => value === true, 'the comparison is offered', 120000, 500);
       // The screen is busy for a long time here: it reads the 9 MB server side and lays out both sides, then
       // copies this device's 9 MB into a new space. The waits are for megabytes, not for a timer.
       const busy = { timeout: 240000 }, idle = () => small.page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'), null, busy);

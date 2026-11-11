@@ -324,8 +324,12 @@
       else if (!account) status = 'auth_required';
       else if (state && !sameBinding(state.binding, { projectUrl: account.projectUrl, userId: account.userId, remoteId: workspaceId })) status = 'account_mismatch';
       else if (state && !state.enabled) status = 'paused';
+      // unmergeable: this page tried to merge exactly this recorded difference and could not. A later
+      // run will not settle it either, so whoever shows the state need not wait for one.
+      const unmergeable = !!state?.conflict && !state.conflict.missing && unmerged.get(workspaceId) === state.conflict.remoteRevision + ':' + state.conflict.localRevision;
       return { status, enabled: !!state?.enabled, binding: clone(state?.binding || null), remoteRevision: state?.remoteRevision ?? 0,
-        syncedLocalRevision: state?.syncedLocalRevision ?? -1, conflict: clone(state?.conflict || null), error: state?.error ? { code: state.error.code, message: safeError(state.error).message } : null, account: getAccount() };
+        syncedLocalRevision: state?.syncedLocalRevision ?? -1, conflict: clone(state?.conflict || null), error: state?.error ? { code: state.error.code, message: safeError(state.error).message } : null, account: getAccount(),
+        ...(unmergeable ? { unmergeable: true } : {}) };
     }
     async function enable(workspaceId) {
       const context = scope(workspaceId);

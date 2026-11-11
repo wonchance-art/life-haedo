@@ -370,9 +370,12 @@
       let error = globalError || domainErrors.get(id) || states.find(state => state.error)?.error || null;
       // Every domain settles its differences itself. While a pass runs, a recorded difference is
       // one it is about to settle; what is still recorded afterwards (or a deleted server copy)
-      // is what needs the person.
+      // is what needs the person. A difference the originals engine has already tried and could
+      // not merge (unmergeable) is shown at once and stays shown during later passes: with a
+      // library of megabytes a pass takes long, and the way to the comparison must not come and go
+      // with it (nor be covered by an earlier pass's network error).
       const recorded = state => !!state.conflict || state.status === 'conflict';
-      if (!booting && states.some(state => state.conflict?.missing || recorded(state) && !working)) status = 'conflict';
+      if (!booting && states.some(state => state.conflict?.missing || recorded(state) && (!working || state.unmergeable === true))) status = 'conflict';
       else if (!booting && (error || states.some(state => state.status === 'error'))) status = 'error';
       else if (!booting && !working && !catalogPending && (mode !== 'account' || !states.length || states.some(state => state.status !== 'synced'))) status = 'pending';
       const fileState = domains.originals;

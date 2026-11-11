@@ -341,7 +341,10 @@ test('what cannot be merged is recorded for the manual comparison and tried agai
 // Until the server or this device changes, a run asks for the server's revision only.
 test('a difference that could not be merged is not downloaded again until the server or this device changes', async t => {
   const { f, id } = await divergedFixture(t, { head: true }); f.state.mergeError = 'snapshot_too_large';
+  assert.equal((await f.manager.getState(id)).unmergeable, undefined);
   assert.equal((await f.manager.syncNow(id)).status, 'conflict');
+  // The state says that this page tried and could not: the account band shows the comparison without waiting for a pass.
+  assert.equal((await f.manager.getState(id)).unmergeable, true);
   const reads = f.state.readCalls, heads = f.state.headCalls;
   for (let run = 0; run < 5; run++) assert.equal((await f.manager.syncNow(id, { headIfClean: run % 2 === 0 })).status, 'conflict');
   assert.deepEqual([f.state.readCalls - reads, f.state.headCalls - heads, f.state.merges.length, f.state.writes], [0, 5, 1, 0]);
@@ -351,7 +354,7 @@ test('a difference that could not be merged is not downloaded again until the se
   await f.manager.syncNow(id); assert.equal(f.state.merges.length, 2, 'and then head only again');
   // The server changed: one more attempt, which now succeeds.
   f.state.row = { ...f.state.row, revision: f.state.row.revision + 1 }; f.state.mergeError = null;
-  assert.equal((await f.manager.syncNow(id)).conflict, null); assert.equal(f.state.merges.length, 3);
+  assert.equal((await f.manager.syncNow(id)).conflict, null); assert.equal(f.state.merges.length, 3); assert.equal((await f.manager.getState(id)).unmergeable, undefined);
   // A deleted server copy is seen by the head check.
   const gone = await divergedFixture(t, { head: true }); gone.f.state.mergeError = 'merge_invalid';
   await gone.f.manager.syncNow(gone.id); gone.f.state.row = null;

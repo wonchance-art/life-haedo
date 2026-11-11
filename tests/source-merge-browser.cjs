@@ -610,6 +610,41 @@ async function main() {
       await converged([mac], 'mac receives the chosen snapshot');
     });
 
+    // ---- the account band under slow state reads (a library of megabytes, a slow device) ----
+    await check('the account band shows a finished state read while events keep arriving: a slow read is not dropped for a newer one', async () => {
+      // The page's account library is the real one; its state read is made slow and its listeners can be
+      // called from here (as its own events do). Nothing in the application knows about this.
+      const slow = await device('slow', { prepare: context => context.addInitScript(() => {
+        const life = (window.HaedoLife ||= {}); let wrapped = null;
+        Object.defineProperty(life, 'AccountLibrary', { configurable: true, get: () => wrapped, set(value) {
+          window.__library = { listeners: new Set(), delay: 0, change: null, reads: 0 };
+          wrapped = Object.freeze({ ...value, create(...args) {
+            const library = value.create(...args);
+            return Object.freeze({ ...library,
+              subscribe(listener) { __library.listeners.add(listener); const off = library.subscribe(listener); return () => { __library.listeners.delete(listener); off(); }; },
+              async getState(...rest) { __library.reads++; const state = await library.getState(...rest); if (__library.delay) await new Promise(resolve => setTimeout(resolve, __library.delay)); return __library.change ? __library.change(state) : state; } });
+          } });
+        } });
+      }) });
+      await converged([mac, slow], 'the device is synced');
+      await slow.page.locator('#lifeAccountStorage[data-state="synced"]').waitFor();
+      const seen = await slow.page.evaluate(async () => {
+        const band = document.querySelector('#lifeAccountStorage'), wait = ms => new Promise(resolve => setTimeout(resolve, ms)), states = [];
+        const announce = () => { for (const listener of [...__library.listeners]) listener({ type: 'state' }); };
+        // Every read now takes 400 ms and reports another state; an event arrives every 100 ms.
+        __library.delay = 400; __library.change = state => ({ ...state, status: 'pending' });
+        const reads = __library.reads, storm = setInterval(announce, 100);
+        await wait(2500); states.push(band.dataset.state, __library.reads - reads);      // the events are still arriving
+        clearInterval(storm); __library.delay = 0; __library.change = null; announce();
+        await wait(1500); states.push(band.dataset.state);
+        return states;
+      });
+      assert.equal(seen[0], 'pending', 'a read that finished is shown although newer events had arrived');
+      assert.ok(seen[1] >= 3 && seen[1] <= 8, 'one read at a time (25 events in 2.5 s): ' + seen[1]);
+      assert.equal(seen[2], 'synced', 'and the last event is followed by a read of its own');
+      await slow.context.close(); devices.splice(devices.indexOf(slow), 1);
+    });
+
     await check('no unexpected console or page errors on any device', async () => {
       const expected = /ERR_INTERNET_DISCONNECTED|ERR_FAILED|net::ERR_/;
       for (const item of devices) assert.deepEqual(item.errors.filter(text => !expected.test(text)), [], item.name);

@@ -490,6 +490,15 @@ test('a recorded difference is shown as a conflict only when the pass could not 
     assert.equal((await manager.getState()).status, 'syncing', 'not shown as a conflict while the pass is running');
     gate.resolve(); await pass;
     assert.equal((await manager.getState()).status, 'synced');
+    // A difference the engine already tried and could not merge stays shown while later passes run,
+    // also over an earlier pass's network error (a large library: each pass takes long).
+    Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing: false, remoteRevision: 6 }, unmergeable: true });
+    gate = deferred(); merge = false;
+    const later = manager.reconcile();
+    for (let i = 0; i < 20; i++) await new Promise(done => setImmediate(done));
+    assert.equal((await manager.getState()).status, 'conflict', 'the comparison stays offered during the pass');
+    gate.resolve(); await later;
+    assert.equal((await manager.getState()).status, 'conflict');
     // A deleted server copy is shown at once, also during a pass.
     Object.assign(h.states.get(first), { status: 'conflict', conflict: { missing: true, remoteRevision: 5 } });
     gate = deferred(); const waiting = manager.reconcile();
