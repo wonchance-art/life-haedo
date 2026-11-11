@@ -78,12 +78,12 @@ jobs:
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
-    # Keep every existing suite, but give five independent fixture groups their
+    # Keep every existing suite, but give six independent fixture groups their
     # own server/browser so a long serial job cannot omit the final checks.
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4, 5]
+        group: [1, 2, 3, 4, 5, 6]
     timeout-minutes: 25
     permissions:
       contents: read
@@ -184,6 +184,13 @@ jobs:
       - name: Verify schedule exits keep drafts without false leave prompts and integrated search returns to the schedule view
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/schedule-exits-browser.cjs
+      # Group 6: core-flow regressions added 2026-11-11 (kept apart so groups 1-5 stay inside the job limit).
+      - name: Verify the annual plan takes remote changes without losing typed input, composition or recovery copies
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-annual-plan-sync-browser.cjs
+      - name: Verify page drafts and the public cover accept remote changes while only focused
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-doc-focus-sync-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -701,6 +708,8 @@ jobs:
             .local/habit-tracker/
             .local/planning-frame-browser/
             .local/schedule-exits-browser/
+            .local/annual-plan-sync-browser/
+            .local/account-doc-focus-sync-browser/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
