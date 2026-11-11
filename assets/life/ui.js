@@ -3267,7 +3267,7 @@
         const discard = button('초안 버리기', guarded(async () => {
           if (!global.confirm('수정 초안을 버릴까요? 보관한 자료와 이전 판은 그대로입니다.')) return;
           const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
-          await sourceEditor.discard(stage.stageId);
+          if (sourceEditor) await sourceEditor.discard(stage.stageId); else await storage.deleteStage(stage.stageId);
           await refreshData();
           if (disposed || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId || state.mode !== 'sources') return;
           render();
