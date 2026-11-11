@@ -199,7 +199,12 @@
       // post's content when the revision was opened.
       baseline = null;
     const localStore = (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
-    const recoveryStore = M.recovery(localStore);
+    // Device copies belong to the signed-in account (and its workspace and draft).
+    const recoveryStore = M.recovery(localStore, storage.account?.userId || "local");
+    // What an open IME composition holds: the model does not have it yet.
+    let composingRange = null,
+      composingText = "",
+      lifecycleBound = false;
     const settled = () => dirtyTick === storedTick || dirtyTick === keptTick;
     function resetTicks(dirty = 0) {
       dirtyTick = dirty;
@@ -294,6 +299,8 @@
       authorNote = "";
       authorButton = null;
       editor = null;
+      composingRange = null;
+      composingText = "";
       draftTimers.forEach(clearTimeout);
       draftTimers = [];
       draftBusy = false;
@@ -934,10 +941,27 @@
     }
     // The page is being hidden or closed before autosave ran: what the editor
     // holds goes to the device copy synchronously (async stores may not finish).
+    // Nothing is committed or changed here: an open composition, a caption
+    // still in its field and the editor itself stay exactly as they are.
     function stash() {
-      if (!host || !valid() || mode !== "edit" || !doc || offer || dirtyTick === storedTick) return;
-      recoveryStore.write(workspaceId, doc);
+      if (!host || !valid() || mode !== "edit" || !doc || offer) return;
+      let ops = doc.ops,
+        newer = dirtyTick !== storedTick;
+      if (composingRange && composingText && editor?.composition?.isComposing) {
+        ops = new Delta(ops).compose(new Delta().retain(composingRange.index).delete(composingRange.length).insert(composingText)).ops;
+        newer = true;
+      }
+      if (selected?.isConnected && captionInput && altInput) {
+        const value = Photo.value(selected);
+        if (captionInput.value !== value.caption || altInput.value !== value.alt) {
+          ops = ops.map((op) => op.insert?.photo?.id === value.id
+            ? { ...op, insert: { photo: { ...op.insert.photo, caption: captionInput.value, alt: altInput.value } } } : op);
+          newer = true;
+        }
+      }
+      if (newer) recoveryStore.write(workspaceId, { ...doc, ops });
     }
+    const stashWhenHidden = () => { if (document.visibilityState === "hidden") stash(); };
     function checkpoint() {
       // Keep the accepted model durable without committing an IME field or a
       // file whose signature, dimensions and original bytes are still pending.
@@ -2437,9 +2461,17 @@
       editor.root.addEventListener("compositionstart", () => {
         if (!acceptsInput()) return;
         composing = true;
+        // Read only (no editor update): where the composition will land.
+        try { composingRange = editor.selection.getRange()[0] || null; } catch (_) { composingRange = null; }
+        composingText = "";
         showStatus();
       });
+      editor.root.addEventListener("compositionupdate", (e) => {
+        if (acceptsInput()) composingText = e.data || "";
+      });
       editor.root.addEventListener("compositionend", () => {
+        composingRange = null;
+        composingText = "";
         if (!acceptsInput()) return;
         composing = false;
         mark();
@@ -2997,6 +3029,13 @@
     ) {
       if ((reset || postId) && doc) { if (postId && postId === doc.id) await flush(); else await leave(); }
       host = target;
+      if (!lifecycleBound) {
+        // The page is hidden or closed: async stores may never finish, so what
+        // the editor holds is also written synchronously to the device copy.
+        lifecycleBound = true;
+        root.addEventListener("pagehide", stash);
+        document.addEventListener("visibilitychange", stashWhenHidden);
+      }
       standalone = isolated;
       feedListener = onFeed;
       feedHost = listHost;
@@ -3058,6 +3097,11 @@
       heldId = null; releaseHeld = null;
       serverSequence++; serverBusy = false; serverValue = null; serverStatus = serverActions = null;
       unsubscribeServer?.(); unsubscribeServer = null;
+      if (lifecycleBound) {
+        lifecycleBound = false;
+        root.removeEventListener("pagehide", stash);
+        document.removeEventListener("visibilitychange", stashWhenHidden);
+      }
       cancelAutosave();
       cleanup();
       // Leaving the view: the feed rows go with it.

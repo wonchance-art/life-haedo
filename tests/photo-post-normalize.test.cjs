@@ -128,8 +128,8 @@ test('the lenient backup writes input that cannot be stored; the strict restore 
   await assert.rejects(M.readBackup(archive, core.id), /본문은 50,000자까지/);
 });
 
-test('recovery copies: device-only, per workspace and draft, exact content, no photo bytes', async () => {
-  const store = memory(), recovery = M.recovery(store), p = await photo();
+test('recovery copies: device-only, per account, workspace and draft, exact content, no photo bytes', async () => {
+  const store = memory(), recovery = M.recovery(store, 'account-a'), p = await photo();
   const draft = doc([{ insert: '보관하지 못한 글 ' + '가'.repeat(60000), attributes: { list: 'unchecked' } }, { insert: { photo: { id: p.id, caption: '설명', alt: '', src: 'blob:x' } } }, { insert: '\n' }],
     { title: '제목\u000b', photos: [p], revision: 4, replaces: { id: 'saved-1', revision: 2 }, attachments: [{ type: 'book', title: '책', creator: '', url: 'https://example.org/b' }] });
   assert.equal(recovery.write('ws-a', draft), true);
@@ -139,15 +139,25 @@ test('recovery copies: device-only, per workspace and draft, exact content, no p
   assert.deepEqual(copy.ops[1], { insert: { photo: { id: p.id, caption: '설명', alt: '' } } }, 'photo references only');
   assert.deepEqual([copy.revision, copy.replaces, copy.attachments.length], [4, { id: 'saved-1', revision: 2 }, 1]);
   assert(!JSON.stringify([...store.map.values()]).includes('blob'), 'no photo bytes or object URLs in localStorage');
-  assert.deepEqual([...store.map.keys()], ['haedo_life_post_recovery_v1:ws-a:' + draft.id]);
-  // Another workspace (another account's workspaces are other ids) and another draft see nothing.
+  assert.deepEqual([...store.map.keys()], ['haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id]);
+  // Another account in the same browser reads nothing, even for the same workspace and draft ids.
+  const other = M.recovery(store, 'account-b');
+  assert.equal(other.read('ws-a', draft.id), null);
+  assert.deepEqual(other.list('ws-a'), []);
+  store.setItem('haedo_life_post_recovery_v1:account-b:ws-a:' + draft.id, store.getItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id));
+  assert.equal(other.read('ws-a', draft.id), null, 'a copy moved under another account\'s key is not trusted');
+  store.removeItem('haedo_life_post_recovery_v1:account-b:ws-a:' + draft.id);
+  other.clear('ws-a', draft.id);
+  assert.equal(recovery.read('ws-a', draft.id)?.id, draft.id, 'and it cannot clear the first account\'s copy');
+  assert.equal(M.recovery(store, 'bad:scope').write('ws-a', draft), false);
+  // Another workspace and another draft see nothing.
   assert.equal(recovery.read('ws-b', draft.id), null);
   assert.equal(recovery.read('ws-a', 'other'), null);
   assert.deepEqual(recovery.list('ws-b'), []);
   assert.deepEqual(recovery.list('ws-a').map(item => item.id), [draft.id]);
   // A copy filed under another key, or damaged, is not trusted.
-  store.setItem('haedo_life_post_recovery_v1:ws-b:' + draft.id, store.getItem('haedo_life_post_recovery_v1:ws-a:' + draft.id));
-  store.setItem('haedo_life_post_recovery_v1:ws-a:broken', '{not json');
+  store.setItem('haedo_life_post_recovery_v1:account-a:ws-b:' + draft.id, store.getItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id));
+  store.setItem('haedo_life_post_recovery_v1:account-a:ws-a:broken', '{not json');
   assert.equal(recovery.read('ws-b', draft.id), null);
   assert.equal(recovery.read('ws-a', 'broken'), null);
   assert.deepEqual(recovery.list('ws-a').map(item => item.id), [draft.id]);
@@ -156,7 +166,7 @@ test('recovery copies: device-only, per workspace and draft, exact content, no p
   // A full or unavailable store reports failure instead of throwing.
   const full = M.recovery({ ...memory(), setItem() { throw new DOMException('full', 'QuotaExceededError'); } });
   assert.equal(full.write('ws-a', draft), false);
-  const none = M.recovery(null);
+  const none = M.recovery(null, 'account-a');
   assert.equal(none.write('ws-a', draft), false);
   assert.equal(none.read('ws-a', draft.id), null);
   assert.deepEqual(none.list('ws-a'), []);
@@ -164,7 +174,7 @@ test('recovery copies: device-only, per workspace and draft, exact content, no p
 });
 
 test('moved posts: an id replaced by a saved revision resolves to the post that took its place', () => {
-  const store = memory(), moved = M.moved(store);
+  const store = memory(), moved = M.moved(store, 'account-a');
   assert.equal(moved.resolve('ws-a', 'a'), null);
   moved.record('ws-a', 'a', 'b'); moved.record('ws-a', 'b', 'c'); moved.record('ws-b', 'a', 'z');
   assert.equal(moved.resolve('ws-a', 'a'), 'c');
@@ -176,6 +186,7 @@ test('moved posts: an id replaced by a saved revision resolves to the post that 
   assert.doesNotThrow(() => moved.resolve('ws-a', 'a'), 'a cycle ends');
   assert(!/[가-힣]/.test(JSON.stringify([...store.map.entries()])), 'identifiers only');
   for (let i = 0; i < 400; i++) moved.record('ws-d', 'from' + i, 'to' + i);
-  assert.equal(Object.keys(JSON.parse(store.getItem('haedo_life_post_moved_v1:ws-d'))).length, 300, 'bounded');
+  assert.equal(Object.keys(JSON.parse(store.getItem('haedo_life_post_moved_v1:account-a:ws-d'))).length, 300, 'bounded');
+  assert.equal(M.moved(store, 'account-b').resolve('ws-a', 'a'), null, 'per account');
   assert.equal(moved.resolve('ws-d', 'from399'), 'to399');
 });

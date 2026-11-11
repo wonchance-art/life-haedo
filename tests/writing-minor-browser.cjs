@@ -128,4 +128,58 @@ H.run(__filename, {
     assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기') || waiting.includes('자동 저장됨 · 계정에 올림'), waiting);
     await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'the open sheet follows the upload', 20000);
   },
+  // m8: input typed after the last autosave survives the page closing, and belongs to its account.
+  async 'pagehide-recovery'({ open }) {
+    const dialogs = [];
+    const { page, context } = await open({ page: { dialogs } });
+    // The page dies before the store commits: draft writes abort while armed (per page load).
+    await context.addInitScript(() => {
+      const original = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (value, ...rest) { const result = original.call(this, value, ...rest); if (window.__dying && this.name === 'meta' && value?.key?.startsWith('photo-post:')) this.transaction.abort(); return result; };
+    });
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('닫히기 직전의 글');
+    await page.locator('.ql-editor').click(); await page.keyboard.type('보관된 앞부분.');
+    const before = await draftWith(page, '보관된 앞부분.');
+    await H.until(() => recoveryCopies(page), copies => copies.length === 0, 'nothing is kept on the side while autosave works');
+    await page.evaluate(() => { window.__dying = true; });
+    await page.keyboard.type(' 마지막 자동 저장 뒤에 친 열일곱 자쯤.');
+    await page.reload();
+    await page.locator('#photoTitle').waitFor(); await page.locator('.photo-recovered').waitFor();
+    assert.equal((await H.records(page))[0].text, before[0].text, 'the store never received the last input');
+    assert.equal(await H.bodyText(page), '보관된 앞부분.\n', 'the stored draft is shown first');
+    assert((await page.locator('.photo-recovered').innerText()).includes('보관하지 못한 입력이 이 기기에 남아 있습니다'));
+    await page.getByRole('button', { name: '복구', exact: true }).click();
+    await H.until(() => H.bodyText(page), text => text === '보관된 앞부분. 마지막 자동 저장 뒤에 친 열일곱 자쯤.\n', 'the last input is back');
+    await draftWith(page, '마지막 자동 저장 뒤에 친 열일곱 자쯤.');
+    await H.until(() => recoveryCopies(page), copies => copies.length === 0, 'the device copy ends once the draft holds it');
+    // A syllable still being composed when the page is hidden is in the copy too.
+    await page.evaluate(() => { window.__dying = true; });
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End');
+    const cdp = await context.newCDPSession(page);
+    for (const text of ['ㄲ', '끄', '끝']) { await cdp.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length }); await H.sleep(40); }
+    // The tab is hidden (app switch on a phone): reported by the page itself here, as the autosave check does.
+    await page.evaluate(() => {
+      for (const [name, value] of [['visibilityState', 'hidden'], ['hidden', true]]) Object.defineProperty(document, name, { get: () => value, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const composing = await recoveryCopies(page);
+    assert.equal(composing.length, 1);
+    assert(composing[0].value.ops.map(op => typeof op.insert === 'string' ? op.insert : '').join('').includes('열일곱 자쯤.끝'), 'the composing text is kept: ' + JSON.stringify(composing[0].value.ops));
+    assert.equal(await page.evaluate(() => Quill.find(document.querySelector('.ql-container')).composition.isComposing), true, 'the composition itself is not ended or altered');
+    await page.evaluate(() => { delete document.visibilityState; delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
+    await cdp.send('Input.insertText', { text: '끝' });
+    // Another account in the same browser never sees it.
+    const key = composing[0].key, draftId = before[0].id;
+    await page.evaluate(() => { window.__dying = false; });
+    await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, accountSession(H.accounts.b));
+    await page.waitForFunction(id => HaedoLife.Shell.storage?.account?.userId === id, H.accounts.b.id);
+    await ready(page); await settle(page);
+    assert(!key.includes(H.accounts.b.id) && key.includes(H.accounts.a.id), 'the copy is keyed by its account: ' + key);
+    assert.equal(await page.evaluate(({ a, draftId }) => { const api = HaedoLife.PhotoPost.recovery(localStorage, HaedoLife.Shell.storage.account.userId); const mine = Object.keys(localStorage).filter(key => key.startsWith('haedo_life_post_recovery_v1:')).map(key => key.split(':')); return mine.filter(parts => api.read(parts[2], parts[3])).length; }, { a: H.accounts.a.id, draftId }), 0, 'reading as the other account finds nothing');
+    await page.goto(H.base + '/index.html'); await ready(page); await settle(page); await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+    await H.writer(page);
+    assert.equal(await page.locator('.photo-recovered').count(), 0, 'no offer for another account\'s input');
+    assert.equal(await H.bodyText(page), '\n');
+  },
 });

@@ -590,19 +590,20 @@
   // this browser only, for the moments the draft itself cannot be stored: the
   // content is over a limit, the store failed, or the page is closing before
   // autosave ran. Text, formats and photo references only; photo bytes stay in
-  // the stored draft. One copy per workspace and draft. A workspace belongs to
-  // one account and is opened only after storage has checked that account, so
-  // another account never reaches these keys. Never synced, never public.
+  // the stored draft. One copy per account, workspace and draft: `scope` is the
+  // signed-in account, so another account in the same browser never reads it
+  // (its workspaces are other ids as well). Never synced, never public.
   const RECOVERY_PREFIX = "haedo_life_post_recovery_v1:";
   const MOVED_PREFIX = "haedo_life_post_moved_v1:";
   const KEY_PART = /^[A-Za-z0-9_-]{1,128}$/;
-  function recovery(store) {
+  function recovery(store, scope = "local") {
+    if (!KEY_PART.test(scope || "")) store = null;
     const key = (ws, postId) =>
-      KEY_PART.test(ws || "") && KEY_PART.test(postId || "") ? RECOVERY_PREFIX + ws + ":" + postId : null;
+      KEY_PART.test(ws || "") && KEY_PART.test(postId || "") ? RECOVERY_PREFIX + scope + ":" + ws + ":" + postId : null;
     function parse(ws, postId, raw) {
       try {
         const v = JSON.parse(raw);
-        if (!plain(v) || v.v !== 1 || v.workspaceId !== ws || v.id !== postId ||
+        if (!plain(v) || v.v !== 1 || v.account !== scope || v.workspaceId !== ws || v.id !== postId ||
             typeof v.title !== "string" || !Array.isArray(v.ops) || !Array.isArray(v.attachments) ||
             !Number.isSafeInteger(v.revision) || typeof v.savedAt !== "string" ||
             !(v.replaces === null || plain(v.replaces) && typeof v.replaces.id === "string"))
@@ -619,7 +620,7 @@
         if (!k || !store) return false;
         try {
           store.setItem(k, JSON.stringify({
-            v: 1, workspaceId: ws, id: d.id, revision: d.revision,
+            v: 1, account: scope, workspaceId: ws, id: d.id, revision: d.revision,
             replaces: d.replaces ? { id: d.replaces.id, revision: d.replaces.revision } : null,
             savedAt: new Date().toISOString(), title: String(d.title ?? ""),
             ops: (Array.isArray(d.ops) ? d.ops : []).map((op) =>
@@ -654,7 +655,7 @@
         const found = [];
         if (!store || !KEY_PART.test(ws || "")) return found;
         try {
-          const prefix = RECOVERY_PREFIX + ws + ":";
+          const prefix = RECOVERY_PREFIX + scope + ":" + ws + ":";
           for (let i = 0; i < store.length; i++) {
             const k = store.key(i);
             if (!k?.startsWith(prefix)) continue;
@@ -669,10 +670,12 @@
   // Saving a revision gives the post a new id. This device remembers which id
   // took an old one's place (identifiers only), so an address kept from before
   // the edit still opens the post.
-  function moved(store) {
+  function moved(store, scope = "local") {
+    if (!KEY_PART.test(scope || "")) store = null;
+    const name = (ws) => MOVED_PREFIX + scope + ":" + ws;
     const read = (ws) => {
       try {
-        const v = JSON.parse(store.getItem(MOVED_PREFIX + ws) || "{}");
+        const v = JSON.parse(store.getItem(name(ws)) || "{}");
         return plain(v) ? v : {};
       } catch (_) {
         return {};
@@ -684,7 +687,7 @@
         try {
           const entries = Object.entries(read(ws)).filter(([k]) => k !== from);
           entries.push([from, to]);
-          store.setItem(MOVED_PREFIX + ws, JSON.stringify(Object.fromEntries(entries.slice(-300))));
+          store.setItem(name(ws), JSON.stringify(Object.fromEntries(entries.slice(-300))));
         } catch (_) {}
       },
       // The id that now stands for `postId`, or null when none is recorded.
