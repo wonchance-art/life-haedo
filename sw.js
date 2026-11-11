@@ -49,8 +49,9 @@ const DISCOVERY_CACHE='haedo-discovery-feed-v1';
 const discoveryURL=new URL('./assets/life/discovery-feed.json',self.registration.scope).href;
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
 // `blog` reopens the blog editor/reader after a reload; `compose` starts a new post;
-// `date` names 일정's period (Y·Q·M·W·D). The app validates every value; the shell is the same page.
-const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose','date']);
+// `date` names 일정's period (Y·Q·M·W·D); `month` the habit page's month (habits.html?month=YYYY-MM).
+// The app validates every value; the shell is the same page.
+const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public','blog','compose','date','month']);
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))
