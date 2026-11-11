@@ -60,9 +60,12 @@
       const sourceAdapter = { getState: () => sourceSync.getState(ws), syncNow: () => sourceSync.syncNow(ws),
         subscribe: listener => sourceSync.subscribe(event => { if (event.workspaceId === ws) listener({ workspaceId: id }); }) };
       const transport = { read: () => remote.read(ws, id), write: request => remote.write({ ...request, workspaceId: ws, draftId: id }) };
+      // A new piece of writing (no original it edits, not yet saved as a record) points at no
+      // original: it is sent while the originals are still pending, failing or unmerged.
+      const sourceOptional = async () => { const stage = await storage.getStage(id); return !!stage && stage.kind === 'writing' && stage.workspaceId === ws && stage.state === 'draft' && stage.sourceId === null; };
       const instance = engine.create({ storage: adapter, sourceSync: sourceAdapter, auth, remote: transport,
         errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false,
-        autoResolve: latest });
+        autoResolve: latest, sourceOptional });
       instance.subscribe(event => emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null));
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
@@ -119,12 +122,17 @@
       const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
       availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
     }
-    // A pass lists a workspace's drafts only while its originals sync is enabled, bound to this
-    // account and synced. Workspaces a pass had to skip for that reason are remembered: when the
+    // A pass needs a workspace's originals to be connected (enabled, bound to this account, a
+    // server revision acknowledged). Drafts that point at an original also need them ready
+    // (synced). Workspaces whose originals a pass found not ready are remembered: when the
     // originals engine connects (an open, a reconnect) or such a workspace's originals become ready,
     // a pass runs then instead of at the next poll. Other originals changes start no pass.
     const originalsReady = state => !!state?.enabled && same(state.binding) && state.status === 'synced';
     const waiting = new Set();
+    // Server drafts that could not be installed while the originals were not ready (they point at
+    // an original that has not arrived): the same server revision is not read again until the
+    // originals are ready, so a long originals outage costs one body read per draft, not one per pass.
+    const held = new Map();
     let sourceCheck = null, sourceAgain = null, offSource = null, sourceEvents = 0;
     function onSource(event) {
       sourceEvents++;
@@ -163,7 +171,9 @@
       if (originalsReady(source)) waiting.delete(ws); else wait();
       if (!source?.enabled || !same(source.binding)) return;
       let listed = null;
-      if (source.status === 'synced') {
+      // The list needs the originals' connection, not their being up to date: each draft and row
+      // that points at an original is still held by its own check until the originals arrive.
+      if (source.remoteRevision >= 1) {
         listed = new Map();
         try {
           let after = null;
@@ -196,9 +206,13 @@
       }
       if (!listed) return;
       const known = new Set(stages.map(stage => stage.stageId));
+      const ready = originalsReady(source);
       for (const row of listed.values()) {
         if (row.state !== 'draft' || known.has(row.draft_id)) continue;
-        try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
+        const key = ws + '/' + row.draft_id;
+        if (!ready && held.get(key) === row.revision) continue;
+        try { await download(ws, row.draft_id, source); known.add(row.draft_id); held.delete(key); }
+        catch (error) { guard(epoch); if (!ready && error?.code === 'writing_source_pending') held.set(key, row.revision); else held.delete(key); }
       }
     }
     // Callers that arrive during a pass wait for the same pass, which then runs once more.
@@ -256,7 +270,7 @@
       automatic();
     }
     function dispose() { if (disposed) return; disposed = true; wiring?.detach(); wiring = null; root.clearTimeout(soon); soon = null;
-      offAll?.(); offSource?.(); offSource = null; waiting.clear(); sourceAgain = null; material?.dispose(); material = null;
+      offAll?.(); offSource?.(); offSource = null; waiting.clear(); held.clear(); sourceAgain = null; material?.dispose(); material = null;
       for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
     }
     // { force: true } (an explicit retry) ignores the unavailable back-off once.
