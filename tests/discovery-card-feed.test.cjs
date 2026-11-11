@@ -438,20 +438,28 @@ test('A1: browser and collector name the same publisher for every source; the fo
   assert.ok(w.includes('publisher'));
 });
 
-test('노컷뉴스: Korean time written under a GMT label is read as Korean time only when the label puts it in the future', t => {
+test('노컷뉴스: its GMT label is always read as Korean time; other sources and explicit offsets are read as written', t => {
   const nocut = 'www.nocutnews.co.kr', entry = (n, date) => `<item><title>합성 노컷 ${n}</title><link>https://${nocut}/news/${6000000 + n}</link><pubDate>${date}</pubDate></item>`;
+  const read = w => JSON.parse(fs.readFileSync(w.output)).extended.articles;
+  const nocutRows = w => read(w).filter(article => article.sourceId === 'nocut-news').sort((a, b) => a.url.localeCompare(b.url)).map(article => [article.publishedAt, article.dateStatus]);
   // NOW is 2026-11-11T03:00:00Z (12:00 KST). 11:40 "GMT" is 8 h 40 min ahead: the feed's own 11:40 KST.
   const ahead = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(1, 'Wed, 11 Nov 2026 11:40:00 GMT')}${entry(2, 'Wed, 11 Nov 2026 09:10:00 GMT')}</channel></rss>`,
     'sbs-news': `<rss version="2.0"><channel><item><title>합성 SBS</title><link>https://news.sbs.co.kr/news/endPage.do?news_id=N1</link><pubDate>Wed, 11 Nov 2026 11:40:00 GMT</pubDate></item></channel></rss>` });
   assert.ok([0, 2].includes(update(ahead).status));
-  const read = w => JSON.parse(fs.readFileSync(w.output)).extended.articles;
-  const rows = read(ahead).filter(article => article.sourceId === 'nocut-news').sort((a, b) => a.url.localeCompare(b.url));
-  assert.deepEqual(rows.map(article => [article.publishedAt, article.dateStatus]), [['2026-11-11T02:40:00Z', 'valid'], ['2026-11-11T00:10:00Z', 'valid']]);
-  // Another source with the same label is read as written (no correction flag): still a future item.
+  assert.deepEqual(nocutRows(ahead), [['2026-11-11T02:40:00Z', 'valid'], ['2026-11-11T00:10:00Z', 'valid']]);
+  // Another source with the same label is read as written: still a future item.
   const sbs = read(ahead).find(article => article.sourceId === 'sbs-news');
   assert.equal(sbs.publishedAt, '2026-11-11T11:40:00Z'); assert.equal(sbs.dateStatus, 'future');
-  // A run where every GMT label is already in the past keeps the labels as they are.
-  const behind = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(3, 'Wed, 11 Nov 2026 02:10:00 GMT')}</channel></rss>` });
-  assert.ok([0, 2].includes(update(behind).status));
-  assert.equal(read(behind).find(article => article.sourceId === 'nocut-news').publishedAt, '2026-11-11T02:10:00Z');
+  // A quiet hour (no label in the future as written) is corrected the same way: 02:10 KST is 17:10Z the day before.
+  const quiet = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(3, 'Wed, 11 Nov 2026 02:10:00 GMT')}</channel></rss>` });
+  assert.ok([0, 2].includes(update(quiet).status));
+  assert.deepEqual(nocutRows(quiet), [['2026-11-10T17:10:00Z', 'valid']]);
+  // One scheduled item does not move the others: 20:00 KST (11:00Z) stays a future item, 11:40 KST is corrected as always.
+  const scheduled = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(4, 'Wed, 11 Nov 2026 20:00:00 GMT')}${entry(5, 'Wed, 11 Nov 2026 11:40:00 GMT')}</channel></rss>` });
+  assert.ok([0, 2].includes(update(scheduled).status));
+  assert.deepEqual(nocutRows(scheduled), [['2026-11-11T11:00:00Z', 'future'], ['2026-11-11T02:40:00Z', 'valid']]);
+  // An explicit offset is the feed's own statement and is read as written.
+  const explicit = workspace(t, { 'nocut-news': `<rss version="2.0"><channel>${entry(6, 'Wed, 11 Nov 2026 11:40:00 +0900')}${entry(7, 'Wed, 11 Nov 2026 01:40:00 +0000')}</channel></rss>` });
+  assert.ok([0, 2].includes(update(explicit).status));
+  assert.deepEqual(nocutRows(explicit), [['2026-11-11T02:40:00Z', 'valid'], ['2026-11-11T01:40:00Z', 'valid']]);
 });

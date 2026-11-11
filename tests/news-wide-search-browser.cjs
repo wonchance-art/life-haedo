@@ -148,7 +148,7 @@ async function main() {
       const box = page.locator('#discoveryWideSearch');
       assert.equal(await box.isChecked(), false); assert.equal(await box.isEnabled(), true);
       const help = await page.locator('#discoveryWideHelp').innerText();
-      for (const part of ['Google 뉴스', '관심 주제와 콘텐츠 언어', '좋아요·담은 글·읽은 글은 보내지 않습니다', 'Google 주소를 거쳐 원문', '내 계정에만 보관', '끄면 지웁니다']) assert(help.includes(part), 'settings text names: ' + part);
+      for (const part of ['Google 뉴스', '관심 주제와 콘텐츠 언어', '좋아요·담은 글·읽은 글은 보내지 않습니다', 'Google 주소를 거쳐 원문', '내 계정 서버에만 보관하고, 끄면 지웁니다', '담은 글과 읽음·관련 없음 기록은 남습니다']) assert(help.includes(part), 'settings text names: ' + part);
       assert.equal(await box.getAttribute('aria-describedby'), 'discoveryWideHelp');
       assert.equal(await page.locator('#discoveryWideTopics').count(), 0, 'nothing is listed as sent while off');
       await closeSettings(page);

@@ -234,7 +234,7 @@ def iso(value):
     return value.astimezone(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
-def parse_date(value, source, now, local_gmt_label=False):
+def parse_date(value, source, now):
     value = plain(value, 160)
     if not value:
         return None, 'unknown'
@@ -243,8 +243,9 @@ def parse_date(value, source, now, local_gmt_label=False):
             date = datetime.fromisoformat(value.replace('Z', '+00:00'))
         except ValueError:
             date = parsedate_to_datetime(value)
-        if local_gmt_label and value.endswith(' GMT') and date.tzinfo is not None:
-            # This run found the feed writing Korean local time under a GMT label (see parse_feed).
+        if source.get('gmtLabelIsKoreanTime') and value.endswith(' GMT') and date.tzinfo is not None:
+            # This feed writes Korean local time under a GMT label (see parse_feed). Only the literal
+            # ' GMT' spelling is read as +09:00; an explicit offset such as +0900 or +0000 is read as written.
             date = date.replace(tzinfo=timezone(timedelta(hours=9)))
         if date.tzinfo is None:
             # Seoul's official RSS emits local post_date without an offset.
@@ -544,12 +545,12 @@ def parse_feed(body, source, now, limit=20):
         raise FeedError('지원하지 않는 RSS/Atom 형식')
     if not entries or len(entries) > 1000:
         raise FeedError('비어 있거나 항목 제한을 넘은 피드')
-    # A feed registered with `gmtLabelIsKoreanTime` (노컷뉴스) writes Korean local time and labels it GMT: on
-    # 2026-11-11 its newest items read 7 to 9 hours ahead of the clock on two fetches. The label is corrected only
-    # in a run where it actually puts an item in the future, so a feed that fixes its label is read as written.
-    local_gmt_label = False
-    if source.get('gmtLabelIsKoreanTime') and not atom:
-        local_gmt_label = any(parse_date(child_text(entry, 'pubDate') or child_text(entry, f'{{{DC}}}date'), source, now)[1] == 'future' for entry in entries)
+    # A feed registered with `gmtLabelIsKoreanTime` (노컷뉴스 only) writes Korean local time and labels it GMT:
+    # on 2026-11-11 its newest items read 7 to 9 hours ahead of the clock on two fetches (12:20Z and 15:01Z), the
+    # +9 h offset less the age of the newest item. Its ' GMT' times are always read as +09:00 (parse_date). Whether
+    # the run happens to hold a future item no longer decides it: a quiet hour or one scheduled item gave the
+    # wrong reading either way. An item that is still ahead after the correction is a scheduled item and gets
+    # the usual 'future' status, like every source. Other sources' GMT labels are read as written.
     articles = {}
     rejected = 0
     for entry in entries:
@@ -582,8 +583,8 @@ def parse_feed(body, source, now, limit=20):
                 tags = []
             url = approved_url(link, source['allowedHosts'])
             canonical = approved_url(url, source['allowedHosts'], canonical=True)
-            published, date_status = parse_date(published_raw, source, now, local_gmt_label)
-            updated, updated_status = parse_date(updated_raw, source, now, local_gmt_label)
+            published, date_status = parse_date(published_raw, source, now)
+            updated, updated_status = parse_date(updated_raw, source, now)
             date_basis = 'published' if date_status == 'valid' else 'updated' if updated_status == 'valid' else 'unknown'
             article = {
                 'id': 'article-' + source['id'] + '-' + hashlib.sha256(canonical.encode()).hexdigest()[:20],

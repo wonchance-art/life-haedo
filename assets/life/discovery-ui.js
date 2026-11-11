@@ -1041,7 +1041,7 @@
       const box = node('div', null, 'discovery-wide-settings'), available = !!wideRemote(), desired = desiredSettings();
       const on = !!desired && settingsModel().wideSearch(desired);
       const toggle = checkbox('넓게 찾기', 'discoveryWideSearch', on, enabled => changeSetting('wideSearch', null, enabled));
-      const help = node('p', '켜면 위에 직접 적어 켜 둔 관심 주제와 콘텐츠 언어(한국어·영어)를 ' + (wideModel()?.SUPPLIER_LABEL || 'Google 뉴스') + '로 보내 여러 매체의 최신 글을 받습니다. 좋아요·담은 글·읽은 글은 보내지 않습니다. 글을 누르면 Google 주소를 거쳐 원문으로 갑니다. 받은 결과는 내 계정에만 보관되고, 끄면 지웁니다.', 'life-meta');
+      const help = node('p', '켜면 위에 직접 적어 켜 둔 관심 주제와 콘텐츠 언어(한국어·영어)를 ' + (wideModel()?.SUPPLIER_LABEL || 'Google 뉴스') + '로 보내 여러 매체의 최신 글을 받습니다. 좋아요·담은 글·읽은 글은 보내지 않습니다. 글을 누르면 Google 주소를 거쳐 원문으로 갑니다. 받은 결과는 내 계정 서버에만 보관하고, 끄면 지웁니다. 담은 글과 읽음·관련 없음 기록은 남습니다.', 'life-meta');
       help.id = 'discoveryWideHelp'; toggle.querySelector('input').setAttribute('aria-describedby', help.id); toggle.querySelector('input').disabled = !current.settings || !available;
       box.append(toggle, help);
       if (!available) box.append(node('p', '로그인한 계정에서만 쓸 수 있습니다.', 'life-meta'));
