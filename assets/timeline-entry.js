@@ -68,5 +68,10 @@
       "연표를 열지 못했습니다. 인터넷 연결을 확인해 주세요. 기기 사본은 보존했습니다.";
     document.getElementById("timelineRetry").hidden = false;
     document.getElementById("timelineRetry").onclick = () => location.reload();
+    // Opens again by itself when the connection or the page comes back (2026-11-11 m2, as platform-ui.js).
+    const again = () => { if (!document.hidden && navigator.onLine !== false) location.reload(); };
+    addEventListener("online", again);
+    document.addEventListener("visibilitychange", again);
+    addEventListener("pageshow", (event) => { if (event.persisted) again(); });
   }
 })();

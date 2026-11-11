@@ -53,7 +53,7 @@ function setup(overrides = {}) {
     if (user) records.set(SESSION_KEY, JSON.stringify({ user, access_token: 'synthetic-' + user.id })); else records.delete(SESSION_KEY);
     for (const listener of [...sdkListeners]) listener(user ? 'SIGNED_IN' : 'SIGNED_OUT', user ? { user } : null);
   };
-  const auth = createAuth(env, { config, clientFactory, ...(overrides.now ? { now: overrides.now } : {}) });
+  const auth = createAuth(env, { config, clientFactory, ...(overrides.now ? { now: overrides.now } : {}), ...(overrides.authOptions || {}) });
   return { auth, state, env, pageHandlers, sdkListeners };
 }
 
@@ -864,4 +864,83 @@ test('m1: no open redirect and no injected parameter: other origins, schemes and
   for (const page of ['index.html', 'life.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html']) assert.equal(safeNext(page + '?' + extra + '#frag'), page);
   // Non-string input.
   for (const value of [null, undefined, 0, '', {}, [], 42, true]) assert.match(safeNext(value), allowed);
+});
+
+// ── 2026-11-11 m2: an account check that never answers ──
+const { VERIFY_LIMIT_MS } = require('../assets/platform-auth.js');
+const never = () => new Promise(() => {});
+test('m2: the limit is the first-screen budget, and the ordinary check still makes exactly one server request', async () => {
+  assert.equal(VERIFY_LIMIT_MS, 10000); assert.equal(VERIFY_LIMIT_MS, STARTUP_LIMIT_MS);
+  const { auth, state } = setup();
+  await tick(); state.calls.length = 0; // the client's own first session read
+  assert.equal((await auth.verify()).id, A.id);
+  assert.deepEqual(state.calls, ['getSession', 'getUser', 'getSession']);
+});
+
+test('m2: a server check that never answers ends as network_error after the limit; the next check asks the server again', async () => {
+  const { auth, state } = setup({ authOptions: { verifyLimit: 40 }, userPromise: never() });
+  await tick(); state.calls.length = 0;
+  const started = Date.now();
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.ok(Date.now() - started >= 35 && Date.now() - started < 2000, 'gave up at the limit');
+  assert.equal(auth.user, null, 'no account is opened by a check that did not answer');
+  assert.deepEqual(state.calls, ['getSession', 'getUser']);
+  // The connection is back: this check is a new request, not the stalled one.
+  state.userPromise = null;
+  assert.equal((await auth.verify()).id, A.id);
+  assert.equal(state.calls.filter(call => call === 'getUser').length, 2);
+  assert.equal(auth.user.id, A.id);
+});
+
+test('m2: a stalled stored-session read (a token refresh that hangs) is given up the same way', async () => {
+  const { auth, state } = setup({ authOptions: { verifyLimit: 40 } });
+  const sdk = auth.getClient().auth, read = sdk.getSession;
+  await tick(); state.calls.length = 0;
+  sdk.getSession = () => { state.calls.push('getSession'); return never(); };
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.deepEqual(state.calls, ['getSession']);
+  sdk.getSession = read;
+  assert.equal((await auth.verify()).id, A.id);
+});
+
+test('m2: an answer that arrives after the limit follows the old guards: same session yes, a changed account never', async () => {
+  const late = deferred();
+  const { auth, state } = setup({ authOptions: { verifyLimit: 30 }, userPromise: late.promise });
+  const seen = []; auth.onAccountChange(account => seen.push(account?.userId || null));
+  await assert.rejects(auth.verify(), errorCode('network_error'));
+  assert.equal(auth.user, null);
+  late.resolve({ data: { user: A }, error: null }); await tick(); await tick();
+  assert.equal(auth.user?.id, A.id, 'the same session: the late server answer is the verification');
+  assert.deepEqual(seen, [A.id]);
+  // Another account signed in while a check was out: its late answer is dropped.
+  const other = deferred();
+  const second = setup({ authOptions: { verifyLimit: 30 }, userPromise: other.promise });
+  await assert.rejects(second.auth.verify(), errorCode('network_error'));
+  second.state.change(B);
+  other.resolve({ data: { user: A }, error: null }); await tick(); await tick();
+  assert.equal(second.auth.user, null, 'a late answer never opens an account after the session changed');
+});
+
+test('m2: only the user check request is cut short; token refresh and data requests are passed through untouched', async () => {
+  const { state, env } = setup({ authOptions: { verifyLimit: 40 } });
+  const sdkFetch = state.options.global.fetch;
+  assert.equal(typeof sdkFetch, 'function');
+  const calls = [];
+  env.fetch = (url, init) => { calls.push({ url, init }); return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))); };
+  env.AbortController = AbortController;
+  const plain = { method: 'GET', headers: {} };
+  sdkFetch(config.url + '/auth/v1/user', plain).catch(() => {});
+  const limited = calls.at(-1);
+  assert.notEqual(limited.init, plain); assert.ok(limited.init.signal, 'the user check carries a signal');
+  await assert.rejects(sdkFetch(config.url + '/auth/v1/user', { method: 'GET' }), error => error.name === 'AbortError');
+  for (const [url, init] of [[config.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: '{}' }], [config.url + '/auth/v1/user', { method: 'PUT', body: '{}' }],
+    [config.url + '/rest/v1/haedo_items', { method: 'GET' }], [config.url + '/auth/v1/user?x=1', { method: 'GET' }], ['https://elsewhere.invalid/auth/v1/user', { method: 'GET' }]]) {
+    sdkFetch(url, init);
+    assert.equal(calls.at(-1).init, init, url + ' ' + init.method + ' is passed as given');
+    assert.equal(calls.at(-1).init.signal, undefined);
+  }
+  // A caller's own signal still aborts the limited request.
+  const outer = new AbortController(), pending = sdkFetch(config.url + '/auth/v1/user', { method: 'GET', signal: outer.signal });
+  outer.abort();
+  await assert.rejects(pending, error => error.name === 'AbortError');
 });

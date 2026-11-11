@@ -22,9 +22,20 @@
   // generation. Only real recovery, an owner change or a manual retry resets it.
   let failure = null, retryOwner = null, automaticRetries = 0;
   const AUTO_RETRY_LIMIT = 3;
+  // An opening that failed for want of a connection is also tried again by itself after these waits
+  // (2026-11-11 m2): three times at most for one failure streak, then only 다시 확인 and the events above.
+  // These tries have their own count, so the online / shown-again retries keep their budget. A hidden or
+  // offline page spends none. A timed try is quiet: the failure notice and its 다시 확인 stay on screen.
+  const AUTO_RETRY_DELAYS = [2000, 5000, 15000];
+  let retryTimer = null, timedRetries = 0, attempts = 0;
   const retryableFailures = new Set(['network_error', 'storage_unavailable', 'request_cancelled', 'storage_aborted']);
   const accountKey = account => account ? account.projectUrl + '|' + account.userId : null;
-  function resetRecovery() { failure = null; retryOwner = null; automaticRetries = 0; }
+  function resetRecovery() { failure = null; retryOwner = null; automaticRetries = 0; timedRetries = 0; if (retryTimer) { root.clearTimeout(retryTimer); retryTimer = null; } }
+  function scheduleRetry() {
+    if (retryTimer) { root.clearTimeout(retryTimer); retryTimer = null; }
+    if (failure?.code !== 'network_error' || timedRetries >= AUTO_RETRY_DELAYS.length) return;
+    retryTimer = root.setTimeout(() => { retryTimer = null; retryAutomatically(true); }, AUTO_RETRY_DELAYS[timedRetries]);
+  }
   function recoveryOwner(key) {
     if (retryOwner && retryOwner !== key) resetRecovery();
     retryOwner = key;
@@ -37,17 +48,21 @@
     // known transient names; a string error code always controls classification.
     const retryable = retryableFailures.has(code) || code === null && ['AbortError', 'InvalidStateError'].includes(name) || error?.code == null && name === 'Error';
     failure = { key, code: code || name, retryable, message };
-    retryNotice(message);
+    // A quiet try that failed the same way keeps the notice it left on screen (and a focused 다시 확인).
+    const status = root.document.getElementById('lifeStartup');
+    if (status.hidden || status.getAttribute('role') !== 'alert' || status.querySelector('p')?.textContent !== message || !status.querySelector('button:not(:disabled)')) retryNotice(message);
+    scheduleRetry();
   }
-  function retryAutomatically() {
-    if (!failure?.retryable || automaticRetries >= AUTO_RETRY_LIMIT || starting || showing || suspended || retained || leaving || isReadOnly()) return false;
+  // timed: one of the AUTO_RETRY_DELAYS tries; otherwise an online / shown-again event.
+  function retryAutomatically(timed = false) {
+    if (!failure?.retryable || (timed === true ? timedRetries >= AUTO_RETRY_DELAYS.length : automaticRetries >= AUTO_RETRY_LIMIT) || starting || showing || suspended || retained || leaving || isReadOnly()) return false;
     if (root.document.visibilityState === 'hidden' || root.navigator.onLine === false) return false;
     const key = accountKey(auth?.getAccount());
     // An initial Auth network failure has no verified owner yet. A real logout
     // clears its failure record through the null-account notification instead.
     if (failure.key && failure.key !== key) return false;
-    automaticRetries += 1;
-    start();
+    if (timed === true) timedRetries += 1; else automaticRetries += 1;
+    start(timed === true);
     return true;
   }
   let workerScheduled = false;
@@ -308,26 +323,29 @@
       return null;
     }
   }
-  function start() {
+  // quiet (a timed automatic try): the failure notice stays while the account is checked again.
+  function start(quiet = false) {
     if (suspended) return Promise.resolve(null);
     if (starting) return starting;
+    // 다시 확인 may be pressed while a quiet try is still out: the earlier attempt then changes nothing.
+    const attempt = ++attempts;
     const pending = (async () => {
       if (isReadOnly()) { hide(); notice('읽기 전용 주소에서는 개인 자료를 열지 않습니다.'); return null; }
       if (!auth) { hide(); retryNotice('로그인 연결을 준비하지 못했습니다.'); return null; }
-      notice('로그인을 확인하고 있습니다.');
+      if (quiet !== true) notice('로그인을 확인하고 있습니다.');
       const authEpoch = auth.epoch, cached = retained ? mounted : null, transition = suspension;
       // One server check for the opening: the foreground account bootstrap and the
       // first mount reuse it while the session, token and account stay the same.
       const opening = auth.beginStartup?.();
       try {
         const user = await (publicHome ? auth.verify({ startup: true }) : auth.requireUser({ startup: true }));
-        if (suspended || auth.epoch !== authEpoch) return null;
+        if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && (cached !== mounted || transition !== suspension)) return null;
         const account = auth.getAccount();
         if (!user || !account) { if (publicHome) showWelcome(); return null; }
         return await show(account);
       } catch (error) {
-        if (suspended || auth.epoch !== authEpoch) return null;
+        if (suspended || auth.epoch !== authEpoch || attempt !== attempts) return null;
         if (cached && cached === mounted && transition === suspension && auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId === activeKey) conceal();
         else hide();
         recordFailure(error, accountKey(auth.getAccount()), '개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');

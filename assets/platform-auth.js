@@ -5,6 +5,12 @@
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   // Longest life of a page opening's shared account check (see beginStartup): about the first-screen budget.
   const STARTUP_LIMIT_MS = 10000;
+  // Longest wait for one account check (2026-11-11 m2). A request that never answers (a connection that
+  // accepts and then stalls) used to leave the first screen on "로그인을 확인하고 있습니다." with no way out.
+  // The same 10 seconds as the opening above: past it the opening's result is not reused anyway, and a
+  // normal check answers in well under 2 seconds even on a throttled phone (first screen 1.1–1.5 s).
+  // The check then fails as network_error, like an unreachable server, and the caller's retry applies.
+  const VERIFY_LIMIT_MS = 10000;
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
   const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
@@ -94,6 +100,9 @@
     // The page's opening (see beginStartup); null outside it.
     let startupScope = null;
     const now = typeof options.now === 'function' ? options.now : () => Date.now();
+    const setTimer = options.setTimeout || ((run, ms) => (env.setTimeout || setTimeout)(run, ms));
+    const clearTimer = options.clearTimeout || (id => (env.clearTimeout || clearTimeout)(id));
+    const verifyLimit = Number.isFinite(options.verifyLimit) ? options.verifyLimit : VERIFY_LIMIT_MS;
     // Advances on every SDK Auth event, cancellation and page lifecycle boundary.
     // A verification scope never reuses a result from an earlier generation.
     let authGeneration = 0;
@@ -135,9 +144,22 @@
     function alive(expected, uid) {
       if (closed || expected !== epoch || (uid && user?.id !== uid)) throw fault('request_cancelled');
     }
+    // The account check itself (GET /auth/v1/user) is given up after the limit, so a stalled request does
+    // not keep the SDK's session lock and every later check behind it. Reading the user is safe to abandon
+    // and repeat. Nothing else is limited here: a token refresh in particular is never cut short (its
+    // answer may already have replaced the refresh token on the server).
+    const userCheck = ready ? config.url + '/auth/v1/user' : null;
+    function sdkFetch(input, init) {
+      const url = typeof input === 'string' ? input : input?.url, method = String(init?.method || input?.method || 'GET').toUpperCase();
+      if (url !== userCheck || method !== 'GET' || typeof env.AbortController !== 'function') return env.fetch(input, init);
+      const controller = new env.AbortController(), outer = init?.signal;
+      if (outer?.aborted) controller.abort(); else outer?.addEventListener?.('abort', () => controller.abort(), { once: true });
+      const timer = setTimer(() => controller.abort(), verifyLimit);
+      return env.fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimer(timer));
+    }
     const client = ready ? sdkFactory(config.url, config.key, {
       auth: { flowType: 'pkce', storageKey: SESSION_KEY, detectSessionInUrl: true, ...(storage ? { storage } : {}) },
-      global: { headers: { 'X-Client-Info': 'haedo-platform' } }
+      global: { headers: { 'X-Client-Info': 'haedo-platform' }, ...(typeof env.fetch === 'function' ? { fetch: sdkFetch } : {}) }
     }) : null;
     const subscription = client?.auth.onAuthStateChange((name, next) => {
       // SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, SIGNED_IN and any other event.
@@ -169,12 +191,31 @@
       if (options?.startup === true && startupScope && !startupScope.ended) return startupScope.verify();
       return serverVerify();
     }
+    // One account check, given up after verifyLimit as network_error. The limit covers the whole attempt
+    // (reading the stored session, a token refresh it may need, the server check), so no stalled step keeps
+    // the caller waiting. An answer that still arrives later is applied under the same guards as before
+    // (same epoch, same session user): it never switches accounts and never reveals a screen by itself.
     async function serverVerify() {
       if (!client || blocked()) return null;
       // A page in the back/forward cache starts no account check. The document
       // becomes visible before pageshow; a check begun then would be shared by
       // the resumed page's own verification and reveal it early.
       if (parked) throw fault('request_cancelled');
+      let timer = null, check = null;
+      const attempt = checkWithServer(value => { check = value; });
+      attempt.catch(() => {});
+      const lapse = new Promise((_, reject) => {
+        timer = setTimer(() => {
+          // A later attempt asks the server again instead of joining the request that stalled.
+          if (check && pendingUser?.promise === check) pendingUser = null;
+          reject(fault('network_error'));
+        }, verifyLimit);
+        timer?.unref?.();
+      });
+      try { return await Promise.race([attempt, lapse]); }
+      finally { clearTimer(timer); }
+    }
+    async function checkWithServer(began) {
       const expected = epoch;
       try {
         const current = await client.auth.getSession(); alive(expected);
@@ -182,7 +223,8 @@
         if (!current.data.session) { if (user) invalidate(); return null; }
         const uid = current.data.session.user.id;
         if (observedId === undefined) observedId = uid;
-        const verified = await verifiedUser(current.data.session, expected); alive(expected);
+        const pending = verifiedUser(current.data.session, expected); began(pending);
+        const verified = await pending; alive(expected);
         const latest = await client.auth.getSession(); alive(expected);
         if (latest.data?.session && latest.data.session.user.id !== uid) { invalidate(); throw fault('request_cancelled'); }
         if (verified.error) throw verified.error;
@@ -387,6 +429,6 @@
       dispose() { if (closed) return; closed = true; invalidate(); subscription?.unsubscribe(); listeners.clear(); env.removeEventListener?.('pagehide', pagehide); env.removeEventListener?.('pageshow', pageshow); env.removeEventListener?.('storage', storageChange); Promise.resolve(client?.auth.dispose?.()).catch(() => {}); }
     });
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS }; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { safeNext, validConfig, createAuth, SESSION_KEY, LOGOUT_KEY, STARTUP_LIMIT_MS, VERIFY_LIMIT_MS }; return; }
   root.HaedoAuth = createAuth(root);
 })(globalThis);

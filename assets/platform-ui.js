@@ -165,6 +165,12 @@
       "개인 공간을 열지 못했습니다. 인터넷 연결을 확인해 주세요. 기기의 기록은 보존돼 있습니다.";
     byId("accessRetry").hidden = false;
     byId("accessRetry").onclick = () => location.reload();
+    // The page opens again by itself when the connection or the page comes back (2026-11-11 m2). Nothing
+    // has been entered on this screen yet. Each try follows one event; there is no timer here.
+    const again = () => { if (!document.hidden && navigator.onLine !== false) location.reload(); };
+    addEventListener("online", again);
+    document.addEventListener("visibilitychange", again);
+    addEventListener("pageshow", (event) => { if (event.persisted) again(); });
     return;
   }
   document.querySelectorAll("[data-close]").forEach((button) => {
