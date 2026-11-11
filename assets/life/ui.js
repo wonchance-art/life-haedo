@@ -534,7 +534,9 @@
     // back. One entry, for one account and one space: another account or space never reads it and removes it.
     const SOURCE_DRAFTS_KEY = 'caeyeon_life_reader_drafts';
     const sourceDraftOwner = () => storage.account?.userId || 'local';
+    let sourceDraftStoreClosed = false;
     function storeSourceDrafts() {
+      if (sourceDraftStoreClosed) return;
       try {
         const drafts = {};
         for (const [versionId, draft] of state.sourceDrafts) {
@@ -5012,6 +5014,8 @@
         sourceDraft.topic = topic.input.value;
         sourceDraft.note = note.input.value;
         sourceDraft.range = state.sourceSelection && { ...state.sourceSelection };
+        // (Typing here again after a logout that did not complete: this tab keeps its copy again.)
+        sourceDraftStoreClosed = false;
         state.sourceDrafts.set(version.id, sourceDraft); storeSourceDrafts();
         announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.');
       };
@@ -6532,6 +6536,10 @@
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.busy) throw new Error('자료를 처리 중입니다. 작업이 끝난 뒤 로그아웃을 다시 선택해 주세요.');
       await persistDrafts();
+      // Logging out: the unsaved excerpt notes were just kept as review drafts in this account's storage. Their
+      // copy in this tab's session storage is plain text and must not stay behind after the account has left.
+      sourceDraftStoreClosed = true;
+      try { global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); } catch (_) { /* unavailable */ }
     }
 
     // Call inside guarded actions; the public logout hook checks its own boundary.
@@ -6652,7 +6660,8 @@
       state.allStages = [];
       cleanup(() => root?.replaceChildren());
       cleanup(() => root?.remove());
-      // Signed out or another account: this tab's copy of unsaved excerpt notes goes with the account it belonged to.
+      // Another account took this screen's place: this tab's copy of unsaved excerpt notes goes with the account it
+      // belonged to. (A logout removes it earlier, in flushDraft; the same account re-verifying keeps it.)
       cleanup(() => { const account = auth?.getAccount?.(); if (!account || account.userId !== storage.account?.userId) global.sessionStorage.removeItem(SOURCE_DRAFTS_KEY); });
       state.sourceDrafts.clear();
       state.readerPositions.clear(); state.readerModes.clear();

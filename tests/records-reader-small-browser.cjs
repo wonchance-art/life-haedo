@@ -5,6 +5,7 @@
 'use strict';
 const R = require('./helpers/records-reader.cjs');
 const { awaitCondition } = require('./helpers/await-condition.cjs');
+const { openAccount } = require('./life-sync-browser.cjs');
 const { assert, frames, settle } = R;
 const S = R.suite('records-reader-small', 'Local Chromium, synthetic Auth, anonymous records. Small reader defects m1–m6.');
 const only = process.argv.slice(2);
@@ -308,6 +309,34 @@ async function m5() {
       assert.equal(await page.locator('#lifeSourceNote').inputValue(), '', name + ': nothing is shown');
       await page.locator('#lifeSourceNote').fill('남의 눈에 보이면 안 되는 메모');
     }
+    await context.close();
+  });
+  // 2026-11-11 독립 검수: 로그아웃하면 이 탭의 사본을 지운다(평문으로 남지 않게). 메모 자체는 로그아웃 직전에 이 계정의
+  // 저장소에 검토 초안으로 보관된다(이전부터 있던 동작).
+  await S.check('m5 logging out removes the tab copy of the unsaved note, after keeping the note in the account storage', async () => {
+    const device = 'm5-logout', { page, context, server } = await S.open({ width: 1440, height: 900, device });
+    const ids = await R.seed(page, [{ title: '문서 가', text: paragraphs(20) }]);
+    await R.openSource(page, ids[0].versionId);
+    await R.pressAt(page, '#lifeExcerptToggle'); await page.locator('#lifeSourceTopic').fill('나가기 전 주제'); await page.locator('#lifeSourceNote').fill('로그아웃 전에 쓴 메모 QWZ');
+    assert((await page.evaluate(key => sessionStorage.getItem(key), DRAFTS)).includes('QWZ'));
+    const workspaceId = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
+    page.on('dialog', dialog => dialog.accept().catch(() => {}));
+    await openAccount(page); const previous = await page.evaluate(() => window.__homeInstance);
+    await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+    await page.waitForFunction(previous => window.__homeInstance && window.__homeInstance !== previous, previous);
+    const left = await page.evaluate(() => Object.keys(sessionStorage).filter(key => (sessionStorage.getItem(key) || '').includes('QWZ')));
+    assert.deepEqual(left, [], 'no tab storage entry holds the note after the logout');
+    assert.equal(await page.evaluate(key => sessionStorage.getItem(key), DRAFTS), null);
+    assert.equal(await page.evaluate(() => Object.keys(localStorage).some(key => (localStorage.getItem(key) || '').includes('QWZ'))), false);
+    // Not lost: the same account, signed in again in this browser, finds it among the drafts to review.
+    // (Signed in through the simulator's login page, as tests/life-sync-browser.cjs does.)
+    server.oauthAccounts.set(device, R.accounts.a);
+    await page.goto(R.base + '/login.html?next=life.html'); await page.locator('#googleLogin').click();
+    await page.waitForURL('**/life.html'); await R.ready(page); await settle(page);
+    assert.equal(await page.evaluate(() => HaedoAuth.user.id), R.accounts.a.id);
+    const kept = await page.evaluate(async workspaceId => (await HaedoLife.Shell.storage.listStages(workspaceId)).map(stage => [stage.draftTopic, stage.draftNote]), workspaceId);
+    assert.deepEqual(kept, [['나가기 전 주제', '로그아웃 전에 쓴 메모 QWZ']], 'kept as a draft to review');
+    assert.equal(await page.evaluate(key => sessionStorage.getItem(key), DRAFTS), null, 'and the tab copy did not come back');
     await context.close();
   });
   // The form waits 400ms after the last key before it keeps its input. Leaving the page starts that save at once.
