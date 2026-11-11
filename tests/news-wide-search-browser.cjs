@@ -59,9 +59,10 @@ function answer(body, { per = 2, status = 'fresh', stale = false } = {}) {
   }
   return { supplier: 'google-news-rss', items, fetchedAt, stale, topics };
 }
-// The stand-in refuses a topic the way the server does (a reduced copy of the contract's 주제 규칙 table, 5a9466c):
-// quotes, brackets, the colon, a word starting with - or +, * | ~ < > = ; @ $ _, an upper-case OR/AND/NOT between words.
-const refusedTopic = topic => /["'“”‘’()[\]「」:*|~<>=;@$_]/.test(topic) || /(^|\s)[-+]/.test(topic) || /\S\s+(OR|AND|NOT)\s+\S/.test(topic);
+// The stand-in refuses a topic the way the server does (a reduced copy of the contract's 주제 규칙 table, ab94caf):
+// quotes and brackets, the colon, * | ~ < > = ; @ $ _, a word starting with +, a - or an apostrophe that is not
+// between two letters or digits, repeated dots, an upper-case OR/AND/NOT between words.
+const refusedTopic = topic => /["“”‘()[\]「」:*|~<>=;@$_]/.test(topic) || /(^|\s)\+/.test(topic) || /(^|[^\p{L}\p{N}])[-'’]|[-'’]($|[^\p{L}\p{N}])/u.test(topic) || /\.\./.test(topic) || /\S\s+(OR|AND|NOT)\s+\S/.test(topic);
 const cards = page => page.locator('#discoveryList > .discovery-article');
 const wideCards = page => page.locator('#discoveryList > .discovery-article[data-wide]');
 const overflow = page => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -216,7 +217,7 @@ async function main() {
       assert.match(unsent[0][2], /서버가 받지 않는 주제/); assert.match(unsent[1][2], /서버가 받지 않는 주제/);
       // The help names the examples of the contract.
       const help = await page.locator('.discovery-wide-settings').innerText();
-      for (const example of ['10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR', '"기후"', 'site:example.com', '-날씨', '기후 OR 날씨']) assert(help.includes(example), 'example ' + example);
+      for (const example of ['K-pop', '3-1', '.NET', '10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR', '"기후"', 'site:example.com', '50:50', '-날씨', 'a,-b', '1..10', '기후 OR 날씨', '기후*']) assert(help.includes(example), 'example ' + example);
       await capture(page, 'wide-settings-1440');
     });
 

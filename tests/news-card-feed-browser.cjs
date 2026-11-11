@@ -150,6 +150,30 @@ async function main() {
       assert.deepEqual(shown.map(card => card.id), await page.evaluate(() => HaedoLife.Discovery.spreadLatest([...document.querySelectorAll('#discoveryList > .discovery-article')]
         .map(node => ({ id: node.dataset.discoveryId, article: { sourceId: node.dataset.sourceId || '', sourceName: node.querySelector('.discovery-source-name').textContent, canonicalUrl: node.dataset.discoveryUrl, sortDate: node.querySelector('time')?.getAttribute('datetime') || null } }))).map(row => row.id)), 'the shared rule');
     });
+    // A1: a burst of one publisher (the shape of the 2026-11-11 collection, where 연합뉴스 and SBS held the newest 40).
+    const burst = (() => {
+      const base = feed({ count: 40 }), at = k => new Date(Date.now() - k * 1000 - 1000).toISOString(), rights = { mode: 'metadata_only', label: '합성 제목·링크', url: null };
+      // A seventh publisher, so a page can be filled with at most three of each.
+      base.extended.sources.push({ id: 'kakao-tech', name: '카카오 기술블로그', url: 'https://tech.kakao.com/', feedUrl: 'https://tech.kakao.com/feed/', language: 'ko', rights, status: 'ok', stale: false, error: null, lastSuccessAt: at(0), lastAttemptAt: at(0) });
+      for (let k = 0; k < 4; k++) base.extended.articles.push({ id: 'kakao-' + k, sourceId: 'kakao-tech', url: 'https://tech.kakao.com/posts/' + (700 + k), title: '합성 기술 글 ' + (k + 1), language: 'ko', tags: [], author: null,
+        publishedAt: at(4000 + k * 600), fetchedAt: at(0), summary: '', coverage: 'link_only', rights });
+      for (let k = 0; k < 20; k++) base.extended.articles.push({ id: 'burst-' + k, sourceId: 'yna-news', url: 'https://www.yna.co.kr/view/AKRB' + (100 + k), title: '합성 속보 ' + (k + 1), language: 'ko', tags: [], author: null,
+        publishedAt: at(k), fetchedAt: at(0), summary: '', coverage: 'link_only', rights });
+      return base;
+    })();
+    await check('A1 a burst from one publisher holds three places of the first page; 읽음 moves no other card', async ({ page }) => {
+      const ids = () => cards(page).evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+      const first = await ids(), names = await cards(page).evaluateAll(nodes => nodes.map(node => node.querySelector('.discovery-source-name').textContent));
+      assert.deepEqual(first.filter(id => id.startsWith('burst-')), ['burst-0', 'burst-1', 'burst-2'], 'three of the twenty newest, newest first');
+      assert(new Set(names).size >= 6, 'six publishers on the first page: ' + new Set(names).size);
+      assert(names.filter(name => name === '연합뉴스').length <= 3);
+      const target = page.locator('#discoveryList [data-discovery-id="burst-1"]');
+      await target.locator('.discovery-card-more > summary').click(); await target.locator('[data-discovery-feedback=already_read]').click(); await idle(page); await frames(page);
+      assert.deepEqual((await ids()).slice(0, 19), first.filter(id => id !== 'burst-1'), 'the drawn page keeps its order; the next burst article does not jump in');
+      // A new order is computed when the person asks for it.
+      await page.locator('#discoveryFilterToggle').click(); await page.locator('#discoveryRefreshNow').click(); await idle(page); await frames(page);
+      assert.deepEqual((await ids()).filter(id => id.startsWith('burst-')).slice(0, 3), ['burst-0', 'burst-2', 'burst-3'], 'after 지금 갱신 the page is spread again');
+    }, { catalog: burst });
     await check('S1 a short list has no 더 보기', async ({ page }) => {
       assert.equal(await cards(page).count(), 20); assert.equal(await page.locator('#discoveryShowMore').count(), 0); assert.equal(await page.locator('.discovery-page-count').count(), 0);
     }, { catalog: feed({ count: 20 }) });

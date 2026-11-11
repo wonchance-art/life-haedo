@@ -1041,7 +1041,7 @@
       const box = node('div', null, 'discovery-wide-settings'), available = !!wideRemote(), desired = desiredSettings();
       const on = !!desired && settingsModel().wideSearch(desired);
       const toggle = checkbox('넓게 찾기', 'discoveryWideSearch', on, enabled => changeSetting('wideSearch', null, enabled));
-      const help = node('p', '켜면 위에서 고른 관심 주제와 콘텐츠 언어(한국어·영어)를 ' + (wideModel()?.SUPPLIER_LABEL || 'Google 뉴스') + '로 보내 여러 매체의 최신 글을 받습니다. 좋아요·담은 글·읽은 글은 보내지 않습니다. 글을 누르면 Google 주소를 거쳐 원문으로 갑니다. 받은 결과는 내 계정에만 보관되고, 끄면 지웁니다.', 'life-meta');
+      const help = node('p', '켜면 위에 직접 적어 켜 둔 관심 주제와 콘텐츠 언어(한국어·영어)를 ' + (wideModel()?.SUPPLIER_LABEL || 'Google 뉴스') + '로 보내 여러 매체의 최신 글을 받습니다. 좋아요·담은 글·읽은 글은 보내지 않습니다. 글을 누르면 Google 주소를 거쳐 원문으로 갑니다. 받은 결과는 내 계정에만 보관되고, 끄면 지웁니다.', 'life-meta');
       help.id = 'discoveryWideHelp'; toggle.querySelector('input').setAttribute('aria-describedby', help.id); toggle.querySelector('input').disabled = !current.settings || !available;
       box.append(toggle, help);
       if (!available) box.append(node('p', '로그인한 계정에서만 쓸 수 있습니다.', 'life-meta'));
@@ -1059,7 +1059,7 @@
           list.append(line);
         }
         if (planned.rows.length) box.append(node('p', '보내는 주제 · 위에서부터 ' + wideModel().LIMITS.topics + '개까지', 'life-meta'), list,
-          node('p', '주제는 글자·숫자와 일부 기호만 받습니다. 받는 예: ' + wideModel().EXAMPLES.accepted.join(', ') + ' · 받지 않는 예: ' + wideModel().EXAMPLES.refused.join(', '), 'life-meta'));
+          node('p', '주제는 글자·숫자와 일부 기호만 받습니다. 따옴표·괄호·쌍점·별표, 글자·숫자 사이가 아닌 빼기, 이어진 점, 낱말 사이의 대문자 OR·AND·NOT은 받지 않습니다. 받는 예: ' + wideModel().EXAMPLES.accepted.join(', ') + ' · 받지 않는 예: ' + wideModel().EXAMPLES.refused.join(', '), 'life-meta'));
         else box.append(node('p', '보낼 관심 주제가 없습니다. 위에서 주제를 추가하거나 고르면 그 주제로 찾습니다.', 'life-meta'));
         if (planned.rows.length && !planned.languages.length) box.append(node('p', '콘텐츠 언어에 한국어나 영어가 없어 보내지 않습니다.', 'life-meta'));
       }
@@ -1085,9 +1085,12 @@
     function discoverItems(result) {
       const mode = result.metadata?.mode, fixed = result.items, wide = mode === 'personal' ? [] : wideRows(fixed);
       let items = !wide.length ? fixed : mode === 'latest' ? engine().spreadLatest([...fixed, ...wide]) : [...fixed, ...engine().spreadLatest(wide, { perPublisher: wide.length })];
-      // A page once drawn keeps its order while this tab, order and filter stay: a card that leaves does not move the others.
-      if (current.order) { const place = new Map(current.order.map((value, index) => [value, index])); items = [...items].sort((a, b) => (place.get(a.article.canonicalUrl) ?? Infinity) - (place.get(b.article.canonicalUrl) ?? Infinity)); }
-      else if (!current.loading) current.order = items.map(item => item.article.canonicalUrl);
+      // The latest order, once drawn, keeps its pages while this tab, order and filter stay: a card that leaves does not
+      // move the others (spreading publishers would otherwise reshuffle a page). 관심순 and 개인 추천 keep their own order.
+      if (mode !== 'latest') return items;
+      const key = current.mode + ':' + mode;
+      if (current.order?.key === key) { const place = new Map(current.order.urls.map((value, index) => [value, index])); items = [...items].sort((a, b) => (place.get(a.article.canonicalUrl) ?? Infinity) - (place.get(b.article.canonicalUrl) ?? Infinity)); }
+      else if (!current.loading) current.order = { key, urls: items.map(item => item.article.canonicalUrl) };
       return items;
     }
     function originalLink(article, { text = article.title, focusKey = 'open:' + article.id, currentFeedOnly = false } = {}) {

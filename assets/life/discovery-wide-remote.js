@@ -24,17 +24,17 @@
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
   // --- topics. Which characters a topic may hold is the server's rule (supabase/functions/haedo-news-wide/topics.mjs,
-  // contract 5a9466c) and is not written a second time here: the server's `invalid_topic` answer is asked for each
+  // contract ab94caf) and is not written a second time here: the server's `invalid_topic` answer is asked for each
   // topic and shown as it is (see refused below). This side only brings a topic to the server's own spelling (NFC,
   // single spaces, trimmed) and keeps the two counts a request must respect: 1 to 40 characters, at most 8 topics.
   const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
   const REASONS = Object.freeze({
     empty: '빈 주제는 보내지 않습니다.', too_long: '40자까지 보낼 수 있습니다.',
-    refused: '서버가 받지 않는 주제입니다. 따옴표·괄호·쌍점·별표 같은 기호, 빼기로 시작하는 낱말, 낱말 사이의 대문자 OR·AND·NOT은 받지 않습니다.',
+    refused: '서버가 받지 않는 주제입니다. 아래 받지 않는 예를 확인해 주세요.',
     duplicate: '같은 주제를 이미 보냅니다.', over_limit: '위에서부터 8개까지만 보냅니다.'
   });
-  // Examples for the settings help, as the contract lists them.
-  const EXAMPLES = Object.freeze({ accepted: Object.freeze(['10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR', 'K-pop', 'C++', 'R&D']), refused: Object.freeze(['"기후"', 'site:example.com', '50:50', '-날씨', '기후 OR 날씨', '기후*']) });
+  // Examples for the settings help, as the contract lists them (news-wide-feed.md, contract ab94caf, item 10).
+  const EXAMPLES = Object.freeze({ accepted: Object.freeze(['K-pop', '3-1', '.NET', '10%', '1,000원', 'Yahoo!', '왜?', 'Portland OR']), refused: Object.freeze(['"기후"', 'site:example.com', '50:50', '-날씨', 'a,-b', '1..10', '기후 OR 날씨', '기후*']) });
   function checkTopic(raw) {
     if (typeof raw !== 'string' || LONE_SURROGATE.test(raw)) return { ok: false, reason: 'empty' };
     if (raw.length > LIMITS.topicLength * 8) return { ok: false, reason: 'too_long' };
