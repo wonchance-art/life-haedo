@@ -9,6 +9,8 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 공식 Impeccable 지침은 `../impeccable/SKILL.md`와 `../impeccable/INSTALLATION.md`를 따른다. 현재는 프로젝트 내부 지침 배포본이며 바이너리·launcher·자동 hook을 설치하지 않았다. 컨텍스트를 직접 읽는 지원된 fallback을 사용하고 엔진 검사 결과를 만들어내지 않는다. 외부 스킬의 일반적인 확인 질문보다 현재 사용자의 명시 요청·기존 합의가 우선한다.
 
+AI가 만든 듯한 티를 점검하거나 화면을 다듬을 때는 `../unslop/INSTALLATION.md`의 해도 적용 범위를 먼저 읽고 `../unslop/SKILL.md`와 `../unslop/references/signs.md`를 쓴다. 지침 파일만 설치했으므로 스냅샷·스토리 영상 스크립트와 이미지 생성은 쓰지 않는다. 기본은 다듬기이며 방향은 `DESIGN.md`에서 가져온다.
+
 ## 시작
 
 - 새 화면이나 개편 시안은 [전문가 기준](../../../docs/design-review/expert-design-brief.md)을 먼저 따른다. 그리기 전에 같은 기능을 출시한 앱 3–5개를 조사해 가져올 패턴과 피할 패턴을 나누고, 합격선과 금지 목록을 넘는 시안만 보여준다.
