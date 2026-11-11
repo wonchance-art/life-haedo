@@ -15,7 +15,7 @@
 // then the publication revision; unpublish moves the revision of an existing row whether it is
 // active or not and, 20261111120000, records a withdrawn row at revision 1 for an expected
 // revision of 0 without a row; `control.legacy` is the definition before it, which refuses
-// revision 0). The real SQL runs in tests/run-blog-unpublish-postgres.cjs and, with the
+// revision 0, or with 'missing' a server that answers "missing" to it). The real SQL runs in tests/run-blog-unpublish-postgres.cjs and, with the
 // browser, in tests/publish-recovery-browser.cjs.
 const test = require('node:test'), assert = require('node:assert/strict');
 const F = require('./fixtures/photo-metadata.cjs');
@@ -61,7 +61,7 @@ function publicationNet(cloud) {
       let result = receipts.get(operation);
       if (result) return clone(result);
       const row = cloud.rows.get(id);
-      if (control.legacy && revision === 0) throw fault('blog_withdrawal_unsupported');
+      if (control.legacy && revision === 0) throw fault(control.legacy === 'missing' ? 'blog_conflict' : 'blog_withdrawal_unsupported');
       if (!row?.publication) {
         // "missing" for an expected revision of 1 or more (BlogRemote reports it like a conflict).
         if (!row || revision !== 0) throw fault('blog_conflict');
@@ -238,8 +238,8 @@ test('M3: while nothing is public a new choice ends the earlier request first, s
   f.late(requests[2]); assert.deepEqual(f.row().published.photoIds, [both[0]]); assert.equal(f.row().publication.revision, 3);
 });
 
-test('earlier server definition: a new choice shares the publication revision of the first publication it replaces, so at most one is applied', async t => {
-  const f = await saved(t, { photos: 2 }); f.net.control.legacy = true; f.net.control.block = 'publish';
+for (const legacy of [true, 'missing']) test('earlier server definition (' + (legacy === true ? 'refuses' : 'answers missing') + '): a new choice shares the publication revision of the first publication it replaces, so at most one is applied', async t => {
+  const f = await saved(t, { photos: 2 }); f.net.control.legacy = legacy; f.net.control.block = 'publish';
   const both = f.doc.photos.map(photo => photo.id);
   await assert.rejects(f.publish({ photoIds: both }), { code: 'network_error' });
   await assert.rejects(f.publish({ photoIds: [] }), { code: 'network_error' });
@@ -296,8 +296,8 @@ test('M3: a first publication that arrives before it could be ended is recorded;
   state = await f.state(); assert.equal(state.publishPending, null); assert.deepEqual(await f.view(), { status: 'public', notice: null });
 });
 
-test('earlier server definition: the replaced first publication arrives first and the new choice is sent once more as an update', async t => {
-  const f = await saved(t, { photos: 2 }); f.net.control.legacy = true; f.net.control.block = 'publish';
+for (const legacy of [true, 'missing']) test('earlier server definition (' + (legacy === true ? 'refuses' : 'answers missing') + '): the replaced first publication arrives first and the new choice is sent once more as an update', async t => {
+  const f = await saved(t, { photos: 2 }); f.net.control.legacy = legacy; f.net.control.block = 'publish';
   const both = f.doc.photos.map(photo => photo.id);
   await assert.rejects(f.publish({ photoIds: both, author: { name: '익명', intro: '' } }), { code: 'network_error' });
   f.net.control.block = null;
@@ -567,12 +567,16 @@ test('R2-M1: withdrawing with an unanswered first publication always sends a wit
   // The next deliberate publication is a new one, at revision 2, with its own address.
   const published = await f.publish({ photoIds: [], expectedPublicRevision: 1 });
   assert.equal(published.revision, 2); assert.notEqual(published.token, state.publication.token, 'the withdrawn row\'s token never becomes a public address');
+  // R2-D: nothing withdraws that publication afterwards, and the old request stays refused.
+  for (let i = 0; i < 3; i++) { f.time.advance(60000); await f.a.sync.syncNow(); }
+  assert.deepEqual(f.published(), { active: true, revision: 2 }); assert.equal(f.net.tried('unpublish').length, 1); assert.throws(() => f.late(old), conflict);
+  assert.deepEqual(await f.view(), { status: 'public', notice: null });
 });
 
 // Review R2-A: by content this device cannot tell its own late request from another device's
 // deliberate publication (the same name, no photos). Nothing is withdrawn by content.
 test('R2-A: another device\'s later publication with the same name and no photos is never withdrawn by this device', async t => {
-  for (const legacy of [false, true]) await t.test(legacy ? 'earlier server definition' : 'current server definition', async t => {
+  for (const legacy of [false, true, 'missing']) await t.test(legacy ? 'earlier server definition (' + (legacy === true ? 'refuses' : 'answers missing') + ')' : 'current server definition', async t => {
     const f = await saved(t), other = await otherDevice(t, f), author = { name: '익명', intro: '' };
     f.net.control.legacy = legacy; f.net.control.block = 'publish';
     await assert.rejects(f.publish({ author }), { code: 'network_error' }); f.net.control.block = null;
@@ -594,8 +598,8 @@ test('R2-A: another device\'s later publication with the same name and no photos
   });
 });
 
-test('earlier server definition: a withdrawal that cannot end the first publication keeps the post unknown, is sent again once per cycle, and ends when the server takes it', async t => {
-  const f = await saved(t); f.net.control.legacy = true; f.net.control.block = 'publish';
+for (const legacy of [true, 'missing']) test('earlier server definition (' + (legacy === true ? 'refuses' : 'answers missing') + '): a withdrawal that cannot end the first publication keeps the post unknown, is sent again once per cycle, and ends when the server takes it', async t => {
+  const f = await saved(t); f.net.control.legacy = legacy; f.net.control.block = 'publish';
   await assert.rejects(f.publish({ author: { name: '익명', intro: '' } }), { code: 'network_error' }); f.net.control.block = null;
   const old = f.net.tried('publish')[0];
   const failure = await f.withdraw().catch(error => error);
@@ -660,8 +664,8 @@ test('r2-m4: 게시 요청 취소 ends an unapplied first publication for certai
     assert.equal(f.net.tried('unpublish').length, 0); assert.deepEqual(f.published(), { active: true, revision: 1 });
     assert.deepEqual(await f.view(), { status: 'public', notice: 'update_unapplied' }, 'still said');
   });
-  await t.test('earlier server definition: both stay recorded and the post is unknown', async () => {
-    const { f, old } = await unapplied(); f.net.control.legacy = true;
+  for (const legacy of [true, 'missing']) await t.test('earlier server definition (' + (legacy === true ? 'refuses' : 'answers missing') + '): both stay recorded and the post is unknown', async () => {
+    const { f, old } = await unapplied(); f.net.control.legacy = legacy;
     await assert.rejects(f.a.sync.cancelPublish(f.a.ws, f.doc.id), { code: 'blog_withdrawal_unsupported' });
     const state = await f.state(); assert.equal(state.publishPending.operationId, old.operation); assert.equal(state.unpublishPending.ending, true); assert.equal(await f.status(), 'unknown');
   });

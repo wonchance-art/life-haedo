@@ -513,7 +513,8 @@
     //   row at revision 1). With an active publication the row is left alone (withdrawing it
     //   would change the public address): the request is returned as `replaced`, still able to
     //   arrive, and 'cancel' leaves it recorded.
-    // - A server with the earlier definition refuses the withdrawal at revision 0. Nothing is
+    // - A server with the earlier definition does not take the withdrawal at revision 0 (it
+    //   refuses it; "missing" is treated the same): the head stays where it was. Nothing is
     //   judged from what is public then: for 'withdraw' and 'cancel' both requests stay recorded
     //   (`deferred`, still "unknown") and the withdrawal is sent again on each cycle; for
     //   'publish' the old request is returned as `replaced`.
@@ -572,14 +573,16 @@
       if (!state?.remoteId) return { state, replaced: null, notes: [], moved: null, deferred: false };
       const changes = {}, notes = []; let replaced = null, moved = null, deferred = false;
       const differs = (name, value) => { if (canonical(state[name] ?? null) !== canonical(value ?? null)) changes[name] = value ?? null; };
-      // A withdrawal request against the exact revision; a conflict means the head moved
-      // meanwhile. `refused`: the server has the earlier definition and changed nothing.
+      // A withdrawal request against the exact revision. Not stored: the head moved meanwhile
+      // (conflict), or the server did not take it. `stuck`: nothing is public and the head is
+      // still at that revision, so the request it was meant to end can still be applied.
       const withdraw = async (operationId, expectedRevision) => {
-        let refused = false;
+        let stored = true;
         if (sent) sent.value = true;
         try { await remote.unpublish(state.remoteId, expectedRevision, operationId); guard(c); }
-        catch (error) { guard(c); if (error?.code === 'blog_withdrawal_unsupported') refused = true; else if (error?.code !== 'blog_conflict') throw error; }
-        return { row: await readHead(state.remoteId), refused };
+        catch (error) { guard(c); if (!['blog_conflict', 'blog_withdrawal_unsupported'].includes(error?.code)) throw error; stored = false; }
+        const row = await readHead(state.remoteId);
+        return { row, stuck: !stored && !!row && !row.publication?.active && publicRevision(row.publication) === expectedRevision };
       };
       let publication = null;
       // Nothing was stored on the server under this identity yet: nothing can be public.
@@ -597,7 +600,7 @@
             row = answer.row;
             // Not silent: a withdrawal sent again long after it was asked is said on the post.
             if (live && !row?.publication?.active) { notes.push('withdrawal_resent'); Object.assign(changes, logged('withdrawal_resent')); }
-            deferred = answer.refused && !!row && publicRevision(row.publication) === withdrawing.expectedRevision && replace !== 'publish';
+            deferred = answer.stuck && replace !== 'publish';
             // A repeated `ending` request moved the revision with nothing public before or after (as below).
             if (!live && row?.publication && !row.publication.active && row.publication.revision === withdrawing.expectedRevision + 1) moved = { from: withdrawing.expectedRevision, to: row.publication.revision };
           }
@@ -626,7 +629,7 @@
           for (const name of Object.keys(changes)) delete changes[name];
           const answer = await withdraw(operationId, expectedRevision); guard(c);
           row = answer.row;
-          if (answer.refused && row && publicRevision(row.publication) === expectedRevision && replace !== 'publish') deferred = true; // both stay recorded
+          if (answer.stuck && replace !== 'publish') deferred = true; // both stay recorded
           else {
             Object.assign(changes, keep); changes.unpublishPending = null;
             // `moved`: the revision this request moved, with nothing public before or after.
