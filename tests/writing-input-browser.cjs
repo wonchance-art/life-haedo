@@ -52,7 +52,8 @@ H.run(__filename, {
     const rows = await draftWith(page, PARAGRAPH);
     assert.deepEqual(rows[0].ops.filter(op => op.attributes?.list).map(op => op.attributes.list), ['bullet'], 'stored as the nearest supported list');
     await H.until(() => H.contents(page), ops => ops.some(op => op.attributes?.list === 'bullet') && !ops.some(op => op.attributes?.list === 'unchecked'), 'the screen shows what was stored');
-    await H.until(() => H.status(page), value => value.text === '체크 목록은 글머리 목록으로 바꿨어요' && value.state === 'notice', 'the change is said in one line');
+    // Said on its own line; the save state beside it stays the real one.
+    await H.until(() => H.status(page), value => value.note === '체크 목록은 글머리 목록으로 바꿨어요' && value.text === '자동 저장됨' && value.state === 'draft', 'the change is said in one line and the save state stays true');
     assert((await H.bodyText(page)).includes(PARAGRAPH), 'typed text is untouched by the alignment');
     // The caret stayed at the end of the paragraph: typing continues there.
     await page.keyboard.type(' 끝.');
@@ -109,7 +110,7 @@ H.run(__filename, {
     const rows = await draftWith(page, PARAGRAPH);
     assert(rows[0].text.includes('끼어\n든 글자'), 'stored clean');
     await H.until(() => H.bodyText(page), text => text.includes('끼어\n든 글자') && !UNSAFE.test(text.replace(/\n/g, '')), 'the screen shows what was stored');
-    await H.until(() => H.status(page), value => value.text === '쓸 수 없는 문자를 뺐어요', 'the change is said in one line');
+    await H.until(() => H.status(page), value => value.note === '쓸 수 없는 문자를 뺐어요' && value.text === '자동 저장됨', 'the change is said in one line');
   },
   // C: the link box takes "naver.com" as https and refuses what is not an http(s) address.
   async 'links'({ open }) {
@@ -140,7 +141,7 @@ H.run(__filename, {
     await page.keyboard.type(' ' + PARAGRAPH);
     const rows = await draftWith(page, PARAGRAPH);
     assert.deepEqual(rows[0].ops.filter(op => op.attributes?.link).map(op => op.attributes.link), ['https://naver.com', 'https://example.org/path'], 'only http(s) links are stored');
-    await H.until(() => H.status(page), value => value.text === '주소가 아닌 링크는 풀었어요', 'the removed link is said');
+    await H.until(() => H.status(page), value => value.note === '주소가 아닌 링크는 풀었어요' && value.text === '자동 저장됨', 'the removed link is said');
     await reloaded(page);
     assert((await H.bodyText(page)).includes(PARAGRAPH));
     await saveSucceeds(page);
@@ -148,7 +149,7 @@ H.run(__filename, {
   // Same root: input that has no valid form (over 50,000 characters) is never stored invalid, never lost, and every exit still works.
   async 'over-limit'({ open }) {
     const dialogs = [];
-    const { page } = await open({ page: { dialogs } });
+    const { page, server } = await open({ page: { dialogs } });
     await H.home(page); await H.writer(page);
     await page.locator('#photoTitle').fill('긴 글');
     await page.locator('.ql-editor').click();
@@ -162,6 +163,17 @@ H.run(__filename, {
     const said = await H.until(() => H.status(page), value => value.state === 'error' && value.detail.includes('본문은 50,000자까지 쓸 수 있습니다') && value.detail.includes(length.toLocaleString('ko-KR')), 'the limit and the current length are said');
     assert.equal(said.text, '이 기기에만 임시 보관 중', 'where the input is kept is said');
     assert(/계정에 올리지 않고 이 기기에만 임시 보관/.test(said.detail));
+    // 글 정보 states the same fact, not that the account will have it soon.
+    await page.locator('.photo-privacy').click(); await page.locator('dialog.photo-info[open]').waitFor();
+    const info = (await page.locator('dialog.photo-info').innerText()).replace(/\n+/g, ' | ');
+    assert(info.includes('이 기기에만 임시 보관 중') && info.includes('한도를 넘어 계정에 올리지 않았습니다'), info);
+    assert(!/곧 계정에 비공개로 올립니다|계정에 올림|계정에 다시 올리기/.test(info), info);
+    await page.keyboard.press('Escape');
+    // A photo cannot be kept on the side while the draft cannot be stored: adding one is refused and says so.
+    await page.locator('#photoFiles').setInputFiles({ name: 'a.jpg', mimeType: 'image/jpeg', buffer: await H.jpeg(page) });
+    const refused = await H.until(() => H.status(page), value => value.text === '사진을 넣지 못했습니다', 'the photo that was not added is said');
+    assert(refused.detail.startsWith('사진을 넣지 못했습니다. 본문은 50,000자까지 쓸 수 있습니다') && refused.state === 'error', refused.detail);
+    assert.equal(await page.locator('.photo-block').count(), 0);
     const kept = await H.records(page);
     assert.equal(kept[0].text, first[0].text, 'nothing over the limit is stored (or synced)');
     const copies = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('haedo_life_post_recovery_v1:')).map(([key, value]) => ({ key, value: JSON.parse(value) })));
@@ -183,11 +195,23 @@ H.run(__filename, {
     await page.locator('#homeComposition[aria-busy="false"]').waitFor();
     assert.equal(await page.locator('#photoTitle').count(), 0, 'the editor closes');
     assert.deepEqual(dialogs.filter(text => text.startsWith('beforeunload')), []);
+    // The draft's upload finishes meanwhile; that raises its local revision without changing its content.
+    await H.until(async () => [...server.posts.values()].filter(row => row.data.status === 'draft').length, count => count === 1, 'the stored draft is uploaded', 20000);
+    await H.sleep(600);
     // Opening the draft again offers the kept input; the editor waits for the choice.
     await page.locator('#homeTab-drafts').click();
     await page.locator('.home-draft[data-draft-id="' + kept[0].id + '"] .home-draft-open').click();
     await page.locator('.photo-recovered').waitFor();
     assert.equal(await H.quill(page, q => q.isEnabled()), false, 'no typing over an undecided copy');
+    // The band explains the locked editor: it has the focus, its first choice is described by its sentence, and it comes before the title.
+    const band = await page.evaluate(() => {
+      const bar = document.querySelector('.photo-recovered'), first = bar.querySelector('button'), text = bar.querySelector('.photo-recovered-text');
+      return { focused: document.activeElement === first, name: first.textContent, described: first.getAttribute('aria-describedby') === text.id && !!text.id, labelled: bar.getAttribute('aria-labelledby') === text.id,
+        role: text.getAttribute('role'), sentence: text.textContent, beforeTitle: !!(bar.compareDocumentPosition(document.querySelector('#photoTitle')) & Node.DOCUMENT_POSITION_FOLLOWING),
+        titleLocked: document.querySelector('#photoTitle').readOnly };
+    });
+    assert.deepEqual({ ...band, sentence: band.sentence.startsWith('보관하지 못한 입력이 이 기기에 남아 있습니다') }, { focused: true, name: '복구', described: true, labelled: true, role: 'status', sentence: true, beforeTitle: true, titleLocked: true });
+    assert(!band.sentence.includes('새 초안'), 'an unchanged draft is continued in place even though its revision number rose: ' + band.sentence);
     assert.equal(await H.bodyText(page), first[0].text);
     await page.getByRole('button', { name: '복구', exact: true }).click();
     await H.until(() => H.bodyText(page), text => text.length === length && text.includes('맨 끝에 쓴 꼬리 문장.'), 'the kept input is back');
@@ -219,6 +243,7 @@ H.run(__filename, {
     await page.locator('#homeComposition[aria-busy="false"]').waitFor();
     await H.writer(page);
     await page.locator('.photo-recovered').waitFor();
+    await H.until(() => page.evaluate(() => document.activeElement === document.querySelector('.photo-recovered button')), focused => focused, 'the band\'s first choice has the focus when 글쓰기 opens on a kept copy');
     await page.getByRole('button', { name: '복구', exact: true }).click();
     await H.until(() => H.bodyText(page), text => text.length > 50000, 'the new post\'s input is offered when writing again');
     await page.getByRole('button', { name: '닫기', exact: true }).click();
@@ -341,5 +366,26 @@ H.run(__filename, {
     assert.deepEqual(typed.changes, [], 'and needs no correction: ' + JSON.stringify(typed.ops));
     await H.stored(page, rows => rows[0]?.text.includes('붙여넣기\n둘째\ttab\n셋째'), 'and it is stored');
     assert.notEqual((await H.status(page)).state, 'error');
+  },
+  // A long error from storage does not become a five-line column in the phone's one-line status slot.
+  async 'long-error-on-a-phone'({ open }) {
+    const { page } = await open({ viewport: { width: 390, height: 844 }, options: { hasTouch: true, isMobile: true } });
+    await H.home(page); await H.writer(page);
+    await page.locator('.ql-editor').click(); await page.keyboard.type('처음 문장.');
+    await draftWith(page, '처음 문장.');
+    await page.evaluate(() => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (value, ...rest) { if (this.name === 'meta' && String(value?.key).startsWith('photo-post:')) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return put.call(this, value, ...rest); };
+    });
+    await page.keyboard.type(' 보관되지 못할 문장.');
+    const said = await H.until(() => H.status(page), value => value.state === 'error' && (value.text || '').length > 24, 'the storage error is shown in its own words');
+    const box = await page.evaluate(() => {
+      const line = document.querySelector('.photo-commandbar .photo-status').getBoundingClientRect(), bar = document.querySelector('.photo-commandbar').getBoundingClientRect(), save = document.querySelector('.photo-save').getBoundingClientRect();
+      return { width: Math.round(line.width), height: Math.round(line.height), bar: Math.round(bar.width), below: line.top >= save.bottom - 1, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    assert(box.width > box.bar * 0.9 && box.height <= 48 && box.below && !box.overflow, 'a full-width line under the command row: ' + JSON.stringify(box) + ' ' + said.text);
+    // The recovery actions are still there, and the input is intact.
+    assert(await page.getByRole('button', { name: '다시 보관', exact: true }).isVisible());
+    assert((await H.bodyText(page)).includes('보관되지 못할 문장.'));
   },
 });

@@ -115,6 +115,25 @@ test('emptiness and content comparison ignore what normalization changes only in
   assert.equal(M.contentKey(a), M.contentKey(b));
   b.ops = [{ insert: '다른 글\n' }];
   assert.notEqual(M.contentKey(a), M.contentKey(b));
+  // Everything a post holds counts: the title, a format, a photo caption, an attachment.
+  const base = doc([{ insert: '같은 글' }, { insert: '\n' }, { insert: { photo: { id: p.id, caption: '설명', alt: '' } } }, { insert: '\n' }], { title: '제목', photos: [p] });
+  const changed = change => { const next = structuredClone({ ...base, photos: [] }); next.photos = base.photos; change(next); return M.contentKey(next); };
+  assert.equal(changed(() => {}), M.contentKey(base));
+  assert.notEqual(changed(d => { d.title = '제목 고침'; }), M.contentKey(base), 'title');
+  assert.notEqual(changed(d => { d.ops[0].attributes = { bold: true }; }), M.contentKey(base), 'format');
+  assert.notEqual(changed(d => { d.ops[2].insert.photo.caption = '설명 고침'; }), M.contentKey(base), 'photo caption');
+  assert.notEqual(changed(d => { d.attachments = [{ type: 'book', title: '책', creator: '', url: 'https://example.org/b' }]; }), M.contentKey(base), 'attachment');
+  // A Markdown post's body is its Markdown text (the editor of that format will compare revisions with it).
+  const md = body => ({ ...M.create(core.id), format: 'life-post-md-v1', ops: undefined, markdown: body, title: '마크다운 글' });
+  assert.notEqual(M.contentKey(md('첫 문단\n')), M.contentKey(md('다른 문단\n')), 'Markdown bodies are compared');
+  assert.equal(M.contentKey(md('같은 문단\n')), M.contentKey(md('같은 문단\n')));
+  assert.notEqual(M.contentHash(md('첫 문단\n')), M.contentHash(md('다른 문단\n')));
+  // The fingerprint kept beside a device copy follows the content key and is short.
+  assert.equal(M.contentHash(a), M.contentHash({ ...structuredClone(a), id: core.id(), revision: 9 }));
+  assert.notEqual(M.contentHash(a), M.contentHash(b));
+  assert(M.contentHash(doc([{ insert: '가'.repeat(60000) + '\n' }])).length < 24);
+  assert.notEqual(M.textHash('ab'), M.textHash('ba'));
+  assert.notEqual(M.textHash(''), M.textHash(' '));
 });
 
 test('the lenient backup writes input that cannot be stored; the strict restore still refuses it', async () => {
@@ -138,6 +157,18 @@ test('recovery copies: device-only, per account, workspace and draft, exact cont
   assert.equal(copy.ops[0].insert, draft.ops[0].insert);
   assert.deepEqual(copy.ops[1], { insert: { photo: { id: p.id, caption: '설명', alt: '' } } }, 'photo references only');
   assert.deepEqual([copy.revision, copy.replaces, copy.attachments.length], [4, { id: 'saved-1', revision: 2 }, 1]);
+  // What was stored when the copy was taken, and whether it was already offered, travel with it.
+  assert.deepEqual([copy.base, copy.askedAt], [null, null], 'unknown unless given');
+  assert.equal(recovery.write('ws-a', draft, M.contentHash(draft)), true);
+  assert.equal(recovery.read('ws-a', draft.id).base, M.contentHash(draft));
+  recovery.markAsked('ws-a', draft.id, '2026-11-11T00:00:00.000Z');
+  recovery.markAsked('ws-a', draft.id, '2026-12-01T00:00:00.000Z');
+  assert.equal(recovery.read('ws-a', draft.id).askedAt, '2026-11-11T00:00:00.000Z', 'the first offer is the one that counts');
+  assert.equal(recovery.list('ws-a')[0].base, M.contentHash(draft));
+  // A copy written before these fields existed reads as unknown, never as a match.
+  const legacy = JSON.parse(store.getItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id)); delete legacy.base; delete legacy.askedAt;
+  store.setItem('haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id, JSON.stringify(legacy));
+  assert.deepEqual([recovery.read('ws-a', draft.id).base, recovery.read('ws-a', draft.id).askedAt], [null, null]);
   assert(!JSON.stringify([...store.map.values()]).includes('blob'), 'no photo bytes or object URLs in localStorage');
   assert.deepEqual([...store.map.keys()], ['haedo_life_post_recovery_v1:account-a:ws-a:' + draft.id]);
   // Another account in the same browser reads nothing, even for the same workspace and draft ids.

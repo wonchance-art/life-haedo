@@ -53,6 +53,7 @@ H.run(__filename, {
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type('덧');
     const rows = await H.stored(page, list => list.some(row => row.status === 'draft' && row.replaces?.id === post.id && row.text.includes('덧')), 'the first change stores the buffer');
     const buffer = rows.find(row => row.status === 'draft');
+    assert.deepEqual(buffer.replaces, { id: post.id, revision: post.revision }, 'the revision names the exact saved version it replaces');
     await H.until(async () => page.url(), url => url.includes('blog=photo.' + buffer.id), 'the address names the stored buffer');
     await H.until(async () => serverDrafts(server).length, count => count === 1, 'the changed revision is kept in the account', 20000);
     await page.keyboard.press('Backspace');
@@ -149,6 +150,20 @@ H.run(__filename, {
     await close(page);
     assert.deepEqual(await H.records(page), [], 'the empty draft is removed on closing');
     assert.deepEqual(await homeDrafts(page), { strip: false, tab: '초안', posts: 0 });
+    // Only a draft with nothing at all is empty: a title alone, or a photo alone, is kept.
+    await H.writer(page);
+    await page.locator('#photoTitle').fill('제목만 있는 초안');
+    await H.stored(page, list => list.length === 1 && list[0].title === '제목만 있는 초안', 'title stored');
+    await close(page);
+    assert.deepEqual((await H.records(page)).map(row => row.title), ['제목만 있는 초안'], 'a draft with only a title is kept');
+    await H.writer(page);
+    await page.locator('#photoFiles').setInputFiles({ name: 'a.jpg', mimeType: 'image/jpeg', buffer: await H.jpeg(page) });
+    await page.locator('.photo-block img').waitFor();
+    await H.stored(page, list => list.some(row => row.photos === 1), 'photo stored');
+    await close(page);
+    assert.deepEqual((await H.records(page)).map(row => [row.title, row.photos]).sort(), [['', 1], ['제목만 있는 초안', 0]], 'a draft with only a photo is kept');
+    await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); for (const row of await s.listPhotoPosts(w)) await s.deletePhotoPost(w, row.id, row.revision); });
+    await H.home(page);
     // An empty draft left by an earlier version (or another device) is not a row.
     await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); await s.savePhotoPost(w, HaedoLife.PhotoPost.create(HaedoLife.Core.id), 0); });
     await H.home(page);
@@ -175,5 +190,48 @@ H.run(__filename, {
     await H.menu(page, '목록에서 숨기기');
     const rows = await H.stored(page, list => list.length === 1 && list[0].archived === true, 'the saved post itself is hidden');
     assert.deepEqual([rows[0].id, rows[0].status], [post.id, 'saved']);
+  },
+  // "The same as the saved post" compares everything a post holds: a revision that changed only the title,
+  // only a format, only a photo caption or only an attachment is a change and is kept on leaving.
+  async 'revision-kinds-are-kept'({ open }) {
+    const { page } = await open();
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('저장한 글');
+    await page.locator('#photoFiles').setInputFiles({ name: 'a.jpg', mimeType: 'image/jpeg', buffer: await H.jpeg(page) });
+    await page.locator('.photo-block img').waitFor();
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+Home'); await page.keyboard.type('원래 본문입니다.');
+    await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+    const post = (await H.stored(page, list => list.length === 1 && list[0].status === 'saved', 'saved'))[0];
+    const kinds = {
+      '제목만': async () => { await page.locator('#photoTitle').fill('저장한 글 (제목만 고침)'); },
+      '굵게만': async () => { await page.locator('.ql-editor').click(); await page.keyboard.press('Control+Home'); await page.keyboard.press('Shift+End'); await page.keyboard.press('Control+b'); },
+      '사진 설명만': async () => { await page.locator('.photo-block .photo-caption-text').first().click(); await page.locator('textarea[aria-label="사진 설명"]').fill('설명만 고침'); },
+      '첨부만': async () => {
+        await page.getByRole('button', { name: '음악·책·대상 붙이기', exact: true }).click(); await page.locator('#clPickerQuery').fill('함께 읽은 책');
+        await page.getByRole('button', { name: '직접 입력', exact: true }).click();
+        const form = page.locator('.photo-attachment-review');
+        await form.getByLabel('첨부 종류', { exact: true }).selectOption('book');
+        await form.getByRole('textbox', { name: '제목 또는 이름', exact: true }).fill('함께 읽은 책');
+        await form.getByRole('checkbox', { name: '컬렉션에도 저장', exact: true }).uncheck();
+        await page.getByRole('button', { name: '첨부', exact: true }).click();
+      },
+    };
+    for (const [kind, change] of Object.entries(kinds)) {
+      await revise(page);
+      const text = await H.bodyText(page);
+      await change();
+      const stored = await H.stored(page, list => list.some(row => row.status === 'draft'), kind + ' 고친 수정본이 보관된다');
+      assert.equal(await H.bodyText(page), text, kind + ': the body text itself is the same as the saved post\'s');
+      await H.until(() => H.status(page), value => value.text === '자동 저장됨', kind + ' stored');
+      await close(page);
+      const rows = await H.records(page);
+      assert.equal(rows.length, 2, kind + ' 고친 수정본은 닫아도 남는다: ' + JSON.stringify(rows.map(row => [row.status, row.title])));
+      assert.deepEqual(rows.find(row => row.status === 'draft').replaces, { id: post.id, revision: post.revision }, kind + ': it still revises the exact saved version');
+      assert.equal(stored.find(row => row.status === 'saved').id, post.id);
+      // Remove the kept revision for the next kind and open the saved post again.
+      await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); for (const row of await s.listPhotoPosts(w)) if (row.status === 'draft') await s.deletePhotoPost(w, row.id, row.revision); });
+      await H.home(page);
+      await page.locator('.home-post .home-post-open').first().click(); await page.locator('.photo-article').waitFor();
+    }
   },
 });

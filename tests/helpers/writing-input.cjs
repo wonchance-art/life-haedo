@@ -43,9 +43,11 @@ const records = page => page.evaluate(async () => {
   const s = HaedoLife.Shell.storage, w = await s.getActive(), rows = await s.listPhotoPosts(w);
   return Promise.all(rows.map(async r => { const d = await s.readPhotoPost(w, r.id); return { id: d.id, title: d.title, status: d.status, revision: d.revision, archived: d.archived, replaces: d.replaces, text: HaedoLife.PhotoPost.plainText(d), photos: d.photos.length, ops: d.ops }; }));
 });
-// `detail` is the longer reason shown on its own line under the command row.
+// `detail` is the longer reason shown on its own line under the command row; `note` is the separate
+// line that says what storing changed (the save state itself stays in `text`).
 const status = page => page.evaluate(() => ({ text: document.querySelector('.photo-status-text')?.textContent ?? null, state: document.querySelector('.photo-status')?.dataset.state ?? null,
-  detail: [...document.querySelectorAll('.photo-recovery-reason')].find(node => node.getClientRects().length)?.textContent ?? '' }));
+  detail: [...document.querySelectorAll('.photo-recovery-reason')].find(node => node.getClientRects().length)?.textContent ?? '',
+  note: [...document.querySelectorAll('.photo-edit-note')].find(node => node.getClientRects().length)?.textContent ?? '' }));
 const mode = page => page.evaluate(() => document.querySelector('.photo-posts')?.dataset.mode ?? null);
 const quill = (page, fn, arg) => page.evaluate(({ fn, arg }) => (0, eval)('(' + fn + ')')(Quill.find(document.querySelector('.ql-container')), arg), { fn: fn.toString(), arg });
 const contents = page => quill(page, q => q.getContents().ops);
@@ -57,16 +59,18 @@ async function until(read, accept, label, timeout = 15000) {
   assert.fail(label + ' · last value: ' + JSON.stringify(value)?.slice(0, 1200));
 }
 const stored = (page, accept, label) => until(() => records(page), accept, label);
-const pasteBody = (page, { text, image = false }) => page.evaluate(async ({ text, image }) => {
+// `html` adds the rich form a document app puts beside the text; `image` adds a picture file (its name is `image` when a string).
+const pasteBody = (page, { text, image = false, html = null }) => page.evaluate(async ({ text, image, html }) => {
   const root = document.querySelector('.ql-editor'); root.focus();
   const data = new DataTransfer();
   if (text != null) data.setData('text/plain', text);
+  if (html != null) data.setData('text/html', html);
   if (image) {
     const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 80; canvas.getContext('2d').fillRect(0, 0, 300, 80);
-    data.items.add(new File([await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))], 'image.png', { type: 'image/png' }));
+    data.items.add(new File([await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))], typeof image === 'string' ? image : 'image.png', { type: 'image/png' }));
   }
   root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-}, { text, image });
+}, { text, image, html });
 async function jpeg(page, width = 320, height = 240, color = '#88aacc') {
   const encoded = await page.evaluate(async ({ width, height, color }) => {
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;

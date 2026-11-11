@@ -82,19 +82,29 @@ H.run(__filename, {
     await H.until(() => H.status(page), value => value.state === 'error' && value.text.startsWith('JPEG·PNG·WebP·HEIC 사진을 골라 주세요'), 'single failure keeps its reason');
     assert.equal(await blocks(page), 2);
   },
-  // m6: a clipboard with text and a picture of it (Word, slides) pastes the text.
+  // m6: a clipboard with text, its rich form and a picture of it (Word, slides) pastes the text;
+  // a file copied in a file manager, whose only text is its name, is still the photo.
   async 'paste-text-with-image'({ open }) {
     const { page } = await open();
     await H.home(page); await H.writer(page);
     await page.locator('.ql-editor').click();
-    await H.pasteBody(page, { text: '워드에서 복사한 문단입니다.', image: true });
+    await H.pasteBody(page, { text: '워드에서 복사한 문단입니다.', html: '<p>워드에서 복사한 <b>문단</b>입니다.</p>', image: true });
     await H.until(() => H.bodyText(page), text => text === '워드에서 복사한 문단입니다.\n', 'the text is pasted');
     assert.equal(await blocks(page), 0, 'not its picture');
     await draftWith(page, '워드에서 복사한 문단입니다.');
-    // A picture alone (a screen capture) is still a photo; blank text does not count as text.
-    await H.pasteBody(page, { text: ' \n', image: true });
-    await H.until(() => blocks(page), count => count === 1, 'a picture with no text is a photo');
+    // A file and its name (what a file manager puts on the clipboard): the photo, not the name.
+    await H.pasteBody(page, { text: 'IMG_1234.png', image: 'IMG_1234.png' });
+    await H.until(() => blocks(page), count => count === 1, 'a copied file is a photo');
+    assert(!(await H.bodyText(page)).includes('IMG_1234'), 'its name is not pasted as text: ' + JSON.stringify(await H.bodyText(page)));
     await H.stored(page, rows => rows[0]?.photos === 1, 'stored');
+    // A picture alone (a screen capture) is a photo; so is one beside rich markup without text (an image copied on a web page).
+    await H.pasteBody(page, { text: ' \n', html: '<img src="https://example.org/a.png">', image: true });
+    await H.until(() => blocks(page), count => count === 2, 'a picture with no text is a photo');
+    await H.stored(page, rows => rows[0]?.photos === 2, 'stored');
+    // Text alone is text, as always.
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End');
+    await H.pasteBody(page, { text: '글자만 있는 붙여넣기.' });
+    await draftWith(page, '글자만 있는 붙여넣기.');
   },
   // m7: a draft says whether it reached the account, in the same words as a saved post.
   async 'draft-account-state'({ open }) {
@@ -126,7 +136,9 @@ H.run(__filename, {
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 이어 쓴 문장.');
     await draftWith(page, '이어 쓴 문장.');
     const waiting = await info(page);
-    assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기') || waiting.includes('자동 저장됨 · 계정에 올림'), waiting);
+    assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기'), waiting);
+    // The first seconds of waiting are the normal upload delay: no retry is offered yet.
+    assert(!waiting.includes('계정에 다시 올리기'), 'no retry while the upload is simply due: ' + waiting);
     await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'the open sheet follows the upload', 20000);
   },
   // m8: input typed after the last autosave survives the page closing, and belongs to its account.
@@ -196,7 +208,21 @@ H.run(__filename, {
       };
     });
     await H.home(a);
-    const post = await savedPost(a, '두 탭에서 연 글', '원래 본문.');
+    // A post long enough to be read part of the way down.
+    await H.writer(a);
+    await a.locator('#photoTitle').fill('두 탭에서 연 글');
+    await a.locator('.ql-editor').click();
+    await H.pasteBody(a, { text: Array.from({ length: 80 }, (_, i) => (i + 1) + '번째 문단입니다. 읽던 자리를 확인하는 문장.').join('\n') + '\n원래 본문.' });
+    await a.getByRole('button', { name: '글 저장', exact: true }).click(); await a.locator('.photo-article').waitFor();
+    const post = (await H.stored(a, list => list.length === 1 && list[0].status === 'saved', 'the post is saved'))[0];
+    // The reader is part of the way down, with the focus on a control of the view.
+    const place = await a.evaluate(() => {
+      scrollTo({ top: 1800, behavior: 'instant' });
+      document.querySelector('.photo-read-return button').focus({ preventScroll: true });
+      const first = [...document.querySelectorAll('.photo-article > *')].find(node => node.getBoundingClientRect().bottom > 0);
+      return { scrollY, first: first.textContent, top: Math.round(first.getBoundingClientRect().top) };
+    });
+    assert(place.scrollY > 1000, 'the view is scrolled: ' + JSON.stringify(place));
     const b = await H.newPage(context, problems, name);
     await b.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await b.locator('.photo-article').waitFor();
     await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
@@ -207,6 +233,14 @@ H.run(__filename, {
     // The other tab hears of the change the moment it commits, so where the post went is recorded before that.
     assert((await b.evaluate(() => window.__movedAtSave || [])).some(text => text.includes('"' + post.id + '":"' + next.id + '"')), 'the replacement is recorded before the save is written');
     await H.until(() => a.locator('.photo-article').innerText(), text => text.includes('다른 탭에서 고친 문장.'), 'the first tab shows the new content without a reload');
+    // Only the content changed: the same block is at the same height and the focus is on the same control.
+    const kept = await a.evaluate(() => {
+      const first = [...document.querySelectorAll('.photo-article > *')].find(node => node.getBoundingClientRect().bottom > 0);
+      return { scrollY, first: first.textContent, top: Math.round(first.getBoundingClientRect().top), focus: document.activeElement?.textContent };
+    });
+    assert.equal(kept.first, place.first, 'the block being read is still the first on screen');
+    assert(Math.abs(kept.top - place.top) <= 2 && Math.abs(kept.scrollY - place.scrollY) <= 40, 'the reading position is kept: ' + JSON.stringify({ place, kept }));
+    assert.equal(kept.focus, '내 글로 돌아가기', 'the focus stays on the same control');
     await H.until(async () => a.url(), url => url.includes('blog=photo.' + next.id), 'and names the post that took its place');
     assert.equal(await H.mode(a), 'read');
     // An open editor is never replaced: unsaved input stays when the post changes elsewhere.
@@ -267,5 +301,31 @@ H.run(__filename, {
     await H.writer(page);
     await page.reload(); await page.locator('#photoTitle').waitFor();
     assert.equal(await H.bodyText(page), '\n');
+  },
+  // m4: two tabs hold the same revision. One saves it; the other's save is refused. The record of where the
+  // post went is the first tab's truth and stays (the refused tab used to take it back).
+  async 'moved-record-survives-a-refused-save'({ open, problems, name }) {
+    const { page: a, context } = await open({ page: { offline: () => false } });
+    await H.home(a);
+    const post = await savedPost(a, '두 탭이 같이 고친 글', '원래 본문.');
+    await a.getByRole('button', { name: '글 수정', exact: true }).click(); await a.locator('#photoTitle').waitFor();
+    await a.locator('.ql-editor').click(); await a.keyboard.press('Control+End'); await a.keyboard.type(' 첫 탭에서 고침.');
+    const buffer = (await H.stored(a, list => list.some(row => row.status === 'draft' && row.text.includes('첫 탭에서 고침.')), 'the revision is stored')).find(row => row.status === 'draft');
+    const b = await H.newPage(context, problems, name);
+    await b.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await b.locator('.photo-article').waitFor();
+    await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
+    assert((await H.bodyText(b)).includes('첫 탭에서 고침.'), 'the second tab holds the same revision');
+    await a.getByRole('button', { name: '글 저장', exact: true }).click(); await a.locator('.photo-article').waitFor();
+    await H.stored(a, list => list.length === 1 && list[0].status === 'saved' && list[0].id === buffer.id, 'the first tab saved it');
+    const record = page => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('haedo_life_post_moved_v1:')).map(key => localStorage.getItem(key)).join('|'));
+    assert((await record(a)).includes('"' + post.id + '":"' + buffer.id + '"'));
+    await b.getByRole('button', { name: '글 저장', exact: true }).click();
+    await H.until(() => H.status(b), value => value.state === 'error', 'the second tab\'s save is refused');
+    assert.equal(await H.mode(b), 'edit');
+    await H.sleep(500);
+    assert((await record(b)).includes('"' + post.id + '":"' + buffer.id + '"'), 'the record of the save that happened is kept');
+    const c = await H.newPage(context, problems, name);
+    await c.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await c.locator('.photo-article').waitFor();
+    assert((await c.locator('.photo-article').innerText()).includes('첫 탭에서 고침.'), 'the old address still opens the revised post');
   },
 });

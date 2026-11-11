@@ -579,8 +579,24 @@
     return notes.length > 1 ? "지원하지 않는 서식·문자를 정리했어요" : notes[0] || "";
   }
   // What the title, body and attachments hold, for comparing two documents.
+  // A Markdown post's body is its Markdown text (it has no ops to compare).
   const contentKey = (d) =>
-    JSON.stringify([d.title, normalize(d).doc.ops, d.attachments || []]);
+    JSON.stringify([d.title, isMarkdown(d) ? { markdown: d.markdown } : normalize(d).doc.ops, d.attachments || []]);
+  // A short fingerprint of that content, small enough to keep beside a device
+  // copy (53-bit string hash and the length; not a security digest).
+  function textHash(value) {
+    const text = String(value);
+    let a = 0xdeadbeef ^ text.length, b = 0x41c6ce57 ^ text.length;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      a = Math.imul(a ^ code, 2654435761);
+      b = Math.imul(b ^ code, 1597334677);
+    }
+    a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+    b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+    return text.length.toString(36) + "." + (4294967296 * (2097151 & b) + (a >>> 0)).toString(36);
+  }
+  const contentHash = (d) => textHash(contentKey(d));
   const isEmpty = (d) =>
     !String(d.title || "").trim() &&
     !(d.attachments || []).length &&
@@ -608,19 +624,26 @@
             !Number.isSafeInteger(v.revision) || typeof v.savedAt !== "string" ||
             !(v.replaces === null || plain(v.replaces) && typeof v.replaces.id === "string"))
           return null;
+        // Copies written before these fields existed have neither.
+        if (typeof v.base !== "string") v.base = null;
+        if (typeof v.askedAt !== "string") v.askedAt = null;
         return v;
       } catch (_) {
         return null;
       }
     }
     return {
-      // True only when the copy is durably written.
-      write(ws, d) {
+      // True only when the copy is durably written. `base` is the fingerprint
+      // (contentHash) of what was stored when this input was taken: of the
+      // stored draft, of the saved post for a revision not stored yet, "" for a
+      // new post. A copy continues a document only while that is still stored.
+      write(ws, d, base = null) {
         const k = key(ws, d?.id);
         if (!k || !store) return false;
         try {
           store.setItem(k, JSON.stringify({
             v: 1, account: scope, workspaceId: ws, id: d.id, revision: d.revision,
+            base: typeof base === "string" ? base : null,
             replaces: d.replaces ? { id: d.replaces.id, revision: d.replaces.revision } : null,
             savedAt: new Date().toISOString(), title: String(d.title ?? ""),
             ops: (Array.isArray(d.ops) ? d.ops : []).map((op) =>
@@ -648,6 +671,15 @@
         const k = key(ws, postId);
         try {
           if (k && store) store.removeItem(k);
+        } catch (_) {}
+      },
+      // Notes when a copy whose draft is gone was offered (see the editor).
+      markAsked(ws, postId, at = new Date().toISOString()) {
+        const k = key(ws, postId);
+        if (!k || !store) return;
+        try {
+          const copy = parse(ws, postId, store.getItem(k));
+          if (copy && !copy.askedAt) store.setItem(k, JSON.stringify({ ...copy, askedAt: at }));
         } catch (_) {}
       },
       // Newest first.
@@ -1346,6 +1378,8 @@
     normalize,
     describeChanges,
     contentKey,
+    contentHash,
+    textHash,
     isEmpty,
     recovery,
     moved,
