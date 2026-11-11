@@ -72,6 +72,12 @@ async function main() {
     const contexts = [], pages = [];
     const device = async label => {
       const context = await makeContext(browser, server, label + '-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', timezoneId: 'Asia/Seoul', locale: 'ko-KR' });
+      // One read of the drafts or covers can be held (window.__holdRead), to type while an editor reads the latest.
+      await context.route(base + '/assets/life/storage.js', async route => {
+        const response = await route.fetch();
+        const hook = `\n;(()=>{const old=HaedoLife.Storage,held=name=>actual=>async(...values)=>{const result=await actual[name](...values);if(window.__holdRead===name){window.__holdRead=null;window.__readEntered=true;await new Promise(resolve=>window.__releaseRead=resolve);}return result;};HaedoLife.Storage=Object.freeze({...old,forAccount(...args){const actual=old.forAccount(...args);return Object.freeze({...actual,readPageDrafts:held('readPageDrafts')(actual),readPublicCover:held('readPublicCover')(actual)});}});})();`;
+        await route.fulfill({ response, body: await response.text() + hook });
+      });
       // Nothing is published in these checks: the public page list and state are empty.
       await context.route('**/rest/v1/rpc/life_public_page_*', route => route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' }));
       contexts.push(context);
@@ -122,6 +128,19 @@ async function main() {
       assert.deepEqual(await a.locator('#ppBody').evaluate(el => ({ same: el === __field, focused: document.activeElement === el, value: el.value })), { same: true, focused: true, value: '맥의 첫 초안 한' });
     });
 
+    await check('page drafts: input typed while the latest drafts are being read is not replaced by them', async ({ device, server }) => {
+      const a = (await device('mac')).page, b = (await device('phone')).page; await draftOnBoth(a, b, server);
+      await b.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), value = await s.readPageDrafts(w); value.posts[0].body = '폰에서 고친 첫 초안'; value.posts[0].updatedAt = new Date().toISOString(); await s.savePageDrafts(w, value, value.revision); });
+      await until(() => serverDoc(server, 'page-drafts').posts.map(draft => draft.body), value => value.includes('폰에서 고친 첫 초안'), 'B edit on the account');
+      await a.locator('#ppBody').evaluate(el => { window.__field = el; el.focus(); el.setSelectionRange(el.value.length, el.value.length); });
+      await a.evaluate(() => { window.__holdRead = 'readPageDrafts'; window.__readEntered = false; });
+      await kick(a); await until(() => a.evaluate(() => window.__readEntered), Boolean, 'the composer is reading the latest drafts (nothing was unsaved)');
+      await a.keyboard.type(' 읽는 중에 친 글'); await a.evaluate(() => __releaseRead());
+      await compare(a).waitFor();   // The input is unsaved against a newer stored draft: the existing comparison.
+      assert.deepEqual(await a.locator('#ppBody').evaluate(el => ({ same: el === __field, focused: document.activeElement === el, value: el.value })), { same: true, focused: true, value: '맥의 첫 초안 읽는 중에 친 글' });
+      assert.deepEqual(await drafts(a), ['폰에서 고친 첫 초안'], 'and the other device\'s stored draft was not overwritten either');
+    });
+
     await check('public cover: a title that only has the cursor takes the other device\'s change quietly and keeps saving', async ({ device, server }) => {
       const a = (await device('mac')).page, b = (await device('phone')).page; await coverOnBoth(a, b, server);
       await setIntro(b, '폰에서 쓴 소개');
@@ -143,6 +162,20 @@ async function main() {
       assert.equal(await a.locator('#pcTitle').evaluate(el => el === __field && document.activeElement === el), true);
       await a.keyboard.press('End'); await a.keyboard.type('!');
       await until(() => serverDoc(server, 'public-cover').covers[0].title, value => value === '폰에서 고친 표지!', 'the field still writes to the open cover');
+    });
+
+    await check('public cover: input typed while the latest cover is being read is not replaced by it', async ({ device, server }) => {
+      const a = (await device('mac')).page, b = (await device('phone')).page; await coverOnBoth(a, b, server);
+      await b.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), value = await s.readPublicCover(w); value.covers[0].title = '폰에서 고친 표지'; value.covers[0].intro = '폰 소개'; await s.savePublicCover(w, value, value.revision); });
+      await until(() => serverDoc(server, 'public-cover').covers[0].title, value => value === '폰에서 고친 표지', 'B change on the account');
+      await a.locator('#pcTitle').evaluate(el => { window.__field = el; el.focus(); el.setSelectionRange(el.value.length, el.value.length); });
+      await a.evaluate(() => { window.__holdRead = 'readPublicCover'; window.__readEntered = false; });
+      await kick(a); await until(() => a.evaluate(() => window.__readEntered), Boolean, 'the editor is reading the latest cover (nothing was unsaved)');
+      await a.keyboard.type(' 읽는 중'); await a.evaluate(() => __releaseRead());
+      await a.locator('#pcRemoteReload').waitFor({ state: 'visible' });   // Unsaved input: the existing reload step.
+      assert.deepEqual(await a.locator('#pcTitle').evaluate(el => ({ same: el === __field, focused: document.activeElement === el, value: el.value })), { same: true, focused: true, value: '맥의 표지 읽는 중' });
+      assert.equal(await a.locator('#pcIntro').inputValue(), '', 'nothing was replaced under the input');
+      assert.deepEqual(await covers(a), ['폰에서 고친 표지 / 폰 소개'], 'and the other device\'s stored cover was not overwritten either');
     });
 
     await check('public cover: a composition in progress is untouched and still gets the reload step', async ({ device, server }) => {
