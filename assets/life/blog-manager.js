@@ -132,9 +132,11 @@
     // An unanswered request is named next to the status for as long as it is kept (never
     // silently): short in the list, in full in the review and 글 정보. None of these says the
     // request failed for good, because it can still arrive.
-    const noticeLabels = { update_unapplied: '앞서 보낸 갱신 미반영', publish_unapplied: '앞서 보낸 게시 미반영', late_publish_guarded: '늦게 반영되는 게시는 철회', copy_unverified: '공개본 확인 필요' };
+    const noticeLabels = { update_unapplied: '앞서 보낸 갱신 미반영', publish_unapplied: '앞서 보낸 게시 미반영', copy_unverified: '공개본 확인 필요' };
     const noticeTexts = life.BlogRemote?.publicationNotes || {};
-    const logTexts = { withdrawal_resent: noticeTexts.withdrawal_resent, late_publication_withdrawn: noticeTexts.late_publication_withdrawn };
+    const logTexts = { withdrawal_resent: noticeTexts.withdrawal_resent, withdrawal_overtaken: noticeTexts.withdrawal_overtaken };
+    // A withdrawal of a post that was not public: `ended` says it ended an unanswered publish request.
+    const notPublic = outcome => outcome?.ended ? '앞서 보낸 공개 게시 요청을 끝냈습니다. 이 글은 공개 중이 아닙니다.' : '이 글은 공개 중이 아닙니다.';
     const logText = log => logTexts[log?.code] ? logTexts[log.code] + (Number.isFinite(Date.parse(log.at)) ? ' (' + new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(log.at)) + ')' : '') : '';
     const postLabel = row => row.title?.trim() || '제목 없는 글';
     function showPublicStates() {
@@ -219,7 +221,7 @@
       if (!valid()) return;
       if (preview?.doc.id === row.id) clearPreview();
       await refreshPublic(); if (!valid()) return; focusPost(row.id);
-      announce(outcome?.guarded ? '지금 공개 중이 아닙니다. ' + noticeTexts.late_publish_guarded : outcome?.status === 'not_published' ? '이 글은 공개 중이 아닙니다.' : '공개 철회를 확인했습니다. 글은 그대로 있습니다.');
+      announce(outcome?.status === 'not_published' ? notPublic(outcome) : '공개 철회를 확인했습니다. 글은 그대로 있습니다.');
     }
     // Hiding only removes a post from the lists. A public post stays public, so the owner is
     // told and chooses; nothing is withdrawn or kept public silently.
@@ -376,6 +378,16 @@
         const notice = panelState?.publicationNotice || (value === 'private' && panelState?.publishPending ? 'publish_unapplied' : value === 'public' && panelState?.publishPending ? 'update_unapplied' : '');
         currentLine.dataset.notice = notice || '';
         if (noticeTexts[notice]) currentLine.append(el('span', ' · ' + noticeTexts[notice], 'blog-manager-current-notice'));
+        // The owner ends a publish request that is not applied: the server then refuses it for
+        // good and this notice ends. An update of a public post is not ended this way.
+        if (notice === 'publish_unapplied' && blogSync?.cancelPublish) currentLine.append(document.createTextNode(' '), button('게시 요청 취소', async () => {
+          let outcome;
+          try { outcome = await blogSync.cancelPublish(workspaceId, doc.id); }
+          catch (failure) { if (valid()) { await syncPanel(); await refreshPublic(); } throw failure; }
+          if (!valid() || preview?.doc.id !== doc.id) return;
+          await syncPanel(); await refreshPublic(); if (!valid()) return;
+          announce(outcome?.status === 'cancelled' ? '앞서 보낸 게시 요청을 취소했습니다. 이 글은 공개 중이 아닙니다.' : outcome?.status === 'published' ? '그 게시 요청은 이미 반영되어 공개 중입니다. 취소하지 않았습니다.' : '취소하지 않았습니다. 공개 상태를 확인해 주세요.');
+        }));
         if (logText(panelState?.publicationLog)) currentLine.append(el('span', ' · ' + logText(panelState.publicationLog), 'blog-manager-current-log'));
         if (had) (currentLine.querySelector('button,a') || panel.querySelector('input'))?.focus({ preventScroll: true });
       };
@@ -536,8 +548,7 @@
           preview.remoteRevision = remoteRevision; preview.publicRevision = publicRevision; panelState = state; showCurrent();
         } catch (_) { if (!valid()) return; }
         await refreshPublic(); if (!valid()) return;
-        if (outcome?.guarded) { result.replaceChildren(meta('지금 공개 중이 아닙니다. ' + noticeTexts.late_publish_guarded)); announce('지금 공개 중이 아닙니다. 앞서 보낸 게시 요청이 늦게 반영되면 이 기기가 바로 철회합니다.'); return; }
-        if (outcome?.status === 'not_published') { result.replaceChildren(meta('이 글은 공개 중이 아닙니다. 철회할 공개본이 없습니다.')); announce('이 글은 공개 중이 아닙니다.'); return; }
+        if (outcome?.status === 'not_published') { result.replaceChildren(meta(outcome.ended ? notPublic(outcome) : '이 글은 공개 중이 아닙니다. 철회할 공개본이 없습니다.')); announce(notPublic(outcome)); return; }
         result.replaceChildren(meta('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.')); announce('공개 철회를 확인했습니다.');
       }));
       footer.append(button('공개 검토 닫기', async () => clearPreview())); panel.append(footer); detail.append(panel); panel.querySelector('input')?.focus({ preventScroll: true });

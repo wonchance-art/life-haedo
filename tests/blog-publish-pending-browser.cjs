@@ -50,6 +50,7 @@ async function main() {
     apply("create table auth.users(id uuid primary key,is_anonymous boolean not null default false); create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz); " +
       "create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$; grant execute on function auth.jwt() to authenticated,service_role;");
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
+    apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql'), 'utf8'));
   }
   await server.initialize(); assert.equal(server.sql('select count(*)::int from haedo_blog_private.posts;'),0,'Every run needs a fresh QA database: Storage fixture bytes live only for this run.'); await fs.mkdir(output, { recursive: true });
   report.testHash=createHash('sha256').update(await fs.readFile(__filename)).digest('hex');

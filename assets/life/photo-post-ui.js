@@ -498,7 +498,7 @@
             : "저장한 글만 공개할 수 있습니다.", "photo-info-note"));
         // A request of this device that is still unanswered is said for as long as it is kept, next
         // to either state (never as failed for good: it can still arrive), and so is what the
-        // settlement did by itself (an old withdrawal sent again, a late publication withdrawn).
+        // settlement did by itself (an old withdrawal sent again, a withdrawal overtaken by a publication).
         const notes = life.BlogRemote?.publicationNotes || {};
         if (known && saved && notes[publicState?.notice]) {
           const said = el("p", notes[publicState.notice], "photo-info-note photo-public-unapplied");

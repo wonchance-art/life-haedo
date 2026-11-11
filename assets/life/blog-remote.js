@@ -20,8 +20,20 @@
     storage_quota: '보관 공간이 부족합니다. 글을 파일로 보관한 뒤 다시 시도해 주세요.',
     blog_publication_unavailable: '이 글의 공개 기능이 아직 준비되지 않았습니다. 저장한 글은 유지됩니다.',
     blog_update_required: '새 형식의 글입니다. 새로고침한 뒤 다시 시도해 주세요. 저장한 글은 유지됩니다.',
-    blog_public_copies_required: '공개할 사진 사본을 먼저 준비해야 합니다. 저장한 글과 공개 요청은 유지됩니다.'
+    blog_public_copies_required: '공개할 사진 사본을 먼저 준비해야 합니다. 저장한 글과 공개 요청은 유지됩니다.',
+    blog_publication_busy: '다른 탭에서 처리 중입니다. 잠시 뒤 다시 시도해 주세요.',
+    // The server's withdrawal cannot yet end a publish request for a post that was never public
+    // (the definition before 20261111120000). Nothing was changed.
+    blog_withdrawal_unsupported: '앞서 보낸 공개 게시 요청을 서버에서 아직 끝내지 못했습니다. 공개 상태는 확인 못 함으로 두고 철회 요청을 다시 보냅니다.'
   };
+  // How long one publication request waits for its answer (2026-11-11). A request that runs
+  // out is not known to have failed: its result is unknown (network_error with `timedOut`),
+  // exactly like a lost answer. Values, from the Supabase documentation read on 2026-11-11:
+  // the API ends a statement of the `authenticated` role after 8 s by default, so 30 s covers
+  // the account check, the statement and a slow connection; an Edge Function is answered with
+  // 504 after 150 s without a response, and the Markdown route makes two account checks and two
+  // statements, so 60 s.
+  const PUBLICATION_TIMEOUT = 30000, MARKDOWN_PUBLICATION_TIMEOUT = 60000;
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   // Connection failures of publishing, withdrawing and the publication check (2026-11-11). The
   // code stays network_error; the text does not borrow the document-save message, because a
@@ -37,18 +49,21 @@
     // This attempt sent nothing; an earlier request of this device is still unanswered.
     publish_unsent_prior: '이번 공개 게시 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
     unpublish_unsent_prior: '이번 공개 철회 요청은 보내지 못했습니다. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다. 연결을 확인한 뒤 공개 상태를 확인해 주세요.',
+    // 게시 요청 취소 (BlogSync cancelPublish): the withdrawal that ends an unapplied publish request.
+    cancel_unsent: '게시 요청 취소를 보내지 못했습니다. 바뀐 것은 없습니다. 연결을 확인한 뒤 다시 시도해 주세요.',
+    cancel_unconfirmed: '게시 요청 취소 결과를 받지 못했습니다. 연결되면 다시 보냅니다. 그때까지 공개 상태는 확인 못 함으로 표시합니다.',
     settle_failed: '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 확인해 주세요.'
   };
   // What a screen says next to a known public state while a request of this device is still
   // unanswered (BlogSync publicationNotice), and what the settlement did by itself
-  // (publicationLog). None says a request failed for good: it can still arrive.
+  // (publicationLog). None says a request failed for good: it can still arrive, until the owner
+  // ends it (게시 요청 취소) or publishes again.
   const publicationNotes = Object.freeze({
     update_unapplied: '앞서 보낸 공개 갱신은 아직 반영되지 않았습니다. 이전 공개본이 그대로 공개 중입니다. 늦게 반영될 수 있으니, 바꾸려면 미리보기를 갱신해 다시 게시해 주세요.',
-    publish_unapplied: '앞서 보낸 공개 게시 요청은 아직 반영되지 않았습니다. 늦게 반영될 수 있습니다. 공개하려면 다시 게시해 주세요.',
-    late_publish_guarded: '앞서 보낸 공개 게시 요청의 결과를 받지 못한 채 철회했습니다. 그 요청이 늦게 반영되면 이 기기가 바로 철회합니다.',
+    publish_unapplied: '앞서 보낸 공개 게시 요청은 아직 반영되지 않았습니다. 늦게 반영될 수 있습니다. 공개하려면 다시 게시하고, 공개하지 않으려면 공개 검토에서 게시 요청을 취소해 주세요.',
     copy_unverified: '공개 중인 사본이 마지막으로 검토한 내용인지 확인하지 못했습니다. 미리보기를 갱신해 다시 게시하면 그 내용으로 바뀝니다.',
     withdrawal_resent: '받지 못했던 철회 요청을 이 기기가 다시 보내 공개를 철회했습니다.',
-    late_publication_withdrawn: '철회한 뒤 늦게 반영된 공개 게시를 이 기기가 철회했습니다.'
+    withdrawal_overtaken: '철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다. 비공개로 두려면 다시 철회해 주세요.'
   });
   const publicationFault = kind => Object.assign(new Error(publicationMessages[kind] || publicationMessages.settle_failed), { code: 'network_error' });
   const id = value => typeof value === 'string' && UUID.test(value);
@@ -86,7 +101,7 @@
     }
     return true;
   }
-  function create({ auth = root.HaedoAuth, blog = root.HaedoLife?.Blog } = {}) {
+  function create({ auth = root.HaedoAuth, blog = root.HaedoLife?.Blog, timers = root, publicationTimeout = PUBLICATION_TIMEOUT, markdownPublicationTimeout = MARKDOWN_PUBLICATION_TIMEOUT } = {}) {
     if (!auth?.ready || !auth.client?.rpc || typeof auth.verify !== 'function' || !blog?.validateManifest) throw fault('auth_required');
     const client = auth.client, controllers = new Set(); let disposed = false, generation = 0;
     const cancel = () => { generation++; for (const item of controllers) item.abort(); controllers.clear(); };
@@ -115,21 +130,36 @@
       } catch (_) { throw fault('invalid_remote_data'); }
     }
     function identity(value) { if (!id(value)) throw fault('invalid_request'); }
-    async function rpc(name, params, { commit = false } = {}) {
+    // `timeout` (ms): the caller stops waiting and the request is cancelled where the client
+    // allows it. The server may still apply it, so this is an unknown result, never a refusal.
+    const TIMED_OUT = {};
+    function limited(work, controller, timeout) {
+      if (!(timeout > 0)) return work();
+      return new Promise((resolve, reject) => {
+        const timer = timers.setTimeout(() => { reject(TIMED_OUT); controller.abort(); }, timeout);
+        work().then(resolve, reject).finally(() => timers.clearTimeout(timer));
+      });
+    }
+    const timedOut = () => Object.assign(fault('network_error'), { timedOut: true });
+    async function rpc(name, params, { commit = false, timeout = 0 } = {}) {
       const context = capture(), controller = new AbortController(); controllers.add(controller);
       let responseError = null, responseStatus = null;
       try {
-        if (commit) await verify(context); else guard(context);
-        let request = client.rpc(name, params);
-        if (typeof request?.abortSignal === 'function') request = request.abortSignal(controller.signal);
-        const response = await request; guard(context);
+        const response = await limited(async () => {
+          if (commit) await verify(context); else guard(context);
+          if (controller.signal.aborted) throw TIMED_OUT; // ran out during the account check: nothing is sent late
+          let request = client.rpc(name, params);
+          if (typeof request?.abortSignal === 'function') request = request.abortSignal(controller.signal);
+          return request;
+        }, controller, timeout); guard(context);
         if (response.error) {
           responseError = response.error; responseStatus = response.status;
           throw responseError;
         }
         return clone(response.data);
       } catch (error) {
-        guard(context); const failure = clean(error);
+        guard(context); if (error === TIMED_OUT) throw timedOut();
+        const failure = clean(error);
         if (error === responseError && responseStatus === 400 && ['life_blog_publish', 'life_blog_publish_copies'].includes(name) &&
           error?.code === '22023' && error.message === 'life_blog_markdown_publication_unavailable') {
           // Receipt replay precedes this SQL exception. Only this actual RPC
@@ -147,8 +177,11 @@
       const context = capture(), controller = new AbortController(); controllers.add(controller);
       try {
         if (typeof client.functions?.invoke !== 'function') throw fault('schema_missing');
-        await verify(context);
-        const response = await client.functions.invoke('haedo-blog-publish', { body: params, signal: controller.signal });
+        const response = await limited(async () => {
+          await verify(context);
+          if (controller.signal.aborted) throw TIMED_OUT;
+          return client.functions.invoke('haedo-blog-publish', { body: params, signal: controller.signal });
+        }, controller, markdownPublicationTimeout);
         guard(context);
         if (response.error) {
           let failure = response.error;
@@ -162,7 +195,7 @@
           throw failure;
         }
         return clone(response.data);
-      } catch (error) { guard(context); throw clean(error); }
+      } catch (error) { guard(context); throw error === TIMED_OUT ? timedOut() : clean(error); }
       finally { controllers.delete(controller); }
     }
     function publication(value) {
@@ -194,8 +227,9 @@
       return rows;
     }
     function assetPath(userId, postId, photoId, digest) { return userId + '/' + postId + '/' + photoId + '/' + digest; }
-    async function read(postId) {
-      identity(postId); const context = capture(); const row = await rpc('life_blog_read', { p_post_id: postId });
+    // `publication: true`: the head read of a publication step, bounded like its requests.
+    async function read(postId, { publication: bounded = false } = {}) {
+      identity(postId); const context = capture(); const row = await rpc('life_blog_read', { p_post_id: postId }, bounded ? { timeout: publicationTimeout } : {});
       if (row === null) return null;
       if (row?.id !== postId || !id(row.workspace_id) || !rev(row.revision) || row.revision < 1 || !Number.isFinite(Date.parse(row.updated_at))) throw fault('invalid_remote_data');
       row.data = manifest(row.data, postId);
@@ -328,20 +362,28 @@
       const params = { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(markdown ? author : options.author || { name: '', intro: '' }) };
       const result = markdown
         ? await publishMarkdown({ ...params, p_copies: named })
-        : copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true }) : await rpc('life_blog_publish', params, { commit: true });
+        : copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true, timeout: publicationTimeout }) : await rpc('life_blog_publish', params, { commit: true, timeout: publicationTimeout });
       if (result?.status !== 'published' && result?.status !== 'stored') { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       if (!id(result.token) || !id(result.blogToken) || !rev(result.revision) || result.revision < 1) throw fault('invalid_remote_data');
       return result;
     }
+    // Expected revision 0 (20261111120000): the post has no publication row; the withdrawal
+    // records a withdrawn one at revision 1, so a publish request sent earlier ends in conflict.
     async function unpublish(postId, expectedRevision, operationId) {
-      identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1) throw fault('invalid_request');
-      const result = await rpc('life_blog_unpublish', { p_post_id: postId, p_expected_revision: expectedRevision, p_operation_id: operationId }, { commit: true });
-      // 'missing': the post has no publication row (never published). Like a conflict, the caller reads the head again.
+      identity(postId); identity(operationId); if (!rev(expectedRevision)) throw fault('invalid_request');
+      let result;
+      try { result = await rpc('life_blog_unpublish', { p_post_id: postId, p_expected_revision: expectedRevision, p_operation_id: operationId }, { commit: true, timeout: publicationTimeout }); }
+      catch (error) {
+        // Only the earlier server definition refuses revision 0 (every argument was checked above).
+        if (expectedRevision === 0 && error?.code === 'invalid_request') throw fault('blog_withdrawal_unsupported');
+        throw error;
+      }
+      // 'missing': no publication row for an expected revision of 1 or more, or no such post. Like a conflict, the caller reads the head again.
       if (!['unpublished', 'stored'].includes(result?.status) || !rev(result.revision)) { if (['conflict', 'missing'].includes(result?.status)) throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       return result;
     }
     return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
-  return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, checkViews });
+  return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, checkViews, PUBLICATION_TIMEOUT, MARKDOWN_PUBLICATION_TIMEOUT });
 });

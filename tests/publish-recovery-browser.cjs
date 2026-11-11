@@ -34,6 +34,7 @@ async function main() {
     apply("create table auth.users(id uuid primary key,is_anonymous boolean not null default false); create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz); " +
       "create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$; grant execute on function auth.jwt() to authenticated,service_role;");
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
+    apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql'), 'utf8'));
   }
   await server.initialize(); await fs.mkdir(output, { recursive: true });
   report.sources = [];
@@ -54,6 +55,8 @@ async function main() {
       if (event.type() !== 'error') return;
       const entry = { name, message: event.text(), url: event.location().url };
       if (entry.url.startsWith(cloud) && deliberate.test(new URL(entry.url).pathname) && /Failed to load resource:.*(?:ERR_FAILED|404)/.test(entry.message)) report.expectedTransportErrors.push(entry);
+      // earlierWithdrawal(): the refusal of the definition before 20261111120000.
+      else if (entry.url === cloud + '/rest/v1/rpc/life_blog_unpublish' && earlier.on && /Failed to load resource:.*400/.test(entry.message)) report.expectedTransportErrors.push(entry);
       else report.consoleErrors.push(entry);
     });
     page.on('dialog', dialog => { dialogs.push({ name, type: dialog.type(), message: dialog.message() }); dialog.accept().catch(() => {}); });
@@ -158,6 +161,23 @@ async function main() {
     await context.route(rpcPath(rpc), handler);
     return { arrived, async release() { open(); await context.unroute(rpcPath(rpc), handler); } };
   }
+  // The server definition before 20261111120000, exactly as it answers a withdrawal with expected
+  // revision 0 (tests/run-blog-unpublish-postgres.cjs "before"): HTTP 400, 22023
+  // life_invalid_request, nothing changed. Every other withdrawal reaches the real SQL.
+  const earlier = { on: false, refused: [] };
+  async function earlierWithdrawal(context) {
+    const handler = route => {
+      const body = route.request().postDataJSON();
+      if (body.p_expected_revision !== 0) return route.fallback();
+      earlier.refused.push(body);
+      return route.fulfill({ status: 400, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'content-type': 'application/json', 'cache-control': 'no-store' },
+        body: JSON.stringify({ code: '22023', details: null, hint: null, message: 'life_invalid_request' }) });
+    };
+    earlier.on = true; earlier.refused.length = 0; await context.route(rpcPath('life_blog_unpublish'), handler);
+    return { refused: earlier.refused, async stop() { await context.unroute(rpcPath('life_blog_unpublish'), handler); earlier.on = false; } };
+  }
+  const uuid = () => require('node:crypto').randomUUID();
+  const published = remoteId => { const value = publication(remoteId); return value && { active: value.active, revision: value.revision }; };
   const cycles = () => server.blogRequests.filter(request => request.rpc === 'life_blog_sync_list').length;
   // One whole cycle of this page after now (its list request and what follows it).
   const cycle = async page => { const before = cycles(); await kick(page); await until(cycles, value => value > before, 'a cycle lists the account'); await new Promise(done => setTimeout(done, 700)); };
@@ -371,7 +391,9 @@ async function main() {
     await publish(page); await publishedLink(page).waitFor();
     assert.doesNotMatch(await statusLine(page), /글이 변경됐습니다/);
     const publishedM = publication(m.remoteId);
-    assert.deepEqual({ active: publishedM.active, photos: publishedM.photos, revision: publishedM.revision }, { active: true, photos: 0, revision: 1 });
+    // The request that never arrived was ended first (a withdrawal from revision 0), so this publication is revision 2.
+    assert.deepEqual({ active: publishedM.active, photos: publishedM.photos, revision: publishedM.revision }, { active: true, photos: 0, revision: 2 });
+    assert.deepEqual(sentUnpublish(m.remoteId).map(request => request.body.p_expected_revision), [0]);
     await visit(visitor.page, await publishedLink(page).getAttribute('href'), 'published');
     assert.equal(await visitor.page.locator('#blogContent img').count(), 0, 'the dropped photos are not public');
     assert.equal(sentPublish(m.remoteId).length, 1, 'only the new choice reached the server');
@@ -454,6 +476,12 @@ async function main() {
     await panel(page).getByRole('button', { name: '공개 철회', exact: true }).click(); await flying.arrived;
     await cycle(tabB);
     assert.equal(sentUnpublish(t2.remoteId).length, 0, 'tab B sent no second withdrawal while the first is in flight'); assert.equal(await publicStatus(tabB, t2.doc.id), 'unknown');
+    // r2-m3: an action in tab B waits for tab A, then says so instead of staying busy (wait limit 10 s).
+    await manager(tabB); const waitFrom = Date.now();
+    await row(tabB, t2.doc.id).getByRole('button', { name: t2.doc.title + ' 공개 상태 확인', exact: true }).click();
+    await tabB.waitForFunction(() => /다른 탭에서 처리 중입니다\. 잠시 뒤 다시 시도해 주세요/.test(document.querySelector('.blog-manager [role="status"]')?.textContent || ''));
+    const waited = Date.now() - waitFrom; assert(waited >= 9000 && waited < 20000, 'the wait limit: ' + waited + ' ms');
+    await idle(tabB); assert.equal(sentUnpublish(t2.remoteId).length, 0, 'tab B sent nothing'); assert.equal(await publicStatus(tabB, t2.doc.id), 'unknown');
     await flying.release(); await idle(page);
     assert.equal(await statusLine(page), '공개 철회를 확인했습니다.'); assert.equal(publication(t2.remoteId).active, false); assert.equal(sentUnpublish(t2.remoteId).length, 1);
     await click(page, '공개 검토 닫기'); await tabB.close();
@@ -468,39 +496,121 @@ async function main() {
     let lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop();
     assert.equal(lateRequest.count, 1); assert.equal(lateRequest.bodies[0].p_expected_publication_revision, 2);
     await click(page, '공개 철회', panel(page));
-    assert.equal(await statusLine(page), '공개 철회를 확인했습니다.');
+    assert.equal(await statusLine(page), '앞서 보낸 공개 게시 요청을 끝냈습니다. 이 글은 공개 중이 아닙니다.');
     assert.equal(sentUnpublish(w1.remoteId).length, 2, 'a withdrawal request was really sent although nothing was public');
     assert.deepEqual({ active: publication(w1.remoteId).active, revision: publication(w1.remoteId).revision }, { active: false, revision: 3 });
     assert.equal(await publicStatus(page, w1.doc.id), 'private'); assert.equal((await state(page, w1.doc.id)).publishPending, null);
     assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict', 'the request arriving after the withdrawal is refused');
     assert.equal(publication(w1.remoteId).active, false); await click(page, '공개 검토 닫기');
-    // (b) No publication row: the server has nothing to move (life_blog_unpublish answers "missing"), so the
-    // withdrawal is kept as a guard and the late request is withdrawn as soon as it arrives.
+    // (b) No publication row (review R2-M1): the withdrawal is always sent, with expected revision 0. The real SQL
+    // records a withdrawn row at revision 1, so the late first publication ends in conflict. Nothing is guarded on
+    // the device and nothing is withdrawn afterwards.
     const w2 = await savedPost(page, '철회 뒤 늦은 첫 게시 글', files);
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_unpublish', { p_post_id: w2.remoteId, p_expected_revision: 1, p_operation_id: require('node:crypto').randomUUID() }).status, 'missing');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_unpublish', { p_post_id: w2.remoteId, p_expected_revision: 1, p_operation_id: uuid() }).status, 'missing', 'an expected revision of 1 or more keeps the earlier answer');
     await manager(page); await openReview(page, w2.doc.id); await preview(page, { selected: w2.doc.photos.map(photo => photo.id), name: '익명 검수' });
     lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop();
+    assert.equal(await publicStatus(page, w2.doc.id), 'unknown'); assert.equal(publication(w2.remoteId), null);
     await click(page, '공개 철회', panel(page));
-    assert.match(await statusLine(page), /지금 공개 중이 아닙니다\. 앞서 보낸 게시 요청이 늦게 반영되면 이 기기가 바로 철회합니다/);
-    assert.equal(sentUnpublish(w2.remoteId).length, 0); assert.equal(publication(w2.remoteId), null);
-    assert.equal(await publicStatus(page, w2.doc.id), 'unknown', 'not called 비공개 while that request can still arrive'); assert.equal((await current(page)).state, 'unknown');
-    // The check reads the server and still cannot rule the request out: it says so instead of doing nothing visible.
-    await click(page, '공개 상태 확인', panel(page));
-    assert.match(await statusLine(page), /아직 확인되지 않았습니다\. 보낸 요청이 늦게 반영될 수 있어 잠시 뒤 다시 확인합니다/);
-    assert.equal((await current(page)).state, 'unknown'); assert.equal(sentPublish(w2.remoteId).length, 0); assert.equal(sentUnpublish(w2.remoteId).length, 0);
+    assert.equal(await statusLine(page), '앞서 보낸 공개 게시 요청을 끝냈습니다. 이 글은 공개 중이 아닙니다.');
+    assert.deepEqual(sentUnpublish(w2.remoteId).map(request => request.body.p_expected_revision), [0], 'the withdrawal request was sent, for revision 0');
+    assert.deepEqual(published(w2.remoteId), { active: false, revision: 1 }, 'a withdrawn row at revision 1');
+    assert.equal(await publicStatus(page, w2.doc.id), 'private', 'settled as 비공개 at once: the request can no longer be applied');
+    assert.deepEqual({ state: (await current(page)).state, notice: await panel(page).locator('.blog-manager-current').getAttribute('data-notice') }, { state: 'private', notice: '' });
+    const bindingW2 = await state(page, w2.doc.id); assert.equal(bindingW2.publishPending, null); assert.equal(bindingW2.unpublishPending, null); assert.equal(Object.hasOwn(bindingW2, 'publishRevoked'), false);
     await click(page, '공개 검토 닫기');
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'stored', 'the request arrives after the withdrawal');
-    const arrivedLate = publication(w2.remoteId); assert.deepEqual({ active: arrivedLate.active, photos: arrivedLate.photos }, { active: true, photos: 2 });
-    await kick(page); await until(() => publication(w2.remoteId).active, value => value === false, 'the guard withdraws the late publication');
-    await until(() => publicStatus(page, w2.doc.id), value => value === 'private', 'the device reads it as not public');
-    await page.waitForFunction(() => /철회한 뒤 늦게 반영된 공개 게시를 이 기기가 철회했습니다/.test(document.querySelector('.blog-manager [role="status"]')?.textContent || ''));
-    assert.equal(sentUnpublish(w2.remoteId).length, 1); assert.equal(sentPublish(w2.remoteId).length, 0, 'the guard sent no publication request');
-    assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: arrivedLate.token }), null);
-    const finalW2 = publication(w2.remoteId);
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'stored', 'the same request again only returns its receipt');
-    assert.deepEqual(publication(w2.remoteId), finalW2, 'and changes nothing');
-    assert.equal(await mark(page, w2.doc.id), '');
-    pass('M1: a withdrawal holds against a late publish request: refused by the moved revision when a publication row exists, withdrawn on arrival when none does');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict', 'the first publication arriving after the withdrawal is refused');
+    assert.deepEqual(published(w2.remoteId), { active: false, revision: 1 }); assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: publication(w2.remoteId).token }), null, 'the row\'s token is not a public address');
+    await cycle(page); assert.equal(sentUnpublish(w2.remoteId).length, 1); assert.equal(sentPublish(w2.remoteId).length, 0); assert.equal(await mark(page, w2.doc.id), '');
+    // The next deliberate publication starts from that row and gets its own address.
+    await openReview(page, w2.doc.id); await preview(page, { selected: [] }); await publish(page); await publishedLink(page).waitFor();
+    assert.deepEqual(published(w2.remoteId), { active: true, revision: 2 }); assert.notEqual(publication(w2.remoteId).token, bindingW2.publication.token);
+    await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
+    pass('R2-M1: a withdrawal holds against a late publish request with or without a publication row: a withdrawal request moves the revision (from 0 without a row) and the late request ends in conflict');
+
+    // R2-A: another device's later deliberate publication with the same name and no photos is indistinguishable
+    // from this device's own request by content. It is never withdrawn.
+    const w3 = await savedPost(page, '철회 뒤 다른 기기의 같은 이름 게시 글');
+    await manager(page); await openReview(page, w3.doc.id); await preview(page, { name: '익명 검수', intro: '' });
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
+    assert.deepEqual(published(w3.remoteId), { active: false, revision: 1 });
+    const theirs = server.rpc(accounts.a.id, 'life_blog_publish', { p_post_id: w3.remoteId, p_expected_revision: lateRequest.bodies[0].p_expected_revision, p_operation_id: uuid(), p_photo_ids: [],
+      p_author: { name: '익명 검수', intro: '' }, p_expected_publication_revision: 1 });
+    assert.equal(theirs.status, 'stored'); const theirCopy = publication(w3.remoteId);
+    assert.deepEqual({ author: theirCopy.author, photos: theirCopy.photos }, { author: lateRequest.bodies[0].p_author, photos: 0 }, 'the same name and no photos as this device\'s unanswered request');
+    await cycle(page); await until(() => publicStatus(page, w3.doc.id), value => value === 'public', 'this device reads the other device\'s publication');
+    await cycle(page);
+    assert.deepEqual(publication(w3.remoteId), theirCopy, 'the other device\'s publication is not withdrawn');
+    assert.deepEqual(sentUnpublish(w3.remoteId).map(request => request.body.p_expected_revision), [0], 'no withdrawal after it');
+    assert.equal(await mark(page, w3.doc.id), '공개 중');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict', 'this device\'s own request can no longer be applied');
+    await openReview(page, w3.doc.id); await click(page, '공개 철회', panel(page)); assert.equal(publication(w3.remoteId).active, false); await click(page, '공개 검토 닫기');
+    pass('R2-A: another device\'s later publication with the same name and no photos stays public; this device sends no withdrawal against it');
+
+    // (c) The server still has the earlier definition (before the migration is applied): the withdrawal for
+    // revision 0 is refused. The post stays 확인 못 함, the withdrawal is sent again once per cycle, nothing is
+    // judged from what becomes public, and it ends when the server takes the withdrawal.
+    const w4 = await savedPost(page, '옛 서버 정의의 철회 글');
+    await manager(page); await openReview(page, w4.doc.id); await preview(page, { name: '익명 검수', intro: '' });
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    let old = await earlierWithdrawal(owner.context);
+    await click(page, '공개 철회', panel(page));
+    assert.match(await statusLine(page), /앞서 보낸 공개 게시 요청을 서버에서 아직 끝내지 못했습니다\. 공개 상태는 확인 못 함으로 두고 철회 요청을 다시 보냅니다/);
+    assert.equal(old.refused.length, 1); assert.equal(publication(w4.remoteId), null);
+    assert.equal(await publicStatus(page, w4.doc.id), 'unknown', 'never called 비공개 while the request can still arrive'); assert.equal((await current(page)).state, 'unknown');
+    await click(page, '공개 검토 닫기');
+    // Sent again by the cycle, and never more than once per cycle (no flood).
+    const listedBefore = cycles();
+    for (let i = 2; i <= 3; i++) { await cycle(page); await until(() => old.refused.length, value => value >= i, 'the withdrawal is sent again on the cycle'); }
+    assert(old.refused.length - 1 <= cycles() - listedBefore, 'at most one per cycle: ' + (old.refused.length - 1) + ' in ' + (cycles() - listedBefore) + ' cycles');
+    assert.equal(new Set(old.refused.map(body => body.p_operation_id)).size, 1, 'the same operation each time'); assert.equal(await publicStatus(page, w4.doc.id), 'unknown');
+    assert.equal(sentPublish(w4.remoteId).length, 0, 'no publication request is sent');
+    // The server takes it (the migration is applied): the next cycle ends the request.
+    await old.stop();
+    await kick(page); await until(() => published(w4.remoteId), value => value?.revision === 1, 'the cycle sends the withdrawal to the updated server');
+    await until(() => publicStatus(page, w4.doc.id), value => value === 'private', 'settled as 비공개');
+    assert.deepEqual(published(w4.remoteId), { active: false, revision: 1 }); assert.equal(sentUnpublish(w4.remoteId)[0].body.p_operation_id, old.refused[0].p_operation_id);
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict');
+    // The same, and another device publishes the same name meanwhile: public, said, not withdrawn.
+    const w5 = await savedPost(page, '옛 서버 정의에서 다른 기기 게시 글');
+    await manager(page); await openReview(page, w5.doc.id); await preview(page, { name: '익명 검수', intro: '' });
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    old = await earlierWithdrawal(owner.context);
+    await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
+    assert.equal(await publicStatus(page, w5.doc.id), 'unknown');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', { ...lateRequest.bodies[0], p_operation_id: uuid() }).status, 'stored');
+    const otherCopy = publication(w5.remoteId); assert.equal(otherCopy.active, true);
+    await kick(page); await until(() => publicStatus(page, w5.doc.id), value => value === 'public', 'the cycle reads the publication');
+    await page.waitForFunction(() => /철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다\. 비공개로 두려면 다시 철회해 주세요/.test(document.querySelector('.blog-manager [role="status"]')?.textContent || ''));
+    await cycle(page);
+    assert.deepEqual(publication(w5.remoteId), otherCopy, 'not withdrawn by content'); assert.equal(sentUnpublish(w5.remoteId).length, 0);
+    assert(old.refused.every(body => body.p_expected_revision === 0)); assert.equal(await mark(page, w5.doc.id), '공개 중');
+    await openPost(page, w5.doc.id, w5.doc.title); await settledPill(page);
+    sheet = await openInfo(page); assert.match(await sheet.locator('.photo-public-log').innerText(), /철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다/); await closeInfo(page);
+    await old.stop();
+    await manager(page); await openReview(page, w5.doc.id); await click(page, '공개 철회', panel(page)); assert.equal(publication(w5.remoteId).active, false); await click(page, '공개 검토 닫기');
+    pass('earlier server definition: a withdrawal that cannot end the first publication keeps 확인 못 함, is sent again once per cycle, withdraws nothing by content, and ends when the server takes it');
+
+    // ---- r2-m4: the "not applied yet" notice ends when the owner ends the request ----------------------
+    const cx = await savedPost(page, '게시 요청 취소 글');
+    await manager(page); await openReview(page, cx.doc.id); await preview(page, { name: '익명 검수', intro: '' });
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop(); await click(page, '공개 검토 닫기');
+    await kick(page); await until(() => mark(page, cx.doc.id), value => value === '앞서 보낸 게시 미반영', 'the list names the request that is not applied');
+    await cycle(page); assert.equal(await mark(page, cx.doc.id), '앞서 보낸 게시 미반영', 'it stays until the owner acts'); assert.equal(sentUnpublish(cx.remoteId).length, 0);
+    await openReview(page, cx.doc.id);
+    assert.match((await current(page)).text, /비공개.*앞서 보낸 공개 게시 요청은 아직 반영되지 않았습니다.*공개하지 않으려면 공개 검토에서 게시 요청을 취소해 주세요/);
+    await shot(page, 'r2m4-cancel-request-1440');
+    await page.setViewportSize({ width: 390, height: 844 }); await panel(page).getByRole('button', { name: '게시 요청 취소', exact: true }).scrollIntoViewIfNeeded(); await shot(page, 'r2m4-cancel-request-390');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no sideways scroll at 390');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await panel(page).getByRole('button', { name: '게시 요청 취소', exact: true }).focus(); await page.keyboard.press('Enter'); await settle(page); await idle(page);
+    assert.equal(await statusLine(page), '앞서 보낸 게시 요청을 취소했습니다. 이 글은 공개 중이 아닙니다.');
+    assert.deepEqual({ state: (await current(page)).state, notice: await panel(page).locator('.blog-manager-current').getAttribute('data-notice') }, { state: 'private', notice: '' });
+    assert.equal(await panel(page).getByRole('button', { name: '게시 요청 취소', exact: true }).count(), 0);
+    assert.deepEqual(published(cx.remoteId), { active: false, revision: 1 }); assert.deepEqual(sentUnpublish(cx.remoteId).map(request => request.body.p_expected_revision), [0]);
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict', 'the cancelled request can never be applied');
+    await click(page, '공개 검토 닫기'); assert.equal(await mark(page, cx.doc.id), '');
+    pass('r2-m4: 게시 요청 취소 ends a publish request that is not applied (keyboard, 1440/390); the notice ends and the late request is refused');
 
     // ---- M2: an update of a public post that is not applied is never silent ---------------------------
     const u = await savedPost(page, '갱신 미반영 글', files);
@@ -523,21 +633,39 @@ async function main() {
     await click(page, '공개 검토 닫기'); assert.equal(await mark(page, u.doc.id), '공개 중');
     pass('M2: an update of a public post that is not applied stays named in the list, the review and 글 정보 while the earlier copy is public');
 
-    // ---- M3: the replaced request arrives while the new choice is in flight --------------------------------
+    // ---- M3: a changed choice while an earlier request is unanswered ---------------------------------------
+    // Nothing is public yet: the earlier request is ended first, so when it arrives it is refused.
     const v = await savedPost(page, '전송 중 경합 글', files);
     await manager(page); await openReview(page, v.doc.id); await preview(page, { selected: v.doc.photos.map(photo => photo.id), name: '익명 검수' });
-    const replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
+    let replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
     await preview(page, { selected: [] });
     flying = await inFlight(owner.context, 'life_blog_publish');
-    await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await flying.arrived;
-    const firstCopy = server.rpc(accounts.a.id, 'life_blog_publish_copies', replacedRequest.bodies[0]);
-    assert.equal(firstCopy.status, 'stored'); assert.equal(publication(v.remoteId).photos, 2, 'the replaced choice reached the server first');
+    await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const secondBody = await flying.arrived;
+    assert.equal(secondBody.p_expected_publication_revision, 1, 'the new choice is sent against the revision the withdrawal made');
+    assert.deepEqual(published(v.remoteId), { active: false, revision: 1 }); assert.deepEqual(sentUnpublish(v.remoteId).map(request => request.body.p_expected_revision), [0]);
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', replacedRequest.bodies[0]).status, 'conflict', 'the replaced choice arriving first is refused');
     await flying.release(); await idle(page); await publishedLink(page).waitFor();
     assert.equal(await statusLine(page), '공개 게시를 확인했습니다. 같은 글의 갱신은 이 주소를 유지합니다.');
-    const finalV = publication(v.remoteId);
-    assert.deepEqual({ active: finalV.active, photos: finalV.photos, revision: finalV.revision, token: finalV.token }, { active: true, photos: 0, revision: 2, token: firstCopy.token }, 'the last reviewed choice is what stays public, at the same address');
-    assert.deepEqual(sentPublish(v.remoteId).map(request => [request.rpc, request.body.p_expected_publication_revision]), [['life_blog_publish', 0], ['life_blog_publish', 1]]);
+    let finalV = publication(v.remoteId);
+    assert.deepEqual({ active: finalV.active, photos: finalV.photos, revision: finalV.revision }, { active: true, photos: 0, revision: 2 }, 'only the last reviewed choice became public');
+    assert.deepEqual(sentPublish(v.remoteId).map(request => [request.rpc, request.body.p_expected_publication_revision]), [['life_blog_publish', 1]]);
     await visit(visitor.page, await publishedLink(page).getAttribute('href'), 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 0);
+    // The post is public now: an unanswered update keeps the address, so the next choice shares its revision. When
+    // the replaced update arrives first, the new choice is sent once more as an update.
+    await preview(page, { selected: v.doc.photos.map(photo => photo.id) });
+    replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
+    await preview(page, { selected: [v.doc.photos[0].id] });
+    flying = await inFlight(owner.context, 'life_blog_publish_copies');
+    await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await flying.arrived;
+    const firstCopy = server.rpc(accounts.a.id, 'life_blog_publish_copies', replacedRequest.bodies[0]);
+    assert.equal(firstCopy.status, 'stored'); assert.equal(publication(v.remoteId).photos, 2, 'the replaced update reached the server first');
+    await flying.release(); await idle(page); await publishedLink(page).waitFor();
+    assert.equal(await statusLine(page), '공개 게시를 확인했습니다. 같은 글의 갱신은 이 주소를 유지합니다.');
+    finalV = publication(v.remoteId);
+    assert.deepEqual({ active: finalV.active, photos: finalV.photos, revision: finalV.revision, token: finalV.token }, { active: true, photos: 1, revision: 4, token: firstCopy.token }, 'the last reviewed choice is what stays public, at the same address');
+    assert.deepEqual(sentPublish(v.remoteId).map(request => [request.rpc, request.body.p_expected_publication_revision]).slice(1), [['life_blog_publish_copies', 2], ['life_blog_publish_copies', 3]]);
+    assert.equal(sentUnpublish(v.remoteId).length, 1, 'a public post is never withdrawn to end an update');
+    await visit(visitor.page, await publishedLink(page).getAttribute('href'), 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 1);
     await click(page, '공개 검토 닫기');
     // A conflict that is not this device's earlier request: nothing is sent again, and the screen says what is public.
     const x = await savedPost(page, '다른 기기 경합 글', files);
@@ -554,7 +682,7 @@ async function main() {
     await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check(); await publish(page);
     assert.equal(await statusLine(page), '공개 미리보기를 먼저 갱신해 주세요.'); assert.equal(sentPublish(x.remoteId).length, 1);
     await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
-    pass('M3: when the replaced request arrives first the new choice is sent once more and stays public; another request\'s conflict ends the preview and says what is public');
+    pass('M3: before anything is public a changed choice ends the earlier request first; an update that arrives first is followed by the new choice once more; another request\'s conflict ends the preview and says what is public');
 
     // ---- M2: a hidden public post ---------------------------------------------------------------
     const h = await savedPost(page, '숨길 공개 글'), q = await savedPost(page, '철회하고 숨길 글');

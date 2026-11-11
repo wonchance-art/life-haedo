@@ -3,16 +3,20 @@
 // this device not knowing whether the post is public. The exact server head settles it:
 // an applied request becomes the recorded publication, an unanswered withdrawal is sent
 // again, and a publish request is never sent again without the owner's action. A request
-// that is not applied yet can still arrive, so it is never recorded as failed for good:
-// a withdrawal ends it on the server where the server allows that and guards against it
-// where it does not, and a new choice shares its publication revision so that at most one
-// of the two is applied.
+// that is not applied yet can still arrive, so it is never recorded as failed for good.
+// While nothing is public, a withdrawal, a new choice or 게시 요청 취소 ends it on the server
+// (one withdrawal request moves the publication revision, from 0 when there is no row:
+// 20261111120000). Only an update of a public post keeps its address and shares the
+// publication revision with the request it replaces, so that at most one of the two is
+// applied. Nothing is ever withdrawn because of what a public copy contains (review R2-M1).
 // Real Storage/BlogSync; the synthetic server follows the SQL publication CAS and receipts
 // (supabase/migrations/20261105051632_life_post_markdown.sql publish/publish_copies and
 // 20261017144744_life_blog_originals.sql unpublish: receipt first, then the post revision,
-// then the publication revision; unpublish answers "missing" without a publication row and
-// moves the revision of an existing row whether it is active or not). The real SQL and
-// browser run in tests/publish-recovery-browser.cjs.
+// then the publication revision; unpublish moves the revision of an existing row whether it is
+// active or not and, 20261111120000, records a withdrawn row at revision 1 for an expected
+// revision of 0 without a row; `control.legacy` is the definition before it, which refuses
+// revision 0). The real SQL runs in tests/run-blog-unpublish-postgres.cjs and, with the
+// browser, in tests/publish-recovery-browser.cjs.
 const test = require('node:test'), assert = require('node:assert/strict');
 const F = require('./fixtures/photo-metadata.cjs');
 const Remote = require('../assets/life/blog-remote.js');
@@ -28,14 +32,21 @@ globalThis.OffscreenCanvas = class {
 const fault = code => Object.assign(new Error(code), { code });
 const clone = value => structuredClone(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const conflict = { code: 'blog_conflict' };
+// Timers a test fires by hand.
+function manualTimers() {
+  const pending = new Map(); let next = 1;
+  return { pending, setTimeout(run, ms) { const id = next++; pending.set(id, { run, ms }); return id; }, clearTimeout(id) { pending.delete(id); },
+    fire(ms) { const hit = [...pending].filter(([, timer]) => timer.ms === ms); for (const [id, timer] of hit) { pending.delete(id); timer.run(); } return hit.length; } };
+}
 
 // The publication RPCs of the synthetic server with the SQL rules, shared by every client of
 // one cloud. `control.lose` drops the answer after the server applied the request,
 // `control.block` fails before the server sees it, `control.before` runs right before the
-// server handles a request (another request arriving first), `control.hold` keeps a request
-// in flight until released.
+// server handles a request (another request arriving first; `{ kind, run }` waits for a request
+// of that kind), `control.hold` keeps a request in flight until released.
 function publicationNet(cloud) {
-  const receipts = new Map(), calls = [], control = { lose: null, block: null, failRead: false, before: null, hold: null };
+  const receipts = new Map(), calls = [], control = { lose: null, block: null, failRead: false, before: null, hold: null, legacy: false };
   const apply = {
     publish(id, revision, operation, options) {
       let result = receipts.get(operation);
@@ -50,8 +61,16 @@ function publicationNet(cloud) {
       let result = receipts.get(operation);
       if (result) return clone(result);
       const row = cloud.rows.get(id);
-      // No publication row: "missing" (BlogRemote reports it like a conflict). A row moves whether active or not.
-      if (!row?.publication || row.publication.revision !== revision) throw fault('blog_conflict');
+      if (control.legacy && revision === 0) throw fault('blog_withdrawal_unsupported');
+      if (!row?.publication) {
+        // "missing" for an expected revision of 1 or more (BlogRemote reports it like a conflict).
+        if (!row || revision !== 0) throw fault('blog_conflict');
+        // Revision 0: a withdrawn row at revision 1. Its token is not a public address.
+        row.publication = { token: Core.id(), blogToken: Core.id(), revision: 1, active: false }; row.published = null;
+        result = { status: 'stored', revision: 1 }; receipts.set(operation, result); return clone(result);
+      }
+      // A row moves whether active or not.
+      if (row.publication.revision !== revision) throw fault('blog_conflict');
       row.publication = { ...row.publication, revision: revision + 1, active: false }; row.published = null;
       result = { status: 'stored', revision: revision + 1 }; receipts.set(operation, result); return clone(result);
     },
@@ -61,7 +80,7 @@ function publicationNet(cloud) {
       const call = { kind, tab: dev.name, id: args[0], revision: args[1], operation: args[2], options: clone(args[3] || null), reached: false }; calls.push(call);
       if (control.block === kind) throw fault('network_error');
       if (control.hold?.kind === kind) { const hold = control.hold; control.hold = null; hold.entered.resolve(call); await hold.release.promise; }
-      if (control.before) { const hook = control.before; control.before = null; await hook(call); }
+      if (control.before && (typeof control.before === 'function' || control.before.kind === kind)) { const hook = control.before.run || control.before; control.before = null; await hook(call); }
       call.reached = true;
       const result = apply[kind](...args);
       if (control.lose === kind) { control.lose = null; throw fault('network_error'); }
@@ -84,17 +103,19 @@ function browserLocks() {
   return { held, async request(name, options, callback) {
     if (typeof options === 'function') { callback = options; options = {}; }
     if (options.ifAvailable && held.has(name)) return callback(null);
-    while (held.has(name)) await held.get(name);
+    const aborted = new Promise((_, reject) => options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true }));
+    aborted.catch(() => {});
+    while (held.has(name)) await Promise.race([held.get(name), aborted]);
     const done = deferred(); held.set(name, done.promise);
     try { return await callback({ name }); } finally { held.delete(name); done.resolve(); }
   } };
 }
 // One tab: its own BlogSync over the device's storage (tabs of one browser share IndexedDB).
-function tab(cloud, net, dev, name, { locks = null, storage = dev.storage } = {}) {
+function tab(cloud, net, dev, name, { locks = null, storage = dev.storage, timers = { setTimeout: () => 0, clearTimeout() {} } } = {}) {
   const remote = cloud.client(name), view = { name, remote, storage: dev.storage, ws: dev.ws, auth: dev.auth };
   net.attach(view);
   view.sync = Sync.create({ storage, auth: dev.auth, blog: Blog, photoPost: Photo, remote, makeId: Core.id, locks, now: () => dev.time.now,
-    timers: { setTimeout: () => 0, clearTimeout() {} }, interval: 30000, publicReader: net.reader });
+    timers, interval: 30000, publicReader: net.reader });
   return view;
 }
 async function saved(t, { photos = 0, locks = null } = {}) {
@@ -110,7 +131,9 @@ async function saved(t, { photos = 0, locks = null } = {}) {
   const publish = (options = {}, from = a) => from.sync.publish(a.ws, doc.id, { expectedLocalRevision: doc.revision, ...options });
   // Replays a request exactly as the page sent it: the same request reaching the server late.
   const late = call => net.apply[call.kind](call.id, call.revision, call.operation, call.options);
-  return { cloud, time, dev, a, doc, net, state, row, status, view, open, publish, late };
+  const withdraw = (from = a) => from.sync.unpublish(a.ws, doc.id);
+  const published = () => ({ active: row().publication?.active ?? null, revision: row().publication?.revision || 0 });
+  return { cloud, time, dev, a, doc, net, state, row, status, view, open, publish, late, withdraw, published };
 }
 // A second device of the same account that received the post.
 async function otherDevice(t, f) {
@@ -187,7 +210,8 @@ test('M4: a request that never reached the server is replaced by a new choice; t
   assert.equal(f.row().publication, null); assert.equal(await f.status(), 'unknown');
   f.net.control.block = null;
   const published = await f.publish({ photoIds: [] });
-  assert.equal(published.revision, 1); assert.deepEqual(f.row().published.photoIds, []);
+  // The earlier request was ended first (revision 0 to 1), so the new publication is revision 2.
+  assert.equal(published.revision, 2); assert.deepEqual(f.row().published.photoIds, []); assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0]);
   assert.deepEqual(f.net.sent('publish').map(call => call.options.photoIds), [[]], 'only the new choice reached the server');
   assert.equal((await f.state()).publishPending, null); assert.deepEqual(await f.view(), { status: 'public', notice: null });
   // The old request arriving late is refused by the publication-revision CAS.
@@ -195,7 +219,7 @@ test('M4: a request that never reached the server is replaced by a new choice; t
   assert.deepEqual(f.row().published.photoIds, []);
 });
 
-test('at most one of two unanswered requests is ever applied: a new choice shares the publication revision of the one it replaces', async t => {
+test('M3: while nothing is public a new choice ends the earlier request first, so only the last request can still be applied', async t => {
   const f = await saved(t, { photos: 2 }); f.net.control.block = 'publish';
   const both = f.doc.photos.map(photo => photo.id);
   await assert.rejects(f.publish({ photoIds: both }), { code: 'network_error' });
@@ -204,30 +228,87 @@ test('at most one of two unanswered requests is ever applied: a new choice share
   f.net.control.block = null;
   const requests = f.net.tried('publish');
   assert.equal(requests.length, 3); assert.equal(new Set(requests.map(call => call.operation)).size, 3);
-  assert.deepEqual(requests.map(call => [call.revision, call.options.expectedPublicRevision]), [[1, 0], [1, 0], [1, 0]], 'the same post and publication revision for each');
+  assert.deepEqual(requests.map(call => [call.revision, call.options.expectedPublicRevision]), [[1, 0], [1, 1], [1, 2]], 'each new choice is sent against a revision the earlier one can no longer meet');
+  assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0, 1], 'one withdrawal before each new choice: from revision 0 without a row, then from the withdrawn row');
+  assert.deepEqual(f.published(), { active: false, revision: 2 }, 'nothing became public by ending them');
   const pending = (await f.state()).publishPending;
-  assert.equal(pending.operationId, requests[2].operation, 'one request is kept as this device\'s own'); assert.equal(pending.contested, true);
+  assert.equal(pending.operationId, requests[2].operation, 'one request is kept as this device\'s own'); assert.equal(pending.contested ?? false, false);
+  // The earlier ones arriving late end in conflict; only the last can be applied.
+  assert.throws(() => f.late(requests[0]), conflict); assert.throws(() => f.late(requests[1]), conflict);
+  f.late(requests[2]); assert.deepEqual(f.row().published.photoIds, [both[0]]); assert.equal(f.row().publication.revision, 3);
+});
+
+test('earlier server definition: a new choice shares the publication revision of the first publication it replaces, so at most one is applied', async t => {
+  const f = await saved(t, { photos: 2 }); f.net.control.legacy = true; f.net.control.block = 'publish';
+  const both = f.doc.photos.map(photo => photo.id);
+  await assert.rejects(f.publish({ photoIds: both }), { code: 'network_error' });
+  await assert.rejects(f.publish({ photoIds: [] }), { code: 'network_error' });
+  await assert.rejects(f.publish({ photoIds: [both[0]] }), { code: 'network_error' });
+  f.net.control.block = null;
+  const requests = f.net.tried('publish');
+  assert.deepEqual(requests.map(call => [call.revision, call.options.expectedPublicRevision]), [[1, 0], [1, 0], [1, 0]], 'the same post and publication revision for each');
+  assert.equal(f.row().publication, null, 'the refused withdrawals changed nothing');
+  const state = await f.state();
+  assert.equal(state.publishPending.operationId, requests[2].operation); assert.equal(state.publishPending.contested, true); assert.equal(state.unpublishPending ?? null, null);
   // Whatever order they arrive in, the server applies exactly one.
   f.late(requests[1]);
-  assert.throws(() => f.late(requests[0]), { code: 'blog_conflict' }); assert.throws(() => f.late(requests[2]), { code: 'blog_conflict' });
+  assert.throws(() => f.late(requests[0]), conflict); assert.throws(() => f.late(requests[2]), conflict);
   assert.deepEqual(f.row().published.photoIds, []); assert.equal(f.row().publication.revision, 1);
 });
 
-test('M3: the replaced request arrives first: the new choice is sent once more as an update, so the last reviewed choice stays public', async t => {
-  const f = await saved(t, { photos: 2 }); f.net.control.block = 'publish';
+test('M3: an unanswered update of a public post arrives first: the new choice is sent once more as an update, so the last reviewed choice stays public', async t => {
+  const f = await saved(t, { photos: 2 }), both = f.doc.photos.map(photo => photo.id), author = { name: '익명', intro: '' };
+  const first = await f.publish({ photoIds: [], author });
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ photoIds: both, author, expectedPublicRevision: 1 }), { code: 'network_error' });
+  f.net.control.block = null;
+  const old = f.net.tried('publish').at(-1);
+  // While the new request is on its way, the old one reaches the server.
+  f.net.control.before = { kind: 'publish', run: async () => { f.late(old); } };
+  const published = await f.publish({ photoIds: [both[0]], author, expectedPublicRevision: 1 });
+  assert.equal(published.revision, 3); assert.deepEqual(f.row().published.photoIds, [both[0]], 'the last reviewed choice is what is public');
+  assert.equal(published.token, first.token, 'an update of the same public address');
+  assert.equal(f.net.tried('unpublish').length, 0, 'a public post is never withdrawn to end an update');
+  const requests = f.net.tried('publish').slice(1);
+  assert.deepEqual(requests.map(call => [call.options.photoIds.length, call.options.expectedPublicRevision, call.reached]), [[2, 1, false], [1, 1, true], [1, 2, true]]);
+  assert.notEqual(requests[2].operation, requests[1].operation);
+  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publication.revision, 3);
+  assert.deepEqual(await f.view(), { status: 'public', notice: null });
+});
+
+test('M3: a first publication that arrives before it could be ended is recorded; the new choice is reviewed against it, or updates it', async t => {
+  const f = await saved(t, { photos: 2 }), both = f.doc.photos.map(photo => photo.id), author = { name: '익명', intro: '' };
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ photoIds: both, author }), { code: 'network_error' });
+  f.net.control.block = null;
+  const old = f.net.tried('publish')[0];
+  // It reaches the server right before the withdrawal that would have ended it.
+  f.net.control.before = { kind: 'unpublish', run: async () => { f.late(old); } };
+  // The review was made while nothing was public (revision 0): it does not publish over a copy it never showed.
+  await assert.rejects(f.publish({ photoIds: [], author, expectedPublicRevision: 0 }), { code: 'local_changed' });
+  assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0], 'the withdrawal met the arrived publication and changed nothing');
+  assert.deepEqual(f.published(), { active: true, revision: 1 }); assert.equal(f.net.tried('publish').length, 1, 'the new choice was not sent');
+  let state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null);
+  assert.deepEqual(await f.view(), { status: 'public', notice: null });
+  // Reviewed against that copy, the new choice is an update of the same address.
+  const published = await f.publish({ photoIds: [], author, expectedPublicRevision: 1 });
+  assert.equal(published.revision, 2); assert.equal(published.token, f.net.receipts.get(old.operation).token); assert.deepEqual(f.row().published.photoIds, []);
+  state = await f.state(); assert.equal(state.publishPending, null); assert.deepEqual(await f.view(), { status: 'public', notice: null });
+});
+
+test('earlier server definition: the replaced first publication arrives first and the new choice is sent once more as an update', async t => {
+  const f = await saved(t, { photos: 2 }); f.net.control.legacy = true; f.net.control.block = 'publish';
   const both = f.doc.photos.map(photo => photo.id);
   await assert.rejects(f.publish({ photoIds: both, author: { name: '익명', intro: '' } }), { code: 'network_error' });
   f.net.control.block = null;
   const old = f.net.tried('publish')[0];
-  // While the new request is on its way, the old one reaches the server.
-  f.net.control.before = async () => { f.late(old); };
+  f.net.control.before = { kind: 'publish', run: async () => { f.late(old); } };
   const published = await f.publish({ photoIds: [], author: { name: '익명', intro: '' } });
   assert.equal(published.revision, 2); assert.deepEqual(f.row().published.photoIds, [], 'no photo of the replaced choice stays public');
   assert.equal(published.token, f.net.receipts.get(old.operation).token, 'an update of the same public address');
   const requests = f.net.tried('publish');
   assert.deepEqual(requests.map(call => [call.options.photoIds.length, call.options.expectedPublicRevision, call.reached]), [[2, 0, false], [0, 0, true], [0, 1, true]]);
-  assert.notEqual(requests[2].operation, requests[1].operation);
-  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publication.revision, 2);
+  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending ?? null, null); assert.equal(state.publication.revision, 2);
   assert.deepEqual(await f.view(), { status: 'public', notice: null });
 });
 
@@ -237,7 +318,7 @@ test('M3: a conflict that is not this device\'s earlier request is not sent agai
   await assert.rejects(f.publish({ photoIds: both, author: { name: '익명', intro: '' } }), { code: 'network_error' });
   f.net.control.block = null;
   // Another device publishes its own choice (another name) while the new request is on its way.
-  f.net.control.before = async () => { f.net.control.before = null; await other.publish({ author: { name: '다른 기기', intro: '' } }); };
+  f.net.control.before = { kind: 'publish', run: async () => { await other.b.sync.syncNow(); await other.publish({ author: { name: '다른 기기', intro: '' } }); } };
   const failure = await f.publish({ photoIds: [], author: { name: '익명', intro: '' } }).catch(error => error);
   assert.equal(failure.code, 'blog_conflict'); assert.equal(failure.ownRequest, false); assert.deepEqual(failure.publicCopy, { photos: 0 });
   assert.deepEqual(f.row().published.author, { name: '다른 기기', intro: '' }, 'the other device\'s publication is not overwritten');
@@ -298,9 +379,9 @@ test('M1: a withdrawal ends an unanswered re-publication for certain when a publ
   const old = f.net.tried('publish').at(-1); assert.equal(old.options.expectedPublicRevision, 2);
   const before = f.net.sent('unpublish').length;
   const result = await f.a.sync.unpublish(f.a.ws, f.doc.id);
-  assert.equal(result.status, 'unpublished'); assert.equal(f.net.sent('unpublish').length, before + 1, 'a withdrawal request was really sent');
+  assert.deepEqual(result, { status: 'not_published', revision: 3, ended: true }); assert.equal(f.net.sent('unpublish').length, before + 1, 'a withdrawal request was really sent');
   assert.deepEqual({ active: f.row().publication.active, revision: f.row().publication.revision }, { active: false, revision: 3 });
-  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publishRevoked ?? null, null, 'no guard is needed');
+  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null);
   assert.deepEqual(await f.view(), { status: 'private', notice: null });
   // The old request arriving after the withdrawal ends in conflict: nothing becomes public.
   assert.throws(() => f.late(old), { code: 'blog_conflict' }); assert.equal(f.row().publication.active, false);
@@ -370,68 +451,220 @@ test('M1/M3: every failure in the middle of ending an unanswered request leaves 
     await f.a.sync.syncNow(); assert.deepEqual(await f.view(), { status: 'public', notice: null }); assert.deepEqual(f.row().published.photoIds, []);
     assert.throws(() => f.late(old), { code: 'blog_conflict' });
   });
-  await t.test('replaced request arrived first, then the second attempt of the new choice gets no answer or never arrives', async () => {
+  await t.test('new choice: the old request is ended, the new request never arrives', async () => {
+    const { f, old } = await withdrawn(); f.net.control.block = 'publish';
+    await assert.rejects(f.publish({ photoIds: [], expectedPublicRevision: 2 }), { code: 'network_error' }); f.net.control.block = null;
+    await f.a.sync.syncNow();
+    assert.deepEqual(await f.view(), { status: 'private', notice: 'publish_unapplied' }); assert.deepEqual(f.published(), { active: false, revision: 3 });
+    assert.throws(() => f.late(old), conflict);
+  });
+  // The same steps for a post that was never public (no publication row: revision 0).
+  const never = async () => {
+    const f = await saved(t, { photos: 2 }); f.net.control.block = 'publish';
+    await assert.rejects(f.publish({ photoIds: f.doc.photos.map(photo => photo.id) }), { code: 'network_error' }); f.net.control.block = null;
+    return { f, old: f.net.tried('publish')[0] };
+  };
+  await t.test('no row, withdrawal: the request never arrives, then is repeated by the cycle', async () => {
+    const { f, old } = await never(); f.net.control.block = 'unpublish';
+    const failure = await f.withdraw().catch(error => error); f.net.control.block = null;
+    assert.equal(failure.code, 'network_error'); assert.match(failure.message, /공개 철회 결과를 받지 못했습니다/);
+    let state = await f.state();
+    assert.equal(state.publishPending.operationId, old.operation, 'the request it was meant to end is not forgotten');
+    assert.deepEqual({ expected: state.unpublishPending.expectedRevision, ending: state.unpublishPending.ending }, { expected: 0, ending: true });
+    assert.equal(await f.status(), 'unknown'); assert.equal(f.row().publication, null);
+    await f.a.sync.syncNow();
+    assert.deepEqual(f.published(), { active: false, revision: 1 }, 'the cycle sent it: a withdrawn row at revision 1');
+    assert.deepEqual(f.net.sent('unpublish').map(call => [call.revision, call.operation]), [[0, state.unpublishPending.operationId]], 'the same operation, once');
+    state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null); assert.equal(state.publicationLog ?? null, null);
+    assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.throws(() => f.late(old), conflict);
+  });
+  await t.test('no row, withdrawal: applied, the answer was lost', async () => {
+    const { f, old } = await never(); f.net.control.lose = 'unpublish';
+    await assert.rejects(f.withdraw(), { code: 'network_error' });
+    assert.deepEqual(f.published(), { active: false, revision: 1 }); assert.equal(await f.status(), 'unknown');
+    await f.a.sync.syncNow();
+    assert.equal(f.net.sent('unpublish').length, 1, 'already moved: not sent again');
+    assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.throws(() => f.late(old), conflict);
+  });
+  await t.test('no row, withdrawal: the publication arrives right before it; the same call withdraws that copy', async () => {
+    const { f, old } = await never();
+    f.net.control.before = { kind: 'unpublish', run: async () => { f.late(old); } };
+    const result = await f.withdraw();
+    assert.equal(result.status, 'stored'); assert.deepEqual(f.published(), { active: false, revision: 2 });
+    assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0, 1], 'the withdrawal for revision 0 met the copy; the exact revision of that copy was then withdrawn');
+    assert.deepEqual(await f.view(), { status: 'private', notice: null });
+  });
+  await t.test('no row, withdrawal unanswered, the publication arrives before the cycle: public and said, never withdrawn by the cycle', async () => {
+    const { f, old } = await never(); f.net.control.block = 'unpublish';
+    await assert.rejects(f.withdraw(), { code: 'network_error' }); f.net.control.block = null;
+    const events = []; f.a.sync.subscribe(event => events.push(event));
+    f.late(old); await f.a.sync.syncNow(); await f.a.sync.syncNow();
+    assert.deepEqual(f.published(), { active: true, revision: 1 }); assert.equal(f.net.sent('unpublish').length, 0, 'no withdrawal against a publication at another revision');
+    const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null); assert.equal(state.publicationLog.code, 'withdrawal_overtaken');
+    assert.deepEqual(await f.view(), { status: 'public', notice: null });
+    assert.deepEqual(events.filter(event => event.type === 'publication_notice').map(event => event.code), ['withdrawal_overtaken'], 'said once');
+    // The owner withdraws again: now there is an exact revision to withdraw.
+    assert.equal((await f.withdraw()).status, 'stored'); assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.equal((await f.state()).publicationLog ?? null, null);
+  });
+  await t.test('no row, new choice: the old request is ended first (revision 0 to 1), then the new one is sent against revision 1', async () => {
+    const { f, old } = await never();
+    const published = await f.publish({ photoIds: [], expectedPublicRevision: 0 });
+    assert.equal(published.revision, 2); assert.deepEqual(f.row().published.photoIds, []);
+    assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0]); assert.equal(f.net.tried('publish').at(-1).options.expectedPublicRevision, 1);
+    assert.throws(() => f.late(old), conflict); assert.deepEqual(await f.view(), { status: 'public', notice: null });
+  });
+  await t.test('no row, new choice: ending the old request fails; no new request is sent and the old one stays recorded', async () => {
+    const { f, old } = await never(); f.net.control.block = 'unpublish';
+    const failure = await f.publish({ photoIds: [], expectedPublicRevision: 0 }).catch(error => error); f.net.control.block = null;
+    assert.equal(failure.code, 'network_error'); assert.match(failure.message, /이번 공개 게시 요청은 보내지 못했습니다\. 앞서 보낸 요청의 결과는 아직 확인하지 못했습니다/);
+    assert.equal(f.net.tried('publish').length, 1); assert.equal((await f.state()).publishPending.operationId, old.operation); assert.equal(await f.status(), 'unknown');
+    await f.a.sync.syncNow();
+    assert.deepEqual(await f.view(), { status: 'private', notice: null }, 'the cycle ended the old request; nothing is published without the owner');
+    assert.equal(f.net.tried('publish').length, 1); assert.equal((await f.state()).publicationLog ?? null, null); assert.throws(() => f.late(old), conflict);
+  });
+  await t.test('no row, new choice: ending the old request fails, and the owner publishes the same reviewed choice again at once', async () => {
+    const { f, old } = await never(); f.net.control.block = 'unpublish';
+    await assert.rejects(f.publish({ photoIds: [], expectedPublicRevision: 0 }), { code: 'network_error' }); f.net.control.block = null;
+    // The repeated withdrawal moves the revision first; the review made while nothing was public still holds.
+    const published = await f.publish({ photoIds: [], expectedPublicRevision: 0 });
+    assert.equal(published.revision, 2); assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0], 'the same withdrawal, sent again once');
+    assert.equal(f.net.tried('publish').at(-1).options.expectedPublicRevision, 1); assert.deepEqual(f.row().published.photoIds, []);
+    assert.throws(() => f.late(old), conflict); assert.deepEqual(await f.view(), { status: 'public', notice: null });
+  });
+  await t.test('update of a public post: the replaced update arrived first, then the second attempt of the new choice gets no answer or never arrives', async () => {
     for (const arrives of [true, false]) {
-      const f = await saved(t, { photos: 2 }); const both = f.doc.photos.map(photo => photo.id); f.net.control.block = 'publish';
-      await assert.rejects(f.publish({ photoIds: both }), { code: 'network_error' }); f.net.control.block = null;
-      const old = f.net.tried('publish')[0];
-      f.net.control.before = async () => { f.late(old); f.net.control[arrives ? 'lose' : 'block'] = 'publish'; };
-      await assert.rejects(f.publish({ photoIds: [] }), { code: 'network_error' }); f.net.control.block = null; f.net.control.lose = null;
-      assert.equal(await f.status(), 'unknown'); assert.equal((await f.state()).publication.revision, 1, 'the copy that is public now is recorded');
+      const f = await saved(t, { photos: 2 }); const both = f.doc.photos.map(photo => photo.id);
+      await f.publish({ photoIds: [both[0]] });
+      f.net.control.block = 'publish';
+      await assert.rejects(f.publish({ photoIds: both, expectedPublicRevision: 1 }), { code: 'network_error' }); f.net.control.block = null;
+      const old = f.net.tried('publish').at(-1);
+      f.net.control.before = { kind: 'publish', run: async () => { f.late(old); f.net.control[arrives ? 'lose' : 'block'] = 'publish'; } };
+      await assert.rejects(f.publish({ photoIds: [], expectedPublicRevision: 1 }), { code: 'network_error' }); f.net.control.block = null; f.net.control.lose = null;
+      assert.equal(await f.status(), 'unknown'); assert.equal((await f.state()).publication.revision, 2, 'the copy that is public now is recorded');
       await f.a.sync.syncNow();
       if (arrives) { assert.deepEqual(await f.view(), { status: 'public', notice: null }); assert.deepEqual(f.row().published.photoIds, []); }
       else { assert.deepEqual(await f.view(), { status: 'public', notice: 'update_unapplied' }, 'the replaced choice is public and the screen says the last choice is not'); assert.deepEqual(f.row().published.photoIds, both); }
+      assert.equal(f.net.tried('unpublish').length, 0);
     }
   });
 });
 
-test('M1: with no publication row the server cannot end an unanswered first publication; the withdrawal guards and withdraws it when it arrives', async t => {
+test('R2-M1: withdrawing with an unanswered first publication always sends a withdrawal request, which ends that publication for certain', async t => {
   const f = await saved(t, { photos: 2 }); const both = f.doc.photos.map(photo => photo.id); f.net.control.block = 'publish';
   await assert.rejects(f.publish({ photoIds: both, author: { name: '익명', intro: '' } }), { code: 'network_error' }); f.net.control.block = null;
   const old = f.net.tried('publish')[0];
   const events = []; f.a.sync.subscribe(event => events.push(event));
-  assert.deepEqual(await f.a.sync.unpublish(f.a.ws, f.doc.id), { status: 'not_published', revision: 0, guarded: true });
-  assert.equal(f.net.tried('unpublish').length, 0, 'there is no publication row to move'); assert.equal(f.net.tried('publish').length, 1);
-  let state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publishRevoked.operationId, old.operation);
-  assert.equal(await f.status(), 'unknown', 'while the request can plausibly still arrive the post is not called private');
-  await f.a.sync.syncNow(); assert.equal(f.net.tried('unpublish').length, 0); assert.equal(await f.status(), 'unknown');
-  // The request arrives after the withdrawal.
-  f.late(old); assert.equal(f.row().publication.active, true);
-  await f.a.sync.syncNow();
-  assert.equal(f.row().publication.active, false, 'the withdrawal still stands'); assert.equal(f.net.sent('unpublish').length, 1);
-  state = await f.state(); assert.equal(state.publishRevoked, null); assert.equal(state.unpublishPending, null); assert.equal(state.publicationLog.code, 'late_publication_withdrawn');
-  assert.deepEqual(await f.view(), { status: 'private', notice: null });
-  assert.deepEqual(events.filter(event => event.type === 'publication_notice'), [{ type: 'publication_notice', code: 'late_publication_withdrawn', workspaceId: f.a.ws, localPostId: f.doc.id }]);
-  assert.equal(f.net.tried('publish').length, 1, 'no publication request was sent by the guard');
+  assert.deepEqual(await f.withdraw(), { status: 'not_published', revision: 1, ended: true });
+  assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0], 'a withdrawal request for revision 0 was sent');
+  assert.deepEqual(f.published(), { active: false, revision: 1 }, 'a withdrawn row at revision 1; nothing is public');
+  const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null); assert.equal(Object.hasOwn(state, 'publishRevoked'), false, 'no guard is kept');
+  assert.deepEqual(await f.view(), { status: 'private', notice: null }, 'settled as not public at once');
+  // The request arrives after the withdrawal: the server refuses it; nothing has to be withdrawn afterwards.
+  assert.throws(() => f.late(old), conflict); assert.equal(f.row().publication.active, false);
+  for (let i = 0; i < 2; i++) { f.time.advance(60000); await f.a.sync.syncNow(); }
+  assert.equal(f.net.tried('unpublish').length, 1); assert.equal(f.net.tried('publish').length, 1); assert.deepEqual(await f.view(), { status: 'private', notice: null });
+  assert.deepEqual(events.filter(event => event.type === 'publication_notice'), []);
+  // The next deliberate publication is a new one, at revision 2, with its own address.
+  const published = await f.publish({ photoIds: [], expectedPublicRevision: 1 });
+  assert.equal(published.revision, 2); assert.notEqual(published.token, state.publication.token, 'the withdrawn row\'s token never becomes a public address');
 });
 
-test('M1: the guard outlasts the unknown window, does not touch another device\'s publication, and ends with a new post revision', async t => {
-  // After the window the post reads as not public, with the guard named; a late arrival is still withdrawn.
-  const f = await saved(t); f.net.control.block = 'publish';
+// Review R2-A: by content this device cannot tell its own late request from another device's
+// deliberate publication (the same name, no photos). Nothing is withdrawn by content.
+test('R2-A: another device\'s later publication with the same name and no photos is never withdrawn by this device', async t => {
+  for (const legacy of [false, true]) await t.test(legacy ? 'earlier server definition' : 'current server definition', async t => {
+    const f = await saved(t), other = await otherDevice(t, f), author = { name: '익명', intro: '' };
+    f.net.control.legacy = legacy; f.net.control.block = 'publish';
+    await assert.rejects(f.publish({ author }), { code: 'network_error' }); f.net.control.block = null;
+    const old = f.net.tried('publish')[0];
+    if (legacy) await assert.rejects(f.withdraw(), { code: 'blog_withdrawal_unsupported' });
+    else assert.equal((await f.withdraw()).ended, true);
+    // Afterwards the other device publishes on purpose: the same name, no photos.
+    await other.b.sync.syncNow();
+    const theirs = await other.publish({ author });
+    const before = f.net.tried('unpublish').length;
+    for (let i = 0; i < 3; i++) { f.time.advance(60000); await f.a.sync.syncNow(); }
+    assert.equal(f.row().publication.active, true, 'the other device\'s publication stays public'); assert.equal(f.row().publication.token, theirs.token);
+    assert.equal(f.net.tried('unpublish').length, before, 'no withdrawal is sent against it');
+    assert(f.net.tried('unpublish').every(call => call.revision === 0), 'every withdrawal this device sent was for revision 0');
+    const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null);
+    assert.equal(await f.status(), 'public');
+    assert.throws(() => f.late(old), conflict, 'this device\'s own request can no longer be applied');
+    assert.equal(f.net.tried('publish').filter(call => call.tab === 'tab-a').length, 1);
+  });
+});
+
+test('earlier server definition: a withdrawal that cannot end the first publication keeps the post unknown, is sent again once per cycle, and ends when the server takes it', async t => {
+  const f = await saved(t); f.net.control.legacy = true; f.net.control.block = 'publish';
   await assert.rejects(f.publish({ author: { name: '익명', intro: '' } }), { code: 'network_error' }); f.net.control.block = null;
-  await f.a.sync.unpublish(f.a.ws, f.doc.id);
-  f.time.advance(Sync.LATE_WINDOW - 1000); assert.equal(await f.status(), 'unknown');
-  f.time.advance(2000); assert.deepEqual(await f.view(), { status: 'private', notice: 'late_publish_guarded' });
-  await f.a.sync.syncNow(); assert.equal((await f.state()).publishRevoked.operationId, f.net.tried('publish')[0].operation, 'still guarded');
-  f.late(f.net.tried('publish')[0]); await f.a.sync.syncNow();
-  assert.equal(f.row().publication.active, false); assert.deepEqual(await f.view(), { status: 'private', notice: null });
-  // Another device's own publication (another name) is not the guarded request: it stays.
-  const g = await saved(t), other = await otherDevice(t, g); g.net.control.block = 'publish';
-  await assert.rejects(g.publish({ author: { name: '익명', intro: '' } }), { code: 'network_error' }); g.net.control.block = null;
-  await g.a.sync.unpublish(g.a.ws, g.doc.id);
-  await other.publish({ author: { name: '다른 기기', intro: '' } });
-  await g.a.sync.syncNow();
-  assert.equal(g.row().publication.active, true); assert.equal(g.net.tried('unpublish').length, 0);
-  assert.equal((await g.state()).publishRevoked, null); assert.deepEqual(await g.view(), { status: 'public', notice: null });
-  assert.throws(() => g.late(g.net.tried('publish')[0]), { code: 'blog_conflict' }, 'the guarded request can no longer be applied');
-  // A new post revision makes the guarded request impossible: the guard ends.
-  const h = await saved(t); h.net.control.block = 'publish';
-  await assert.rejects(h.publish(), { code: 'network_error' }); h.net.control.block = null;
-  await h.a.sync.unpublish(h.a.ws, h.doc.id);
-  const edited = await h.a.storage.savePhotoPost(h.a.ws, { ...h.doc, title: '고친 제목', updatedAt: new Date(h.time.now + 1000).toISOString() }, h.doc.revision);
-  h.time.advance(5000); await h.a.sync.syncNow(); await h.a.sync.syncNow();
-  assert.equal(h.cloud.rows.get(h.doc.id).revision, 2); assert.equal(edited.revision > h.doc.revision, true);
-  assert.equal((await h.state()).publishRevoked, null); assert.throws(() => h.late(h.net.tried('publish')[0]), { code: 'blog_conflict' });
+  const old = f.net.tried('publish')[0];
+  const failure = await f.withdraw().catch(error => error);
+  assert.equal(failure.code, 'blog_withdrawal_unsupported'); assert.match(failure.message, /아직 끝내지 못했습니다.*확인 못 함.*철회 요청을 다시 보냅니다/);
+  let state = await f.state();
+  assert.equal(state.publishPending.operationId, old.operation, 'not recorded as private: the request can still arrive'); assert.equal(state.unpublishPending.ending, true);
+  assert.equal(await f.status(), 'unknown'); assert.equal(f.row().publication, null);
+  const operation = state.unpublishPending.operationId, sent = () => f.net.tried('unpublish').length, first = sent();
+  for (let i = 1; i <= 3; i++) {
+    f.time.advance(30000); await f.a.sync.syncNow();
+    assert.equal(sent(), first + i, 'once per cycle'); assert.equal(await f.status(), 'unknown');
+  }
+  assert(f.net.tried('unpublish').slice(first).every(call => call.operation === operation && call.revision === 0), 'the same operation each time');
+  await f.a.sync.settlePublication(f.a.ws, f.doc.id); assert.equal(await f.status(), 'unknown', 'a check does not call it private either');
+  assert.equal(f.net.tried('publish').length, 1, 'no publication request is sent');
+  // A second 공개 철회 says the same and records nothing new.
+  await assert.rejects(f.withdraw(), { code: 'blog_withdrawal_unsupported' }); assert.equal((await f.state()).unpublishPending.operationId, operation);
+  // The server gets the new definition: the next cycle ends it.
+  f.net.control.legacy = false; await f.a.sync.syncNow();
+  assert.deepEqual(f.published(), { active: false, revision: 1 }); assert.deepEqual(await f.view(), { status: 'private', notice: null });
+  state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.unpublishPending, null);
+  assert.throws(() => f.late(old), conflict);
+});
+
+test('r2-m4: 게시 요청 취소 ends an unapplied first publication for certain; an applied one is left public and an update is left as it is', async t => {
+  const unapplied = async () => {
+    const f = await saved(t); f.net.control.block = 'publish';
+    await assert.rejects(f.publish(), { code: 'network_error' }); f.net.control.block = null;
+    await f.a.sync.syncNow();
+    assert.deepEqual(await f.view(), { status: 'private', notice: 'publish_unapplied' });
+    return { f, old: f.net.tried('publish')[0] };
+  };
+  await t.test('the notice stays until the owner ends it', async () => {
+    const { f, old } = await unapplied();
+    for (let i = 0; i < 3; i++) { f.time.advance(60000); await f.a.sync.syncNow(); }
+    assert.deepEqual(await f.view(), { status: 'private', notice: 'publish_unapplied' }); assert.equal(f.net.tried('unpublish').length, 0, 'nothing is ended without the owner');
+    assert.deepEqual(await f.a.sync.cancelPublish(f.a.ws, f.doc.id), { status: 'cancelled' });
+    assert.deepEqual(f.net.sent('unpublish').map(call => call.revision), [0]); assert.deepEqual(f.published(), { active: false, revision: 1 });
+    assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.deepEqual(await f.a.sync.publicationNotices(f.a.ws), {});
+    assert.equal((await f.state()).publishPending, null); assert.throws(() => f.late(old), conflict);
+  });
+  await t.test('it had been applied after all: nothing is withdrawn', async () => {
+    const { f, old } = await unapplied(); f.late(old);
+    assert.deepEqual(await f.a.sync.cancelPublish(f.a.ws, f.doc.id), { status: 'published' });
+    assert.deepEqual(f.published(), { active: true, revision: 1 }); assert.equal(f.net.tried('unpublish').length, 0);
+    assert.deepEqual(await f.view(), { status: 'public', notice: null });
+  });
+  await t.test('the cancellation gets no answer: unknown, then finished by the cycle', async () => {
+    const { f, old } = await unapplied(); f.net.control.block = 'unpublish';
+    const failure = await f.a.sync.cancelPublish(f.a.ws, f.doc.id).catch(error => error); f.net.control.block = null;
+    assert.equal(failure.code, 'network_error'); assert.match(failure.message, /게시 요청 취소 결과를 받지 못했습니다/);
+    assert.equal(await f.status(), 'unknown'); assert.equal((await f.state()).publishPending.operationId, old.operation);
+    await f.a.sync.syncNow();
+    assert.deepEqual(await f.view(), { status: 'private', notice: null }); assert.throws(() => f.late(old), conflict);
+  });
+  await t.test('an unapplied update of a public post is not ended this way (its address would change)', async () => {
+    const f = await saved(t); await f.publish(); f.net.control.block = 'publish';
+    await assert.rejects(f.publish({ author: { name: '갱신', intro: '' }, expectedPublicRevision: 1 }), { code: 'network_error' }); f.net.control.block = null;
+    await f.a.sync.syncNow();
+    assert.deepEqual(await f.view(), { status: 'public', notice: 'update_unapplied' });
+    assert.deepEqual(await f.a.sync.cancelPublish(f.a.ws, f.doc.id), { status: 'pending' });
+    assert.equal(f.net.tried('unpublish').length, 0); assert.deepEqual(f.published(), { active: true, revision: 1 });
+    assert.deepEqual(await f.view(), { status: 'public', notice: 'update_unapplied' }, 'still said');
+  });
+  await t.test('earlier server definition: both stay recorded and the post is unknown', async () => {
+    const { f, old } = await unapplied(); f.net.control.legacy = true;
+    await assert.rejects(f.a.sync.cancelPublish(f.a.ws, f.doc.id), { code: 'blog_withdrawal_unsupported' });
+    const state = await f.state(); assert.equal(state.publishPending.operationId, old.operation); assert.equal(state.unpublishPending.ending, true); assert.equal(await f.status(), 'unknown');
+  });
 });
 
 test('a withdrawal whose answer was lost is unknown until settled; one never received is sent again by the cycle and said on the post', async t => {
@@ -548,23 +781,27 @@ test('M1: a successful publish or withdrawal is not reported as an error when an
   merged = await f.state(); assert.equal(merged.unpublishPending, null); assert.equal(merged.publication.active, false); assert.equal(merged.racedTab, 2);
 });
 
-test('two unanswered requests and a copy that is not provably the last choice: said as unverified', async t => {
-  const f = await saved(t, { photos: 2 }); const both = f.doc.photos.map(photo => photo.id); f.net.control.block = 'publish';
-  await assert.rejects(f.publish({ photoIds: both }), { code: 'network_error' });
-  await assert.rejects(f.publish({ photoIds: [] }), { code: 'network_error' }); f.net.control.block = null;
-  const [first, second] = f.net.tried('publish');
+test('two unanswered updates of a public post and a copy that is not provably the last choice: said as unverified', async t => {
+  const twice = async () => {
+    const f = await saved(t, { photos: 2 }); const both = f.doc.photos.map(photo => photo.id);
+    await f.publish({ photoIds: [] }); f.net.control.block = 'publish';
+    await assert.rejects(f.publish({ photoIds: both, expectedPublicRevision: 1 }), { code: 'network_error' });
+    await assert.rejects(f.publish({ photoIds: [both[0]], expectedPublicRevision: 1 }), { code: 'network_error' }); f.net.control.block = null;
+    const [first, second] = f.net.tried('publish').slice(1);
+    assert.deepEqual([first, second].map(call => call.options.expectedPublicRevision), [1, 1]); assert.equal(f.net.tried('unpublish').length, 0);
+    return { f, both, first, second };
+  };
+  const { f, both, first } = await twice();
   f.late(first); await f.a.sync.syncNow();
   assert.deepEqual(await f.view(), { status: 'public', notice: 'copy_unverified' }, 'public, but it is the replaced choice');
-  assert.equal(f.net.tried('publish').length, 2, 'the cycle sends no publication request to find out');
+  assert.equal(f.net.tried('publish').length, 3, 'the cycle sends no publication request to find out');
   // The explicit publication of the last choice ends the doubt.
-  await f.publish({ photoIds: [], expectedPublicRevision: 1 });
-  assert.deepEqual(await f.view(), { status: 'public', notice: null }); assert.deepEqual(f.row().published.photoIds, []);
+  await f.publish({ photoIds: [both[0]], expectedPublicRevision: 2 });
+  assert.deepEqual(await f.view(), { status: 'public', notice: null }); assert.deepEqual(f.row().published.photoIds, [both[0]]);
   // When the last choice is what arrived, there is no doubt.
-  const g = await saved(t, { photos: 2 }); const pair = g.doc.photos.map(photo => photo.id); g.net.control.block = 'publish';
-  await assert.rejects(g.publish({ photoIds: pair }), { code: 'network_error' });
-  await assert.rejects(g.publish({ photoIds: [] }), { code: 'network_error' }); g.net.control.block = null;
-  g.late(g.net.tried('publish')[1]); await g.a.sync.syncNow();
-  assert.deepEqual(await g.view(), { status: 'public', notice: null });
+  const g = await twice();
+  g.f.late(g.second); await g.f.a.sync.syncNow();
+  assert.deepEqual(await g.f.view(), { status: 'public', notice: null });
 });
 
 test('a failed check keeps the state unknown and changes nothing; an account change during it is cancelled', async t => {
@@ -652,26 +889,98 @@ test('M3/m1: the public profile is read anonymously while a post is public; with
   assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '익명A', intro: '익명 소개' }, posts: 0, remembered: true });
 });
 
+test('r2-m5: with nothing public the remembered name and intro are those of the most recent publication on this device', async t => {
+  const f = await saved(t);
+  const second = await f.a.storage.savePhotoPost(f.a.ws, await post({ title: '두 번째 글' }), 0); await f.a.sync.syncNow();
+  const publish = (doc, author) => f.a.sync.publish(f.a.ws, doc.id, { expectedLocalRevision: doc.revision, author });
+  await publish(f.doc, { name: '먼저 쓴 이름', intro: '먼저 쓴 소개' }); await f.withdraw();
+  f.time.advance(60000);
+  await publish(second, { name: '나중에 쓴 이름', intro: '' }); await f.a.sync.unpublish(f.a.ws, second.id);
+  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '나중에 쓴 이름', intro: '' }, posts: 0, remembered: true });
+  // The other order of posts: still by the time of publication, not by the order of the posts.
+  f.time.advance(60000);
+  await publish(f.doc, { name: '가장 나중 이름', intro: '가장 나중 소개' }); await f.withdraw();
+  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '가장 나중 이름', intro: '가장 나중 소개' }, posts: 0, remembered: true });
+});
+
+test('r2-m3: an action that waits for another tab says so after the wait limit and sends nothing; the cycle never waits', async t => {
+  const locks = browserLocks(), timers = manualTimers(), f = await saved(t, { locks }), b = f.open('tab-b', { timers });
+  await f.publish();
+  // Tab A's withdrawal request hangs.
+  const hold = f.net.holdNext('unpublish'), hanging = f.withdraw(); hanging.catch(() => {});
+  await hold.entered.promise;
+  for (const act of [() => b.sync.unpublish(f.a.ws, f.doc.id), () => b.sync.publish(f.a.ws, f.doc.id, { expectedLocalRevision: f.doc.revision }), () => b.sync.settlePublication(f.a.ws, f.doc.id), () => b.sync.cancelPublish(f.a.ws, f.doc.id)]) {
+    let settled = false; const waiting = act().catch(error => error).finally(() => { settled = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false, 'it waits for the other tab'); assert.equal(timers.fire(Sync.LOCK_WAIT), 1, 'one wait limit is running');
+    const failure = await waiting;
+    assert.equal(failure.code, 'blog_publication_busy'); assert.match(failure.message, /다른 탭에서 처리 중입니다/);
+  }
+  assert.equal(f.net.tried('unpublish').length, 1, 'tab B sent nothing'); assert.equal(f.net.tried('publish').length, 1);
+  assert.equal(await f.status(b), 'unknown', 'what the other tab is sending is not judged');
+  await b.sync.syncNow(); assert.equal(f.net.tried('unpublish').length, 1, 'the cycle does not wait and does not send');
+  // Tab A's request ends: tab B's next action runs, and its wait limit is cleared.
+  hold.release.resolve(); assert.equal((await hanging).status, 'stored');
+  assert.equal((await b.sync.settlePublication(f.a.ws, f.doc.id)).publicationStatus, 'private');
+  assert.equal([...timers.pending.values()].filter(timer => timer.ms === Sync.LOCK_WAIT).length, 0);
+  assert.equal(Sync.LOCK_WAIT, 10000);
+});
+
+test('r2-m3: a publish, withdrawal or publication head read that gets no answer in time is an unknown result, never a refusal', async t => {
+  const UID = Core.id(), POST = Core.id(), timers = manualTimers(), calls = [], signals = [];
+  let reply = null; // null: the request never answers
+  const auth = { ready: true, epoch: 1, config: { url: 'https://blog-test.supabase.co' }, user: { id: UID }, session: { user: { id: UID } }, async verify() { return auth.user; }, onAccountChange() { return () => {}; },
+    client: { rpc(name, params) { calls.push({ name, params }); return { abortSignal(signal) { signals.push(signal); return this; }, then(resolve, reject) { return (reply ? Promise.resolve(reply) : new Promise(() => {})).then(resolve, reject); } }; } } };
+  const remote = Remote.create({ auth, blog: Blog, timers }); t.after(() => remote.dispose());
+  assert.equal(Remote.PUBLICATION_TIMEOUT, 30000); assert.equal(Remote.MARKDOWN_PUBLICATION_TIMEOUT, 60000);
+  for (const [name, send] of [['life_blog_unpublish', () => remote.unpublish(POST, 1, Core.id())], ['life_blog_publish', () => remote.publish(POST, 1, Core.id(), { photoIds: [], author: { name: '', intro: '' } })], ['life_blog_read', () => remote.read(POST, { publication: true })]]) {
+    let settled = false; const waiting = send().catch(error => error).finally(() => { settled = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.at(-1).name, name); assert.equal(settled, false);
+    assert.equal(timers.fire(Remote.PUBLICATION_TIMEOUT), 1, name + ' has a time limit');
+    const failure = await waiting;
+    assert.equal(failure.code, 'network_error', 'the same as a lost answer: BlogSync keeps the request as unanswered'); assert.equal(failure.timedOut, true);
+    assert.equal(signals.at(-1).aborted, true, 'the request is cancelled where the client allows it');
+  }
+  // A document read (sync) is not bounded: a large post on a slow connection is not cut off.
+  const before = timers.pending.size; remote.read(POST).catch(() => {}); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(timers.pending.size, before);
+  // An answer in time clears the limit.
+  reply = { data: { status: 'stored', revision: 1 }, error: null };
+  assert.deepEqual(await remote.unpublish(POST, 0, Core.id()), { status: 'stored', revision: 1 });
+  assert.equal(calls.at(-1).params.p_expected_revision, 0, 'a withdrawal before any publication is sent with revision 0');
+  assert.equal([...timers.pending.values()].filter(timer => timer.ms === Remote.PUBLICATION_TIMEOUT).length, 0);
+  // The earlier server definition refuses revision 0: named, so BlogSync keeps the post unknown.
+  reply = { data: null, error: { code: '22023', message: 'life_invalid_request' }, status: 400 };
+  await assert.rejects(remote.unpublish(POST, 0, Core.id()), { code: 'blog_withdrawal_unsupported' });
+  await assert.rejects(remote.unpublish(POST, 1, Core.id()), { code: 'invalid_request' });
+  for (const status of ['conflict', 'missing']) { reply = { data: { status }, error: null }; await assert.rejects(remote.unpublish(POST, 0, Core.id()), conflict); }
+  await assert.rejects(remote.unpublish(POST, -1, Core.id()), { code: 'invalid_request' });
+});
+
 test('publication failures never borrow the document-save message; status and notice are pure readings of the binding', () => {
-  for (const kind of ['publish_unsent', 'publish_unconfirmed', 'publish_unsent_prior', 'unpublish_unsent', 'unpublish_unconfirmed', 'unpublish_unsent_prior', 'settle_failed']) {
+  for (const kind of ['publish_unsent', 'publish_unconfirmed', 'publish_unsent_prior', 'unpublish_unsent', 'unpublish_unconfirmed', 'unpublish_unsent_prior', 'cancel_unsent', 'cancel_unconfirmed', 'settle_failed']) {
     const error = Remote.publicationFault(kind);
     assert.equal(error.code, 'network_error'); assert.doesNotMatch(error.message, /자동으로 다시 시도|글은 이 기기에 남아/);
   }
+  assert.doesNotMatch(Remote.publicationFault('cancel_unconfirmed').message, /공개 상태를 확인하지 못했습니다/, 'it has its own text');
+  assert.deepEqual(Object.keys(Remote.publicationNotes).sort(), ['copy_unverified', 'publish_unapplied', 'update_unapplied', 'withdrawal_overtaken', 'withdrawal_resent'], 'no note about withdrawing by content');
   assert.match(Remote.publicationFault('publish_unsent').message, /공개 상태는 바뀌지 않았습니다/);
   assert.doesNotMatch(Remote.publicationFault('publish_unconfirmed').message, /다시 보냅니다/, 'a publish request is never promised to be sent again');
   // No note calls an unanswered request failed for good.
   for (const text of Object.values(Remote.publicationNotes)) assert.doesNotMatch(text, /반영되지 않았습니다\.$|실패했습니다/);
   for (const name of ['update_unapplied', 'publish_unapplied']) assert.match(Remote.publicationNotes[name], /아직 반영되지 않았습니다.*늦게 반영될 수 있/);
-  const live = { active: true, revision: 1 }, at = Date.parse('2026-11-11T00:00:00.000Z'), iso = ms => new Date(at + ms).toISOString();
+  const live = { active: true, revision: 1 };
   assert.equal(Sync.publicationStatus(null), 'private');
   assert.equal(Sync.publicationStatus({ publication: live }), 'public');
   assert.equal(Sync.publicationStatus({ publication: live, unpublishPending: { operationId: 'w' } }), 'unknown');
   assert.equal(Sync.publicationStatus({ publication: null, publishPending: { operationId: 'p' } }), 'unknown');
   assert.equal(Sync.publicationStatus({ publication: null, publishPending: { operationId: 'p' }, publishChecked: 'p' }), 'private');
   assert.equal(Sync.publicationStatus({ publication: null, publishPending: { operationId: 'q' }, publishChecked: 'p' }), 'unknown');
-  assert.equal(Sync.publicationStatus({ publication: null, publishRevoked: { operationId: 'x', at: iso(0) } }, at + Sync.LATE_WINDOW - 1), 'unknown');
-  assert.equal(Sync.publicationStatus({ publication: null, publishRevoked: { operationId: 'x', at: iso(0) } }, at + Sync.LATE_WINDOW), 'private');
-  assert.equal(Sync.publicationNotice({ publication: null, publishRevoked: { operationId: 'x', at: iso(0) } }, at + Sync.LATE_WINDOW), 'late_publish_guarded');
+  // A binding written by the withdrawn guard design is read without it.
+  assert.equal(Sync.publicationStatus({ publication: null, publishRevoked: { operationId: 'x', at: new Date().toISOString() } }), 'private');
+  assert.equal(Sync.publicationNotice({ publication: null, publishRevoked: { operationId: 'x', at: new Date().toISOString() } }), null);
+  assert.equal(Object.hasOwn(Sync, 'LATE_WINDOW'), false);
   assert.equal(Sync.publicationNotice({ publication: null, publishPending: { operationId: 'p' }, publishChecked: 'p' }), 'publish_unapplied');
   assert.equal(Sync.publicationNotice({ publication: live, publishPending: { operationId: 'p' }, publishChecked: 'p' }), 'update_unapplied');
   assert.equal(Sync.publicationNotice({ publication: live, publishPending: { operationId: 'p' } }), null, 'unknown has no notice: the status itself says it');
