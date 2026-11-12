@@ -7,6 +7,10 @@
 })(globalThis, function (discovery) {
   'use strict';
   const MAX_ENTRIES = 500, MAX_BYTES = 1024 * 1024, FORMAT = 'haedo-discovery-actions';
+  // A portable copy holds the profile read from the account's two documents, each within the bounds above, so it may
+  // hold up to twice as much (2026-11-12: a pair above 500 could not be saved as a copy, although the 보관 한도 notice
+  // asks for one). Adding its entries to a profile still meets the single bounds (mergeCopy → finish).
+  const COPY_MAX_ENTRIES = 2 * MAX_ENTRIES, COPY_MAX_BYTES = 2 * MAX_BYTES;
   const plain = value => value !== null && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
   const copy = value => structuredClone(value);
@@ -23,7 +27,7 @@
   const nullableStamp = value => value === null || stamp(value);
   function api() { const value = discovery(); check(typeof value?.canonicalUrl === 'function' && plain(value.ALLOWED_SOURCES), 'dependency_unavailable'); return value; }
   function key(value) { const result = api().canonicalUrl(value); check(result); return result; }
-  function bounded(value) { check(new TextEncoder().encode(JSON.stringify(value)).length < MAX_BYTES, 'discovery_actions_too_large'); }
+  function bounded(value, max = MAX_BYTES) { check(new TextEncoder().encode(JSON.stringify(value)).length < max, 'discovery_actions_too_large'); }
   function snapshot(value) {
     fields(value, ['id', 'sourceId', 'sourceName', 'url', 'canonicalUrl', 'title', 'author', 'language', 'tags', 'publishedAt', 'updatedAt', 'fetchedAt', 'coverage', 'rights']);
     check(id(value.id) && id(value.sourceId) && text(value.sourceName, 200) && text(value.title, 500) && (value.author === null || text(value.author, 200)) && text(value.language, 30));
@@ -56,8 +60,8 @@
   }
   // `totals: false` skips the 500-entry and 1 MB bounds. They hold for every stored document and for anything that
   // adds an entry; the profile read from the two account documents (combine) may be above them and still opens.
-  function entries(values, activeOnly = false, totals = true) {
-    check(Array.isArray(values)); if (totals) check(values.length <= MAX_ENTRIES, 'discovery_actions_too_large'); const seen = new Set();
+  function entries(values, activeOnly = false, totals = true, max = MAX_ENTRIES) {
+    check(Array.isArray(values)); if (totals) check(values.length <= max, 'discovery_actions_too_large'); const seen = new Set();
     for (const value of values) { entry(value); check(!seen.has(value.canonicalUrl) && (!activeOnly || value.liked || value.bookmarked)); seen.add(value.canonicalUrl); }
   }
   function validate(profile, { totals = true } = {}) {
@@ -104,7 +108,7 @@
     previewCopy(result); return result;
   }
   function previewCopy(value) {
-    fields(value, ['format', 'schemaVersion', 'exportedAt', 'entries']); check(value.format === FORMAT && value.schemaVersion === 1 && stamp(value.exportedAt)); entries(value.entries, true); bounded(value);
+    fields(value, ['format', 'schemaVersion', 'exportedAt', 'entries']); check(value.format === FORMAT && value.schemaVersion === 1 && stamp(value.exportedAt)); entries(value.entries, true, true, COPY_MAX_ENTRIES); bounded(value, COPY_MAX_BYTES);
     for (const row of value.entries) check(Date.parse(row.updatedAt) <= Date.parse(value.exportedAt));
     return { ...copy(value), counts: { total: value.entries.length, liked: value.entries.filter(row => row.liked).length, bookmarked: value.entries.filter(row => row.bookmarked).length } };
   }
@@ -191,6 +195,6 @@
     check(moving.every(row => extendedNext.entries.some(kept => kept.canonicalUrl === row.canonicalUrl)));
     return { legacy: legacyNext, extended: extendedNext, lost };
   }
-  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy,
+  return Object.freeze({ MAX_ENTRIES, MAX_BYTES, COPY_MAX_ENTRIES, COPY_MAX_BYTES, FORMAT, empty, validate, capture, setReaction, setPersonalization, setExcluded, forget, clear, exportCopy, previewCopy, mergeCopy,
     legacyEntry, legacyCompatible, combine, separate, migrate });
 });
