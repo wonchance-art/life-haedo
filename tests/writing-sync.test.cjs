@@ -194,25 +194,31 @@ test('pending originals do not stop drafts: local drafts are enabled and sent, s
 test('a hidden page sends only its own unsent drafts, once (upload only); other tabs\' saves, the poll and focus start nothing', async t => {
   const win = new Map(), doc = new Map(), previous = { add: globalThis.addEventListener, remove: globalThis.removeEventListener, interval: globalThis.setInterval, timeout: globalThis.setTimeout,
     document: Object.getOwnPropertyDescriptor(globalThis, 'document') };
-  let poll = null, nudges = [];
+  let poll = null, nudges = [], delays = [];
   globalThis.addEventListener = (name, fn) => win.set(name, fn); globalThis.removeEventListener = name => win.delete(name);
   globalThis.setInterval = handler => { poll = handler; return { unref() {} }; };
-  globalThis.setTimeout = (fn, ms, ...rest) => { if (ms === 3000) { nudges.push(fn); return { unref() {} }; } return previous.timeout(fn, ms, ...rest); }; // the 3 s nudge, run by hand
+  // The nudge (3 s on a visible page, 250 ms for a hidden page's own save) is run by hand; its delay is recorded.
+  globalThis.setTimeout = (fn, ms, ...rest) => { if (ms === 3000 || ms === 250) { const timer = { fn, unref() {} }; nudges.push(timer); delays.push(ms); return timer; } return previous.timeout(fn, ms, ...rest); };
+  const clear = globalThis.clearTimeout; previous.clear = clear;
+  globalThis.clearTimeout = timer => { if (timer && nudges.includes(timer)) nudges = nudges.filter(value => value !== timer); else clear(timer); };
   const page = { visibilityState: 'visible', addEventListener: (name, fn) => doc.set(name, fn), removeEventListener: name => doc.delete(name) };
   globalThis.document = page;
   const rows = [{ draft_id: id(5), state: 'draft', title: '다른 기기 초안', revision: 2 }, { draft_id: id(1), state: 'draft', title: '', revision: 3 }, { draft_id: id(2), state: 'draft', title: '', revision: 3 }];
   const synced = n => ({ draftId: id(n), enabled: true, status: 'synced', remoteRevision: 3, syncedLocalRevision: 1, outbox: null, conflict: null, error: null });
   const f = fixture({ stages: [draft(1), draft(2)], states: [synced(1), synced(2)], rows });
-  t.after(() => { f.manager.dispose(); globalThis.addEventListener = previous.add; globalThis.removeEventListener = previous.remove; globalThis.setInterval = previous.interval; globalThis.setTimeout = previous.timeout;
+  t.after(() => { f.manager.dispose(); globalThis.addEventListener = previous.add; globalThis.removeEventListener = previous.remove; globalThis.setInterval = previous.interval; globalThis.setTimeout = previous.timeout; globalThis.clearTimeout = previous.clear;
     if (previous.document) Object.defineProperty(globalThis, 'document', previous.document); else delete globalThis.document; });
   f.hooks.installError = 'writing_source_pending'; // keeps the server-only draft uninstalled: every full pass would try the list
   f.manager.start(); await f.manager.refresh(); await settled();
   const sent = () => f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]);
   const save = (n, own) => { f.local.get(id(n)).revision++; f.emitStorage({ type: 'writing_draft_changed', workspaceId: WS, stageId: id(n), ...(own ? { local: true } : {}) }); };
-  const runNudges = async () => { const timers = nudges; nudges = []; for (const fn of timers) fn(); await settled(); };
+  const runNudges = async () => { const timers = nudges; nudges = []; for (const timer of timers) timer.fn(); await settled(); };
   assert.deepEqual(sent(), [], 'nothing to send yet'); const listed = lists(f); assert.ok(listed >= 1);
   // The person types here (this page saves draft 1) and switches away before the nudge fires.
-  save(1, true); page.visibilityState = 'hidden';
+  // A visible page gathers its saves for 3 s from the first one: later saves in that window do not push it back.
+  delays = []; save(1, true); save(1, true); save(1, true);
+  assert.deepEqual([delays, nudges.length], [[3000], 1], 'one 3 s wait from the first save, not moved by the next ones');
+  page.visibilityState = 'hidden';
   doc.get('visibilitychange')(); await settled();
   assert.deepEqual(sent(), [id(1)], 'this page\'s own unsent draft is sent while hidden');
   assert.equal(lists(f), listed, 'no server list while hidden');
@@ -228,9 +234,16 @@ test('a hidden page sends only its own unsent drafts, once (upload only); other 
   poll(); win.get('focus')(); doc.get('visibilitychange')(); win.get('online')(); await settled();
   assert.equal(f.calls.length, quiet, 'a hidden page with nothing of its own to send does nothing');
   assert.deepEqual(told, [], 'the draft\'s own engine is not started for another tab\'s save either');
-  // A save of its own while hidden (an autosave that lands after the switch) goes out by the nudge: that draft only.
-  save(1, true); await runNudges();
+  // A save of its own while hidden (an autosave that lands after the switch) goes out a quarter
+  // of a second later, not after the visible page's 3 s: that draft only.
+  delays = []; save(1, true);
+  assert.deepEqual(delays, [250], 'a hidden page\'s own save is sent after 250 ms');
+  await runNudges();
   assert.deepEqual(sent(), [id(1), id(1)]); assert.equal(lists(f), listed); assert.deepEqual(told, [id(1)], 'its engine hears this page\'s own save');
+  // A nudge already waiting its 3 s (saved while visible) is brought forward by a save that lands after the switch.
+  page.visibilityState = 'visible'; delays = []; save(1, true); page.visibilityState = 'hidden'; save(1, true);
+  assert.deepEqual([delays, nudges.length], [[3000, 250], 1], 'one nudge left, the 250 ms one');
+  await runNudges(); assert.deepEqual(sent(), [id(1), id(1), id(1)]); assert.equal(lists(f), listed);
   // A page closed while it still reads "visible": pagehide itself starts nothing (the platform has
   // suspended the session by then). The unsent draft stays; the back/forward cache parks.
   page.visibilityState = 'visible'; save(1, true); nudges = [];
