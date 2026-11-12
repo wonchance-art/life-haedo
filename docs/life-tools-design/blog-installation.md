@@ -314,9 +314,11 @@ notify pgrst,'reload schema';
 3. **배포 후 확인.** 버전 번호가 1 올랐는지, 존재하지 않는 공개 사진 요청이 404·`no-store`·`nosniff`인지(위 "Edge `haedo-blog-media` 배포" 확인과 같다). 실제 공개 사진의 읽기는 소유자 기기에서 기존 공개 글 하나를 열어 본다(에이전트가 공개 글을 새로 만들지 않는다).
 4. **되돌리기.** main 판(`c2dc755a…`)을 같은 방법으로 다시 배포한다. 데이터 변경이 없다.
 
-## 2026-11-12 지운 글 식별자의 판 재사용 막기 (저장소 작성, 운영 미적용)
+## 2026-11-12 지운 글 식별자의 판 재사용 막기 (2026-11-12 운영 적용)
 
-마이그레이션 `supabase/migrations/20261112120000_life_blog_revision_continuity.sql`(SHA-256 `59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb`, ASCII만, 백슬래시·`\u` 없음). 작업자는 운영에 적용하지 않았다. 적용은 총괄 담당이다.
+마이그레이션 `supabase/migrations/20261112120000_life_blog_revision_continuity.sql`(SHA-256 `59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb`, ASCII만, 백슬래시·`\u` 없음).
+
+**운영 적용 기록(총괄, 2026-11-12 19:3xZ, #256 병합 `565d1ea` 뒤):** 적용 전 읽기 — `current_user`·세 함수·`posts` 소유자 `postgres`, `save` `b19da73c…`·`delete_post` `428df3b8…`·`life_blog_save` `525b3f80…`(config·ACL 기대값과 같음), 행 수 posts 6·assets 0·receipts 12·publications 0·profiles 0, `retired_posts` 없음, 트리거 1개, 덮지 못하는 지운 식별자 0. 적용 — 파일을 base64로 보내 데이터베이스 안에서 SHA-256 `59a0cbcb…` 대조 뒤 실행, 오류 없음(파일의 사전·사후 자체 확인 통과). 적용 후 — `save_post` `d467bd36…`(definer, authenticated만), 래퍼 `983ed640…`, `retire_post_revision` `967fad77…`·`retired_revision_guard` `9e4ce528…`(실행 권한 없음), `save`·`delete_post` 불변, 모두 `search_path=pg_catalog`·소유자 `postgres`, `retired_posts` RLS 켬·정책 0·API 권한 없음·0행, 트리거 3개 모두 `O`, 행 수 불변.
 
 ### 왜 바꿨나
 
