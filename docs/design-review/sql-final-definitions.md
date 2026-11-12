@@ -9,7 +9,7 @@
 - 테이블: 만든 파일보다 뒤 파일의 `alter table`이 열·제약을 바꾸는 경우. RLS 켜기·소유자 변경은 제외한다.
 - 인자 목록이 바뀌어 오버로드가 남는지는 `npm run test:sql-replay`가 재생한 DB 카탈로그와 대조한다.
 
-## 함수 (25개 재정의)
+## 함수 (26개 재정의)
 
 | 함수 | 정의한 파일 수 | 최종 | 이전 정의 |
 | --- | ---: | --- | --- |
@@ -35,6 +35,7 @@
 | `haedo_naver_private.inventory_finish(uuid, uuid, bigint, integer, jsonb, integer, integer, text)` | 2 | `20261029112456_naver_observed_inventory_baseline` | `20261021113658_life_naver_captures` |
 | `public.life_account_document_put(text, bigint, uuid, jsonb, boolean, timestamp with time zone)` | 2 | `20261101150000_life_account_documents_owner_lock` | `20261101090000_life_account_documents` |
 | `public.life_blog_publish(uuid, bigint, uuid, text[], jsonb, bigint)` | 2 | `20261102120000_life_blog_public_photo_copies` | `20261017144744_life_blog_originals` |
+| `public.life_blog_save(uuid, uuid, bigint, uuid, jsonb)` | 2 | `20261112120000_life_blog_revision_continuity` | `20261017144744_life_blog_originals` |
 | `public.life_library_meta_valid(jsonb, uuid, jsonb)` | 2 | `20261101140000_life_sync_edit_times` | `20261023160149_account_library_default_and_metadata` |
 | `public.life_library_original_put(uuid, uuid, jsonb)` | 2 | `20261023163156_account_library_original_owner_variable` | `20261023160149_account_library_default_and_metadata` |
 | `public.life_public_page_valid(jsonb)` | 2 | `20261012010000_life_page_posts` | `20261005120000_life_public_pages` |

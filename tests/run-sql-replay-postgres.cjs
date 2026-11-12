@@ -11,6 +11,8 @@
  *    to be true and the schema/grant/policy/bucket catalog to be unchanged.
  * 3. Runs supabase/operations/naver-status-check.sql and requires its 12 rows (1-11 plus 5.5).
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
+ * 4.1 Runs the read-only blog installation audit (supabase/tests/blog-installation.sql) on the
+ *     fully replayed catalog (every migration, the installs re-applied): every item must be true.
  * 4.5 Runs supabase/tests/blog-ai-authorship.sql (rolled back) on a fresh replayed copy.
  * 4.6 Runs supabase/tests/life-ai-usage.sql (rolled back) on a fresh replayed copy, then two
  *     sessions of two DIFFERENT accounts race for the last of the project-wide monthly AI
@@ -24,6 +26,10 @@
  *     20261111120000) on a fresh replayed copy: every publish path, owner and visitor reads,
  *     deletion, receipts, privileges and other owners. That file run directly also checks the
  *     earlier definition and the installation itself.
+ * 4.9 Runs the revision continuity contract (tests/run-blog-revision-continuity-postgres.cjs,
+ *     20261112120000) on a fresh replayed copy, applying that file once more on top: a deleted
+ *     post's revisions are never handed out again. Run directly it also checks the earlier
+ *     behaviour and the installation's refusal of drifted predecessors.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -141,6 +147,12 @@ async function main() {
       assert.deepEqual([...parsed.keys()].filter(name => !inDb.has(name)).sort(), [], 'functions found by the scan but missing from the database');
       for (const [name, count] of parsed) assert.equal(inDb.get(name), count, `${name}: overload count differs from the scan`);
       pass(`final-definition scan matches the replayed catalog (${parsed.size} functions, ${summary.redefinedFunctions.length} redefined)`);
+
+      const audit = [].concat(await pgStub.applyFile(client, path.join(ROOT, 'supabase/tests/blog-installation.sql'))).filter(r => r.rows?.length).at(-1).rows[0].result;
+      const falseItems = Object.entries(audit).filter(([, value]) => value !== true).map(([name]) => name);
+      assert.deepEqual(falseItems, [], 'blog installation audit on the fully replayed catalog');
+      assert(Object.keys(audit).length >= 15, 'blog installation audit items: ' + Object.keys(audit).length);
+      pass(`blog installation audit on the fully replayed catalog: ${Object.keys(audit).length} items true`);
     } finally { await client.end(); }
 
     const authorshipDb = await pg.cloneDatabase('replay_ai_authorship');
@@ -294,6 +306,15 @@ async function main() {
       finally { console.log = log; await db.end(); }
       assert(count >= 50, 'withdrawal-before-publication checks ran: ' + count);
       pass(`withdrawal before publication (20261111120000): ${count} checks on a fresh replayed copy`);
+    }
+
+    {
+      const continuityDb = await pg.cloneDatabase('replay_blog_revision_continuity'), db = await pg.connect(continuityDb);
+      const log = console.log; let count;
+      try { console.log = () => {}; count = await require('./run-blog-revision-continuity-postgres.cjs').contract(db, { installed: true, connect: () => pg.connect(continuityDb) }); }
+      finally { console.log = log; await db.end(); }
+      assert(count >= 70, 'revision continuity checks ran: ' + count);
+      pass(`revision continuity after deletion (20261112120000): ${count} checks on a fresh replayed copy`);
     }
 
     const clone = await pg.cloneDatabase('replay_clone');
