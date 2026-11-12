@@ -603,6 +603,25 @@
     const canonical = syncCommon()?.canonical;
     return canonical ? canonical(value) : JSON.stringify(value);
   }
+  // Whether input taken from the editor (a device copy: title, ops, attachments) holds what
+  // document `d` holds. A Markdown document has no ops to compare, so a copy and a Markdown
+  // document (on either side) are never "the same": nothing is dropped as a duplicate of it
+  // (review MINOR-B, before D2 writes Markdown in the editor).
+  function sameInput(copy, d) {
+    if (!copy || !d || isMarkdown(copy) || isMarkdown(d) || typeof copy.markdown === "string" || !Array.isArray(copy.ops)) return false;
+    try {
+      return contentKey({ ...d, title: copy.title, ops: copy.ops, attachments: copy.attachments }) === contentKey(d);
+    } catch (_) {
+      return false;
+    }
+  }
+  // The time a change is written: now, never before the document's own first time. Another
+  // device's clock may be ahead of this one, and a post written there carries its time
+  // (review m5); other comparisons of times keep their meaning.
+  function writtenAt(d, at = Date.now()) {
+    const value = new Date(at).toISOString();
+    return typeof d?.createdAt === "string" && d.createdAt > value ? d.createdAt : value;
+  }
   // A short fingerprint of that content, small enough to keep beside a device
   // copy (53-bit string hash and the length; not a security digest).
   function textHash(value) {
@@ -1447,6 +1466,8 @@
     normalize,
     describeChanges,
     contentKey,
+    sameInput,
+    writtenAt,
     contentHash,
     keyHash,
     textHash,

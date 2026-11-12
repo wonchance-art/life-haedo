@@ -446,6 +446,78 @@ H.run(__filename, {
     assert.deepEqual((await band(next)).buttons, ['새 초안으로 복구', '버리기'], 'offered again after the tab closed');
     assert.equal((await H.records(next)).find(row => row.id === restored.id).text, '다른 기기에서 바꾼 내용.\n', 'the changed draft is untouched');
   },
+  // 4th review (검사 공백 storedHandedOver): the restored draft's own device copy could not be written (storage full)
+  // but the store works. The original copy is handed over and goes with the restored draft's first store, in this
+  // same page (not by a later copy write or another page).
+  async 'a-handed-over-copy-goes-with-the-first-store'({ open }) {
+    const { page, context } = await open();
+    await dying(context);
+    await H.home(page); await H.writer(page);
+    await page.locator('.ql-editor').click(); await page.keyboard.type('넘겨줄 초안의 본문.');
+    await draftWith(page, '넘겨줄 초안의 본문.');
+    await page.evaluate(() => { window.__dying = true; });
+    await page.keyboard.type(' 남은 입력.');
+    await hide(page);
+    await page.reload(); await H.home(page);
+    await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); for (const row of await s.listPhotoPosts(w)) await s.deletePhotoPost(w, row.id, row.revision); });
+    const [gone] = await copies(page);
+    await H.writer(page);
+    await page.locator('.photo-recovered').waitFor();
+    // Copies cannot be written; the store can. Writes of the original copy are counted: it must not be written again.
+    await page.evaluate(() => {
+      const setItem = Storage.prototype.setItem;
+      window.__copyWrites = 0;
+      Storage.prototype.setItem = function (key, value) { if (String(key).startsWith('haedo_life_post_recovery_v1:')) { window.__copyWrites++; throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); } return setItem.call(this, key, value); };
+    });
+    await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
+    await H.until(() => H.bodyText(page), text => text === '넘겨줄 초안의 본문. 남은 입력.\n', 'the kept input is in the editor');
+    assert.ok(await page.evaluate(() => window.__copyWrites) >= 1, 'the restored draft\'s own copy could not be written');
+    const rows = await draftWith(page, '남은 입력.');
+    assert.equal(rows.length, 1); assert.notEqual(rows[0].id, gone.id, 'a draft of its own');
+    await H.until(() => copies(page), list => list.length === 0, 'the original copy goes with that first store');
+    assert.notEqual((await H.status(page)).state, 'error');
+  },
+  // 4th review MINOR (사진 일시 실패 안내 문구): reading the photos of the post a copy's draft became fails for now.
+  // Nothing is restored and the copy stays with its photo places; "not on this device" is never said; a retry restores the photo.
+  async 'a-photo-read-that-fails-for-now-restores-nothing'({ open }) {
+    const { page, context } = await open();
+    await dying(context);
+    await H.home(page); await H.writer(page);
+    await page.locator('#photoTitle').fill('사진 있는 초안');
+    await page.locator('#photoFiles').setInputFiles({ name: 'a.jpg', mimeType: 'image/jpeg', buffer: await H.jpeg(page) });
+    await page.locator('.photo-block img').waitFor();
+    await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type('사진 아래 문장.');
+    const id = (await draftWith(page, '사진 아래 문장.'))[0].id;
+    await page.evaluate(() => { window.__dying = true; });
+    await page.keyboard.type(' 보관되지 못한 문장.');
+    await hide(page);
+    await page.reload(); await H.home(page);
+    await page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); d.archived = true; await s.savePhotoPost(w, d, d.revision); }, id);
+    const [kept] = await copies(page);
+    assert.equal(kept.ops.filter(op => op.insert?.photo).length, 1, 'the copy holds the photo place');
+    await H.writer(page);
+    await page.locator('.photo-recovered').waitFor();
+    // The next read of that draft fails once (a transient storage error).
+    await page.evaluate(id => {
+      const get = IDBObjectStore.prototype.get;
+      IDBObjectStore.prototype.get = function (key, ...rest) {
+        if (String(key).startsWith('photo-post:') && String(key).endsWith(':' + id)) { IDBObjectStore.prototype.get = get; throw new DOMException('Busy for now.', 'UnknownError'); }
+        return get.call(this, key, ...rest);
+      };
+    }, id);
+    await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
+    await H.until(() => H.status(page), value => value.state === 'error', 'the restore says it did not happen');
+    const said = (await H.status(page)).text;
+    assert.match(said, /사진을 읽지 못해 복구하지 않았습니다/); assert.doesNotMatch(said, /남아 있지 않아요/);
+    assert.deepEqual((await copies(page)).map(copy => [copy.id, copy.savedAt]), [[kept.id, kept.savedAt]], 'the copy stays, photo place and all');
+    assert.equal((await H.records(page)).length, 1, 'no draft without its photo was made');
+    assert.ok(await page.locator('.photo-recovered').count(), 'still offered');
+    await page.getByRole('button', { name: '새 초안으로 복구', exact: true }).click();
+    await H.until(() => H.bodyText(page), text => text.includes('보관되지 못한 문장.'), 'restored on the retry');
+    assert.equal(await page.locator('.ql-editor .photo-block img').count(), 1, 'with its photo');
+    assert.doesNotMatch((await H.status(page)).text || '', /남아 있지 않아요/);
+    await H.stored(page, list => list.some(row => row.id !== id && row.photos === 1 && row.text.includes('보관되지 못한 문장.')), 'a draft of its own with the photo');
+  },
   // settleDraft's fingerprint (keyHash) of the saved post, on the path that reaches it with the editor still open:
   // another screen asks the editor to leave (flush), the revision buffer that holds what the post holds is removed,
   // and the move does not happen. Input lost after that still continues the post: its copy restores in place.
