@@ -67,6 +67,8 @@ jobs:
         run: node tests/run-news-wide-postgres.cjs
       - name: Verify withdrawal before any publication, owner-only receipts and the advisory lock between two connections
         run: node tests/run-blog-unpublish-postgres.cjs
+      - name: Verify a deleted post's identity keeps counting revisions in isolated PostgreSQL
+        run: node tests/run-blog-revision-continuity-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

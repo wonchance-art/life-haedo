@@ -1,4 +1,7 @@
-/* Shared synthetic private blog HTTP transport. No hosted SQL/RLS claim. */
+/* Shared synthetic private blog HTTP transport. No hosted SQL/RLS claim.
+ * A post created again under a deleted identity continues after the highest revision it
+ * reached (20261112120000_life_blog_revision_continuity.sql); reuseRevisions = true keeps the
+ * earlier rule (created again at revision 1). */
 'use strict';
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
@@ -6,7 +9,7 @@ const Blog = require('../../assets/life/blog.js');
 const copy = value => structuredClone(value), sha = bytes => createHash('sha256').update(bytes).digest('hex');
 function withBlogCloud(BaseCloud, accounts) {
 return class BlogCloud extends BaseCloud {
-  constructor() { super(); this.posts = new Map(); this.originals = new Map(); this.blogCalls = []; this.assetCalls = []; this.blogReceipts = new Map(); this.hold = null; }
+  constructor() { super(); this.posts = new Map(); this.originals = new Map(); this.blogCalls = []; this.assetCalls = []; this.blogReceipts = new Map(); this.retiredRevisions = new Map(); this.reuseRevisions = false; this.hold = null; }
   owner(request) {
     try { return JSON.parse(Buffer.from(request.headers().authorization.replace(/^Bearer /i, '').split('.')[1], 'base64url')).sub; }
     catch (_) { return null; }
@@ -65,7 +68,7 @@ return class BlogCloud extends BaseCloud {
       this.deletedOriginals ||= new Set();
       if (row && body.p_expected_revision !== null && body.p_expected_revision !== undefined && row.revision !== body.p_expected_revision) return send({ status: 'conflict', revision: row.revision });
       if (row?.publication?.active) return send({ status: 'published', revision: row.revision }); // 20261101160000: withdraw first
-      if (row) { this.posts.delete(key); for (const name of this.originals.keys()) if (name.startsWith(owner + '/' + body.p_post_id + '/')) this.deletedOriginals.add(name); }
+      if (row) { this.posts.delete(key); this.retiredRevisions.set(key, Math.max(this.retiredRevisions.get(key) || 0, row.revision)); for (const name of this.originals.keys()) if (name.startsWith(owner + '/' + body.p_post_id + '/')) this.deletedOriginals.add(name); }
       return send({ status: row ? 'deleted' : 'missing', revision: row?.revision || 0, paths: [...this.deletedOriginals].filter(name => name.startsWith(owner + '/' + body.p_post_id + '/')).sort() });
     }
     if (rpc !== 'life_blog_save') return send({ code: 'unsupported_blog_rpc', message: 'Synthetic private transport does not implement this RPC' }, 400);
@@ -88,7 +91,7 @@ return class BlogCloud extends BaseCloud {
           assets[photo.id].view = { bucket: 'haedo-blog-originals', path: viewPath };
         }
       }
-      result = { status: 'stored', revision: (row?.revision || 0) + 1 };
+      result = { status: 'stored', revision: row ? row.revision + 1 : this.reuseRevisions ? 1 : (this.retiredRevisions.get(key) || 0) + 1 };
       this.posts.set(key, { owner, id: body.p_post_id, workspace_id: body.p_workspace_id, revision: result.revision, data: copy(body.p_data), assets, publication: row?.publication || null, updated_at: new Date().toISOString() });
       this.blogReceipts.set(receiptKey, { payload, result });
     }

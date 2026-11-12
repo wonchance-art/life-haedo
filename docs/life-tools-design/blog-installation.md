@@ -313,3 +313,119 @@ notify pgrst,'reload schema';
 2. **배포.** 파일은 `supabase/functions/haedo-blog-media/index.ts` 하나다(가져오는 공유 모듈 없음). SHA-256 `266b045617f757af21f9917b03a483506ea04e26f4d434c026125f7a1bbba232`(main `c767df3` 판은 `c2dc755a87d1cd156772c7205bd2de8746105ba7adfb2f783196fef255788249`). JWT 게이트 끔을 유지한다. 비밀값은 바꾸지 않는다.
 3. **배포 후 확인.** 버전 번호가 1 올랐는지, 존재하지 않는 공개 사진 요청이 404·`no-store`·`nosniff`인지(위 "Edge `haedo-blog-media` 배포" 확인과 같다). 실제 공개 사진의 읽기는 소유자 기기에서 기존 공개 글 하나를 열어 본다(에이전트가 공개 글을 새로 만들지 않는다).
 4. **되돌리기.** main 판(`c2dc755a…`)을 같은 방법으로 다시 배포한다. 데이터 변경이 없다.
+
+## 2026-11-12 지운 글 식별자의 판 재사용 막기 (저장소 작성, 운영 미적용)
+
+마이그레이션 `supabase/migrations/20261112120000_life_blog_revision_continuity.sql`(SHA-256 `59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb`, ASCII만, 백슬래시·`\u` 없음). 작업자는 운영에 적용하지 않았다. 적용은 총괄 담당이다.
+
+### 왜 바꿨나
+
+- `delete_post`는 글 행을 지우고, 그 뒤 같은 식별자의 `save`(expected 0)는 행을 판 1부터 다시 만든다(ABA).
+- 그 식별자를 판 1로 가진 다른 기기는 "같은 판"으로 보고 새 내용을 받지 않는다. 그 기기가 이어 써 판 2로 올리면 다시 만든 내용이 복구 사본 없이 사라진다.
+- v220 앱은 지운 식별자를 다시 만들지 않는다(새 무작위 식별자). v219 이하 앱(열어 둔 탭·설치한 PWA)은 다시 만든다. v220도 첫 저장의 응답을 잃은 글이 그사이 지워지면 같은 작업 ID로 expected 0을 다시 보낸다(영수증은 삭제 때 지워진다).
+- 같은 원인으로, 지운 글의 판 1에 대해 늦게 도착한 첫 게시 요청이 다시 만든 글(판 1)을 공개할 수 있었다. 격리 PostgreSQL에서 재현했다(새 검사의 `before:` 항목).
+
+### 설계안 비교
+
+| 기준 | (a) 지운 식별자의 마지막 판 기록, 다시 만들면 그 다음 판부터 | (b) 지운 식별자의 재생성 거절 | (c) 행을 지우지 않고 삭제 표시 |
+| --- | --- | --- | --- |
+| 옛 앱(v219 이하) | 저장된다. 응답의 판(N+1)을 그대로 기록한다(`blog-sync.js`는 `result.revision`을 쓴다) | `missing`이면 두 번 다시 보낸 뒤 `blog_conflict`, 오류면 재시도만 반복한다. 그 글은 그 기기에만 남고 영구히 올라가지 않는다 | sync_list·read가 지운 행을 돌려주면 옛 앱이 그 행을 받아 되살린다. 모든 읽기 경로를 고쳐야 한다 |
+| v220 앱 | 그대로 동작(새 식별자는 판 1부터) | v219가 남긴 상태(remoteRevision 0)로 업데이트된 기기는 `reidentify`가 같은 식별자를 유지해 역시 멈춘다. 앱 변경이 필요하다 | 앱 변경 필요 |
+| 다른 기기(판 k ≤ N 보유) | 다른 판을 본다. 변경이 없으면 받고, 있으면 충돌 → 복구 사본 | 받을 것 없음 | 앱이 삭제 표시를 이해해야 함 |
+| 조용한 유실 | 없음 | 없음(대신 멈춤) | 구현에 따라 |
+| 개인정보 | 소유자·식별자·판·시각만. 본문 없음 | 같음 | 본문을 지우려면 행을 비워야 해 사실상 (a)와 같아진다 |
+| 공개·영수증 | 늦은 게시 요청은 판이 달라 `conflict`. 영수증 형식·해시 그대로 | 같음 | 공개 경로 전부 재검토 |
+
+선택: (a). 옛 앱도 새 앱도 멈추지 않고, 앱을 바꾸지 않으며, 다른 기기는 기존 충돌 처리(복구 사본)로 받는다. (b)는 유실은 없지만 옛 앱의 글을 그 기기에 가둔다. 선택을 바꿀 조건: 지운 식별자로 다시 만든 글이 사용자에게 "지운 글이 되살아남"으로 문제가 되면, 그때는 앱이 새 식별자로 옮기는 v220 동작을 유지한 채 (b)를 검토한다.
+
+### 바뀐 것
+
+- 새 표 `haedo_blog_private.retired_posts(owner_id, post_id, revision, retired_at)`. 지운 식별자마다 한 행, 도달한 가장 높은 판. RLS 켬, API 역할(anon·authenticated·service_role) 권한 없음.
+- `posts`의 AFTER DELETE 트리거 `blog_retire_post_revision`이 기록한다. 함수 본문이 아닌 트리거라서, 11-01 설치 묶음 재실행이 `delete_post`를 다시 만들어도 기록은 계속된다.
+- `haedo_blog_private.save_post`는 `haedo_blog_private.save`(20261101091500)와 한 곳만 다르다: 행이 없고 expected 0이면 `기록된 판 + 1`로 저장하고 그 판을 응답·영수증에 쓴다. `public.life_blog_save`가 이제 이것을 부른다(`create or replace`, 권한 그대로). 옛 `save`는 11-01 설치 묶음이 다시 만들기 때문에 그대로 두었고, 부르는 곳이 없다.
+- `posts`의 BEFORE INSERT 트리거 `blog_retired_revision_guard`는 기록된 판 이하의 새 행을 `22023 life_blog_revision_retired`로 거절한다. 나중에 옛 래퍼가 되살아나는 경우의 안전장치다.
+- 설치는 한 문장(DO 블록)이다. 전후로 posts·assets·receipts·publications·profiles(·retired_posts)의 행 수와 해시를 비교해 달라지면 되돌린다. 설치 전에 `save`·`delete_post`·`public.life_blog_save`의 `md5(prosrc)`가 검수한 값인지, 실행 역할(`current_user`)이 `posts`·`save`·`delete_post`의 소유자인지 확인하고, 아니면 아무것도 바꾸지 않고 멈춘다(삭제 트리거는 `delete_post` 소유자의 권한으로 `retired_posts`에 쓰므로, 소유자가 다르면 모든 삭제가 권한 오류가 된다). 설치 끝에 `save_post`의 SECURITY DEFINER·`search_path=pg_catalog`, 트리거 함수의 `search_path`, 새 표의 소유자를 스스로 확인한다. 다시 실행해도 바뀌는 것이 없다.
+
+| 호출 | 이전 | 지금 |
+| --- | --- | --- |
+| 새 식별자 save, expected 0 | 판 1 | 판 1 (그대로) |
+| 지운 식별자 save, expected 0 | 판 1 | 기록된 판 + 1 |
+| 지운 식별자 save, expected ≥ 1 | `missing` | `missing` (그대로) |
+| 다시 만든 글에 옛 판으로 save | (판 1이 겹치면) 저장되어 덮어씀 | `conflict` |
+| 같은 작업 ID 재요청 | 영수증 | 영수증 (그대로) |
+| 응답 잃은 첫 저장이 삭제 뒤 재요청 | 판 1로 다시 만듦 | 기록된 판 + 1 |
+| 지운 글 판 1에 대한 늦은 첫 게시 | 다시 만든 글을 공개 | `conflict` |
+| 공개 중인 글 삭제 | `published`로 거절 | 그대로, 기록 없음 |
+| 오래된 판의 삭제 | `conflict` | 그대로, 기록 없음 |
+| 다른 계정의 같은 uuid | 따로 | 따로(기록도 계정별) |
+
+### 검사
+
+- `node tests/run-blog-revision-continuity-postgres.cjs`: 98개 확인, 종료 코드 0(PostgreSQL 16.15). 소유자가 아닌 역할로 설치하면 멈추는 것, 새 함수의 definer·`search_path`·소유자도 본다. 설치 전 동작 재현, 설치(행 불변·다른 함수 불변·권한·멱등·변형된 이전 정의에서 멈춤), 여러 번 지우고 다시 만들기, 옛 판 보유 기기의 conflict, 영수증 재요청, 응답 잃은 재요청, 늦은 게시, 공개 글 삭제 거절, 사진, Markdown, 다른 계정, 안전장치 트리거, 권한, 두 연결의 삭제·재생성 경합(advisory lock 대기).
+- 변이 13종은 모두 종료 코드 1: `--mutation=restart-at-one|no-record|no-guard|any-owner|old-wrapper|grant-anon|grant-table|guard-any-row|no-lock|no-owner-check|save-no-search-path|row-write-inside|no-precheck`.
+- `npm run test:sql-replay` 4.9 단계가 모든 마이그레이션을 재생하고 11-01·11-02 설치 묶음을 다시 적용한 사본에서 같은 계약(83개)을 돌린다. 설치 묶음 재적용 뒤 카탈로그 불변도 그대로 통과한다.
+- 새 4.1 단계가 전체 재생 DB에서 읽기 전용 감사 `supabase/tests/blog-installation.sql`(15개)을 돌린다. 그 감사의 `five_tables_rls`는 표가 다섯 개뿐이라고 세던 것을 원래 다섯 표의 이름과 "스키마의 모든 표에 RLS"로 고쳤다(새 표가 생긴 규칙 변경에 맞춘 단언 갱신). 이전 감사는 이 단계에서 실패하는 것을 확인했다.
+- `tests/blog-sync-mixed-versions.test.cjs`: 검수 재현 q6-mixed를 하네스로 옮겼다. 맥은 v220 이전 앱의 `missing` 응답 처리(같은 식별자를 expected 0으로 다시 보냄)를 흉내 낸다. 새 규칙에서는 맥 문장과 아이패드 문장이 서버와 세 기기에 모두 남고, 이전 규칙(`server({ reuseRevisions: true })`)에서는 맥 문장이 사라지는 것까지 확인한다. 하네스 두 개(`tests/helpers/blog-sync-cloud.cjs`, `tests/helpers/blog-cloud.cjs`)는 새 규칙을 따른다.
+- 실제 브라우저 검사의 DB 준비 목록(`blog-completion`, `account-blog-continuity`, `publish-recovery`)과 `tests/integrated-release-installation.cjs`의 고정 목록·해시에 이 파일을 더했다.
+- 앱(`assets/`)은 바꾸지 않았다.
+
+### 운영 적용 순서 (총괄)
+
+앱 배포와 순서 제약이 없다(앱 변경 없음). 기기 동기화가 쉬는 때 적용한다. 적용 중 블로그 표에 쓰기가 끼면 행 비교가 예외를 내고 되돌린다. 그때는 다시 실행한다.
+
+1. **적용 전 읽기(기록).** 개수·상태·해시만 읽는다. 본문·토큰·키는 꺼내지 않는다.
+
+   ```sql
+   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl, p.proowner::regrole as owner
+   from pg_proc p where p.oid in ('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure,
+     'haedo_blog_private.delete_post(uuid,bigint)'::regprocedure, 'public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure) order by 1;
+   select c.oid::regclass as rel, c.relowner::regrole as owner from pg_class c where c.oid='haedo_blog_private.posts'::regclass;
+   select current_user;
+   select (select count(*) from haedo_blog_private.posts) posts, (select count(*) from haedo_blog_private.assets) assets,
+          (select count(*) from haedo_blog_private.receipts) receipts, (select count(*) from haedo_blog_private.publications) publications,
+          (select count(*) from haedo_blog_private.profiles) profiles, to_regclass('haedo_blog_private.retired_posts') is not null as retired_table;
+   select tgname, tgenabled from pg_trigger where tgrelid='haedo_blog_private.posts'::regclass and not tgisinternal order by 1;
+   -- 설치 전에 지운 글 중 원본 기록이 남은 식별자 수(이 파일이 덮지 못하는 범위의 하한)
+   select count(distinct a.post_id) from haedo_blog_private.assets a
+   where a.deleted_at is not null and not exists(select 1 from haedo_blog_private.posts p where p.owner_id=a.owner_id and p.id=a.post_id);
+   ```
+
+   - 적용할 역할(`current_user`)이 세 함수와 `posts`의 소유자와 같아야 한다(격리 PostgreSQL에서는 모두 `postgres`). 다르면 설치 문장이 스스로 멈춘다.
+   - 기대값(격리 PostgreSQL): `save` `b19da73c86a6d28a3430cf7c1d35666f`, `delete_post` `428df3b85623bbbccf220060e5db80cd`, `life_blog_save` `525b3f80d22992179296eea2df0e26fe`. 셋 다 config `{search_path=pg_catalog}`, 실행 권한은 `authenticated`만, `save`·`delete_post`는 definer `true`, 래퍼는 `false`. `retired_table`은 `false`. 트리거는 `blog_markdown_no_downgrade` 하나.
+   - 해시가 다르면 적용하지 않는다(설치 문장도 스스로 멈춘다). `pg_get_functiondef`로 저장소 본문과 대조한다.
+2. **적용.** 파일 전체(한 문장)를 그대로 보낸다. 이 파일은 ASCII이고 `\u`·백슬래시가 없어 운영 도구의 문자 치환(2026-11-12 교훈)을 받지 않는다. 그래도 2026-11-12 절차대로 base64로 보내 데이터베이스 안에서 `encode(sha256(decode('<base64>','base64')),'hex')`가 위 SHA-256과 같은지 확인한 뒤 `convert_from(decode('<base64>','base64'),'UTF8')`를 실행하면 가장 확실하다. Edge 배포는 없다.
+3. **적용 후 확인.**
+
+   ```sql
+   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl, p.proowner::regrole as owner
+   from pg_proc p where p.oid in ('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure, 'haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb)'::regprocedure,
+     'public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure, 'haedo_blog_private.delete_post(uuid,bigint)'::regprocedure,
+     'haedo_blog_private.retire_post_revision()'::regprocedure, 'haedo_blog_private.retired_revision_guard()'::regprocedure) order by 1;
+   select relrowsecurity, has_table_privilege('authenticated','haedo_blog_private.retired_posts','select') auth_select,
+          has_table_privilege('anon','haedo_blog_private.retired_posts','select') anon_select, (select count(*) from haedo_blog_private.retired_posts) retired_rows
+   from pg_class where oid='haedo_blog_private.retired_posts'::regclass;
+   select c.oid::regclass as rel, c.relowner::regrole as owner from pg_class c where c.oid in ('haedo_blog_private.posts'::regclass,'haedo_blog_private.retired_posts'::regclass) order by 1;
+   select tgname, tgenabled from pg_trigger where tgrelid='haedo_blog_private.posts'::regclass and not tgisinternal order by 1;
+   -- 1의 행 수 쿼리를 다시 실행해 같은지 본다
+   ```
+
+   - 기대값: `save_post` `d467bd3618b488b11055bbaa023adf43`(definer `true`, `authenticated`만), `life_blog_save` `983ed6402056f10522ce2f7adba06bcf`(권한은 1과 같음), `retire_post_revision` `967fad775da38784cc736ae57cd92d21`, `retired_revision_guard` `9e4ce528d771993e778c9ed598140eda`(둘 다 실행 권한 없음), `save`·`delete_post`는 1과 같다. 여섯 함수와 `posts`·`retired_posts`의 소유자는 모두 1의 소유자와 같다. `relrowsecurity` `true`, 권한 둘 다 `false`, `retired_rows` 0. 트리거는 `blog_markdown_no_downgrade`·`blog_retire_post_revision`·`blog_retired_revision_guard` 셋, 모두 `O`.
+   - 행 수는 1과 같아야 한다.
+   - 운영에서 시험 저장·삭제를 하지 않는다. 확인은 소유자 기기에서 평소 쓰기·삭제가 그대로 되는지로 충분하다(지운 글은 `retired_rows`가 1씩 는다).
+
+### 되돌리기
+
+- **래퍼만 되돌리기**(데이터 변경 없음): `create or replace function public.life_blog_save(p_workspace_id uuid,p_post_id uuid,p_expected_revision bigint,p_operation_id uuid,p_data jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $$select haedo_blog_private.save(p_workspace_id,p_post_id,p_expected_revision,p_operation_id,p_data)$$;` 뒤 `notify pgrst,'reload schema';`. 그 뒤 `md5(prosrc)`가 `525b3f80…`인지 본다. 이 상태에서는 안전장치 트리거가 지운 식별자의 판 1 재생성을 거절한다(옛 앱의 그 글은 기기에 남고 올라가지 않는다. 위 (b)와 같다).
+- **전부 걷어 내기**(소유자 승인 뒤에만, `drop`): 래퍼를 되돌린 뒤 `drop trigger blog_retired_revision_guard on haedo_blog_private.posts; drop trigger blog_retire_post_revision on haedo_blog_private.posts; drop function haedo_blog_private.retired_revision_guard(); drop function haedo_blog_private.retire_post_revision(); drop function haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb); drop table haedo_blog_private.retired_posts;`. 표에는 삭제 흔적(식별자·판)만 있고 글 내용은 없다. 걷어 내면 판 재사용이 다시 열린다.
+
+### 알고 두는 것
+
+- 설치 전에 지운 식별자는 판 기록이 없어 덮지 못한다(1의 마지막 쿼리가 원본 기록이 남은 것의 수를 센다. 사진 없는 글은 흔적이 없다). 그런 식별자를 옛 앱이 다시 만들면 예전처럼 판 1부터다.
+- 계정을 지우는 절차가 생기면 `retired_posts`의 그 계정 행도 함께 지워야 한다(지금은 계정 삭제 SQL이 없다).
+- 옛 `haedo_blog_private.save`는 `authenticated` 실행 권한을 그대로 갖는다(11-01 설치 묶음이 다시 부여한다). 그 함수로 지운 식별자를 판 1로 만들려 하면 안전장치가 거절한다.
+- 하네스의 가짜 서버 둘은 삭제 때 영수증을 지우지 않는다(실제 SQL은 지운다). 이번 범위에서 고치지 않았다.
+
+### 확인하지 못한 것
+
+- 새 SQL 계약은 PostgreSQL 16.15에서 돌렸다. PostgreSQL 17.11(Docker 고정 이미지)에서는 `scripts/check-blog-backend.mjs`·`tests/integrated-release-installation.cjs`와 실제 SQL 브라우저 검사 3개가 이 파일을 설치한 DB에서 통과했다.
+- v219 실기기(열어 둔 탭·설치한 PWA)와의 혼재는 실제 기기에서 확인하지 않았다. 옛 앱 확인은 c684213 판 모듈을 쓴 일회성 하네스 실행과 같은 판을 띄운 브라우저 재현(q6-mixed)으로만 했다.
