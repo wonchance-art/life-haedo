@@ -311,6 +311,32 @@ test('reactions: a pair above 500 entries or 1 MB opens and can be changed, rese
   assert.throws(() => Actions.validate(filled(W, 'yna-news', 501)), tooLarge);
 });
 
+// 2026-11-12 (11-11 news review, left for the second round): the 보관 한도 notice asks for a copy, and a pair above
+// 500 entries or 1 MB could not be saved as one (exportCopy met the single bounds). A copy holds what the two
+// documents hold, so up to twice the bounds; adding from it to a profile still meets the single bounds.
+test('reactions: a pair above 500 entries or 1 MB is saved as a copy that opens again; adding from it meets the single bounds', () => {
+  const tooLarge = { code: 'discovery_actions_too_large' };
+  const legacy = filled(W, 'naver-d2', 300), extended = filled(W, 'yna-news', 201), shown = Actions.combine(legacy, extended);
+  const copy = Actions.exportCopy(shown, { now: T(30) });
+  assert.equal(copy.entries.length, 501, 'every entry is in the copy');
+  assert.deepEqual(Actions.previewCopy(JSON.parse(JSON.stringify(copy))).counts, { total: 501, liked: 0, bookmarked: 501 }, 'and the copy opens again');
+  // Into the same profile: nothing new, nothing refused. Into an empty one: 501 new entries are more than one profile holds.
+  assert.equal(Actions.mergeCopy(shown, copy, { expectedRevision: shown.revision, now: T(31) }).entries.length, 501);
+  assert.throws(() => Actions.mergeCopy(Actions.empty(W), copy, { expectedRevision: 0, now: T(31) }), tooLarge);
+  const half = { ...copy, entries: copy.entries.slice(0, 500) };
+  assert.equal(Actions.mergeCopy(Actions.empty(W), half, { expectedRevision: 0, now: T(31) }).entries.length, 500, 'up to the bound it is added');
+  // Bytes: two documents of 250 long entries each are more than 1 MB together; the copy holds them all.
+  const long = n => '가'.repeat(480) + n, tags = ['나'.repeat(150)], big = Actions.combine(filled(W, 'naver-d2', 250, long, tags), filled(W, 'yna-news', 250, long, tags));
+  const bigCopy = Actions.exportCopy(big, { now: T(32) }), bytes = new TextEncoder().encode(JSON.stringify(bigCopy)).length;
+  assert.ok(bytes > Actions.MAX_BYTES && bytes < Actions.COPY_MAX_BYTES, 'more than 1 MB, within the copy bound');
+  assert.equal(Actions.previewCopy(bigCopy).counts.total, 500);
+  // The copy bound is what two full documents hold: a copy above it is refused.
+  const over = { ...copy, entries: [...copy.entries, ...filled(W, 'sbs-news', 500).entries] };
+  assert.equal(over.entries.length, Actions.COPY_MAX_ENTRIES + 1);
+  assert.throws(() => Actions.previewCopy(over), tooLarge);
+  assert.equal(Actions.previewCopy({ ...over, entries: over.entries.slice(0, Actions.COPY_MAX_ENTRIES) }).counts.total, Actions.COPY_MAX_ENTRIES);
+});
+
 test('storage: two devices adding near the bound to different documents; the account pair opens and only adding is refused', async t => {
   const Sync = require('../assets/life/account-docs-sync.js');
   const { base, store, raw } = fixture(); t.after(() => base.close());

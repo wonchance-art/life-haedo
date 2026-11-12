@@ -286,7 +286,7 @@
       const token = generation, copyToken = ++current.copyGeneration;
       current.copyReading = true; current.copyError = ''; current.copyPreview = null; current.copyEnvelope = null; draw();
       try {
-        if (file.size > actionsModel().MAX_BYTES) throw new Error('too_large');
+        if (file.size > (actionsModel().COPY_MAX_BYTES || actionsModel().MAX_BYTES)) throw new Error('too_large');
         const bytes = await file.arrayBuffer(); if (!valid(token) || copyToken !== current.copyGeneration) return;
         const envelope = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
         const preview = actionsModel().previewCopy(envelope);
