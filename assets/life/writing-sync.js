@@ -283,9 +283,16 @@
         } while (again && !disposed);
       } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
     }
-    function nudge() {
-      if (disposed || suspended || parked || soon) return;
-      soon = root.setTimeout(() => { soon = null; wake(); }, 3000); soon?.unref?.();
+    // A visible page gathers saves for 3 s. A save of its own that lands while the page is hidden
+    // (typed, switched away at once, and the autosave came after the switch) goes out a quarter
+    // of a second later, as BlogSync sends a hidden page's saves: the system may freeze a hidden
+    // page within seconds (2026-11-12, 11-11 sync review m1: 3 s before).
+    let soonDue = 0;
+    function nudge(delay = 3000) {
+      if (disposed || suspended || parked) return;
+      if (soon) { if (soonDue <= Date.now() + delay) return; root.clearTimeout(soon); }
+      soonDue = Date.now() + delay;
+      soon = root.setTimeout(() => { soon = null; wake(); }, delay); soon?.unref?.();
     }
     // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
     // reads no body for drafts that did not change on either side.
@@ -294,7 +301,7 @@
       if (event.local === true) mine.add(event.workspaceId + '/' + event.stageId);
       // A hidden page reacts to its own saves only.
       else if (hidden()) return;
-      nudge();
+      nudge(hidden() ? 250 : 3000);
     }
     function start() { guard(); if (started) return; started = true;
       wiring = syncLifecycle()?.attach(root, {
