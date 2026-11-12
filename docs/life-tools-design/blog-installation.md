@@ -316,7 +316,7 @@ notify pgrst,'reload schema';
 
 ## 2026-11-12 지운 글 식별자의 판 재사용 막기 (저장소 작성, 운영 미적용)
 
-마이그레이션 `supabase/migrations/20261112120000_life_blog_revision_continuity.sql`(SHA-256 `44a2ec12054f4d8ab68d48e1349e582b247f932149809ea81ef2ba5edf6c5a8c`, ASCII만, 백슬래시·`\u` 없음). 작업자는 운영에 적용하지 않았다. 적용은 총괄 담당이다.
+마이그레이션 `supabase/migrations/20261112120000_life_blog_revision_continuity.sql`(SHA-256 `59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb`, ASCII만, 백슬래시·`\u` 없음). 작업자는 운영에 적용하지 않았다. 적용은 총괄 담당이다.
 
 ### 왜 바꿨나
 
@@ -344,7 +344,7 @@ notify pgrst,'reload schema';
 - `posts`의 AFTER DELETE 트리거 `blog_retire_post_revision`이 기록한다. 함수 본문이 아닌 트리거라서, 11-01 설치 묶음 재실행이 `delete_post`를 다시 만들어도 기록은 계속된다.
 - `haedo_blog_private.save_post`는 `haedo_blog_private.save`(20261101091500)와 한 곳만 다르다: 행이 없고 expected 0이면 `기록된 판 + 1`로 저장하고 그 판을 응답·영수증에 쓴다. `public.life_blog_save`가 이제 이것을 부른다(`create or replace`, 권한 그대로). 옛 `save`는 11-01 설치 묶음이 다시 만들기 때문에 그대로 두었고, 부르는 곳이 없다.
 - `posts`의 BEFORE INSERT 트리거 `blog_retired_revision_guard`는 기록된 판 이하의 새 행을 `22023 life_blog_revision_retired`로 거절한다. 나중에 옛 래퍼가 되살아나는 경우의 안전장치다.
-- 설치는 한 문장(DO 블록)이다. 전후로 posts·assets·receipts·publications·profiles(·retired_posts)의 행 수와 해시를 비교해 달라지면 되돌린다. 설치 전에 `save`·`delete_post`·`public.life_blog_save`의 `md5(prosrc)`가 검수한 값인지 확인하고, 다르면 아무것도 바꾸지 않고 멈춘다. 다시 실행해도 바뀌는 것이 없다.
+- 설치는 한 문장(DO 블록)이다. 전후로 posts·assets·receipts·publications·profiles(·retired_posts)의 행 수와 해시를 비교해 달라지면 되돌린다. 설치 전에 `save`·`delete_post`·`public.life_blog_save`의 `md5(prosrc)`가 검수한 값인지, 실행 역할(`current_user`)이 `posts`·`save`·`delete_post`의 소유자인지 확인하고, 아니면 아무것도 바꾸지 않고 멈춘다(삭제 트리거는 `delete_post` 소유자의 권한으로 `retired_posts`에 쓰므로, 소유자가 다르면 모든 삭제가 권한 오류가 된다). 설치 끝에 `save_post`의 SECURITY DEFINER·`search_path=pg_catalog`, 트리거 함수의 `search_path`, 새 표의 소유자를 스스로 확인한다. 다시 실행해도 바뀌는 것이 없다.
 
 | 호출 | 이전 | 지금 |
 | --- | --- | --- |
@@ -361,9 +361,10 @@ notify pgrst,'reload schema';
 
 ### 검사
 
-- `node tests/run-blog-revision-continuity-postgres.cjs`: 95개 확인, 종료 코드 0(PostgreSQL 16.15). 설치 전 동작 재현, 설치(행 불변·다른 함수 불변·권한·멱등·변형된 이전 정의에서 멈춤), 여러 번 지우고 다시 만들기, 옛 판 보유 기기의 conflict, 영수증 재요청, 응답 잃은 재요청, 늦은 게시, 공개 글 삭제 거절, 사진, Markdown, 다른 계정, 안전장치 트리거, 권한, 두 연결의 삭제·재생성 경합(advisory lock 대기).
-- 변이 10종은 모두 종료 코드 1: `--mutation=restart-at-one|no-record|no-guard|any-owner|old-wrapper|grant-anon|grant-table|guard-any-row|no-lock|no-precheck`.
-- `npm run test:sql-replay` 4.9 단계가 모든 마이그레이션을 재생하고 11-01·11-02 설치 묶음을 다시 적용한 사본에서 같은 계약(81개)을 돌린다. 설치 묶음 재적용 뒤 카탈로그 불변도 그대로 통과한다.
+- `node tests/run-blog-revision-continuity-postgres.cjs`: 98개 확인, 종료 코드 0(PostgreSQL 16.15). 소유자가 아닌 역할로 설치하면 멈추는 것, 새 함수의 definer·`search_path`·소유자도 본다. 설치 전 동작 재현, 설치(행 불변·다른 함수 불변·권한·멱등·변형된 이전 정의에서 멈춤), 여러 번 지우고 다시 만들기, 옛 판 보유 기기의 conflict, 영수증 재요청, 응답 잃은 재요청, 늦은 게시, 공개 글 삭제 거절, 사진, Markdown, 다른 계정, 안전장치 트리거, 권한, 두 연결의 삭제·재생성 경합(advisory lock 대기).
+- 변이 13종은 모두 종료 코드 1: `--mutation=restart-at-one|no-record|no-guard|any-owner|old-wrapper|grant-anon|grant-table|guard-any-row|no-lock|no-owner-check|save-no-search-path|row-write-inside|no-precheck`.
+- `npm run test:sql-replay` 4.9 단계가 모든 마이그레이션을 재생하고 11-01·11-02 설치 묶음을 다시 적용한 사본에서 같은 계약(83개)을 돌린다. 설치 묶음 재적용 뒤 카탈로그 불변도 그대로 통과한다.
+- 새 4.1 단계가 전체 재생 DB에서 읽기 전용 감사 `supabase/tests/blog-installation.sql`(15개)을 돌린다. 그 감사의 `five_tables_rls`는 표가 다섯 개뿐이라고 세던 것을 원래 다섯 표의 이름과 "스키마의 모든 표에 RLS"로 고쳤다(새 표가 생긴 규칙 변경에 맞춘 단언 갱신). 이전 감사는 이 단계에서 실패하는 것을 확인했다.
 - `tests/blog-sync-mixed-versions.test.cjs`: 검수 재현 q6-mixed를 하네스로 옮겼다. 맥은 v220 이전 앱의 `missing` 응답 처리(같은 식별자를 expected 0으로 다시 보냄)를 흉내 낸다. 새 규칙에서는 맥 문장과 아이패드 문장이 서버와 세 기기에 모두 남고, 이전 규칙(`server({ reuseRevisions: true })`)에서는 맥 문장이 사라지는 것까지 확인한다. 하네스 두 개(`tests/helpers/blog-sync-cloud.cjs`, `tests/helpers/blog-cloud.cjs`)는 새 규칙을 따른다.
 - 실제 브라우저 검사의 DB 준비 목록(`blog-completion`, `account-blog-continuity`, `publish-recovery`)과 `tests/integrated-release-installation.cjs`의 고정 목록·해시에 이 파일을 더했다.
 - 앱(`assets/`)은 바꾸지 않았다.
@@ -375,9 +376,11 @@ notify pgrst,'reload schema';
 1. **적용 전 읽기(기록).** 개수·상태·해시만 읽는다. 본문·토큰·키는 꺼내지 않는다.
 
    ```sql
-   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl
+   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl, p.proowner::regrole as owner
    from pg_proc p where p.oid in ('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure,
      'haedo_blog_private.delete_post(uuid,bigint)'::regprocedure, 'public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure) order by 1;
+   select c.oid::regclass as rel, c.relowner::regrole as owner from pg_class c where c.oid='haedo_blog_private.posts'::regclass;
+   select current_user;
    select (select count(*) from haedo_blog_private.posts) posts, (select count(*) from haedo_blog_private.assets) assets,
           (select count(*) from haedo_blog_private.receipts) receipts, (select count(*) from haedo_blog_private.publications) publications,
           (select count(*) from haedo_blog_private.profiles) profiles, to_regclass('haedo_blog_private.retired_posts') is not null as retired_table;
@@ -387,24 +390,26 @@ notify pgrst,'reload schema';
    where a.deleted_at is not null and not exists(select 1 from haedo_blog_private.posts p where p.owner_id=a.owner_id and p.id=a.post_id);
    ```
 
+   - 적용할 역할(`current_user`)이 세 함수와 `posts`의 소유자와 같아야 한다(격리 PostgreSQL에서는 모두 `postgres`). 다르면 설치 문장이 스스로 멈춘다.
    - 기대값(격리 PostgreSQL): `save` `b19da73c86a6d28a3430cf7c1d35666f`, `delete_post` `428df3b85623bbbccf220060e5db80cd`, `life_blog_save` `525b3f80d22992179296eea2df0e26fe`. 셋 다 config `{search_path=pg_catalog}`, 실행 권한은 `authenticated`만, `save`·`delete_post`는 definer `true`, 래퍼는 `false`. `retired_table`은 `false`. 트리거는 `blog_markdown_no_downgrade` 하나.
    - 해시가 다르면 적용하지 않는다(설치 문장도 스스로 멈춘다). `pg_get_functiondef`로 저장소 본문과 대조한다.
 2. **적용.** 파일 전체(한 문장)를 그대로 보낸다. 이 파일은 ASCII이고 `\u`·백슬래시가 없어 운영 도구의 문자 치환(2026-11-12 교훈)을 받지 않는다. 그래도 2026-11-12 절차대로 base64로 보내 데이터베이스 안에서 `encode(sha256(decode('<base64>','base64')),'hex')`가 위 SHA-256과 같은지 확인한 뒤 `convert_from(decode('<base64>','base64'),'UTF8')`를 실행하면 가장 확실하다. Edge 배포는 없다.
 3. **적용 후 확인.**
 
    ```sql
-   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl
+   select p.oid::regprocedure as fn, md5(p.prosrc) as src_md5, p.prosecdef as definer, p.proconfig::text as config, p.proacl::text as acl, p.proowner::regrole as owner
    from pg_proc p where p.oid in ('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure, 'haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb)'::regprocedure,
      'public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure, 'haedo_blog_private.delete_post(uuid,bigint)'::regprocedure,
      'haedo_blog_private.retire_post_revision()'::regprocedure, 'haedo_blog_private.retired_revision_guard()'::regprocedure) order by 1;
    select relrowsecurity, has_table_privilege('authenticated','haedo_blog_private.retired_posts','select') auth_select,
           has_table_privilege('anon','haedo_blog_private.retired_posts','select') anon_select, (select count(*) from haedo_blog_private.retired_posts) retired_rows
    from pg_class where oid='haedo_blog_private.retired_posts'::regclass;
+   select c.oid::regclass as rel, c.relowner::regrole as owner from pg_class c where c.oid in ('haedo_blog_private.posts'::regclass,'haedo_blog_private.retired_posts'::regclass) order by 1;
    select tgname, tgenabled from pg_trigger where tgrelid='haedo_blog_private.posts'::regclass and not tgisinternal order by 1;
    -- 1의 행 수 쿼리를 다시 실행해 같은지 본다
    ```
 
-   - 기대값: `save_post` `d467bd3618b488b11055bbaa023adf43`(definer `true`, `authenticated`만), `life_blog_save` `983ed6402056f10522ce2f7adba06bcf`(권한은 1과 같음), `retire_post_revision` `967fad775da38784cc736ae57cd92d21`, `retired_revision_guard` `9e4ce528d771993e778c9ed598140eda`(둘 다 실행 권한 없음), `save`·`delete_post`는 1과 같다. `relrowsecurity` `true`, 권한 둘 다 `false`, `retired_rows` 0. 트리거는 `blog_markdown_no_downgrade`·`blog_retire_post_revision`·`blog_retired_revision_guard` 셋, 모두 `O`.
+   - 기대값: `save_post` `d467bd3618b488b11055bbaa023adf43`(definer `true`, `authenticated`만), `life_blog_save` `983ed6402056f10522ce2f7adba06bcf`(권한은 1과 같음), `retire_post_revision` `967fad775da38784cc736ae57cd92d21`, `retired_revision_guard` `9e4ce528d771993e778c9ed598140eda`(둘 다 실행 권한 없음), `save`·`delete_post`는 1과 같다. 여섯 함수와 `posts`·`retired_posts`의 소유자는 모두 1의 소유자와 같다. `relrowsecurity` `true`, 권한 둘 다 `false`, `retired_rows` 0. 트리거는 `blog_markdown_no_downgrade`·`blog_retire_post_revision`·`blog_retired_revision_guard` 셋, 모두 `O`.
    - 행 수는 1과 같아야 한다.
    - 운영에서 시험 저장·삭제를 하지 않는다. 확인은 소유자 기기에서 평소 쓰기·삭제가 그대로 되는지로 충분하다(지운 글은 `retired_rows`가 1씩 는다).
 

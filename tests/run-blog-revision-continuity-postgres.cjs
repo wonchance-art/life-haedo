@@ -47,6 +47,14 @@ const MUTATIONS = {
   'guard-any-row': sql => sql.replace('and r.revision>=new.revision) then', ') then'),
   // The recreation does not take the post's advisory lock.
   'no-lock': sql => sql.replace(" perform pg_advisory_xact_lock(hashtextextended('blog:'||who::text||':'||p_post_id::text,0));\n", ''),
+  // The installation runs as a role that does not own posts and delete_post (its trigger could not write).
+  'no-owner-check': sql => sql.replace("  raise exception 'Run this as the owner of haedo_blog_private.posts, save and delete_post (now %); nothing was changed',current_user;", '  null;'),
+  // save_post loses its fixed search_path (also removed from the installation's own check, so the contract must find it).
+  'save-no-search-path': sql => sql.replace('returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$\ndeclare who uuid:=auth.uid(); h bytea; prior', 'returns jsonb language plpgsql security definer as $fn$\ndeclare who uuid:=auth.uid(); h bytea; prior')
+    .replace(" or (select not prosecdef or proconfig is distinct from array['search_path=pg_catalog'] or", ' or (select not prosecdef or'),
+  // A row changes inside the installation: the preservation check must roll it back.
+  'row-write-inside': sql => sql.replace("\n if (select md5(prosrc) from pg_proc where oid=to_regprocedure('public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)')) is distinct from '983ed6402056f10522ce2f7adba06bcf'",
+    "\n update haedo_blog_private.posts set updated_at=updated_at+interval '1 second';\n if (select md5(prosrc) from pg_proc where oid=to_regprocedure('public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)')) is distinct from '983ed6402056f10522ce2f7adba06bcf'"),
   // The drifted-predecessor check is gone.
   'no-precheck': sql => sql.replace("raise exception 'haedo_blog_private.save differs from the repository definition (20261101091500); nothing was changed';", 'null;'),
 };
@@ -148,6 +156,10 @@ async function contract(db, { installed = false, connect } = {}) {
     check((await db.query("select has_table_privilege($1,'haedo_blog_private.retired_posts','select') or has_table_privilege($1,'haedo_blog_private.retired_posts','insert') or has_table_privilege($1,'haedo_blog_private.retired_posts','update') or has_table_privilege($1,'haedo_blog_private.retired_posts','delete') value", [role])).rows[0].value, false, role + ' has no privilege on the retired table');
   }
   check((await db.query("select relrowsecurity value from pg_class where oid='haedo_blog_private.retired_posts'::regclass")).rows[0].value, true, 'row level security is on for the retired table');
+  check((await qualified(`select p.oid::regprocedure::text name,p.prosecdef definer,p.proconfig::text config,pg_get_userbyid(p.proowner) owner from pg_proc p where p.oid::regprocedure::text = any($1) order by 1`, [ADDED])),
+    [['haedo_blog_private.retire_post_revision()', false], ['haedo_blog_private.retired_revision_guard()', false], ['haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb)', true]]
+      .map(([name, definer]) => ({ name, definer, config: '{search_path=pg_catalog}', owner: 'postgres' })), 'save_post is SECURITY DEFINER, the trigger routines are not; all three fix search_path=pg_catalog and belong to the owner of posts');
+  check((await db.query("select pg_get_userbyid(relowner) value from pg_class where oid in ('haedo_blog_private.posts'::regclass,'haedo_blog_private.retired_posts'::regclass) group by 1")).rows.map(row => row.value), ['postgres'], 'posts and the retired table have the same owner');
   check((await db.query("select array_agg(attname::text order by attnum) value from pg_attribute where attrelid='haedo_blog_private.retired_posts'::regclass and attnum>0 and not attisdropped")).rows[0].value, ['owner_id', 'post_id', 'revision', 'retired_at'], 'the retired table holds identifiers, a revision and a time: no title, body, photo or workspace');
   check((await save({ ...kept, title: '설치 뒤 이어 쓴 글' }, 2)).revision, 3, 'a post stored before the installation goes on as before');
 
@@ -275,6 +287,11 @@ async function contract(db, { installed = false, connect } = {}) {
   // ---- A drifted predecessor stops the installation unchanged ----
   if (!installed) {
     const stopped = await rows();
+    // A role that does not own posts and delete_post: the delete trigger would write with other rights.
+    await db.query("do $r$ begin if not exists(select 1 from pg_roles where rolname='haedo_other_admin') then create role haedo_other_admin superuser nologin; end if; end $r$");
+    await db.query('set role haedo_other_admin');
+    try { await refused(db.query(installation()), /Run this as the owner of haedo_blog_private\.posts, save and delete_post \(now haedo_other_admin\)/, 'run as a role that does not own posts and delete_post, the installation stops'); }
+    finally { await db.query('rollback').catch(() => {}); await db.query('reset role'); }
     const original = (await db.query("select pg_get_functiondef('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)'::regprocedure) value")).rows[0].value;
     await db.query(original.replace('\nbegin\n', '\nbegin\n -- drifted copy\n'));
     await refused(db.query(installation()), /haedo_blog_private\.save differs from the repository definition/, 'a save whose body differs from the repository stops the installation');

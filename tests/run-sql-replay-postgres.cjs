@@ -11,6 +11,8 @@
  *    to be true and the schema/grant/policy/bucket catalog to be unchanged.
  * 3. Runs supabase/operations/naver-status-check.sql and requires its 12 rows (1-11 plus 5.5).
  * 4. Cross-checks scripts/sql-final-definitions.mjs against the replayed functions.
+ * 4.1 Runs the read-only blog installation audit (supabase/tests/blog-installation.sql) on the
+ *     fully replayed catalog (every migration, the installs re-applied): every item must be true.
  * 4.5 Runs supabase/tests/blog-ai-authorship.sql (rolled back) on a fresh replayed copy.
  * 4.6 Runs supabase/tests/life-ai-usage.sql (rolled back) on a fresh replayed copy, then two
  *     sessions of two DIFFERENT accounts race for the last of the project-wide monthly AI
@@ -145,6 +147,12 @@ async function main() {
       assert.deepEqual([...parsed.keys()].filter(name => !inDb.has(name)).sort(), [], 'functions found by the scan but missing from the database');
       for (const [name, count] of parsed) assert.equal(inDb.get(name), count, `${name}: overload count differs from the scan`);
       pass(`final-definition scan matches the replayed catalog (${parsed.size} functions, ${summary.redefinedFunctions.length} redefined)`);
+
+      const audit = [].concat(await pgStub.applyFile(client, path.join(ROOT, 'supabase/tests/blog-installation.sql'))).filter(r => r.rows?.length).at(-1).rows[0].result;
+      const falseItems = Object.entries(audit).filter(([, value]) => value !== true).map(([name]) => name);
+      assert.deepEqual(falseItems, [], 'blog installation audit on the fully replayed catalog');
+      assert(Object.keys(audit).length >= 15, 'blog installation audit items: ' + Object.keys(audit).length);
+      pass(`blog installation audit on the fully replayed catalog: ${Object.keys(audit).length} items true`);
     } finally { await client.end(); }
 
     const authorshipDb = await pg.cloneDatabase('replay_ai_authorship');

@@ -22,7 +22,13 @@ async function prepend(dev, id, sentence, updatedAt) {
   const cur = await read(dev, id);
   return dev.storage.savePhotoPost(dev.ws, { ...copy(cur), ops: [{ insert: sentence + ' ' + text(cur) }], updatedAt }, cur.revision);
 }
-// The earlier app's answer to `missing`: the same identity again, from revision 0.
+// The earlier app's answer to `missing`: the same identity again, from revision 0. In c684213
+// assets/life/blog-sync.js, send() on `missing` (lines 336-339) sets remoteRevision 0 and keeps
+// remoteId, then pushLocked() (line 359) makes a new pending request { operationId: makeId(),
+// manifest, expectedRevision: state.remoteRevision (0) } that send() posts with postId
+// latest.remoteId (line 318): the same identity, a new operation id, expected revision 0 and the
+// same document. This wrapper sends exactly that request. The same scenario was also run once with
+// the c684213 modules themselves on the Mac (not committed): the same outcome on both rules.
 function earlierApp(dev) {
   const save = dev.remote.save.bind(dev.remote), sent = [];
   dev.remote.save = async request => {

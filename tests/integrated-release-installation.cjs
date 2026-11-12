@@ -61,7 +61,7 @@ const newsWideMigration = ['supabase/migrations/20261111130000_news_wide_feed.sq
 // 2026-11-12: a deleted post's revisions are never handed out again (review B1, ABA): new retired table,
 // two triggers on posts and save_post behind public.life_blog_save. Its cases run in
 // run-blog-revision-continuity-postgres and the SQL replay (4.9).
-const blogRevisionContinuityMigration = ['supabase/migrations/20261112120000_life_blog_revision_continuity.sql', '44a2ec12054f4d8ab68d48e1349e582b247f932149809ea81ef2ba5edf6c5a8c'];
+const blogRevisionContinuityMigration = ['supabase/migrations/20261112120000_life_blog_revision_continuity.sql', '59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];

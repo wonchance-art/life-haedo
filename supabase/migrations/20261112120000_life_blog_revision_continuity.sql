@@ -38,6 +38,13 @@ declare relation text; n bigint; h text; before_rows jsonb:='{}'; prior jsonb;
  relations text[]:=array['haedo_blog_private.posts','haedo_blog_private.assets','haedo_blog_private.receipts','haedo_blog_private.publications','haedo_blog_private.profiles','haedo_blog_private.retired_posts'];
  wrapper text;
 begin
+ -- The delete trigger runs with the rights of delete_post's owner and writes retired_posts, which
+ -- this statement creates and so owns: both must be the same role, or every deletion would fail.
+ if (select pg_get_userbyid(proowner) from pg_proc where oid=to_regprocedure('haedo_blog_private.delete_post(uuid,bigint)')) is distinct from current_user::text
+ or (select pg_get_userbyid(relowner) from pg_class where oid=to_regclass('haedo_blog_private.posts')) is distinct from current_user::text
+ or (select pg_get_userbyid(proowner) from pg_proc where oid=to_regprocedure('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)')) is distinct from current_user::text then
+  raise exception 'Run this as the owner of haedo_blog_private.posts, save and delete_post (now %); nothing was changed',current_user;
+ end if;
  -- The routines this file copies or replaces must be the reviewed ones.
  if (select md5(prosrc) from pg_proc where oid=to_regprocedure('haedo_blog_private.save(uuid,uuid,bigint,uuid,jsonb)')) is distinct from 'b19da73c86a6d28a3430cf7c1d35666f' then
   raise exception 'haedo_blog_private.save differs from the repository definition (20261101091500); nothing was changed';
@@ -137,6 +144,11 @@ $retire_wrapper$;
  or has_function_privilege('anon','public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)','execute')
  or not has_function_privilege('authenticated','public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)','execute')
  or has_function_privilege('anon','haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb)','execute')
+ or (select not prosecdef or proconfig is distinct from array['search_path=pg_catalog'] or pg_get_userbyid(proowner) is distinct from current_user::text
+     from pg_proc where oid='haedo_blog_private.save_post(uuid,uuid,bigint,uuid,jsonb)'::regprocedure)
+ or (select count(*) from pg_proc where oid in ('haedo_blog_private.retire_post_revision()'::regprocedure,'haedo_blog_private.retired_revision_guard()'::regprocedure)
+     and proconfig is not distinct from array['search_path=pg_catalog'] and pg_get_userbyid(proowner)=current_user::text)<>2
+ or (select pg_get_userbyid(relowner) from pg_class where oid='haedo_blog_private.retired_posts'::regclass) is distinct from current_user::text
  or (select count(*) from pg_trigger where tgrelid='haedo_blog_private.posts'::regclass and tgname in ('blog_retire_post_revision','blog_retired_revision_guard') and tgenabled='O')<>2
  then raise exception 'Revision continuity install did not end in the expected state; rolled back'; end if;
  for relation,prior in select key,value from jsonb_each(before_rows) loop
