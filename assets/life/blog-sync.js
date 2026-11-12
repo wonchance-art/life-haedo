@@ -405,6 +405,16 @@
       // An account change or a newer local request cannot commit this document.
       const latest = await readState(c);
       if (latest?.pending?.operationId !== pending.operationId || latest.remoteId !== state.remoteId) throw fault('request_cancelled');
+      // Over revision 1, the one a re-created row starts at again: the head is read first, so a row deleted and
+      // re-created with other content is decided (replacedUnder) instead of overwritten.
+      if (pending.expectedRevision === 1 && latest.remoteManifest) {
+        const head = await remote.read(latest.remoteId); guard(c);
+        if (replacedUnder(latest, head)) {
+          const fresh = await writeState(c, latest, { pending: null, status: 'pending', error: null });
+          if (attempt >= 2) throw fault('blog_conflict');
+          return resolveConflict(c, fresh, await readPost(c), attempt + 1, byRemote);
+        }
+      }
       let result;
       try {
         result = await remote.save({ workspaceId: latest.remoteWorkspaceId, postId: latest.remoteId,
@@ -437,9 +447,43 @@
     // again, and a device that missed the deletion would take that row for the revision it holds and later overwrite it
     // without a recovery copy. Other devices receive it as a new post; the deleted identity stays deleted. The local
     // post keeps its id (its screens, evidence and drafts follow it); only the binding moves.
-    function reidentify(c, state) {
-      return writeState(c, state, { remoteId: state.remoteRevision > 0 ? makeId() : state.remoteId, remoteRevision: 0, remoteManifest: null, pending: null, conflict: null,
+    // The new identity is derived from the deleted one and the revision this device last held (review q5, 2026-11-02
+    // rule): two devices that changed the same deleted post meet as one post on the server, and the later is decided
+    // like any conflict (latest wins, the other kept as `복구 사본`) instead of two unrelated posts. If that derived row
+    // is itself deleted and re-created later (a third device still holding the deleted post), a device holding it sees
+    // the same revision with other content and decides it again instead of taking it for its own (replacedUnder; the
+    // push over revision 1 checks the head first). An identity already used here falls back to a fresh one.
+    async function reidentify(c, state) {
+      let remoteId = state.remoteId;
+      if (state.remoteRevision > 0) {
+        remoteId = await derivedId(state.remoteId, state.remoteRevision, 'revived'); guard(c);
+        const value = await storage.listBlogSyncStates(c.ws); guard(c);
+        // Another device's revival may already be here as a post received under that identity. A clean, closed one is
+        // only a mirror of the server row: it goes, and this change meets that row on the server like any conflict.
+        // Removed first, so an interruption leaves this post bound to the deleted identity and decided again later.
+        const mirror = value.states.find(item => item.state.remoteId === remoteId && item.localPostId !== c.id);
+        const other = mirror && value.posts.find(item => item.id === mirror.localPostId);
+        if (value.tombstones.some(item => item.remoteId === remoteId)) remoteId = makeId();
+        else if (mirror) {
+          let removed = false;
+          if (other && !dirty(mirror.state, other) && !openHere(c.ws, other.id) && !(await elsewhere(c.ws, other.id))) {
+            try { guard(c); await storage.commitBlogSync(c.ws, { postId: other.id, remove: true, baseRevision: other.revision, bindingRevision: mirror.state.revision }, { isCurrent: () => current(c) && !openHere(c.ws, other.id) }); removed = true; emit(c.ws, other.id); }
+            catch (error) { if (error?.code === 'request_cancelled' && !current(c)) throw error; }
+          }
+          if (!removed) remoteId = makeId();
+        } else if (value.posts.some(item => item.id === remoteId && item.id !== c.id)) remoteId = makeId();
+      }
+      return writeState(c, state, { remoteId, remoteRevision: 0, remoteManifest: null, pending: null, conflict: null,
         publication: null, publishPending: null, unpublishPending: null, publishChecked: null, choiceUnsent: null, publicationEarlier: null, publicationDoubt: null, status: 'pending', error: null });
+    }
+    // The server row has the revision this device holds but other content: it was deleted and re-created under the same
+    // identity (the server starts a re-created row at revision 1 again). Decided as a change, never taken as the same.
+    const replacedUnder = (state, row) => !!row && !!state?.remoteManifest && row.revision === state.remoteRevision && canonical(row.data) !== canonical(state.remoteManifest);
+    // The same from a list head (its document time), so the cycle reads that row.
+    function listedReplaced(state, head) {
+      if (!state?.remoteManifest || head.revision !== state.remoteRevision) return false;
+      const listed = Date.parse(head.document_updated_at), held = Date.parse(state.remoteManifest.updatedAt);
+      return Number.isFinite(listed) && Number.isFinite(held) && listed !== held;
     }
     async function pushLocked(c, { expectedManifest = null, expectedLocalRevision, attempt = 0, byRemote = null } = {}) {
       const post = await readPost(c); let state = await readState(c);
@@ -476,7 +520,7 @@
       // The server never turns a saved post back into a draft, so this
       // device's draft cannot simply be sent over a saved server version.
       const regression = row.data.status === 'saved' && post.status === 'draft';
-      if (row.revision === state.remoteRevision && !regression) return pushLocked(c, { attempt: attempt + 1, byRemote });
+      if (row.revision === state.remoteRevision && !regression && !replacedUnder(state, row)) return pushLocked(c, { attempt: attempt + 1, byRemote });
       const remoteWins = remoteIsLater(row, post);
       // Both outcomes that change this local document wait for an open editor,
       // checked again after the downloads (it may have opened meanwhile).
@@ -597,7 +641,7 @@
           const waits = async () => { if (busyHere(ws, id)) { waitedFor(ws, id); return true; } const other = await elsewhere(ws, id); guard(c); return other; };
           if (await waits()) return null;
           const row = await remote.read(head.id); guard(c);
-          if (!row || row.revision === state.remoteRevision) return null;
+          if (!row || row.revision === state.remoteRevision && !replacedUnder(state, row)) return null;
           return await withBytes(row, async () => {
             const doc = localDoc(await download(c, row), id, post.revision, ws, byRemote);
             if (await waits()) return null; // an editor opened or got busy during the download
@@ -969,7 +1013,9 @@
       return serial(entry.ws, entry.localPostId, async () => {
         const c = context(entry.ws, entry.localPostId), state = await readState(c);
         if (!state || state.remoteId === entry.localPostId) return;
-        await writeState(c, state, { enabled: true, enableOnSave: false, remoteId: entry.localPostId, remoteWorkspaceId: entry.ws, remoteRevision: 0, localRevision: 0,
+        // A fresh identity, never the local id: that id may be a server identity deleted elsewhere (a revived post bound
+        // to another device's revival), and re-creating it would start its revisions at 1 again (review B1).
+        await writeState(c, state, { enabled: true, enableOnSave: false, remoteId: makeId(), remoteWorkspaceId: entry.ws, remoteRevision: 0, localRevision: 0,
           remoteManifest: null, publication: null, pending: null, conflict: null, publishPending: null, unpublishPending: null, status: 'pending', error: null });
       });
     }
@@ -1060,7 +1106,7 @@
               else if (!backingOff(ws, row.id)) tasks.push(() => install(ws, row, local.byRemote));
             } else {
               const moved = canonical(entry.state.publication ?? null) !== canonical(row.publication ?? null);
-              if (entry.state.remoteRevision !== row.revision) {
+              if (entry.state.remoteRevision !== row.revision || listedReplaced(entry.state, row)) {
                 if (!backingOff(entry.ws, entry.localPostId)) tasks.push(() => apply(entry.ws, entry.localPostId, row, local.byRemote));
               } else if (moved && !unsettled(entry.state)) tasks.push(() => refreshPublication(entry.ws, entry.localPostId, row));
               // An unacknowledged publish or withdrawal is settled against the exact head, once per
@@ -1068,10 +1114,14 @@
               if (unsettled(entry.state) && (moved || publicationStatus(entry.state) === 'unknown')) tasks.push(() => settleQuiet(entry.ws, entry.localPostId));
             }
           }
+          // Deletions after everything received: a change here to a deleted post that another device already revived
+          // finds that revival installed (reidentify) instead of racing its install into two bindings of one row.
+          const gone = [];
           for (const [remoteId, entry] of local.byRemote) {
-            if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) tasks.push(() => vanish(entry.ws, entry.localPostId, remoteId));
+            if (!seen.has(remoteId) && entry.state.remoteRevision > 0 && !backingOff(entry.ws, entry.localPostId)) gone.push(() => vanish(entry.ws, entry.localPostId, remoteId));
           }
           await pool(tasks, receiveConcurrency);
+          await pool(gone, receiveConcurrency);
           // A new device can list the account's posts before its first library is stored
           // (2026-11-03 CI: the second browser then waited the whole 30 s interval).
           // Look again soon, backing off up to the interval while none is there.

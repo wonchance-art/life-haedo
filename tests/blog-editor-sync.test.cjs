@@ -267,8 +267,10 @@ test('MINOR-B: a Markdown document on either side is never the same input as a d
 // Review B1 (q3, three devices): a change made here to a post another device deleted is kept under a new server
 // identity. The deleted identity is never re-created at revision 1, which a device that missed the deletion would take
 // for the revision it holds and later overwrite without a recovery copy. The input is somewhere in every case.
+// Review q5 (2026-11-02 rule): two devices that both changed it meet under the same derived identity; the later wins
+// and the earlier is kept as `복구 사본`. These go through the upload's `missing` answer; the list path is below.
 for (const offlineEdit of [false, true]) {
-  test('B1: a post deleted on one device and changed on another is kept as a post of its own; a third device ' + (offlineEdit ? 'that also changed it keeps both' : 'receives it'), async () => {
+  test('B1: a post deleted on one device and changed on another is kept as a post of its own; a third device ' + (offlineEdit ? 'that also changed it: one post, the earlier change a recovery copy' : 'receives it'), async () => {
     const cloud = server(), time = clock();
     const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
     const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '세 기기 초안', status: 'draft' }), 0); time.advance(10000);
@@ -284,14 +286,16 @@ for (const offlineEdit of [false, true]) {
     assert.ok(macRow, 'the change is on the server under a new identity'); assert.notEqual(macRow.id, draft.id);
     for (let i = 0; i < 3; i++) { time.advance(60000); await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); }
     const titles = async dev => (await list(dev)).map(row => row.title).sort();
-    const expected = offlineEdit ? ['맥에서 지워진 뒤 쓴 문장', '아이패드에서 고친 문장'] : ['맥에서 지워진 뒤 쓴 문장'];
+    const current = offlineEdit ? '아이패드에서 고친 문장' : '맥에서 지워진 뒤 쓴 문장';
+    const expected = offlineEdit ? [KEPT + '맥에서 지워진 뒤 쓴 문장', '아이패드에서 고친 문장'].sort() : ['맥에서 지워진 뒤 쓴 문장'];
     for (const dev of [mac, phone, ipad]) assert.deepEqual(await titles(dev), expected, dev.name);
     assert.deepEqual([...cloud.rows.values()].map(row => row.data.title).sort(), expected);
+    assert.equal([...cloud.rows.values()].find(row => row.data.title === current).id, macRow.id, 'both met under the one derived identity');
     // The iPad goes on writing what it now holds: an ordinary edit of that post, received by the Mac.
-    const ipadPost = (await list(ipad)).find(row => row.title === '맥에서 지워진 뒤 쓴 문장');
-    await redraft(ipad, ipadPost.id, '맥에서 지워진 뒤 쓴 문장 · 아이패드가 이어 씀', new Date(time.now + 60000).toISOString()); time.advance(70000);
+    const ipadPost = (await list(ipad)).find(row => row.title === current);
+    await redraft(ipad, ipadPost.id, current + ' · 아이패드가 이어 씀', new Date(time.now + 60000).toISOString()); time.advance(70000);
     await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow();
-    assert.ok((await titles(mac)).includes('맥에서 지워진 뒤 쓴 문장 · 아이패드가 이어 씀'));
+    assert.ok((await titles(mac)).includes(current + ' · 아이패드가 이어 씀'));
     for (const dev of [mac, phone, ipad]) dev.sync.dispose();
   });
 }
@@ -326,4 +330,86 @@ test('M-a: an open editor whose post the server no longer has is told once (remo
   assert.deepEqual(await shown(a), [['draft', '초안']], 'kept while open');
   release(); await a.sync.syncNow();
   assert.deepEqual(await shown(a), []);
+});
+
+// Review U17 (q3c): the cycle's list shows the row gone first while the post here is changed (an edit still in its
+// upload delay, or made offline and not yet sent): vanish keeps it under a new identity, never the deleted one.
+test('U17: the list shows a changed post gone first: it is kept under a new identity, and a device that missed the deletion receives it', async () => {
+  const cloud = server(), time = clock();
+  const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
+  const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '목록 먼저 초안', status: 'draft' }), 0); time.advance(10000);
+  await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); await ipad.sync.syncNow();
+  await phone.sync.deletePost(phone.ws, draft.id); await phone.sync.syncNow();
+  // Just written: still in the draft upload delay, so the cycle lists before it sends anything.
+  await redraft(mac, draft.id, '목록이 먼저 본 문장', new Date(time.now).toISOString());
+  const saves = cloud.stats.saves.length;
+  await mac.sync.syncNow();
+  assert.ok(cloud.stats.saves.length > saves, 'the vanish path sent it');
+  assert.equal(cloud.rows.has(draft.id), false, 'the deleted identity is never re-created');
+  const kept = [...cloud.rows.values()].find(row => row.data.title === '목록이 먼저 본 문장');
+  assert.ok(kept); assert.notEqual(kept.id, draft.id);
+  await ipad.sync.syncNow(); await phone.sync.syncNow();
+  for (const dev of [mac, phone, ipad]) assert.deepEqual(await shown(dev), [['draft', '목록이 먼저 본 문장']], dev.name);
+  for (const dev of [mac, phone, ipad]) dev.sync.dispose();
+});
+
+// Review U19: a conflict being decided finds the row gone (deleted between the list and the read): kept under a new
+// identity as well.
+test('U19: a conflict that finds the row gone keeps the change under a new identity', async t => {
+  const { cloud, time, a, draft, elsewhere } = await shared(t);
+  await elsewhere('다른 기기에서 이어 씀');
+  await redraft(a, draft.id, '이 기기에서 고친 문장', new Date(time.now).toISOString());
+  const read = a.remote.read; let gone = false;
+  a.remote.read = async (id, ...rest) => { if (id === draft.id && !gone) { gone = true; cloud.rows.delete(draft.id); return null; } return read.call(a.remote, id, ...rest); };
+  await a.sync.syncNow();
+  a.remote.read = read;
+  assert.ok(gone, 'the conflict read found it gone');
+  assert.equal(cloud.rows.has(draft.id), false);
+  const kept = [...cloud.rows.values()].find(row => row.data.title === '이 기기에서 고친 문장');
+  assert.ok(kept, 'the change is on the server under a new identity'); assert.notEqual(kept.id, draft.id);
+});
+
+// Review q5 safety: a row deleted and re-created under the same identity (a re-created derived identity, or an older
+// app) starts at revision 1 again. A device holding revision 1 sees other content there and decides it as a change:
+// clean, it takes it; changed, its push over revision 1 reads the head first and keeps the other side as `복구 사본`.
+for (const dirtyHere of [false, true]) {
+  test('q5: a row re-created at the revision held here with other content is decided, never taken as the same (' + (dirtyHere ? 'changed here' : 'clean') + ')', async t => {
+    const { cloud, time, a, b, draft } = await shared(t);
+    // The server row is replaced under the same identity at revision 1.
+    const row = cloud.rows.get(draft.id);
+    cloud.rows.set(draft.id, { ...row, revision: 1, data: { ...copy(row.data), title: '다시 만들어진 내용', updatedAt: new Date(time.now + 1000).toISOString() } });
+    if (dirtyHere) await redraft(a, draft.id, '이 기기의 나중 수정', new Date(time.now + 60000).toISOString());
+    time.advance(120000); await a.sync.syncNow({ flushDrafts: true }); await a.sync.syncNow({ flushDrafts: true });
+    const expected = dirtyHere ? [['draft', KEPT + '다시 만들어진 내용'], ['draft', '이 기기의 나중 수정']].sort() : [['draft', '다시 만들어진 내용']];
+    assert.deepEqual(await shown(a), expected);
+    if (dirtyHere) assert.equal(cloud.rows.get(draft.id).data.title, '이 기기의 나중 수정');
+    else assert.equal(cloud.rows.get(draft.id).data.title, '다시 만들어진 내용');
+  });
+}
+
+// Review q5 (list first): the other device's revival arrives here before this device's own change to the deleted post is
+// sent (still in its upload delay). The received copy is only a mirror and goes; this change meets that row like any
+// conflict: one post, the earlier change kept as `복구 사본`. Separated duplicates never reuse a deleted identity.
+test('q5: a revival received before this change is sent: one post, the earlier change a recovery copy; the deleted identity is never re-created', async () => {
+  const cloud = server(), time = clock();
+  const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
+  const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '두 기기 고침', status: 'draft' }), 0); time.advance(10000);
+  await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); await ipad.sync.syncNow();
+  await redraft(mac, draft.id, '맥 오프라인 고침', new Date(time.now).toISOString());
+  await phone.sync.deletePost(phone.ws, draft.id); await phone.sync.syncNow();
+  time.advance(60000); await mac.sync.syncNow({ flushDrafts: true });
+  const revived = [...cloud.rows.values()].find(row => row.data.title === '맥 오프라인 고침'); assert.ok(revived);
+  // The iPad's change is just written (in its upload delay): its cycle lists first, receives the revival, then decides.
+  await redraft(ipad, draft.id, '아이패드 오프라인 고침', new Date(time.now).toISOString());
+  // Its read of the revived row is slow: the deletion of its own post is decided only after the revival is installed.
+  const read = ipad.remote.read;
+  ipad.remote.read = async (id, ...rest) => { if (id === revived.id) await new Promise(resolve => setTimeout(resolve, 60)); return read.call(ipad.remote, id, ...rest); };
+  await ipad.sync.syncNow();
+  ipad.remote.read = read;
+  for (let i = 0; i < 3; i++) { time.advance(60000); await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); }
+  const expected = [['draft', KEPT + '맥 오프라인 고침'], ['draft', '아이패드 오프라인 고침']].sort();
+  for (const dev of [mac, phone, ipad]) assert.deepEqual(await shown(dev), expected, dev.name);
+  assert.equal(cloud.rows.has(draft.id), false, 'the deleted identity is never re-created');
+  assert.equal(cloud.rows.get(revived.id).data.title, '아이패드 오프라인 고침', 'the later change took the revived row');
+  for (const dev of [mac, phone, ipad]) dev.sync.dispose();
 });

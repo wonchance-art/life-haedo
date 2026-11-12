@@ -3308,7 +3308,8 @@
       if (was.replaces) {
         const targetRow = rows.find((item) => item.id === was.replaces.id) || rows.find((item) => item.id === movedStore.resolve(workspaceId, was.replaces.id));
         changed = !targetRow || targetRow.id !== was.replaces.id || targetRow.revision !== was.replaces.revision;
-        if (follow && gone?.id === was.id && gone.tick === dirtyTick && targetRow?.status === "saved" && changed) {
+        // Not while anything works on what the editor holds (an AI suggestion panel, a link being written: editorBusy).
+        if (follow && !editorBusy() && gone?.id === was.id && gone.tick === dirtyTick && targetRow?.status === "saved" && changed) {
           gone = null;
           await open(targetRow.id);
           if (current(epoch) && doc?.id === targetRow.id) showStatus("다른 탭이나 기기에서 이 수정을 글로 저장했어요");

@@ -337,6 +337,95 @@ async function main() {
     });
 
     // Review m-3: a tab that missed the other tab's notice (no BroadcastChannel here) reads storage again when shown.
+    // Review U17 (q3c): the list shows the draft gone while the Mac's change to it is still waiting to be sent. It is
+    // kept under a new identity; a device that missed the deletion receives it and its later edit keeps it.
+    await check('U17: a draft deleted elsewhere while an edit here waits to be sent is kept under a new identity for every device', async () => {
+      const server = new FakeCloud(); server.enableAccountLibrary();
+      const mac = await device(browser, server, 'u17-mac'), phone = await device(browser, server, 'u17-phone'), ipad = await device(browser, server, 'u17-ipad');
+      try {
+        const id = await writeDraft(mac.page, '세 기기 초안', '초안 본문.');
+        await onServer(server, list => list.some(item => item.id === id), 'draft on the server');
+        for (const dev of [phone, ipad]) await received(dev, list => list.some(item => item.id === id), dev.name + ' receives');
+        server.offline.add('u17-ipad');
+        await phone.page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(); await HaedoLife.BlogSync.forStorage(s).deletePost(w, id); }, id);
+        await kick(phone.page); await onServer(server, list => !list.some(item => item.id === id), 'deleted on the server');
+        await kick(mac.page); await sleep(3000);
+        await typeTop(mac.page, '맥에서 지워진 뒤 쓴 문장. '); await sleep(1200); await closeEditor(mac.page);
+        const kept = list => list.some(item => item.id !== id && /맥에서 지워진 뒤 쓴 문장/.test(item.text));
+        await until(async () => { await kick(mac.page); return serverPosts(server); }, list => kept(list) && !list.some(item => item.id === id), 'kept under a new identity, the deleted one stays deleted');
+        server.offline.delete('u17-ipad');
+        const fresh = await received(ipad, list => kept(list) && !list.some(item => item.id === id), 'the iPad receives it and drops the deleted draft');
+        const ipadId = fresh.find(item => /맥에서 지워진 뒤 쓴 문장/.test(item.text)).id;
+        await openDraft(ipad.page, ipadId); await typeTop(ipad.page, '아이패드 덧붙임. '); await sleep(1200); await closeEditor(ipad.page);
+        const both = list => list.some(item => /아이패드 덧붙임\. 맥에서 지워진 뒤 쓴 문장/.test(item.text));
+        await onServer(server, both, 'the iPad edit keeps the Mac sentence');
+        await until(async () => { await kick(mac.page); return posts(mac.page); }, both, 'the Mac converges');
+      } finally { for (const dev of [mac, phone, ipad]) await dev.context.close(); }
+    });
+
+    // Review q5 (2026-11-02 rule): two devices change a draft offline that a third deletes. They meet as one post; the
+    // later wins and the earlier is kept as `복구 사본` (no two posts of the same title).
+    await check('q5: a deleted draft changed offline on two devices: one post, the earlier change kept as a recovery copy', async () => {
+      const server = new FakeCloud(); server.enableAccountLibrary();
+      const mac = await device(browser, server, 'q5-mac'), phone = await device(browser, server, 'q5-phone'), ipad = await device(browser, server, 'q5-ipad');
+      try {
+        const id = await writeDraft(mac.page, '두 기기 고침', '초안 본문.'); await closeEditor(mac.page);
+        await onServer(server, list => list.some(item => item.id === id), 'draft on the server');
+        for (const dev of [phone, ipad]) await received(dev, list => list.some(item => item.id === id), dev.name + ' receives');
+        server.offline.add('q5-mac'); server.offline.add('q5-ipad');
+        await openDraft(mac.page, id); await typeTop(mac.page, '맥 오프라인 고침. '); await sleep(1500); await closeEditor(mac.page);
+        await sleep(1000);
+        await openDraft(ipad.page, id); await typeTop(ipad.page, '아이패드 오프라인 고침. '); await sleep(1500); await closeEditor(ipad.page);
+        await phone.page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(); await HaedoLife.BlogSync.forStorage(s).deletePost(w, id); }, id);
+        await kick(phone.page); await onServer(server, list => !list.some(item => item.id === id), 'deleted on the server');
+        server.offline.delete('q5-mac'); await until(async () => { await kick(mac.page); return serverPosts(server); }, list => list.some(item => /맥 오프라인 고침/.test(item.text)), 'the Mac change is kept');
+        server.offline.delete('q5-ipad');
+        const converged = list => list.filter(item => /오프라인 고침/.test(item.text)).length === 2 && list.some(item => item.title === '두 기기 고침' && /아이패드 오프라인 고침/.test(item.text)) &&
+          list.some(item => item.title === KEPT + '두 기기 고침' && /맥 오프라인 고침/.test(item.text)) && !list.some(item => item.id === id);
+        await until(async () => { await kick(ipad.page); await kick(mac.page); return serverPosts(server); }, converged, 'one post (the later iPad change) and the Mac change as a recovery copy');
+        // Devices keep their own local ids (the Mac's post keeps the deleted draft's local id; only its server identity moved).
+        const local = list => list.filter(item => /오프라인 고침/.test(item.text)).length === 2 && list.some(item => item.title === '두 기기 고침' && /아이패드 오프라인 고침/.test(item.text)) &&
+          list.some(item => item.title === KEPT + '두 기기 고침' && /맥 오프라인 고침/.test(item.text));
+        for (const dev of [mac, phone, ipad]) await received(dev, local, dev.name + ' converges');
+      } finally { for (const dev of [mac, phone, ipad]) await dev.context.close(); }
+    });
+
+    // Review (3rd) M-a: a link being written (Quill's link input) the moment a finished revision is followed keeps the
+    // editor; the revision is followed once the link input is closed. (An AI suggestion panel is held the same way,
+    // editorBusy; it is not opened here because it asks the AI service for its usage.)
+    await check('M-a: a link input opened while a revision finished elsewhere is followed keeps the editor', async () => {
+      const { server, a, b, close } = await pair('ma-link');
+      try {
+        const id = await writeSaved(a.page, '링크 입력 글', '원문 문단입니다.');
+        await received(b, list => list.some(item => item.id === id), 'phone receives');
+        await openEdit(a.page, id); await typeTop(a.page, '맥 입력. ');
+        await onServer(server, list => list.some(item => item.status === 'draft' && /맥 입력/.test(item.text)), 'Mac revision on the server');
+        await received(b, list => list.some(item => item.status === 'draft' && /맥 입력/.test(item.text)), 'phone receives the revision');
+        // The moment the Mac hears that the revision left the server, a link input opens (right after the editor's own handler).
+        await a.page.evaluate(() => {
+          const sync = HaedoLife.BlogSync.forStorage(HaedoLife.Shell.storage);
+          const off = sync.subscribe(event => {
+            if (event.type !== 'remote_gone') return; off();
+            Quill.find(document.querySelector('.ql-container')).setSelection(0, 2, 'user');
+            document.querySelector('.photo-editor .ql-link').click();
+            window.__linkOpened = !!document.querySelector('.ql-tooltip.ql-editing:not(.ql-hidden)');
+          });
+        });
+        await openEdit(b.page, (await posts(b.page)).find(item => item.status === 'saved').id); await typeTop(b.page, '폰 마무리. '); await sleep(1200);
+        await b.page.getByRole('button', { name: '글 저장', exact: true }).click(); await b.page.locator('.photo-article').waitFor();
+        await until(async () => { await kick(a.page); return a.page.evaluate(() => window.__linkOpened); }, value => value === true, 'the link input opened as the Mac heard');
+        await sleep(2500);
+        assert.equal(await a.page.locator('.ql-editor').count(), 1, 'the editor stays while the link input is open');
+        assert.equal(await a.page.locator('.ql-tooltip.ql-editing:not(.ql-hidden)').count(), 1, 'the link input stays open');
+        assert.match((await editor(a.page)).note, /이 수정을 글로 저장했어요/);
+        await a.page.keyboard.press('Escape');
+        await a.page.waitForFunction(() => !document.querySelector('.ql-tooltip.ql-editing:not(.ql-hidden)'));
+        await a.page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+        await a.page.locator('.photo-article').waitFor();
+        assert.match(await a.page.locator('.photo-article').innerText(), /폰 마무리\. 맥 입력\./);
+      } finally { await close(); }
+    });
+
     await check('m-3: shown again (visibility, back/forward cache) an open editor or read view reads what storage holds now', async () => {
       const { a, close } = await pair('m3c');
       try {
