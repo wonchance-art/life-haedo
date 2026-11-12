@@ -20,19 +20,21 @@ const homeReady = page => page.waitForFunction(() => document.querySelector('#ho
 async function openHome(page) { await page.goto(base + '/index.html'); await ready(page); await page.locator('.life-home').waitFor(); await homeReady(page); }
 
 // `saved` saved posts, `drafts` drafts (the first `copies` of them are recovery copies), in the open library.
-async function seed(page, { saved = 0, drafts = 0, copies = 0 }) {
-  return page.evaluate(async ({ saved, drafts, copies }) => {
+// `wordy`: that many of the plain drafts have the copies' words in their text (not in a copy's title).
+async function seed(page, { saved = 0, drafts = 0, copies = 0, wordy = 0 }) {
+  return page.evaluate(async ({ saved, drafts, copies, wordy }) => {
     const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
     const prefix = HaedoLife.BlogSync.CONFLICT_PREFIX;
     for (let index = 0; index < saved + drafts; index++) {
       const doc = m.create(c.id, new Date(Date.UTC(2026, 9, 1) + index * 60000).toISOString()), draft = index >= saved;
       doc.status = draft ? 'draft' : 'saved';
       doc.title = draft && index - saved < copies ? prefix + '익명 초안 ' + index : (draft ? '익명 초안 ' : '익명 글 ') + index;
-      doc.ops = [{ insert: '익명 본문 ' + index + '\n' }];
+      const plain = draft && index - saved >= copies, words = plain && index - saved - copies < wordy;
+      doc.ops = [{ insert: (words ? '복구 사본이라는 낱말이 든 익명 본문 ' : '익명 본문 ') + index + '\n' }];
       await s.savePhotoPost(ws, doc, 0);
     }
     return { ws, count: (await s.listPhotoPosts(ws)).length };
-  }, { saved, drafts, copies });
+  }, { saved, drafts, copies, wordy });
 }
 const notice = page => page.locator('#homePostList .home-limit:not(.home-delete-refused)');
 async function shot(page, name) {
@@ -62,7 +64,7 @@ async function main() {
     for (const [width, height] of [[1440, 1000], [390, 844]]) {
       await check(`${width}px: nothing below 190; from 190 the count left; at the cap how many to delete and where`, async page => {
         await openHome(page);
-        assert.equal((await seed(page, { saved: 185, drafts: 4 })).count, 189);
+        assert.equal((await seed(page, { saved: 185, drafts: 4, wordy: 1 })).count, 189);
         // A 첨부 글 draft (page composer) is not counted by the cap, even with the copies' words in it.
         await page.evaluate(async () => {
           const s = HaedoLife.Shell.storage, w = await s.getActive(), value = await s.readPageDrafts(w), draft = HaedoLife.PagePosts.draft([], HaedoLife.Core.id(), new Date().toISOString());
@@ -80,10 +82,30 @@ async function main() {
         await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
         assert.deepEqual([...new Set(await page.locator('#homePostList .home-draft').evaluateAll(nodes => nodes.map(node => node.dataset.draftKind)))], ['photo-draft']);
         assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['모든 초안 보기']);
-        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).click();
+        const tabLabel = () => page.locator('#homeTab-drafts').innerText().then(text => text.trim());
+        assert.equal(await tabLabel(), '초안 5', 'the tab counts what it lists');
+        // The drafts tab itself clears the filter (as 모든 초안 보기 does).
+        await page.locator('#homeTab-drafts').click();
         await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 6);
         assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1);
+        assert.equal(await tabLabel(), '초안 6');
         assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기']);
+        await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
+        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
+        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).click();
+        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 6);
+        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기']);
+        // The filter holds only while the line is shown: below 190 it is gone with the line.
+        await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
+        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
+        await page.evaluate(async () => {
+          const s = HaedoLife.Shell.storage, ws = await s.getActive(), row = (await s.listPhotoPosts(ws)).find(item => item.status === 'draft');
+          await s.deletePhotoPost(ws, row.id, row.revision);
+        });
+        await page.waitForFunction(() => !document.querySelector('#homePostList .home-limit') && document.querySelectorAll('#homePostList .home-draft').length === 5);
+        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1, 'every draft again');
+        assert.equal(await tabLabel(), '초안 5');
+        await seed(page, { drafts: 1 }); await page.waitForFunction(() => document.querySelector('#homePostList .home-limit'));
         await page.locator('#homeTab-posts').click(); await page.locator('#homeTab-posts[aria-selected="true"]').waitFor();
         // 199: one left, then the cap with two recovery copies among the drafts.
         await seed(page, { drafts: 7 }); await seed(page, { drafts: 2, copies: 2 });
@@ -103,6 +125,8 @@ async function main() {
         await notice(page).getByRole('button', { name: '복구 사본 2개 보기', exact: true }).focus(); await page.keyboard.press('Enter');
         await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor();
         await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 2);
+        assert.equal(await page.locator('#homePostList .home-draft', { hasText: '낱말이 든' }).count(), 0, 'a draft with the words only in its text is not a copy');
+        assert.equal(await page.locator('#homeTab-drafts').innerText().then(text => text.trim()), '초안 2');
         assert.deepEqual((await page.locator('#homePostList .home-draft strong').allInnerTexts()).map(text => text.startsWith('복구 사본 · ')), [true, true]);
         assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('home-draft-open')), true, 'focus moves to the first copy');
         assert.equal(await page.locator('#homePostSearch').inputValue(), '복구 사본');

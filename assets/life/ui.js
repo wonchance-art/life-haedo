@@ -1381,8 +1381,11 @@
         state.syncAccount = account;
         // The state for the status lines and buttons, without the server copy of a recorded
         // difference (2026-11-12: megabytes on every sync event). The comparison reads it when opened.
-        // The open workspace's revision lets a record ahead of it be read in full (a read error, not "synced").
-        const held = state.bundle?.workspaceId === workspaceId ? state.bundle.revision : undefined;
+        // The stored revision this page knows (the open workspace's, or a later one storage announced
+        // while the screen kept its copy) lets a record ahead of it be read in full: a read error, never
+        // "synced". Storage announces only revisions it stored, so a record really ahead is still caught.
+        const told = state.storedRevision?.workspaceId === workspaceId ? state.storedRevision.revision : -1;
+        const held = state.bundle?.workspaceId === workspaceId ? Math.max(state.bundle.revision, told) : undefined;
         const info = await sync.getState(workspaceId, held === undefined ? { light: true } : { light: true, localRevision: held });
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
@@ -1448,10 +1451,14 @@
 
     function connectSubscription() {
       if (unsubscribe) unsubscribe();
+      state.storedRevision = null; // only what storage announces to this subscription
       unsubscribe = storage.subscribe(state.bundle.workspaceId, event => {
         if (event.type === 'error') { failure(event.error); return; }
         if (event.type === 'sync_changed') { refreshSync().catch(failure); return; }
         if (event.type !== 'changed') return;
+        // The stored revision this page has been told of, for the sync state read (refreshSync).
+        if (Number.isSafeInteger(event.revision) && event.workspaceId === state.bundle.workspaceId)
+          state.storedRevision = { workspaceId: event.workspaceId, revision: Math.max(event.revision, state.storedRevision?.workspaceId === event.workspaceId ? state.storedRevision.revision : -1) };
         // The material editor's own save is read back by its onSaved; it is not "changed elsewhere".
         if (event.revision <= state.bundle.revision || state.busy || sourceEditor?.isSaving()) return;
         state.remoteChanged = true;

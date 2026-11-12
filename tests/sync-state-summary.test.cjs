@@ -186,13 +186,38 @@ test('a record ahead of the workspace: the screen\'s light read is a read error,
   const behind = await a.manager.getState(a.ws, { light: true, localRevision: held });
   assert.equal(behind.status, 'synced'); assert.equal(Object.hasOwn(behind.conflict || {}, 'row'), false);
   // The record says the device synced a revision the workspace does not have.
-  const meta = a.rows.get('meta'), key = JSON.stringify(`sync:${a.ws}`), good = clone(meta.get(key)), current = (await a.read()).revision;
-  meta.set(key, { ...good, value: { ...good.value, syncedLocalRevision: current + 5 } });
+  // A committed transaction replaces the store's map: read it again each time.
+  const meta = () => a.rows.get('meta'), key = JSON.stringify(`sync:${a.ws}`), good = clone(meta().get(key)), current = (await a.read()).revision;
+  meta().set(key, { ...good, value: { ...good.value, syncedLocalRevision: current + 5 } });
   assert.equal((await a.manager.getState(a.ws, { light: true })).status, 'synced', 'without the revision the light read cannot tell (documented)');
   await assert.rejects(a.manager.getState(a.ws, { light: true, localRevision: current }), { code: 'invalid_sync_metadata' }, 'the screen shows a read error, never synced');
   await assert.rejects(a.manager.pause(a.ws), { code: 'invalid_sync_metadata' });
-  assert.deepEqual(meta.get(key).value, { ...good.value, syncedLocalRevision: current + 5 }, 'pausing wrote nothing');
+  assert.deepEqual(meta().get(key).value, { ...good.value, syncedLocalRevision: current + 5 }, 'pausing wrote nothing');
   await assert.rejects(a.manager.getState(a.ws, { localRevision: current }), { code: 'remote_invalid' }, 'the revision goes with light only');
-  meta.set(key, good);
+  meta().set(key, good);
   assert.equal((await a.manager.pause(a.ws)).status, 'paused');
+  assert.equal(meta().get(key).value.enabled, false, 'a pause that is allowed is written (the check above reads the live store)');
+});
+
+// The full read is only for a record ahead of what the screen holds (review 2026-11-12: not on every
+// event while the screen's copy is behind; ui.js passes the stored revision storage announced).
+test('the light read with the screen\'s revision reads in full only when the record is ahead of it', async t => {
+  const server = createServer(), a = createDevice('A', server); t.after(() => a.close());
+  await a.login(); a.ws = (await a.storage.createWorkspace('익명 자료')).workspaceId; await add(a, '첫 자료');
+  await a.manager.enable(a.ws);
+  let fulls = 0;
+  const storage = { ...a.storage, getSyncState: id => { fulls++; return a.storage.getSyncState(id); } };
+  const { create } = require(path.join(__dirname, '../assets/life/sync.js'));
+  const factory = () => server.adapter(a); factory.loadConfig = () => clone(CONFIG); factory.saveConfig = () => {};
+  const manager = create({ storage, core: Core, remoteFactory: factory, automatic: false }); t.after(() => manager.dispose());
+  await manager.connect({ ...CONFIG, email: 'a@example.invalid', password: 'fixture-only' });
+  const held = (await a.read()).revision, record = (await a.storage.getSyncSummary(a.ws)).syncedLocalRevision;
+  assert.equal(record, held);
+  fulls = 0;
+  for (let index = 0; index < 3; index++) assert.equal((await manager.getState(a.ws, { light: true, localRevision: held })).status, 'synced');
+  assert.equal(fulls, 0, 'the same revision: no full read');
+  await manager.getState(a.ws, { light: true, localRevision: held + 3 });
+  assert.equal(fulls, 0, 'a screen ahead of the record (it knows a later save): no full read');
+  await manager.getState(a.ws, { light: true, localRevision: held - 1 });
+  assert.equal(fulls, 1, 'a record ahead of the screen: one full read');
 });

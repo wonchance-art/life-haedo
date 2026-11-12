@@ -7,7 +7,7 @@
  *   BASE_URL=http://127.0.0.1:4864 CHROMIUM_PATH=... PW_MODULE_PATH=... node tests/sync-state-display-browser.cjs */
 'use strict';
 const assert = require('node:assert/strict');
-const { FakeCloud } = require('./life-sync-browser.cjs');
+const { FakeCloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, observe } = require('./unified-home-browser.cjs');
 const { fixture, syncing, enable } = require('./life-management-browser.cjs');
 
@@ -25,10 +25,30 @@ const ahead = (page, by) => page.evaluate(async by => {
 async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   const report = { checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0 };
-  const server = new FakeCloud(), context = await makeContext(browser, server, 'display-0'), page = await context.newPage();
+  const server = new FakeCloud(), context = await makeContext(browser, server, 'display-0');
+  // Records the options of each state read the screen asks the engine for (the engine itself unchanged).
+  await context.route(base + '/assets/life/sync.js', async route => {
+    const response = await route.fetch(), source = await response.text();
+    const hook = `\n;(()=>{const api=HaedoLife.Sync,create=api.create;HaedoLife.Sync=Object.freeze({...api,create(...args){const manager=create(...args);` +
+      `return Object.freeze({...manager,getState(id,options){if(options&&options.localRevision!==undefined)(window.__screenReads||=[]).push(options.localRevision);return manager.getState(id,options);}});}});})();`;
+    await route.fulfill({ response, body: source + hook });
+  });
+  const page = await context.newPage();
   page.setDefaultTimeout(15000); observe(page, report, 'display');
   try {
     await fixture(page); await syncing(page); await enable(page);
+    await page.waitForFunction(() => /서버와 동기화됨/.test(document.querySelector('#lifeSyncStatus')?.textContent || ''));
+    // Another save (here, straight to storage, as another tab's would be) while the screen keeps its
+    // copy: the screen reads with the revision storage announced, so a consistent record needs no full read.
+    const saved = await page.evaluate(async () => {
+      const s = HaedoLife.Shell.storage, c = HaedoLife.Core, id = await s.getActive(), current = await s.read(id);
+      const prepared = await c.prepareImport({ origin: 'other', title: '다른 탭이 저장한 자료', text: '다른 탭 본문' }, current);
+      const result = await s.commitLocal({ operationId: c.id(), workspaceId: id, baseRevision: current.revision, changes: c.buildImportChanges(current, prepared, []) });
+      return result.revision;
+    });
+    await page.waitForFunction(revision => (window.__screenReads || []).includes(revision), saved);
+    assert.equal(Math.max(...await page.evaluate(() => window.__screenReads)), saved, 'the screen passes the revision storage announced, not its older copy\'s');
+    await page.evaluate(async () => { await HaedoLife.Shell.sync.syncNow(await HaedoLife.Shell.storage.getActive()); });
     await page.waitForFunction(() => /서버와 동기화됨/.test(document.querySelector('#lifeSyncStatus')?.textContent || ''));
     const stored = await ahead(page, 5);
     // A run (as the page's own focus and timer runs do) makes the screen read the state again.

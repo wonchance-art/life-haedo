@@ -192,7 +192,9 @@
     // published it before this one knew) and the post came back. Said once on this list, until 확인.
     let refusedDelete = false;
     const REFUSED_DELETE = '공개 중인 글이라 서버에서 삭제하지 않았어요. 다음 동기화에서 이 글을 다시 받아요. 공개를 철회한 뒤 삭제해 주세요.';
-    // cap: only the rows the 200 cap counts (this library's posts and drafts), set by the cap notice's buttons.
+    // cap: only the rows the 200 cap counts (this library's posts and drafts), set by the cap notice's
+    // buttons: true, or 'copies' (and only the recovery copies, while the search is the copies' words).
+    // It holds only while the notice is shown (updateList clears it when the count drops below 190).
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20, cap: false };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
@@ -207,7 +209,7 @@
       listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
         searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
-        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT, cap: incoming.cap === true };
+        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT, cap: incoming.cap === true || incoming.cap === 'copies' ? incoming.cap : false };
     }
     function clearMedia() {
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
@@ -555,7 +557,11 @@
     // A row the 200 cap counts: a post or draft of this library's post list (not 첨부 글·기록 글 drafts,
     // not another library's posts).
     const counted = (context, row) => (row.kind === 'photo' || row.kind === 'photo-draft') && (row.workspaceId || context.workspaceId) === context.workspaceId;
-    const shown = (context, row) => row.tab === listState.tab && matchesQuery(row) && (!listState.cap || counted(context, row));
+    const COPY_PREFIX = () => life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ', COPY_QUERY = () => COPY_PREFIX().replace(/[\s·]+$/, '');
+    // A recovery copy a sync conflict kept: a draft of this library whose title starts with the prefix.
+    const isCopy = (context, row) => row.tab === 'drafts' && counted(context, row) && String(row.title || '').startsWith(COPY_PREFIX());
+    const capped = (context, row) => !listState.cap || counted(context, row) && (listState.cap !== 'copies' || listState.query !== COPY_QUERY() || isCopy(context, row));
+    const shown = (context, row) => row.tab === listState.tab && matchesQuery(row) && capped(context, row);
     function matchesQuery(row, text = listState.query) {
       const query = text.trim().toLocaleLowerCase('ko-KR');
       return !query || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(item => item.title) : [])]
@@ -581,9 +587,9 @@
       if (!capacity) return null;
       // Drafts of this library's list as the cap counts them (empty ones too); the rest are posts.
       const drafts = photo?.drafts?.[context.workspaceId] || 0;
-      const prefix = life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ', copyQuery = prefix.replace(/[\s·]+$/, '');
-      // Counted as the button shows them: this library's drafts that the search for the copies finds.
-      const copies = rows.filter(row => row.tab === 'drafts' && counted(context, row) && matchesQuery(row, copyQuery) && String(row.title || '').startsWith(prefix)).length;
+      const copyQuery = COPY_QUERY();
+      // Counted as the button shows them (shown with cap 'copies'): this library's recovery copies.
+      const copies = rows.filter(row => isCopy(context, row) && matchesQuery(row, copyQuery)).length;
       const notice = el('div', null, 'home-limit'); notice.dataset.homeLimit = capacity.full ? 'full' : 'near';
       notice.append(el('p', limitText(capacity, drafts), 'life-meta'));
       const show = (label, query, cap, key) => {
@@ -596,8 +602,8 @@
       };
       const here = listState.tab === 'drafts' && listState.cap;
       const actions = el('div', null, 'home-limit-actions');
-      if (drafts && !(here && !listState.query.trim())) actions.append(show('초안 보기', '', true, 'drafts'));
-      if (copies && !(here && listState.query === copyQuery)) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, true, 'copies'));
+      if (drafts && !(here && listState.cap === true && !listState.query.trim())) actions.append(show('초안 보기', '', true, 'drafts'));
+      if (copies && !(here && listState.cap === 'copies' && listState.query === copyQuery)) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, 'copies', 'copies'));
       if (here) actions.append(show('모든 초안 보기', '', false, 'all-drafts'));
       if (actions.childElementCount) notice.append(actions);
       return notice;
@@ -619,7 +625,10 @@
       context.resumeRow = rows.find(row => row.tab === 'drafts') || null;
       context.resume.hidden = !context.resumeRow || listState.tab !== 'posts' || !!query;
       if (context.resumeRow) context.resumeLabel.textContent = String(context.resumeRow.title || '').trim() || snippet(context.resumeRow.body) || '작성 중인 초안';
-      const counts = Object.fromEntries(Object.keys(TAB_LABELS).map(tab => [tab, rows.filter(row => row.tab === tab).length]));
+      // The filter of the cap notice holds only while the notice is shown.
+      if (listState.cap && !postCapacity(context.results.photo?.status === 'fulfilled' ? context.results.photo.value?.counts?.[context.workspaceId] : undefined)) listState.cap = false;
+      // A tab's count is what it lists without a search (with the notice's filter, the filtered rows).
+      const counts = Object.fromEntries(Object.keys(TAB_LABELS).map(tab => [tab, rows.filter(row => row.tab === tab && capped(context, row)).length]));
       for (const button of context.tabs.children) {
         const tab = button.dataset.homeTab, selected = tab === listState.tab;
         button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
