@@ -1,6 +1,6 @@
 # 뉴스 넓게 찾기 — 서버 (2026-11-11)
 
-**상태:** Edge 함수 `haedo-news-wide`, 마이그레이션 `20261111130000_news_wide_feed.sql`, 허용 계정 설치 SQL, 검사와 이 문서까지다. **운영 DB·운영 Edge에는 적용하지 않았고 화면 연결도 없다.** 로컬 검사 결과와 미검증 항목은 아래 「검증」 절에 나눠 적는다. 운영 적용은 마지막 절의 순서대로 총괄이 한다.
+**상태:** Edge 함수 `haedo-news-wide`, 마이그레이션 `20261111130000_news_wide_feed.sql`, 허용 계정 설치 SQL, 검사와 이 문서까지다. **마이그레이션 20261111130000은 2026-11-11 운영 적용(6함수 md5 일치, 허용 목록 0행), Edge `haedo-news-wide` 미배포, 허용 SQL 미적용. 화면 연결도 없다.** 로컬 검사 결과와 미검증 항목은 아래 「검증」 절에 나눠 적는다. 운영 적용은 마지막 절의 순서대로 총괄이 한다.
 
 배경: 뉴스 탭이 정해 둔 출처에서만 나와 좁다는 소유자 요청(2026-11-11). 1단계(화면 카드화·5건 상한 해제·고정 출처 확대)는 `news/discover-feed` 브랜치의 다른 작업이다. 이 문서는 2단계의 서버 쪽, 곧 **뉴스 설정에 직접 적은 관심 주제로 외부 뉴스 집계 서비스를 조회해 그 계정에만 돌려주는 경로**다.
 
@@ -27,7 +27,7 @@
 
 - 주소: `https://news.google.com/rss/search?q=<주제>&hl=ko&gl=KR&ceid=KR:ko`, 영어는 `hl=en-US&gl=US&ceid=US:en`.
 - 실호출로 확인한 것: 질의 한 번에 최대 100건. 항목은 `title`("제목 - 매체"), `link`(Google 경유 주소), `pubDate`, `<source url="매체 홈">매체 이름</source>`. 이미지는 없다. `description`은 HTML이다.
-- 피드 저작권 문구: 개인 피드 리더 안에서 개인·비상업 용도로 Google 뉴스 결과를 보여 주는 목적에만 제공한다. 그 밖의 사용은 금지한다. 이 함수는 **허용된 계정 하나의 개인 리더**라는 전제에서만 이 문구에 기댄다.
+- 피드 저작권 문구: 개인 피드 리더 안에서 개인·비상업 용도로 Google 뉴스 결과를 보여 주는 목적에만 제공한다. 그 밖의 사용은 금지한다. 이 함수는 **소유자 한 사람의 계정들의 개인 리더**라는 전제에서만 이 문구에 기댄다(2026-11-12: 소유자 계정 3개).
 - 원문 주소는 단순 리다이렉트로 얻을 수 없다. **풀려고 하지 않고** Google 주소를 그대로 쓴다.
 - 비용 0원. 키·계정 없음.
 
@@ -45,8 +45,10 @@
 
 - 표 `haedo_news_wide_private.allowed_accounts(owner_id, added_at)`에 있는 계정만 넓게 찾기를 쓸 수 있다. RLS가 켜져 있고 정책이 없으며 `anon`·`authenticated`·`service_role`에 어떤 표 권한도 없다.
 - 마이그레이션은 이 표를 **빈 채로** 만든다. 저장소에는 계정 ID가 없다. 비어 있으면 모든 계정이 거절된다(닫힌 기본값).
-- 목록에 계정을 넣는 길은 운영 설치 SQL `supabase/operations/20261111-news-wide-allow-first-account.sql` 하나뿐이다. 사용자가 부를 수 있는 함수는 이 표에 쓰지 않는다(검사로 고정).
-- 설치 SQL은 **익명이 아닌 계정이 정확히 1개일 때만** 그 계정을 넣는다. 0개이거나 2개 이상이면 아무것도 넣지 않고 예외로 멈춘다. 그때는 총괄이 소유자에게 어느 계정인지 묻는다(파일을 고쳐 계정을 고르지 않는다). 이미 들어 있으면 변화가 없다. 결과와 알림에는 개수만 나온다.
+- 목록에 계정을 넣는 길은 운영 설치 SQL 두 파일뿐이다. 사용자가 부를 수 있는 함수는 이 표에 쓰지 않는다(검사로 고정).
+- `supabase/operations/20261111-news-wide-allow-first-account.sql`(1개 계정용 기록)은 **익명이 아닌 계정이 정확히 1개일 때만** 그 계정을 넣는다. 0개이거나 2개 이상이면 아무것도 넣지 않고 예외로 멈춘다. 운영에는 비익명 계정이 3개라 이 파일은 멈춘다.
+- **2026-11-12 소유자 결정: 계정 3개.** 운영의 비익명 계정 3개가 모두 소유자 계정이라는 답에 따라 `supabase/operations/20261112-news-wide-allow-owner-accounts.sql`을 쓴다. 파일 맨 앞의 상수 `expected constant bigint := 3`과 비익명 계정 수가 **정확히 같고**, 비익명 계정 중 `created_cutoff constant timestamptz := '2026-10-04 00:00:00+00'` 이후(또는 생성 시각 없이) 만들어진 계정이 **하나도 없을 때만** 그 계정 전부를 넣는다. 컷오프는 총괄이 읽기 전용으로 잰 "비익명 중 가장 늦은 생성 2026-10-03 11:46Z"의 다음 날이다. 수만 보면 소유자 계정 하나가 지워지고 다른 사람이 가입해도 3개로 같기 때문에 넣었다. 수가 다르면 `Expected exactly 3 non-anonymous accounts (owner decision 2026-11-12), found N`으로, 컷오프 뒤 계정이 있으면 `Found N non-anonymous account(s) created on or after the cutoff …`로 아무것도 넣지 않고 멈춘다. 개수 판정·컷오프 판정·삽입·사후 집합 검사가 같은 조건을 쓴다. 그때는 총괄이 소유자에게 다시 묻는다(파일을 고쳐 계정을 고르지 않는다). 넣은 뒤 목록이 비익명 계정 집합과 정확히 같아야 하고, 목록에 다른 계정이 이미 있으면 멈춘다. 익명 계정은 넣지 않는다.
+- 두 파일 모두 이미 들어 있는 계정은 그대로 두고(다시 실행해도 같은 결과), 결과와 알림에는 개수만 나온다.
 - 목록에 없는 계정:
   - `claim`은 입력을 보기도 전에 `{"status":"not_allowed"}`를 돌려준다. 행·lease·호출 수를 만들지 않는다.
   - `finish`도 `not_allowed`를 돌려주고 아무것도 저장하지 않는다(받는 도중 목록에서 빠진 경우).
@@ -117,7 +119,9 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 | 실패 뒤 대기 | 5분(연결·형식 오류), 30분(429·403·리다이렉트) | 공급원이 막고 있을 때 반복해서 두드리지 않는다. |
 | 보관 주제 수 / 미사용 정리 | 64개 / 7일 | 주제를 몇 번 바꿔 쓴 분량. |
 
-허용 계정이 하나이므로 위 계정당 한도가 곧 전체 한도다. 시간·하루 한도는 고정 구간이다. 구간이 바뀌는 순간에는 짧은 시간에 두 구간 몫(최대 120회)이 나갈 수 있다. 값을 바꾸려면 새 마이그레이션과 이 표를 함께 고친다.
+한도와 캐시는 계정별이다. 2026-11-12 소유자 결정으로 허용 계정이 3개이므로 전체 상한은 시간당 180회, 하루 1,800회다. 시간·하루 한도는 고정 구간이라, 구간이 바뀌는 순간에는 짧은 시간에 두 구간 몫(계정당 120회, 3개면 최대 360회)이 나갈 수 있다. 캐시도 계정별이라 같은 주제를 계정마다 따로 받는다(세 계정이 같은 주제 16쌍을 켜 두면 30분마다 48회, 시간당 96회).
+
+Google 차단 위험은 이 수치로 본다. 공급원 쪽에서는 Supabase Edge의 같은 IP 대역에서 오는 호출로 보이므로, 계정이 셋이어도 한 출처의 호출량이다. 평소 쓰임(한두 기기에서 탭을 열 때 갱신)은 계정 하나 기준 시간당 32회 이하라 세 계정을 합쳐도 시간당 100회 안팎이고, 상한 180회·경계 360회는 고장 난 클라이언트나 켜 둔 탭이 셋 다 돌 때의 최악값이다. 이 최악값에서 429·동의 화면이 나오면 함수는 그 요청의 남은 호출을 멈추고, 막힌 주제만 30분 대기에 들어간다. 멈춘 나머지 주제는 대기가 없어 다음 요청에서 다시 시도하므로, 모든 주제가 대기에 들어갈 때까지 요청마다 최대 한 번(동시 4개까지) 더 나갈 수 있다. 실제 Edge IP에서 Google이 몇 회까지 받아 주는지는 확인하지 못했다(「검증」 절 미검증). 차단이 잦으면 계정당 한도를 낮추는 새 마이그레이션을 먼저 검토한다. 값을 바꾸려면 새 마이그레이션과 이 표를 함께 고친다.
 
 ## 요청과 응답
 
@@ -244,7 +248,7 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 실행한 것(로컬, 2026-11-11, 최종 head 기준):
 
 - `node --test tests/news-wide-edge.test.cjs tests/news-wide-handler.test.cjs` — 입력 검증, 주제 규칙, 주소 조립, 어댑터 계약, 리다이렉트·크기·형식 거절, 파싱·정규화·상한, 인증 거절과 Auth 일시 장애 구분, 허용 계정 거절, 캐시 상태별 응답, 공급원 거절 뒤 중단, 로그 필드, 허용 출처, 키 형식, 배포 파일의 보이지 않는 문자 없음과 SHA-256 표 대조.
-- `node tests/run-news-wide-postgres.cjs` — 격리 PostgreSQL 16에서 기존 객체 불변, 권한, 허용 계정과 설치 SQL(계정 0·익명만·1·3개, 미리 채워진 목록, 재실행, 출력에 개수만), 소유자 격리, 입력 검증, Edge·SQL 주제 규칙 대조(목록과 무작위 2만 개), `standard_conforming_strings` on·off 두 세션의 같은 답, 설치 SQL 실행 중 다른 표·`auth.users` 행 수가 바뀌면 되돌림(다른 연결에서 행 추가), TTL·대기·한도·보존, 동시 요청, 실제 handler와 실제 SQL의 연결, `md5(prosrc)` 표 대조. `--mutation=<이름>` 35가지(마이그레이션 29, 설치 SQL 6)는 각각 검사를 실패시킨다.
+- `node tests/run-news-wide-postgres.cjs` — 격리 PostgreSQL 16에서 기존 객체 불변, 권한, 허용 계정과 설치 SQL(계정 0·익명만·1·3개, 미리 채워진 목록, 재실행, 출력에 개수만), 2026-11-12 소유자 계정 SQL(별도 DB에서 비익명 0·익명만·1·2·4개와 익명이 실계정으로 바뀐 경우·3개 중 하나 삭제 → 멈춤과 목록 불변, 수는 3이지만 컷오프 뒤 계정이 섞인 경우(소유자 계정 하나 삭제 뒤 새 가입, 생성 시각 없음, 컷오프 뒤 생긴 익명의 영구 전환) → 멈춤과 목록 불변, 다른 계정이 든 목록 → 멈춤, 3개 → 셋 모두 들어가고 익명 제외·이미 있던 행 유지, 재실행 불변, 실행 중 `public` 표·`haedo_*` 표·`auth.users` 행 수 변경 → 되돌림, 들어간 세 계정의 실제 `claim`, 알림·오류·결과에 UUID·`@` 없음, 전부 ASCII·`\u`와 백슬래시 없음), 소유자 격리, 입력 검증, Edge·SQL 주제 규칙 대조(목록과 무작위 2만 개), `standard_conforming_strings` on·off 두 세션의 같은 답, 설치 SQL 실행 중 다른 표·`auth.users` 행 수가 바뀌면 되돌림(다른 연결에서 행 추가), TTL·대기·한도·보존, 동시 요청, 실제 handler와 실제 SQL의 연결, `md5(prosrc)` 표 대조. `--mutation=<이름>` 44가지(마이그레이션 29, 1개 계정 설치 SQL 6, 소유자 계정 SQL 9)는 각각 검사를 실패시킨다. 소유자 계정 SQL 안에 금지 문장(delete·grant 등)이 없는지 보는 정적 검사는 주석과 따옴표 문자열만 걷어 내고 찾는 보조 검사라 우회할 수 있다. 주 방어는 SHA-256 고정과 검수다.
 - `SQL_REPLAY_REQUIRED=1 npm run test:sql-replay` — 새 파일을 포함한 37개 마이그레이션 재생.
 - `node scripts/check-news-wide-live.mjs`(수동) — 일반 검색어 "기후"·"climate" 각 1회. 두 응답 모두 fixture가 가정한 모양이었다.
 
@@ -260,7 +264,7 @@ User-Agent: Mozilla/5.0 (compatible; FeedReader/1.0)
 
 ## 운영 적용 안내 (총괄)
 
-작업자는 아래 어느 것도 실행하지 않았다. 새 비밀값은 **없다**(기존 `SUPABASE_URL`, `SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`만 읽는다). 순서는 **마이그레이션 → 해시 대조 → 허용 계정 설치 SQL → 함수 배포**다. 허용 계정을 넣기 전에는 함수를 배포해도 모든 계정이 403이다.
+작업자는 아래 어느 것도 실행하지 않았다. **운영은 1·2단계를 이미 지났다(2026-11-11 마이그레이션 적용). 3번(해시·정규식 생존·권한과 빈 표)을 다시 확인한 뒤 4번부터 한다.** 1번의 `schema_absent=true` 같은 기대값은 적용 전 기록이다. 새 비밀값은 **없다**(기존 `SUPABASE_URL`, `SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`만 읽는다). 순서는 **마이그레이션 → 해시 대조 → 허용 계정 설치 SQL → 함수 배포**다. 허용 계정을 넣기 전에는 함수를 배포해도 모든 계정이 403이다.
 
 적용할 파일은 저장소의 파일을 **바이트 그대로** 쓴다. 마이그레이션은 전부 ASCII이고 보이지 않는 문자는 `\u` 표기로만 들어 있다(글자로 옮기다 빠지는 일을 막기 위해서다). 옮긴 뒤에는 아래 해시로 확인한다.
 
@@ -274,12 +278,12 @@ select to_regnamespace('haedo_news_wide_private') is null as schema_absent,
   to_regclass('auth.sessions') is not null as has_auth_sessions,
   exists (select 1 from information_schema.columns where table_schema = 'auth' and table_name = 'users' and column_name = 'is_anonymous') as has_is_anonymous,
   (select count(*) from auth.users u where not coalesce(u.is_anonymous, false)) as non_anonymous_accounts,
-  (select count(*) from pg_namespace where nspname like 'haedo\_%') as haedo_schemas,
+  (select count(*) from pg_namespace where left(nspname, 6) = 'haedo_') as haedo_schemas,
   (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public') as public_functions,
   (select count(*) from pg_policies) as policies;
 ```
 
-기대: `schema_absent=true`, `own_public_functions=0`, 가운데 셋은 `true`. `non_anonymous_accounts`가 1이 아니면 4번에서 멈추므로 먼저 소유자에게 묻는다. 뒤 세 숫자를 적어 둔다.
+기대: `schema_absent=true`, `own_public_functions=0`, 가운데 셋은 `true`. `non_anonymous_accounts`는 3이어야 한다(2026-11-12 소유자 결정). 3이 아니면 4번에서 멈추므로 먼저 소유자에게 다시 묻는다. 뒤 세 숫자를 적어 둔다.
 
 **2. 마이그레이션 적용:** `supabase/migrations/20261111130000_news_wide_feed.sql` 그대로. 한 트랜잭션이고 새 스키마·표 세 개·함수 아홉 개만 만든다. 기존 표·함수·정책·행을 읽거나 고치지 않으므로 기존 행 수가 바뀔 수 없다(격리 검사에서 기존 카탈로그 불변, 두 번 적용해도 같은 결과).
 
@@ -346,15 +350,16 @@ select (select count(*) from haedo_news_wide_private.feeds) as feeds,
 
 1번의 뒤 세 숫자는 `haedo_schemas` +1, `public_functions` +3, `policies` 그대로여야 한다.
 
-**4. 허용 계정 설치:** `supabase/operations/20261111-news-wide-allow-first-account.sql`을 그대로 실행한다.
+**4. 허용 계정 설치 (2026-11-12 소유자 결정: 계정 3개):** `supabase/operations/20261112-news-wide-allow-owner-accounts.sql`을 그대로 실행한다. 파일은 전부 ASCII이고 백슬래시가 하나도 없어(`\u`도 없다) 운영 SQL 도구가 이스케이프를 바꿔 보낼 거리가 없다(`npm test`와 격리 검사가 단언한다). 실행 전에 아래 표의 SHA-256과 대조한다.
 
-- 익명이 아닌 계정이 정확히 1개면 그 계정을 넣고, 맨 아래 결과 표의 `ok`가 모두 `true`다(`n`은 개수).
-- 0개이거나 2개 이상이면 `Expected exactly one non-anonymous account, found N`으로 멈추고 아무것도 넣지 않는다. **이 경우 총괄이 소유자에게 어느 계정을 허용할지 묻는다.** 계정을 고르는 SQL은 이 저장소에 없으며, 소유자 결정 뒤 따로 검수해 만든다.
-- 목록에 이미 다른 계정이 있으면 멈춘다. 같은 계정이 이미 있으면 변화가 없다(다시 실행해도 된다).
-- 실행 전후로 다른 표의 행 수를 비교하고 달라지면 되돌린다.
-- 출력에는 계정 ID·이메일이 없다.
+- 익명이 아닌 계정이 정확히 3개이고 모두 2026-10-04 전에 만들어졌으면 셋 모두 넣고, 맨 아래 결과 표 6행의 `ok`가 모두 `true`다(`n`은 개수: 3, 3, 0, 0, 0, 비어 있음).
+- 3개가 아니면 `Expected exactly 3 non-anonymous accounts (owner decision 2026-11-12), found N`으로 멈추고 아무것도 넣지 않는다. 컷오프 뒤 계정이 있으면 `Found N non-anonymous account(s) created on or after the cutoff of the owner decision 2026-11-12 (or with no creation time)`로 멈춘다. **두 경우 모두 총괄이 소유자에게 다시 묻는다.** 파일을 고쳐 계정을 고르지 않는다.
+- 목록에 비익명 계정이 아닌 계정이 이미 있으면 `The allow list would hold N account(s) and must hold exactly the 3 non-anonymous accounts`로 멈춘다. 세 계정 중 일부가 이미 있으면 그 행은 그대로 두고 나머지만 넣는다(다시 실행해도 된다).
+- 실행 전후로 `public`·`haedo_*`의 모든 표(`allowed_accounts` 제외)와 `auth.users`의 행 수를 비교하고 달라지면 되돌린다.
+- 출력에는 계정 ID·이메일이 없다. 삭제·권한 완화가 없다.
+- 이전 파일 `supabase/operations/20261111-news-wide-allow-first-account.sql`은 비익명 계정이 1개일 때의 기록이다. 운영에서는 `found 3`으로 멈추므로 실행하지 않는다.
 
-**5. Edge 함수 배포:** 이름 `haedo-news-wide`, 진입점 `supabase/functions/haedo-news-wide/index.ts`, **`verify_jwt=false`**([2026-11-04 결정](../life-tools-design/weekly-tech-review.md): 함수가 JWT 모양이 아닌 Bearer를 본문을 읽기 전에 거절하고 `/auth/v1/user`로 세션을 확인한다). 함께 올릴 실행 파일 9개와, 2·4번에서 쓰는 SQL 2개의 SHA-256(배포 뒤 플랫폼이 돌려준 소스와 대조한다):
+**5. Edge 함수 배포:** 이름 `haedo-news-wide`, 진입점 `supabase/functions/haedo-news-wide/index.ts`, **`verify_jwt=false`**([2026-11-04 결정](../life-tools-design/weekly-tech-review.md): 함수가 JWT 모양이 아닌 Bearer를 본문을 읽기 전에 거절하고 `/auth/v1/user`로 세션을 확인한다). 함께 올릴 실행 파일 9개와, 2·4번의 SQL 3개(4번은 2026-11-12 파일을 쓰고, 이전 1개 계정용 파일도 기록으로 둔다)의 SHA-256(배포 뒤 플랫폼이 돌려준 소스와 대조한다):
 
 <!-- news-wide-file-hashes:start -->
 | 파일 | SHA-256 |
@@ -370,6 +375,7 @@ select (select count(*) from haedo_news_wide_private.feeds) as feeds,
 | `supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs` | `438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55` |
 | `supabase/migrations/20261111130000_news_wide_feed.sql` | `7825f9fb5ae538a3254f6d9fde7f7dffecd17d212c79fd6c77ce841886fe84ed` |
 | `supabase/operations/20261111-news-wide-allow-first-account.sql` | `407be756008f2bc62e758ac9728448da397d135c99bfbd02ed37e42c8a572cfb` |
+| `supabase/operations/20261112-news-wide-allow-owner-accounts.sql` | `45a9e24c8a7c30aa9e5e6d7a5eba3206efa847855ee831f90ab33b2c0d076019` |
 <!-- news-wide-file-hashes:end -->
 
 함수 폴더만 복사한 배포는 `_shared/supabase-keys.mjs`와 파서 번들을 잃는다. `haedo-rss` 함수 자체는 배포하지 않아도 된다(파서 파일만 쓴다). 파서의 라이선스는 같은 폴더의 `LICENSES.txt`다.
@@ -393,7 +399,7 @@ commit;
 
 ## 소유자가 판단할 것
 
-1. **허용할 계정.** 익명이 아닌 계정이 하나뿐이면 설치 SQL이 그 계정을 넣는다. 둘 이상이면 어느 계정인지 소유자가 정해야 한다.
-2. **피드 약관.** "개인 피드 리더 안에서 개인·비상업"이라는 문구에 서버 캐시(30분)와 재전달이 들어맞는지는 해석의 문제다. 허용된 계정 하나의 개인 리더라는 전제에서만 근거가 있다.
+1. **허용할 계정.** 2026-11-12에 결정했다: 운영의 비익명 계정 3개가 모두 소유자 계정이고 셋 모두 허용한다. 계정 수가 달라지면 설치 SQL이 멈추고 다시 묻는다.
+2. **피드 약관.** "개인 피드 리더 안에서 개인·비상업"이라는 문구에 서버 캐시(30분)와 재전달이 들어맞는지는 해석의 문제다. 소유자 한 사람의 계정들의 개인 리더라는 전제에서만 근거가 있다.
 3. **Google 주소 경유.** 원문 주소를 얻을 수 없어 글을 누르면 Google을 거친다. `담기`에도 Google 주소가 보관된다.
 4. **끄면 지우기.** `life_news_wide_clear`는 처음 지시서에 없던 추가다. 빼면 끈 뒤에도 주제가 서버에 남는다.
