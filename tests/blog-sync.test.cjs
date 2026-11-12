@@ -159,14 +159,18 @@ test('explicit deletion removes the post and its originals on the server and on 
   await a.sync.syncNow(); assert.equal((await list(a)).length, 0, 'a deleted post is never received again');
 });
 
-test('a post deleted elsewhere while this device changed it is recreated instead of dropped', async () => {
+// 2026-11-12 (review B1): kept under a new server identity, never the deleted one (the server would start its revisions
+// at 1 again, which a device that missed the deletion takes for the revision it holds).
+test('a post deleted elsewhere while this device changed it is recreated instead of dropped, under a new server identity', async () => {
   const { cloud, time, a, b } = await pair();
   const doc = await save(a, await post()); await a.sync.syncNow(); await b.sync.syncNow();
   const draft = await edit(b, doc.id, { title: '삭제 중에 고친 내용' }, '2026-11-01T10:00:00.000Z'); const kept = await finish(b, draft, '2026-11-01T10:00:00.000Z');
   await a.sync.deletePost(a.ws, doc.id); await a.sync.syncNow(); assert.equal(cloud.rows.size, 0);
   time.advance(60000); await b.sync.syncNow();
   assert.equal((await b.storage.readPhotoPost(b.ws, kept.id)).title, '삭제 중에 고친 내용');
-  assert.equal(cloud.rows.get(doc.id).data.title, '삭제 중에 고친 내용');
+  assert.equal(cloud.rows.has(doc.id), false, 'the deleted identity stays deleted');
+  const recreated = [...cloud.rows.values()]; assert.equal(recreated.length, 1); assert.equal(recreated[0].data.title, '삭제 중에 고친 내용');
+  assert.equal((await b.storage.readBlogSyncState(b.ws, kept.id)).remoteId, recreated[0].id);
   await a.sync.syncNow(); assert.equal((await list(a))[0].title, '삭제 중에 고친 내용');
 });
 

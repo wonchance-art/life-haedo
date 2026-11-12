@@ -257,6 +257,9 @@ jobs:
       - name: Verify the light sync state read stays within budget and matches the full read
         if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/sync-state-read-performance-browser.cjs
+      - name: Verify an open editor follows other tabs and devices and never loses its input
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-editor-sync-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -787,6 +790,7 @@ jobs:
             .local/post-limit-notice/
             .local/sync-state-display-failure/
             .local/sync-state-read-performance/
+            .local/blog-editor-sync/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/

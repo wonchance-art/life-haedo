@@ -83,7 +83,7 @@
   function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
     photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
     makeId = () => root.crypto.randomUUID(), autoSync = false, interval = 30000, concurrency = 2, receiveConcurrency = 4, downloadConcurrency = 6, receiveBytes = 160 * 1024 * 1024,
-    now = () => Date.now(), timers = root, locks = root.navigator?.locks, events = root, publicReader = null } = {}) {
+    now = () => Date.now(), timers = root, locks = root.navigator?.locks, leases = undefined, events = root, publicReader = null } = {}) {
     const cleaner = root.HaedoLife?.BlogRemote?.clean || (error => error);
     const fault = code => cleaner({ code });
     // Publishing and withdrawing are never retried like a document save; their connection
@@ -295,7 +295,99 @@
     const remoteIsLater = (row, post) => writtenAt(row.data?.updatedAt, typeof row.updated_at === 'string' ? Date.parse(row.updated_at) : NaN) >= writtenAt(post.updatedAt, now());
     const synced = (state, row, extra = {}) => ({ ...state, enabled: true, enableOnSave: false, remoteRevision: row.revision, remoteManifest: row.data,
       remoteWorkspaceId: row.workspace_id, publication: row.publication ?? null, pending: null, conflict: null, status: 'synced', error: null, ...extra });
-    const held = (ws, id) => (holds.get(key(ws, id)) || 0) > 0;
+    // ---- open editors (holds) ----------------------------------------------------
+    // An open editor holds its post (holdPost). Two levels (2026-11-12, review M2/M3):
+    // - 'open': the editor is open. A deletion from another device (vanish, release, forget)
+    //   waits: typing in it would only bring the post back.
+    // - 'change': the editor has input that is not in storage yet (typing before autosave, an
+    //   IME composition, a photo in progress) as its `busy()` says. A received version waits;
+    //   a clean editor takes it and reads the post again (photo-post-ui refreshEdit). A hold
+    //   without `busy` is always busy (the earlier meaning).
+    // Other tabs of this browser see a hold of this tab as both levels: they never change a post
+    // that is open here, and this tab's own engine applies what arrives for it. Shared through a
+    // Web Lock held while the editor is open (released with the tab); without Web Locks, through
+    // a lease in localStorage renewed while it is open.
+    const tabId = makeId();
+    const holdName = (ws, id) => 'haedo-blog-hold:' + owner.projectUrl + ':' + owner.userId + ':' + ws + '/' + id;
+    const LEASE = 30000;
+    const leaseStore = leases === undefined ? (typeof locks?.request === 'function' ? null : (() => { try { return root.localStorage || null; } catch (_) { return null; } })()) : leases;
+    const openHere = (ws, id) => (holds.get(key(ws, id))?.size || 0) > 0;
+    function busyHere(ws, id) {
+      for (const entry of holds.get(key(ws, id)) || []) {
+        if (!entry.busy) return true;
+        try { if (entry.busy()) return true; } catch (_) { return true; }
+      }
+      return false;
+    }
+    // Whether another tab of this browser has this post open.
+    async function elsewhere(ws, id) {
+      const name = holdName(ws, id);
+      if (typeof locks?.query === 'function') {
+        try {
+          const value = await locks.query();
+          const count = (value?.held || []).filter(lock => lock.name === name).length;
+          return count > (shared.get(key(ws, id))?.granted ? 1 : 0);
+        } catch (_) { return false; }
+      }
+      if (!leaseStore) return false;
+      try {
+        const prefix = name + '#', at = now();
+        for (let i = 0; i < leaseStore.length; i++) {
+          const item = leaseStore.key(i);
+          if (!item?.startsWith(prefix) || item === prefix + tabId) continue;
+          if (Number(leaseStore.getItem(item)) > at) return true;
+        }
+      } catch (_) { /* Unreadable: treated as not held. */ }
+      return false;
+    }
+    // `level` 'open' or 'change' (above). Checked again right before a commit.
+    async function held(ws, id, level = 'change') {
+      if (level === 'open' ? openHere(ws, id) : busyHere(ws, id)) return true;
+      return elsewhere(ws, id);
+    }
+    // The tab-wide share of a hold: one per post while any editor of this page holds it.
+    const shared = new Map();
+    function share(ws, id) {
+      const k = key(ws, id), name = holdName(ws, id);
+      if (shared.has(k)) return;
+      const entry = { granted: false, stop: null }; shared.set(k, entry);
+      if (typeof locks?.request === 'function') {
+        let release; const done = new Promise(resolve => { release = resolve; });
+        entry.stop = release;
+        try { Promise.resolve(locks.request(name, { mode: 'shared' }, () => { if (shared.get(k) !== entry) return undefined; entry.granted = true; return done; })).catch(() => {}).finally(() => { entry.granted = false; }); }
+        catch (_) { /* No shared hold; this tab's own still applies. */ }
+        return;
+      }
+      if (!leaseStore) return;
+      const item = name + '#' + tabId;
+      let timer = null;
+      const renew = () => { try { leaseStore.setItem(item, String(now() + LEASE)); } catch (_) {} timer = timers.setTimeout(renew, LEASE / 3); };
+      renew();
+      entry.stop = () => { timers.clearTimeout(timer); try { leaseStore.removeItem(item); } catch (_) {} };
+    }
+    function unshare(ws, id) { const entry = shared.get(key(ws, id)); if (!entry) return; shared.delete(key(ws, id)); entry.stop?.(); }
+    // A hidden page with nothing outside storage does not keep its post from the other tabs: it
+    // cannot be typed in, and its editor reads again whatever another tab stores for it. Shared
+    // again when the page shows or the editor gets busy.
+    const holdPlaces = new Map();
+    function reshare(ws, id) {
+      if (openHere(ws, id) && (events?.document?.visibilityState !== 'hidden' || busyHere(ws, id))) share(ws, id);
+      else unshare(ws, id);
+    }
+    // A post open here that the server no longer has (deleted, or a revision finished on another device): said once.
+    const goneOpen = new Set();
+    function goneHere(ws, id) {
+      const k = key(ws, id);
+      if (!goneOpen.has(k)) { goneOpen.add(k); publish$({ type: 'remote_gone', workspaceId: ws, localPostId: id }); }
+    }
+    // Received versions that waited for a busy editor here; the editor says when it is idle.
+    const waitingChange = new Set();
+    function waitedFor(ws, id) {
+      const k = key(ws, id);
+      if (!waitingChange.has(k)) { waitingChange.add(k); publish$({ type: 'remote_waiting', workspaceId: ws, localPostId: id }); }
+    }
+    // In a commit's own transaction: an editor here that became busy since the check stops it.
+    const quietHere = (c, id = c.id) => () => current(c) && !busyHere(c.ws, id);
     // ---- upload ---------------------------------------------------------------
     async function sendMedia(c, remoteId, item, blob) {
       if (blob) { await remote.uploadAsset(remoteId, item, blob); guard(c); return; }
@@ -334,11 +426,20 @@
       const fresh = await writeState(c, latest, { pending: null, status: 'pending', error: null });
       if (attempt >= 2) throw fault('blog_conflict');
       if (result.status === 'missing') {
-        // Deleted on another device while this one changed it: recreate, never drop.
-        await writeState(c, fresh, { remoteRevision: 0, remoteManifest: null, publication: null });
+        // Deleted on another device while this one changed it: kept, never dropped, as a post of its own.
+        await reidentify(c, fresh);
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
       return resolveConflict(c, fresh, await readPost(c), attempt + 1, byRemote);
+    }
+    // The server no longer has a post this device changed (deleted on another device). The change is kept under a new
+    // server identity, never the deleted one (review B1, 2026-11-12): the server starts a re-created row's revisions at 1
+    // again, and a device that missed the deletion would take that row for the revision it holds and later overwrite it
+    // without a recovery copy. Other devices receive it as a new post; the deleted identity stays deleted. The local
+    // post keeps its id (its screens, evidence and drafts follow it); only the binding moves.
+    function reidentify(c, state) {
+      return writeState(c, state, { remoteId: state.remoteRevision > 0 ? makeId() : state.remoteId, remoteRevision: 0, remoteManifest: null, pending: null, conflict: null,
+        publication: null, publishPending: null, unpublishPending: null, publishChecked: null, choiceUnsent: null, publicationEarlier: null, publicationDoubt: null, status: 'pending', error: null });
     }
     async function pushLocked(c, { expectedManifest = null, expectedLocalRevision, attempt = 0, byRemote = null } = {}) {
       const post = await readPost(c); let state = await readState(c);
@@ -369,7 +470,7 @@
     async function resolveConflict(c, state, post, attempt = 0, byRemote = null) {
       const row = await remote.read(state.remoteId); guard(c);
       if (!row) {
-        await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
+        await reidentify(c, state);
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
       // The server never turns a saved post back into a draft, so this
@@ -380,11 +481,18 @@
       // Both outcomes that change this local document wait for an open editor,
       // checked again after the downloads (it may have opened meanwhile).
       let otherId = null; // an editing draft already here that this decision rewrites
-      const waits = () => (remoteWins || regression) && held(c.ws, c.id) || !!otherId && held(c.ws, otherId);
-      if (waits()) return getState(c.ws, c.id);
+      const waits = async () => {
+        for (const id of [remoteWins || regression ? c.id : null, otherId]) {
+          if (!id) continue;
+          if (busyHere(c.ws, id)) { waitedFor(c.ws, id); return true; }
+          if (await elsewhere(c.ws, id)) { guard(c); return true; }
+        }
+        guard(c); return false;
+      };
+      if (await waits()) return getState(c.ws, c.id);
       const remoteDoc = await download(c, row);
       const map = byRemote || (await snapshot(c)).byRemote;
-      if (waits()) return getState(c.ws, c.id);
+      if (await waits()) return getState(c.ws, c.id);
       const same = sameContent(post, remoteDoc);
       if (remoteWins || regression) {
         const input = { postId: c.id, post: localDoc(remoteDoc, c.id, post.revision, c.ws, map), baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision };
@@ -408,15 +516,18 @@
             // already here as this post's editing draft: the two drafts are
             // decided like any conflict. The later one stays the editing draft
             // (a tie keeps the one already here) and the other is kept.
-            otherId = other.id; if (waits()) return getState(c.ws, c.id);
+            otherId = other.id; if (await waits()) return getState(c.ws, c.id);
             const ours = writtenAt(post.updatedAt, now()) > writtenAt(other.updatedAt, now());
             input.edit = ours ? { ...draftCopy(post, post.title, other.id, exact), revision: other.revision } : { ...structuredClone(other), replaces: exact };
             if (!sameContent(post, other)) copies.push(conflictCopy(ours ? other : post));
           } else input.edit = draftCopy(post, post.title, makeId(), exact);
           if (copies.length) input.copy = copies;
-          if (waits()) return getState(c.ws, c.id);
+          if (await waits()) return getState(c.ws, c.id);
         }
-        await storage.commitBlogSync(c.ws, input, { isCurrent: () => current(c) });
+        // An editor here that became busy since the check keeps its post as it is (decided again once it is idle).
+        const quiet = quietHere(c), other = otherId;
+        try { await storage.commitBlogSync(c.ws, input, { isCurrent: () => quiet() && (!other || !busyHere(c.ws, other)) }); }
+        catch (error) { if (error?.code === 'request_cancelled' && current(c)) { waitedFor(c.ws, other && busyHere(c.ws, other) ? other : c.id); return getState(c.ws, c.id); } throw error; }
         guard(c); emit(c.ws, c.id); retries.delete(key(c.ws, c.id));
         kick(1000); // the kept draft reaches the other devices promptly
         return getState(c.ws, c.id);
@@ -481,13 +592,17 @@
           // already be the newer server head.
           if (state.pending) return await pushLocked(c, { byRemote });
           if (dirty(state, post)) return await resolveConflict(c, state, post, 0, byRemote);
-          if (held(ws, id)) return null;
+          // A busy editor here (input not in storage yet) or an editor in another tab keeps it;
+          // a clean editor here takes the received version and reads it again.
+          const waits = async () => { if (busyHere(ws, id)) { waitedFor(ws, id); return true; } const other = await elsewhere(ws, id); guard(c); return other; };
+          if (await waits()) return null;
           const row = await remote.read(head.id); guard(c);
           if (!row || row.revision === state.remoteRevision) return null;
           return await withBytes(row, async () => {
             const doc = localDoc(await download(c, row), id, post.revision, ws, byRemote);
-            if (held(ws, id)) return null; // an editor opened during the download
-            await storage.commitBlogSync(ws, { postId: id, post: doc, baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision }, { isCurrent: () => current(c) });
+            if (await waits()) return null; // an editor opened or got busy during the download
+            try { await storage.commitBlogSync(ws, { postId: id, post: doc, baseRevision: post.revision, binding: synced(state, row), bindingRevision: state.revision }, { isCurrent: quietHere(c) }); }
+            catch (error) { if (error?.code === 'request_cancelled' && current(c)) { waitedFor(ws, id); return null; } throw error; }
             guard(c); emit(ws, id); retries.delete(key(ws, id)); return id;
           });
         } catch (error) { await rememberError(c, error); throw explain(error); }
@@ -576,15 +691,27 @@
     }
     // One post's publish, withdrawal and settlement run one at a time across the tabs of this
     // browser. Without Web Locks (an older browser, tests) only this page's own queue applies.
+    // This page's own cycle check (settleQuiet) holding the lock is not "another tab" (review
+    // r5-m1): an action waits for it to end, however long its requests take (each has its own
+    // limit, BlogRemote), and then runs, so the owner's press is decided against the state that
+    // check found instead of being turned away. Only a wait for another tab is limited.
+    const quietLocks = new Map();
     function postLock(ws, id, task, { ifAvailable = false } = {}) {
       if (typeof locks?.request !== 'function') return task();
       const name = 'haedo-blog-publication:' + owner.projectUrl + ':' + owner.userId + ':' + ws + '/' + id;
       let ran = false;
-      if (ifAvailable) return Promise.resolve(locks.request(name, { ifAvailable: true }, async lock => { if (!lock) return undefined; ran = true; return task(); })).then(result => ran ? result : undefined);
+      if (ifAvailable) return Promise.resolve(locks.request(name, { ifAvailable: true }, async lock => {
+        if (!lock) return undefined; ran = true;
+        const run = Promise.resolve().then(task); quietLocks.set(name, run);
+        try { return await run; } finally { if (quietLocks.get(name) === run) quietLocks.delete(name); }
+      })).then(result => ran ? result : undefined);
       // Another tab holds it: wait LOCK_WAIT, then say so instead of leaving the button busy.
-      const waiting = new AbortController(), timer = timers.setTimeout(() => waiting.abort(), LOCK_WAIT);
-      return Promise.resolve(locks.request(name, { signal: waiting.signal }, async () => { ran = true; timers.clearTimeout(timer); return task(); }))
-        .catch(error => { timers.clearTimeout(timer); throw !ran && waiting.signal.aborted ? fault('blog_publication_busy') : error; });
+      const waiting = new AbortController(); let timer = null;
+      const arm = () => { if (!ran && timer === null && !waiting.signal.aborted) timer = timers.setTimeout(() => waiting.abort(), LOCK_WAIT); };
+      const own = quietLocks.get(name);
+      if (own) own.then(arm, arm); else arm();
+      return Promise.resolve(locks.request(name, { signal: waiting.signal }, async () => { ran = true; if (timer !== null) timers.clearTimeout(timer); return task(); }))
+        .catch(error => { if (timer !== null) timers.clearTimeout(timer); throw !ran && waiting.signal.aborted ? fault('blog_publication_busy') : error; });
     }
     // What the settlement did by itself, kept with the post so it is said on its screens
     // (publicationLog) and reported to the screen that is open (publication_notice).
@@ -723,11 +850,13 @@
           if (await remote.read(remoteId)) return; guard(c);
           const post = await readPost(c);
           if (dirty(state, post)) {
-            await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
+            await reidentify(c, state);
             await pushLocked(c, {}); return;
           }
-          if (held(ws, id)) return;
-          await storage.commitBlogSync(ws, { postId: id, remove: true, baseRevision: post.revision, bindingRevision: state.revision }, { isCurrent: () => current(c) });
+          // An editor here keeps it open; it is told, so it can say so (or follow a revision finished elsewhere).
+          if (openHere(ws, id)) { goneHere(ws, id); return; }
+          if (await held(ws, id, 'open')) return;
+          await storage.commitBlogSync(ws, { postId: id, remove: true, baseRevision: post.revision, bindingRevision: state.revision }, { isCurrent: () => current(c) && !openHere(ws, id) });
           guard(c); emit(ws, id); return { post, revision: state.remoteRevision };
         } catch (error) { await rememberError(c, error); throw explain(error); }
       });
@@ -746,7 +875,7 @@
       await serial(ws, copyId, async () => {
         const c = context(ws, copyId);
         try {
-          if (held(ws, copyId) || !(await storage.listBlogSyncStates(ws)).posts.some(row => row.id === copyId)) return;
+          if (await held(ws, copyId, 'open') || !(await storage.listBlogSyncStates(ws)).posts.some(row => row.id === copyId)) return;
           const state = await readState(c);
           if (state && (state.remoteRevision > 0 || state.pending)) return;
           const doc = await readPost(c);
@@ -763,12 +892,12 @@
     async function release(ws, targets) {
       const value = await storage.listBlogSyncStates(ws);
       for (const row of value.posts) {
-        if (row.status !== 'draft' || held(ws, row.id)) continue;
+        if (row.status !== 'draft' || await held(ws, row.id, 'open')) continue;
         await serial(ws, row.id, async () => {
           const c = context(ws, row.id);
           try {
             const doc = await readPost(c);
-            if (doc.status !== 'draft' || !doc.replaces || !targets.includes(doc.replaces.id) || held(ws, row.id)) return;
+            if (doc.status !== 'draft' || !doc.replaces || !targets.includes(doc.replaces.id) || await held(ws, row.id, 'open')) return;
             await storage.savePhotoPost(ws, { ...doc, replaces: null }, doc.revision); guard(c); emit(ws, row.id);
           } catch (_) { /* The draft stays as it is; saving it as a new post remains available. */ }
         });
@@ -1080,6 +1209,7 @@
     // The resumed page verifies its account first; each later cycle verifies again.
     function pageshow(event) { if (event?.persisted && parked) { parked = false; schedule(interval); } }
     function visibility() {
+      for (const { ws, id } of holdPlaces.values()) reshare(ws, id);
       if (events?.document?.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
     }
     function start() {
@@ -1110,10 +1240,25 @@
       const value = await storage.listBlogSyncStates(ws), states = new Map(value.states.map(entry => [entry.localPostId, entry.state]));
       return Object.fromEntries(value.posts.map(post => [post.id, publicationNotice(states.get(post.id))]).filter(([, notice]) => notice));
     }
-    // An open editor holds its post: remote changes wait until it is released.
-    function holdPost(ws, id) {
-      const k = key(ws, id); holds.set(k, (holds.get(k) || 0) + 1); let released = false;
-      return () => { if (released) return; released = true; const count = (holds.get(k) || 1) - 1; if (count > 0) holds.set(k, count); else { holds.delete(k); kick(500); } };
+    // An open editor holds its post (see "open editors" above). `busy()`: whether the editor has
+    // input that is not in storage yet. The returned release also has `idle()`, which the editor
+    // calls when it has nothing outside storage: a received version that waited is taken then.
+    function holdPost(ws, id, { busy = null } = {}) {
+      const k = key(ws, id), entry = { busy: typeof busy === 'function' ? busy : null };
+      if (!holds.has(k)) holds.set(k, new Set());
+      holds.get(k).add(entry); holdPlaces.set(k, { ws, id }); reshare(ws, id);
+      let released = false;
+      const release = () => {
+        if (released) return; released = true;
+        const set = holds.get(k); set?.delete(entry);
+        if (!set?.size) { holds.delete(k); holdPlaces.delete(k); unshare(ws, id); waitingChange.delete(k); goneOpen.delete(k); kick(500); }
+      };
+      release.idle = () => {
+        if (released) return;
+        reshare(ws, id);
+        if (waitingChange.has(k) && !busyHere(ws, id)) { waitingChange.delete(k); kick(500); }
+      };
+      return release;
     }
     // ---- publication (explicit only) --------------------------------------------
     // `sent` is set once this call hands a request to the network (unconfirmed()).

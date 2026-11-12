@@ -1227,6 +1227,53 @@ test('r2-m3: an action that waits for another tab says so after the wait limit a
   assert.equal(Sync.LOCK_WAIT, 10000);
 });
 
+test('r5-m1: a press while this tab\'s own cycle check holds the post\'s lock waits for that check instead of being called another tab\'s', async t => {
+  const locks = browserLocks(), timers = manualTimers(), f = await saved(t, { photos: 2, locks }), b = f.open('tab-b', { timers });
+  const both = f.doc.photos.map(photo => photo.id), author = { name: '익명', intro: '' };
+  const publish = options => f.publish(options, b);
+  f.net.control.block = 'publish';
+  await assert.rejects(publish({ photoIds: both, author }), { code: 'network_error' }); f.net.control.block = null;
+  const old = f.net.tried('publish')[0];
+  // The earlier request arrives; this tab's cycle sees the publication move and checks it, with a slow head read.
+  f.late(old);
+  const read = b.remote.read, gate = deferred(), entered = deferred(); let held = false;
+  b.remote.read = async (...args) => { if (!held) { held = true; entered.resolve(); await gate.promise; } return read(...args); };
+  const cycling = b.sync.syncNow();
+  await entered.promise;
+  let settled = false; const pressed = publish({ photoIds: [], author, expectedPublicRevision: 0 }).catch(error => error).finally(() => { settled = true; });
+  for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'the press waits for the check');
+  assert.equal([...timers.pending.values()].filter(timer => timer.ms === Sync.LOCK_WAIT).length, 0, 'no "another tab" limit runs for this tab\'s own check');
+  gate.resolve(); await cycling;
+  const failure = await pressed;
+  assert.notEqual(failure.code, 'blog_publication_busy', 'never "다른 탭에서 처리 중입니다"');
+  assert.equal(failure.code, 'local_changed', 'decided against what the check found: the earlier request is public now');
+  assert.equal(f.net.tried('publish').length, 1, 'nothing was sent by the press');
+  assert.deepEqual(await f.view(b), { status: 'public', notice: null });
+  b.remote.read = read;
+  // Reviewed again against what is public, the same press goes through.
+  await publish({ photoIds: [], author, expectedPublicRevision: 1 });
+  assert.deepEqual(f.row().published.photoIds, []);
+  assert.equal([...timers.pending.values()].filter(timer => timer.ms === Sync.LOCK_WAIT).length, 0, 'every wait limit was cleared');
+});
+
+test('r5 검사 공백: an attempt refused for a reason other than the connection, before sending, names no earlier request', async t => {
+  const { f, author } = await lostFirst(t);
+  await assert.rejects(f.publish({ photoIds: [], author, expectedLocalRevision: f.doc.revision + 1 }), { code: 'local_changed' });
+  assert.equal((await f.state()).choiceUnsent ?? null, null, 'only a connection failure leaves the earlier request named');
+  assert.equal(f.net.tried('publish').length, 1);
+});
+
+test('r5 검사 공백: a post the server has never stored ends a named earlier request in the check (nothing of it can be public)', async t => {
+  const { f, author } = await lostFirst(t);
+  await unsentY(f, author);
+  const state = await f.state(); assert.ok(state.choiceUnsent, 'named before');
+  await f.a.storage.writeBlogSyncState(f.a.ws, f.doc.id, { ...state, remoteRevision: 0 }, state.revision);
+  const checked = await f.a.sync.settlePublication(f.a.ws, f.doc.id);
+  assert.equal(checked.choiceUnsent ?? null, null); assert.equal(checked.publishPending ?? null, null);
+  assert.equal((await f.state()).choiceUnsent ?? null, null);
+});
+
 test('r2-m3: a publish, withdrawal or publication head read that gets no answer in time is an unknown result, never a refusal', async t => {
   const UID = Core.id(), POST = Core.id(), timers = manualTimers(), calls = [], signals = [];
   let reply = null; // null: the request never answers
