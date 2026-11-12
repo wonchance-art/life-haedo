@@ -15,6 +15,9 @@
  *   5. the allow list: empty means nobody; only the operations SQL
  *      (supabase/operations/20261111-news-wide-allow-first-account.sql) fills it, and
  *      only when exactly one non-anonymous account exists;
+ *   5b. the owner-accounts operations SQL
+ *      (supabase/operations/20261112-news-wide-allow-owner-accounts.sql, its own database):
+ *      adds every non-anonymous account only when there are exactly the expected number;
  *   6. md5(prosrc) of the installed functions equals the table in
  *      docs/design-review/news-wide-feed.md (--hashes prints the current table).
  * --mutation=<name> weakens one guard in memory (no file is rewritten); the unchanged
@@ -31,6 +34,7 @@ const pgStub = require('./helpers/supabase-pg-stub.cjs');
 const ROOT = pgStub.ROOT, NAME = '20261111130000_news_wide_feed.sql';
 const FILE = path.join(ROOT, 'supabase/migrations', NAME);
 const OPS = path.join(ROOT, 'supabase/operations/20261111-news-wide-allow-first-account.sql');
+const OWNERS = path.join(ROOT, 'supabase/operations/20261112-news-wide-allow-owner-accounts.sql');
 const DOC = path.join(ROOT, 'docs/design-review/news-wide-feed.md');
 const SUPPLIER = 'google-news-rss';
 const ALLOWED_CHECK = " if not exists (select 1 from haedo_news_wide_private.allowed_accounts a where a.owner_id = who) then\n  return jsonb_build_object('status', 'not_allowed'); end if;\n";
@@ -43,6 +47,17 @@ const OPS_MUTATIONS = {
   'ops-row-count-not-compared': sql => sql.replace("    if n <> (before ->> (r.nspname || '.' || r.relname))::bigint then", '    if false then'),
   'ops-users-not-counted': sql => sql.replace(" or (ns.nspname = 'auth' and c.relname = 'users')", ''),
   'ops-prints-account': sql => sql.replace("raise notice 'news-wide allow list: % account(s) before, % after; % existing tables unchanged',\n    listed_before,", "raise notice 'news-wide allow list: % account(s) before, % after; % existing tables unchanged',\n    (select owner_id from haedo_news_wide_private.allowed_accounts limit 1),"),
+};
+// Mutations of the owner-accounts operations SQL (2026-11-12, three accounts).
+const OWNERS_MUTATIONS = {
+  // The exact count: the first check removed (the later list check still stops it, with the wrong reason), or both.
+  'owners-count-not-compared': sql => sql.replace('if accounts <> expected then', 'if false then'),
+  'owners-count-unchecked': sql => sql.replace('if accounts <> expected then', 'if false then').replace('if listed_after <> expected\n     or exists (', 'if exists ('),
+  'owners-anonymous-included': sql => sql.replaceAll('where not coalesce(u.is_anonymous, false)', 'where true'),
+  // The before/after row-count comparison: removed, or auth.users left out of it.
+  'owners-row-count-not-compared': sql => sql.replace("    if n <> (before ->> (r.nspname || '.' || r.relname))::bigint then", '    if false then'),
+  'owners-users-not-counted': sql => sql.replace(" or (ns.nspname = 'auth' and c.relname = 'users')", ''),
+  'owners-prints-account': sql => sql.replace("% expected; % existing tables unchanged',\n    listed_before,", "% expected; % existing tables unchanged',\n    (select owner_id from haedo_news_wide_private.allowed_accounts limit 1),"),
 };
 const MUTATIONS = {
   // The allow list: removed from one function, or open while the table is empty.
@@ -82,8 +97,8 @@ const MUTATIONS = {
   'no-retention': sql => sql.replace(/ delete from haedo_news_wide_private\.feeds where owner_id = who and touched_at < stamp - interval '7 days'\n  and \(lease_until is null or lease_until <= stamp\);\n/, ''),
 };
 const args = process.argv.slice(2), printHashes = args.length === 1 && args[0] === '--hashes';
-if (!printHashes && (args.length > 1 || args.length && !(/^--mutation=[a-z-]+$/.test(args[0]) && (Object.hasOwn(MUTATIONS, args[0].slice(11)) || Object.hasOwn(OPS_MUTATIONS, args[0].slice(11))))))
-  throw Error('Only --hashes or --mutation=' + [...Object.keys(MUTATIONS), ...Object.keys(OPS_MUTATIONS)].join('|') + ' is accepted.');
+if (!printHashes && (args.length > 1 || args.length && !(/^--mutation=[a-z-]+$/.test(args[0]) && [MUTATIONS, OPS_MUTATIONS, OWNERS_MUTATIONS].some(set => Object.hasOwn(set, args[0].slice(11))))))
+  throw Error('Only --hashes or --mutation=' + [...Object.keys(MUTATIONS), ...Object.keys(OPS_MUTATIONS), ...Object.keys(OWNERS_MUTATIONS)].join('|') + ' is accepted.');
 const mutation = printHashes ? undefined : args[0]?.slice(11);
 function mutated(file, set) {
   const original = fs.readFileSync(file, 'utf8');
@@ -92,7 +107,7 @@ function mutated(file, set) {
   if (changed === original) throw Error('Mutation ' + mutation + ' no longer matches ' + path.basename(file) + '.');
   return changed;
 }
-const migration = () => mutated(FILE, MUTATIONS), operations = () => mutated(OPS, OPS_MUTATIONS);
+const migration = () => mutated(FILE, MUTATIONS), operations = () => mutated(OPS, OPS_MUTATIONS), ownersSQL = () => mutated(OWNERS, OWNERS_MUTATIONS);
 const UUID_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const HASH_QUERY = "select p.proname, md5(p.prosrc) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_news_wide_private' order by 1;";
 // The expected md5(prosrc) table in the operations guide: | `name` | `32 hex` | between the two markers.
@@ -137,6 +152,143 @@ const pass = name => { passed++; console.log('PASS ' + name); };
 const link = n => 'https://news.google.com/rss/articles/CBMiFIXTURE' + n + '?oc=5';
 const item = (n, changes = {}) => ({ id: String(n).padStart(32, '0'), title: '가상 제목 ' + n, link: link(n), publishedAt: '2026-11-11T09:00:00.000Z', sourceName: '가상일보', sourceUrl: 'https://outlet.example/', ...changes });
 
+// 5b. The owner-accounts operations SQL (owner decision 2026-11-12: all three non-anonymous
+// accounts are the owner's). Its own database, so the cases start from a known state.
+async function ownerAccounts(pg) {
+  const text = fs.readFileSync(OWNERS, 'utf8');
+  // Plain ASCII with no \u sequence (the orchestrator's tool would turn one into a character),
+  // one expected count, and the result check names the same number.
+  assert(!/[^\x00-\x7f]/.test(text) && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) && !/\r/.test(text), 'the owner-accounts SQL is plain ASCII');
+  assert(!/\\u/i.test(text), 'the owner-accounts SQL holds no \\u sequence');
+  assert(!UUID_TEXT.test(text) && !/@[a-z0-9-]+\./i.test(text), 'no account ID or e-mail address in the owner-accounts SQL');
+  assert.deepEqual([...text.matchAll(/^ {2}expected constant bigint := (\d+);$/gm)].map(match => Number(match[1])), [3], 'one expected constant, 3');
+  assert.deepEqual([...text.matchAll(/allowed_accounts\) = (\d+) as ok/g)].map(match => Number(match[1])), [3], 'the result check expects the same 3');
+  assert.equal((text.match(/^do \$haedo_news_wide_allow_owners\$$/gm) || []).length, 1, 'one DO block');
+  // Outside comments and string literals (the result check names privileges as strings).
+  assert(!/\b(delete|truncate|drop|grant|revoke|alter|update)\b/i.test(text.replace(/^\s*--.*$/gm, '').replace(/'[^']*'/g, "''")), 'no delete, truncate, drop, grant, revoke, alter or update');
+
+  const admin = await pg.connect();
+  try { await admin.query('create database news_wide_owners'); await admin.query('create database news_wide_owners_bare'); } finally { await admin.end(); }
+  {
+    const empty = await pg.connect('news_wide_owners_bare');
+    try { await pgStub.replayMigrations(empty, { files: [] }); await assert.rejects(empty.query(text), /apply migration 20261111130000_news_wide_feed\.sql first/); } finally { await empty.end(); }
+  }
+  const db = await pg.connect('news_wide_owners'), rival = await pg.connect('news_wide_owners');
+  try {
+    await pgStub.replayMigrations(db, { files: pgStub.migrationFiles().filter(file => path.basename(file) !== NAME) });
+    await db.query(AUTH_SHIM);
+    await db.query(migration());
+    const said = [];
+    db.on('notice', notice => said.push(String(notice.message)));
+    const rows = table => db.query(`select count(*)::int n from ${table}`).then(result => result.rows[0].n);
+    const listed = () => db.query('select owner_id::text id, added_at::text at from haedo_news_wide_private.allowed_accounts order by 1').then(result => result.rows);
+    const install = async () => { const results = [].concat(await db.query(ownersSQL())); return results.at(-1).rows; };
+    const refused = async (pattern, label) => {
+      const state = await listed();
+      await assert.rejects(install(), error => { said.push(String(error.message)); return pattern.test(error.message); }, label);
+      assert.deepEqual(await listed(), state, label + ': the allow list did not change');
+    };
+    const account = async (anonymous, n) => {
+      const id = randomUUID(), session = randomUUID();
+      await db.query('insert into auth.users(id, email, is_anonymous) values ($1, $2, $3)', [id, anonymous === true ? null : 'owner' + n + '@example.invalid', anonymous]);
+      await db.query('insert into auth.sessions(id, user_id) values ($1, $2)', [session, id]);
+      return { id, session };
+    };
+    const found = n => new RegExp('^Expected exactly 3 non-anonymous accounts \\(owner decision 2026-11-12\\), found ' + n + '\\. Nothing was added\\. Ask the owner again\\.$');
+
+    await refused(found(0), 'no account at all');
+    const ANON = await account(true, 0);
+    await refused(found(0), 'only an anonymous account');
+    const A = await account(false, 1);
+    await refused(found(1), 'one real account');
+    const B = await account(null, 2); // no flag at all counts as a real account
+    await refused(found(2), 'two real accounts');
+    const C = await account(false, 3);
+    // Three real accounts, but the list already holds another (anonymous) account: stop.
+    await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [ANON.id]); // test setup only
+    await refused(/^The allow list would hold 4 account\(s\) and must hold exactly the 3 non-anonymous accounts\. Nothing was changed\.$/, 'the list already holds another account');
+    await db.query('delete from haedo_news_wide_private.allowed_accounts');
+    // A row count that changes while it runs rolls it back, in another table and in auth.users
+    // (the same waiting scheme as for the first operations SQL above).
+    const installPid = (await db.query('select pg_backend_pid() p')).rows[0].p;
+    const racing = async (change, values, pattern, label) => {
+      const state = await listed();
+      await rival.query('begin');
+      let outcome;
+      try {
+        await rival.query('lock table haedo_news_wide_private.allowed_accounts in row exclusive mode');
+        outcome = install().then(() => null, error => error);
+        let waiting = false;
+        for (let attempt = 0; attempt < 500 && !waiting; attempt++) {
+          const probe = await pg.connect('news_wide_owners');
+          try { waiting = (await probe.query(`select wait_event_type = 'Lock' w from pg_stat_activity where pid = $1`, [installPid])).rows[0]?.w === true; } finally { await probe.end(); }
+          if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        assert(waiting, label + ': the operations SQL waits for the allow list after its first count');
+        await rival.query(change, values);
+        await rival.query('commit');
+      } catch (error) { await rival.query('rollback').catch(() => {}); throw error; }
+      const error = await outcome;
+      assert(error instanceof Error, label + ': the operations SQL must not succeed');
+      said.push(String(error.message));
+      assert.match(error.message, pattern, label);
+      assert.deepEqual(await listed(), state, label + ': the allow list did not change');
+    };
+    await db.query('create table public.news_wide_probe_rows (n integer)'); // test-only, counted like any other table
+    await racing('insert into public.news_wide_probe_rows values (1)', [], /Row count changed in public\.news_wide_probe_rows \(before 0, after 1\)\. Rolled back/, 'another table changes meanwhile');
+    const LATE = randomUUID();
+    await racing('insert into auth.users(id, is_anonymous) values ($1, true)', [LATE], /Row count changed in auth\.users \(before 4, after 5\)\. Rolled back/, 'an anonymous account appears meanwhile (the account check alone would pass)');
+    await db.query('delete from auth.users where id = $1', [LATE]); await db.query('drop table public.news_wide_probe_rows');
+    // One of the three is already listed (as the first operations SQL could have left it): its row is kept, the other two are added.
+    await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [A.id]); // test setup only
+    const kept = (await listed())[0];
+    const counts = async () => ({ feeds: await rows('haedo_news_wide_private.feeds'), limits: await rows('haedo_news_wide_private.limits'), users: await rows('auth.users'), sessions: await rows('auth.sessions') });
+    const countsBefore = await counts();
+    const expectedReport = [['allowed accounts equal the expected 3', true, 3], ['the allow list is exactly the non-anonymous accounts', true, 3],
+      ['no anonymous account on the allow list', true, 0], ['no API role can read or write the allow list', true, 0], ['row level security is on', true, null]];
+    const shape = report => report.map(row => [row.check_name, row.ok, row.n === null ? null : Number(row.n)]);
+    let report = await install();
+    assert.deepEqual(shape(report), expectedReport);
+    const installed = await listed();
+    assert.deepEqual(installed.map(row => row.id), [A.id, B.id, C.id].sort(), 'exactly the three real accounts, not the anonymous one');
+    assert.deepEqual(installed.find(row => row.id === A.id), kept, 'the account already listed keeps its row');
+    assert.deepEqual(await counts(), countsBefore, 'no other row count changed');
+    report = await install();
+    assert.deepEqual(shape(report), expectedReport); assert.deepEqual(await listed(), installed, 'running it again changes nothing (same rows, same times)');
+    // Each of the three can now use the feature (rolled back, nothing kept); the anonymous account still cannot.
+    const claim = async who => {
+      await db.query('begin');
+      try {
+        await db.query("select set_config('request.jwt.claims', $1, true), set_config('request.jwt.claim.sub', $2, true)", [JSON.stringify({ sub: who.id, role: 'authenticated', session_id: who.session }), who.id]);
+        await db.query('set local role authenticated');
+        return (await db.query('select public.life_news_wide_claim($1, $2::jsonb) value', [SUPPLIER, JSON.stringify([{ topic: '기후', language: 'ko' }])])).rows[0].value;
+      } catch (error) { return { status: 'error: ' + error.message }; } finally { await db.query('rollback'); }
+    };
+    for (const who of [A, B, C]) assert.equal((await claim(who)).entries?.[0]?.status, 'claimed', 'an allowed account gets a lease');
+    assert.notEqual((await claim(ANON)).status, 'ok', 'the anonymous account is not allowed');
+    assert.deepEqual(await counts(), countsBefore, 'the claims were rolled back');
+    // A fourth real account appears: stop, the three stay as they are.
+    const D = await account(false, 4);
+    await refused(found(4), 'four real accounts');
+    await db.query('delete from auth.users where id = $1', [D.id]);
+    // An anonymous account that becomes a real one counts as a fourth.
+    await db.query('update auth.users set is_anonymous = false where id = $1', [ANON.id]);
+    await refused(found(4), 'an anonymous account turned real');
+    await db.query('update auth.users set is_anonymous = true where id = $1', [ANON.id]);
+    // One of the three is deleted (its list row goes with it): two left, stop.
+    await db.query('delete from auth.users where id = $1', [C.id]);
+    await refused(found(2), 'one of the three accounts removed');
+    // What it says (notices, errors, result rows) holds counts only.
+    for (const line of [...said, JSON.stringify(report)]) assert(!UUID_TEXT.test(line) && !line.includes('@'), 'no account ID or e-mail in the output: ' + line);
+    const notices = said.filter(line => line.startsWith('news-wide allow list: '));
+    assert.equal(notices.length, 2, 'one notice per successful run');
+    assert.match(notices[0], /^news-wide allow list: 1 account\(s\) before, 3 after, 3 expected; \d+ existing tables unchanged$/);
+    assert.match(notices[1], /^news-wide allow list: 3 account\(s\) before, 3 after, 3 expected; \d+ existing tables unchanged$/);
+    assert(said.length >= 12, 'errors were captured');
+    pass('owner-accounts SQL (expected 3): 0, anonymous-only, 1, 2 and 4 real accounts (also an anonymous one turned real, and one of three removed) refused with the list unchanged; a list holding another account refused; a row count that changes during the run, in another table or in auth.users, rolls it back; 3 real accounts beside an anonymous one: all three added, the anonymous one not, an already listed one kept; re-run unchanged; each listed account can claim; counts only in its output');
+  } finally { await db.end().catch(() => {}); await rival.end().catch(() => {}); }
+}
+
 async function main() {
   if (!pgStub.findPostgres()) {
     const reason = 'no local PostgreSQL server binaries (/usr/lib/postgresql/<n>/bin, HAEDO_PG_BIN or pg_config). Nothing was checked.';
@@ -168,7 +320,7 @@ async function main() {
       assert.match(text, /^--[^\n]+\n/); assert.equal((text.match(/^begin;$/gm) || []).length, 1); assert.match(text, /\ncommit;\s*$/);
       assert(!/\b(drop|truncate|alter\s+(?!table haedo_news_wide_private\.(feeds|limits|allowed_accounts) enable row level security))\b/i.test(text.replace(/^\s*--.*$/gm, '')), 'no drop, truncate or alter of anything else');
       assert(!/[^\x00-\x7f]/.test(text) && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text), 'the migration is plain ASCII: nothing invisible can be lost when it is copied');
-      assert(!UUID_TEXT.test(text) && !UUID_TEXT.test(fs.readFileSync(OPS, 'utf8')), 'no account ID in the migration or the operations SQL');
+      assert(!UUID_TEXT.test(text) && !UUID_TEXT.test(fs.readFileSync(OPS, 'utf8')) && !UUID_TEXT.test(fs.readFileSync(OWNERS, 'utf8')), 'no account ID in the migration or the operations SQL');
       const hashes = (await db.query(HASH_QUERY)).rows.map(row => [row.proname, row.md5]);
       if (printHashes) { console.log(hashes.map(([name, md5]) => '| `' + name + '` | `' + md5 + '` |').join('\n')); return; }
       if (!mutation) assert.deepEqual(hashes, documentedHashes(), 'md5(prosrc) differs from the table in docs/design-review/news-wide-feed.md (node tests/run-news-wide-postgres.cjs --hashes prints the current one)');
@@ -330,6 +482,7 @@ async function main() {
       // the operations SQL above is the only way onto the list.
       await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [B]);
       pass('allow list: empty allows nobody; the operations SQL adds the account only when exactly one non-anonymous account exists (0, anonymous-only, 2, 3 and a pre-filled list refused; a row count that changes during the run, in another table or in auth.users, rolls it back; re-run unchanged; counts only in its output); a real account that is not listed gets not_allowed and no row; no API role can write the list');
+      await ownerAccounts(pg);
 
       // 2b. Closed by default (real calls).
       await refused(as(db, 'anon', { role: 'anon' }, 'select public.life_news_wide_claim($1, $2::jsonb) value', [SUPPLIER, JSON.stringify(one('기후'))]), /permission denied for function life_news_wide_claim/, 'anon claim');

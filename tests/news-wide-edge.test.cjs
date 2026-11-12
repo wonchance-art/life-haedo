@@ -359,7 +359,8 @@ test('deploy targets hold no literal invisible character, and their hashes are t
   const deployed = ['supabase/functions/haedo-news-wide/index.ts', 'supabase/functions/haedo-news-wide/handler.mjs', 'supabase/functions/haedo-news-wide/topics.mjs',
     'supabase/functions/haedo-news-wide/upstream.mjs', 'supabase/functions/haedo-news-wide/items.mjs', 'supabase/functions/haedo-news-wide/xml.mjs',
     'supabase/functions/haedo-news-wide/suppliers/google-news.mjs', 'supabase/functions/_shared/supabase-keys.mjs', 'supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs'];
-  const sql = ['supabase/migrations/20261111130000_news_wide_feed.sql', 'supabase/operations/20261111-news-wide-allow-first-account.sql'];
+  const sql = ['supabase/migrations/20261111130000_news_wide_feed.sql', 'supabase/operations/20261111-news-wide-allow-first-account.sql',
+    'supabase/operations/20261112-news-wide-allow-owner-accounts.sql'];
   // Format, line/paragraph separator, private-use, unassigned and non-characters, controls other
   // than tab and newline, and any space other than U+0020: all must be written as escapes, so
   // that copying the text through a tool cannot silently drop them.
@@ -375,6 +376,12 @@ test('deploy targets hold no literal invisible character, and their hashes are t
   const migration = fs.readFileSync(path.join(root, sql[0]), 'utf8');
   assert(!/[^\x00-\x7f]/.test(migration), 'non-ASCII character in the migration');
   assert(!/\r/.test(migration) && !/\r/.test(fs.readFileSync(path.join(root, sql[1]), 'utf8')), 'no carriage return: md5(prosrc) depends on the exact text');
+  // The owner-accounts operations SQL (2026-11-12) is plain ASCII with no \u sequence at all: the
+  // orchestrator's operations tool turns \uXXXX into the character, so the file must not hold one.
+  const owners = fs.readFileSync(path.join(root, sql[2]), 'utf8');
+  assert(!/[^\x00-\x7f]/.test(owners), 'non-ASCII character in the owner-accounts SQL');
+  assert(!/\\u/i.test(owners), 'a \\u sequence in the owner-accounts SQL');
+  assert(!/\r/.test(owners) && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(owners), 'no control character other than tab and newline in the owner-accounts SQL');
   // The detector itself: it sees what it must see and leaves ordinary text alone.
   for (const hidden of [0x200b, 0x200e, 0x202e, 0x2028, 0x2060, 0xfeff, 0x00ad, 0x00a0, 0x3000, 0xfffe, 0xffff, 0xe000, 0x0001, 0x000d, 0x007f, 0x061c, 0xe0001]) assert(hiddenLiteral.test(String.fromCodePoint(hidden)), 'detected: ' + hidden.toString(16));
   for (const plain of ['a', ' ', '\t', '가', '’', '·', '𠀀', 'é', '🌿']) assert(!hiddenLiteral.test(plain), 'not flagged: ' + JSON.stringify(plain));

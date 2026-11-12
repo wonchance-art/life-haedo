@@ -1,0 +1,114 @@
+-- Haedo 2026-11-12 news wide search: allow the owner's accounts (run as one script, in the
+-- Supabase SQL Editor or the orchestrator's operations SQL tool).
+-- ADMIN OPERATIONS ONLY. Apply supabase/migrations/20261111130000_news_wide_feed.sql first.
+--
+-- What it does: when the number of non-anonymous accounts is exactly `expected` (declared at
+-- the top of the block below), it adds every one of them to
+-- haedo_news_wide_private.allowed_accounts. Only accounts in that table can use news wide search.
+--
+-- Owner decision 2026-11-12: production has three non-anonymous accounts and the owner
+-- confirmed that all three are the owner's own. If the count is anything else (an account was
+-- added or removed since), nothing is added and the script stops: ask the owner again. Do not
+-- edit this file to pick accounts.
+--
+-- Safety:
+--   * The whole change is one DO block, i.e. one statement. If any step fails, everything is
+--     rolled back and nothing changes.
+--   * Afterwards the allow list must equal the set of non-anonymous accounts exactly. It stops
+--     if the list already held any other account. Anonymous accounts are never added.
+--   * Row counts of every table in public and haedo_* (except allowed_accounts) and of
+--     auth.users are compared before and after; any difference rolls everything back.
+--   * Safe to run again: accounts already on the list are left as they are.
+--   * No account ID or e-mail is printed: notices, errors and the result table hold counts only.
+--     No account ID is written in this file.
+--   * No delete, no truncate, no privilege or RLS change.
+--   * Plain ASCII, no backslash-u escape: the text reaches the database unchanged.
+-- After it runs, check that every ok value in the result table at the bottom is true.
+
+do $haedo_news_wide_allow_owners$
+declare
+  -- The owner confirmed on 2026-11-12 that all three non-anonymous accounts are the owner's own.
+  expected constant bigint := 3;
+  r record;
+  n bigint;
+  before jsonb := '{}'::jsonb;
+  accounts bigint;
+  listed_before bigint;
+  listed_after bigint;
+begin
+  if to_regclass('haedo_news_wide_private.allowed_accounts') is null then
+    raise exception 'haedo_news_wide_private.allowed_accounts does not exist: apply migration 20261111130000_news_wide_feed.sql first';
+  end if;
+
+  for r in
+    select ns.nspname, c.relname
+      from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+     where c.relkind = 'r' and (ns.nspname = 'public' or ns.nspname like 'haedo\_%' or (ns.nspname = 'auth' and c.relname = 'users'))
+       and not (ns.nspname = 'haedo_news_wide_private' and c.relname = 'allowed_accounts')
+     order by 1, 2
+  loop
+    execute format('select count(*) from %I.%I', r.nspname, r.relname) into n;
+    before := before || jsonb_build_object(r.nspname || '.' || r.relname, n);
+  end loop;
+
+  lock table haedo_news_wide_private.allowed_accounts in share row exclusive mode;
+  select count(*) into accounts from auth.users u where not coalesce(u.is_anonymous, false);
+  select count(*) into listed_before from haedo_news_wide_private.allowed_accounts;
+  if accounts <> expected then
+    raise exception 'Expected exactly % non-anonymous accounts (owner decision 2026-11-12), found %. Nothing was added. Ask the owner again.', expected, accounts;
+  end if;
+
+  insert into haedo_news_wide_private.allowed_accounts(owner_id)
+    select u.id from auth.users u where not coalesce(u.is_anonymous, false)
+    on conflict (owner_id) do nothing;
+
+  select count(*) into listed_after from haedo_news_wide_private.allowed_accounts;
+  if listed_after <> expected
+     or exists (select 1 from haedo_news_wide_private.allowed_accounts a
+                 where not exists (select 1 from auth.users u where u.id = a.owner_id and not coalesce(u.is_anonymous, false)))
+     or exists (select 1 from auth.users u where not coalesce(u.is_anonymous, false)
+                   and not exists (select 1 from haedo_news_wide_private.allowed_accounts a where a.owner_id = u.id)) then
+    raise exception 'The allow list would hold % account(s) and must hold exactly the % non-anonymous accounts. Nothing was changed.', listed_after, expected;
+  end if;
+
+  for r in
+    select ns.nspname, c.relname
+      from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+     where c.relkind = 'r' and before ? (ns.nspname || '.' || c.relname)
+  loop
+    execute format('select count(*) from %I.%I', r.nspname, r.relname) into n;
+    if n <> (before ->> (r.nspname || '.' || r.relname))::bigint then
+      raise exception 'Row count changed in %.% (before %, after %). Rolled back; run again.',
+        r.nspname, r.relname, before ->> (r.nspname || '.' || r.relname), n;
+    end if;
+  end loop;
+
+  raise notice 'news-wide allow list: % account(s) before, % after, % expected; % existing tables unchanged',
+    listed_before, listed_after, expected, (select count(*) from jsonb_object_keys(before));
+end
+$haedo_news_wide_allow_owners$;
+
+-- Result check (read only, counts only). The 3 below is the same owner decision as `expected`.
+select 'allowed accounts equal the expected 3' as check_name,
+       (select count(*) from haedo_news_wide_private.allowed_accounts) = 3 as ok,
+       (select count(*) from haedo_news_wide_private.allowed_accounts) as n
+union all
+select 'the allow list is exactly the non-anonymous accounts',
+       not exists (select 1 from haedo_news_wide_private.allowed_accounts a
+                    where not exists (select 1 from auth.users u where u.id = a.owner_id and not coalesce(u.is_anonymous, false)))
+       and not exists (select 1 from auth.users u where not coalesce(u.is_anonymous, false)
+                        and not exists (select 1 from haedo_news_wide_private.allowed_accounts a where a.owner_id = u.id)),
+       (select count(*) from auth.users u where not coalesce(u.is_anonymous, false))
+union all
+select 'no anonymous account on the allow list',
+       not exists (select 1 from haedo_news_wide_private.allowed_accounts a join auth.users u on u.id = a.owner_id where coalesce(u.is_anonymous, false)),
+       (select count(*) from haedo_news_wide_private.allowed_accounts a join auth.users u on u.id = a.owner_id where coalesce(u.is_anonymous, false))
+union all
+select 'no API role can read or write the allow list',
+       not exists (select 1 from unnest(array['anon','authenticated','service_role']) role, unnest(array['select','insert','update','delete','truncate']) privilege
+                    where has_table_privilege(role, 'haedo_news_wide_private.allowed_accounts', privilege)),
+       (select count(*) from pg_policy where polrelid = 'haedo_news_wide_private.allowed_accounts'::regclass)
+union all
+select 'row level security is on',
+       coalesce((select relrowsecurity from pg_class where oid = 'haedo_news_wide_private.allowed_accounts'::regclass), false),
+       null;
