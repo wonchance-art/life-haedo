@@ -107,7 +107,7 @@
             !el.disabled && el.getClientRects().length && (settingsMemory.id && el.id === settingsMemory.id || settingsMemory.focusKey && el.dataset.focusKey === settingsMemory.focusKey) &&
             (!settingsMemory.articleUrl || el.closest('[data-discovery-url]')?.dataset.discoveryUrl === settingsMemory.articleUrl));
           target?.focus({ preventScroll: true });
-          root.scrollTo({ top: settingsMemory.scrollY, behavior: 'instant' });
+          placing(); root.scrollTo({ top: settingsMemory.scrollY, behavior: 'instant' });
         });
         return;
       }
@@ -120,7 +120,7 @@
           articles.find(el => el.dataset.discoveryUrl === memory.articleUrl)?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open]') ||
           articles[Math.min(memory.articleIndex || 0, articles.length - 1)]?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open]') || surface.querySelector('#discoveryUndoToast, #discoveryUndo');
         target?.focus({ preventScroll: true });
-        root.scrollTo({ top: memory.scrollY, behavior: 'instant' });
+        placing(); root.scrollTo({ top: memory.scrollY, behavior: 'instant' });
       });
     }
     function message(text) { if (scope()) { current.status = text; current.error = ''; } }
@@ -253,12 +253,13 @@
     function selectCollection(collection) {
       const fromSettings = current.settingsScreen;
       capture(); current.settingsScreen = false; current.collection = collection; current.collectionUrls = null; current.memory = null; resetList(); current.confirmForget = null; current.toast = null; current.selected = null; readerHistoryClosed(); draw();
-      if (fromSettings) { surface.querySelector('#discoveryDiscover')?.focus(); surface.scrollIntoView({ block: 'start' }); }
+      if (fromSettings) { placing(); surface.querySelector('#discoveryDiscover')?.focus(); surface.scrollIntoView({ block: 'start' }); }
     }
     function showSettings(value) {
       if (value === !!current.settingsScreen) return;
       if (value) capture();
       current.settingsScreen = value; draw();
+      placing();
       if (value) { current.settingsBack.focus({ preventScroll: true }); surface.scrollIntoView({ block: 'start' }); }
       else { surface.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
     }
@@ -402,7 +403,7 @@
       const languagesLink = button('언어', 'discoveryFilterLanguages', () => { filter.open = false; current.languageOpen = true; showSettings(true); if (current.languageDetails) current.languageDetails.open = true; }, 'discovery-quiet');
       const imagesLink = button('기사 이미지', 'discoveryFilterImages', () => {
         filter.open = false; current.optionsOpen = true; showSettings(true); if (current.options) current.options.open = true;
-        const toggle = root.document.getElementById('discoveryShowImages'); toggle?.focus({ preventScroll: true }); toggle?.scrollIntoView({ block: 'center' });
+        const toggle = root.document.getElementById('discoveryShowImages'); placing(); toggle?.focus({ preventScroll: true }); toggle?.scrollIntoView({ block: 'center' });
       }, 'discovery-quiet');
       filterBody.append(sortLabel, sort, topicsLink, languagesLink, imagesLink, refresh); filter.append(filterSummary, filterBody);
       const outside = event => { if (filter.open && !filter.contains(event.target)) filter.open = false; };
@@ -682,6 +683,19 @@
       if (event.type === 'keydown' && (!SCROLL_KEYS.has(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable]'))) return;
       touchList();
     }
+    // Dragging the scroll bar or moving a screen reader's cursor scrolls the page with no wheel, touch, key or focus on
+    // the list (11-11 review, left for the second round): a scroll of the page is a use too, unless the screen made it
+    // itself. placing() marks the screen's own scrolls (restoring a place, bringing a control into view); a smooth one
+    // goes on for a while, so the scrolls that follow it closely belong to it.
+    let placedAt = -Infinity;
+    const clock = () => root.performance?.now?.() ?? Date.now();
+    function placing() { placedAt = clock(); }
+    function pageScrolled() {
+      const now = clock();
+      if (now - placedAt < 250) { placedAt = now; return; }
+      if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      touchList();
+    }
     // 기사 이미지 보기 (default off): only then does a card ask a publisher's server for its image.
     function imagesOn() { return !!current?.settings && settingsModel().showImages(desiredSettings()); }
     function dropImages() {
@@ -809,7 +823,7 @@
       current.mode = 'related'; current.baselineMode = 'related'; current.collection = 'discover'; current.collectionUrls = null; current.memory = null; resetList();
       current.settingsScreen = false;
       // The order now shows on the filter icon (적용 1); focus lands there, where 정렬 can be changed back.
-      draw(); surface.querySelector('#discoveryFilterToggle')?.focus(); surface.scrollIntoView({ block: 'start' });
+      draw(); placing(); surface.querySelector('#discoveryFilterToggle')?.focus(); surface.scrollIntoView({ block: 'start' });
     }
     async function saveTopic() {
       if (!scope() || !current.profile || topicWrite || current.topicConflict || current.composing) return;
@@ -1323,7 +1337,7 @@
       current.visible = from + PAGE; draw();
       const added = current.body.querySelectorAll('#discoveryList > .discovery-article')[from]?.querySelector('[data-discovery-select], a.discovery-row-open[data-discovery-open], button');
       if (!added) return;
-      added.focus({ preventScroll: true }); added.closest('.discovery-article').scrollIntoView({ block: 'nearest' });
+      placing(); added.focus({ preventScroll: true }); added.closest('.discovery-article').scrollIntoView({ block: 'nearest' });
       capture(added.closest('[data-discovery-id]')?.dataset.discoveryId, added.dataset.focusKey);
     }
     // Where the reader replaces the list (below 1101px) opening it is a new history entry; the browser's
@@ -1341,7 +1355,7 @@
         if (!scope() || !current.reader?.element.isConnected) return;
         const narrow = root.matchMedia?.('(max-width: 1100px)').matches;
         (narrow ? current.reader.back : current.reader.title).focus({ preventScroll: !narrow });
-        if (narrow) root.scrollTo({ top: 0, behavior: 'instant' });
+        if (narrow) { placing(); root.scrollTo({ top: 0, behavior: 'instant' }); }
       });
     }
     function closeReader({ history = true } = {}) {
@@ -1644,7 +1658,7 @@
         const fresh = current.newUrls && !current.newDismissed ? items.filter(item => current.newUrls.has(item.article.canonicalUrl)).length : 0;
         if (fresh) {
           // Pressing it is a refresh the person asks for: the order is computed again, so the new ones take their place.
-          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
           notice.append(icon('up', 16), node('span', '새 글 ' + fresh + '건')); body.append(notice);
         }
         rows = items.map(item => () => articleCard(item, feed.sources || []));
@@ -1697,7 +1711,7 @@
       readingUI?.refreshLinks();
       if (settingsFocus && !settingsFocus.element.isConnected) {
         const target = [...current.settingsPanel.querySelectorAll('button,input,select,summary,a')].find(el => settingsFocus.id && el.id === settingsFocus.id || settingsFocus.key && el.dataset.focusKey === settingsFocus.key);
-        if (target?.getClientRects().length && !target.disabled) { target.focus({ preventScroll: true }); root.scrollTo({ top: settingsFocus.scrollY, behavior: 'instant' }); }
+        if (target?.getClientRects().length && !target.disabled) { target.focus({ preventScroll: true }); placing(); root.scrollTo({ top: settingsFocus.scrollY, behavior: 'instant' }); }
       }
     }
     async function render(options = {}) {
@@ -1801,8 +1815,9 @@
     }
     root.document.addEventListener('pointerdown', closeCardMenus, true);
     for (const type of ['wheel', 'touchmove', 'keydown']) root.addEventListener(type, pageScrollIntent, { passive: true });
+    root.addEventListener('scroll', pageScrolled, { passive: true });
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });

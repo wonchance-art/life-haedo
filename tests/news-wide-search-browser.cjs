@@ -628,6 +628,23 @@ async function main() {
       assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 12건/);
       assert.deepEqual(await shownIds(page), before, 'the cards already drawn keep their places');
     });
+    // 2026-11-12 (11-11 review, left for the second round): dragging the scroll bar or moving a screen reader's cursor
+    // scrolls the page with no wheel, touch, key or focus on the list. Here the page is scrolled by a script for them
+    // (headless Chromium draws no scroll bar), and the list must still count as used.
+    await check('news opened again with 넓게 찾기 on: scrolled without a wheel, touch or key (scroll bar, screen reader), a late answer joins after the drawn cards', async ({ page, wide, state }) => {
+      wide.reply = twelve; state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+      const before = await shownIds(page); assert.equal(before.length, 20);
+      await page.waitForTimeout(400); // past the screen's own placing of the list
+      await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'instant' })); await frames(page);
+      assert.ok(await page.evaluate(() => scrollY) > 0, 'the page moved');
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 12건/);
+      assert.deepEqual(await shownIds(page), before, 'the cards already drawn keep their places');
+    });
     await check('a topic the server refuses (safety net) leaves the taken topics\' answer in place: no request beyond one per topic', async ({ page, wide }) => {
       for (const topic of ['주제 하나', '서버만 거절', '주제 둘']) await addTopic(page, topic);
       await setWide(page, true); await settled(async () => wide.requests.length, 4, 'one request, then one per topic');
