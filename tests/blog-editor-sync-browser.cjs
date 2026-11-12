@@ -16,7 +16,7 @@
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
-const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
+const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const output = path.resolve('.local/blog-editor-sync');
 const KEPT = '복구 사본 · ';
@@ -398,11 +398,19 @@ async function main() {
         await openEdit(a.page, id); await typeTop(a.page, '맥 입력. ');
         await onServer(server, list => list.some(item => item.status === 'draft' && /맥 입력/.test(item.text)), 'Mac revision on the server');
         await received(b, list => list.some(item => item.status === 'draft' && /맥 입력/.test(item.text)), 'phone receives the revision');
-        // The moment the Mac hears that the revision left the server, a link input opens (right after the editor's own handler).
-        await a.page.evaluate(() => {
-          const sync = HaedoLife.BlogSync.forStorage(HaedoLife.Shell.storage);
-          const off = sync.subscribe(event => {
-            if (event.type !== 'remote_gone') return; off();
+        // The Mac reads the finished post a little late, so it first hears that the revision left the server and then
+        // stores the finished post. At that store the editor starts to follow; in that moment a link input opens
+        // (right after the editor's own handler): the follow must see it and stay.
+        let slow = true;
+        await a.context.route(cloud + '/rest/v1/rpc/life_blog_read', async route => {
+          if (slow && route.request().postDataJSON()?.p_post_id === id) { slow = false; await sleep(2000); }
+          return route.fallback();
+        });
+        await a.page.evaluate(async () => {
+          const s = HaedoLife.Shell.storage, w = await s.getActive(), sync = HaedoLife.BlogSync.forStorage(s);
+          const offGone = sync.subscribe(event => { if (event.type === 'remote_gone') { offGone(); window.__gone = true; } });
+          const offStore = s.subscribe(w, event => {
+            if (event.type !== 'photo_posts_changed' || !window.__gone || window.__linkOpened) return; offStore();
             Quill.find(document.querySelector('.ql-container')).setSelection(0, 2, 'user');
             document.querySelector('.photo-editor .ql-link').click();
             window.__linkOpened = !!document.querySelector('.ql-tooltip.ql-editing:not(.ql-hidden)');
@@ -410,7 +418,8 @@ async function main() {
         });
         await openEdit(b.page, (await posts(b.page)).find(item => item.status === 'saved').id); await typeTop(b.page, '폰 마무리. '); await sleep(1200);
         await b.page.getByRole('button', { name: '글 저장', exact: true }).click(); await b.page.locator('.photo-article').waitFor();
-        await until(async () => { await kick(a.page); return a.page.evaluate(() => window.__linkOpened); }, value => value === true, 'the link input opened as the Mac heard');
+        await until(async () => { await kick(a.page); return a.page.evaluate(() => window.__linkOpened); }, value => value === true, 'the link input opened as the Mac stored the finished post');
+        assert.equal(slow, false, 'the finished post was read late');
         await sleep(2500);
         assert.equal(await a.page.locator('.ql-editor').count(), 1, 'the editor stays while the link input is open');
         assert.equal(await a.page.locator('.ql-tooltip.ql-editing:not(.ql-hidden)').count(), 1, 'the link input stays open');
@@ -420,6 +429,34 @@ async function main() {
         await a.page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
         await a.page.locator('.photo-article').waitFor();
         assert.match(await a.page.locator('.photo-article').innerText(), /폰 마무리\. 맥 입력\./);
+      } finally { await close(); }
+    });
+
+    // Review B14/U19: a conflict being decided finds the row gone (deleted between the list and the read). The change
+    // here is kept under a new identity; the deleted one is never re-created.
+    await check('B14: a conflict that finds the post deleted meanwhile keeps the change under a new identity', async () => {
+      const { server, a, b, close } = await pair('b14');
+      try {
+        const id = await writeDraft(a.page, '충돌 중 지워질 초안', '초안 본문.'); await closeEditor(a.page);
+        await onServer(server, list => list.some(item => item.id === id), 'draft on the server');
+        await received(b, list => list.some(item => item.id === id), 'phone receives');
+        await openDraft(b.page, id); await typeTop(b.page, '폰에서 고침. '); await sleep(1200); await closeEditor(b.page);
+        await onServer(server, list => list.some(item => item.id === id && /폰에서 고침/.test(item.text)), 'phone edit on the server');
+        // The Mac's own change, just written (still in its upload delay): the cycle lists first and decides a conflict.
+        let gone = false;
+        await a.context.route(cloud + '/rest/v1/rpc/life_blog_read', route => {
+          if (!gone && route.request().postDataJSON()?.p_post_id === id) {
+            gone = true;
+            for (const [key, row] of server.posts) if (row.id === id) server.posts.delete(key);
+          }
+          return route.fallback();
+        });
+        await a.page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); await s.savePhotoPost(w, { ...d, title: '맥에서 고친 제목', updatedAt: new Date().toISOString() }, d.revision); }, id);
+        await kick(a.page);
+        const kept = list => !list.some(item => item.id === id) && list.some(item => item.title === '맥에서 고친 제목');
+        await until(async () => { await kick(a.page); return serverPosts(server); }, kept, 'kept under a new identity, the deleted one stays deleted');
+        assert.equal(gone, true, 'the conflict read found it gone');
+        await received(b, list => list.some(item => item.title === '맥에서 고친 제목') && !list.some(item => item.id === id), 'the phone receives it');
       } finally { await close(); }
     });
 
