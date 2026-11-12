@@ -113,9 +113,11 @@ async function main() {
         await received(b, list => list.some(item => item.id === id), 'phone receives the draft');
         await openDraft(a.page, id);
         await a.page.locator('.ql-editor').click(); await a.page.keyboard.press('End');
-        const scroll = await a.page.evaluate(() => scrollY);
         await openDraft(b.page, id); await typeTop(b.page, '폰에서 이어 쓴 문단. '); await sleep(1200); await closeEditor(b.page);
         await onServer(server, list => list.some(item => item.id === id && /폰에서/.test(item.text)), 'phone edit on the server');
+        // Where the Mac page rests (opening the editor may still be scrolling smoothly).
+        let scroll = await a.page.evaluate(() => scrollY);
+        for (let resting = false; !resting;) { await sleep(300); const now = await a.page.evaluate(() => scrollY); resting = now === scroll; scroll = now; }
         const shown = await until(async () => { await kick(a.page); return editor(a.page); }, value => /폰에서 이어 쓴 문단/.test(value.body), 'the open editor reads the new version');
         assert.match(shown.note, /다른 기기나 탭에서 바뀐 내용을 불러왔어요/);
         assert.equal(await a.page.evaluate(() => document.activeElement?.closest('.ql-editor') !== null), true, 'focus stays in the body');

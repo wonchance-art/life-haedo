@@ -1667,6 +1667,8 @@
             over = { id: target.id, revision: target.revision };
             payload.replaces = { ...over };
             previousId = target.id;
+            // Hiding is not an edit of the content: a post hidden elsewhere stays hidden with the new content.
+            if (target.archived && Object.hasOwn(payload, "archived")) payload.archived = true;
           }
         }
         // An address or another tab that still names the replaced post finds this

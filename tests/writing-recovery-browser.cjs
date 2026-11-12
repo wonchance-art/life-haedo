@@ -278,24 +278,28 @@ H.run(__filename, {
     assert.equal(await band(page), null, 'the saved post already holds that input');
     assert.equal((await copies(page)).length, 0);
   },
-  // 현재 입력을 새 초안으로 보관 stores the input under a new id. Input typed after that and lost with the page
-  // still continues that new draft: its copy restores in place.
+  // A copy made by hand (사본으로 이어 쓰기, the same store as the former 현재 입력을 새 초안으로 보관) stores the input
+  // under a new id. Input typed after that and lost with the page still continues that new draft: its copy restores
+  // in place. 2026-11-12 (account sync review M2/M3): the other tab's change to the same draft is no conflict here any
+  // more; this tab, with nothing unsaved, reads it and goes on from it.
   async 'copy-after-keeping-input-as-a-new-draft'({ open, problems, name }) {
     const { page, context } = await open();
     await dying(context);
     await H.home(page); await H.writer(page);
     await page.locator('#photoTitle').fill('두 탭 초안');
     await page.locator('.ql-editor').click(); await page.keyboard.type('처음 보관한 문장.');
-    await draftWith(page, '처음 보관한 문장.');
+    const [first] = await draftWith(page, '처음 보관한 문장.');
     const other = await H.newPage(context, problems, name);
     await other.goto(page.url()); await other.locator('.ql-editor').waitFor();
     await other.locator('.ql-editor').click(); await other.keyboard.press('Control+End'); await other.keyboard.type(' 다른 탭에서 덧붙임.');
     await draftWith(other, '다른 탭에서 덧붙임.');
     await page.bringToFront();
+    await H.until(() => H.bodyText(page), text => text.includes('다른 탭에서 덧붙임.'), 'this tab reads the other tab\'s change');
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 이 탭에서 계속 쓴 문장.');
-    await H.until(() => H.status(page), value => value.state === 'error', 'the other tab\'s change is a conflict here');
-    await page.getByRole('button', { name: '현재 입력을 새 초안으로 보관', exact: true }).click();
-    const kept = (await H.stored(page, list => list.length === 2 && list.some(row => row.text.includes('이 탭에서 계속 쓴 문장.')), 'the input is a new draft')).find(row => row.text.includes('이 탭에서 계속 쓴 문장.'));
+    await draftWith(page, '다른 탭에서 덧붙임. 이 탭에서 계속 쓴 문장.');
+    assert.notEqual((await H.status(page)).state, 'error');
+    await H.menu(page, '사본으로 이어 쓰기');
+    const kept = (await H.stored(page, list => list.length === 2 && list.some(row => row.id !== first.id && row.text.includes('이 탭에서 계속 쓴 문장.')), 'the input is a new draft')).find(row => row.id !== first.id);
     await H.until(() => H.status(page), value => value.text === '자동 저장됨', 'settled');
     await page.evaluate(() => { window.__dying = true; });
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 새 초안에서 잃은 입력');

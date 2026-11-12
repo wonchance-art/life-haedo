@@ -1833,8 +1833,8 @@
           kept = await writePhotoPost(tx, workspaceId, copy, 0, refs ? { refs, baseRevision: 0 } : null, null, effects, refs || [], null, true);
           if (refs) effects.evidenceKeys = [`post-evidence:${workspaceId}:${copyId}`];
         }
-        const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
-        return { post, copyId: kept?.id || null };
+        const stored$ = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
+        return { post: stored$, copyId: kept?.id || null };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);

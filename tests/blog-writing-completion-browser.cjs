@@ -182,11 +182,23 @@ async function main() {
       const active = (await read()).docs.find(v => v.id === primaryId); assert.equal(active.archived, false); assert.deepEqual(active.attachments, primary.attachments); assert.deepEqual(active.photos.map(p => p.digest), primary.photos.map(p => p.digest));
     });
 
-    await check('Another tab archiving the original cannot be overwritten by an older edit; explicit new-copy recovery preserves both', async () => {
+    // 2026-11-12 (account sync review M4, owner rules 11-01/11-02): the later save of a revision wins over a change made
+    // in another tab meanwhile; hiding is not an edit of the content, so the post keeps the new content and stays hidden.
+    // The hidden version held the same content: nothing is kept as a recovery copy, and nothing asks for a choice.
+    await check('Another tab hiding the original while it is revised: the later save updates the post, which stays hidden; nothing is lost or duplicated', async () => {
       await click('글 수정'); await page.locator('#photoTitle').fill('다른 탭 보관 후 새 글로 보존'); await stored();
+      const before = (await read()).docs, original = before.find(v => v.id === primaryId);
       await go(other); await openPost(other, primaryId); await other.locator('.photo-article').waitFor(); await more('목록에서 숨기기', other); await other.getByRole('button', { name: '목록에 다시 보이기', exact: true }).waitFor();
-      await click('글 저장'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '다른 탭 보관 후 새 글로 보존'); await more('새 글로 저장'); await page.locator('.photo-article').waitFor();
-      const docs = (await read()).docs; assert.equal(docs.find(v => v.id === primaryId).archived, true); assert(docs.some(v => v.title === '다른 탭 보관 후 새 글로 보존' && v.status === 'saved' && v.id !== primaryId));
+      await click('글 저장'); await page.locator('.photo-article').waitFor();
+      assert.notEqual(await page.locator('.photo-status').getAttribute('role'), 'alert');
+      const docs = (await read()).docs, saved = docs.filter(v => v.title === '다른 탭 보관 후 새 글로 보존');
+      assert.equal(saved.length, 1); assert.equal(saved[0].status, 'saved'); assert.equal(saved[0].archived, true, 'still hidden');
+      assert.deepEqual(saved[0].ops, original.ops); assert.deepEqual(saved[0].attachments, original.attachments);
+      assert.equal(docs.some(v => v.id === primaryId), false, 'the revision took the post\'s place');
+      assert.equal(docs.some(v => v.title.startsWith('복구 사본 · ')), false, 'the hidden version held the same content');
+      assert.equal(docs.length, before.length - 1, 'the editing draft became the post');
+      await page.getByRole('button', { name: '목록에 다시 보이기', exact: true }).waitFor();
+      primaryId = saved[0].id;
     });
 
     await check('Empty drafts are reused and unfinished posts live in the explicit draft area rather than the normal saved feed', async () => {
