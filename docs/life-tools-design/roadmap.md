@@ -1,6 +1,6 @@
 # 구현 로드맵과 에이전트 작업 배치
 
-## 11-11 핵심 기능 검수·수정과 뉴스 넓게 찾기 — 총괄, #249 통합(`haedo-v218`), 병합·운영 적용 전, 실기기 확인 전 (2026-11-11 KST)
+## 11-11 핵심 기능 검수·수정과 뉴스 넓게 찾기 — 총괄, #249·#250 병합(`haedo-v218`), 운영 SQL 적용, Edge `haedo-news-wide` 미배포, 실기기 확인 전 (2026-11-12 KST 갱신)
 
 소유자 지시 "기존 구조 얽매이지 말고 직접 문제 찾고 해결해. 핵심 기능 위주로 우선 리뷰"와 뉴스 탭 요청("크롬 추천 뉴스처럼, 지금은 너무 지정된 곳에서만 나옴")을 한 통합 PR로 묶었다. 핵심 흐름 다섯 영역을 실제 브라우저로 검수해 재현된 결함을 여섯 묶음으로 고쳤고, 뉴스는 2단계(카드 피드·고정 출처 확대 → 관심 주제로 넓게 찾기)로 했다. 묶음마다 구현자와 다른 에이전트가 독립 검수했고 BLOCKER·MAJOR는 고친 뒤 재검수했다(공개 복구 5차, 글쓰기 4차, 원문 병합 3차, 뉴스 화면 3차까지).
 
@@ -25,15 +25,19 @@
   - `records-split-resize:204`(Home/End 뒤 scrollY): 읽던 줄 보정이 다음 렌더 프레임에 일어나 옛 동기 단언과 경합. 기본 스크롤 차단과 보정 뒤 정확 일치를 단언.
   - `blog-writing-completion:198`: 그려진 적 없는 목록 줄을 기다려 대기가 즉시 통과, 공개 복구의 삭제 전 Web Lock·상태 읽기로 삭제가 늦어져 경주를 짐. 편집기가 사라질 때(닫기 정리 완료)를 기다림. 제품 동작은 정상.
   - 묶음 의미 충돌: 매일 진입의 백업 목록 v3(이전 판이 미리보기 전에 거절)와 뉴스 검사의 "이전 판이 연다". 검사를 v3 거절과 v2 표시 파일의 `extended` 무시로 나눔.
+  - main 배포 실행 842(800bd79) 실패 `account-wide-home-browser:131`: `capture()`가 1440→390→1440으로 폭을 바꾼 직후, 검색 형태를 바꾸는 matchMedia 수신기가 돌기 전 한 프레임에 390px 상태를 읽어 곧 숨겨질 돋보기를 누름. 폭을 바꾼 뒤 페이지가 보고하는 `data-search-mode`를 기다림(#250). 반복 탐침 60회 중 7·11회 → 0회. 경합은 11-08 S3부터 있었고 #249 뒤 빈도가 올랐다(c767df3 60회 중 1회). 빈도를 올린 변경은 특정 못 함.
+  - 예약 실행 829(c767df3, 11-11 14:11Z): 모든 작업이 "Install Chromium and Korean fonts"에서 실패. 러너 설치 단계이며 배포는 건너뜀. 다음 실행부터 재현 안 됨, 로그는 실행 기록에 보존.
   - 기준 커밋에서 원인 재현한 검사 경합: `nine-public-browser`(갱신 응답 전 읽기), `purpose-workflow-browser`(배출 뒤 favicon 요청), `schedule-entries-browser`(`evaluateAll` 두 번 왕복), `photo-post-browser`(되돌리기 700ms 벽시계), `core-experience-browser`(부드러운 스크롤 중 탭), `material-writing-browser`(복원 열기 미대기), `ai-authorship-browser`(300ms 일시 안내를 늦게 읽음).
 - **미해결(출시로 표시하지 않음, 로그 보존)**
   - `purpose-writing-browser`: 전체 실행 11회 중 1회. 가설(미확정): 클릭 순간 `#lifeLibraryStatus` 높이 변화로 약 44px 이동해 다른 요소가 눌림. 버튼이 조용히 버려지는 결함은 아님.
   - `schedule-day-change-browser` :161·:351 시간 의존(기준 커밋에서도 재현), `blog-sync-review.test.cjs:167`(main에 있음, 실시간 `setTimeout 60`), `records-split-resize` "news separator" `aria-current`(계측만), `account-library-browser` 15초 예산(기준에서도 8회 중 5회 초과), `naver-media-continuity` fullPage 캡처 20초(부하성).
 - **성능 부채(main부터, 이번에 줄었음):** `storage.getSyncState`가 상태 읽기마다 이 기기 묶음과 충돌 기록을 검사·복제한다. 15 MiB·4배 감속에서 상태 읽기 1~3.6초(main 8.6~20초). 18 MB 수동 비교는 감속 없이 25초. 상태 표시용 가벼운 읽기가 후속 후보.
-- **운영 적용(병합 관문에서, 총괄)**
-  1. 공개 전 철회 마이그레이션 `20261111120000`(sha256 `e90696b2…cd8508`, 적용 전후 `md5(prosrc)`·행 수 기록) → 앱 배포.
-  2. 넓게 찾기 마이그레이션 `20261111130000`(sha256 `7825f9fb…84ed`) → 함수 해시 대조 → 허용 계정 SQL(비익명 계정 정확히 1개일 때만, 아니면 소유자에게 묻기) → Edge `haedo-news-wide` 배포 → 첫 호출로 Auth 응답 모양 확인.
-  3. Edge `haedo-blog-media` 재배포(공개 사본 ICC 검사).
+- **운영 적용 기록(총괄)**
+  1. 공개 전 철회 마이그레이션 `20261111120000`: 적용함. `unpublish` md5 ec59cc1e → bf1f6385, ACL·설정 같음, 행 수(posts 6·assets 0·receipts 12·publications 0·profiles 0) 불변.
+  2. 넓게 찾기 마이그레이션 `20261111130000`: 적용함. 6함수 md5 문서 표와 일치(처음 `topic_valid`가 도구의 `\u` 변환으로 달라져 base64·해시 확인으로 다시 적용), 표 3개 RLS 켬·정책 0·API 권한 없음.
+  3. 허용 계정 SQL `20261112-news-wide-allow-owner-accounts.sql`(sha256 `45a9e24c…6019`, 11-12 소유자 결정 "3개 모두 내 것"): 적용함. 적용 전 비익명 3·익명 0·허용 0·컷오프(10-04) 뒤 생성 0, 3번 확인 재점검 통과 → base64로 보내 데이터베이스 안에서 SHA-256 대조 뒤 실행 → 결과 6행 모두 ok(n 3·3·0·0·0). 독립 검수 2회(MINOR 4 → 0).
+  4. Edge `haedo-blog-media` 재배포(공개 사본 ICC 검사): 함. 라이브 404·no-store·nosniff·no-referrer.
+  5. **Edge `haedo-news-wide` 미배포:** 9개 파일 중 압축된 vendor 파서(64 KB, 6줄)를 도구로 바이트 그대로 옮기기 어렵다. 소유자가 CLI로 `supabase functions deploy haedo-news-wide --no-verify-jwt` 실행 → 총괄이 배포 소스 9개 해시를 저장소와 대조하고 로그인 없는 호출의 거절을 확인. 그 전까지 넓게 찾기는 `지금 가져오지 못했습니다`.
 - **소유자 판단 대기:** 공개 이름·소개를 글별 공개와 분리, 일정 목록 묶음 기준(`updatedAt`)과 달력(`createdAt`), 공개 때 첨부별 선택, 200개 상한 제거 계획, 오늘 날짜를 주소에 명시한 화면이 다음 날 오늘을 따라갈지, 서식 보기 발췌를 일반 문단만 허용할지, 뉴스 기사 이미지 기본값, 조건부 출처(연합·SBS·노컷 "개인·비상업", 기술블로그 3곳), 넓게 찾은 글에 좋아요.
 - **미검증:** 실제 Mac·iPad·iPhone·Safari·VoiceOver, 실제 한글 키보드, 실제 Supabase(RLS·Auth 응답·Edge Deno), Google 뉴스의 Supabase IP 응답, PostgreSQL 17 로컬 실행(CI는 17).
 
@@ -46,7 +50,7 @@
    - 선행: 소유자의 B2 선택, 1번의 글 색인 재구성
    - 완료 기준: 공개 사본과 v2 렌더 일치, 독립 검수 BLOCKER·MAJOR 0, CI 녹색
 3. **뉴스 넓게 찾기 운영 확인과 RSS 운영 활성화:** 넓게 찾기 실제 계정 1회 왕복(주제 2개, 한도·거절·끄기 지우기), 조건부 출처 판단 반영, RSS 피드 1개 실제 왕복.
-   - 선행: #249 운영 적용, 소유자의 조건부 출처·이미지 기본값 판단과 RSS 피드 주소
+   - 선행: Edge `haedo-news-wide` 배포(소유자 CLI), 소유자의 조건부 출처·이미지 기본값 판단과 RSS 피드 주소
    - 완료 기준: 실제 왕복 기록(전후 행 수·호출 수), 공개 파일·캐시에 넓게 찾기 결과 0
 
 ## 11-08 일정 통합 정리·RSS 운영 전 후속 — 총괄, #243까지 병합(`haedo-v217`), 실기기 확인 전 (2026-11-08 KST)
