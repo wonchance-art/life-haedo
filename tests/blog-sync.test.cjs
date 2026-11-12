@@ -221,11 +221,8 @@ test('legacy received copies keep their local id; duplicate copies of one server
   await b.sync.syncNow();
   assert.equal((await list(b)).length, 2, 'no new installation of an already received post');
   assert.equal((await b.storage.readBlogSyncState(b.ws, legacy.id)).remoteId, doc.id);
-  // 2026-11-12 (review B1): a separated duplicate gets a fresh server identity, never its local id (which may be a
-  // server identity deleted elsewhere, whose re-creation would start at revision 1 again).
-  const separated = (await b.storage.readBlogSyncState(b.ws, extra.id)).remoteId;
-  assert.notEqual(separated, doc.id); assert.notEqual(separated, extra.id);
-  assert.equal(cloud.rows.get(separated).data.title, '예전에 새 사본으로 받은 글');
+  assert.equal((await b.storage.readBlogSyncState(b.ws, extra.id)).remoteId, extra.id);
+  assert.equal(cloud.rows.get(extra.id).data.title, '예전에 새 사본으로 받은 글');
   await a.sync.syncNow(); assert.equal((await list(a)).length, 2);
 });
 

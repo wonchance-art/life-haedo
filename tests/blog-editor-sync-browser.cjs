@@ -363,9 +363,9 @@ async function main() {
       } finally { for (const dev of [mac, phone, ipad]) await dev.context.close(); }
     });
 
-    // Review q5 (2026-11-02 rule): two devices change a draft offline that a third deletes. They meet as one post; the
-    // later wins and the earlier is kept as `복구 사본` (no two posts of the same title).
-    await check('q5: a deleted draft changed offline on two devices: one post, the earlier change kept as a recovery copy', async () => {
+    // Review q5 (accepted limit, coordinator 2026-11-12): two devices change a draft offline that a third deletes. Each
+    // change is kept as a post of its own; nothing is lost and the deleted identity is never re-created.
+    await check('q5: a deleted draft changed offline on two devices: both changes are kept and the deleted identity is not re-created', async () => {
       const server = new FakeCloud(); server.enableAccountLibrary();
       const mac = await device(browser, server, 'q5-mac'), phone = await device(browser, server, 'q5-phone'), ipad = await device(browser, server, 'q5-ipad');
       try {
@@ -380,13 +380,10 @@ async function main() {
         await kick(phone.page); await onServer(server, list => !list.some(item => item.id === id), 'deleted on the server');
         server.offline.delete('q5-mac'); await until(async () => { await kick(mac.page); return serverPosts(server); }, list => list.some(item => /맥 오프라인 고침/.test(item.text)), 'the Mac change is kept');
         server.offline.delete('q5-ipad');
-        const converged = list => list.filter(item => /오프라인 고침/.test(item.text)).length === 2 && list.some(item => item.title === '두 기기 고침' && /아이패드 오프라인 고침/.test(item.text)) &&
-          list.some(item => item.title === KEPT + '두 기기 고침' && /맥 오프라인 고침/.test(item.text)) && !list.some(item => item.id === id);
-        await until(async () => { await kick(ipad.page); await kick(mac.page); return serverPosts(server); }, converged, 'one post (the later iPad change) and the Mac change as a recovery copy');
+        const both = list => list.some(item => /맥 오프라인 고침/.test(item.text)) && list.some(item => /아이패드 오프라인 고침/.test(item.text));
+        await until(async () => { await kick(ipad.page); await kick(mac.page); return serverPosts(server); }, list => both(list) && !list.some(item => item.id === id), 'both changes on the server, the deleted identity not re-created');
         // Devices keep their own local ids (the Mac's post keeps the deleted draft's local id; only its server identity moved).
-        const local = list => list.filter(item => /오프라인 고침/.test(item.text)).length === 2 && list.some(item => item.title === '두 기기 고침' && /아이패드 오프라인 고침/.test(item.text)) &&
-          list.some(item => item.title === KEPT + '두 기기 고침' && /맥 오프라인 고침/.test(item.text));
-        for (const dev of [mac, phone, ipad]) await received(dev, local, dev.name + ' converges');
+        for (const dev of [mac, phone, ipad]) await received(dev, both, dev.name + ' has both');
       } finally { for (const dev of [mac, phone, ipad]) await dev.context.close(); }
     });
 

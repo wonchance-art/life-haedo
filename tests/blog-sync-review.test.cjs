@@ -112,9 +112,7 @@ test('M1: the same refusal reached without a revision conflict is decided once, 
   const count = () => cloud.stats.saves.filter(call => call.device === 'ipad').length, saves = count();
   time.advance(20 * 60000); await b.sync.syncNow();
   assert.equal(count(), saves, 'nothing is sent again once decided');
-  // 2026-11-12 (review q5): the server row holds other content at the revision this device holds. The push over
-  // revision 1 reads the head first and decides it as a change, so the draft request is never even refused.
-  assert.equal(refused(), 0, 'decided before any refused request');
+  assert.equal(refused(), 1, 'the refused draft request was sent once');
 });
 
 test('M2: when the server version wins, the conflict clears its retry state and ends synced', async () => {

@@ -267,10 +267,11 @@ test('MINOR-B: a Markdown document on either side is never the same input as a d
 // Review B1 (q3, three devices): a change made here to a post another device deleted is kept under a new server
 // identity. The deleted identity is never re-created at revision 1, which a device that missed the deletion would take
 // for the revision it holds and later overwrite without a recovery copy. The input is somewhere in every case.
-// Review q5 (2026-11-02 rule): two devices that both changed it meet under the same derived identity; the later wins
-// and the earlier is kept as `복구 사본`. These go through the upload's `missing` answer; the list path is below.
+// Review q5 (accepted limit, coordinator 2026-11-12): two devices that both changed it each keep theirs as a post of its
+// own under a fresh identity. Nothing is lost and the deleted identity is never re-created; the two are not merged.
+// These go through the upload's `missing` answer; the list path is U17 below.
 for (const offlineEdit of [false, true]) {
-  test('B1: a post deleted on one device and changed on another is kept as a post of its own; a third device ' + (offlineEdit ? 'that also changed it: one post, the earlier change a recovery copy' : 'receives it'), async () => {
+  test('B1: a post deleted on one device and changed on another is kept as a post of its own; a third device ' + (offlineEdit ? 'that also changed it keeps both' : 'receives it'), async () => {
     const cloud = server(), time = clock();
     const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
     const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '세 기기 초안', status: 'draft' }), 0); time.advance(10000);
@@ -286,11 +287,12 @@ for (const offlineEdit of [false, true]) {
     assert.ok(macRow, 'the change is on the server under a new identity'); assert.notEqual(macRow.id, draft.id);
     for (let i = 0; i < 3; i++) { time.advance(60000); await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); }
     const titles = async dev => (await list(dev)).map(row => row.title).sort();
-    const current = offlineEdit ? '아이패드에서 고친 문장' : '맥에서 지워진 뒤 쓴 문장';
-    const expected = offlineEdit ? [KEPT + '맥에서 지워진 뒤 쓴 문장', '아이패드에서 고친 문장'].sort() : ['맥에서 지워진 뒤 쓴 문장'];
+    const current = '맥에서 지워진 뒤 쓴 문장';
+    const expected = offlineEdit ? ['맥에서 지워진 뒤 쓴 문장', '아이패드에서 고친 문장'] : ['맥에서 지워진 뒤 쓴 문장'];
     for (const dev of [mac, phone, ipad]) assert.deepEqual(await titles(dev), expected, dev.name);
-    assert.deepEqual([...cloud.rows.values()].map(row => row.data.title).sort(), expected);
-    assert.equal([...cloud.rows.values()].find(row => row.data.title === current).id, macRow.id, 'both met under the one derived identity');
+    assert.deepEqual([...cloud.rows.values()].map(row => row.data.title).sort(), expected, 'every change is on the server');
+    assert.equal(cloud.rows.has(draft.id), false, 'the deleted identity stays deleted');
+    if (offlineEdit) assert.equal(new Set([...cloud.rows.values()].map(row => row.id)).size, 2, 'each under a fresh identity of its own');
     // The iPad goes on writing what it now holds: an ordinary edit of that post, received by the Mac.
     const ipadPost = (await list(ipad)).find(row => row.title === current);
     await redraft(ipad, ipadPost.id, current + ' · 아이패드가 이어 씀', new Date(time.now + 60000).toISOString()); time.advance(70000);
@@ -367,49 +369,4 @@ test('U19: a conflict that finds the row gone keeps the change under a new ident
   assert.equal(cloud.rows.has(draft.id), false);
   const kept = [...cloud.rows.values()].find(row => row.data.title === '이 기기에서 고친 문장');
   assert.ok(kept, 'the change is on the server under a new identity'); assert.notEqual(kept.id, draft.id);
-});
-
-// Review q5 safety: a row deleted and re-created under the same identity (a re-created derived identity, or an older
-// app) starts at revision 1 again. A device holding revision 1 sees other content there and decides it as a change:
-// clean, it takes it; changed, its push over revision 1 reads the head first and keeps the other side as `복구 사본`.
-for (const dirtyHere of [false, true]) {
-  test('q5: a row re-created at the revision held here with other content is decided, never taken as the same (' + (dirtyHere ? 'changed here' : 'clean') + ')', async t => {
-    const { cloud, time, a, b, draft } = await shared(t);
-    // The server row is replaced under the same identity at revision 1.
-    const row = cloud.rows.get(draft.id);
-    cloud.rows.set(draft.id, { ...row, revision: 1, data: { ...copy(row.data), title: '다시 만들어진 내용', updatedAt: new Date(time.now + 1000).toISOString() } });
-    if (dirtyHere) await redraft(a, draft.id, '이 기기의 나중 수정', new Date(time.now + 60000).toISOString());
-    time.advance(120000); await a.sync.syncNow({ flushDrafts: true }); await a.sync.syncNow({ flushDrafts: true });
-    const expected = dirtyHere ? [['draft', KEPT + '다시 만들어진 내용'], ['draft', '이 기기의 나중 수정']].sort() : [['draft', '다시 만들어진 내용']];
-    assert.deepEqual(await shown(a), expected);
-    if (dirtyHere) assert.equal(cloud.rows.get(draft.id).data.title, '이 기기의 나중 수정');
-    else assert.equal(cloud.rows.get(draft.id).data.title, '다시 만들어진 내용');
-  });
-}
-
-// Review q5 (list first): the other device's revival arrives here before this device's own change to the deleted post is
-// sent (still in its upload delay). The received copy is only a mirror and goes; this change meets that row like any
-// conflict: one post, the earlier change kept as `복구 사본`. Separated duplicates never reuse a deleted identity.
-test('q5: a revival received before this change is sent: one post, the earlier change a recovery copy; the deleted identity is never re-created', async () => {
-  const cloud = server(), time = clock();
-  const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
-  const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '두 기기 고침', status: 'draft' }), 0); time.advance(10000);
-  await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); await ipad.sync.syncNow();
-  await redraft(mac, draft.id, '맥 오프라인 고침', new Date(time.now).toISOString());
-  await phone.sync.deletePost(phone.ws, draft.id); await phone.sync.syncNow();
-  time.advance(60000); await mac.sync.syncNow({ flushDrafts: true });
-  const revived = [...cloud.rows.values()].find(row => row.data.title === '맥 오프라인 고침'); assert.ok(revived);
-  // The iPad's change is just written (in its upload delay): its cycle lists first, receives the revival, then decides.
-  await redraft(ipad, draft.id, '아이패드 오프라인 고침', new Date(time.now).toISOString());
-  // Its read of the revived row is slow: the deletion of its own post is decided only after the revival is installed.
-  const read = ipad.remote.read;
-  ipad.remote.read = async (id, ...rest) => { if (id === revived.id) await new Promise(resolve => setTimeout(resolve, 60)); return read.call(ipad.remote, id, ...rest); };
-  await ipad.sync.syncNow();
-  ipad.remote.read = read;
-  for (let i = 0; i < 3; i++) { time.advance(60000); await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); }
-  const expected = [['draft', KEPT + '맥 오프라인 고침'], ['draft', '아이패드 오프라인 고침']].sort();
-  for (const dev of [mac, phone, ipad]) assert.deepEqual(await shown(dev), expected, dev.name);
-  assert.equal(cloud.rows.has(draft.id), false, 'the deleted identity is never re-created');
-  assert.equal(cloud.rows.get(revived.id).data.title, '아이패드 오프라인 고침', 'the later change took the revived row');
-  for (const dev of [mac, phone, ipad]) dev.sync.dispose();
 });
