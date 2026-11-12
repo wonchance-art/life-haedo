@@ -248,6 +248,15 @@ jobs:
       - name: Verify an earlier-release device keeps news settings, reactions and reading comparisons across the account
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/news-old-shell-sync-browser.cjs
+      - name: Verify the post limit notice counts what the limit counts and leads to drafts and recovery copies
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/post-limit-notice-browser.cjs
+      - name: Verify the sync screen never shows an inconsistent record as in sync
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/sync-state-display-browser.cjs
+      - name: Verify the light sync state read stays within budget and matches the full read
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/sync-state-read-performance-browser.cjs
       - name: Verify the timeline editor stays the only writer of timeline documents
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/timeline-single-writer-browser.cjs
@@ -775,6 +784,9 @@ jobs:
             .local/news-card-feed/
             .local/news-wide-search/
             .local/news-old-shell-sync/
+            .local/post-limit-notice/
+            .local/sync-state-display-failure/
+            .local/sync-state-read-performance/
             .local/post-markdown-old-tab/
             .local/post-markdown-old-tab-input/
             .local/naver-blog/
