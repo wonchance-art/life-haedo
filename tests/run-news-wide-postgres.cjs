@@ -54,9 +54,13 @@ const OWNERS_MUTATIONS = {
   'owners-count-not-compared': sql => sql.replace('if accounts <> expected then', 'if false then'),
   'owners-count-unchecked': sql => sql.replace('if accounts <> expected then', 'if false then').replace('if listed_after <> expected\n     or exists (', 'if exists ('),
   'owners-anonymous-included': sql => sql.replaceAll('where not coalesce(u.is_anonymous, false)', 'where true'),
+  // The creation cutoff: the stop removed (the insert and the set check still exclude a later account, with the wrong reason), or all of it.
+  'owners-cutoff-not-checked': sql => sql.replace('if late <> 0 then', 'if false then'),
+  'owners-cutoff-removed': sql => sql.replace('if late <> 0 then', 'if false then').replaceAll(' and coalesce(u.created_at < created_cutoff, false)', ''),
   // The before/after row-count comparison: removed, or auth.users left out of it.
   'owners-row-count-not-compared': sql => sql.replace("    if n <> (before ->> (r.nspname || '.' || r.relname))::bigint then", '    if false then'),
   'owners-users-not-counted': sql => sql.replace(" or (ns.nspname = 'auth' and c.relname = 'users')", ''),
+  'owners-haedo-not-counted': sql => sql.replace(" or left(ns.nspname, 6) = 'haedo_'", ''),
   'owners-prints-account': sql => sql.replace("% expected; % existing tables unchanged',\n    listed_before,", "% expected; % existing tables unchanged',\n    (select owner_id from haedo_news_wide_private.allowed_accounts limit 1),"),
 };
 const MUTATIONS = {
@@ -160,9 +164,12 @@ async function ownerAccounts(pg) {
   // one expected count, and the result check names the same number.
   assert(!/[^\x00-\x7f]/.test(text) && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) && !/\r/.test(text), 'the owner-accounts SQL is plain ASCII');
   assert(!/\\u/i.test(text), 'the owner-accounts SQL holds no \\u sequence');
+  assert(!text.includes('\\'), 'the owner-accounts SQL holds no backslash at all (a tool that doubles one would change a pattern silently)');
   assert(!UUID_TEXT.test(text) && !/@[a-z0-9-]+\./i.test(text), 'no account ID or e-mail address in the owner-accounts SQL');
   assert.deepEqual([...text.matchAll(/^ {2}expected constant bigint := (\d+);$/gm)].map(match => Number(match[1])), [3], 'one expected constant, 3');
   assert.deepEqual([...text.matchAll(/allowed_accounts\) = (\d+) as ok/g)].map(match => Number(match[1])), [3], 'the result check expects the same 3');
+  assert.deepEqual([...text.matchAll(/^ {2}created_cutoff constant timestamptz := '([^']+)';$/gm)].map(match => match[1]), ['2026-10-04 00:00:00+00'], 'one creation cutoff');
+  assert.deepEqual([...text.matchAll(/u\.created_at < '([^']+)'::timestamptz/g)].map(match => match[1]), ['2026-10-04 00:00:00+00', '2026-10-04 00:00:00+00'], 'the result check uses the same cutoff');
   assert.equal((text.match(/^do \$haedo_news_wide_allow_owners\$$/gm) || []).length, 1, 'one DO block');
   // Outside comments and string literals (the result check names privileges as strings).
   assert(!/\b(delete|truncate|drop|grant|revoke|alter|update)\b/i.test(text.replace(/^\s*--.*$/gm, '').replace(/'[^']*'/g, "''")), 'no delete, truncate, drop, grant, revoke, alter or update');
@@ -188,22 +195,25 @@ async function ownerAccounts(pg) {
       await assert.rejects(install(), error => { said.push(String(error.message)); return pattern.test(error.message); }, label);
       assert.deepEqual(await listed(), state, label + ': the allow list did not change');
     };
-    const account = async (anonymous, n) => {
+    // created: the owner's accounts exist before the cutoff (2026-10-04); a later sign-up gets now(), or null.
+    const OWNED = '2026-09-01 08:00:00+00';
+    const account = async (anonymous, n, created = 'now') => {
       const id = randomUUID(), session = randomUUID();
-      await db.query('insert into auth.users(id, email, is_anonymous) values ($1, $2, $3)', [id, anonymous === true ? null : 'owner' + n + '@example.invalid', anonymous]);
+      await db.query('insert into auth.users(id, email, is_anonymous, created_at) values ($1, $2, $3, $4)', [id, anonymous === true ? null : 'owner' + n + '@example.invalid', anonymous, created === 'now' ? new Date() : created]);
       await db.query('insert into auth.sessions(id, user_id) values ($1, $2)', [session, id]);
       return { id, session };
     };
+    const late = n => new RegExp('^Found ' + n + ' non-anonymous account\\(s\\) created on or after the cutoff of the owner decision 2026-11-12 \\(or with no creation time\\)\\. Nothing was added\\. Ask the owner again\\.$');
     const found = n => new RegExp('^Expected exactly 3 non-anonymous accounts \\(owner decision 2026-11-12\\), found ' + n + '\\. Nothing was added\\. Ask the owner again\\.$');
 
     await refused(found(0), 'no account at all');
     const ANON = await account(true, 0);
     await refused(found(0), 'only an anonymous account');
-    const A = await account(false, 1);
+    const A = await account(false, 1, OWNED);
     await refused(found(1), 'one real account');
-    const B = await account(null, 2); // no flag at all counts as a real account
+    const B = await account(null, 2, OWNED); // no flag at all counts as a real account
     await refused(found(2), 'two real accounts');
-    const C = await account(false, 3);
+    const C = await account(false, 3, '2026-10-03 11:46:00+00');
     // Three real accounts, but the list already holds another (anonymous) account: stop.
     await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [ANON.id]); // test setup only
     await refused(/^The allow list would hold 4 account\(s\) and must hold exactly the 3 non-anonymous accounts\. Nothing was changed\.$/, 'the list already holds another account');
@@ -238,14 +248,16 @@ async function ownerAccounts(pg) {
     await racing('insert into public.news_wide_probe_rows values (1)', [], /Row count changed in public\.news_wide_probe_rows \(before 0, after 1\)\. Rolled back/, 'another table changes meanwhile');
     const LATE = randomUUID();
     await racing('insert into auth.users(id, is_anonymous) values ($1, true)', [LATE], /Row count changed in auth\.users \(before 4, after 5\)\. Rolled back/, 'an anonymous account appears meanwhile (the account check alone would pass)');
-    await db.query('delete from auth.users where id = $1', [LATE]); await db.query('drop table public.news_wide_probe_rows');
+    await db.query('create schema haedo_probe; create table haedo_probe.rows (n integer)'); // test-only, a haedo_* table
+    await racing('insert into haedo_probe.rows values (1)', [], /Row count changed in haedo_probe\.rows \(before 0, after 1\)\. Rolled back/, 'a haedo_* table changes meanwhile');
+    await db.query('delete from auth.users where id = $1', [LATE]); await db.query('drop table public.news_wide_probe_rows; drop schema haedo_probe cascade');
     // One of the three is already listed (as the first operations SQL could have left it): its row is kept, the other two are added.
     await db.query('insert into haedo_news_wide_private.allowed_accounts(owner_id) values ($1)', [A.id]); // test setup only
     const kept = (await listed())[0];
     const counts = async () => ({ feeds: await rows('haedo_news_wide_private.feeds'), limits: await rows('haedo_news_wide_private.limits'), users: await rows('auth.users'), sessions: await rows('auth.sessions') });
     const countsBefore = await counts();
     const expectedReport = [['allowed accounts equal the expected 3', true, 3], ['the allow list is exactly the non-anonymous accounts', true, 3],
-      ['no anonymous account on the allow list', true, 0], ['no API role can read or write the allow list', true, 0], ['row level security is on', true, null]];
+      ['no non-anonymous account created on or after the cutoff', true, 0], ['no anonymous account on the allow list', true, 0], ['no API role can read or write the allow list', true, 0], ['row level security is on', true, null]];
     const shape = report => report.map(row => [row.check_name, row.ok, row.n === null ? null : Number(row.n)]);
     let report = await install();
     assert.deepEqual(shape(report), expectedReport);
@@ -278,6 +290,17 @@ async function ownerAccounts(pg) {
     // One of the three is deleted (its list row goes with it): two left, stop.
     await db.query('delete from auth.users where id = $1', [C.id]);
     await refused(found(2), 'one of the three accounts removed');
+    // The count is three again, but not with the accounts the owner confirmed: stop.
+    const E = await account(false, 5);
+    await refused(late(1), 'one owner account removed and a new account signed up after the cutoff');
+    await db.query('delete from auth.users where id = $1', [E.id]);
+    const F = await account(false, 6, null);
+    await refused(late(1), 'an account with no creation time');
+    await db.query('delete from auth.users where id = $1', [F.id]);
+    await db.query('update auth.users set is_anonymous = false where id = $1', [ANON.id]);
+    await refused(late(1), 'an anonymous account created after the cutoff turned real');
+    await db.query('update auth.users set is_anonymous = true where id = $1', [ANON.id]);
+    assert.deepEqual((await listed()).map(row => row.id), [A.id, B.id].sort(), 'the two remaining owner accounts stay listed, nothing else');
     // What it says (notices, errors, result rows) holds counts only.
     for (const line of [...said, JSON.stringify(report)]) assert(!UUID_TEXT.test(line) && !line.includes('@'), 'no account ID or e-mail in the output: ' + line);
     const notices = said.filter(line => line.startsWith('news-wide allow list: '));
@@ -285,7 +308,7 @@ async function ownerAccounts(pg) {
     assert.match(notices[0], /^news-wide allow list: 1 account\(s\) before, 3 after, 3 expected; \d+ existing tables unchanged$/);
     assert.match(notices[1], /^news-wide allow list: 3 account\(s\) before, 3 after, 3 expected; \d+ existing tables unchanged$/);
     assert(said.length >= 12, 'errors were captured');
-    pass('owner-accounts SQL (expected 3): 0, anonymous-only, 1, 2 and 4 real accounts (also an anonymous one turned real, and one of three removed) refused with the list unchanged; a list holding another account refused; a row count that changes during the run, in another table or in auth.users, rolls it back; 3 real accounts beside an anonymous one: all three added, the anonymous one not, an already listed one kept; re-run unchanged; each listed account can claim; counts only in its output');
+    pass('owner-accounts SQL (expected 3, cutoff 2026-10-04): 0, anonymous-only, 1, 2 and 4 real accounts (also an anonymous one turned real, and one of three removed) refused with the list unchanged; three accounts with one created after the cutoff (a new sign-up, no creation time, a late anonymous one turned real) refused; a list holding another account refused; a row count that changes during the run, in public, in a haedo_* table or in auth.users, rolls it back; 3 real accounts beside an anonymous one: all three added, the anonymous one not, an already listed one kept; re-run unchanged; each listed account can claim; counts only in its output');
   } finally { await db.end().catch(() => {}); await rival.end().catch(() => {}); }
 }
 
