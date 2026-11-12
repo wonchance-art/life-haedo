@@ -15,6 +15,7 @@ const { playwright, makeContext, ready, settle, nav } = require('./unified-home-
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { MarkdownPublishCloud, syntheticSession } = require('./helpers/post-markdown-publish-cloud.cjs');
+const { instantScroll } = require('./helpers/instant-scroll.cjs');
 const output = path.resolve(__dirname, '../.local/publish-recovery');
 const report = { checks: [], screenshots: [], consoleErrors: [], pageErrors: [], external: [], expectedTransportErrors: [],
   scope: 'Actual app/SDK/IndexedDB and isolated PostgreSQL publication RPCs with the real media handler. Synthetic Auth and Storage HTTP; viewport sizes are emulated, not Apple devices; no hosted project.' };
@@ -66,6 +67,8 @@ async function main() {
   }
   async function device(name, account = accounts.a, { width = 1440, height = 1000 } = {}) {
     const context = await makeContext(browser, server, name, account, { viewport: { width, height } }); contexts.push(context);
+    // Every click below lands where Playwright aimed it (tests/helpers/instant-scroll.cjs).
+    await instantScroll(context);
     await context.route('**/*', route => {
       const origin = new URL(route.request().url()).origin;
       if ([new URL(base).origin, cloud].includes(origin)) return route.fallback();
