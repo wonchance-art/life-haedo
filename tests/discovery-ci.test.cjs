@@ -385,6 +385,41 @@ test('real existing Python updater and fixture XML integrate with seed/validatio
   assert.equal(JSON.parse(fs.readFileSync(w.f.candidate)).articles.find(article => article.sourceId === ids[0]).title, '공개 합성 기사');
 });
 
+// 2026-11-12 deploy 43204071088 (main 5a970a0): the seed was the 9 + 19 source publication, arXiv returned an
+// empty feed, and the real updater re-cleaned its last-good author list (cut at 120 characters right after a
+// comma), dropping the trailing space. checkCollection then stopped the release.
+test('real updater keeps failed first-registry and extended sources byte for byte from a 28-source publication', async t => {
+  const w = workspace(t), fixture = path.join(w.root, 'fixtures'); fs.mkdirSync(fixture);
+  const failed = ['arxiv-cs-cl', 'conversation-global'];
+  const previous = seed();
+  assert.equal(previous.sources.length + previous.extended.sources.length, 28);
+  assert.ok(previous.sources.some(source => source.id === failed[0]) && previous.extended.sources.some(source => source.id === failed[1]));
+  for (const article of all(previous).articles.filter(article => failed.includes(article.sourceId))) {
+    // Values the collector writes: a trailing space only where plain() cut at its limit (author 120, title 400, tag 80).
+    Object.assign(article, { author: 'Lin, '.repeat(24), title: 'Q&amp;A <code> ' + 'a'.repeat(384) + ' ', tags: ['R&amp;D', 'cut tag '.repeat(10)] });
+  }
+  for (const [id, hosts] of Object.entries(Core.ALLOWED_SOURCES)) {
+    fs.writeFileSync(path.join(fixture, id + '.robots.txt'), 'User-agent: *\nAllow: /\n');
+    if (id === failed[1]) continue; // Missing feed.
+    fs.writeFileSync(path.join(fixture, id + '.xml'), id === failed[0] ? '<rss><channel/></rss>'
+      : `<rss><channel><item><title>새 공개 합성 기사</title><link>https://${hosts[0]}/fresh-${id}</link><pubDate>2026-10-19T10:00:00Z</pubDate></item></channel></rss>`);
+  }
+  const result = await CI.collect({ root: w.root, clock: stamp, fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
+    runUpdater: ({ candidate, report }) => {
+      const child = spawnSync('python3', [path.resolve(__dirname, '../scripts/update-discovery-feed.py'), '--output', candidate,
+        '--report', report, '--fixtures', fixture, '--now', NOW], { encoding: 'utf8' });
+      assert.equal(child.error, undefined); return child.status;
+    } });
+  assert.equal(result.status, 'collected'); assert.equal(result.collectorExitCode, 2); assert.equal(result.okSources, 26);
+  const next = JSON.parse(fs.readFileSync(w.f.candidate));
+  for (const id of failed) {
+    const fields = article => ['id', 'url', 'canonicalUrl', 'title', 'publishedAt', 'dateStatus', 'updatedAt', 'updatedDateStatus', 'dateBasis', 'author', 'tags', 'fetchedAt']
+      .map(field => [field, article[field]]);
+    assert.deepEqual(all(next).articles.filter(article => article.sourceId === id).map(fields), all(previous).articles.filter(article => article.sourceId === id).map(fields));
+  }
+  assert.ok(next.articles.some(article => article.sourceId === failed[0]) && next.extended.articles.some(article => article.sourceId === failed[1]));
+});
+
 test('Pages schedule preserves all required checks and least-privilege publication gates', () => {
   const workflow = fs.readFileSync(path.resolve(__dirname, '../.github/workflows/pages.yml'), 'utf8');
   assert.match(workflow, /cron: ['"]15 6 \* \* \*['"]/);
