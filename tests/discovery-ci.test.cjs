@@ -395,7 +395,8 @@ test('real updater keeps failed first-registry and extended sources byte for byt
   assert.equal(previous.sources.length + previous.extended.sources.length, 28);
   assert.ok(previous.sources.some(source => source.id === failed[0]) && previous.extended.sources.some(source => source.id === failed[1]));
   for (const article of all(previous).articles.filter(article => failed.includes(article.sourceId))) {
-    Object.assign(article, { author: 'Lin, '.repeat(24), title: 'Q&amp;A about <code> markup, cut ', tags: ['R&amp;D ', 'cut tag '] });
+    // Values the collector writes: a trailing space only where plain() cut at its limit (author 120, title 400, tag 80).
+    Object.assign(article, { author: 'Lin, '.repeat(24), title: 'Q&amp;A <code> ' + 'a'.repeat(384) + ' ', tags: ['R&amp;D', 'cut tag '.repeat(10)] });
   }
   for (const [id, hosts] of Object.entries(Core.ALLOWED_SOURCES)) {
     fs.writeFileSync(path.join(fixture, id + '.robots.txt'), 'User-agent: *\nAllow: /\n');

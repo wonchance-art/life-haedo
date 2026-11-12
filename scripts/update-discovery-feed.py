@@ -502,8 +502,11 @@ def author_name(value):
     # RSS <author> sometimes contains an email address; keep only an explicit display name.
     if '@' in value:
         match = re.search(r'\(([^()@]+)\)', value)
-        return plain(match.group(1), 120) if match else None
-    return value[:120] or None
+        value = plain(match.group(1), 120) if match else ''
+    name = value[:120]
+    # A doubly escaped `&amp;#64;` inside the parentheses decodes to `@` only here, and empty parentheses
+    # leave ''. Neither is a display name: publish no author rather than an address or an empty string.
+    return name if name and '@' not in name else None
 
 
 def article_date(article):
@@ -624,24 +627,26 @@ def previous_parts(previous):
 
 
 # The form of a plain() result: words separated by single spaces, no controls or bidi overrides. Its last
-# character can be a space when plain() cut the text at its limit right after one (an arXiv author list
+# character can be a space only when plain() cut the text at its limit right after one (an arXiv author list
 # cut at 120 characters on 2026-11-12). plain() is not idempotent on its own output: a second pass trims
 # that space and reads `&`/`<` text as markup again, so a failed source's retained text never goes through it twice.
 PLAIN_FORM = re.compile(r'[^\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]+(?: [^\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]+)* ?')
 
 
+def collector_form(value, limit):
+    """True when plain()/author_name() could have written value: a trailing space only from a cut at the limit."""
+    return (isinstance(value, str) and len(value) <= limit and PLAIN_FORM.fullmatch(value) is not None and
+            (not value.endswith(' ') or len(value) == limit))
+
+
 def retained_text(value, limit):
     """Last-good text kept byte for byte when it already has plain()'s output form; anything else is cleaned."""
-    if isinstance(value, str) and len(value) <= limit and PLAIN_FORM.fullmatch(value):
-        return value
-    return plain(value, limit)
+    return value if collector_form(value, limit) else plain(value, limit)
 
 
 def retained_author(value):
     """Last-good author kept exactly when author_name() could have produced it; anything else is cleaned."""
-    if isinstance(value, str) and len(value) <= 120 and '@' not in value and PLAIN_FORM.fullmatch(value):
-        return value
-    return author_name(value)
+    return value if collector_form(value, 120) and '@' not in value else author_name(value)
 
 
 def previous_articles(previous, source):
