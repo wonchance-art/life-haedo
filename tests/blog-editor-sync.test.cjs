@@ -208,7 +208,11 @@ test('M3 safety: input stored over a draft another tab changed keeps that versio
   assert.equal(kept.title, KEPT + '다른 탭에서 고침'); assert.equal(kept.status, 'draft'); assert.equal(kept.replaces, null); assert.equal(kept.updatedAt, '2026-11-01T09:10:00.000Z');
   const same = await a.storage.savePhotoPostOver(a.ws, { ...copy(saved), updatedAt: '2026-11-01T09:30:00.000Z' }, saved.revision, { over: { id: draft.id, revision: saved.revision }, copyId: Core.id() });
   assert.equal(same.keptCopyId, null, 'nothing differs: no copy');
-  assert.deepEqual(await shown(a), [['draft', KEPT + '다른 탭에서 고침'], ['draft', '이 탭의 입력']].sort());
+  // The caller knows the stored version holds nothing it has not seen (only its revision moved): no copy either.
+  const moved = await a.storage.savePhotoPost(a.ws, { ...copy(same), updatedAt: '2026-11-01T09:31:00.000Z' }, same.revision);
+  const known = await a.storage.savePhotoPostOver(a.ws, { ...copy(moved), title: '이 탭의 다음 입력', revision: moved.revision, updatedAt: '2026-11-01T09:40:00.000Z' }, moved.revision, { over: { id: draft.id, revision: moved.revision }, copyId: Core.id(), keep: false });
+  assert.equal(known.keptCopyId, null); assert.equal(known.title, '이 탭의 다음 입력');
+  assert.deepEqual(await shown(a), [['draft', KEPT + '다른 탭에서 고침'], ['draft', '이 탭의 다음 입력']].sort());
 });
 
 test('M4: the later save of a saved post edited on two devices updates it; the other version is a recovery copy everywhere; the public copy is not touched', async t => {

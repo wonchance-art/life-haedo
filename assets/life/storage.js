@@ -1797,7 +1797,9 @@
     // and the input takes its place. A post that is public keeps its public copy: publication
     // stays an explicit action. Anything else changed since `over` was read is refused as a
     // conflict, so the caller reads again.
-    async function savePhotoPostOver(workspaceId, input, baseRevision, { over, copyId } = {}) {
+    // `keep: false`: the caller knows the stored version holds no content it has not seen (only its revision or hidden
+    // state moved), so nothing is kept for it.
+    async function savePhotoPostOver(workspaceId, input, baseRevision, { over, copyId, keep = true } = {}) {
       collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
       if (!plain(over)) throw fault('invalid_photo_post', '바꿀 글을 확인해 주세요.');
       requireId(over.id, '바꿀 글'); requireRevision(over.revision); requireId(copyId, '복구 사본');
@@ -1815,7 +1817,7 @@
           throw fault('photo_post_conflict', '확인하는 동안 글이 또 바뀌었습니다. 입력은 그대로 남아 있습니다.');
         photoPost().validate(stored);
         if (!self) value.replaces = { id: over.id, revision: over.revision };
-        const same = photoPost().contentKey(stored) === photoPost().contentKey(value) &&
+        const same = keep === false || photoPost().contentKey(stored) === photoPost().contentKey(value) &&
           stablePayload(stored.photos.map(photoPost().metadata)) === stablePayload(value.photos.map(photoPost().metadata));
         let kept = null;
         if (!same) {

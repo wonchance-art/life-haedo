@@ -1140,7 +1140,9 @@
         }
         const value = { ...payload, revision: stored ? stored.revision : 0 };
         if (!stored) return note(await storage.savePhotoPost(workspaceId, value, 0), "다른 곳에서 지운 초안이라 지금 입력으로 다시 보관했어요");
-        const saved = await storage.savePhotoPostOver(workspaceId, value, stored.revision, { over: { id: stored.id, revision: stored.revision }, copyId: life.Core.id() });
+        // What storage holds may differ only by its revision (nothing this editor has not seen): nothing to keep then.
+        const keep = !(typeof storedBase === "string" && storedBase && M.contentHash(stored) === storedBase);
+        const saved = await storage.savePhotoPostOver(workspaceId, value, stored.revision, { over: { id: stored.id, revision: stored.revision }, copyId: life.Core.id(), keep });
         if (saved.keptCopyId) try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.keptCopyId); } catch (_) {}
         return note(saved, saved.keptCopyId ? "다른 탭이나 기기에서 바뀐 내용은 복구 사본으로 남겼어요" : "");
       }
@@ -1664,8 +1666,9 @@
           if (!current(token)) return;
           if (!target || target.status !== "saved") payload.replaces = null;
           else if (target.id !== payload.replaces.id || target.revision !== payload.replaces.revision) {
-            over = { id: target.id, revision: target.revision };
-            payload.replaces = { ...over };
+            // Content this revision did not start from is kept; a post that only moved (hidden, rewritten) keeps nothing.
+            over = { id: target.id, revision: target.revision, keep: baseline === null || M.contentKey(target) !== baseline };
+            payload.replaces = { id: target.id, revision: target.revision };
             previousId = target.id;
             // Hiding is not an edit of the content: a post hidden elsewhere stays hidden with the new content.
             if (target.archived && Object.hasOwn(payload, "archived")) payload.archived = true;
@@ -1677,7 +1680,7 @@
         replaced = previousId !== payload.id;
         if (replaced) movedStore.record(workspaceId, previousId, payload.id);
         const saved = await (over && typeof storage.savePhotoPostOver === "function"
-          ? storage.savePhotoPostOver(workspaceId, payload, doc.revision, { over, copyId: life.Core.id() })
+          ? storage.savePhotoPostOver(workspaceId, payload, doc.revision, { over: { id: over.id, revision: over.revision }, copyId: life.Core.id(), keep: over.keep })
           : storage.savePhotoPost(workspaceId, payload, doc.revision)
         ).catch(async (cause) => {
           // Taken back only when the replacement did not happen. Another tab
