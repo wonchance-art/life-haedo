@@ -1823,13 +1823,22 @@
             throw fault('photo_post_conflict', '복구 사본 식별자가 이미 쓰이고 있습니다.');
           const copy = { ...clone(stored), id: copyId, title: recoveryCopyTitle(stored.title, stored.updatedAt), revision: 0, status: 'draft', replaces: null };
           if (Object.hasOwn(copy, 'archived')) copy.archived = false;
-          kept = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects, [], null, true);
+          // The kept version keeps its exact source evidence (as a format transition's copy does),
+          // unless it can no longer be checked: the input is never refused for the copy's sake.
+          let refs = null;
+          try {
+            const row = await postEvidenceRow(meta, workspaceId, `post-evidence:${workspaceId}:${over.id}`);
+            if (row?.refs?.length) { refs = checkedEvidence(row.refs, workspaceId); checkEvidenceTargets(refs, await checkedBundle(tx.objectStore('bundles'), workspaceId, meta)); }
+          } catch (error) { if (error?.name === 'TransactionInactiveError' || error?.name === 'AbortError') throw error; refs = null; }
+          kept = await writePhotoPost(tx, workspaceId, copy, 0, refs ? { refs, baseRevision: 0 } : null, null, effects, refs || [], null, true);
+          if (refs) effects.evidenceKeys = [`post-evidence:${workspaceId}:${copyId}`];
         }
         const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
         return { post, copyId: kept?.id || null };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      if (effects.evidenceKeys) accountDocChanged(...effects.evidenceKeys);
       // The stored post, as savePhotoPost returns it; which copy was kept is a property beside it.
       return Object.defineProperty(result.post, 'keptCopyId', { value: result.copyId, enumerable: false });
     }

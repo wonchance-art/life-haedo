@@ -1068,6 +1068,9 @@
         .then((saved) => {
           if (!valid() || doc !== target) return;
           const first = target.revision === 0 && !!target.replaces;
+          // The input went to a draft of its own (storeDraft): the editor continues that draft.
+          const moved = saved.id !== target.id ? target.id : null;
+          if (moved) Object.assign(target, { id: saved.id, replaces: null, archived: false, createdAt: saved.createdAt });
           target.revision = saved.revision;
           storedTick = tick;
           keptTick = -1;
@@ -1080,7 +1083,8 @@
           if (storedTick === dirtyTick) recoveryStore.clear(workspaceId, target.id);
           if (normal.changed) alignEditor(normal, tick);
           if (saved.overNote && current(token)) showChangeNote(saved.overNote);
-          if (first && current(token) && mode === "edit") onModeChange({ mode, id: target.id });
+          if ((first || moved) && current(token) && mode === "edit") onModeChange({ mode, id: target.id });
+          if (moved) { recoveryStore.clear(workspaceId, moved); baseline = null; syncHold(); }
           // A short AI-mark note gives way to the save state once saved.
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
@@ -1121,10 +1125,20 @@
           if (e?.code === "photo_post_missing") return null;
           throw cause;
         });
-        if (stored && (stored.status !== "draft" || stored.archived || stored.revision === target.revision)) throw cause;
+        if (stored && stored.status === "draft" && !stored.archived && stored.revision === target.revision) throw cause;
         if (!valid() || doc !== target) throw cause;
-        const value = { ...payload, revision: stored ? stored.revision : 0 };
         const note = (saved, text) => Object.defineProperty(saved, "overNote", { value: text, enumerable: false });
+        // Saved as a post or hidden elsewhere (another tab finished or hid this same draft): the input
+        // is kept as a draft of its own, with the draft's exact source evidence; the other stays as it is.
+        if (stored && (stored.status !== "draft" || stored.archived)) {
+          const evidence = await independentEvidence(epoch, target.id, target.replaces?.id);
+          if (!evidence || !valid() || doc !== target) throw cause;
+          const at = new Date().toISOString();
+          const fresh = { ...payload, id: life.Core.id(), revision: 0, status: "draft", replaces: null, archived: false, createdAt: at, updatedAt: at };
+          return note(await storage.savePhotoPostWithEvidence(workspaceId, fresh, 0, evidence.refs, 0),
+            stored.status === "saved" ? "다른 탭이나 기기에서 이 초안을 글로 저장해, 지금 입력은 새 초안으로 보관했어요" : "다른 탭이나 기기에서 이 초안을 숨겨, 지금 입력은 새 초안으로 보관했어요");
+        }
+        const value = { ...payload, revision: stored ? stored.revision : 0 };
         if (!stored) return note(await storage.savePhotoPost(workspaceId, value, 0), "다른 곳에서 지운 초안이라 지금 입력으로 다시 보관했어요");
         const saved = await storage.savePhotoPostOver(workspaceId, value, stored.revision, { over: { id: stored.id, revision: stored.revision }, copyId: life.Core.id() });
         if (saved.keptCopyId) try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.keptCopyId); } catch (_) {}
@@ -3235,6 +3249,8 @@
       if (mode !== "edit" || !doc) return false;
       if (composing || imeActive() || dirtyTick !== storedTick || saving || checkpointing || (busy && !loading) || offer) return true;
       if (attachmentUI?.pending() || attachmentUI?.composing()) return true;
+      // An AI suggestion panel or a link being written works on what the editor holds now.
+      if (document.querySelector("dialog.writing-ai-panel[open]") || host?.querySelector(".ql-tooltip.ql-editing:not(.ql-hidden)")) return true;
       if (selected?.isConnected && captionInput && altInput) {
         const value = Photo.value(selected);
         if (captionInput.value !== value.caption || altInput.value !== value.alt) return true;
@@ -3293,8 +3309,13 @@
         } else return;
         if (!current(token) || doc !== was || mode !== "edit") return;
         if (editorBusy()) { editStale = true; return; }
-        // Saved or hidden elsewhere (another tab finished it): show it the way opening it would.
-        if (next.status !== "draft" || next.archived) { await open(next.id); return; }
+        // Saved or hidden elsewhere (another tab finished or hid this same draft, nothing unsaved
+        // here): shown the way opening it would, and said.
+        if (next.status !== "draft" || next.archived) {
+          await open(next.id);
+          if (current(epoch) && doc?.id === next.id) showStatus(next.status === "saved" ? "다른 탭이나 기기에서 이 초안을 글로 저장했어요" : "다른 탭이나 기기에서 이 초안을 숨겼어요");
+          return;
+        }
         const hadFocus = !!editor?.hasFocus?.(), range = hadFocus ? editor.getSelection() : null, before = range ? editor.getContents() : null;
         const titleFocus = document.activeElement === titleInput && titleInput ? [titleInput.selectionStart, titleInput.selectionEnd] : null;
         const y = root.scrollY;

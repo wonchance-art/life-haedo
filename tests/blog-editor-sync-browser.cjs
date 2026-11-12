@@ -206,6 +206,11 @@ async function main() {
         assert.match(state.note, /다른 탭이나 기기에서 바뀐 내용은 복구 사본으로 남겼어요/); assert.notEqual(await tab2.locator('.photo-status').getAttribute('data-state'), 'error');
         assert.equal(await tab2.locator('.photo-recovery-actions:not([hidden])').count(), 0, 'no manual recovery');
         await until(async () => editor(a.page), value => /탭2 입력/.test(value.body), 'tab 1 (clean) reads the stored version');
+        // Tab 2 finishes the draft: tab 1, with nothing unsaved, shows the saved post and says why.
+        await tab2.getByRole('button', { name: '글 저장', exact: true }).click(); await tab2.locator('.photo-article').waitFor();
+        await a.page.locator('.photo-article').waitFor();
+        assert.match(await a.page.locator('.photo-status').innerText(), /다른 탭이나 기기에서 이 초안을 글로 저장했어요/);
+        assert.match(await a.page.locator('.photo-article').innerText(), /탭2 입력/);
         await tab2.close();
       } finally { await close(); }
     });
