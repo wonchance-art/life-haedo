@@ -1543,7 +1543,7 @@
         onReturn: async context => {
           // A post deleted from its read view: forget every reference to it and go where its back control goes.
           if (context.deletedId) {
-            const deleted = context.deletedId, done = '글을 삭제했습니다. 다른 기기에서도 삭제됩니다.';
+            const deleted = context.deletedId, done = context.notice || '글을 삭제했습니다. 다른 기기에서도 삭제됩니다.';
             const material = session.materialReturn && [session.materialReturn.postId, session.materialReturn.targetPostId].includes(deleted) ? session.materialReturn : null;
             const nine = !!session.ninePostReturn || [session.nineComposeReturn?.postId, session.nineComposeTarget?.postId, session.ninePostReference?.postId].includes(deleted);
             // The 9칸 receipt names the draft it created; a later save may have replaced that id.

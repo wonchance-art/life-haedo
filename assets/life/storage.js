@@ -1798,6 +1798,75 @@
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
       return result;
     }
+    // The writer's input stored over a version that changed elsewhere since it was opened
+    // (2026-11-01/02 owner rules: the later side wins, the other is kept as `복구 사본`, saved
+    // posts included). `over` names the exact stored version being replaced: the open draft
+    // itself at a newer revision (another tab or device changed it), or, for a finished
+    // revision (`replaces`), its saved post at the revision it has now. In one transaction that
+    // version, unless it holds the same content, becomes a new private recovery draft (`copyId`)
+    // and the input takes its place. A post that is public keeps its public copy: publication
+    // stays an explicit action. Anything else changed since `over` was read is refused as a
+    // conflict, so the caller reads again.
+    // `keep: false`: the caller knows the stored version holds no content it has not seen (only its revision or hidden
+    // state moved), so nothing is kept for it.
+    async function savePhotoPostOver(workspaceId, input, baseRevision, { over, copyId, keep = true } = {}) {
+      collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
+      if (!plain(over)) throw fault('invalid_photo_post', '바꿀 글을 확인해 주세요.');
+      requireId(over.id, '바꿀 글'); requireRevision(over.revision); requireId(copyId, '복구 사본');
+      const value = photoPost().compact(input);
+      if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const self = over.id === value.id;
+      if (self ? over.revision !== baseRevision || value.status !== 'draft' : value.status !== 'saved' || value.replaces?.id !== over.id)
+        throw fault('invalid_photo_post', '바꿀 글과 저장할 입력을 확인해 주세요.');
+      if (copyId === value.id || copyId === over.id) throw fault('invalid_photo_post', '복구 사본 식별자를 확인해 주세요.');
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        const stored = (await meta.get(`photo-post:${workspaceId}:${over.id}`))?.value;
+        if (!stored || stored.revision !== over.revision || stored.status !== (self ? 'draft' : 'saved'))
+          throw fault('photo_post_conflict', '확인하는 동안 글이 또 바뀌었습니다. 입력은 그대로 남아 있습니다.');
+        photoPost().validate(stored);
+        if (!self) value.replaces = { id: over.id, revision: over.revision };
+        const same = keep === false || photoPost().contentKey(stored) === photoPost().contentKey(value) &&
+          stablePayload(stored.photos.map(photoPost().metadata)) === stablePayload(value.photos.map(photoPost().metadata));
+        let kept = null;
+        if (!same) {
+          for (const prefix of ['photo-post', 'post-evidence', 'blog-sync']) if (await meta.get(`${prefix}:${workspaceId}:${copyId}`))
+            throw fault('photo_post_conflict', '복구 사본 식별자가 이미 쓰이고 있습니다.');
+          const copy = { ...clone(stored), id: copyId, title: recoveryCopyTitle(stored.title, stored.updatedAt), revision: 0, status: 'draft', replaces: null };
+          if (Object.hasOwn(copy, 'archived')) copy.archived = false;
+          // The kept version keeps its exact source evidence (as a format transition's copy does),
+          // unless it can no longer be checked: the input is never refused for the copy's sake.
+          let refs = null;
+          try {
+            const row = await postEvidenceRow(meta, workspaceId, `post-evidence:${workspaceId}:${over.id}`);
+            if (row?.refs?.length) { refs = checkedEvidence(row.refs, workspaceId); checkEvidenceTargets(refs, await checkedBundle(tx.objectStore('bundles'), workspaceId, meta)); }
+          } catch (error) { if (error?.name === 'TransactionInactiveError' || error?.name === 'AbortError') throw error; refs = null; }
+          kept = await writePhotoPost(tx, workspaceId, copy, 0, refs ? { refs, baseRevision: 0 } : null, null, effects, refs || [], null, true);
+          if (refs) effects.evidenceKeys = [`post-evidence:${workspaceId}:${copyId}`];
+        }
+        const stored$ = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
+        return { post: stored$, copyId: kept?.id || null };
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      if (effects.evidenceKeys) accountDocChanged(...effects.evidenceKeys);
+      // The stored post, as savePhotoPost returns it; which copy was kept is a property beside it.
+      return Object.defineProperty(result.post, 'keptCopyId', { value: result.copyId, enumerable: false });
+    }
+    // The name of a recovery copy, as BlogSync names the copies a conflict keeps ("복구 사본 · 제목";
+    // a copy of a copy gets the time its content was written, in UTC), cut to whole characters.
+    function recoveryCopyTitle(source, writtenAt) {
+      let title = source || '', suffix = '';
+      if (!title.startsWith('복구 사본 · ')) title = '복구 사본 · ' + title;
+      else if (!/ \(\d\d-\d\d \d\d:\d\d UTC\)$/.test(title)) {
+        const at = new Date(writtenAt), two = number => String(number).padStart(2, '0');
+        if (Number.isFinite(at.getTime())) suffix = ` (${two(at.getUTCMonth() + 1)}-${two(at.getUTCDate())} ${two(at.getUTCHours())}:${two(at.getUTCMinutes())} UTC)`;
+      }
+      let head = '';
+      for (const char of title) { if (head.length + char.length + suffix.length > 500) break; head += char; }
+      return head + suffix;
+    }
     // Explicit first-edit confirmation/save only: never call from autosave.
     // The recovery comes from the exact stored source, not an editor snapshot.
     async function savePostTransition(workspaceId, input, baseRevision, request) {
@@ -1950,6 +2019,9 @@
           const materialRevision = await moveMaterialWritingOutputs(meta, workspaceId, target.id, value.id);
           if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
+          // The post keeps the time it was first written, which another device's clock may have set
+          // ahead of this one: the finished revision is then written at that time, never before it.
+          if (value.updatedAt < value.createdAt) value.updatedAt = value.createdAt;
         }
         value.revision = baseRevision + 1; photoPost().validate(value);
         const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
@@ -6466,7 +6538,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePhotoPostOver, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, readMaterialContinuityOutputDeletion, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
