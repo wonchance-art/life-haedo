@@ -63,16 +63,27 @@ async function main() {
       await check(`${width}px: nothing below 190; from 190 the count left; at the cap how many to delete and where`, async page => {
         await openHome(page);
         assert.equal((await seed(page, { saved: 185, drafts: 4 })).count, 189);
-        await nav(page, 'home'); await homeReady(page);
+        // A 첨부 글 draft (page composer) is not counted by the cap, even with the copies' words in it.
+        await page.evaluate(async () => {
+          const s = HaedoLife.Shell.storage, w = await s.getActive(), value = await s.readPageDrafts(w), draft = HaedoLife.PagePosts.draft([], HaedoLife.Core.id(), new Date().toISOString());
+          draft.body = '첨부 글 초안 · 복구 사본이라는 낱말이 든 메모'; value.posts.push(draft); await s.savePageDrafts(w, value, value.revision);
+        });
+        await openHome(page); // the list reads 첨부 글 drafts when it opens
         assert.equal(await notice(page).count(), 0, 'below 190: no line');
         await seed(page, { drafts: 1 }); await page.waitForFunction(() => document.querySelector('#homePostList .home-limit'));
         assert.equal(await notice(page).getAttribute('data-home-limit'), 'near');
         assert.equal((await notice(page).locator('.life-meta').innerText()).trim(), '글·초안 190/200개 · 10개 더 저장할 수 있어요.');
         await shot(page, `near-${width}`);
-        // 초안 보기 goes to the drafts; there the line keeps the count and has nothing to go to.
+        // 초안 보기 goes to the drafts the cap counts (no 첨부 글 draft); 모든 초안 보기 shows every draft again.
         await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
         await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor();
-        assert.equal(await notice(page).getByRole('button').count(), 0);
+        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
+        assert.deepEqual([...new Set(await page.locator('#homePostList .home-draft').evaluateAll(nodes => nodes.map(node => node.dataset.draftKind)))], ['photo-draft']);
+        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['모든 초안 보기']);
+        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).click();
+        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 6);
+        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1);
+        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기']);
         await page.locator('#homeTab-posts').click(); await page.locator('#homeTab-posts[aria-selected="true"]').waitFor();
         // 199: one left, then the cap with two recovery copies among the drafts.
         await seed(page, { drafts: 7 }); await seed(page, { drafts: 2, copies: 2 });
@@ -95,7 +106,8 @@ async function main() {
         assert.deepEqual((await page.locator('#homePostList .home-draft strong').allInnerTexts()).map(text => text.startsWith('복구 사본 · ')), [true, true]);
         assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('home-draft-open')), true, 'focus moves to the first copy');
         assert.equal(await page.locator('#homePostSearch').inputValue(), '복구 사본');
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 모두 보기']);
+        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 0, 'the 첨부 글 draft with the same words is not one of them');
+        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기', '모든 초안 보기']);
         await shot(page, `copies-${width}`);
         // Deleting one makes room again.
         await page.evaluate(async () => {
@@ -127,7 +139,7 @@ async function main() {
       assert.equal(await page.locator('.home-delete-refused').count(), 0, 'another library: not this list');
       await page.evaluate(id => window.__refuse({ type: 'delete_refused', reason: 'published', workspaceId: id, remoteId: crypto.randomUUID() }), ws);
       await page.locator('.home-delete-refused').waitFor();
-      assert.equal((await page.locator('.home-delete-refused .life-meta').innerText()).trim(), '공개 중인 글이라 서버에서 삭제하지 않았어요. 글은 목록에 다시 보입니다. 공개를 철회한 뒤 삭제해 주세요.');
+      assert.equal((await page.locator('.home-delete-refused .life-meta').innerText()).trim(), '공개 중인 글이라 서버에서 삭제하지 않았어요. 다음 동기화에서 이 글을 다시 받아요. 공개를 철회한 뒤 삭제해 주세요.');
       assert.match(await page.locator('#homePosts [role="status"][aria-live="polite"]').innerText(), /공개를 철회한 뒤 삭제해 주세요/);
       await shot(page, 'delete-refused-820'); await page.setViewportSize({ width: 390, height: 844 }); await shot(page, 'delete-refused-390');
       await page.locator('#homeTab-drafts').click(); await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor();

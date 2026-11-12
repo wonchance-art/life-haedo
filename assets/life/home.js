@@ -122,6 +122,13 @@
     if (!Number.isSafeInteger(count) || count < POST_LIMIT_NOTICE) return null;
     return { count, limit: POST_LIMIT, remaining: Math.max(0, POST_LIMIT - count), full: count >= POST_LIMIT, toDelete: Math.max(0, count - POST_LIMIT + 1) };
   }
+  // What the line says; `drafts`: how many of the counted rows are drafts (what to delete first).
+  function limitText(capacity, drafts) {
+    const head = '글·초안 ' + capacity.count + '/' + capacity.limit + '개 · ';
+    if (!capacity.full) return head + capacity.remaining + '개 더 저장할 수 있어요.';
+    const what = drafts >= capacity.toDelete ? '쓰지 않는 초안이나 복구 사본을' : drafts > 0 ? '초안 ' + drafts + '개와 쓰지 않는 글을 합쳐' : '쓰지 않는 글을';
+    return head + '새 글을 저장하려면 ' + what + ' ' + capacity.toDelete + '개 지워 주세요.';
+  }
   async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
     let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
@@ -147,7 +154,8 @@
     for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws, publication: publication.get(ws + '/' + post.id) || 'private' })));
     // counts: each read library's whole list, as the cap counts it (postCapacity).
     return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids,
-      counts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.length])) };
+      counts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.length])),
+      drafts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.filter(row => row.status === 'draft').length])) };
   }
   // A row's date and its full form. Formatters are made once (2026-11-04: two new
   // Intl.DateTimeFormat per row were ~3% of the main thread while the first list was drawn);
@@ -183,8 +191,9 @@
     // The server refused a deletion sent from this device (the post is public there: another device
     // published it before this one knew) and the post came back. Said once on this list, until 확인.
     let refusedDelete = false;
-    const REFUSED_DELETE = '공개 중인 글이라 서버에서 삭제하지 않았어요. 글은 목록에 다시 보입니다. 공개를 철회한 뒤 삭제해 주세요.';
-    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
+    const REFUSED_DELETE = '공개 중인 글이라 서버에서 삭제하지 않았어요. 다음 동기화에서 이 글을 다시 받아요. 공개를 철회한 뒤 삭제해 주세요.';
+    // cap: only the rows the 200 cap counts (this library's posts and drafts), set by the cap notice's buttons.
+    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20, cap: false };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
     // ≥761px the posts search is an always-visible field; ≤760 it opens from the tab row's icon.
@@ -193,12 +202,12 @@
     const searchAlwaysShown = () => !!wideSearch?.matches;
     function captureState() { return { ...listState }; }
     function adoptState(workspaceId, incoming) {
-      if (listState.workspaceId !== workspaceId) listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT };
+      if (listState.workspaceId !== workspaceId) listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT, cap: false };
       if (incoming?.workspaceId !== workspaceId) return;
       listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
         searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
-        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT };
+        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT, cap: incoming.cap === true };
     }
     function clearMedia() {
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
@@ -467,14 +476,14 @@
       const tabs = el('div', null, 'home-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '내 글 상태');
       for (const [key, label] of Object.entries(TAB_LABELS)) {
         const button = action(context, label, () => {
-          listState.tab = key; listState.limit = ROW_LIMIT; updateList(context, true);
+          listState.tab = key; listState.cap = false; listState.limit = ROW_LIMIT; updateList(context, true);
         }, 'home-tab');
         button.id = 'homeTab-' + key; button.dataset.homeTab = key; button.dataset.focusKey = 'home:tab:' + key;
         button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', 'homePostList');
         button.addEventListener('keydown', event => {
           const keys = Object.keys(TAB_LABELS), at = keys.indexOf(listState.tab);
           const next = event.key === 'ArrowRight' ? keys[(at + 1) % keys.length] : event.key === 'ArrowLeft' ? keys[(at + keys.length - 1) % keys.length] : event.key === 'Home' ? keys[0] : event.key === 'End' ? keys[keys.length - 1] : null;
-          if (!next) return; event.preventDefault(); listState.tab = next; listState.limit = ROW_LIMIT; updateList(context, true); tabs.querySelector('[data-home-tab="' + next + '"]').focus({ preventScroll: true });
+          if (!next) return; event.preventDefault(); listState.tab = next; listState.cap = false; listState.limit = ROW_LIMIT; updateList(context, true); tabs.querySelector('[data-home-tab="' + next + '"]').focus({ preventScroll: true });
         });
         tabs.append(button);
       }
@@ -543,8 +552,12 @@
       context.searchInput.placeholder = always ? '내 글 찾기' : TAB_LABELS[listState.tab] + '에서 검색';
       context.searchClear.hidden = !listState.query;
     }
-    function matchesQuery(row) {
-      const query = listState.query.trim().toLocaleLowerCase('ko-KR');
+    // A row the 200 cap counts: a post or draft of this library's post list (not 첨부 글·기록 글 drafts,
+    // not another library's posts).
+    const counted = (context, row) => (row.kind === 'photo' || row.kind === 'photo-draft') && (row.workspaceId || context.workspaceId) === context.workspaceId;
+    const shown = (context, row) => row.tab === listState.tab && matchesQuery(row) && (!listState.cap || counted(context, row));
+    function matchesQuery(row, text = listState.query) {
+      const query = text.trim().toLocaleLowerCase('ko-KR');
       return !query || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(item => item.title) : [])]
         .filter(Boolean).join('\n').toLocaleLowerCase('ko-KR').includes(query);
     }
@@ -553,7 +566,7 @@
         (requested.kind === 'photo' ? node.dataset.photoPostId : requested.kind === 'plain' ? node.dataset.postId : node.dataset.sourceId) === requested.id);
     }
     function focusAnchor(context, requested) {
-      const rows = resultRows(context).rows.filter(row => row.tab === listState.tab && matchesQuery(row));
+      const rows = resultRows(context).rows.filter(row => shown(context, row));
       const index = rows.findIndex(row => row.kind === requested.kind && row.id === requested.id);
       if (index >= listState.limit) { listState.limit = Math.ceil((index + 1) / ROW_LIMIT) * ROW_LIMIT; updateList(context); }
       const row = anchorRow(context, requested);
@@ -566,25 +579,26 @@
       const photo = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
       const capacity = postCapacity(photo?.counts?.[context.workspaceId]);
       if (!capacity) return null;
-      const prefix = life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ';
-      const copies = rows.filter(row => row.kind === 'photo-draft' && row.tab === 'drafts' && (row.workspaceId || context.workspaceId) === context.workspaceId && String(row.title || '').startsWith(prefix)).length;
+      // Drafts of this library's list as the cap counts them (empty ones too); the rest are posts.
+      const drafts = photo?.drafts?.[context.workspaceId] || 0;
+      const prefix = life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ', copyQuery = prefix.replace(/[\s·]+$/, '');
+      // Counted as the button shows them: this library's drafts that the search for the copies finds.
+      const copies = rows.filter(row => row.tab === 'drafts' && counted(context, row) && matchesQuery(row, copyQuery) && String(row.title || '').startsWith(prefix)).length;
       const notice = el('div', null, 'home-limit'); notice.dataset.homeLimit = capacity.full ? 'full' : 'near';
-      notice.append(el('p', '글·초안 ' + capacity.count + '/' + capacity.limit + '개 · ' + (capacity.full
-        ? '새 글을 저장하려면 쓰지 않는 초안이나 복구 사본을 ' + capacity.toDelete + '개 지워 주세요.'
-        : capacity.remaining + '개 더 저장할 수 있어요.'), 'life-meta'));
-      const show = (label, query, key) => {
+      notice.append(el('p', limitText(capacity, drafts), 'life-meta'));
+      const show = (label, query, cap, key) => {
         const button = action(context, label, () => {
-          listState.tab = 'drafts'; listState.query = query; listState.searchExpanded = !!query; listState.limit = ROW_LIMIT;
+          listState.tab = 'drafts'; listState.cap = cap; listState.query = query; listState.searchExpanded = !!query; listState.limit = ROW_LIMIT;
           context.searchInput.value = query; updateList(context, true);
           context.list.querySelector('.home-draft-open')?.focus({ preventScroll: true });
         }, 'home-limit-action');
         button.dataset.focusKey = 'home:limit:' + key; return button;
       };
+      const here = listState.tab === 'drafts' && listState.cap;
       const actions = el('div', null, 'home-limit-actions');
-      if (listState.tab !== 'drafts' || listState.query.trim()) actions.append(show(listState.tab === 'drafts' ? '초안 모두 보기' : '초안 보기', '', 'drafts'));
-      // The copies' titles start with the prefix ("복구 사본 · "); the search uses its words.
-      const copyQuery = prefix.replace(/[\s·]+$/, '');
-      if (copies && listState.query !== copyQuery) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, 'copies'));
+      if (drafts && !(here && !listState.query.trim())) actions.append(show('초안 보기', '', true, 'drafts'));
+      if (copies && !(here && listState.query === copyQuery)) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, true, 'copies'));
+      if (here) actions.append(show('모든 초안 보기', '', false, 'all-drafts'));
       if (actions.childElementCount) notice.append(actions);
       return notice;
     }
@@ -612,7 +626,7 @@
         button.textContent = TAB_LABELS[tab] + (counts[tab] && tab !== 'posts' ? ' ' + counts[tab] : '');
       }
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
-      const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
+      const matched = rows.filter(row => shown(context, row));
       const fragment = document.createDocumentFragment();
       if (refusedDelete) {
         const refused = el('div', null, 'home-limit home-delete-refused'); refused.append(el('p', REFUSED_DELETE, 'life-meta'));
@@ -725,7 +739,7 @@
             const notice = el('div', null, 'home-saved-filter-notice'); notice.setAttribute('role', 'status');
             notice.append(el('p', '저장한 글이 현재 검색 조건이나 탭에 포함되지 않아 보이지 않아요.', 'life-meta'),
               action(context, listState.query.trim() ? '검색어 지우고 저장한 글 보기' : '저장한 글에서 보기', () => {
-                listState.tab = saved.tab; listState.query = ''; listState.limit = ROW_LIMIT;
+                listState.tab = saved.tab; listState.query = ''; listState.cap = false; listState.limit = ROW_LIMIT;
                 context.surface.querySelector('#homePostSearch').value = ''; updateList(context, true); notice.remove(); focusAnchor(context, requested);
               }));
             context.list.before(notice);
@@ -786,5 +800,5 @@
     function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels, postCapacity, POST_LIMIT });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels, postCapacity, limitText, POST_LIMIT });
 })(globalThis);

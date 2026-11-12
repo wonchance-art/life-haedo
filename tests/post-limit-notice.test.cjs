@@ -18,6 +18,15 @@ test('postCapacity: nothing below 190, the count left up to 200, how many to del
   assert.deepEqual(Home.postCapacity(204), { count: 204, limit: 200, remaining: 0, full: true, toDelete: 5 });
 });
 
+test('limitText: what to delete follows how many of the counted rows are drafts', () => {
+  const text = (count, drafts) => Home.limitText(Home.postCapacity(count), drafts);
+  assert.equal(text(190, 0), '글·초안 190/200개 · 10개 더 저장할 수 있어요.');
+  assert.equal(text(200, 3), '글·초안 200/200개 · 새 글을 저장하려면 쓰지 않는 초안이나 복구 사본을 1개 지워 주세요.');
+  assert.equal(text(200, 0), '글·초안 200/200개 · 새 글을 저장하려면 쓰지 않는 글을 1개 지워 주세요.');
+  assert.equal(text(204, 5), '글·초안 204/200개 · 새 글을 저장하려면 쓰지 않는 초안이나 복구 사본을 5개 지워 주세요.');
+  assert.equal(text(204, 2), '글·초안 204/200개 · 새 글을 저장하려면 초안 2개와 쓰지 않는 글을 합쳐 5개 지워 주세요.');
+});
+
 test('the count is the library\'s whole list as the cap counts it, and the numbers match what storage refuses', async () => {
   const cloud = server(), dev = await device(cloud, 'mac');
   const save = async (title, extra = {}) => { const doc = await post({ title, status: 'saved', ...extra }); Object.assign(doc, extra); return dev.storage.savePhotoPost(dev.ws, doc, 0); };
@@ -28,6 +37,7 @@ test('the count is the library\'s whole list as the cap counts it, and the numbe
   await save('복구 사본 · 메모', { status: 'draft' });
   const listed = await Home.listAccountPosts(dev.storage, dev.ws);
   assert.equal(listed.counts[dev.ws], 199);
+  assert.equal(listed.drafts[dev.ws], 2, 'drafts as the cap counts them: the empty one and the copy');
   assert.deepEqual(Home.postCapacity(listed.counts[dev.ws]), { count: 199, limit: 200, remaining: 1, full: false, toDelete: 0 });
   await save('200번째 글');
   const full = Home.postCapacity((await Home.listAccountPosts(dev.storage, dev.ws)).counts[dev.ws]);

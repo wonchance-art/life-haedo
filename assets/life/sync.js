@@ -317,17 +317,26 @@
     // { light: true }: the recorded difference without the server copy (conflict { missing,
     // remoteRevision, localRevision }); what a status line or the account library needs. The
     // comparison screen reads the full state, row included.
+    // { light: true, localRevision }: a screen that holds the workspace passes its revision. A record
+    // ahead of it (another tab saved since, or a damaged record) is read in full: the full read
+    // answers for the stored workspace and stops on a record that is really ahead, so the screen
+    // shows a read error and never a synced state the light read cannot check.
     async function getState(workspaceId, options = {}) {
-      if (!options || typeof options !== 'object' || Array.isArray(options) || Reflect.ownKeys(options).some(key => key !== 'light') ||
-          options.light !== undefined && typeof options.light !== 'boolean') throw fault('remote_invalid');
-      const light = options.light === true;
+      if (!options || typeof options !== 'object' || Array.isArray(options) || Reflect.ownKeys(options).some(key => !['light', 'localRevision'].includes(key)) ||
+          options.light !== undefined && typeof options.light !== 'boolean' ||
+          options.localRevision !== undefined && (options.light !== true || !Number.isSafeInteger(options.localRevision) || options.localRevision < 0)) throw fault('remote_invalid');
+      const light = options.light === true, held = options.localRevision;
       live();
       const generation = epoch;
       // Before shared Auth verification, a scoped manager exposes no source/conflict snapshot.
       if (storage.account && !account) return { status: 'auth_required', enabled: false, binding: null,
         remoteRevision: 0, syncedLocalRevision: -1, conflict: null, error: null, account: null };
       localAccount(account);
-      const state = await (light ? summary(workspaceId) : storage.getSyncState(workspaceId));
+      let state = await (light ? summary(workspaceId) : storage.getSyncState(workspaceId));
+      if (light && held !== undefined && state && Math.max(state.syncedLocalRevision, state.outbox?.localRevision ?? -1, state.conflict?.localRevision ?? -1) > held) {
+        live(); if (generation !== epoch) throw fault('stale_session');
+        state = await storage.getSyncState(workspaceId);
+      }
       live();
       if (generation !== epoch) throw fault('stale_session');
       localAccount(account);
@@ -365,7 +374,8 @@
       const context = scope(workspaceId);
       const nextGeneration = (spaceEpochs.get(workspaceId) || 0) + 1;
       spaceEpochs.set(workspaceId, nextGeneration); context.spaceEpoch = nextGeneration;
-      const state = await summary(workspaceId);
+      // The full read: a record that does not match the workspace is refused before pausing writes anything.
+      const state = await storage.getSyncState(workspaceId);
       guard(context);
       if (!state || !sameBinding(state.binding, binding(context, workspaceId))) throw fault(state ? 'account_mismatch' : 'not_enabled');
       if (timers.has(workspaceId)) root.clearTimeout(timers.get(workspaceId)); timers.delete(workspaceId);

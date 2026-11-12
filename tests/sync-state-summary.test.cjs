@@ -171,3 +171,28 @@ test('composition and library-metadata summaries equal the full reads; a damaged
   assert.equal((await a.sync()).error, 'invalid_collection', 'the engine run stops with the same error');
   bundles.set(key, good);
 });
+
+// Review 2026-11-12 (MINOR 1, 2): a record ahead of the stored workspace. A screen that holds the
+// workspace never sees it as synced; pausing refuses it before writing anything.
+test('a record ahead of the workspace: the screen\'s light read is a read error, and pausing writes nothing', async t => {
+  const server = createServer(), a = createDevice('A', server); t.after(() => a.close());
+  await a.login(); a.ws = (await a.storage.createWorkspace('익명 자료')).workspaceId; await add(a, '첫 자료');
+  await a.manager.enable(a.ws);
+  const held = (await a.read()).revision;
+  // Consistent and in step: the light read with the screen's revision is the light read.
+  assert.deepEqual(await a.manager.getState(a.ws, { light: true, localRevision: held }), await a.manager.getState(a.ws, { light: true }));
+  // A screen holding an older revision (another tab saved since): the full read answers, in the light form.
+  await add(a, '다른 탭이 저장한 자료'); assert.equal((await a.sync()).status, 'synced');
+  const behind = await a.manager.getState(a.ws, { light: true, localRevision: held });
+  assert.equal(behind.status, 'synced'); assert.equal(Object.hasOwn(behind.conflict || {}, 'row'), false);
+  // The record says the device synced a revision the workspace does not have.
+  const meta = a.rows.get('meta'), key = JSON.stringify(`sync:${a.ws}`), good = clone(meta.get(key)), current = (await a.read()).revision;
+  meta.set(key, { ...good, value: { ...good.value, syncedLocalRevision: current + 5 } });
+  assert.equal((await a.manager.getState(a.ws, { light: true })).status, 'synced', 'without the revision the light read cannot tell (documented)');
+  await assert.rejects(a.manager.getState(a.ws, { light: true, localRevision: current }), { code: 'invalid_sync_metadata' }, 'the screen shows a read error, never synced');
+  await assert.rejects(a.manager.pause(a.ws), { code: 'invalid_sync_metadata' });
+  assert.deepEqual(meta.get(key).value, { ...good.value, syncedLocalRevision: current + 5 }, 'pausing wrote nothing');
+  await assert.rejects(a.manager.getState(a.ws, { localRevision: current }), { code: 'remote_invalid' }, 'the revision goes with light only');
+  meta.set(key, good);
+  assert.equal((await a.manager.pause(a.ws)).status, 'paused');
+});

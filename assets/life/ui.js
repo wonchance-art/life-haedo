@@ -1381,7 +1381,9 @@
         state.syncAccount = account;
         // The state for the status lines and buttons, without the server copy of a recorded
         // difference (2026-11-12: megabytes on every sync event). The comparison reads it when opened.
-        const info = await sync.getState(workspaceId, { light: true });
+        // The open workspace's revision lets a record ahead of it be read in full (a read error, not "synced").
+        const held = state.bundle?.workspaceId === workspaceId ? state.bundle.revision : undefined;
+        const info = await sync.getState(workspaceId, held === undefined ? { light: true } : { light: true, localRevision: held });
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
         const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
@@ -6238,7 +6240,7 @@
         await refreshSync();
         if (!state.syncState?.conflict) return;
         const workspaceId = state.bundle.workspaceId, remote = await comparedConflict(workspaceId);
-        if (disposed || !remote || state.bundle?.workspaceId !== workspaceId) return;
+        if (disposed || state.mode !== 'sync' || !remote || state.bundle?.workspaceId !== workspaceId) return;
         state.conflictView = { workspaceId, local: structuredClone(state.bundle), remote, accountKey: state.syncAccountKey };
         renderConflict();
         const comparisonHeading = main.querySelector('#lifeSyncConflict h3');
