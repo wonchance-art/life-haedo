@@ -489,3 +489,49 @@ test('new feed empty/error preserves its prior metadata while legacy source iden
   assert.deepEqual(identity(after), identity(before));
   assert.equal(after.sources.find(s => s.id === 'mit-linguistics').status, 'ok');
 });
+
+// 2026-11-12 deploy 43204071088: arXiv returned an empty feed, and re-cleaning its last-good metadata trimmed
+// the space that plain() leaves when it cuts an author list at 120 characters right after a comma. The
+// deployment check (refresh-discovery-artifact.cjs checkCollection) then stopped the release.
+test('failed source keeps collector-written text byte for byte, including a cut that ends in a space', t => {
+  const w = workspace(t); assert.equal(update(w).status, 0);
+  const before = JSON.parse(fs.readFileSync(w.output));
+  const old = before.articles.find(a => a.sourceId === 'arxiv-cs-cl');
+  Object.assign(old, { author: 'Lin, '.repeat(24), title: 'Q&amp;A about <code> markup, cut ', tags: ['R&amp;D ', 'cut tag '] });
+  assert.equal(old.author.length, 120);
+  const expected = structuredClone(old);
+  fs.writeFileSync(w.output, JSON.stringify(before));
+  fs.writeFileSync(path.join(w.dir, 'arxiv-cs-cl.xml'), '<rss><channel/></rss>');
+  assert.equal(update(w, next).status, 2);
+  const after = JSON.parse(fs.readFileSync(w.output));
+  assert.equal(after.sources.find(s => s.id === 'arxiv-cs-cl').status, 'error');
+  assert.deepEqual(after.articles.find(a => a.sourceId === 'arxiv-cs-cl'), expected);
+});
+
+test('failed source text outside the collector form is still cleaned, never published as stored', t => {
+  const w = workspace(t); assert.equal(update(w).status, 0);
+  const before = JSON.parse(fs.readFileSync(w.output));
+  const old = before.articles.find(a => a.sourceId === 'arxiv-cs-cl');
+  Object.assign(old, { author: 'person@example.org', title: ' Two  spaces\n<script>BAD_SCRIPT</script>\u202e', tags: ['  padded  ', 'dup', 'dup', 'x'.repeat(81)] });
+  fs.writeFileSync(w.output, JSON.stringify(before));
+  fs.writeFileSync(path.join(w.dir, 'arxiv-cs-cl.xml'), '<rss><channel/></rss>');
+  assert.equal(update(w, next).status, 2);
+  const kept = JSON.parse(fs.readFileSync(w.output)).articles.find(a => a.sourceId === 'arxiv-cs-cl');
+  assert.equal(kept.author, null);
+  assert.equal(kept.title, 'Two spaces');
+  assert.deepEqual(kept.tags, ['padded', 'dup', 'x'.repeat(80)]);
+});
+
+test('every plain() result is a fixed point of last-good retention', () => {
+  const samples = ['Lin, '.repeat(30), 'a&amp;amp;b', 'x &lt;b&gt; y', 'AT&T &copy 2026', 'tab\tand\u00a0nbsp', '<p>para</p><div>block</div>',
+    '\u202eflip\u2066', 'trailing  ', '한글 제목 '.repeat(50), '<script>BAD</script>kept', '&#10;&#x20;entity'];
+  const result = python(`samples=${JSON.stringify(samples)}
+out=[]
+for s in samples:
+    for limit in (5, 80, 120, 400):
+        p=m.plain(s, limit)
+        out.append(m.retained_text(p, limit)==p and (len(p)>120 or m.retained_author(p)==p))
+print(json.dumps(out))`);
+  assert.equal(result.length, 44);
+  assert.ok(result.every(Boolean));
+});
