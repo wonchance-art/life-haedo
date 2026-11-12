@@ -678,7 +678,11 @@
       context.list.replaceChildren(fragment);
       context.renderedTab = listState.tab;
       if (userAction && previousTab && previousTab !== listState.tab) global.HaedoMotion?.enter(context.list, { kind: 'tab' });
-      if (focusKey) [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
+      const restored = focusKey && [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey);
+      restored?.focus({ preventScroll: true });
+      // A notice line's button that is gone with its line (the count dropped below 190 from another
+      // tab or device, or 확인): focus goes to the shown tab rather than the page body.
+      if (focusKey && !restored && focused?.closest?.('.home-limit')) context.tabs.querySelector('[data-home-tab="' + listState.tab + '"]')?.focus({ preventScroll: true });
       context.feedback.textContent = applicable.length ? '일부 목록을 확인하지 못했어요.' : TAB_LABELS[listState.tab] + ' ' + matched.length + '개' + (query ? ' 검색됨' : '');
       context.area.setAttribute('aria-busy', 'false');
       void enrichDrafts(context);

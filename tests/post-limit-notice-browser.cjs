@@ -98,12 +98,15 @@ async function main() {
         // The filter holds only while the line is shown: below 190 it is gone with the line.
         await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
         await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
+        // Focus on the line's button when the line goes (a deletion elsewhere): it moves to the shown tab.
+        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).focus();
         await page.evaluate(async () => {
           const s = HaedoLife.Shell.storage, ws = await s.getActive(), row = (await s.listPhotoPosts(ws)).find(item => item.status === 'draft');
           await s.deletePhotoPost(ws, row.id, row.revision);
         });
         await page.waitForFunction(() => !document.querySelector('#homePostList .home-limit') && document.querySelectorAll('#homePostList .home-draft').length === 5);
         assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1, 'every draft again');
+        assert.equal(await page.evaluate(() => document.activeElement?.id), 'homeTab-drafts', 'focus is not lost to the page body');
         assert.equal(await tabLabel(), '초안 5');
         await seed(page, { drafts: 1 }); await page.waitForFunction(() => document.querySelector('#homePostList .home-limit'));
         await page.locator('#homeTab-posts').click(); await page.locator('#homeTab-posts[aria-selected="true"]').waitFor();
