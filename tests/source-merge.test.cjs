@@ -269,6 +269,28 @@ test('a losing title is one row per source and text, whichever version it is kep
     'each beside the version that was current when its device renamed the source');
 });
 
+// The row's time is the source's creation time, not when the losing device renamed it: two merges
+// on other devices that lose the same title at other moments make the very same row, so the rows
+// meet as one when those devices sync (11-11 review: a mutation to the losing edit's time survived).
+test('a losing title row carries the source\'s creation time: the same title lost at other moments is one identical row', async () => {
+  const base = await seed(), source = base.sources[0];
+  const rename = async (bundle, title) => { await tick(); const current = bundle.sources.find(value => value.id === source.id);
+    return Core.applyChanges(bundle, { put: { sources: [{ ...copy(current), title, revision: current.revision + 1, updatedAt: new Date().toISOString() }] } }); };
+  const row = bundle => bundle.links.filter(link => link.kind === PREVIOUS_TITLE && link.note === '진 제목');
+  // Phone and Mac meet: the phone's 진 제목 loses. Later iPad and a fourth device meet: the iPad's 진 제목 (renamed later) loses.
+  const phone = await rename(base, '진 제목'), mac = await rename(base, '이긴 제목'), ipad = await rename(base, '진 제목'), other = await rename(base, '더 나중 제목');
+  assert.notEqual(phone.sources[0].updatedAt, ipad.sources[0].updatedAt);
+  const first = merged(base, phone, mac).bundle, second = merged(base, ipad, other).bundle;
+  const [one] = row(first), [two] = row(second);
+  assert.ok(Date.parse(source.createdAt) < Date.parse(phone.sources[0].updatedAt), 'the source was made before it was renamed');
+  assert.deepEqual([one.createdAt, one.updatedAt, row(first).length], [source.createdAt, source.createdAt, 1], 'the row\'s time is when the source was made');
+  assert.deepEqual(two, one, 'the same row, whichever merge made it and when the title lost');
+  // The two merged workspaces meet (both still against the first base): one such row, exactly as made, and it is not changed again.
+  const met = mergeWorkspace({ base: mergeBase(base), local: first, remote: second }).bundle;
+  assert.deepEqual(row(met), [one]);
+  assert.deepEqual(row(mergeWorkspace({ base: mergeBase(first), local: met, remote: first }).bundle), [one], 'merged again: unchanged');
+});
+
 test('both sides added a version without renaming the source: announced, nothing else to keep', async () => {
   const base = await seed(), sourceId = base.sources[0].id;
   const a = await newVersion(base, sourceId, '공통 자료', '한쪽의 새 본문'), b = await newVersion(base, sourceId, '공통 자료', '다른 쪽의 나중 본문');
