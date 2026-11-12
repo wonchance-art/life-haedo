@@ -1328,6 +1328,12 @@
       } else update();
     }
 
+    // The recorded difference with the server's copy, read in full only when the comparison opens.
+    async function comparedConflict(workspaceId) {
+      const full = await sync.getState(workspaceId);
+      return full?.conflict ? structuredClone(full.conflict) : null;
+    }
+
     function syncPresentation() {
       if (managedLibrary) return libraryPresentation();
       if (!sync) return { key: 'unavailable', label: '서버 동기화 미연결', hint: '자료는 이 기기에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
@@ -1373,7 +1379,9 @@
         }
         state.syncAccountKey = accountKey;
         state.syncAccount = account;
-        const info = await sync.getState(workspaceId);
+        // The state for the status lines and buttons, without the server copy of a recorded
+        // difference (2026-11-12: megabytes on every sync event). The comparison reads it when opened.
+        const info = await sync.getState(workspaceId, { light: true });
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
         const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
@@ -6178,8 +6186,9 @@
         else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
           await persistDrafts(); await refreshData(); await refreshSync();
           if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
-          state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle),
-            remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
+          const workspaceId = state.bundle.workspaceId, remote = await comparedConflict(workspaceId);
+          if (disposed || state.mode !== 'sync' || !remote || state.bundle?.workspaceId !== workspaceId) return;
+          state.conflictView = { workspaceId, local: structuredClone(state.bundle), remote, accountKey: state.syncAccountKey };
           renderConflict();
         }), 'life-primary'));
         else shown = false;
@@ -6228,7 +6237,9 @@
         await refreshData();
         await refreshSync();
         if (!state.syncState?.conflict) return;
-        state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle), remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
+        const workspaceId = state.bundle.workspaceId, remote = await comparedConflict(workspaceId);
+        if (disposed || !remote || state.bundle?.workspaceId !== workspaceId) return;
+        state.conflictView = { workspaceId, local: structuredClone(state.bundle), remote, accountKey: state.syncAccountKey };
         renderConflict();
         const comparisonHeading = main.querySelector('#lifeSyncConflict h3');
         if (comparisonHeading) { comparisonHeading.tabIndex = -1; comparisonHeading.focus(); }

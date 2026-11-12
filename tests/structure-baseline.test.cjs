@@ -306,7 +306,9 @@ const FOR_ACCOUNT_API = [
   "forgetMaterialContinuity:function",
   "getActive:function",
   "getCompositionState:function",
+  "getCompositionSummary:function", // status read (2026-11-12)
   "getLibraryMetaState:function",
+  "getLibraryMetaSummary:function", // status read (2026-11-12)
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",
@@ -499,7 +501,9 @@ const STORAGE_API = [
   "forgetMaterialContinuity:function",
   "getActive:function",
   "getCompositionState:function",
+  "getCompositionSummary:function", // status read (2026-11-12)
   "getLibraryMetaState:function",
+  "getLibraryMetaSummary:function", // status read (2026-11-12)
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",

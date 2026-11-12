@@ -7,7 +7,8 @@
  *   full        storage.getSyncState + the copy of the difference sync.getState returns: the status
  *               read before 2026-11-12 (status lines, the account library's band, engine decisions),
  *   summary     storage.getSyncSummary: sync.getState({ light: true }) and the engine's decisions now,
- *   band before / band now   the account library's status read (originals + composition + metadata).
+ *   band before / band now   the account library's status read (originals + composition + metadata):
+ *               before, the three full reads; now, the three summaries (getSync/Composition/LibraryMetaSummary).
  * Fails when a summary read of a library of SYNC_PERF_BUDGET_LIMIT_MIB (4) or less takes longer than
  * SYNC_PERF_BUDGET_MS (500) at its median, is not faster than the full read, or differs from the full
  * state without its snapshots. Synthetic libraries and an emulated slowdown on this machine: not a
@@ -72,7 +73,7 @@ async function measure({ page, cdp }) {
         times.full.push(await run(async () => { const state = await s.getSyncState(ws); structuredClone(state.conflict); }));
         times.summary.push(await run(() => s.getSyncSummary(ws)));
         times.bandBefore.push(await run(async () => { const [state] = await Promise.all([s.getSyncState(ws), s.getCompositionState(ws), s.getLibraryMetaState(ws)]); structuredClone(state.conflict); }));
-        times.band.push(await run(() => Promise.all([s.getSyncSummary(ws), s.getCompositionState(ws), s.getLibraryMetaState(ws)])));
+        times.band.push(await run(() => Promise.all([s.getSyncSummary(ws), s.getCompositionSummary(ws), s.getLibraryMetaSummary(ws)])));
       }
       const whole = await s.getSyncState(ws), light = await s.getSyncSummary(ws);
       const projected = { ...whole, outbox: whole.outbox && { operationId: whole.outbox.operationId, expectedRevision: whole.outbox.expectedRevision, localRevision: whole.outbox.localRevision },

@@ -4662,6 +4662,19 @@
         return clone(await readCompositionState(meta, workspaceId, state));
       });
     }
+    // The same state for a status line (2026-11-12, like getSyncSummary): the workspace must exist
+    // and belong to the account (its key only); the originals' content is not read or checked here.
+    // The composition record and its server base are read and checked exactly as above, so the value
+    // is the same. Every path that sends, applies or resolves (prepareCompositionUpload, apply…,
+    // resolve…, the engine's own run) still reads and checks the whole workspace.
+    async function getCompositionSummary(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await readCompositionState(meta, workspaceId, await workbenchValue(meta, workspaceId)));
+      });
+    }
     async function bindCompositionSync(workspaceId, input) {
       const binding = bindingValue(input, workspaceId);
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
@@ -5081,6 +5094,15 @@
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const state = await libraryMetaValue(meta, workspaceId);
         return clone(await readLibraryMetaState(meta, workspaceId, state));
+      });
+    }
+    // The same state for a status line (2026-11-12): see getCompositionSummary.
+    async function getLibraryMetaSummary(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await readLibraryMetaState(meta, workspaceId, await libraryMetaValue(meta, workspaceId)));
       });
     }
     async function bindLibraryMetaSync(workspaceId, input) {
@@ -6455,10 +6477,10 @@
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, getSyncSummary, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync, mergeSyncRemote, captureSyncBase, getSyncNotice, dismissSyncNotice,
-      getCompositionState, dismissCompositionNotice, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
+      getCompositionState, getCompositionSummary, dismissCompositionNotice, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
       applyCompositionRemote, adoptCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
       listCompositionRecoveries, readCompositionRecovery,
-      readLibraryMetaSnapshot, readLibraryMetaEditedAt, dismissLibraryMetaNotice, getLibraryMetaState, bindLibraryMetaSync, pauseLibraryMetaSync, prepareLibraryMetaUpload, ackLibraryMetaSync,
+      readLibraryMetaSnapshot, readLibraryMetaEditedAt, dismissLibraryMetaNotice, getLibraryMetaState, getLibraryMetaSummary, bindLibraryMetaSync, pauseLibraryMetaSync, prepareLibraryMetaUpload, ackLibraryMetaSync,
       applyLibraryMetaRemote, adoptLibraryMetaRemote, setLibraryMetaConflict, setLibraryMetaError, resolveLibraryMetaSync,
       listLibraryMetaRecoveries, readLibraryMetaRecovery,
       getWritingSyncState, dismissWritingNotice, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,

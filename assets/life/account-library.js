@@ -155,7 +155,8 @@
       const rows = await eligible(), workspaceId = await step(() => storage.getActive());
       if (!rows.some(row => row.workspaceId === workspaceId)) return null;
       const states = await step(() => Promise.all([
-        storage.getSyncSummary ? storage.getSyncSummary(workspaceId) : storage.getSyncState(workspaceId), storage.getLibraryMetaState(workspaceId)
+        storage.getSyncSummary ? storage.getSyncSummary(workspaceId) : storage.getSyncState(workspaceId),
+        storage.getLibraryMetaSummary ? storage.getLibraryMetaSummary(workspaceId) : storage.getLibraryMetaState(workspaceId)
       ]));
       const acknowledged = state => same(state?.binding) && state.binding.remoteId === workspaceId &&
         Number.isSafeInteger(state.remoteRevision) && state.remoteRevision > 0;

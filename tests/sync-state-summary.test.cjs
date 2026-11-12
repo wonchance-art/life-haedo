@@ -132,3 +132,42 @@ test('an engine on a storage without the summary (an older cached module) reads 
   assert.ok(reads.length >= 3, 'every read went to the full state');
   await assert.rejects(manager.getState(a.ws, { light: 'yes' }), { code: 'remote_invalid' });
 });
+
+// Composition and library metadata (2026-11-12): the status read of each is the same value without
+// reading the originals workspace; a damaged workspace still stops every path that saves or sends.
+test('composition and library-metadata summaries equal the full reads; a damaged workspace still stops saving and sending', async t => {
+  require('../assets/life/workbench.js'); require('../assets/life/library-meta.js');
+  require('../assets/life/source-folders.js'); require('../assets/life/collection.js'); require('../assets/life/nine-board.js');
+  const server = createServer(), a = createDevice('A', server); t.after(() => a.close());
+  await a.login(); a.ws = (await a.storage.createWorkspace('익명 자료')).workspaceId; await add(a, '첫 자료');
+  await a.manager.enable(a.ws);
+  const s = a.storage, ws = a.ws, b = binding(ws);
+  const same = async label => {
+    assert.deepEqual(await s.getCompositionSummary(ws), await s.getCompositionState(ws), label + ': composition');
+    assert.deepEqual(await s.getLibraryMetaSummary(ws), await s.getLibraryMetaState(ws), label + ': metadata');
+  };
+  await same('not connected'); assert.equal(await s.getCompositionSummary(ws), null);
+  await s.bindCompositionSync(ws, b); await s.bindLibraryMetaSync(ws, b);
+  await same('connected');
+  assert.ok(await s.prepareCompositionUpload(ws, b)); assert.ok(await s.prepareLibraryMetaUpload(ws, b));
+  await same('requests waiting');
+  assert.ok((await s.getCompositionSummary(ws)).outbox?.data, 'the composition request is the record\'s own and is returned as before');
+  // Damage the originals workspace as stored.
+  const bundles = a.rows.get('bundles'), key = JSON.stringify(ws), good = clone(bundles.get(key));
+  bundles.set(key, { ...clone(good), sources: 'damaged' });
+  assert.equal((await s.getSyncSummary(ws)).status, 'synced');
+  assert.equal((await s.getCompositionSummary(ws)).status, 'pending');
+  assert.equal((await s.getLibraryMetaSummary(ws)).status, 'pending');
+  const stops = (label, action) => assert.rejects(action, { code: 'invalid_collection' }, label);
+  await stops('full originals read', s.getSyncState(ws));
+  await stops('full composition read', s.getCompositionState(ws));
+  await stops('full metadata read', s.getLibraryMetaState(ws));
+  await stops('workspace read', s.read(ws));
+  await stops('originals request', s.prepareSyncUpload(ws, b));
+  await stops('composition request', s.prepareCompositionUpload(ws, b));
+  await stops('metadata request', s.prepareLibraryMetaUpload(ws, b));
+  const commit = await s.commitLocal({ workspaceId: ws, operationId: Core.id(), baseRevision: good.revision, changes: { put: {} } });
+  assert.deepEqual([commit.status, commit.error?.code], ['rejected', 'invalid_collection'], 'saving the originals stops');
+  assert.equal((await a.sync()).error, 'invalid_collection', 'the engine run stops with the same error');
+  bundles.set(key, good);
+});
