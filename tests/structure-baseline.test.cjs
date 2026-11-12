@@ -310,6 +310,7 @@ const FOR_ACCOUNT_API = [
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",
+  "getSyncSummary:function", // status read without snapshots (2026-11-12)
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
   "installBlogSeriesCopy:function",
@@ -502,6 +503,7 @@ const STORAGE_API = [
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",
+  "getSyncSummary:function", // status read without snapshots (2026-11-12)
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
   "installBlogSeriesCopy:function",

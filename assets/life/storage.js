@@ -611,7 +611,11 @@
       }
       return base;
     }
-    function validateSyncState(state, workspaceId) {
+    // deep (the default): the snapshots a record carries (the request waiting to be sent, the
+    // server copy of a recorded difference) are checked as whole workspaces. getSyncSummary
+    // passes false: it returns neither snapshot, so it checks how they are tied to the record
+    // (identifier, revision) and leaves their content to every path that uses them.
+    function validateSyncState(state, workspaceId, deep = true) {
       try {
         onlyFields(state, ['workspaceId', 'binding', 'enabled', 'remoteRevision', 'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error']);
         if (state.workspaceId !== workspaceId || typeof state.enabled !== 'boolean' ||
@@ -623,7 +627,7 @@
           const box = state.outbox;
           onlyFields(box, ['operationId', 'expectedRevision', 'localRevision', 'data']);
           requireId(box.operationId, '전송 작업'); requireRevision(box.expectedRevision); requireRevision(box.localRevision);
-          core().validateWorkspace(box.data);
+          if (deep) core().validateWorkspace(box.data); else if (!plain(box.data)) throw new Error('outbox');
           if (box.data.workspaceId !== workspaceId || box.data.revision !== box.localRevision || box.expectedRevision !== state.remoteRevision) throw new Error('outbox');
         }
         if (state.conflict !== null) {
@@ -631,7 +635,7 @@
           if (typeof state.conflict.missing !== 'boolean') throw new Error('conflict');
           requireRevision(state.conflict.remoteRevision); requireRevision(state.conflict.localRevision);
           if (state.conflict.missing ? state.conflict.row !== null :
-            remoteRow(state.conflict.row, workspaceId).revision !== state.conflict.remoteRevision) throw new Error('conflict');
+            (deep ? remoteRow(state.conflict.row, workspaceId) : shallowRow(state.conflict.row, workspaceId)).revision !== state.conflict.remoteRevision) throw new Error('conflict');
           if (state.conflict.remoteRevision < state.remoteRevision) throw new Error('conflict revision');
         }
         if (state.error !== null) {
@@ -645,6 +649,12 @@
             (state.outbox && state.outbox.localRevision <= state.syncedLocalRevision)) throw new Error('state consistency');
       } catch (_) { throw fault('invalid_sync_metadata', '동기화 정보가 손상되었습니다. 자료를 보존하고 연결 상태를 확인하세요.'); }
       return state;
+    }
+    // The parts of a recorded server row that tie it to the record, without reading its content.
+    function shallowRow(row, workspaceId) {
+      if (!plain(row) || !Number.isSafeInteger(row.revision) || row.revision < 1 || row.id !== workspaceId ||
+          !plain(row.data) || row.data.workspaceId !== workspaceId) throw new Error('conflict row');
+      return row;
     }
     async function readSyncState(store, workspaceId, bundle) {
       if (account) await assertOwner(store, workspaceId);
@@ -4138,6 +4148,32 @@
         return clone(await readSyncState(tx.objectStore('meta'), workspaceId, bundle));
       });
     }
+    // The originals' sync state without its snapshots (2026-11-12): what a status line, the account
+    // library and the engine's decisions read. getSyncState reads and checks the whole workspace and
+    // the record's snapshots and copies them (seconds for a library of megabytes on a slow device);
+    // this reads the record alone and returns it without them:
+    //   outbox   { operationId, expectedRevision, localRevision }   (no data)
+    //   conflict { missing, remoteRevision, localRevision }         (no row)
+    // Every other field is the stored record's, so status, conflict and what is waiting are the same.
+    // The workspace must exist and belong to the account (its key only). Not checked here, unlike
+    // getSyncState: the workspace's own content and that the record's revisions are not ahead of it;
+    // every path that reads or sends the content (commitLocal, prepareSyncUpload, applySyncRemote,
+    // mergeSyncRemote, resolveSync, read) still stops on either.
+    async function getSyncSummary(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+        const entry = await meta.get(`sync:${workspaceId}`);
+        if (entry === undefined) return null;
+        const state = validateSyncState(entry.value, workspaceId, false), { outbox, conflict, error } = state;
+        return { workspaceId, binding: { ...state.binding }, enabled: state.enabled, remoteRevision: state.remoteRevision,
+          syncedLocalRevision: state.syncedLocalRevision,
+          outbox: outbox && { operationId: outbox.operationId, expectedRevision: outbox.expectedRevision, localRevision: outbox.localRevision },
+          conflict: conflict && { missing: conflict.missing, remoteRevision: conflict.remoteRevision, localRevision: conflict.localRevision },
+          status: state.status, error: error && { code: error.code, message: error.message } };
+      });
+    }
     async function bindSync(workspaceId, input) {
       const binding = bindingValue(input, workspaceId);
       const state = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
@@ -6417,7 +6453,7 @@
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy, attachNaverCaptureCopy, listNaverCaptures,
       listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
-      getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
+      getSyncState, getSyncSummary, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync, mergeSyncRemote, captureSyncBase, getSyncNotice, dismissSyncNotice,
       getCompositionState, dismissCompositionNotice, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
       applyCompositionRemote, adoptCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,

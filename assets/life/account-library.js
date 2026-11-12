@@ -34,6 +34,9 @@
   const copy = value => value == null ? value : structuredClone(value);
   // Account spaces received or synchronized at the same time in the background pass.
   const SPACE_CONCURRENCY = 2;
+  // The originals' state without the server copy of a recorded difference (sync.getState light):
+  // this module reads status, binding and whether a difference is recorded, on every notification.
+  const LIGHT = Object.freeze({ light: true });
   function create({ storage, core, sync, compositionSync, libraryMetaSync, auth = root.HaedoAuth,
     remote, originalsFactory, naverMediaFactory, polling = true } = {}) {
     if (!storage?.isAccountScoped || !storage.account || !core || !sync || !compositionSync || !libraryMetaSync || !auth?.verify)
@@ -95,7 +98,7 @@
       throw fault('catalog_too_large');
     }
     async function sources(workspaceId, local, pristine, knownRemote = false) {
-      let state = await step(() => sync.getState(workspaceId));
+      let state = await step(() => sync.getState(workspaceId, LIGHT));
       if (!state.binding) {
         if (knownRemote || catalog.has(workspaceId)) {
           await step(() => sync.adoptExisting(workspaceId, {
@@ -110,9 +113,9 @@
             await step(() => sync.adoptExisting(workspaceId));
           }
         }
-        state = await step(() => sync.getState(workspaceId));
+        state = await step(() => sync.getState(workspaceId, LIGHT));
       }
-      if (!state.enabled) { await step(() => sync.enable(workspaceId)); state = await step(() => sync.getState(workspaceId)); }
+      if (!state.enabled) { await step(() => sync.enable(workspaceId)); state = await step(() => sync.getState(workspaceId, LIGHT)); }
       // The originals merge by themselves (both sides' items stay), so a recorded difference
       // still runs: the run merges it and sends the result. Only a deleted server copy waits.
       if (state.conflict?.missing) return state;
@@ -152,7 +155,7 @@
       const rows = await eligible(), workspaceId = await step(() => storage.getActive());
       if (!rows.some(row => row.workspaceId === workspaceId)) return null;
       const states = await step(() => Promise.all([
-        storage.getSyncState(workspaceId), storage.getLibraryMetaState(workspaceId)
+        storage.getSyncSummary ? storage.getSyncSummary(workspaceId) : storage.getSyncState(workspaceId), storage.getLibraryMetaState(workspaceId)
       ]));
       const acknowledged = state => same(state?.binding) && state.binding.remoteId === workspaceId &&
         Number.isSafeInteger(state.remoteRevision) && state.remoteRevision > 0;
@@ -362,7 +365,7 @@
       const id = workspaceId || await step(() => storage.getActive());
       const domains = { sources: null, composition: null, metadata: null, originals: originals?.getState?.() || null };
       if (id && sourceStarted) {
-        const values = await Promise.allSettled([sync.getState(id), compositionSync.getState(id), libraryMetaSync.getState(id)]); guard();
+        const values = await Promise.allSettled([sync.getState(id, LIGHT), compositionSync.getState(id), libraryMetaSync.getState(id)]); guard();
         ['sources', 'composition', 'metadata'].forEach((key, index) => { domains[key] = values[index].status === 'fulfilled' ? values[index].value : { status: 'error', error: clean(values[index].reason) }; });
       }
       const states = [domains.sources, domains.composition, domains.metadata].filter(Boolean);

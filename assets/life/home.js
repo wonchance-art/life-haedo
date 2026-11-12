@@ -113,6 +113,15 @@
     });
     return known;
   }
+  // Posts and drafts of one library are capped (storage writePhotoPost, `photo_post_limit`: a write
+  // that would make a library's list longer than 200, for a post or draft started on this device).
+  // From 190 on, the list says how many are left; at the cap, how many to delete and where they are.
+  // The count is the library's whole list, as the cap counts it (hidden, empty and restored-copy rows too).
+  const POST_LIMIT = 200, POST_LIMIT_NOTICE = 190;
+  function postCapacity(count) {
+    if (!Number.isSafeInteger(count) || count < POST_LIMIT_NOTICE) return null;
+    return { count, limit: POST_LIMIT, remaining: Math.max(0, POST_LIMIT - count), full: count >= POST_LIMIT, toDelete: Math.max(0, count - POST_LIMIT + 1) };
+  }
   async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
     let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
@@ -136,7 +145,9 @@
     }
     const posts = [], publication = await publicationOf(storage, [...read.keys()]);
     for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws, publication: publication.get(ws + '/' + post.id) || 'private' })));
-    return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
+    // counts: each read library's whole list, as the cap counts it (postCapacity).
+    return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids,
+      counts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.length])) };
   }
   // A row's date and its full form. Formatters are made once (2026-11-04: two new
   // Intl.DateTimeFormat per row were ~3% of the main thread while the first list was drawn);
@@ -169,6 +180,10 @@
     const contentCache = new Map();
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null, stopPublic = null, publicTimer = null;
+    // The server refused a deletion sent from this device (the post is public there: another device
+    // published it before this one knew) and the post came back. Said once on this list, until 확인.
+    let refusedDelete = false;
+    const REFUSED_DELETE = '공개 중인 글이라 서버에서 삭제하지 않았어요. 글은 목록에 다시 보입니다. 공개를 철회한 뒤 삭제해 주세요.';
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
@@ -545,6 +560,34 @@
       if (!row) return false;
       row.querySelector('.home-post-open')?.focus({ preventScroll: true }); row.scrollIntoView({ block: 'start', behavior: 'instant' }); return true;
     }
+    // The cap of the open library (where 글쓰기 starts a post), shown only near it. Its buttons go
+    // to what can be deleted: the 초안 tab, and the recovery copies a sync conflict kept there.
+    function limitNotice(context, rows) {
+      const photo = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
+      const capacity = postCapacity(photo?.counts?.[context.workspaceId]);
+      if (!capacity) return null;
+      const prefix = life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ';
+      const copies = rows.filter(row => row.kind === 'photo-draft' && row.tab === 'drafts' && (row.workspaceId || context.workspaceId) === context.workspaceId && String(row.title || '').startsWith(prefix)).length;
+      const notice = el('div', null, 'home-limit'); notice.dataset.homeLimit = capacity.full ? 'full' : 'near';
+      notice.append(el('p', '글·초안 ' + capacity.count + '/' + capacity.limit + '개 · ' + (capacity.full
+        ? '새 글을 저장하려면 쓰지 않는 초안이나 복구 사본을 ' + capacity.toDelete + '개 지워 주세요.'
+        : capacity.remaining + '개 더 저장할 수 있어요.'), 'life-meta'));
+      const show = (label, query, key) => {
+        const button = action(context, label, () => {
+          listState.tab = 'drafts'; listState.query = query; listState.searchExpanded = !!query; listState.limit = ROW_LIMIT;
+          context.searchInput.value = query; updateList(context, true);
+          context.list.querySelector('.home-draft-open')?.focus({ preventScroll: true });
+        }, 'home-limit-action');
+        button.dataset.focusKey = 'home:limit:' + key; return button;
+      };
+      const actions = el('div', null, 'home-limit-actions');
+      if (listState.tab !== 'drafts' || listState.query.trim()) actions.append(show(listState.tab === 'drafts' ? '초안 모두 보기' : '초안 보기', '', 'drafts'));
+      // The copies' titles start with the prefix ("복구 사본 · "); the search uses its words.
+      const copyQuery = prefix.replace(/[\s·]+$/, '');
+      if (copies && listState.query !== copyQuery) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, 'copies'));
+      if (actions.childElementCount) notice.append(actions);
+      return notice;
+    }
     function updateList(context, userAction = false) {
       if (!showing(context)) return;
       // Before the first read ends (the wide search field is usable from the first frame) a search
@@ -571,6 +614,13 @@
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
       const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
       const fragment = document.createDocumentFragment();
+      if (refusedDelete) {
+        const refused = el('div', null, 'home-limit home-delete-refused'); refused.append(el('p', REFUSED_DELETE, 'life-meta'));
+        const seen = action(context, '확인', () => { refusedDelete = false; updateList(context, true); context.list.focus({ preventScroll: true }); }, 'home-limit-action');
+        seen.dataset.focusKey = 'home:delete-refused'; refused.append(seen); fragment.append(refused);
+      }
+      const limit = limitNotice(context, rows);
+      if (limit) fragment.append(limit);
       if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록에 다시 보이게 할 수 있어요.', 'life-meta home-archive-note'));
       const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
       if (applicable.length) {
@@ -691,6 +741,11 @@
       try { sync = life.BlogSync?.forStorage?.(storage) || null; } catch (_) { sync = null; }
       if (typeof sync?.subscribe !== 'function') return;
       stopPublic = sync.subscribe(event => {
+        if (event?.type === 'delete_refused' && event.reason === 'published' && showing(context)) {
+          const value = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
+          if (!(value?.workspaces || [context.workspaceId]).includes(event.workspaceId)) return;
+          refusedDelete = true; updateList(context); context.feedback.textContent = REFUSED_DELETE; return;
+        }
         if (!event?.localPostId || !showing(context)) return;
         if (publicTimer) clearTimeout(publicTimer);
         publicTimer = setTimeout(async () => {
@@ -731,5 +786,5 @@
     function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels, postCapacity, POST_LIMIT });
 })(globalThis);
