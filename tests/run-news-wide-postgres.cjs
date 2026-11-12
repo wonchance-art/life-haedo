@@ -325,9 +325,13 @@ async function main() {
     const db = await pg.connect('news_wide'), rival = await pg.connect('news_wide');
     try {
       // 1. Additive and repeatable.
-      const earlier = pgStub.migrationFiles().filter(file => path.basename(file) !== NAME);
-      assert.equal(earlier.length + 1, pgStub.migrationFiles().length, 'the migration file is in supabase/migrations');
-      assert.equal(pgStub.migrationFiles().at(-1), FILE, 'it sorts after every earlier migration');
+      // Later migrations (20261112120000 and after) may exist; this one is applied on top of exactly the
+      // migrations that sort before it, which are the ones it was written against.
+      const all = pgStub.migrationFiles(), at = all.indexOf(FILE);
+      assert.ok(at >= 0, 'the migration file is in supabase/migrations');
+      const earlier = all.slice(0, at);
+      assert.ok(earlier.every(file => path.basename(file) < NAME) && all.slice(at + 1).every(file => path.basename(file) > NAME),
+        'it sorts after every earlier migration');
       await pgStub.replayMigrations(db, { files: earlier });
       await db.query(AUTH_SHIM);
       const before = await catalog(db), sql = migration();
