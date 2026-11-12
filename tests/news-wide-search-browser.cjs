@@ -700,6 +700,50 @@ async function main() {
       assert.equal(await page.locator('#discoveryNewArticles').count(), 0, 'nothing to announce: the list took them');
       assert.notDeepEqual(await shownIds(page), drawn, 'the new links took their place on the first page');
     });
+    // 11-12 re-review MINOR-A: news opened from a long 일정 list scrolled down opened in the middle of its own list. The
+    // 넓게 찾기 request made while news opened kept the other tab's scroll as news's place, and the screen put the page
+    // back there after the shell had raised it to the top. News opens at its top the first time, and where news itself
+    // was when it is opened again.
+    await check('news opened from a long 일정 list scrolled down opens at its top; opened again, where news itself was', async ({ page, wide, state }) => {
+      state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      // Forty saved posts on forty days: a 일정 list several screens long (20 rows shown, anonymous synthetic posts).
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+        for (let n = 0; n < 40; n++) { const doc = m.create(c.id, new Date(Date.UTC(2026, 9, 1 + n, 3)).toISOString()); doc.title = '합성 일정 글 ' + (n + 1); doc.status = 'saved'; doc.ops = [{ insert: '합성 본문 ' + (n + 1) + '\n' }]; await s.savePhotoPost(ws, doc, 0); }
+      });
+      const settle = async () => { let last = -1; for (let n = 0; n < 40; n++) { await page.waitForTimeout(100); const y = await page.evaluate(() => scrollY); if (y === last) return y; last = y; } return last; };
+      const list = label => until(page, () => document.querySelectorAll('#homePosts [data-photo-post-id]').length >= 20, null, label);
+      // News drawn at its top with a 넓게 찾기 request still out, 일정 scrolled down, news again: the request made while
+      // news opens must not take the 일정 place as news's own (the reviewer's trace: 0 by the shell, then 1181 by restore()).
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+      const out = wide.requests.length;
+      await nav(page, 'schedule'); await list('the 일정 list');
+      await page.evaluate(() => window.scrollTo({ top: 1200, behavior: 'instant' })); await frames(page);
+      assert.ok(await page.evaluate(() => scrollY) > 800, 'the 일정 list is scrolled down: ' + await page.evaluate(() => scrollY));
+      await nav(page, 'news'); await idle(page); await frames(page);
+      await settled(async () => wide.requests.length > out, true, 'news asks again on opening');
+      assert.equal(await settle(), 0, 'news opens at its own place, the top');
+      release(); wide.hold = null; await idle(page);
+      // A fresh page that opens on 일정: news has not been drawn in it yet.
+      await page.goto(base + '/index.html?section=schedule'); await ready(page);
+      await list('the 일정 list');
+      await page.evaluate(() => window.scrollTo({ top: 1200, behavior: 'instant' })); await frames(page);
+      assert.ok(await page.evaluate(() => scrollY) > 800, 'the 일정 list is scrolled down: ' + await page.evaluate(() => scrollY));
+      const fresh = wide.requests.length;
+      await nav(page, 'news'); await idle(page); await frames(page);
+      await settled(async () => wide.requests.length > fresh, true, 'news asks on opening');
+      assert.equal(await settle(), 0, 'news opens at its top');
+      // News's own place: scrolled here, then 일정 scrolled elsewhere, then news again.
+      const box = await page.locator('#discoveryList').boundingBox(); await page.mouse.move(box.x + 40, box.y + 40); await page.mouse.wheel(0, 500);
+      const own = await settle(); assert.ok(own > 300, 'news is scrolled: ' + own);
+      await nav(page, 'schedule'); await list('the 일정 list again');
+      await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })); await frames(page);
+      assert.notEqual(await page.evaluate(() => scrollY), own, 'the 일정 list is somewhere else');
+      await nav(page, 'news'); await idle(page); await frames(page);
+      assert.equal(await settle(), own, 'news opens again where news itself was');
+    });
     await check('a topic the server refuses (safety net) leaves the taken topics\' answer in place: no request beyond one per topic', async ({ page, wide }) => {
       for (const topic of ['주제 하나', '서버만 거절', '주제 둘']) await addTopic(page, topic);
       await setWide(page, true); await settled(async () => wide.requests.length, 4, 'one request, then one per topic');

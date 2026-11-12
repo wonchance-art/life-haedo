@@ -94,7 +94,9 @@
       current.memory = { articleId: id, articleUrl: focused?.closest?.('[data-discovery-url]')?.dataset.discoveryUrl || article?.canonicalUrl || current.memory?.articleUrl || null,
         articleIndex: Math.max(0, [...(surface?.querySelectorAll('[data-discovery-id]') || [])].findIndex(el => el.dataset.discoveryId === id)),
         focusKey: focusKey || (surface?.contains(focused) ? focused.dataset.focusKey : null) || current.memory?.focusKey || null,
-        scrollY: root.scrollY || 0 };
+        // While the tab opens the page still shows the other tab's place (the shell raises it afterwards): news's
+        // own place is the last one read while news was shown, the top the first time (11-12 re-review MINOR-A).
+        scrollY: opening ? current.newsY ?? 0 : root.scrollY || 0 };
     }
     function restore() {
       const memory = current?.memory, token = generation;
@@ -687,13 +689,16 @@
     // the list (11-11 review, left for the second round): a scroll of the page is a use too, unless the screen made it
     // itself. placing() marks the screen's own scrolls (restoring a place, bringing a control into view); a smooth one
     // goes on for a while, so the scrolls that follow it closely belong to it.
-    let placedAt = -Infinity;
+    // opening: from the start of render() to its end; the page then still shows wherever the other tab left it.
+    let placedAt = -Infinity, opening = false;
     const clock = () => root.performance?.now?.() ?? Date.now();
     function placing() { placedAt = clock(); }
     function pageScrolled() {
+      const shown = !opening && active && !!surface?.isConnected && scope() && !!current && !current.settingsScreen && root.document.getElementById('lifeApp')?.hidden === false;
+      if (shown) current.newsY = root.scrollY || 0; // news's own place (capture)
       const now = clock();
       if (now - placedAt < 250) { placedAt = now; return; }
-      if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      if (!shown || current.listTouched) return;
       touchList();
     }
     // 기사 이미지 보기 (default off): only then does a card ask a publisher's server for its image.
@@ -1716,8 +1721,8 @@
     }
     async function render(options = {}) {
       leave(); if (disposed) return;
-      // Opening the tab, the shell and this screen put the page back where news was: not a use of the list.
-      placing(); active = true; const next = getBundle()?.workspaceId;
+      // Opening the tab: scrolls until render() ends are the shell's and this screen's (see placing() below).
+      opening = true; active = true; const next = getBundle()?.workspaceId;
       if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; }
       workspaceId = next; const token = generation;
       if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, listTouched: false, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
@@ -1780,11 +1785,14 @@
           if (!valid(token)) return;
         }
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
-        placing();
         // Opening the news tab with 넓게 찾기 on asks once; a pending erase from an earlier switch-off is tried again.
         if (valid(token)) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
+        // The shell puts the page back where news was once this render is done, and restore() follows a frame later:
+        // neither is a use of the list.
+        if (valid(token)) { opening = false; placing(); }
         if (reopen && valid(token) && !current.selected) showArticle(reopen);
       } catch (error) {
+        if (valid(token)) opening = false;
         if (valid(token)) { current.initialReading = false; current.loading = false; current.languageConflict = true; current.languageError = '언어 설정을 확인하지 못했습니다. 최신 언어 설정 확인을 눌러 주세요.'; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
       }
     }
@@ -1811,6 +1819,9 @@
       readingUI?.leave(); cancelPrivateRead(); disposeReaderView();
       wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; }
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
+      // Coming back puts news where news itself was, also when the page had already moved on before this capture.
+      if (current?.memory && Number.isFinite(current.newsY)) current.memory.scrollY = current.newsY;
+      opening = false;
       setImmersive(false); for (const element of inerted) element.inert = false; inerted = [];
       generation++; active = false; if (current) { current.languageReadEpoch++; stopTranslation(); } stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
       if (current) current.loading = false;
