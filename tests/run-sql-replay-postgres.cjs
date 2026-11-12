@@ -24,6 +24,10 @@
  *     20261111120000) on a fresh replayed copy: every publish path, owner and visitor reads,
  *     deletion, receipts, privileges and other owners. That file run directly also checks the
  *     earlier definition and the installation itself.
+ * 4.9 Runs the revision continuity contract (tests/run-blog-revision-continuity-postgres.cjs,
+ *     20261112120000) on a fresh replayed copy, applying that file once more on top: a deleted
+ *     post's revisions are never handed out again. Run directly it also checks the earlier
+ *     behaviour and the installation's refusal of drifted predecessors.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -294,6 +298,15 @@ async function main() {
       finally { console.log = log; await db.end(); }
       assert(count >= 50, 'withdrawal-before-publication checks ran: ' + count);
       pass(`withdrawal before publication (20261111120000): ${count} checks on a fresh replayed copy`);
+    }
+
+    {
+      const continuityDb = await pg.cloneDatabase('replay_blog_revision_continuity'), db = await pg.connect(continuityDb);
+      const log = console.log; let count;
+      try { console.log = () => {}; count = await require('./run-blog-revision-continuity-postgres.cjs').contract(db, { installed: true, connect: () => pg.connect(continuityDb) }); }
+      finally { console.log = log; await db.end(); }
+      assert(count >= 70, 'revision continuity checks ran: ' + count);
+      pass(`revision continuity after deletion (20261112120000): ${count} checks on a fresh replayed copy`);
     }
 
     const clone = await pg.cloneDatabase('replay_clone');
