@@ -326,22 +326,24 @@ H.run(__filename, {
     await b.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await b.locator('.photo-article').waitFor();
     await b.getByRole('button', { name: '글 수정', exact: true }).click(); await b.locator('#photoTitle').waitFor();
     assert((await H.bodyText(b)).includes('첫 탭에서 고침.'), 'the second tab holds the same revision');
-    // 2026-11-12 (account sync review M2/M3, owner rules 11-01/11-02): the second tab has input outside storage (an
-    // open composition) when the first tab saves the revision. Nothing is refused any more: its input is kept as a
-    // draft of its own and saved as a post of its own, and the record of the save that happened is kept.
+    // 2026-11-12 (account sync review M2/M3 and m-1, owner rules 11-01/11-02): the second tab has input outside storage
+    // (an open composition) when the first tab saves the revision. Nothing is refused any more: its input stays a
+    // revision of the post, based on the version it started from, and saving it updates the post and keeps the first
+    // tab's save as a recovery copy. The record of the save that happened is kept, and the old address still opens.
     await b.locator('#photoTitle').evaluate(n => n.dispatchEvent(new CompositionEvent('compositionstart', { data: '' })));
     await a.getByRole('button', { name: '글 저장', exact: true }).click(); await a.locator('.photo-article').waitFor();
     await H.stored(a, list => list.length === 1 && list[0].status === 'saved' && list[0].id === buffer.id, 'the first tab saved it');
     const record = page => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('haedo_life_post_moved_v1:')).map(key => localStorage.getItem(key)).join('|'));
     assert((await record(a)).includes('"' + post.id + '":"' + buffer.id + '"'));
     await b.locator('#photoTitle').evaluate(n => { n.value = '둘째 탭의 제목'; n.dispatchEvent(new CompositionEvent('compositionend', { data: '' })); });
-    await H.until(() => H.status(b), value => /새 초안으로 보관했어요/.test(value.note), 'the second tab keeps its input as a draft of its own');
+    await H.until(() => H.status(b), value => /이 수정을 먼저 글로 저장했어요/.test(value.note), 'the second tab keeps its input as a revision of the post');
     assert.equal(await H.mode(b), 'edit');
     await b.getByRole('button', { name: '글 저장', exact: true }).click(); await b.locator('.photo-article').waitFor();
     await H.sleep(500);
     assert((await record(b)).includes('"' + post.id + '":"' + buffer.id + '"'), 'the record of the save that happened is kept');
     const rows = await H.records(b);
-    assert.deepEqual(rows.map(row => [row.status, row.id === buffer.id, row.title]).sort(), [['saved', false, '둘째 탭의 제목'], ['saved', true, '두 탭이 같이 고친 글']].sort(), 'both saves are posts');
+    assert.deepEqual(rows.map(row => [row.status, row.id === buffer.id, row.title]).sort(), [['draft', false, '복구 사본 · 두 탭이 같이 고친 글'], ['saved', false, '둘째 탭의 제목']].sort(), 'one post; the first save is a recovery copy');
+    assert.ok(rows.find(row => row.title === '복구 사본 · 두 탭이 같이 고친 글').text.includes('첫 탭에서 고침.'));
     const c = await H.newPage(context, problems, name);
     await c.goto(H.base + '/index.html?view=page&blog=photo.' + post.id); await c.locator('.photo-article').waitFor();
     assert((await c.locator('.photo-article').innerText()).includes('첫 탭에서 고침.'), 'the old address still opens the revised post');

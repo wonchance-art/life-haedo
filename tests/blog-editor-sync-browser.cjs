@@ -268,6 +268,105 @@ async function main() {
       } finally { await close(); }
     });
 
+    // Review B1 (q2b): a draft deleted in another tab while this tab's input is outside storage. The input is kept as a
+    // new draft under a new id (never the deleted id, whose server row would come back at revision 1 and be taken for
+    // the version another device holds). The other device receives it, and its later edit keeps it.
+    await check('B1: a draft deleted in another tab while input is outside storage: the input is kept under a new id everywhere', async () => {
+      const { server, a, b, close } = await pair('b1');
+      try {
+        const id = await writeDraft(a.page, '지울 초안', '초안 본문.');
+        await onServer(server, list => list.some(item => item.id === id), 'draft on the server');
+        await received(b, list => list.some(item => item.id === id), 'phone receives');
+        const tab2 = await a.context.newPage(); await openHome(tab2);
+        await a.page.bringToFront();
+        await a.page.locator('#photoTitle').evaluate(n => n.dispatchEvent(new CompositionEvent('compositionstart', { data: '' })));
+        await tab2.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); await HaedoLife.BlogSync.forStorage(s).deletePost(w, id, { expectedRevision: d.revision }); }, id);
+        await sleep(800);
+        await a.page.locator('#photoTitle').evaluate(n => { n.value = '지운 뒤 이어 쓴 제목'; n.dispatchEvent(new CompositionEvent('compositionend', { data: '' })); });
+        const kept = (await until(async () => posts(a.page), list => list.some(item => item.title === '지운 뒤 이어 쓴 제목'), 'the input is stored')).find(item => item.title === '지운 뒤 이어 쓴 제목');
+        assert.notEqual(kept.id, id, 'under a new id'); assert.equal(kept.replaces, null);
+        assert.match((await editor(a.page)).note, /지운 초안이라, 지금 입력은 새 초안으로 보관했어요/);
+        await onServer(server, list => !list.some(item => item.id === id) && list.some(item => item.id === kept.id && item.title === '지운 뒤 이어 쓴 제목'), 'the account: deleted id gone, the input under its new id');
+        await received(b, list => !list.some(item => item.id === id) && list.some(item => item.id === kept.id), 'the phone: the deleted draft goes, the kept input arrives');
+        await closeEditor(a.page);
+        // The phone goes on writing what it holds now.
+        await openDraft(b.page, kept.id); await typeTop(b.page, '폰에서 덧붙임. '); await sleep(1200); await closeEditor(b.page);
+        const both = list => list.some(item => item.id === kept.id && item.title === '지운 뒤 이어 쓴 제목' && /폰에서 덧붙임/.test(item.text));
+        await onServer(server, both, 'the phone edit keeps the Mac title');
+        await until(async () => { await kick(a.page); return posts(a.page); }, both, 'the Mac converges');
+        await tab2.close();
+      } finally { await close(); }
+    });
+
+    // Review M-a (q1): a revision of a saved post open on the Mac while the phone continues and finishes it.
+    await check('M-a: a revision finished on another device: a clean editor shows the saved post and says so; a busy one keeps the input and its save keeps the other version as a recovery copy', async () => {
+      const { server, a, b, close } = await pair('ma');
+      try {
+        const id = await writeSaved(a.page, '다듬는 글', '원문 문단.');
+        await received(b, list => list.some(item => item.id === id), 'phone receives');
+        const savedId = async page => (await posts(page)).find(item => item.status === 'saved').id;
+        const hop = async (busy, word) => {
+          await openEdit(a.page, await savedId(a.page)); await typeTop(a.page, '맥 입력 ' + word + '. ');
+          await onServer(server, list => list.some(item => item.status === 'draft' && new RegExp('맥 입력 ' + word).test(item.text)), 'Mac revision on the server');
+          await received(b, list => list.some(item => item.status === 'draft' && new RegExp('맥 입력 ' + word).test(item.text)), 'phone receives the revision');
+          if (busy) await a.page.locator('#photoTitle').evaluate(n => n.dispatchEvent(new CompositionEvent('compositionstart', { data: '' })));
+          await openEdit(b.page, await savedId(b.page)); assert.match((await editor(b.page)).body, new RegExp('맥 입력 ' + word), 'the phone continues the same revision');
+          await typeTop(b.page, '폰 마무리 ' + word + '. '); await sleep(1200);
+          await b.page.getByRole('button', { name: '글 저장', exact: true }).click(); await b.page.locator('.photo-article').waitFor();
+          await onServer(server, list => list.some(item => item.status === 'saved' && new RegExp('폰 마무리 ' + word).test(item.text)), 'phone save on the server');
+        };
+        await hop(false, '하나');
+        await until(async () => { await kick(a.page); return a.page.locator('.photo-article').count(); }, count => count === 1, 'the Mac shows the saved post');
+        assert.match(await a.page.locator('.photo-status').innerText(), /다른 탭이나 기기에서 이 수정을 글로 저장했어요/);
+        assert.match(await a.page.locator('.photo-article').innerText(), /폰 마무리 하나\. 맥 입력 하나\./);
+        const one = list => list.filter(item => item.status === 'saved').length === 1 && !list.some(item => item.status === 'draft');
+        await until(async () => { await kick(a.page); return posts(a.page); }, one, 'no editing draft is left on the Mac');
+        // Busy: the Mac's composition is open when the phone finishes.
+        await hop(true, '둘');
+        await until(async () => { await kick(a.page); return editor(a.page); }, value => /이 수정을 글로 저장했어요 · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요/.test(value.note), 'the Mac says so and keeps the editor');
+        assert.equal(await a.page.locator('.ql-editor').count(), 1);
+        await a.page.locator('#photoTitle').evaluate(n => { n.value = '맥이 나중에 고친 제목'; n.dispatchEvent(new CompositionEvent('compositionend', { data: '' })); });
+        await until(async () => editor(a.page), value => value.status === '자동 저장됨', 'the Mac input is stored');
+        await a.page.getByRole('button', { name: '글 저장', exact: true }).click(); await a.page.locator('.photo-article').waitFor();
+        const converged = list => list.filter(item => item.status === 'saved').length === 1 && list.some(item => item.status === 'saved' && item.title === '맥이 나중에 고친 제목') &&
+          list.some(item => item.status === 'draft' && item.title === KEPT + '다듬는 글' && /폰 마무리 둘/.test(item.text));
+        await until(async () => { await kick(a.page); return posts(a.page); }, converged, 'the Mac: one post, the phone version as a recovery copy');
+        await onServer(server, list => converged(list) && list.length === 2, 'the account converges');
+        await received(b, converged, 'the phone converges');
+      } finally { await close(); }
+    });
+
+    // Review m-3: a tab that missed the other tab's notice (no BroadcastChannel here) reads storage again when shown.
+    await check('m-3: shown again (visibility, back/forward cache) an open editor or read view reads what storage holds now', async () => {
+      const { a, close } = await pair('m3c');
+      try {
+        const id = await writeDraft(a.page, '다시 볼 초안', '처음 문장.');
+        await closeEditor(a.page);
+        const post = await writeSaved(a.page, '다시 볼 글', '처음 본문.');
+        await home(a.page);
+        const tab1 = await a.context.newPage();
+        await tab1.addInitScript(() => { window.BroadcastChannel = undefined; });
+        await openHome(tab1);
+        const setVisibility = (page, state) => page.evaluate(value => { Object.defineProperty(document, 'visibilityState', { get: () => value, configurable: true }); Object.defineProperty(document, 'hidden', { get: () => value === 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }, state);
+        // A read view restored from the back/forward cache.
+        await openRead(tab1, post);
+        await a.page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); await s.savePhotoPost(w, { ...d, title: '다른 탭에서 바꾼 글 제목', updatedAt: new Date().toISOString() }, d.revision); }, post);
+        await sleep(1500);
+        assert.doesNotMatch(await tab1.locator('.photo-article').innerText(), /다른 탭에서 바꾼 글 제목/, 'no notice reached this tab');
+        await tab1.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+        await until(() => tab1.locator('.photo-article').innerText(), text => /다른 탭에서 바꾼 글 제목/.test(text), 'restored from the back/forward cache: the read view reads it');
+        // An open editor shown again after its tab was hidden.
+        await openDraft(tab1, id);
+        await setVisibility(tab1, 'hidden');
+        await a.page.evaluate(async id => { const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); await s.savePhotoPost(w, { ...d, title: '다른 탭에서 바꾼 제목', updatedAt: new Date().toISOString() }, d.revision); }, id);
+        await sleep(1500);
+        assert.equal(await tab1.locator('#photoTitle').inputValue(), '다시 볼 초안', 'no notice reached this tab');
+        await setVisibility(tab1, 'visible');
+        await until(() => tab1.locator('#photoTitle').inputValue(), value => value === '다른 탭에서 바꾼 제목', 'shown again: the editor reads it');
+        await tab1.close();
+      } finally { await close(); }
+    });
+
     await check('m5: a device whose clock is 10 minutes behind saves its revision of a post just made elsewhere', async () => {
       const { server, a, b, close } = await pair('m5', { init: skewed(-10) });
       try {

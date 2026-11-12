@@ -1070,7 +1070,9 @@
           const first = target.revision === 0 && !!target.replaces;
           // The input went to a draft of its own (storeDraft): the editor continues that draft.
           const moved = saved.id !== target.id ? target.id : null;
-          if (moved) Object.assign(target, { id: saved.id, replaces: null, archived: false, createdAt: saved.createdAt });
+          // The saved post's content a revision started from stays its baseline while it still revises the same version.
+          const sameBase = moved && !!saved.replaces && !!target.replaces && saved.replaces.id === target.replaces.id && saved.replaces.revision === target.replaces.revision;
+          if (moved) Object.assign(target, { id: saved.id, replaces: saved.replaces ? { ...saved.replaces } : null, archived: false, createdAt: saved.createdAt });
           target.revision = saved.revision;
           storedTick = tick;
           keptTick = -1;
@@ -1084,7 +1086,7 @@
           if (normal.changed) alignEditor(normal, tick);
           if (saved.overNote && current(token)) showChangeNote(saved.overNote);
           if ((first || moved) && current(token) && mode === "edit") onModeChange({ mode, id: target.id });
-          if (moved) { recoveryStore.clear(workspaceId, moved); baseline = null; syncHold(); }
+          if (moved) { recoveryStore.clear(workspaceId, moved); if (!sameBase) baseline = null; syncHold(); }
           // A short AI-mark note gives way to the save state once saved.
           if (storedTick === dirtyTick && !authorNoteKept) authorNote = "";
           if (payload.status === "draft") try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.id || payload.id); } catch (_) {}
@@ -1128,18 +1130,26 @@
         if (stored && stored.status === "draft" && !stored.archived && stored.revision === target.revision) throw cause;
         if (!valid() || doc !== target) throw cause;
         const note = (saved, text) => Object.defineProperty(saved, "overNote", { value: text, enumerable: false });
-        // Saved as a post or hidden elsewhere (another tab finished or hid this same draft): the input
-        // is kept as a draft of its own, with the draft's exact source evidence; the other stays as it is.
-        if (stored && (stored.status !== "draft" || stored.archived)) {
+        // Gone, saved as a post or hidden elsewhere (another tab deleted, finished or hid this same draft): the
+        // input is kept as a draft of its own under a new id, with the draft's exact source evidence. Never under
+        // the same id again (review B1): its server identity was deleted, and a re-created one would start again at
+        // revision 1, which another device takes for the version it holds. The other side stays as it is.
+        // Review m-1 (2026-11-02 rule): input that continued a revision (or a draft) finished elsewhere stays a
+        // revision of that post, based on the version it started from. Saving it then updates the post and keeps the
+        // version saved first as a recovery copy (finish → savePhotoPostOver); never based on the post's version now,
+        // which would replace it without a copy.
+        if (!stored || stored.status !== "draft" || stored.archived) {
           const evidence = await independentEvidence(epoch, target.id, target.replaces?.id);
           if (!evidence || !valid() || doc !== target) throw cause;
-          const at = new Date().toISOString();
-          const fresh = { ...payload, id: life.Core.id(), revision: 0, status: "draft", replaces: null, archived: false, createdAt: at, updatedAt: at };
+          const at = new Date().toISOString(), finished = stored?.status === "saved";
+          const replaces = finished ? (target.replaces ? { ...target.replaces } : { id: stored.id, revision: target.revision }) : stored ? null : target.replaces ? { ...target.replaces } : null;
+          const fresh = { ...payload, id: life.Core.id(), revision: 0, status: "draft", replaces, archived: false, createdAt: at, updatedAt: at };
           return note(await storage.savePhotoPostWithEvidence(workspaceId, fresh, 0, evidence.refs, 0),
-            stored.status === "saved" ? "다른 탭이나 기기에서 이 초안을 글로 저장해, 지금 입력은 새 초안으로 보관했어요" : "다른 탭이나 기기에서 이 초안을 숨겨, 지금 입력은 새 초안으로 보관했어요");
+            !stored ? "다른 탭이나 기기에서 지운 초안이라, 지금 입력은 새 초안으로 보관했어요"
+              : finished ? (target.replaces ? "다른 탭이나 기기에서 이 수정을 먼저 글로 저장했어요" : "다른 탭이나 기기에서 이 초안을 먼저 글로 저장했어요") + " · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요"
+              : "다른 탭이나 기기에서 이 초안을 숨겨, 지금 입력은 새 초안으로 보관했어요");
         }
-        const value = { ...payload, revision: stored ? stored.revision : 0 };
-        if (!stored) return note(await storage.savePhotoPost(workspaceId, value, 0), "다른 곳에서 지운 초안이라 지금 입력으로 다시 보관했어요");
+        const value = { ...payload, revision: stored.revision };
         // What storage holds may differ only by its revision (nothing this editor has not seen): nothing to keep then.
         const keep = !(typeof storedBase === "string" && storedBase && M.contentHash(stored) === storedBase);
         const saved = await storage.savePhotoPostOver(workspaceId, value, stored.revision, { over: { id: stored.id, revision: stored.revision }, copyId: life.Core.id(), keep });
@@ -1267,6 +1277,14 @@
       if (newer) writeCopy({ ...doc, ops });
     }
     const stashWhenHidden = () => { if (document.visibilityState === "hidden") stash(); };
+    // Shown again (tab switch, back/forward cache): what storage holds is read again, as a missed
+    // cross-tab notice would have done (review m-3).
+    const readWhenShown = (event) => {
+      if (event?.type === "pageshow" && !event.persisted) return;
+      if (document.visibilityState === "hidden" || !host?.isConnected || !doc) return;
+      if (mode === "edit") refreshEdit();
+      else if (mode === "read") refreshRead();
+    };
     function checkpoint() {
       // Keep the accepted model durable without committing an IME field or a
       // file whose signature, dimensions and original bytes are still pending.
@@ -3280,9 +3298,44 @@
     // stay where they were. Input never stored is never replaced: a store over a changed draft
     // keeps the other version as a recovery copy instead (storeDraft).
     let refreshingEdit = false, editStale = false;
+    // The server no longer has the open draft (BlogSync remote_gone): { id, tick } with the dirtyTick of then, so
+    // nothing typed since is replaced. targetNoted: the version of the revised post already said changed.
+    let gone = null, targetNoted = null;
+    // What changed elsewhere for the open stored draft, said in the note line (review M-a). `follow`: with nothing typed
+    // since the server lost this revision and its post changed (finished elsewhere), the post it became is opened.
+    async function sayChanges(was, rows, follow) {
+      let changed = false;
+      if (was.replaces) {
+        const targetRow = rows.find((item) => item.id === was.replaces.id) || rows.find((item) => item.id === movedStore.resolve(workspaceId, was.replaces.id));
+        changed = !targetRow || targetRow.id !== was.replaces.id || targetRow.revision !== was.replaces.revision;
+        if (follow && gone?.id === was.id && gone.tick === dirtyTick && targetRow?.status === "saved" && changed) {
+          gone = null;
+          await open(targetRow.id);
+          if (current(epoch) && doc?.id === targetRow.id) showStatus("다른 탭이나 기기에서 이 수정을 글로 저장했어요");
+          return true;
+        }
+        const mark = changed ? (targetRow ? targetRow.id + "@" + targetRow.revision + (gone?.id === was.id ? ":gone" : "") : "gone") : null;
+        if (mark && targetNoted !== mark) {
+          targetNoted = mark;
+          showChangeNote(targetRow ? (gone?.id === was.id ? "다른 탭이나 기기에서 이 수정을 글로 저장했어요" : "다른 탭이나 기기에서 이 글이 바뀌었어요") + " · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요"
+            : "다른 탭이나 기기에서 이 글을 지웠어요 · 저장하면 새 글로 보관해요");
+        }
+      }
+      if (gone?.id === was.id && !gone.said && !changed) {
+        gone.said = true;
+        showChangeNote("다른 탭이나 기기에서 지운 초안이에요 · 계속 쓰면 새 초안으로 다시 보관해요");
+      }
+      return false;
+    }
     async function refreshEdit() {
       if (mode !== "edit" || !doc || !current(epoch)) { editStale = false; return; }
-      if (refreshingEdit || editorBusy()) { editStale = true; return; }
+      if (refreshingEdit || editorBusy()) {
+        editStale = true;
+        // Busy: nothing in the editor changes, but what changed elsewhere is said now.
+        const token = epoch, was = doc;
+        if (!refreshingEdit && was.revision > 0) storage.listPhotoPosts(workspaceId).then((rows) => { if (current(token) && doc === was && mode === "edit") return sayChanges(was, rows, false); }).catch(() => {});
+        return;
+      }
       editStale = false;
       const token = epoch, was = doc;
       const read = (id) => storage.readPhotoPost(workspaceId, id).catch((e) => {
@@ -3295,10 +3348,18 @@
         if (was.revision > 0) {
           // The list row first: the editor's own autosave announces itself too, and reading the
           // whole post (its photos) back after each of them is not needed.
-          const row = (await storage.listPhotoPosts(workspaceId)).find((item) => item.id === was.id);
+          const rows = await storage.listPhotoPosts(workspaceId), row = rows.find((item) => item.id === was.id);
+          if (!current(token) || doc !== was) return;
+          if (await sayChanges(was, rows, true)) return;
           if (row && row.revision === was.revision) return;
           if (!current(token) || doc !== was) return;
           const stored = await read(was.id);
+          // Deleted in this browser (another tab, or this hidden tab's account applying a deletion): typing goes on
+          // and is kept as a new draft (storeDraft), never under the deleted id.
+          if (!stored && current(token) && doc === was && !(gone?.id === was.id && gone.said)) {
+            gone = { id: was.id, tick: -1, said: true };
+            showChangeNote("다른 탭이나 기기에서 지운 초안이에요 · 계속 쓰면 새 초안으로 보관해요");
+          }
           if (!stored || stored.revision === was.revision) return;
           next = stored;
         } else if (was.replaces && dirtyTick === 0) {
@@ -3702,6 +3763,8 @@
         lifecycleBound = true;
         root.addEventListener("pagehide", stash);
         document.addEventListener("visibilitychange", stashWhenHidden);
+        root.addEventListener("pageshow", readWhenShown);
+        document.addEventListener("visibilitychange", readWhenShown);
       }
       standalone = isolated;
       feedListener = onFeed;
@@ -3715,6 +3778,9 @@
         if (event.workspaceId !== workspaceId || event.localPostId !== doc?.id || !current(epoch)) return;
         // A version from another device waits for the input here to be stored.
         if (event.type === "remote_waiting") { if (mode === "edit") showChangeNote("다른 기기에서도 바뀌었어요 · 지금 입력을 보관한 뒤 맞추고, 진 쪽은 복구 사본으로 남겨요"); return; }
+        // The server no longer has the open post: deleted, or a revision finished elsewhere (refreshEdit says which).
+        // Input outside storage then is never followed away from: tick -1.
+        if (event.type === "remote_gone") { if (mode === "edit") { gone = { id: doc.id, tick: editorBusy() ? -1 : dirtyTick }; refreshEdit(); } return; }
         if (mode === "edit") readDraftState();
         else if (!serverBusy) readServerState();
       });
@@ -3772,6 +3838,8 @@
         lifecycleBound = false;
         root.removeEventListener("pagehide", stash);
         document.removeEventListener("visibilitychange", stashWhenHidden);
+        root.removeEventListener("pageshow", readWhenShown);
+        document.removeEventListener("visibilitychange", readWhenShown);
       }
       cancelAutosave();
       cleanup();

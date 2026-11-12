@@ -118,19 +118,27 @@ async function main(){
   await check('A failed IndexedDB write blocks departure, keeps the same editor/caret and can be retried without changing the saved original',async()=>{
    await page.locator('[data-photo-post-id="'+first+'"]').click();await page.locator('.photo-article').waitFor();await click('글 수정');await page.locator('#photoTitle').waitFor();await page.evaluate(()=>{window.__photoPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=__photoPut.apply(this,args);if(args[0]?.key?.startsWith('photo-post:'))this.transaction.abort();return r;};window.__photoTitle=document.querySelector('#photoTitle');});await page.locator('#photoTitle').fill('실패해도 남는 수정 입력');await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.equal(await page.locator('#photoTitle').evaluate(n=>n===__photoTitle),true);await page.setViewportSize({width:1440,height:1000});await page.locator('[data-haedo-navigation] [data-haedo-section=schedule]').click();await page.locator('#lifeError:not([hidden])').waitFor();assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'),'page');assert.equal(await page.locator('#photoTitle').inputValue(),'실패해도 남는 수정 입력');assert.equal((await read()).docs.find(v=>v.id===first).title,'산책에서 남긴 두 장의 사진');await page.evaluate(()=>IDBObjectStore.prototype.put=__photoPut);await click('초안 다시 저장');await saved();await page.getByRole('button',{name:'글 저장',exact:true}).focus();await page.keyboard.press('Enter');await page.locator('.photo-article').waitFor();first=(await read()).docs.find(v=>v.status==='saved'&&v.title==='실패해도 남는 수정 입력').id;
   });
-  // 2026-11-12 (account sync review M2/M3, owner rules 11-01/11-02): two tabs revising one saved post continue one
-  // revision draft. A tab with nothing unsaved follows what the other tab saved; input that was outside storage
-  // when the other tab saved is kept as a draft of its own. Nothing asks for a manual choice any more.
-  await check('Two tabs revising one saved post continue one revision; a later input outside storage is kept as a draft of its own',async()=>{
-   await go(other);await page.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();await page.locator('#photoTitle').fill('내 탭 수정');await saved();await other.locator('[data-photo-post-id="'+first+'"]').click();await other.locator('.photo-article').waitFor();await other.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();
+  // 2026-11-12 (account sync review M2/M3 and m-1, owner rules 11-01/11-02): two tabs revising one saved post continue one
+  // revision draft. Input that was outside storage when the other tab saved stays a revision of that post, based on the
+  // version it started from; saving it updates the post and keeps the version saved first as a recovery copy (one post,
+  // one `복구 사본`, no manual choice). The earlier "both saves are posts" result was the former manual 새 글로 저장.
+  await check('Two tabs revising one saved post: the later save updates it and the version saved first is kept as a recovery copy',async()=>{
+   await go(other);await page.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();await page.locator('#photoTitle').fill('내 탭 수정');await saved();
+   const base=(await read()).docs.find(v=>v.id===first);
+   await other.locator('[data-photo-post-id="'+first+'"]').click();await other.locator('.photo-article').waitFor();await other.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();
    assert.equal(await other.locator('#photoTitle').inputValue(),'내 탭 수정','the other tab continues the same revision');
    await page.locator('#photoTitle').evaluate(n=>n.dispatchEvent(new CompositionEvent('compositionstart',{data:''})));
    await other.locator('#photoTitle').fill('다른 탭의 저장본');await other.getByRole('button',{name:'글 저장',exact:true}).click();await other.locator('.photo-article').waitFor();
    await page.locator('#photoTitle').evaluate(n=>{n.value='내 탭 수정 이어서';n.dispatchEvent(new CompositionEvent('compositionend',{data:''}));});
-   await page.waitForFunction(()=>/새 초안으로 보관했어요/.test(document.querySelector('.photo-edit-note')?.textContent||''));await saved();
+   await page.waitForFunction(()=>/이 수정을 먼저 글로 저장했어요 · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요/.test(document.querySelector('.photo-edit-note')?.textContent||''));await saved();
    assert.notEqual(await page.locator('.photo-status').getAttribute('role'),'alert');assert.equal(await page.locator('#photoTitle').inputValue(),'내 탭 수정 이어서');
-   let docs=(await read()).docs;assert(docs.some(v=>v.status==='saved'&&v.title==='다른 탭의 저장본'),'the other tab\'s save stays');assert(docs.some(v=>v.status==='draft'&&v.title==='내 탭 수정 이어서'&&v.replaces===null),'this tab\'s input is a draft of its own');
-   await click('글 저장');await page.locator('.photo-article').waitFor();const titles=(await read()).docs.filter(v=>v.status==='saved').map(v=>v.title);assert(titles.includes('내 탭 수정 이어서'));assert(titles.includes('다른 탭의 저장본'));
+   let docs=(await read()).docs;const otherSave=docs.find(v=>v.status==='saved'&&v.title==='다른 탭의 저장본');assert(otherSave,'the other tab\'s save stays until this save');
+   const kept=docs.find(v=>v.status==='draft'&&v.title==='내 탭 수정 이어서');assert(kept,'this tab\'s input is stored');assert.deepEqual(kept.replaces,{id:first,revision:base.revision},'a revision of the post, based on the version it started from');
+   await click('글 저장');await page.locator('.photo-article').waitFor();
+   docs=(await read()).docs;const saves=docs.filter(v=>v.status==='saved').map(v=>v.title);
+   assert(saves.includes('내 탭 수정 이어서'));assert(!saves.includes('다른 탭의 저장본'),'one post, not two');assert.equal(docs.some(v=>v.id===otherSave.id),false,'the later save took its place');
+   const copy=docs.find(v=>v.title==='복구 사본 · 다른 탭의 저장본');assert(copy,'the version saved first is a recovery copy');assert.equal(copy.status,'draft');assert.equal(copy.replaces,null);
+   assert.match(await page.locator('.photo-status').innerText(),/다른 곳에서 바뀐 판은 복구 사본으로 남겼어요/);
   });
   await check('Invalid photo types, remote image paste and failed imports do not replace text or install hidden photos',async()=>{
    await click('사진 글 목록');await click('글쓰기');await page.locator('.ql-editor').fill('붙여넣기 전의 문장');await page.locator('#photoFiles').setInputFiles({name:'unsupported.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')});await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.match(await page.locator('.ql-editor').textContent(),/붙여넣기 전의 문장/);assert.equal(await page.locator('.photo-block').count(),0);

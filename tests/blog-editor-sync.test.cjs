@@ -263,3 +263,67 @@ test('MINOR-B: a Markdown document on either side is never the same input as a d
   assert.equal(Photo.sameInput({ ...copyOf, ops: [{ insert: '전혀 다른 본문\n' }] }, markdown), false, 'any copy differs from it');
   assert.equal(Photo.sameInput({ title: doc.title, format: 'life-post-md-v1', markdown: '같은 본문\n', attachments: [] }, doc), false, 'a Markdown copy differs too');
 });
+
+// Review B1 (q3, three devices): a change made here to a post another device deleted is kept under a new server
+// identity. The deleted identity is never re-created at revision 1, which a device that missed the deletion would take
+// for the revision it holds and later overwrite without a recovery copy. The input is somewhere in every case.
+for (const offlineEdit of [false, true]) {
+  test('B1: a post deleted on one device and changed on another is kept as a post of its own; a third device ' + (offlineEdit ? 'that also changed it keeps both' : 'receives it'), async () => {
+    const cloud = server(), time = clock();
+    const mac = await device(cloud, 'mac', { time }), phone = await device(cloud, 'phone', { time }), ipad = await device(cloud, 'ipad', { time });
+    const draft = await mac.storage.savePhotoPost(mac.ws, await post({ title: '세 기기 초안', status: 'draft' }), 0); time.advance(10000);
+    await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); await ipad.sync.syncNow();
+    // The phone deletes it; the Mac (which has not heard yet) changes it; the iPad is away.
+    await phone.sync.deletePost(phone.ws, draft.id); await phone.sync.syncNow();
+    assert.equal(cloud.rows.has(draft.id), false);
+    await redraft(mac, draft.id, '맥에서 지워진 뒤 쓴 문장', new Date(time.now + 60000).toISOString()); time.advance(70000);
+    if (offlineEdit) await redraft(ipad, draft.id, '아이패드에서 고친 문장', new Date(time.now).toISOString());
+    time.advance(10000); await mac.sync.syncNow({ flushDrafts: true });
+    assert.equal(cloud.rows.has(draft.id), false, 'the deleted identity is never re-created');
+    const macRow = [...cloud.rows.values()].find(row => row.data.title === '맥에서 지워진 뒤 쓴 문장');
+    assert.ok(macRow, 'the change is on the server under a new identity'); assert.notEqual(macRow.id, draft.id);
+    for (let i = 0; i < 3; i++) { time.advance(60000); await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow({ flushDrafts: true }); await phone.sync.syncNow(); }
+    const titles = async dev => (await list(dev)).map(row => row.title).sort();
+    const expected = offlineEdit ? ['맥에서 지워진 뒤 쓴 문장', '아이패드에서 고친 문장'] : ['맥에서 지워진 뒤 쓴 문장'];
+    for (const dev of [mac, phone, ipad]) assert.deepEqual(await titles(dev), expected, dev.name);
+    assert.deepEqual([...cloud.rows.values()].map(row => row.data.title).sort(), expected);
+    // The iPad goes on writing what it now holds: an ordinary edit of that post, received by the Mac.
+    const ipadPost = (await list(ipad)).find(row => row.title === '맥에서 지워진 뒤 쓴 문장');
+    await redraft(ipad, ipadPost.id, '맥에서 지워진 뒤 쓴 문장 · 아이패드가 이어 씀', new Date(time.now + 60000).toISOString()); time.advance(70000);
+    await ipad.sync.syncNow({ flushDrafts: true }); await mac.sync.syncNow();
+    assert.ok((await titles(mac)).includes('맥에서 지워진 뒤 쓴 문장 · 아이패드가 이어 씀'));
+    for (const dev of [mac, phone, ipad]) dev.sync.dispose();
+  });
+}
+
+// Review m-2: the same tab's editor that gets busy while a received version is being committed keeps its post: the
+// commit's own transaction checks it again (quietHere) and the version waits for the editor to be idle.
+test('m-2: an editor that gets busy during the commit of a received version keeps its post; the version comes in once idle', async t => {
+  const { cloud, a, draft, elsewhere } = await shared(t);
+  let busy = false, typing = true; const events = [];
+  // Input arrives exactly as the received version is being written: after every check before the transaction.
+  const storage = { ...a.storage, commitBlogSync: (...args) => { if (typing) busy = true; return a.storage.commitBlogSync(...args); } };
+  const tab = tabOf(cloud, a, 'mac-editor', { storage }); t.after(() => tab.dispose());
+  tab.subscribe(event => events.push(event));
+  const release = tab.holdPost(a.ws, draft.id, { busy: () => busy });
+  await elsewhere('다른 기기에서 이어 씀');
+  await tab.syncNow();
+  assert.equal((await read(a, draft.id)).title, '초안', 'the post under the busy editor is untouched');
+  assert.deepEqual(events.filter(event => event.type === 'remote_waiting').map(event => event.localPostId), [draft.id], 'the editor is told');
+  typing = false; busy = false; release.idle(); await tab.syncNow();
+  assert.equal((await read(a, draft.id)).title, '다른 기기에서 이어 씀');
+  release();
+});
+
+// Review M-a: a revision open here whose server copy is gone (another device finished or deleted it) is said once.
+test('M-a: an open editor whose post the server no longer has is told once (remote_gone); the post stays while it is open', async t => {
+  const { a, b, draft } = await shared(t);
+  const events = []; a.sync.subscribe(event => events.push(event));
+  const release = a.sync.holdPost(a.ws, draft.id, { busy: () => false });
+  await b.sync.deletePost(b.ws, draft.id); await b.sync.syncNow();
+  await a.sync.syncNow(); await a.sync.syncNow();
+  assert.deepEqual(events.filter(event => event.type === 'remote_gone').map(event => event.localPostId), [draft.id]);
+  assert.deepEqual(await shown(a), [['draft', '초안']], 'kept while open');
+  release(); await a.sync.syncNow();
+  assert.deepEqual(await shown(a), []);
+});

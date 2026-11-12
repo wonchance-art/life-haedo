@@ -374,6 +374,12 @@
       if (openHere(ws, id) && (events?.document?.visibilityState !== 'hidden' || busyHere(ws, id))) share(ws, id);
       else unshare(ws, id);
     }
+    // A post open here that the server no longer has (deleted, or a revision finished on another device): said once.
+    const goneOpen = new Set();
+    function goneHere(ws, id) {
+      const k = key(ws, id);
+      if (!goneOpen.has(k)) { goneOpen.add(k); publish$({ type: 'remote_gone', workspaceId: ws, localPostId: id }); }
+    }
     // Received versions that waited for a busy editor here; the editor says when it is idle.
     const waitingChange = new Set();
     function waitedFor(ws, id) {
@@ -420,11 +426,20 @@
       const fresh = await writeState(c, latest, { pending: null, status: 'pending', error: null });
       if (attempt >= 2) throw fault('blog_conflict');
       if (result.status === 'missing') {
-        // Deleted on another device while this one changed it: recreate, never drop.
-        await writeState(c, fresh, { remoteRevision: 0, remoteManifest: null, publication: null });
+        // Deleted on another device while this one changed it: kept, never dropped, as a post of its own.
+        await reidentify(c, fresh);
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
       return resolveConflict(c, fresh, await readPost(c), attempt + 1, byRemote);
+    }
+    // The server no longer has a post this device changed (deleted on another device). The change is kept under a new
+    // server identity, never the deleted one (review B1, 2026-11-12): the server starts a re-created row's revisions at 1
+    // again, and a device that missed the deletion would take that row for the revision it holds and later overwrite it
+    // without a recovery copy. Other devices receive it as a new post; the deleted identity stays deleted. The local
+    // post keeps its id (its screens, evidence and drafts follow it); only the binding moves.
+    function reidentify(c, state) {
+      return writeState(c, state, { remoteId: state.remoteRevision > 0 ? makeId() : state.remoteId, remoteRevision: 0, remoteManifest: null, pending: null, conflict: null,
+        publication: null, publishPending: null, unpublishPending: null, publishChecked: null, choiceUnsent: null, publicationEarlier: null, publicationDoubt: null, status: 'pending', error: null });
     }
     async function pushLocked(c, { expectedManifest = null, expectedLocalRevision, attempt = 0, byRemote = null } = {}) {
       const post = await readPost(c); let state = await readState(c);
@@ -455,7 +470,7 @@
     async function resolveConflict(c, state, post, attempt = 0, byRemote = null) {
       const row = await remote.read(state.remoteId); guard(c);
       if (!row) {
-        await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
+        await reidentify(c, state);
         return pushLocked(c, { attempt: attempt + 1, byRemote });
       }
       // The server never turns a saved post back into a draft, so this
@@ -835,9 +850,11 @@
           if (await remote.read(remoteId)) return; guard(c);
           const post = await readPost(c);
           if (dirty(state, post)) {
-            await writeState(c, state, { remoteRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'pending', error: null });
+            await reidentify(c, state);
             await pushLocked(c, {}); return;
           }
+          // An editor here keeps it open; it is told, so it can say so (or follow a revision finished elsewhere).
+          if (openHere(ws, id)) { goneHere(ws, id); return; }
           if (await held(ws, id, 'open')) return;
           await storage.commitBlogSync(ws, { postId: id, remove: true, baseRevision: post.revision, bindingRevision: state.revision }, { isCurrent: () => current(c) && !openHere(ws, id) });
           guard(c); emit(ws, id); return { post, revision: state.remoteRevision };
@@ -1234,7 +1251,7 @@
       const release = () => {
         if (released) return; released = true;
         const set = holds.get(k); set?.delete(entry);
-        if (!set?.size) { holds.delete(k); holdPlaces.delete(k); unshare(ws, id); waitingChange.delete(k); kick(500); }
+        if (!set?.size) { holds.delete(k); holdPlaces.delete(k); unshare(ws, id); waitingChange.delete(k); goneOpen.delete(k); kick(500); }
       };
       release.idle = () => {
         if (released) return;
