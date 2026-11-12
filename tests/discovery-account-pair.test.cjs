@@ -335,6 +335,32 @@ test('reactions: a pair above 500 entries or 1 MB is saved as a copy that opens 
   assert.equal(over.entries.length, Actions.COPY_MAX_ENTRIES + 1);
   assert.throws(() => Actions.previewCopy(over), tooLarge);
   assert.equal(Actions.previewCopy({ ...over, entries: over.entries.slice(0, Actions.COPY_MAX_ENTRIES) }).counts.total, Actions.COPY_MAX_ENTRIES);
+  // And the byte bound is exactly 2 MB: a copy one byte under it opens, one of 2 MB or 2 MB + 1 is refused.
+  // Entries of about 29 KB each (50 long tags): about 70 of them reach 2 MB, well within 1,000 entries.
+  const longTags = Array.from({ length: 50 }, (_, i) => '나'.repeat(190) + String(i).padStart(2, '0'));
+  const template = Actions.exportCopy(filled(W, 'naver-d2', 1, undefined, longTags), { now: T(33) }), row = template.entries[0];
+  const entryAt = (n, title, tags = row.snapshot.tags) => { const value = structuredClone(row), url = row.snapshot.url.replace(/-0$/, '-size-' + n);
+    value.snapshot = { ...value.snapshot, id: 'size-' + n, url, canonicalUrl: url, title, tags }; value.canonicalUrl = url;
+    assert.notEqual(url, row.snapshot.url); return value; };
+  const size = value => new TextEncoder().encode(JSON.stringify(value)).length;
+  // Whole entries while one more still leaves room, then the last entry's tags (about 580 bytes each) and its title (1 to 3 bytes a letter) to the byte.
+  const sized = target => {
+    const value = { ...template, entries: [] };
+    while (size({ ...value, entries: [...value.entries, entryAt(0, 'a'), entryAt(0, 'a', [])] }) <= target - 3) value.entries.push(entryAt(value.entries.length + 1, 'a'));
+    const n = value.entries.length + 1, tags = []; value.entries.push(entryAt(n, 'a', []));
+    while (tags.length < longTags.length) {
+      const next = entryAt(n, 'a', [...tags, longTags[tags.length]]);
+      if (size({ ...value, entries: [...value.entries.slice(0, -1), next] }) > target - 3) break;
+      tags.push(longTags[tags.length]); value.entries[n - 1] = next;
+    }
+    const more = target - size(value), title = '가'.repeat(Math.floor(more / 3)) + 'a'.repeat(1 + more % 3);
+    assert.ok(title.length <= 500); value.entries[n - 1] = entryAt(n, title, [...tags]);
+    assert.equal(size(value), target); return value;
+  };
+  const twoMB = 2 * 1024 * 1024; // the bound itself, not read from the module under test
+  const under = sized(twoMB - 1); assert.ok(under.entries.length < Actions.COPY_MAX_ENTRIES);
+  assert.equal(Actions.previewCopy(under).counts.total, under.entries.length, 'one byte under 2 MB opens');
+  for (const target of [twoMB, twoMB + 1]) assert.throws(() => Actions.previewCopy(sized(target)), tooLarge, target + ' bytes is refused');
 });
 
 test('storage: two devices adding near the bound to different documents; the account pair opens and only adding is refused', async t => {

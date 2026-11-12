@@ -1716,7 +1716,8 @@
     }
     async function render(options = {}) {
       leave(); if (disposed) return;
-      active = true; const next = getBundle()?.workspaceId;
+      // Opening the tab, the shell and this screen put the page back where news was: not a use of the list.
+      placing(); active = true; const next = getBundle()?.workspaceId;
       if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; }
       workspaceId = next; const token = generation;
       if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, listTouched: false, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
@@ -1779,6 +1780,7 @@
           if (!valid(token)) return;
         }
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
+        placing();
         // Opening the news tab with 넓게 찾기 on asks once; a pending erase from an earlier switch-off is tried again.
         if (valid(token)) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
         if (reopen && valid(token) && !current.selected) showArticle(reopen);

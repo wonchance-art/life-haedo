@@ -215,7 +215,9 @@ test('a hidden page sends only its own unsent drafts, once (upload only); other 
   const runNudges = async () => { const timers = nudges; nudges = []; for (const timer of timers) timer.fn(); await settled(); };
   assert.deepEqual(sent(), [], 'nothing to send yet'); const listed = lists(f); assert.ok(listed >= 1);
   // The person types here (this page saves draft 1) and switches away before the nudge fires.
-  delays = []; save(1, true); assert.deepEqual(delays, [3000], 'a visible page gathers its saves for 3 s');
+  // A visible page gathers its saves for 3 s from the first one: later saves in that window do not push it back.
+  delays = []; save(1, true); save(1, true); save(1, true);
+  assert.deepEqual([delays, nudges.length], [[3000], 1], 'one 3 s wait from the first save, not moved by the next ones');
   page.visibilityState = 'hidden';
   doc.get('visibilitychange')(); await settled();
   assert.deepEqual(sent(), [id(1)], 'this page\'s own unsent draft is sent while hidden');

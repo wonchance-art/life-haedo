@@ -645,6 +645,61 @@ async function main() {
       assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 12건/);
       assert.deepEqual(await shownIds(page), before, 'the cards already drawn keep their places');
     });
+    // Scrolls the list did not cause are not a use: back on the news tab from another tab that was scrolled down, the
+    // shell and the screen put the page back where news was. An answer that arrives then still takes its place.
+    await check('news opened again from another scrolled tab: a late answer takes its place on the first page', async ({ page, wide, state }) => {
+      wide.reply = twelve; state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      // A fresh page that opens on 설정: news has not been drawn in it yet, so opening news asks once.
+      await page.goto(base + '/index.html?section=manage'); await ready(page); await page.waitForTimeout(300);
+      await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })); await frames(page);
+      const away = await page.evaluate(() => scrollY); assert.ok(away > 200, 'the other tab is scrolled down: ' + away);
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      const asked = wide.requests.length;
+      await nav(page, 'news'); await idle(page); await frames(page);
+      await settled(async () => wide.requests.length, asked + 1, 'news asks on opening');
+      await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(() => scrollY), 0, 'news is back at its top');
+      release(); wide.hold = null;
+      await until(page, () => document.querySelectorAll('#discoveryList > .discovery-article[data-wide]').length > 0, null, 'found links drawn'); await frames(page);
+      assert.equal(await page.locator('#discoveryNewArticles').count(), 0, 'nothing to announce: the list took them');
+    });
+    // The screen's own scrolls are not a use (placing()): 새 글 n건 computes the list again and scrolls to it, and
+    // news opened again puts the page back where it was (with the shell). An answer that arrives after that still
+    // takes its place in the order instead of being announced (11-12 review m1).
+    await check('the screen\'s own scrolls are not a use: after 새 글 n건 and a return to the tab, a late answer takes its place in the order', async ({ page, wide, state }) => {
+      // Every answer brings 12 links of its own (another round, other addresses), the newest first.
+      let round = 0;
+      wide.reply = body => { round++; const base = answer(body, { per: 0 });
+        base.items = Array.from({ length: 12 }, (_, i) => item(body.topics[0], 'ko', round * 100 + i, { sourceName: '넓은 매체 ' + i, publishedAt: new Date(Date.now() - (i + 2) * 60000).toISOString() }));
+        base.topics = body.topics.map(topic => ({ topic, language: 'ko', status: 'fresh', fetchedAt: base.fetchedAt, count: 12 })); return { status: 200, body: base }; };
+      state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+      const box = await page.locator('#discoveryList').boundingBox(); await page.mouse.move(box.x + 40, box.y + 40); await page.mouse.wheel(0, 300); await frames(page);
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      // 새 글 n건: the list is computed again (not used yet) and the screen scrolls to it.
+      const pressed = await page.evaluate(() => scrollY);
+      await page.locator('#discoveryNewArticles').click();
+      const still = async () => { let last = -1; for (let n = 0; n < 40; n++) { await page.waitForTimeout(100); const y = await page.evaluate(() => scrollY); if (y === last) return y; last = y; } return last; };
+      const placed = await still(); assert.notEqual(placed, pressed, 'the screen scrolled to the list by itself');
+      // Another device adds a topic while 일정 is shown (the same account's stored profile): news asks again when it opens.
+      await nav(page, 'schedule'); await page.waitForTimeout(300);
+      await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), p = await s.readInterestProfile(w);
+        await s.saveInterestProfile(w, HaedoLife.InterestProfile.setManual(p, [...p.manual, { id: 'manual-other-device', label: '둘째 주제' }], { expectedRevision: p.revision }), p.revision); });
+      wide.hold = new Promise(resolve => { release = resolve; }); const asked = wide.requests.length;
+      await page.evaluate(() => { window.__moves = 0; addEventListener('scroll', () => { window.__moves++; }); });
+      await nav(page, 'news'); await idle(page); await frames(page);
+      await settled(async () => wide.requests.length, asked + 1, 'asked on opening'); await still();
+      assert.ok(await page.evaluate(() => window.__moves) > 0, 'opening news moved the page');
+      const drawn = await shownIds(page); assert.equal(drawn.length, 20);
+      release(); wide.hold = null;
+      await until(page, () => !document.querySelector('#discoveryWideNotice')?.textContent.includes('찾는 중'), null, 'answer drawn'); await page.waitForTimeout(300); await frames(page);
+      assert.equal(await page.locator('#discoveryNewArticles').count(), 0, 'nothing to announce: the list took them');
+      assert.notDeepEqual(await shownIds(page), drawn, 'the new links took their place on the first page');
+    });
     await check('a topic the server refuses (safety net) leaves the taken topics\' answer in place: no request beyond one per topic', async ({ page, wide }) => {
       for (const topic of ['주제 하나', '서버만 거절', '주제 둘']) await addTopic(page, topic);
       await setWide(page, true); await settled(async () => wide.requests.length, 4, 'one request, then one per topic');
