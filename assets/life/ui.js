@@ -1328,6 +1328,12 @@
       } else update();
     }
 
+    // The recorded difference with the server's copy, read in full only when the comparison opens.
+    async function comparedConflict(workspaceId) {
+      const full = await sync.getState(workspaceId);
+      return full?.conflict ? structuredClone(full.conflict) : null;
+    }
+
     function syncPresentation() {
       if (managedLibrary) return libraryPresentation();
       if (!sync) return { key: 'unavailable', label: '서버 동기화 미연결', hint: '자료는 이 기기에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
@@ -1373,7 +1379,14 @@
         }
         state.syncAccountKey = accountKey;
         state.syncAccount = account;
-        const info = await sync.getState(workspaceId);
+        // The state for the status lines and buttons, without the server copy of a recorded
+        // difference (2026-11-12: megabytes on every sync event). The comparison reads it when opened.
+        // The stored revision this page knows (the open workspace's, or a later one storage announced
+        // while the screen kept its copy) lets a record ahead of it be read in full: a read error, never
+        // "synced". Storage announces only revisions it stored, so a record really ahead is still caught.
+        const told = state.storedRevision?.workspaceId === workspaceId ? state.storedRevision.revision : -1;
+        const held = state.bundle?.workspaceId === workspaceId ? Math.max(state.bundle.revision, told) : undefined;
+        const info = await sync.getState(workspaceId, held === undefined ? { light: true } : { light: true, localRevision: held });
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         // Kept by a merge of both devices' changes (the later edit of one item won); shown until acknowledged.
         const notice = typeof storage.getSyncNotice === 'function' ? await storage.getSyncNotice(workspaceId).catch(() => null) : null;
@@ -1438,10 +1451,14 @@
 
     function connectSubscription() {
       if (unsubscribe) unsubscribe();
+      state.storedRevision = null; // only what storage announces to this subscription
       unsubscribe = storage.subscribe(state.bundle.workspaceId, event => {
         if (event.type === 'error') { failure(event.error); return; }
         if (event.type === 'sync_changed') { refreshSync().catch(failure); return; }
         if (event.type !== 'changed') return;
+        // The stored revision this page has been told of, for the sync state read (refreshSync).
+        if (Number.isSafeInteger(event.revision) && event.workspaceId === state.bundle.workspaceId)
+          state.storedRevision = { workspaceId: event.workspaceId, revision: Math.max(event.revision, state.storedRevision?.workspaceId === event.workspaceId ? state.storedRevision.revision : -1) };
         // The material editor's own save is read back by its onSaved; it is not "changed elsewhere".
         if (event.revision <= state.bundle.revision || state.busy || sourceEditor?.isSaving()) return;
         state.remoteChanged = true;
@@ -6178,8 +6195,9 @@
         else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
           await persistDrafts(); await refreshData(); await refreshSync();
           if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
-          state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle),
-            remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
+          const workspaceId = state.bundle.workspaceId, remote = await comparedConflict(workspaceId);
+          if (disposed || state.mode !== 'sync' || !remote || state.bundle?.workspaceId !== workspaceId) return;
+          state.conflictView = { workspaceId, local: structuredClone(state.bundle), remote, accountKey: state.syncAccountKey };
           renderConflict();
         }), 'life-primary'));
         else shown = false;
@@ -6228,7 +6246,9 @@
         await refreshData();
         await refreshSync();
         if (!state.syncState?.conflict) return;
-        state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle), remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
+        const workspaceId = state.bundle.workspaceId, remote = await comparedConflict(workspaceId);
+        if (disposed || state.mode !== 'sync' || !remote || state.bundle?.workspaceId !== workspaceId) return;
+        state.conflictView = { workspaceId, local: structuredClone(state.bundle), remote, accountKey: state.syncAccountKey };
         renderConflict();
         const comparisonHeading = main.querySelector('#lifeSyncConflict h3');
         if (comparisonHeading) { comparisonHeading.tabIndex = -1; comparisonHeading.focus(); }
