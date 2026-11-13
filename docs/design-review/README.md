@@ -86,6 +86,8 @@ B의 [발췌와 내 생각을 연결한 화면](evidence/social/thread-connected
 - [최신 오픈소스·실제 제품 화면 비교](references.md)
 - [공식 Impeccable 4.5.0 배포본·라이선스·고정 출처](impeccable.md)
 - [unslop 지침 도입·고정 커밋·해도 적용 범위](unslop.md)
+- [unslop 점검표로 본 배포 화면 2026-11 (v217, 점검·보고만)](unslop-audit-2026-11.md)
+- [v218 화면 디자인 점검 (복구 띠·글 공개·보관 안내·넓게 찾기 설명, 수정 중 항목 재확인)](v218-design-check.md)
 - [공통 익명 한글 자료와 사례](sample-content.md)
 - [브라우저 검증 결과·재현·실기 한계](verification.md)
 - [제품 사실](../../PRODUCT.md) / [공통 디자인 기준](../../DESIGN.md)
