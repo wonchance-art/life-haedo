@@ -156,9 +156,10 @@ async function main() {
       await page.evaluate(() => { window.__blogForceStatus = null; });
       await page.locator('dialog.photo-info').getByRole('button', { name: '계정에 다시 올리기', exact: true }).click();
       await page.waitForFunction(() => window.__saveDefaultCalls === 1);
-      // 2026-11-16 (review m4): uploaded is quiet, so the sheet's 저장 row leaves (the reader's live region says it).
+      // 2026-11-16 (review m4, N1): uploaded is quiet: the sheet's 저장 row stays for screen readers only.
       await page.waitForFunction(() => document.querySelector('#photoServerStatus')?.dataset.state === 'synced' &&
-        ![...document.querySelectorAll('dialog.photo-info .photo-info-row > dt')].some(dt => dt.textContent === '저장'));
+        [...document.querySelectorAll('dialog.photo-info .photo-info-row')].some(row => row.querySelector('dt')?.textContent === '저장' &&
+          row.classList.contains('life-sr-only') && row.querySelector('dd > .photo-info-value')?.textContent === '저장됨 · 계정에 올림' && !row.querySelector('button, [tabindex]')));
       const focus = await page.evaluate(() => ({ body: document.activeElement === document.body, inSheet: !!document.activeElement?.closest('dialog.photo-info'), title: document.activeElement?.id === 'photoInfoTitle' }));
       assert.deepEqual(focus, { body: false, inSheet: true, title: true });
     });

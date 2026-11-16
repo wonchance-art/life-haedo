@@ -309,9 +309,11 @@
     function showSyncState(id, node) {
       const value = syncStates[id] || 'pending';
       node.dataset.state = value; node.replaceChildren(document.createTextNode(syncLabels[value] || syncLabels.pending));
-      // 2026-11-16 owner: a post's 계정에 올림 and 계정에 올리기 대기 are said to screen readers only (no
-      // offline state here); 계정에 올리지 못함 with its 다시 시도 is shown.
-      node.classList.toggle('life-sr-only', value !== 'error');
+      // 2026-11-16 owner: a post's 계정에 올림 and 계정에 올리기 대기 are said to screen readers only;
+      // 계정에 올리지 못함 with its 다시 시도 is shown, and so is a wait once a sync pass could not reach the
+      // account (lastError: offline, sign-in expired), as in the reader (review n4).
+      const stalled = value === 'pending' && !!blogSync?.getStatus?.()?.lastError;
+      node.classList.toggle('life-sr-only', value !== 'error' && !stalled);
       if (value === 'error' && blogSync?.syncNow) node.append(document.createTextNode(' '), button('다시 시도', async () => { await blogSync.syncNow({ force: true }); if (valid()) await refreshSync(); }));
     }
     async function refreshSync() {

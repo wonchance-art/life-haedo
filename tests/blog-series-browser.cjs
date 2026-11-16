@@ -123,6 +123,13 @@ async function main() {
   async function createSeries(f) {
     await f.page.locator('#bsNew').click(); await f.page.locator('#bsTitle').fill('제주에서 천천히 걸은 사흘');
     await f.page.locator('#bsIntro').fill('세 편의 글과 사진으로 남긴 비공개 여행 모음 🌱'); await saved(f.page);
+    // 2026-11-16 review N2: from the keystrokes until the autosave stored them, the status line shows no words.
+    await f.page.evaluate(() => { const s = document.querySelector('.bs-status'); window.__bsShown = []; window.__bsWatch = true;
+      const look = () => { const st = getComputedStyle(s); if (!s.hidden && st.display !== 'none' && !/inset\(50%\)/.test(st.clipPath) && s.getClientRects().length && s.textContent) window.__bsShown.push(s.textContent); if (window.__bsWatch) requestAnimationFrame(look); }; look(); });
+    await f.page.locator('#bsTitle').pressSequentially(' 기록', { delay: 40 });
+    await f.page.waitForFunction(() => document.querySelector('.bs-status')?.dataset.state === 'saved');
+    assert.deepEqual(await f.page.evaluate(() => { window.__bsWatch = false; return [...new Set(window.__bsShown)]; }), [], 'autosave: no words shown while typing and storing');
+    await f.page.locator('#bsTitle').fill('제주에서 천천히 걸은 사흘'); await saved(f.page);
     await f.page.locator('.bs-picker > summary').click(); await f.page.locator('#bsCandidates [data-post-id]').first().waitFor();
     assert.equal(await f.page.locator('#bsCandidates [data-post-id]').count(), 3, 'Drafts and archived posts are not candidates');
     for (const id of f.seed.ids) {

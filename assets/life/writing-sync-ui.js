@@ -34,7 +34,10 @@
       const focus = content.contains(document.activeElement) ? document.activeElement.id : '';
       status.dataset.state = state?.status || 'error'; status.textContent = labels[state?.status] || '동기화 확인 필요';
       errorBox.textContent = error || state?.error?.message || ''; errorBox.hidden = !errorBox.textContent;
-      status.classList.toggle('life-save-quiet', !errorBox.textContent && QUIET.has(state?.status));
+      // not_enabled waits for the automatic loop to switch the draft on; when that loop cannot reach the
+      // server (availability 'unavailable', in back-off) it would not by itself, so the wait shows (review n5).
+      const stopped = state?.status === 'not_enabled' && manager.availability?.()?.status === 'unavailable';
+      status.classList.toggle('life-save-quiet', !errorBox.textContent && QUIET.has(state?.status) && !stopped);
       const problem = errorBox.textContent ? '확인 필요' : state?.notice ? '변경 반영됨' : '',
         settled = problem ? '' : ({ pending: '보내는 중', synced: '동기화됨', closed: '완료' })[state?.status] || '';
       // The summary's own words for a state that went well stay in its name only (screen readers).

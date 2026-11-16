@@ -21,8 +21,10 @@
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력을 확인해 주세요 · 입력 유지' : composing.size ? '입력 중' : saving ? '이 브라우저에 저장 중…' : tick !== stored ? '저장 전 변경 있음' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
-      // 2026-11-16 owner: saving, and a stored state, are said to screen readers only (.life-save-quiet keeps the line's box).
-      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !composing.size && (!!saving || tick === stored));
+      // 2026-11-16 owner: saving, a stored state, and (review N2) a change the autosave will store or Korean input
+      // still being composed are said to screen readers only (.life-save-quiet keeps the line's box). Every
+      // change schedules an autosave except in a conflict, which is a shown failure.
+      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !conflict());
       const recovery = surface.querySelector('.bs-recovery');
       if (recovery) { recovery.hidden = !failure; recovery.querySelector('#bsRecover').hidden = !conflict(); }
       onDirty();

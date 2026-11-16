@@ -732,6 +732,13 @@
         rows.append(wrap);
         return detail;
       };
+      // 2026-11-16 owner (review N1): a save state that went well or is running stays in the sheet for
+      // screen readers only. The whole row is clipped away and holds nothing that takes focus.
+      const quietRow = (text) => {
+        const detail = row("저장", el("span", text, "photo-info-value"));
+        detail.parentElement.classList.add("life-sr-only");
+        return detail;
+      };
       refreshInfo = () => {
         if (info !== sheet || !current(token)) return;
         const state = publication(), published = state === "public", known = published || state === "private",
@@ -799,13 +806,12 @@
           // waiting are the normal upload delay.
           const waited = account === "pending" && Date.now() - storedAt >= 15000;
           // 2026-11-16 owner: as on the command row, a state that went well or is running is not shown:
-          // the 저장 row is left out (its words stay in the command row's live region) and comes back with
-          // a failure, a lasting wait or a notice.
-          const quietRow = account ? ["checking", "saving", "synced"].includes(account) || account === "pending" && !waited
+          // the 저장 row stays for screen readers only (quietRow) and shows with a failure, a lasting wait
+          // or a notice.
+          const quiet = account ? ["checking", "saving", "synced"].includes(account) || account === "pending" && !waited
             : !!status?.classList.contains("life-save-quiet");
-          const state = quietRow ? el("dd") : row("저장", stateValue(account
-            ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ")
-            : statusText?.textContent || ""));
+          const said = account ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ") : statusText?.textContent || "";
+          const state = quiet ? quietRow(said) : row("저장", stateValue(said));
           if (account) state.dataset.state = account;
           state.append(el("p", (unstored
             // Over a limit: the same fact the status line states.
@@ -827,9 +833,9 @@
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
-          // 2026-11-16 owner: a quiet state (see serverQuiet) leaves the 저장 row out; #photoServerStatus says it.
+          // 2026-11-16 owner: a quiet state (see serverQuiet) is said in the sheet for screen readers only.
           const value = serverState() || "checking", quiet = serverQuiet(value);
-          const state = quiet ? el("dd") : row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
+          const state = quiet ? quietRow(SERVER_LABELS[value] || SERVER_LABELS.error) : row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
           state.dataset.state = value;
           if (!quiet && ["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
             const retry = button("계정에 다시 올리기", saveServer);
@@ -2018,8 +2024,8 @@
     const serverQuiet = (state) => ["checking", "saving", "synced"].includes(state) || state === "pending" && !blogSync?.getStatus?.()?.lastError;
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
-      const state = serverState() || "checking";
-      serverStatus.textContent = SERVER_LABELS[state] || SERVER_LABELS.error;
+      const state = serverState() || "checking", label = SERVER_LABELS[state] || SERVER_LABELS.error;
+      if (serverStatus.textContent !== label) serverStatus.textContent = label;
       serverStatus.dataset.state = state;
       serverStatus.dataset.postId = doc.id;
       const quiet = serverQuiet(state);
@@ -3804,8 +3810,16 @@
       unsubscribe?.();
       unsubscribeServer?.();
       unsubscribeServer = blogSync?.subscribe?.(event => {
-        // A pass ended (2026-11-16 review m3): whether a wait is still quiet depends on its lastError.
-        if (event.type === "status") { if (mode === "read" && current(epoch)) showServerStatus(); return; }
+        // A pass ended (2026-11-16 review m3): whether a wait is still quiet depends on its lastError. Only a
+        // change of that is drawn (review n3): the same sentence is not written into the live region again,
+        // and an open 글 정보 sheet is not rebuilt for nothing.
+        if (event.type === "status") {
+          if (mode === "read" && current(epoch) && serverStatus) {
+            const state = serverState() || "checking";
+            if (serverStatus.dataset.state !== state || serverStatus.classList.contains("life-save-quiet") !== serverQuiet(state)) showServerStatus();
+          }
+          return;
+        }
         if (event.workspaceId !== workspaceId || event.localPostId !== doc?.id || !current(epoch)) return;
         // A version from another device waits for the input here to be stored.
         if (event.type === "remote_waiting") { if (mode === "edit") showChangeNote("다른 기기에서도 바뀌었어요 · 지금 입력을 보관한 뒤 맞추고, 진 쪽은 복구 사본으로 남겨요"); return; }

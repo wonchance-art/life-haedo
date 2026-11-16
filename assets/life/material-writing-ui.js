@@ -22,8 +22,10 @@
     function message() {
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
-      // 2026-11-16 owner: saving, and a stored state, are said to screen readers only (.life-save-quiet keeps the line's box).
-      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !sourceLoading && !sources?.pending() && !composing.size && (!!saving || tick === stored));
+      // 2026-11-16 owner: saving, a stored state, and (review N2) a change the autosave will store or Korean input
+      // still being composed are said to screen readers only (.life-save-quiet keeps the line's box). Every
+      // change schedules an autosave except in a conflict, which is a shown failure.
+      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !sourceLoading && !sources?.pending() && !conflict());
       updateControls();
     }
     function updateControls() {

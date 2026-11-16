@@ -66,6 +66,24 @@ async function fixture(t, options = {}) {
     setBeforeSave: value => { beforeSave = value; }, setBeforeCreate: value => { beforeCreate = value; }, setFailRead: value => { failRead = value; }, setFailOpen: value => { failOpen = value; }, setScope: value => { scope = value; }, creates: () => creates };
 }
 
+function recordStatus(node) {
+  const seen = []; let className = node.className;
+  Object.defineProperty(node, 'className', { configurable: true, get: () => className, set: value => { className = value; seen.push({ text: node.textContent, quiet: String(value).split(' ').includes('life-save-quiet') }); } });
+  return seen;
+}
+// 2026-11-16 review N2: typing (plain and Korean composition) shows no words from the first keystroke until
+// the autosave stored it; the words stay for screen readers.
+test('typing shows no status words until the autosave stored it', async t => {
+  const f = await fixture(t), seen = recordStatus(f.get('.mw-status')), title = f.get('#mwTitle');
+  await f.input('#mwTitle', '자동 저장을 기다리는 제목');
+  await title.emit('compositionstart'); title.value = '자동 저장을 기다리는 제목 한글'; await title.emit('input'); await title.emit('compositionend');
+  await new Promise(resolve => setTimeout(resolve, 700)); await f.ui.flush();
+  assert.ok(seen.length > 2, 'the line was rewritten while typing');
+  assert.deepEqual(seen.filter(value => !value.quiet), [], 'nothing shown while typing and storing');
+  assert.equal(f.db().plans[0]?.title ?? f.get('#mwTitle').value, '자동 저장을 기다리는 제목 한글');
+  assert.match(f.get('.mw-status').textContent, /저장됨/);
+});
+
 test('ordered blocks and adopted quotes preview in full; private question and source notes require explicit paragraph copying', async t => {
   const f = await fixture(t), title = await f.input('#mwTitle', '글 제목'), question = await f.input('#mwQuestion', 'PRIVATE_QUESTION');
   const material = f.M.material(f.bundle, f.imported.source.id, f.imported.version.id, f.C.id); material.note = 'PRIVATE_NOTE'; await f.sources().onAdd(material);
