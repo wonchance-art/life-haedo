@@ -422,7 +422,8 @@
           await navigate(onOpenSource, { ...context, planId: owner.id });
         } });
       sourceLoading = true; message();
-      sourcesTask = Promise.resolve().then(() => sources.mount()).finally(() => { if (active()) { sourceLoading = false; settleSourcePending(); } }); return sourcesTask;
+      // The autosave timer skips while the sources load: schedule it again once they did (review R1).
+      sourcesTask = Promise.resolve().then(() => sources.mount()).finally(() => { if (active()) { sourceLoading = false; settleSourcePending(); schedule(); } }); return sourcesTask;
     }
     async function render() {
       if (!mounted()) return;

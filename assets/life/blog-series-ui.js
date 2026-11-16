@@ -267,7 +267,10 @@
             if (!mounted(token) || request !== importSequence) return;
             if (!summary || typeof summary.title !== 'string' || !Number.isInteger(summary.posts) || summary.posts < 0 || !Number.isInteger(summary.photos) || summary.photos < 0) throw new Error('모음 파일의 확인 정보를 읽지 못했습니다.');
             importCandidate = { file: input, summary, epoch: token }; clear(); showImport(importCandidate);
-          } catch (cause) { if (mounted(token) && request === importSequence) report(cause); } finally { acting = false; message(); }
+          } catch (cause) { if (mounted(token) && request === importSequence) report(cause); }
+          // The autosave timer skips while acting: input typed during the inspection is stored now, as after a
+          // button action (2026-11-16 review R1), so a quiet unsaved state never stays unsaved.
+          finally { acting = false; message(); if (!failure && tick !== stored && !saving && mounted(token)) flushInternal().catch(report); }
         }); toolbar.append(file);
       }
       status = el('p', '', 'life-meta bs-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');

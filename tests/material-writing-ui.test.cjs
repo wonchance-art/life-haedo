@@ -84,6 +84,20 @@ test('typing shows no status words until the autosave stored it', async t => {
   assert.match(f.get('.mw-status').textContent, /저장됨/);
 });
 
+// 2026-11-16 review R1: the autosave skips while the source panel loads; input typed meanwhile is stored once
+// the panel loaded (its quiet unsaved state never stays unsaved).
+test('input typed while the sources load is stored after they loaded', async t => {
+  const f = await fixture(t), hold = deferred(); f.setBeforeSources(() => hold.promise);
+  const mounting = f.ui.mount(f.host); await settle();
+  await f.input('#mwTitle', '자료를 불러오는 동안 쓴 제목');
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.notEqual(f.db().plans[0].title, '자료를 불러오는 동안 쓴 제목', 'held while the sources load');
+  hold.resolve(); await mounting; await settle();
+  await new Promise(resolve => setTimeout(resolve, 700)); await settle();
+  assert.equal(f.db().plans[0].title, '자료를 불러오는 동안 쓴 제목', 'stored once the sources loaded');
+  assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+});
+
 test('ordered blocks and adopted quotes preview in full; private question and source notes require explicit paragraph copying', async t => {
   const f = await fixture(t), title = await f.input('#mwTitle', '글 제목'), question = await f.input('#mwQuestion', 'PRIVATE_QUESTION');
   const material = f.M.material(f.bundle, f.imported.source.id, f.imported.version.id, f.C.id); material.note = 'PRIVATE_NOTE'; await f.sources().onAdd(material);

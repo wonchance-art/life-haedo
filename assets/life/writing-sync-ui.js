@@ -10,7 +10,7 @@
   // failure are shown.
   const QUIET = new Set(['not_enabled', 'pending', 'synced', 'closed']);
   const el = (tag, text, cls) => { const value = document.createElement(tag); if (text != null) value.textContent = text; if (cls) value.className = cls; return value; };
-  function create({ host, manager, storage, workspaceId: ws, draftId: id, beforeAction, onOpen, isCurrent }) {
+  function create({ host, manager, storage, sourceSync = null, workspaceId: ws, draftId: id, beforeAction, onOpen, isCurrent }) {
     let disposed = false, busy = false, actionId = 0, refreshId = 0, state = null, error = '';
     host.id = 'lifeWritingSync'; host.dataset.draftId = id; host.classList.add('life-writing-sync');
     const summary = el('summary', '초안 동기화'); host.append(summary);
@@ -34,9 +34,11 @@
       const focus = content.contains(document.activeElement) ? document.activeElement.id : '';
       status.dataset.state = state?.status || 'error'; status.textContent = labels[state?.status] || '동기화 확인 필요';
       errorBox.textContent = error || state?.error?.message || ''; errorBox.hidden = !errorBox.textContent;
-      // not_enabled waits for the automatic loop to switch the draft on; when that loop cannot reach the
-      // server (availability 'unavailable', in back-off) it would not by itself, so the wait shows (review n5).
-      const stopped = state?.status === 'not_enabled' && manager.availability?.()?.status === 'unavailable';
+      // not_enabled waits for the automatic loop to switch the draft on. It will not by itself (review n5,
+      // R2) when the server lacks the draft feature or refuses it (availability 'unavailable': schema_missing
+      // or permission_denied, retried with back-off), or when this workspace's originals' sync is in error
+      // or paused (the loop runs only for workspaces whose originals are connected): then the wait shows.
+      const stopped = state?.status === 'not_enabled' && (manager.availability?.()?.status === 'unavailable' || sourceStopped);
       status.classList.toggle('life-save-quiet', !errorBox.textContent && QUIET.has(state?.status) && !stopped);
       const problem = errorBox.textContent ? '확인 필요' : state?.notice ? '변경 반영됨' : '',
         settled = problem ? '' : ({ pending: '보내는 중', synced: '동기화됨', closed: '완료' })[state?.status] || '';
@@ -63,11 +65,15 @@
       }
       if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
     }
+    let sourceStopped = false;
     async function refresh() {
       if (!alive() || busy) return; const token = ++refreshId;
       try {
         const next = await manager.getState(ws, id);
+        // Only for a draft not switched on yet; a failed read says nothing.
+        const source = next?.status === 'not_enabled' && sourceSync?.getState ? await sourceSync.getState(ws, { light: true }).catch(() => null) : null;
         if (!alive() || busy || token !== refreshId) return;
+        sourceStopped = ['error', 'paused'].includes(source?.status);
         state = next; draw();
       }
       catch (cause) { if (alive() && !busy && token === refreshId) { error = cause.message; state = null; draw(); } }

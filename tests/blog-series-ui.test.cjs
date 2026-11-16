@@ -136,6 +136,20 @@ test('storage and catalog failures preserve inputs and old candidates for explic
   f.setBeforeSave(null); await f.click('#bsRetry'); assert.equal(f.db().series[0].title, '보존할 입력');
 });
 
+// 2026-11-16 review R1: the autosave skips while a ZIP is inspected; input typed meanwhile is stored after it.
+test('input typed during a ZIP inspection is stored after the inspection', async t => {
+  const hold = deferred(), f = await fixture(t, { onInspectImport: async () => { await hold.promise; return { title: '여행 모음 파일', posts: 1, photos: 0 }; }, onImport: async () => { throw new Error('설치 안 함'); } });
+  await f.input('#bsTitle', '검사 전 제목'); await f.module.flush();
+  const file = f.get('#bsImport'); file.files = [{ name: 'trip.zip' }]; const inspecting = file.emit('change'); await settle();
+  await f.input('#bsTitle', '검사 중에 고친 제목');
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.notEqual(f.db().series[0].title, '검사 중에 고친 제목', 'held while the file is inspected');
+  hold.resolve(); await inspecting; await settle();
+  await new Promise(resolve => setTimeout(resolve, 100)); await settle();
+  assert.equal(f.db().series[0].title, '검사 중에 고친 제목', 'stored after the inspection');
+  assert.equal(f.get('.bs-status').textContent, '이 브라우저에 비공개로 저장됨');
+});
+
 test('failed import inspection keeps the existing editor and stale account callbacks cannot render or navigate', async t => {
   const hold = deferred(), f = await fixture(t, { onInspectImport: async () => { throw new Error('파일 검증 실패'); }, onImport: async () => { throw new Error('검증되지 않은 파일 설치 금지'); } });
   const title = await f.input('#bsTitle', '현재 모음'); await f.module.flush(); const file = f.get('#bsImport'); file.files = [{}]; await file.emit('change');

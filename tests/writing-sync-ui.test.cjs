@@ -19,14 +19,15 @@ class Node {
   get isConnected() { return true; }
 }
 const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); };
-function mount(t, state, availability) {
+function mount(t, state, availability, source = null) {
   const previous = { document: global.document, life: global.HaedoLife };
   global.document = { createElement: tag => new Node(tag), activeElement: null, getElementById: () => null };
   delete require.cache[path.resolve(__dirname, '../assets/life/writing-sync-ui.js')];
   require('../assets/life/writing-sync-ui.js');
   t.after(() => { global.document = previous.document; global.HaedoLife = previous.life; });
   const host = new Node('details'), manager = { getState: async () => structuredClone(state), subscribe: () => () => {}, availability: () => availability };
-  global.HaedoLife.WritingSyncUI.create({ host, manager, storage: { subscribe: () => () => {} }, workspaceId: 'ws', draftId: 'draft', beforeAction: async () => {}, onOpen: async () => {}, isCurrent: () => true });
+  const sourceSync = source && { getState: async (ws, options) => { assert.deepEqual([ws, options], ['ws', { light: true }]); return structuredClone(source); } };
+  global.HaedoLife.WritingSyncUI.create({ host, manager, storage: { subscribe: () => () => {} }, sourceSync, workspaceId: 'ws', draftId: 'draft', beforeAction: async () => {}, onOpen: async () => {}, isCurrent: () => true });
   return host;
 }
 const line = host => { const status = host.children.find(node => node.id === 'writingSyncStatus'); return { said: status.textContent, quiet: status.classList.contains('life-save-quiet'), summary: host.children[0].textContent }; };
@@ -38,9 +39,19 @@ test('uploaded, uploading and a draft not switched on yet are said, not shown', 
   }
 });
 
-test('a draft that cannot be switched on (the automatic loop cannot reach the server) shows its wait (review n5)', async t => {
+test('a draft the server cannot take (no draft feature or no permission: availability unavailable) shows its wait (review n5, R2)', async t => {
   const host = mount(t, { status: 'not_enabled', enabled: false }, { status: 'unavailable', until: Date.now() + 60000 }); await settle();
   assert.deepEqual([line(host).said, line(host).quiet], ['계정에 올리기 대기', false]);
+});
+
+test('a draft whose workspace originals sync is in error or paused shows its wait; connected originals keep it quiet (review R2)', async t => {
+  for (const [source, quiet] of [[{ status: 'error', enabled: true }, false], [{ status: 'paused', enabled: false }, false], [{ status: 'synced', enabled: true }, true], [{ status: 'pending', enabled: true }, true]]) {
+    const host = mount(t, { status: 'not_enabled', enabled: false }, { status: 'available', until: 0 }, source); await settle();
+    assert.deepEqual([line(host).said, line(host).quiet], ['계정에 올리기 대기', quiet], source.status);
+  }
+  // A draft already switched on does not look at the originals: uploaded stays quiet.
+  const host = mount(t, { status: 'synced', enabled: true }, { status: 'available', until: 0 }, { status: 'error', enabled: true }); await settle();
+  assert.equal(line(host).quiet, true);
 });
 
 test('paused, a conflict and a failure are shown; the summary keeps a settled word for screen readers only', async t => {

@@ -10,7 +10,7 @@
     if (className) node.className = className;
     return node;
   }
-  function create({ host, storage, core, writingSync, getBundle, parentNavigation = false, isDisposed = () => false, announce = () => {}, onSaved = () => {}, onClose = () => {} }) {
+  function create({ host, storage, core, writingSync, sourceSync = null, getBundle, parentNavigation = false, isDisposed = () => false, announce = () => {}, onSaved = () => {}, onClose = () => {} }) {
     const model = life.Writing;
     const workspaces = new Map(), urls = new Set();
     let disposed = false, visible = false, generation = 0, current = null;
@@ -341,7 +341,7 @@
       if (writingSync && life.WritingSyncUI) {
         const syncHost = el('details'); syncHost.open = !!session.syncOpen; surface.append(syncHost);
         const stageId = session.stage.stageId;
-        syncPanel = life.WritingSyncUI.create({ host: syncHost, manager: writingSync, storage,
+        syncPanel = life.WritingSyncUI.create({ host: syncHost, manager: writingSync, storage, sourceSync,
           workspaceId: session.workspaceId, draftId: stageId, beforeAction: () => flushSession(session),
           isCurrent: () => showing(session) && session.stage.stageId === stageId,
           onOpen: id => open({ stageId: id, syncOpen: true }) });

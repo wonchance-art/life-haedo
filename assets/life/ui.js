@@ -523,7 +523,7 @@
     });
 
     writer = global.HaedoLife.WritingUI?.create({
-      storage, core, writingSync, host: main, getBundle: () => state.bundle,
+      storage, core, writingSync, sourceSync: sync, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, parentNavigation: true,
       onClose: returnFromSubview,
       onSaved: async ({ sourceId, sourceVersionId }) => {
