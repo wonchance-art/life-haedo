@@ -90,6 +90,7 @@ B의 [발췌와 내 생각을 연결한 화면](evidence/social/thread-connected
 - [v218 화면 디자인 점검 (복구 띠·글 공개·보관 안내·넓게 찾기 설명, 수정 중 항목 재확인)](v218-design-check.md)
 - [노션 방향 시안 — 화면 정리 제안 (v220 기준, 진단·조사·시안)](notion-direction.md)
 - [노션 방향 화면 정리 — 구현 계약과 작업 분리 (11-16, W1–W6)](notion-visual-contract.md)
+- [노션 방향 W1 바탕·토큰 구현 보고 (11-16)](notion-w1-report.md)
 - [공통 익명 한글 자료와 사례](sample-content.md)
 - [브라우저 검증 결과·재현·실기 한계](verification.md)
 - [제품 사실](../../PRODUCT.md) / [공통 디자인 기준](../../DESIGN.md)
