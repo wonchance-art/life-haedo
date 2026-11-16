@@ -13,6 +13,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { readFileSync } = require('node:fs');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { PlatformTables } = require('./schedule-entries-browser.cjs');
@@ -254,6 +255,30 @@ async function main() {
       await overnight(page, '2026-11-18T07:30:00+09:00'); await titled(page, '11월 18일 수요일');
       assert.equal((await snap(page)).date, '2026-11-18');
     });
+
+    // Review 11-16 M1: the pin belongs to the screen the address opened. Leaving the calendar (menu 자료, then 일정 and D
+    // again) lets it go, so an app left open over midnight moves to today again (the 11-11 daily entry). The timeline's
+    // 일정에서 고치기 opens today's D through the same kind of address (the helper is read from assets/app.js).
+    const scheduleDayHref = new Function('return ' + /const scheduleDayHref=(d=>[^;]+);/.exec(readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'))[1])();
+    for (const start of ['address', 'timeline link']) {
+      await check('a pinned date is let go when the calendar is left (' + start + '): menu 자료 → 일정 → D, and the next day opens today; Back to the pinned entry pins it again', async ({ page }) => {
+        await at(page, '2026-11-11T23:40:00+09:00');
+        const href = start === 'address' ? '/index.html?section=schedule&view=day&date=2026-11-11' : '/' + scheduleDayHref('2026-11-11');
+        assert.equal(href, '/index.html?section=schedule&view=day&date=2026-11-11');
+        await page.goto(base + href); await ready(page); await shown(page, 'day');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+        await page.locator('a[href*="section=records"]').first().click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
+        await page.locator('nav a[href="index.html"]').first().click(); await list(page);
+        await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: false, today: true }, 'a D reached in the app shows today and follows');
+        await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일');
+        assert.equal((await snap(page)).date, '2026-11-12');
+        // The entry that the address opened is still pinned: Back to it opens its date, pinned.
+        await page.goBack(); await list(page); await page.goBack(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
+        await page.goBack(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      });
+    }
 
     await check('a pinned day whose 행복도 choice failed is not held: the screen stays on its day, with its warning and input', async ({ page }) => {
       await at(page, '2026-11-11T23:50:00+09:00');

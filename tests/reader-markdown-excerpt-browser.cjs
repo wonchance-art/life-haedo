@@ -267,6 +267,43 @@ async function main() {
       }
     });
 
+    // Review 11-16 m1: what the button notes at a press belongs to the click of that press only.
+    await S.check('a press on the button dragged off it (no click), then a refused pick and Enter: the notice, not the earlier plain pick', async () => {
+      const f = await fixture(plainRaw);
+      await showBlock(f.page, '하나뿐인 구절');
+      await dragSelect(f.page, await phraseEnds(f.page, '하나뿐인 구절', '하나뿐인 구절'));
+      const button = await R.rect(f.page, '#lifeExcerptToggle');
+      await f.page.mouse.move(button.left + button.width / 2, button.top + button.height / 2); await f.page.mouse.down();
+      await f.page.mouse.move(button.left + button.width / 2, button.top + button.height + 240, { steps: 4 }); await f.page.mouse.up(); await frames(f.page);
+      assert.equal((await view(f.page)).panel, false, 'no click happened');
+      await dragSelect(f.page, await phraseEnds(f.page, '바로 뒤의', '바로 뒤의'));
+      assert.deepEqual([(await view(f.page)).save, (await view(f.page)).picked], [false, INSTRUCTION]);
+      await f.page.locator('#lifeExcerptToggle').evaluate(element => element.focus({ preventScroll: true })); await f.page.keyboard.press('Enter'); await frames(f.page);
+      const state = await view(f.page);
+      assert.deepEqual([state.panel, state.mode, state.notice, state.picked, state.save], [false, 'raw', NOTICE, INSTRUCTION, false], 'refused with the notice');
+      assert.deepEqual(await records(f.page), []);
+      await f.context.close();
+    });
+
+    // Review 11-16 m2: in the formatted view a new selection in the text replaces a passage chosen in the keyboard copy.
+    await S.check('formatted view: a passage chosen with 키보드로 구절 선택, then a refused selection in the text: nothing left to store', async () => {
+      const f = await fixture(plainRaw);
+      await showBlock(f.page, '하나뿐인 구절');
+      await dragSelect(f.page, await phraseEnds(f.page, '하나뿐인 구절', '하나뿐인 구절'));
+      await R.pressAt(f.page, '#lifeExcerptToggle');
+      assert.deepEqual([(await view(f.page)).mode, (await view(f.page)).panel], ['formatted', true]);
+      await f.page.getByRole('button', { name: '키보드로 구절 선택' }).click();
+      await f.page.getByRole('button', { name: '첫 줄 선택' }).click(); await frames(f.page);
+      let state = await view(f.page);
+      assert.deepEqual([state.mode, state.picked, state.save], ['formatted', '# 사\n', true], 'the keyboard copy names an exact place in the original');
+      await showBlock(f.page, '바로 뒤의');
+      await dragSelect(f.page, await phraseEnds(f.page, '바로 뒤의', '바로 뒤의'));
+      state = await view(f.page);
+      assert.deepEqual([state.mode, state.selection, state.picked, state.save, state.toBlog], ['formatted', '바로 뒤의', INSTRUCTION, false, false], 'the new selection replaced it and is not storable');
+      assert.deepEqual(await records(f.page), []);
+      await f.context.close();
+    });
+
     await S.check('picked in the original text after the notice: the excerpt is that exact place, character for character', async () => {
       const item = cases[1], f = await fixture(item.raw);
       await showBlock(f.page, item.block);

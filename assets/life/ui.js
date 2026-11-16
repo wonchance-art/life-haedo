@@ -1691,10 +1691,15 @@
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
+      // A pinned date belongs to the screen the address opened: leaving the calendar (records, the 일정 list, settings…)
+      // lets it go before the day change is applied, so the date kept for the next calendar screen follows today again.
+      // Back to a pinned entry pins it again (schedulePinned below).
+      const namesDate = Object.prototype.hasOwnProperty.call(viewOptions, 'scheduleDate');
+      if (!namesDate && !calendarModes.has(mode)) schedulePin = null;
       // A navigation is drawn with the current day (the date an option names is applied after it).
       scheduleRollover();
       // A date named here is chosen in the app (not pinned), unless it reopens a pinned history entry.
-      if (Object.prototype.hasOwnProperty.call(viewOptions, 'scheduleDate')) schedulePin = schedulePinned === true ? viewOptions.scheduleDate : null;
+      if (namesDate) schedulePin = schedulePinned === true ? viewOptions.scheduleDate : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -5087,9 +5092,10 @@
         useQuote.disabled = useNine.disabled = !sourceActive || !exact || start >= end;
         savePosition();
       };
-      // The formatted pick is replaced by a selection that is not one (wider, elsewhere, collapsed): nothing is left to store.
-      const forgetFormattedPick = () => {
-        if (!formattedPick) return;
+      // In the formatted view a new selection in the text that is not a plain pick (wider, elsewhere, collapsed) replaces
+      // what was chosen before (a plain pick, or a passage chosen in the keyboard copy): nothing is left to store.
+      const forgetSelection = () => {
+        if (!formattedPick && !state.sourceSelection) return;
         formattedPick = null; state.sourceSelection = null;
         if (state.sourceDrafts.has(version.id)) { state.sourceDrafts.get(version.id).range = null; storeSourceDrafts(); }
         picked.textContent = instruction; quote.dataset.hasSelection = 'false';
@@ -5101,7 +5107,7 @@
         const range = state.sourceSelection;
         // A formatted pick is stored only while it is still the same place and the original there is the text that was picked.
         if (range && formattedPick && (formattedPick.start !== range.start || formattedPick.end !== range.end || version.contentText.slice(range.start, range.end) !== formattedPick.text)) {
-          forgetFormattedPick(); throw new Error(formattedRefusal);
+          forgetSelection(); throw new Error(formattedRefusal);
         }
         return range;
       };
@@ -5120,7 +5126,7 @@
         if (formattedView) {
           selectionOrigin = 'dom';
           const pick = range.collapsed ? null : pickInFormatted(range);
-          if (pick) remember(pick.start, pick.end, { exact: true, text: pick.text }); else forgetFormattedPick();
+          if (pick) remember(pick.start, pick.end, { exact: true, text: pick.text }); else forgetSelection();
           return;
         }
         const offset = (container, value) => container === originalText ? value : container === reader ? (value === 0 ? 0 : version.contentText.length) : null;
@@ -5220,12 +5226,20 @@
         return selection && selection.rangeCount === 1 && !selection.isCollapsed ? pickInFormatted(selection.getRangeAt(0)) : null;
       };
       // A touch on the button can clear the page selection before the click arrives; note at the press that there was one.
+      // Only the click of that press may use it: a press dragged off the button (no click), a cancelled pointer or a key
+      // press drops it, and a keyboard click (detail 0) never reads it.
       let pressedPlace = null, pressedPick = null;
+      const dropPressed = () => { pressedPlace = pressedPick = null; };
       quote.addEventListener('pointerdown', () => { pressedPick = pickedNow(); pressedPlace = pressedPick ? null : pickedPlace(); }, { capture: true });
+      for (const name of ['pointercancel', 'keydown']) quote.addEventListener(name, dropPressed, { capture: true });
+      const dropOutside = event => { if (!quote.contains(event.target)) dropPressed(); };
+      document.addEventListener('pointerup', dropOutside, true);
+      const pressCleanup = readerCleanup;
+      readerCleanup = () => { pressCleanup(); document.removeEventListener('pointerup', dropOutside, true); };
       quote.addEventListener('click', event => {
-        const opening = formattedView && panel.hidden;
-        const pick = opening ? pickedNow() || pressedPick : null;
-        const place = opening && !pick ? pickedPlace() || pressedPlace : null; pressedPlace = pressedPick = null;
+        const opening = formattedView && panel.hidden, pointer = event.detail > 0;
+        const pick = opening ? pickedNow() || (pointer ? pressedPick : null) : null;
+        const place = opening && !pick ? pickedPlace() || (pointer ? pressedPlace : null) : null; dropPressed();
         // Closing the panel keeps the view it was read in.
         if (!opening) return;
         // A plain-paragraph pick: the panel opens here, in the formatted view, with that passage.
