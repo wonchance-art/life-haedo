@@ -44,7 +44,10 @@
     platformRecovery: [{ path: 'items', key: 'rid', time: 'keptAt', sort: byDate('keptAt') }],
     // 하루 행복도: 날짜마다 한 항목, 같은 날을 두 기기가 고치면 늦게 고친 쪽(at). 연표 문서마다 한
     // 줄인 이행 표시(migrated)도 연표별로 합친다(happiness-single-writer.md).
-    happinessDays: [{ path: 'entries', key: 'date', time: 'at', sort: byDate('date') }, { path: 'migrated', key: 'docId', time: 'at' }]
+    happinessDays: [{ path: 'entries', key: 'date', time: 'at', sort: byDate('date') }, { path: 'migrated', key: 'docId', time: 'at' }],
+    // 연표 표시 설정(행복도 곡선·나이, 2026-11-16): 항목마다 늦게 고친 쪽(at). 첫 동기화에 올린 이전 값은 at이
+    // 1970이라 계정에 이미 있는 값에 진다(storage.js absorbTimelineDisplay).
+    timelineDisplay: [{ path: 'items', key: 'key', time: 'at', sort: (a, b) => String(a.key).localeCompare(String(b.key)) }]
   });
   function canonical(value) {
     if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';

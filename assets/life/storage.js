@@ -1166,6 +1166,193 @@
       if (result.revision) happinessChanged(result.revision);
       return result;
     }
+    // 연표 표시 설정(행복도 곡선·나이, 2026-11-16 총괄 지시 D: 11-01 "모든 데이터 계정 자동 연동"). 계정에
+    // 하나인 계정 문서이고 항목마다 고친 시각(at)을 둔다. 다른 기기와는 AccountDocsSync가 항목별로 늦은 쪽을
+    // 남긴다(LISTS.timelineDisplay). 연표 편집기(timeline.html, assets/app.js)는 이 모듈을 불러오지 않고 기존
+    // localStorage 값(caeyeon_life_ma·caeyeon_life_age)을 읽고 쓰므로, 그 키를 이 브라우저의 사본으로 계속 쓴다
+    // (호환). 기록(caeyeon_life_display_sync)에는 사본이 어느 계정의 어떤 판인지, 고친 시각, 계정 문서에 넣었는지
+    // (up)를 둔다. 동기화 주기마다(listAccountDocs)와 받은 문서를 적용한 뒤 absorbTimelineDisplay가 넣지 않은
+    // 사본 값을 계정 문서에 넣고, 문서 값을 사본에 다시 적는다. 설계: account-sync-everywhere.md의 2026-11-16 절.
+    const DISPLAY_FORMAT = 1, DISPLAY_FIELDS = Object.freeze(['curve', 'age']);
+    const DISPLAY_KEYS = Object.freeze({ curve: 'caeyeon_life_ma', age: 'caeyeon_life_age' });
+    const DISPLAY_RECORD = 'caeyeon_life_display_sync';
+    const DISPLAY_CURVE = Object.freeze([0, 36, 60]), DISPLAY_AGE = Object.freeze(['intl', 'kr']);
+    const DISPLAY_EPOCH = '1970-01-01T00:00:00.000Z';
+    const timelineDisplayKey = () => `timelineDisplay:${accountKey}:settings`;
+    // 연표와 같은 읽기 규칙(app.js MA_SIGMA·AGE_MODE: 가까운 칸, 동점은 큰 쪽). 값이 없거나 숫자가 아니면 고른 적 없음.
+    function displayValue(field, raw) {
+      if (raw === null || raw === undefined || raw === '') return undefined;
+      if (field === 'curve') {
+        const value = +raw; if (!Number.isFinite(value)) return undefined;
+        return DISPLAY_CURVE.reduce((a, b) => Math.abs(b - value) <= Math.abs(a - value) ? b : a, DISPLAY_CURVE[0]);
+      }
+      return raw === 'kr' ? 'kr' : 'intl';
+    }
+    // Items of a newer release (other keys) are kept as they are and never written to a copy here.
+    const displayKnown = (key, v) => key === 'curve' ? DISPLAY_CURVE.includes(v) : key === 'age' ? DISPLAY_AGE.includes(v) :
+      v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 200);
+    function validateTimelineDisplay(value) {
+      const bad = () => fault('invalid_timeline_display', '연표 표시 설정의 형식을 확인할 수 없습니다. 기존 설정은 보존했습니다.');
+      onlyFields(value, ['revision', 'format', 'items'], 'invalid_timeline_display'); requireRevision(value.revision);
+      if (!Number.isSafeInteger(value.format) || value.format < 1) throw bad();
+      if (value.format > DISPLAY_FORMAT) throw fault('app_refresh_required', '앱을 새로고침한 뒤 다시 시도해 주세요. 값은 그대로 있습니다.');
+      if (!Array.isArray(value.items) || value.items.length > 32) throw bad();
+      const keys = new Set();
+      for (const item of value.items) {
+        onlyFields(item, ['key', 'v', 'at'], 'invalid_timeline_display');
+        if (typeof item.key !== 'string' || !/^[a-z][A-Za-z0-9]{0,31}$/.test(item.key) || keys.has(item.key) || !displayKnown(item.key, item.v) || !isoTime(item.at)) throw bad();
+        keys.add(item.key);
+      }
+    }
+    async function timelineDisplayValue(meta) {
+      const row = await meta.get(timelineDisplayKey());
+      const value = row === undefined ? { revision: 0, format: DISPLAY_FORMAT, items: [] } : row.value;
+      validateTimelineDisplay(value);
+      return value;
+    }
+    function timelineDisplayScope() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 연표 표시 설정을 저장해 주세요.');
+    }
+    function displayStore() {
+      try { return options.localStorage !== undefined ? options.localStorage : root.window === root ? root.localStorage || null : null; } catch (_) { return null; }
+    }
+    // The record names its account by a hash of the account key, not the account itself.
+    const displayOwner = () => accountDocHash(accountKey);
+    const displayEntry = (field, value) => plain(value) && displayKnown(field, value.v) && isoTime(value.at) && typeof value.up === 'boolean' ? value : null;
+    const displayItem = item => plain(item) && DISPLAY_FIELDS.includes(item.key) && displayKnown(item.key, item.v) && isoTime(item.at);
+    const displayLater = (at, nowMs) => new Date(Math.max(nowMs, happinessTime(at) + 1)).toISOString();
+    // One synchronous read of the copies and the record; null when this browser's storage cannot be read.
+    function displaySnapshot(store) {
+      try {
+        const raws = {}; for (const field of DISPLAY_FIELDS) raws[field] = store.getItem(DISPLAY_KEYS[field]);
+        const text = store.getItem(DISPLAY_RECORD);
+        let record = null; try { record = text ? JSON.parse(text) : null; } catch (_) { record = null; }
+        return { raws, text, record: plain(record) ? record : null };
+      } catch (_) { return null; }
+    }
+    function displayUnchanged(store, snap) {
+      const now = displaySnapshot(store);
+      return !!now && now.text === snap.text && DISPLAY_FIELDS.every(field => now.raws[field] === snap.raws[field]);
+    }
+    // The copies' values the record does not show as put into its owner's account document.
+    function displayPending(snap, nowMs) {
+      const record = snap.record, out = [];
+      for (const field of DISPLAY_FIELDS) {
+        const v = displayValue(field, snap.raws[field]); if (v === undefined) continue;
+        const entry = displayEntry(field, record?.[field]);
+        if (entry && entry.v === v) { if (!entry.up) out.push({ key: field, v, at: entry.at }); continue; }
+        // 바뀐 시각을 모르는 값. 기록이 생기기 전부터 있던 값은 가장 이른 것(첫 동기화: 계정에 이미 있는 값이 이긴다),
+        // 기록이 생긴 뒤 옛 판 앱이 고친 값은 지금 본 시각으로 본다.
+        out.push({ key: field, v, at: entry ? displayLater(entry.at, nowMs) : typeof record?.owner === 'string' ? new Date(nowMs).toISOString() : DISPLAY_EPOCH });
+      }
+      return out;
+    }
+    // Whose copies these are. Copies another account left unput are held for that account (one account at a
+    // time) and never put into this one. null: a third account's values already wait, so nothing is touched.
+    function displayPlan(snap, nowMs) {
+      const me = displayOwner(), record = snap.record, owner = typeof record?.owner === 'string' ? record.owner : null;
+      const held = plain(record?.held) && typeof record.held.owner === 'string' && Array.isArray(record.held.items) ? record.held : null;
+      const mine = held?.owner === me ? held.items.filter(displayItem).map(clone) : [];
+      const next = { owner: me };
+      if (!owner || owner === me) {
+        for (const field of DISPLAY_FIELDS) { const entry = displayEntry(field, record?.[field]); if (entry) next[field] = clone(entry); }
+        if (held && held.owner !== me) next.held = clone(held);
+        return { record: next, pending: [...mine, ...displayPending(snap, nowMs)] };
+      }
+      const theirs = displayPending(snap, nowMs);
+      if (theirs.length && held && held.owner !== me && held.owner !== owner) return null;
+      if (theirs.length) {
+        const kept = held?.owner === owner ? held.items.filter(item => displayItem(item) && !theirs.some(other => other.key === item.key)).map(clone) : [];
+        next.held = { owner, items: [...kept, ...theirs] };
+      } else if (held && held.owner !== me) next.held = clone(held);
+      // The other account's values stay on screen until this account's document has its own; they are not sent.
+      for (const field of DISPLAY_FIELDS) { const v = displayValue(field, snap.raws[field]); if (v !== undefined) next[field] = { v, at: DISPLAY_EPOCH, up: true }; }
+      return { record: next, pending: mine };
+    }
+    async function readTimelineDisplay() {
+      timelineDisplayScope();
+      return transaction(['meta'], 'readonly', async tx => clone(await timelineDisplayValue(tx.objectStore('meta'))));
+    }
+    // Put the copies' unput values into the account document (per item, the later edit wins; a losing local
+    // value is kept as a recovery copy), then write the document back to the copies. given: explicit choices
+    // made where the copies cannot be written; they win over the document's current item.
+    async function absorbTimelineDisplay({ given = [] } = {}) {
+      timelineDisplayScope();
+      const store = displayStore(), nowMs = Date.now();
+      const snap = store ? displaySnapshot(store) : null, plan = snap ? displayPlan(snap, nowMs) : null;
+      const pending = [...(plan?.pending || []), ...given.map(item => ({ ...item, force: true }))];
+      const result = await transaction(['meta'], pending.length ? 'readwrite' : 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), previous = await timelineDisplayValue(meta);
+        if (!pending.length) return { value: previous, stored: false };
+        const items = new Map(previous.items.map(item => [item.key, clone(item)])), lost = [];
+        let changed = false;
+        for (const item of pending.sort((a, b) => happinessTime(a.at) - happinessTime(b.at))) {
+          const existing = items.get(item.key);
+          if (existing && existing.v === item.v) continue;
+          if (item.force || !existing || happinessTime(item.at) > happinessTime(existing.at)) {
+            items.set(item.key, { key: item.key, v: item.v, at: item.force && existing ? displayLater(existing.at, happinessTime(item.at)) : item.at }); changed = true;
+          } else lost.push({ key: item.key, v: item.v, at: item.at });
+        }
+        // 이 브라우저의 값이 계정의 더 늦은 값에 지면, 사본을 덮기 전에 그 값을 이 기기의 복구 사본으로 남긴다.
+        for (const item of lost) await addAccountDocRecovery(meta, timelineDisplayKey(), { items: [item] }, 'timeline_import');
+        if (!changed) return { value: previous, stored: false };
+        const value = { revision: previous.revision + 1, format: DISPLAY_FORMAT, items: [...items.values()].sort((a, b) => a.key.localeCompare(b.key)) };
+        validateTimelineDisplay(value);
+        await meta.put({ key: timelineDisplayKey(), value });
+        return { value, stored: true };
+      });
+      if (result.stored) accountDocChanged(timelineDisplayKey());
+      let status = 'synced', mirrored = false;
+      if (!snap) status = 'unavailable';
+      else if (!plan) status = 'held';
+      else if (disposed) status = 'closed'; // The account changed meanwhile: this account's values never reach the copies.
+      else if (!displayUnchanged(store, snap)) status = 'retry'; // Changed meanwhile: the next pass reads them again.
+      else {
+        const record = clone(plan.record);
+        try {
+          for (const item of result.value.items) {
+            if (!DISPLAY_FIELDS.includes(item.key)) continue;
+            if (displayValue(item.key, snap.raws[item.key]) !== item.v) { store.setItem(DISPLAY_KEYS[item.key], String(item.v)); mirrored = true; }
+            record[item.key] = { v: item.v, at: item.at, up: true };
+          }
+          // Nothing chosen anywhere yet: no record is written (opening 설정 adds no key to this browser).
+          const text = JSON.stringify(record), empty = snap.text === null && Object.keys(record).length === 1;
+          if (text !== snap.text && !empty) store.setItem(DISPLAY_RECORD, text);
+        } catch (_) { status = 'local_failed'; }
+      }
+      if (result.stored || mirrored) {
+        const event = { type: 'timeline_display_changed', workspaceId: 'settings', revision: result.value.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      const values = {};
+      for (const item of result.value.items) if (DISPLAY_FIELDS.includes(item.key)) values[item.key] = item.v;
+      return { status, stored: result.stored, revision: result.value.revision, values };
+    }
+    // A choice made in 설정: written to this browser's copy at once (the timeline reads it), then put into the
+    // account document. Returns a promise; the copy is already written when this returns.
+    function saveTimelineDisplay(changes) {
+      timelineDisplayScope();
+      const fields = plain(changes) ? Object.keys(changes) : [];
+      if (!fields.length || fields.some(key => !DISPLAY_FIELDS.includes(key) || !displayKnown(key, changes[key]))) throw fault('invalid_request', '연표 표시 설정 값을 확인해 주세요.');
+      const store = displayStore(), nowMs = Date.now(), snap = store ? displaySnapshot(store) : null;
+      const owner = typeof snap?.record?.owner === 'string' ? snap.record.owner : null;
+      if (snap && (!owner || owner === displayOwner())) {
+        let written = false;
+        try {
+          const record = snap.record ? clone(snap.record) : {};
+          record.owner = displayOwner();
+          for (const field of fields) {
+            store.setItem(DISPLAY_KEYS[field], String(changes[field]));
+            record[field] = { v: changes[field], at: displayLater(displayEntry(field, record[field])?.at, nowMs), up: false };
+          }
+          store.setItem(DISPLAY_RECORD, JSON.stringify(record)); written = true;
+        } catch (_) { /* This browser cannot keep it: the account document still takes the choice below. */ }
+        if (written) return absorbTimelineDisplay().then(result => ({ ...result, localSaved: true }));
+      }
+      const at = new Date(nowMs).toISOString();
+      return absorbTimelineDisplay({ given: fields.map(key => ({ key, v: changes[key], at })) }).then(result => ({ ...result, localSaved: false }));
+    }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
     }
@@ -5978,7 +6165,9 @@
       platformRecovery: { read: meta => platformRecoveryValue(meta), event: 'platform_recovery_changed', recovery: false },
       // 하루 행복도: 날짜별로 합치고(LISTS), 두 기기가 같은 날을 고치면 늦은 쪽, 진 쪽은 이 기기에 남긴다.
       happinessDays: { read: meta => happinessDaysValue(meta), event: 'happiness_days_changed', recovery: true },
-      materialOutputDeleted: { read: (meta, planId) => materialOutputDeletionValue(meta, planId), event: null, recovery: false }
+      materialOutputDeleted: { read: (meta, planId) => materialOutputDeletionValue(meta, planId), event: null, recovery: false },
+      // 연표 표시 설정(곡선·나이): 항목별로 늦은 쪽(LISTS). 사본에 다시 적은 뒤 absorbTimelineDisplay가 알린다.
+      timelineDisplay: { read: meta => timelineDisplayValue(meta), event: null, recovery: true }
     });
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
@@ -6068,6 +6257,8 @@
       // first pass. Promote only proven links and never remove the old proof.
       await promoteMaterialOutputDeletions();
       await moveDiscoveryExtended();
+      // The timeline editor writes only this browser's copies: put what it changed into the document first.
+      try { await absorbTimelineDisplay(); } catch (error) { if (error?.code === 'storage_scope_closed') throw error; /* Copies stay; the next pass tries again. */ }
       return transaction(['meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'), result = [], owners = new Map();
         for (const key of await meta.getAllKeys()) {
@@ -6181,7 +6372,8 @@
     // 1: the 2026-11-01 kinds. 2: restored-copy. 3: platformRecovery. 4: happinessDays. 5: materialOutputDeleted.
     // 6: discoveryActionsExtended, discoveryReadingExtended (the second document of each pair, review MAJOR-1). An
     // earlier shell skipped those rows, and one that held a row back left it unread; rereading once settles both.
-    const ACCOUNT_DOC_SCHEMA = 6;
+    // 7: timelineDisplay (행복도 곡선·나이, 2026-11-16).
+    const ACCOUNT_DOC_SCHEMA = 7;
     const accountDocSchemaKey = () => `accountDocSchema:${accountKey}`;
     // Once per account and schema: a device that synced under an older schema
     // reads the change list again from the start. Rows it already has return
@@ -6286,6 +6478,8 @@
       });
       if (result.status === 'applied') {
         accountDocApplied(parsed, result.value, result.eventRevision);
+        // Received display settings reach this browser's copies (the timeline editor reads only those).
+        if (parsed.prefix === 'timelineDisplay') try { await absorbTimelineDisplay(); } catch (_) { /* The next pass writes them. */ }
         for (const change of materialChanges) materialWritingChanged(change.workspaceId, change.revision);
         delete result.value; delete result.eventRevision;
       }
@@ -6531,6 +6725,7 @@
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readRssInboxProgress, saveRssInboxProgress,
       readAnnualPlan, saveAnnualPlan, readPlatformRecovery, addPlatformRecovery, readHappinessDays, writeHappinessDay, absorbTimelineDays,
+      readTimelineDisplay, saveTimelineDisplay, absorbTimelineDisplay,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,

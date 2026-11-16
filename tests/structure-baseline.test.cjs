@@ -261,6 +261,7 @@ module.exports = { SITES, CORPUS, extract, groups, currentOutputs, storageApis }
 // ---------------------------------------------------------------------------------------------
 const FOR_ACCOUNT_API = [
   "absorbTimelineDays:function",
+  "absorbTimelineDisplay:function",
   "account:object",
   "accountDocHash:function",
   "accountDocKinds:object",
@@ -395,6 +396,7 @@ const FOR_ACCOUNT_API = [
   "readRssInboxProgress:function",
   "readSourceFolders:function",
   "readSourceFoldersSnapshot:function",
+  "readTimelineDisplay:function",
   "readWorkbench:function",
   "readWorkbenchEditedAt:function",
   "readWorkbenchSnapshot:function",
@@ -431,6 +433,7 @@ const FOR_ACCOUNT_API = [
   "saveRssInboxProgress:function",
   "saveSourceFolders:function",
   "saveStage:function",
+  "saveTimelineDisplay:function",
   "saveWorkbench:function",
   "scanLocalPosts:function",
   "setActive:function",
@@ -455,6 +458,7 @@ const FOR_ACCOUNT_API = [
 
 const STORAGE_API = [
   "absorbTimelineDays:function",
+  "absorbTimelineDisplay:function",
   "account:object",
   "accountDocHash:function",
   "accountDocKinds:object",
@@ -591,6 +595,7 @@ const STORAGE_API = [
   "readRssInboxProgress:function",
   "readSourceFolders:function",
   "readSourceFoldersSnapshot:function",
+  "readTimelineDisplay:function",
   "readWorkbench:function",
   "readWorkbenchEditedAt:function",
   "readWorkbenchSnapshot:function",
@@ -627,6 +632,7 @@ const STORAGE_API = [
   "saveRssInboxProgress:function",
   "saveSourceFolders:function",
   "saveStage:function",
+  "saveTimelineDisplay:function",
   "saveWorkbench:function",
   "scanLocalPosts:function",
   "setActive:function",

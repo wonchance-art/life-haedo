@@ -208,7 +208,8 @@ async function main() {
       assert.deepEqual(stored('discoveryActionsExtended').data, uploaded.data, 'the newer device\'s added-source and found-link reactions stay on the account');
       // The same device on the new shell: all three are in 담은 글, nothing on the account changed.
       await updateShell(); await page.waitForTimeout(1200); await syncNow(page); await idle(page);
-      assert.deepEqual(await page.evaluate(() => [typeof HaedoLife.DiscoveryActions.combine, HaedoLife.Shell.storage.accountDocKinds.schema]), ['function', 6], 'the new shell after the update');
+      // The pair came with schema 6; a later schema (7: timelineDisplay) still knows it. No pin on the newest number (2026-11-16).
+      assert.deepEqual(await page.evaluate(() => [typeof HaedoLife.DiscoveryActions.combine, HaedoLife.Shell.storage.accountDocKinds.schema >= 6]), ['function', true], 'the new shell after the update');
       report.observations.reactionsAfterShellUpdate = { tab: await tab(page, '#discoveryBookmarked') };
       assert.equal(await bookmarkedCount(page), 3, 'three reactions on the new shell');
       assert.deepEqual(both(stored).map(entry => entry.canonicalUrl).sort(), [legacy.data.entries[0].canonicalUrl, ...uploaded.data.entries.map(entry => entry.canonicalUrl)].sort());

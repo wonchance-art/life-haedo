@@ -622,7 +622,7 @@ test('canonical receipts remain account-private even on a shared IndexedDB', asy
   assert.equal((await f.a.readMaterialWritingOutput(f.ws, f.plan.id)).status, 'deleted');
 });
 
-// The current schema is 6 (the news pairs, 2026-11-11); a schema-4 cursor still rereads once.
+// A schema-4 cursor still rereads once on the current schema (5 or later: materialOutputDeleted).
 test('schema 4 cursor that skipped deletion receipts replays them once on the current schema', async t => {
   const origin = await fixture(), fresh = blank(); t.after(origin.close); t.after(fresh.close);
   const { row } = savedRow(origin), docKey = markerKey(row.data.plan.id), value = markerValue(row), calls = [];
@@ -637,7 +637,8 @@ test('schema 4 cursor that skipped deletion receipts replays them once on the cu
   assert.equal(await fresh.a.readMaterialContinuityOutputDeletion(row), true);
   assert.deepEqual(calls, [0]);
   await sync.syncNow(); assert.deepEqual(calls, [0, 7]);
-  assert.deepEqual(await fresh.a.upgradeAccountDocSchema(), { schema: 6, rewound: false });
+  const current = fresh.a.accountDocKinds.schema; assert.ok(current >= 5, 'the schema that knows materialOutputDeleted (5) or a later one');
+  assert.deepEqual(await fresh.a.upgradeAccountDocSchema(), { schema: current, rewound: false });
 });
 
 for (const mode of ['install', 'adopt']) {

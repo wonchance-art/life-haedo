@@ -1,7 +1,8 @@
 /* 설정 화면의 배치: 넓은 화면은 왼쪽 항목 목록 + 오른쪽 상세, 좁은 화면은 묶음별 행과 현재 값.
  * 2026-11-03 부드러운 판 묶음 E. 행의 동작(자료공간·계정 보관·백업·공개 페이지)은 ui.js가 만들고
- * 이 모듈은 배치·하위 항목 해시·뉴스 언어 값·연표 표시 설정(기존 저장값만)을 맡는다.
- * 새 저장 키·계정 동기화 문서·스키마는 만들지 않는다. 일정의 주 시작(월요일)·처음 여는 단계(일정 목록)·
+ * 이 모듈은 배치·하위 항목 해시·뉴스 언어 값·연표 표시 설정을 맡는다. 연표 표시 설정(곡선·나이)은
+ * 2026-11-16부터 계정 문서 timelineDisplay로 모든 기기에 맞추고(storage.saveTimelineDisplay), 연표가 읽는
+ * 기존 기기 저장값은 사본으로 계속 쓴다. 그 밖의 새 저장 키는 만들지 않는다. 일정의 주 시작(월요일)·처음 여는 단계(일정 목록)·
  * 행복도 입력 단위(날마다)는 소유자 결정(11-03)으로 고정값이라 설정 행을 두지 않는다. */
 (function (root) {
   'use strict';
@@ -17,7 +18,7 @@
     { id: 'keys', title: '단축키', wideOnly: true }
   ]);
   const HASH = /^#settings-(account|workspace|news|schedule|backup|public|keys)$/;
-  // 연표(assets/app.js)가 읽는 기존 기기 저장값. 값과 해석은 app.js의 MA_SIGMA·AGE_MODE와 같다.
+  // 연표(assets/app.js)가 읽는 기존 기기 저장값(계정 문서의 이 브라우저 사본). 값과 해석은 app.js의 MA_SIGMA·AGE_MODE와 같다.
   const CURVE_KEY = 'caeyeon_life_ma', CURVE_STEPS = [0, 36, 60];
   const CURVE = { 0: ['기록', '적은 값 그대로'], 36: ['시기', '그 해의 기조'], 60: ['흐름', '인생의 궤적'] };
   const AGE_KEY = 'caeyeon_life_age', AGE = [['intl', '만 나이'], ['kr', '한국 나이']];
@@ -191,11 +192,19 @@
 
     // ---------- 일정: 연표 표시(기존 기기 저장값) ----------
     let curveInputs = [], curveSelect = null, ageInputs = [], ageSelect = null;
+    // 계정 문서(storage.saveTimelineDisplay)가 있으면 그쪽으로 저장한다: 이 브라우저 사본을 바로 쓰고 계정 문서에 넣는다.
+    const display = options.storage?.account && typeof options.storage.saveTimelineDisplay === 'function' ? options.storage : null;
     function write(key, value) {
       try { localStorage.setItem(key, String(value)); return true; }
       catch (_) { return false; }
     }
+    // 연표 사본을 다른 탭·연표 편집기가 바꿨거나 화면을 열었을 때: 계정 문서에 넣고 계정 값을 사본에 다시 적는다.
+    function absorb() {
+      if (!display || disposed || !isCurrent()) return;
+      Promise.resolve().then(() => display.absorbTimelineDisplay()).then(() => { if (!disposed && isCurrent()) syncSchedule(); }).catch(() => {});
+    }
     function syncSchedule() {
+      if (disposed) return;
       const curve = String(readCurve(localStorage)), age = readAge(localStorage);
       for (const input of curveInputs) input.checked = input.value === curve;
       if (curveSelect && curveSelect !== root.document.activeElement) curveSelect.value = curve;
@@ -207,6 +216,25 @@
       const out = [];
       const status = node('p', '', 'life-help settings-save-error'); status.setAttribute('role', 'status');
       const apply = (key, value) => {
+        if (display) {
+          const field = key === CURVE_KEY ? 'curve' : 'age';
+          let pending;
+          try { pending = display.saveTimelineDisplay({ [field]: value }); }
+          catch (_) { status.textContent = '설정을 저장하지 못했습니다. 다시 골라 주세요.'; syncSchedule(); return; }
+          status.textContent = '';
+          syncSchedule();
+          pending.then(result => {
+            if (disposed || !isCurrent()) return;
+            status.textContent = result.localSaved ? '' : '계정에는 저장했지만 이 브라우저의 연표에는 적용하지 못했습니다. 저장소 설정을 확인해 주세요.';
+            syncSchedule();
+          }, () => {
+            if (disposed || !isCurrent()) return;
+            // 사본은 이미 바뀌었고 기록에 '올리지 않음'으로 남아 다음 동기화가 다시 넣는다.
+            status.textContent = '이 브라우저에는 적용했고, 계정에는 다음 동기화 때 다시 저장합니다.';
+            syncSchedule();
+          });
+          return;
+        }
         const saved = write(key, value);
         status.textContent = saved ? '' : '이 브라우저에 설정을 보관하지 못했습니다. 저장소 설정을 확인해 주세요.';
         syncSchedule();
@@ -249,12 +277,19 @@
       for (const [value, label] of AGE) { const option = node('option', label); option.value = value; ageSelect.append(option); }
       ageSelect.addEventListener('change', () => apply(AGE_KEY, ageSelect.value));
       ageRow.append(ageSelect, glyph('chevron'));
-      out.push(curveRow, ageRow, curveGroup, ageGroup, node('p', '연표 화면에 적용합니다. 이 기기의 브라우저에 보관합니다.', 'life-help settings-note'), status);
-      // 다른 탭(연표)에서 바꾼 값을 따른다.
+      // 고르는 중인 선택 칸(포커스)은 다른 기기·탭의 값으로 바꾸지 않는다. 칸을 떠나면 지금 값을 보인다.
+      curveSelect.addEventListener('blur', () => syncSchedule()); ageSelect.addEventListener('blur', () => syncSchedule());
+      out.push(curveRow, ageRow, curveGroup, ageGroup, node('p', display ? '연표 화면에 적용합니다. 계정에 저장해 로그인한 모든 기기에 같게 적용합니다.' : '연표 화면에 적용합니다. 이 기기의 브라우저에 보관합니다.', 'life-help settings-note'), status);
+      // 다른 탭(연표)에서 바꾼 값을 따르고 계정 문서에 넣는다.
       listen(root, 'storage', event => {
         if (!element.isConnected) return dispose();
-        if (event.key === null || event.key === CURVE_KEY || event.key === AGE_KEY) syncSchedule();
+        if (event.key === null || event.key === CURVE_KEY || event.key === AGE_KEY || event.key === 'caeyeon_life_display_sync') { syncSchedule(); absorb(); }
       });
+      // 다른 기기에서 받은 값이 이 브라우저 사본에 적히면 다시 그린다.
+      if (display?.subscribe) try {
+        const unlisten = display.subscribe('settings', event => { if (event.type === 'timeline_display_changed' && !disposed && isCurrent()) syncSchedule(); });
+        cleanups.push(() => unlisten?.());
+      } catch (_) { /* 알림이 없어도 열 때와 storage 이벤트로 맞춘다. */ }
       return out;
     }
 
@@ -295,7 +330,7 @@
       });
       cleanups.push(() => { countSequence++; unlistenCounts?.(); });
     }
-    syncSchedule();
+    syncSchedule(); absorb();
 
     // ---------- 하위 항목: 해시와 현재 항목 ----------
     let current = null;

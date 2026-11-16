@@ -383,6 +383,18 @@ const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
 /* 나이 셈법 — 만(태어난 해 0세) / 한국식(태어난 해 1세) */
 let AGE_MODE=(()=>{try{return localStorage.getItem('caeyeon_life_age')==='kr'?'kr':'intl';}catch(e){return 'intl';}})();
+/* 곡선·나이는 해도 계정 문서(timelineDisplay)의 이 브라우저 사본이다(2026-11-16). 연표는 계정 저장소를 불러오지 않으므로
+   고친 값과 시각을 기록(caeyeon_life_display_sync)에 '계정에 아직 넣지 않음'(up:false)으로 남기고, 다음 해도 진입 때
+   해도가 계정 문서의 시각과 비교해 넣는다(storage.js absorbTimelineDisplay). 기록의 계정(owner)은 건드리지 않는다. */
+function markDisplay(field,v){
+  try{
+    let r=null;try{r=JSON.parse(localStorage.getItem('caeyeon_life_display_sync'));}catch(e){}
+    if(!r||typeof r!=='object'||Array.isArray(r))r={};
+    const prev=Date.parse(r[field]&&r[field].at||'');
+    r[field]={v,at:new Date(Math.max(Date.now(),isFinite(prev)?prev+1:0)).toISOString(),up:false};
+    localStorage.setItem('caeyeon_life_display_sync',JSON.stringify(r));
+  }catch(e){}
+}
 let SHOW=(()=>{
   const d={};SHOW_KEYS.forEach(k=>d[k]=true);
   try{const r=JSON.parse(localStorage.getItem('caeyeon_life_show'));
@@ -2804,7 +2816,7 @@ function renderShowPanel(){
       ev.stopPropagation();
       if(AGE_MODE===m)return;
       AGE_MODE=m;
-      try{localStorage.setItem('caeyeon_life_age',m);}catch(e){}
+      try{localStorage.setItem('caeyeon_life_age',m);markDisplay('age',m);}catch(e){}
       syncShowPanel();render();
     };
     showPanel.appendChild(b);
@@ -2816,7 +2828,7 @@ function renderShowPanel(){
     b.onclick=ev=>{
       ev.stopPropagation();
       MA_SIGMA=+v;
-      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
+      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);markDisplay('curve',MA_SIGMA);}catch(e){}
       syncShowPanel();render();
     };
     showPanel.appendChild(b);
