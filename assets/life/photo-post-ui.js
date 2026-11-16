@@ -3580,6 +3580,9 @@
           archived,
         );
         host.append(retained);
+        // A status said while the list is read (an address naming a changed revision: mount's open()
+        // fails meanwhile) stays; only what was there before the read is cleared when the list arrives.
+        const errorBefore = error;
         storage
           .listPhotoPosts(workspaceId)
           .then((rows) => {
@@ -3673,7 +3676,7 @@
                 }
               retireCovers(previous);
             }
-            statusText.textContent = "";
+            if (error === errorBefore) statusText.textContent = "";
           })
           .catch((e) => {
             if (current(token)) {

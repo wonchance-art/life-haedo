@@ -1,5 +1,35 @@
 # 구현 로드맵과 에이전트 작업 배치
 
+## 11-16 핵심 3차 1부 — 총괄, #260(`haedo-v221`), 실기기 확인 전 (2026-11-16 KST)
+
+11-16 소유자 결정 7~12와 뉴스 AI 추천을 묶음별로 작업자에게 맡겼다. 구현하지 않은 에이전트가 독립 검수했고, BLOCKER·MAJOR는 고친 뒤 재검수했다.
+
+| 묶음 | 브랜치(최종) | 내용 | 검수 |
+| --- | --- | --- | --- |
+| E 뉴스 AI 추천 | `core3/news-pick` `00a086e` | `haedo-ai` `news_pick`(Haiku, 후보 번호만, 4키 요청: 요청 ID·작업·직접 적은 주제·후보 제목/매체/시각), 좋아요·담기·읽은 글 제외, $5 이하 남으면 뉴스 멈춤, 넓게 찾은 글 좋아요(결정 6). 결정 3 확인만 | ship, MINOR 7 반영 후 재검수 ship |
+| C 날짜 고정·발췌 | `core3/date-excerpt` `28333dc` | 주소의 `date=`·`month=` 고정(결정 11), 서식 보기 일반 문단 발췌(결정 12), 결정 13 문서 확정 | MAJOR 1(고정이 화면을 떠나도 남음) → 재검수 ship, R2 보완 |
+| B 공개 선택 | `core3/publish-choice` `ab83af7` | 공개 이름·소개 따로 저장(결정 7), 첨부 하나씩 고르기 기본 0개(결정 9), 쓰지 않는 `haedo_blog_private.publish` 실행 권한 회수 | MAJOR 1(이전 앱 게시가 이름을 덮음) → 재검수 ship |
+| A 글 색인 | `core3/post-index` `c9a42eb` + `20a7ac0` | 글마다 요약 행, 200개 상한 제거(결정 10), 목록·달력 날짜 createdAt(결정 8), 자동 저장 바이트 −75% | MAJOR 1(검증 실패 문서가 목록에서 사라짐) → 재검수 ship |
+
+- **운영 SQL:** `20261116120000_life_blog_public_choice.sql`(SHA-256 `620f4caa…20c4`) 적용. 적용 전 확인(9개 before·새 함수 missing·ok 전부 true), 파일 내장 보호(함수 md5·권한·6개 표 행 수와 행 해시) 통과, 적용 후 20개 함수 md5·소유자·권한 일치, 옛 서명 3개 없음, 행 수 그대로(posts 6·receipts 12·publications 0·profiles 0·retired 1).
+- **통합 CI에서 처음 깨진 것(재현 → 원인 → 수정):**
+  - 구조 기준 고정 목록에 `DiscoveryPick` 누락(E).
+  - 설치 검사 마이그레이션 목록 누락, 미리보기 검사 가짜 동기화에 `publicProfile` 없음(B).
+  - `blog-manager-browser:354`: 늦게 온 사진 글 목록이 열기 오류 안내를 지움. A 전 판 통과·뒤 판 실패로 원인 묶음 확정. A 이전부터 있던 순서 경합이 드러난 제품 결함이라 제품을 고침(`20a7ac0`).
+  - `sync-common-mixed`: 옛 판 앱이 공개 단계에서 새로고침 안내 대신 다른 거절을 보임(B 뒤 판만 실패). 미리보기·게시가 새로고침 필요를 먼저 확인(`15fa340`).
+- **Designer #248**(노션 방향 시안·구현 계약, 문서만): 병합 API가 502를 반복해 같은 head를 이 PR에 합침.
+- **CI:** `15fa340`에서 check·blog·browser_suites 1–7 전부 녹색. 새 검사 `news-pick-browser`(7번), `run-blog-public-choice-postgres`(check) 등록.
+- **소유자 CLI 배포 필요(앱보다 먼저가 이상적이나, 늦어도 데이터는 바뀌지 않음):** `haedo-blog-publish`(첨부 선택 인자; 전에는 Markdown 글 공개만 실패), `haedo-ai`(`news_pick`; 전에는 AI 추천이 최신순으로 돌아감). 둘 다 `--no-verify-jwt`, 압축 vendor·`\u` 이스케이프가 있어 도구 배포 불가.
+- **출시 절차:** 배포 뒤 Mac·iPad·iPhone의 열린 탭과 홈 화면 앱을 새로고침한 다음에 글 200개를 넘긴다(이전 판 탭의 "지워 주세요" 안내는 따르지 않는다).
+- **미검증:** 실제 Apple 기기·Safari·VoiceOver, 실제 Haiku 응답 품질, 실제 Edge(Deno) 실행, Docker로만 도는 검사는 CI 결과로만 확인.
+
+### 다음 큰 작업 묶음 (우선순위 순)
+
+1. **핵심 3차 2부 + 노션 방향 1단계:** 저장 성공 표시 숨김(F·F2, 재검수 중), 곡선·나이 계정 연동(D, MAJOR 수정 중), 노트 메뉴 분리와 일정 정리(N, 구조), W1 바탕·토큰(Designer) → W2 노트·일정 시각. 한 번에 배포.
+   - 완료 기준: 각 독립 검수 BLOCKER·MAJOR 0, 통합판 CI 녹색, 1440·820·390·320 캡처
+2. **노션 방향 2단계:** W3 글 읽기, W4 자료·뉴스·설정, W5 마무리(Designer). 계약 `docs/design-review/notion-visual-contract.md`.
+3. **조건부 출처의 비공개 경로(결정 4) · RSS 운영 활성화:** `haedo-news-wide`에 허용 계정 전용 고정 RSS 공급자 → 화면 합치기 → 공개 수집기에서 제외(`news-pick.md` 순서).
+
 ## 11-16 소유자 처리분과 결정 — 총괄 기록, 앱 판 `haedo-v220` 그대로 (2026-11-16 KST)
 
 - **배포(소유자 CLI, 09:51~09:52Z):** Edge `haedo-news-wide` 1판(첫 배포)과 `haedo-rss` 2판(fast-xml-parser 5.12.1). 둘 다 `verify_jwt=false`.
