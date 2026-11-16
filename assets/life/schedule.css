@@ -164,7 +164,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-day-cell:hover { background: var(--haedo-hover); }
 .schedule-day-cell[data-outside] { background: transparent; color: var(--haedo-meta); }
 /* The chosen day: the selected surface and an ink ring inside (two cues; the 1px grid stays). */
-.schedule-day-cell[aria-current=date] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+.schedule-day-cell[aria-current=date] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1px var(--haedo-ink); }
 /* Today: a 24px ink circle with the white number (12.26:1); every number sits in the same 24px box. */
 .schedule-day-number { display: inline-flex; flex: none; align-self: flex-start; align-items: center; justify-content: center; min-width: 24px; height: 24px; margin: -2px 0 0 -4px; padding: 0 4px; border-radius: 12px; font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; box-sizing: border-box; }
 .schedule-day-cell[data-today] .schedule-day-number { background: var(--haedo-ink); color: #fff; font-weight: var(--haedo-weight-semibold); }
@@ -229,8 +229,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-entries { min-width: 0; margin: 8px 0 16px; }
 .schedule-entries[aria-busy=true] { min-height: 44px; }
 .schedule-entry-section { min-width: 0; margin: 0 0 16px; }
-/* h2 since review 3 n2 (headings of one level); the letter spacing of the former h3 keeps the same look. */
-.schedule-entry-title { margin: 16px 0 4px; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); line-height: 1.5; letter-spacing: 0; }
+/* What a side part holds (h3 under the part's h2, 2026-11-16 m5): 14px 600 ink. */
+.schedule-entry-title, .schedule-aside-sub { margin: 12px 0 4px; color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; letter-spacing: 0; }
 .schedule-habit { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: var(--haedo-text-control); }
 .schedule-habit > input, .schedule-habit-grid input[type=checkbox] { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
 .schedule-goals { display: grid; gap: 8px; }
@@ -248,7 +248,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 /* Today's column: ink 600 with a 2px ink line under the date (a second cue beside the weight). */
 .schedule-habit-grid thead th[data-today] { color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); text-decoration: underline 2px; text-underline-offset: 6px; }
 .schedule-happiness { min-width: 0; margin: 8px 0 0; border: 0; padding: 0; }
-.schedule-happiness > legend { margin: 16px 0 4px; padding: 0; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); }
+.schedule-happiness > legend { margin: 12px 0 4px; padding: 0; font-size: 14px; font-weight: var(--haedo-weight-semibold); }
 .schedule-happiness-title { margin: 0; font: inherit; letter-spacing: inherit; }
 /* 행복도 0–10: one row of eleven while each choice is at least 44px wide (11 × 44 + 10 × 4 = 524px), else two
  * rows, 0–5 and 6–10, at every width (2026-11-08 S7; review 3 m2: 1101–1300px is narrow too, beside the aside).
@@ -369,7 +369,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-quarter-month, .schedule-quarter-photo, .schedule-count, .schedule-quarter-row > .schedule-dots { display: none; }
   .schedule-dots-large .schedule-dot { width: 8px; height: 8px; }
 
-  .schedule-month-grid { gap: 0; border: 0; }
+  .schedule-month-grid { gap: 0; margin-inline: -16px; border: 0; }
   .schedule-weekday { padding: 0 0 4px; border: 0; text-align: center; font-size: var(--haedo-text-badge); }
   .schedule-day-cell { align-items: center; gap: 4px; min-height: 52px; padding: 4px 0; border: 0; background: transparent; border-radius: var(--haedo-control-radius); }
   /* iPhone: today a 32px ink circle (white 12.26:1); the chosen day, when it is not today, a 1.5px ink ring and 600. */
@@ -387,7 +387,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-chosen-title { margin: 0; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); }
 
   .schedule-week-day { grid-template-columns: 72px minmax(0, 1fr); }
-  .schedule-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 -8px 8px; }
+  /* The days reach 16px into the side gutters so each is at least 44px wide at 320 (280 + 32 = 312, 7 × 44.6). */
+  .schedule-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 -16px 8px; }
   .schedule-strip-day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 60px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; }
   .schedule-strip-name { color: var(--haedo-muted); font-size: var(--haedo-text-badge); }
   .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }

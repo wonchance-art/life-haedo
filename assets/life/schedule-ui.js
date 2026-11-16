@@ -301,6 +301,8 @@
       if (entries.length > limit) list.append(el('p', '그 밖의 계획 ' + (entries.length - limit) + '개는 연간 계획에서 볼 수 있어요.', 'life-meta schedule-more'));
       return list;
     }
+    // Each part opens with the same h2 (2026-11-16 노션 방향 m5): 예정 · 습관 · 행복도 · 목표 · 계획; what a part holds is
+    // named by h3 under it (D: 습관, 행복도; Y: 올해 계획, 목표).
     // 2026-11-16 (notes-menu): every unit has the same frame. The body (거르기 above it) shows the period's records;
     // the side column holds, always in this order, 예정 → 습관·행복도 → 목표·계획, each with what fits the period.
     // From 1101px it stands beside the body, below that under it (schedule.css). An empty part is one line, no table.
@@ -348,7 +350,7 @@
     function yearPlan(context, year) {
       const thisYear = data().parts(data().today()).year === year;
       const text = context.result.rows.find(row => row.year === year)?.text;
-      const title = el('h2', thisYear ? '올해 계획' : year + '년 계획', 'schedule-aside-title schedule-year-title');
+      const title = el('h3', thisYear ? '올해 계획' : year + '년 계획', 'schedule-aside-sub schedule-year-title');
       if (String(text || '').trim()) return [title, el('p', snippet(text, 240), 'schedule-year-text')];
       const link = el('a', '연간 계획에 ' + (thisYear ? '올해' : '이 해') + ' 문장을 적을 수 있어요', 'schedule-year-empty');
       link.href = 'index.html?section=schedule&view=annual-plan'; link.dataset.focusKey = 'schedule:year-plan';
@@ -394,7 +396,7 @@
       // 목표·계획 of Y: the year's sentence, the goals in progress (moved here, 2026-11-08 S4), then the plan link line.
       wrap.append(primary, side(context, year === data().parts(now).year ? '올해' : '이 해', [
         plansPart(context, entries, '이 해의 남은 예정이 없어요.'), habitLinkPart(),
-        ['goals', [...yearPlan(context, year), entrySlot(context, 'year', { year }, null), links.plan ? links.plan() : null]]
+        ['goals', [el('h2', '목표 · 계획', 'schedule-aside-title'), ...yearPlan(context, year), entrySlot(context, 'year', { year }, null), links.plan ? links.plan() : null]]
       ]));
       return wrap;
     }
@@ -481,7 +483,7 @@
       // 습관 of this month: one compact read-only tracker table (2026-11-08 S5; checked in D·W and on the habit screen).
       wrap.append(primary, side(context, '이 달', [
         plansPart(context, remaining(context, first, last), '이 달의 남은 예정이 없어요.'),
-        ['habits', [entrySlot(context, 'month', {}, links.habits)]], planLinksPart()
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'month', {}, links.habits)]], planLinksPart()
       ]));
       return wrap;
     }
@@ -547,7 +549,7 @@
       primary.append(filterTabs(context, draw), grid);
       wrap.append(primary, side(context, '이 주', [
         plansPart(context, remaining(context, week[0], week[6]), '이 주의 남은 예정이 없어요.'),
-        ['habits', [entrySlot(context, 'week', { week }, links.habits)]], planLinksPart()
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'week', { week }, links.habits)]], planLinksPart()
       ]));
       return wrap;
     }
@@ -603,7 +605,7 @@
       // 행복도 is entered here in D alone (2026-11-08 S7).
       wrap.append(primary, side(context, '이 날', [
         plansPart(context, context.date >= now ? (context.result.days.get(context.date)?.plans || []) : [], '이 날의 남은 예정이 없어요.'),
-        ['habits', [entrySlot(context, 'day', {}, links.habits)]], planLinksPart()
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'day', {}, links.habits)]], planLinksPart()
       ]));
       return wrap;
     }
