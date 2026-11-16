@@ -240,17 +240,22 @@ async function main() {
       assert(!text.includes(PRIVATE) && !text.includes('제주 여행') && !text.includes('비 오는 날'), 'account B sees none of account A');
     });
 
-    await check('the calendar places a post on the day it was written; the list keeps its edit order', async ({ page }) => {
+    // Rule change (owner decision 8, 2026-11-16): the list orders and heads posts by the day they were
+    // first written, as the calendar places them. Until then the list sorted and headed by the last edit
+    // (this check asserted the edited post under 11월 2일). The row's own time line still names the edit.
+    await check('the list and the calendar both place a post on the day it was written; the row still says when it was edited', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
       const firstDay = page.locator('#homePostList .home-day-heading').first();
       assert.equal(await firstDay.innerText(), '11월 2일 월요일');
-      // The list heading uses the field it sorts by (updatedAt): the edited post sits under 11월 2일.
-      assert.deepEqual(await page.locator('#homePostList > *').evaluateAll(nodes => {
+      const listed = await page.locator('#homePostList > *').evaluateAll(nodes => {
         const out = []; let day = null;
-        for (const node of nodes) { if (node.classList.contains('home-day-heading')) day = node.textContent; else if (node.classList.contains('home-post')) out.push([day, node.querySelector('.home-post-open').textContent]); }
-        return out.slice(0, 2);
-      }), [['11월 2일 월요일', PRIVATE], ['11월 2일 월요일', '천변을 따라 걸은 날']]);
+        for (const node of nodes) { if (node.classList.contains('home-day-heading')) day = node.textContent; else if (node.classList.contains('home-post')) out.push([day, node.querySelector('.home-post-open').textContent, node.querySelector('.home-row-time').textContent, node.querySelector('.home-post-meta time')?.textContent || '']); }
+        return out;
+      });
+      assert.deepEqual(listed.slice(0, 4).map(row => row.slice(0, 2)), [['11월 2일 월요일', PRIVATE], ['10월 29일 목요일', '비 오는 날 동네 도서관'], ['10월 28일 수요일', '창가 자리에서 읽은 책'], ['10월 21일 수요일', '천변을 따라 걸은 날']]);
+      const edited = listed.find(row => row[1] === '천변을 따라 걸은 날');
+      assert.deepEqual(edited.slice(2), ['20:00', '수정 11월 2일'], 'the edited post keeps its edit time on its row (총괄 decision: row times unchanged)');
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-21'); await ready(page); await shown(page, 'day');
       assert.match(await page.locator('#lifeSchedule').innerText(), /천변을 따라 걸은 날/);
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day');
@@ -303,22 +308,22 @@ async function main() {
       await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
     });
 
-    await check('a calendar reads each post’s writing day once and again only after the post changes', async ({ page }) => {
+    // Rule change (owner decision 8, 2026-11-16): each post's list row carries createdAt, so the calendar
+    // reads no post to place it. Until then the list row had none and the calendar read every saved photo
+    // post once (cached by revision); this check counted 27 reads and one more after an edit.
+    await check('a calendar places posts from their list rows: no post is read for its writing day, before or after an edit', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const fixture = await seed(page);
       await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
       const reads = () => page.evaluate(() => (window.__schedulePhotoReads || []).reduce((sum, n) => sum + n, 0));
-      const first = await reads(); assert.equal(first, 27, 'the first calendar reads every saved photo post once');
       for (const unit of ['month', 'day', 'quarter', 'week', 'tools']) { await page.locator('[data-schedule-view="' + unit + '"]').click(); await shown(page, unit); }
-      assert.equal(await reads(), first, 'later units reuse the cached writing days');
-      // A changed post (new revision) is read again; the others stay cached.
+      assert.equal(await reads(), 0, 'no unit reads a post for its writing day');
       await page.evaluate(async id => {
         const s = HaedoLife.Shell.storage, ws = await s.getActive(), doc = await s.readPhotoPost(ws, id);
         doc.title = doc.title + ' 고침'; doc.updatedAt = new Date().toISOString(); await s.savePhotoPost(ws, doc, doc.revision);
       }, fixture.ids['추석 장보기']);
       await page.locator('[data-schedule-view="month"]').click(); await shown(page, 'month');
-      await page.waitForFunction(n => (window.__schedulePhotoReads || []).reduce((sum, v) => sum + v, 0) >= n, first + 1);
       await page.locator('[data-schedule-view="day"]').click(); await shown(page, 'day');
-      assert.equal(await reads(), first + 1, 'only the changed post was read again');
+      assert.equal(await reads(), 0, 'nor after an edit');
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-09-14'); await ready(page); await shown(page, 'day');
       assert.match(await page.locator('#lifeSchedule').innerText(), /추석 장보기 고침/, 'the edited post keeps its writing day');
     });

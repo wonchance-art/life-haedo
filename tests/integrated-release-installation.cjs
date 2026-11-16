@@ -62,6 +62,9 @@ const newsWideMigration = ['supabase/migrations/20261111130000_news_wide_feed.sq
 // two triggers on posts and save_post behind public.life_blog_save. Its cases run in
 // run-blog-revision-continuity-postgres and the SQL replay (4.9).
 const blogRevisionContinuityMigration = ['supabase/migrations/20261112120000_life_blog_revision_continuity.sql', '59a0cbcb799d4c47169fad17cb6b11b6c7104983cfe122076176ea85cd9e96cb'];
+// 2026-11-16: public name/intro saved apart from publishing and attachments chosen one by one (owner
+// decisions 7 and 9). Its cases run in run-blog-public-choice-postgres and the SQL replay (4.10).
+const blogPublicChoiceMigration = ['supabase/migrations/20261116120000_life_blog_public_choice.sql', '620f4caaa29a5b92be8fe4f936517af83e16387697bd1fd71f230f8d828320c4'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -97,13 +100,14 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], privateReaderMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration, rssIntakeMigration[0], postMarkdownMigration[0], postMarkdownPublishMigration[0], blogWithdrawMigration[0], newsWideMigration[0], blogRevisionContinuityMigration[0]].sort(),
-      'Exactly the ten legacy and twenty-nine reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], privateReaderMigration[0], observedBaselineMigration[0], ...accountSyncMigrations, naverEnableInventoryMigration, blogAiAuthorshipMigration, blogPublicCopiesMigration, aiUsageMigration, rssIntakeMigration[0], postMarkdownMigration[0], postMarkdownPublishMigration[0], blogWithdrawMigration[0], newsWideMigration[0], blogRevisionContinuityMigration[0], blogPublicChoiceMigration[0]].sort(),
+      'Exactly the ten legacy and thirty reviewed additive migrations are required; missing or unknown files are rejected.');
     assert.equal(hash(await fs.readFile(path.join(root, postMarkdownMigration[0]))), postMarkdownMigration[1], 'Reviewed Markdown migration changed.');
     assert.equal(hash(await fs.readFile(path.join(root, postMarkdownPublishMigration[0]))), postMarkdownPublishMigration[1], 'Reviewed Markdown publication migration changed.');
     assert.equal(hash(await fs.readFile(path.join(root, blogWithdrawMigration[0]))), blogWithdrawMigration[1], 'Reviewed withdrawal-before-publication migration changed.');
     assert.equal(hash(await fs.readFile(path.join(root, newsWideMigration[0]))), newsWideMigration[1], 'Reviewed wide news migration changed.');
     assert.equal(hash(await fs.readFile(path.join(root, blogRevisionContinuityMigration[0]))), blogRevisionContinuityMigration[1], 'Reviewed revision continuity migration changed.');
+    assert.equal(hash(await fs.readFile(path.join(root, blogPublicChoiceMigration[0]))), blogPublicChoiceMigration[1], 'Reviewed public choice migration changed.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);

@@ -3347,9 +3347,15 @@
       try {
         let next = null, nextBaseline;
         if (was.revision > 0) {
-          // The list row first: the editor's own autosave announces itself too, and reading the
-          // whole post (its photos) back after each of them is not needed.
-          const rows = await storage.listPhotoPosts(workspaceId), row = rows.find((item) => item.id === was.id);
+          // The list rows first: the editor's own autosave announces itself too, and reading the
+          // whole post (its photos) back after each of them is not needed. Only the rows sayChanges
+          // looks at: this post, the post it revises and where that one went (2026-11-16: not the
+          // whole list on every autosave).
+          const wanted = [...new Set([was.id, ...(was.replaces ? [was.replaces.id, movedStore.resolve(workspaceId, was.replaces.id)] : [])].filter((id) => typeof id === "string" && id))];
+          const rows = typeof storage.readPostSummaries === "function"
+            ? (await storage.readPostSummaries(workspaceId, wanted)).filter(Boolean)
+            : await storage.listPhotoPosts(workspaceId);
+          const row = rows.find((item) => item.id === was.id);
           if (!current(token) || doc !== was) return;
           if (await sayChanges(was, rows, true)) return;
           if (row && row.revision === was.revision) return;
@@ -3555,6 +3561,9 @@
           archived,
         );
         host.append(retained);
+        // A status said while the list is read (an address naming a changed revision: mount's open()
+        // fails meanwhile) stays; only what was there before the read is cleared when the list arrives.
+        const errorBefore = error;
         storage
           .listPhotoPosts(workspaceId)
           .then((rows) => {
@@ -3648,7 +3657,7 @@
                 }
               retireCovers(previous);
             }
-            statusText.textContent = "";
+            if (error === errorBefore) statusText.textContent = "";
           })
           .catch((e) => {
             if (current(token)) {

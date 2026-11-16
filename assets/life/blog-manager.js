@@ -499,7 +499,8 @@
           remoteRevision = state?.remoteRevision || 0; publicRevision = state?.publication?.revision || 0;
           panelState = state; showCurrent();
         }
-        if (!profile) throw new Error('현재 공개 이름과 소개를 읽지 못해 미리보기를 만들지 않았습니다. 공개 이름·소개 다시 읽기를 누른 뒤 갱신해 주세요.');
+        // An app older than the shared sync module cannot read the saved name: it says refresh, like every server step.
+        if (!profile) throw staleApp() ? refreshRequired() : new Error('현재 공개 이름과 소개를 읽지 못해 미리보기를 만들지 않았습니다. 공개 이름·소개 다시 읽기를 누른 뒤 갱신해 주세요.');
         const photoIds = [...selected].filter(([, check]) => check.checked).map(([id]) => id);
         const attachments = chosenCards.filter(check => check.checked).map(check => Number(check.dataset.attachmentPosition));
         const author = { name: profile.author.name, intro: profile.author.intro };
@@ -527,9 +528,11 @@
         announce('이 미리보기와 같은 본문·선택 사진·선택 첨부로 공개합니다.');
       }));
       footer.append(button('공개 게시·갱신', async () => {
+        // Server readiness first: an app that must be refreshed says so before any local step.
+        requireSync('publish');
         if (changed || !preview?.snapshot) throw new Error('공개 미리보기를 먼저 갱신해 주세요.');
         if (!consent.checked) throw new Error('미리보기의 공개 내용을 확인해 주세요.');
-        requireSync('publish'); const current = await storage.readPhotoPost(workspaceId, doc.id);
+        const current = await storage.readPhotoPost(workspaceId, doc.id);
         if (!valid()) return;
         if (changed || !preview?.snapshot || !consent.checked) throw new Error('공개 내용이 바뀌었습니다. 미리보기를 갱신하고 공개 범위를 다시 확인해 주세요.');
         if (current.revision !== preview.revision || current.archived || current.status !== 'saved') throw new Error('글이 바뀌었습니다. 공개 내용 검토를 다시 열어 최신 글을 확인해 주세요.');
