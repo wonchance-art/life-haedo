@@ -1,9 +1,13 @@
-/* The 200 posts-and-drafts cap, said before it refuses (2026-11-12): the home list (일정, 내 글) shows
- * how many are left from 190 on, and at the cap how many to delete with buttons to the 초안 tab and to
- * the recovery copies kept there; the cap itself (storage photo_post_limit) is unchanged. A deletion
- * the server refused because the post is public is said on the list until 확인. Actual app, IndexedDB
- * and the tests' FakeCloud with synthetic Auth; anonymous posts; 1440px and 390px viewports (a
- * simulation, not Apple hardware).
+/* Libraries above 200 posts and drafts on the home list (일정, 내 글). Rule change (owner decision 10,
+ * 2026-11-16): there is no cap, so no line counts toward one. Until then (2026-11-12) the list said from
+ * 190 on how many were left and at 200 how many to delete, with buttons to the drafts and the recovery
+ * copies, and storage refused the 201st post (these checks asserted that line and photo_post_limit).
+ * Now: 250 rows are listed with no such line and the 251st post is stored; a tab of the earlier version
+ * (haedo-v220: storage.js, home.js and schedule-ui.js of c76e693 served to that tab only) on the same
+ * device lists every post, refuses its own new post with its own message and changes nothing, and its
+ * edit reaches this version. A deletion the server refused because the post is public is said on the
+ * list until 확인. Actual app, IndexedDB and the tests' FakeCloud with synthetic Auth; anonymous posts;
+ * 1440px and 390px viewports (a simulation, not Apple hardware).
  *   python3 scripts/dev-server.py --port 4862 &
  *   BASE_URL=http://127.0.0.1:4862 CHROMIUM_PATH=... PW_MODULE_PATH=... node tests/post-limit-notice-browser.cjs
  * Screenshots and report: .local/post-limit-notice/. */
@@ -14,6 +18,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { previousFile } = require('./helpers/post-index-previous.cjs');
 const out = path.resolve(__dirname, '../.local/post-limit-notice');
 const report = { scope: 'Actual app and IndexedDB, FakeCloud, synthetic Auth, anonymous posts; viewport simulation, not Apple hardware', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [], screenshots: [] };
 const homeReady = page => page.waitForFunction(() => document.querySelector('#homePosts')?.getAttribute('aria-busy') === 'false' && !document.querySelector('.home-loading'));
@@ -40,12 +45,24 @@ const notice = page => page.locator('#homePostList .home-limit:not(.home-delete-
 async function shot(page, name) {
   const file = path.join(out, name + '.png'); await page.screenshot({ path: file, fullPage: false }); report.screenshots.push(file);
 }
-// A new post started here is refused at the cap, as before this change.
-async function newPost(page) {
-  return page.evaluate(async () => {
-    const s = HaedoLife.Shell.storage, m = HaedoLife.PhotoPost, doc = m.create(HaedoLife.Core.id); doc.title = '한도 확인 새 글'; doc.ops = [{ insert: '본문\n' }];
-    try { await s.savePhotoPost(await s.getActive(), doc, 0); return 'stored'; } catch (error) { return error.code; }
+// A new saved post started here: 'stored', or the refusal's code and message.
+async function newPost(page, title = '한도 확인 새 글') {
+  return page.evaluate(async title => {
+    const s = HaedoLife.Shell.storage, m = HaedoLife.PhotoPost, doc = m.create(HaedoLife.Core.id); doc.title = title; doc.status = 'saved'; doc.ops = [{ insert: '본문\n' }];
+    try { await s.savePhotoPost(await s.getActive(), doc, 0); return 'stored'; } catch (error) { return error.code + ': ' + error.message; }
+  }, title);
+}
+const feedback = page => page.locator('#homePosts [role="status"][aria-live="polite"]').innerText().then(text => text.trim());
+const docCount = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return (await s.listPhotoPosts(await s.getActive())).length; });
+// The earlier version's post-list files, served to one tab only.
+const PREVIOUS = new Map(['storage.js', 'home.js', 'schedule-ui.js'].map(name => [name, previousFile(name)]));
+async function previousTab(context) {
+  const page = await context.newPage(); page.setDefaultTimeout(15000);
+  await page.route(`${base}/assets/life/*.js`, route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    return PREVIOUS.has(name) ? route.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body: PREVIOUS.get(name) }) : route.fallback();
   });
+  return page;
 }
 
 async function main() {
@@ -62,89 +79,54 @@ async function main() {
   }
   try {
     for (const [width, height] of [[1440, 1000], [390, 844]]) {
-      await check(`${width}px: nothing below 190; from 190 the count left; at the cap how many to delete and where`, async page => {
+      await check(`${width}px: 250 posts and drafts are listed with no cap line, and the 251st post is stored`, async page => {
         await openHome(page);
-        assert.equal((await seed(page, { saved: 185, drafts: 4, wordy: 1 })).count, 189);
-        // A 첨부 글 draft (page composer) is not counted by the cap, even with the copies' words in it.
-        await page.evaluate(async () => {
-          const s = HaedoLife.Shell.storage, w = await s.getActive(), value = await s.readPageDrafts(w), draft = HaedoLife.PagePosts.draft([], HaedoLife.Core.id(), new Date().toISOString());
-          draft.body = '첨부 글 초안 · 복구 사본이라는 낱말이 든 메모'; value.posts.push(draft); await s.savePageDrafts(w, value, value.revision);
-        });
-        await openHome(page); // the list reads 첨부 글 drafts when it opens
-        assert.equal(await notice(page).count(), 0, 'below 190: no line');
-        await seed(page, { drafts: 1 }); await page.waitForFunction(() => document.querySelector('#homePostList .home-limit'));
-        assert.equal(await notice(page).getAttribute('data-home-limit'), 'near');
-        assert.equal((await notice(page).locator('.life-meta').innerText()).trim(), '글·초안 190/200개 · 10개 더 저장할 수 있어요.');
-        await shot(page, `near-${width}`);
-        // 초안 보기 goes to the drafts the cap counts (no 첨부 글 draft); 모든 초안 보기 shows every draft again.
-        await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
-        await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
-        assert.deepEqual([...new Set(await page.locator('#homePostList .home-draft').evaluateAll(nodes => nodes.map(node => node.dataset.draftKind)))], ['photo-draft']);
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['모든 초안 보기']);
-        const tabLabel = () => page.locator('#homeTab-drafts').innerText().then(text => text.trim());
-        assert.equal(await tabLabel(), '초안 5', 'the tab counts what it lists');
-        // The drafts tab itself clears the filter (as 모든 초안 보기 does).
-        await page.locator('#homeTab-drafts').click();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 6);
-        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1);
-        assert.equal(await tabLabel(), '초안 6');
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기']);
-        await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
-        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).click();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 6);
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기']);
-        // The filter holds only while the line is shown: below 190 it is gone with the line.
-        await notice(page).getByRole('button', { name: '초안 보기', exact: true }).click();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 5);
-        // Focus on the line's button when the line goes (a deletion elsewhere): it moves to the shown tab.
-        await notice(page).getByRole('button', { name: '모든 초안 보기', exact: true }).focus();
-        await page.evaluate(async () => {
-          const s = HaedoLife.Shell.storage, ws = await s.getActive(), row = (await s.listPhotoPosts(ws)).find(item => item.status === 'draft');
-          await s.deletePhotoPost(ws, row.id, row.revision);
-        });
-        await page.waitForFunction(() => !document.querySelector('#homePostList .home-limit') && document.querySelectorAll('#homePostList .home-draft').length === 5);
-        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 1, 'every draft again');
-        assert.equal(await page.evaluate(() => document.activeElement?.id), 'homeTab-drafts', 'focus is not lost to the page body');
-        assert.equal(await tabLabel(), '초안 5');
-        await seed(page, { drafts: 1 }); await page.waitForFunction(() => document.querySelector('#homePostList .home-limit'));
-        await page.locator('#homeTab-posts').click(); await page.locator('#homeTab-posts[aria-selected="true"]').waitFor();
-        // 199: one left, then the cap with two recovery copies among the drafts.
-        await seed(page, { drafts: 7 }); await seed(page, { drafts: 2, copies: 2 });
-        await page.waitForFunction(() => document.querySelector('#homePostList .home-limit .life-meta')?.textContent.includes('199/200'));
-        assert.equal((await notice(page).locator('.life-meta').innerText()).trim(), '글·초안 199/200개 · 1개 더 저장할 수 있어요.');
-        await seed(page, { drafts: 1 });
-        await page.waitForFunction(() => document.querySelector('#homePostList .home-limit')?.dataset.homeLimit === 'full');
-        assert.equal((await notice(page).locator('.life-meta').innerText()).trim(), '글·초안 200/200개 · 새 글을 저장하려면 쓰지 않는 초안이나 복구 사본을 1개 지워 주세요.');
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기', '복구 사본 2개 보기']);
-        assert.equal(await newPost(page), 'photo_post_limit', 'the cap is unchanged');
-        const box = await notice(page).boundingBox(), viewport = page.viewportSize();
-        assert.ok(box.x >= 0 && box.x + box.width <= viewport.width + 1, 'the line fits the width');
-        for (const button of await notice(page).getByRole('button').all()) assert.ok((await button.boundingBox()).height >= 44, 'buttons are at least 44px high');
+        assert.equal((await seed(page, { saved: 240, drafts: 10, copies: 2 })).count, 250);
+        await page.waitForFunction(() => document.querySelector('#homePosts [role="status"]')?.textContent.trim() === '글 240개');
+        assert.equal(await notice(page).count(), 0, 'no line about a cap');
+        assert.equal(await page.locator('#homeTab-drafts').innerText().then(text => text.trim()), '초안 10');
+        // The posts tab pages through all of them, 20 at a time.
+        for (let shown = 20; shown < 240; shown += 20) await page.locator('#homePostList .home-more').click();
+        assert.equal(await page.locator('#homePostList .home-post').count(), 240);
+        assert.equal(await page.locator('#homePostList .home-more').count(), 0);
+        assert.equal(await newPost(page, '251번째 글'), 'stored');
+        await page.waitForFunction(() => document.querySelector('#homePosts [role="status"]')?.textContent.trim() === '글 241개');
+        assert.equal(await notice(page).count(), 0);
+        assert.equal(await page.locator('#homePostList .home-post', { hasText: '251번째 글' }).count(), 1, 'the new post is listed (first: it was written last)');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no horizontal scroll');
-        await shot(page, `full-${width}`);
-        // The recovery copies, with the keyboard.
-        await notice(page).getByRole('button', { name: '복구 사본 2개 보기', exact: true }).focus(); await page.keyboard.press('Enter');
-        await page.locator('#homeTab-drafts[aria-selected="true"]').waitFor();
-        await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-draft').length === 2);
-        assert.equal(await page.locator('#homePostList .home-draft', { hasText: '낱말이 든' }).count(), 0, 'a draft with the words only in its text is not a copy');
-        assert.equal(await page.locator('#homeTab-drafts').innerText().then(text => text.trim()), '초안 2');
-        assert.deepEqual((await page.locator('#homePostList .home-draft strong').allInnerTexts()).map(text => text.startsWith('복구 사본 · ')), [true, true]);
-        assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('home-draft-open')), true, 'focus moves to the first copy');
-        assert.equal(await page.locator('#homePostSearch').inputValue(), '복구 사본');
-        assert.equal(await page.locator('#homePostList .home-draft[data-draft-kind="plain-draft"]').count(), 0, 'the 첨부 글 draft with the same words is not one of them');
-        assert.deepEqual(await notice(page).getByRole('button').allInnerTexts(), ['초안 보기', '모든 초안 보기']);
-        await shot(page, `copies-${width}`);
-        // Deleting one makes room again.
-        await page.evaluate(async () => {
-          const s = HaedoLife.Shell.storage, ws = await s.getActive(), row = (await s.listPhotoPosts(ws)).find(item => item.title.startsWith(HaedoLife.BlogSync.CONFLICT_PREFIX));
-          await s.deletePhotoPost(ws, row.id, row.revision);
-        });
-        await page.waitForFunction(() => document.querySelector('#homePostList .home-limit')?.dataset.homeLimit === 'near');
-        assert.equal(await newPost(page), 'stored');
+        await page.evaluate(() => scrollTo(0, 0)); await shot(page, `posts-250-${width}`);
       }, { viewport: { width, height }, ...(width < 760 ? { hasTouch: true, isMobile: true } : {}) });
     }
+    await check('a tab of the earlier version on the same device lists every post, refuses its own new one with its message, and its edit reaches this version', async page => {
+      await openHome(page);
+      assert.equal((await seed(page, { saved: 205 })).count, 205);
+      await page.waitForFunction(() => document.querySelector('#homePosts [role="status"]')?.textContent.trim() === '글 205개');
+      const old = await previousTab(page.context()); observe(old, report, 'earlier version tab');
+      await openHome(old);
+      assert.equal(await old.evaluate(() => typeof HaedoLife.HomeUI.postCapacity), 'function', 'the tab runs the earlier home module');
+      await old.waitForFunction(() => document.querySelector('#homePosts [role="status"]')?.textContent.trim() === '글 205개');
+      assert.equal((await notice(old).locator('.life-meta').innerText()).trim(), '글·초안 205/200개 · 새 글을 저장하려면 쓰지 않는 글을 6개 지워 주세요.', 'its own line counts every post');
+      await shot(old, 'earlier-version-tab');
+      // Its own cap: refused with its existing message; nothing is written.
+      const before = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return JSON.stringify((await s.listPhotoPosts(ws)).map(row => [row.id, row.revision])); });
+      assert.match(await newPost(old, '이전 판의 새 글'), /^photo_post_limit: 글과 초안은 합계 200개까지입니다\./);
+      assert.equal(await page.evaluate(async () => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return JSON.stringify((await s.listPhotoPosts(ws)).map(row => [row.id, row.revision])); }), before, 'a refused save changes nothing');
+      // A post that is there is saved (the one seeded last, so first on this version's list); this version's list shows the change.
+      const edited = await old.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, ws = await s.getActive(), rows = await s.listPhotoPosts(ws), row = rows[rows.length - 1], doc = await s.readPhotoPost(ws, row.id);
+        const saved = await s.savePhotoPost(ws, { ...doc, title: '이전 판 탭에서 고친 글', updatedAt: new Date().toISOString() }, doc.revision);
+        return { id: saved.id, revision: saved.revision, createdAt: doc.createdAt };
+      });
+      await page.waitForFunction(() => [...document.querySelectorAll('#homePostList .home-post-open')].some(node => node.textContent === '이전 판 탭에서 고친 글'));
+      const mine = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return (await s.listPhotoPosts(ws)).find(row => row.id === id); }, edited.id);
+      assert.deepEqual([mine.title, mine.revision, mine.createdAt], ['이전 판 탭에서 고친 글', edited.revision, edited.createdAt]);
+      // This version stores a new post; the earlier tab lists it too.
+      assert.equal(await newPost(page, '새 판의 206번째 글'), 'stored');
+      await old.reload(); await ready(old); await old.locator('.life-home').waitFor(); await homeReady(old);
+      await old.waitForFunction(() => document.querySelector('#homePosts [role="status"]')?.textContent.trim() === '글 206개');
+      assert.equal(await docCount(page), 206);
+      await old.close();
+    });
     await check('a deletion the server refused (public there) is said on the list until 확인', async page => {
       await page.addInitScript(() => {
         // The refusal reaches screens as a BlogSync event (blog-sync.js deleteRemote); a test wrapper

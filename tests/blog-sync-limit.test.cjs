@@ -1,10 +1,12 @@
 'use strict';
-// The 200 posts+drafts cap stops a new post or draft the person starts on this device. It never stops
-// what already exists: a post account sync brings, the copies a sync conflict keeps, a received
-// preparation's finished post, a backup restored into its copy, saving a post that is already here, or
-// the one editing draft through which the editor changes a saved post (core review M6, 2026-11-11, and
-// its review). Real Storage (in-memory IndexedDB adapter) and BlogSync per device; the private blog
-// server is the tests' SQL-rule fixture.
+// Libraries above 200 posts and drafts. Rule change (owner decision 10, 2026-11-16): there is no cap.
+// Until then a cap of 200 refused a new post or draft started on this device (and these checks required
+// that refusal, photo_post_limit), while what already existed was never stopped: a post account sync
+// brings, the copies a sync conflict keeps, a received preparation's finished post, a backup restored
+// into its copy, saving a post that is already here, the editing draft of a saved post (core review M6,
+// 2026-11-11). All of those stay checked here above 200, and a post started here is now stored as well.
+// Real Storage (in-memory IndexedDB adapter) and BlogSync per device; the private blog server is the
+// tests' SQL-rule fixture.
 const test = require('node:test'), assert = require('node:assert/strict');
 const { server, device, clock, post, edit, finish, owner, memoryIdb, Core } = require('./helpers/blog-sync-cloud.cjs');
 const { createStorage } = require('../assets/life/storage.js');
@@ -17,7 +19,6 @@ const list = dev => dev.storage.listPhotoPosts(dev.ws);
 // What a device shows: every post's status, title and text, in one comparable order.
 const shown = async dev => (await list(dev)).map(row => [row.status, row.title, row.body].join('|')).sort();
 const write = (dev, title, time, status = 'saved') => post({ title, time, status }).then(doc => dev.storage.savePhotoPost(dev.ws, doc, 0));
-const capped = error => { assert.equal(error.code, 'photo_post_limit'); assert.match(error.message, /합계 200개/); assert.match(error.message, /초안이나 복구 사본을 지운 뒤 다시 저장/); return true; };
 async function pair(shared) {
   const cloud = server(), time = clock(Date.UTC(2026, 10, 11, 12));
   const a = await device(cloud, 'mac', { time }), b = await device(cloud, 'phone', { time }), first = [];
@@ -66,7 +67,7 @@ test('196 shared, 4 new on each device while apart: the account has 204 and both
   assert.deepEqual(await shown(a), await shown(b), 'both devices show the same 204 posts');
 });
 
-test('above the cap the editor still changes a saved post: its one editing draft is stored and finishing it restores the count', async () => {
+test('above 200 the editor changes a saved post through its editing draft, and every new post or draft is stored too', async () => {
   const { time, a, b } = await above();
   const row = (await list(a)).find(item => item.title === '폰에서 쓴 새 글 0'), saved = await a.storage.readPhotoPost(a.ws, row.id);
   time.advance(60000);
@@ -75,29 +76,32 @@ test('above the cap the editor still changes a saved post: its one editing draft
   assert.equal(draft.status, 'draft'); assert.deepEqual(draft.replaces, { id: saved.id, revision: saved.revision }); assert.equal((await list(a)).length, 205);
   // The draft autosaves again (same draft: the list does not grow).
   const typed = await a.storage.savePhotoPost(a.ws, { ...draft, title: '맥에서 고친 폰 글', updatedAt: iso(time.now + 1000) }, draft.revision);
-  // The exception is exactly that one draft. A second draft of the same post, a draft naming another
-  // revision or a post that is not here, and any new post or draft are refused as before.
-  await assert.rejects(edit(a, row.id, { title: '같은 글의 두 번째 수정 초안' }, iso(time.now)), capped);
+  // Until 11-16 everything else here was refused (only that one draft passed). Now a second draft of the
+  // same post, drafts naming another revision or a post that is not here, and new posts and drafts are stored.
+  const second = await edit(a, row.id, { title: '같은 글의 두 번째 수정 초안' }, iso(time.now));
   const other = (await list(a)).find(item => item.title === '글 3'), stale = await a.storage.readPhotoPost(a.ws, other.id);
-  await assert.rejects(a.storage.savePhotoPost(a.ws, { ...stale, id: Core.id(), revision: 0, status: 'draft', replaces: { id: stale.id, revision: stale.revision + 1 } }, 0), capped);
-  await assert.rejects(a.storage.savePhotoPost(a.ws, { ...stale, id: Core.id(), revision: 0, status: 'draft', replaces: { id: Core.id(), revision: 1 } }, 0), capped);
-  await assert.rejects(write(a, '205번째 새 글', iso(time.now)), capped); await assert.rejects(write(a, '205번째 새 초안', iso(time.now), 'draft'), capped);
-  assert.equal((await list(a)).length, 205, 'nothing refused was stored');
+  await a.storage.savePhotoPost(a.ws, { ...stale, id: Core.id(), revision: 0, status: 'draft', replaces: { id: stale.id, revision: stale.revision + 1 } }, 0);
+  await a.storage.savePhotoPost(a.ws, { ...stale, id: Core.id(), revision: 0, status: 'draft', replaces: { id: Core.id(), revision: 1 } }, 0);
+  await write(a, '205번째 새 글', iso(time.now)); await write(a, '205번째 새 초안', iso(time.now), 'draft');
+  assert.equal((await list(a)).length, 210, 'every draft and post is stored');
+  assert.equal((await a.storage.readPhotoPost(a.ws, second.id)).title, '같은 글의 두 번째 수정 초안');
   time.advance(60000);
   const done = await finish(a, typed, iso(time.now));
-  assert.equal(done.status, 'saved'); assert.equal(done.title, '맥에서 고친 폰 글'); assert.equal((await list(a)).length, 204, 'finishing the draft replaces the post: the count is back');
+  assert.equal(done.status, 'saved'); assert.equal(done.title, '맥에서 고친 폰 글'); assert.equal((await list(a)).length, 209, 'finishing the draft replaces the post');
   clean(...await settle(time, a, b));
-  assert.equal((await list(b)).some(item => item.title === '맥에서 고친 폰 글'), true, 'the edit made above the cap reached the other device');
-  assert.deepEqual(await shown(a), await shown(b)); assert.equal((await list(b)).length, 204);
+  assert.equal((await list(b)).some(item => item.title === '맥에서 고친 폰 글'), true, 'the edit made above 200 reached the other device');
+  assert.equal((await list(b)).some(item => item.title === '205번째 새 글'), true, 'a post started above 200 reached the other device');
+  assert.deepEqual(await shown(a), await shown(b));
 });
 
-test('a new post or draft made on this device is still refused at 200 and says what to do', async () => {
-  const { time, a } = await pair(200), before = await shown(a);
-  for (const status of ['saved', 'draft']) await assert.rejects(write(a, '201번째 ' + status, iso(time.now), status), capped);
-  assert.deepEqual(await shown(a), before, 'a refused post changes nothing');
-  // Deleting one makes room again.
-  const row = (await list(a))[0]; await a.storage.deletePhotoPost(a.ws, row.id, row.revision);
-  await write(a, '자리를 비운 뒤 새 글', iso(time.now)); assert.equal((await list(a)).length, 200);
+// Until 11-16: refused at 200 with photo_post_limit, and deleting one made room.
+test('a new post and draft made on this device at 200 are stored and reach the other device', async () => {
+  const { time, a, b } = await pair(200), before = await shown(a);
+  for (const status of ['saved', 'draft']) await write(a, '201번째 ' + status, iso(time.now), status);
+  assert.deepEqual((await shown(a)).filter(row => !before.includes(row)), ['draft|201번째 draft|출발한 날 🌿\n', 'saved|201번째 saved|출발한 날 🌿\n'], 'both are listed with their text');
+  assert.equal((await list(a)).length, 202);
+  clean(...await settle(time, a, b));
+  assert.equal((await list(b)).length, 202); assert.deepEqual(await shown(a), await shown(b));
 });
 
 // A draft on both devices; the phone finishes it; the Mac, at the cap, keeps writing its draft later.
@@ -142,9 +146,10 @@ test('a backup made above the cap restores every post into its copy; the restore
   const restored = await target.listPhotoPosts(copies[0].workspaceId);
   assert.equal(restored.length, 204, 'all 204 posts are in the restore copy');
   assert.deepEqual(restored.map(row => [row.status, row.title, row.body].join('|')).sort(), await shown(a), 'with the same state, title and text');
-  // In the copy, as anywhere: a post the person starts is refused above the cap.
-  await assert.rejects(target.savePhotoPost(copies[0].workspaceId, await post({ title: '복원 사본에서 새로 쓰는 글' }), 0), capped);
-  // The entry point is not a way around the cap in an ordinary workspace.
+  // In the copy, as anywhere: a post the person starts is stored above 200 (until 11-16: refused).
+  await target.savePhotoPost(copies[0].workspaceId, await post({ title: '복원 사본에서 새로 쓰는 글' }), 0);
+  assert.equal((await target.listPhotoPosts(copies[0].workspaceId)).length, 205);
+  // The restore entry point serves only a restore copy.
   const ordinary = (await target.createWorkspace('보통 자료공간')).workspaceId;
   await assert.rejects(target.restorePhotoPost(ordinary, await post({ title: '복원이 아닌 글' })), { code: 'restored_copy_invalid' });
   assert.deepEqual(await target.listPhotoPosts(ordinary), []);
@@ -152,6 +157,6 @@ test('a backup made above the cap restores every post into its copy; the restore
   const copy = copies[0].workspaceId, once = await target.restorePhotoPost(copy, await post({ title: '한 번 되살린 글' }));
   await assert.rejects(target.restorePhotoPost(copy, { ...(await post({ title: '판이 적힌 글' })), revision: 3 }), { code: 'photo_post_conflict' });
   await assert.rejects(target.restorePhotoPost(copy, { ...once, revision: 0 }), { code: 'photo_post_conflict' });
-  assert.equal((await target.listPhotoPosts(copy)).length, 205); assert.equal((await target.readPhotoPost(copy, once.id)).revision, 1);
+  assert.equal((await target.listPhotoPosts(copy)).length, 206); assert.equal((await target.readPhotoPost(copy, once.id)).revision, 1);
   target.close();
 });

@@ -209,25 +209,29 @@ async function main() {
     finally { await f.context.close(); active = null; }
   }
   try {
-    await check('An omitted summary stays absent from home/manager; the manager offers no per-browser finder, and the account-scoped scan reads and exports its two originals without any DB mutation', async ({ page, seeded }) => {
+    await check('An omitted or stale summary is rebuilt from its document for home/manager; the manager offers no per-browser finder, and the account-scoped scan reads and exports its two originals without any DB mutation', async ({ page, seeded }) => {
       await page.locator('#homePostList').waitFor(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
       // 2026-11-01 one account, one blog: the home lists the indexed posts of
       // every library of the account: the second library's saved post and the
       // account-less post that sign-in adoption copied (same id) into the
-      // account's new copy. A document omitted from its summary list stays absent.
+      // account's new copy. Rule change (owner decision 10, 2026-11-16, post list rebuild): documents
+      // are the source of truth, so a document omitted from its summary list (its library's whole list
+      // row deleted) is listed again and a stale summary shows the document's title. Until then the
+      // omitted post stayed absent from home and manager (this check asserted 2 home rows and 0 in the manager).
       const homeIds = () => page.locator('#homePostList .home-post').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId + '@' + node.dataset.workspaceId).sort());
-      const shown = await (async () => { for (let tries = 0; tries < 100; tries++) { const ids = await homeIds(); if (ids.length === 2) return ids; await page.waitForTimeout(100); } return homeIds(); })();
-      assert.deepEqual(shown.map(row => row.split('@')[0]).sort(), [seeded.staleId, seeded.unownedId].sort());
+      const shown = await (async () => { for (let tries = 0; tries < 100; tries++) { const ids = await homeIds(); if (ids.length === 3) return ids; await page.waitForTimeout(100); } return homeIds(); })();
+      assert.deepEqual(shown.map(row => row.split('@')[0]).sort(), [seeded.missingId, seeded.staleId, seeded.unownedId].sort());
       assert.ok(shown.every(row => row.split('@')[1] !== seeded.unownedWorkspaceId), 'the copied post opens in the account copy, never the account-less library');
-      assert.equal(await page.locator('#homePostList [data-photo-post-id="' + seeded.missingId + '"]').count(), 0);
-      await manager(page); assert.equal(await page.locator('.blog-manager-list .blog-post').count(), 0);
+      assert.equal(await page.locator('#homePostList .home-post[data-photo-post-id="' + seeded.staleId + '"] .home-post-open').innerText(), '현재 본문 제목이 정확한 합성글');
+      await manager(page); assert.equal(await page.locator('.blog-manager-list .blog-post').count(), 1);
       assert.equal(await page.locator('#blogLocalFind').count(), 0, 'No per-device discovery choice remains');
       assert.equal(await page.getByText('이 브라우저에서 글 찾기').count(), 0);
       const before = await databaseSnapshot(page); assert.equal(await page.evaluate(() => window.__finderScans || 0), 0);
       const found = await scan(page);
       assert.equal(found.complete, true); assert.deepEqual(found.issues, []);
-      const missing = found.posts.find(p => p.id === seeded.missingId); assert.ok(missing); assert.equal(missing.indexState, 'missing');
-      assert.equal(found.posts.find(p => p.id === seeded.staleId).indexState, 'mismatch');
+      // The lists the home read rebuilt both rows (until 11-16 the scan reported 'missing' and 'mismatch' here).
+      const missing = found.posts.find(p => p.id === seeded.missingId); assert.ok(missing); assert.equal(missing.indexState, 'listed');
+      assert.equal(found.posts.find(p => p.id === seeded.staleId).indexState, 'listed');
       assert.equal(found.posts.find(p => p.id === seeded.staleId).title, '현재 본문 제목이 정확한 합성글');
       for (const id of [seeded.draftId, seeded.archivedId, seeded.plainId, seeded.pageDraftId, seeded.writingId, seeded.writingDraftId, seeded.appliedStageId]) assert.ok(found.posts.some(p => p.id === id), id);
       assert.equal(found.posts.find(p => p.id === seeded.draftId).status, 'draft'); assert.equal(found.posts.find(p => p.id === seeded.archivedId).archived, true);

@@ -1617,7 +1617,9 @@
           const workspace = { workspaceId, title: bundle.title, unowned };
           result.workspaces.push(workspace);
           const add = (kind, row) => result.posts.push({ workspaceId, workspaceTitle: bundle.title, unowned, kind, ...row });
-          const summaryRow = await meta.get(`photo-posts:${workspaceId}`), summaries = new Map();
+          // The list rows as stored, before any list repair: each post's own row, and the earlier
+          // versions' whole-list row (readPostList), which still names every post.
+          const summaryRow = await meta.get(legacyListKey(workspaceId)), summaries = new Map(), rows = new Map(), rowPrefix = summaryPrefix(workspaceId);
           if (summaryRow !== undefined) {
             if (!Array.isArray(summaryRow.value)) issue(workspaceId, 'photo', 'invalid_photo_post_index');
             else for (const summary of summaryRow.value) {
@@ -1625,7 +1627,8 @@
               else summaries.set(summary.id, summary);
             }
           }
-          const prefix = `photo-post:${workspaceId}:`, found = new Set();
+          for (const entry of await meta.getAll(keyRange(rowPrefix))) if (typeof entry?.key === 'string' && entry.key.startsWith(rowPrefix)) rows.set(entry.key.slice(rowPrefix.length), entry.value);
+          const prefix = postPrefix(workspaceId), found = new Set();
           let cursor = await meta.openCursor(root.IDBKeyRange.bound(prefix, prefix + '\uffff'));
           while (cursor) {
             const doc = cursor.value?.value;
@@ -1633,12 +1636,11 @@
               photoPost().validate(doc);
               if (cursor.key !== prefix + doc.id) throw fault('invalid_photo_post', '글과 저장 식별자가 다릅니다.');
               found.add(doc.id);
-              const summary = summaries.get(doc.id), expected = photoSummary(doc);
-              let indexState = summary ? 'mismatch' : 'missing';
-              if (summary) {
-                try { if (stablePayload(summary) === stablePayload(expected)) indexState = 'listed'; }
-                catch (_) { issue(workspaceId, 'photo', 'invalid_photo_post_index'); }
-              }
+              // 'listed': the post's row and its whole-list entry both say what the document says;
+              // 'missing': neither names it; 'mismatch': otherwise. The list rebuilds either from the document.
+              const summary = summaries.get(doc.id), row = rows.get(doc.id), expected = photoSummary(doc);
+              const indexState = summary === undefined && row === undefined ? 'missing'
+                : plain(summary) && sameLegacy(summary, expected) && sameSummary(row, expected) ? 'listed' : 'mismatch';
               add('photo', { id: doc.id, revision: doc.revision, title: doc.title, status: doc.status,
                 archived: doc.archived === true, indexState, updatedAt: doc.updatedAt });
             } catch (cause) { issue(workspaceId, 'photo', cause); }
@@ -1745,11 +1747,44 @@
         return { kind: ref.kind, title: stage.title, body: stage.text, doc: clone(stage) };
       });
     }
+    // Every post and draft of the workspace, one summary each (id, title, status, revision, createdAt,
+    // updatedAt, plain text as `body`, photo and attachment counts, archived), oldest first. Rows that
+    // do not match their documents (the first list after the upgrade, a write by an earlier app
+    // version, a damaged row) are rewritten afterwards in a transaction of their own that reads them
+    // again; when that fails nothing is lost: this list already follows the documents.
     async function listPhotoPosts(workspaceId) {
       collectionScope(workspaceId);
+      const state = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+        return readPostList(meta, workspaceId);
+      });
+      if (state.dirty) {
+        await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+          const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+          const again = await readPostList(meta, workspaceId);
+          if (again.dirty) await writePostList(meta, workspaceId, again);
+        }).catch(() => {});
+        scopeGuard();
+      }
+      return clone(state.list);
+    }
+    // The list summaries of a few posts (the same rule as the list; null for a post that is not
+    // there), without reading the whole list: an open editor checks its own post and the one it
+    // revises after each save.
+    async function readPostSummaries(workspaceId, postIds) {
+      collectionScope(workspaceId);
+      if (!Array.isArray(postIds) || postIds.length > 100) throw fault('invalid_request', '읽을 글 목록을 확인해 주세요.');
+      postIds.forEach(id => requireId(id, '사진 글'));
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
-        return clone((await meta.get(`photo-posts:${workspaceId}`))?.value || []);
+        const legacy = legacyEntries(await meta.get(legacyListKey(workspaceId))), result = [];
+        for (const id of postIds) {
+          const row = (await meta.get(summaryPrefix(workspaceId) + id))?.value, entry = legacy?.get(id);
+          // A row and entry that agree are trusted only while the document is there (the list reads its key).
+          const present = typeof meta.getKey === 'function' ? await meta.getKey(postPrefix(workspaceId) + id) !== undefined : (await meta.get(postPrefix(workspaceId) + id)) !== undefined;
+          result.push(present ? (await resolvePost(meta, workspaceId, id, row, entry)).summary : null);
+        }
+        return clone(result);
       });
     }
     async function readPhotoPost(workspaceId, postId) {
@@ -1842,7 +1877,7 @@
             const row = await postEvidenceRow(meta, workspaceId, `post-evidence:${workspaceId}:${over.id}`);
             if (row?.refs?.length) { refs = checkedEvidence(row.refs, workspaceId); checkEvidenceTargets(refs, await checkedBundle(tx.objectStore('bundles'), workspaceId, meta)); }
           } catch (error) { if (error?.name === 'TransactionInactiveError' || error?.name === 'AbortError') throw error; refs = null; }
-          kept = await writePhotoPost(tx, workspaceId, copy, 0, refs ? { refs, baseRevision: 0 } : null, null, effects, refs || [], null, true);
+          kept = await writePhotoPost(tx, workspaceId, copy, 0, refs ? { refs, baseRevision: 0 } : null, null, effects, refs || []);
           if (refs) effects.evidenceKeys = [`post-evidence:${workspaceId}:${copyId}`];
         }
         const stored$ = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
@@ -1922,11 +1957,11 @@
         for (const char of title) { if (head.length + char.length + suffix.length > 500) break; head += char; }
         const recovery = { ...clone(source), id: recoveryId, title: head + suffix, revision: 0, status: 'draft', replaces: null };
         if (recovery.format !== 'life-photo-post-v1') recovery.archived = false;
-        // Final first permits a replacement at the 200-post limit. Both writes,
+        // The finished post first, then its recovery copy. Both writes,
         // refs, identity/receipt transfers and material output moves share tx.
         const post = await writePhotoPost(tx, workspaceId, value, baseRevision, null, null, effects);
         const kept = await writePhotoPost(tx, workspaceId, recovery, 0,
-          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs, null, true);
+          originalEvidence ? { refs, baseRevision: 0 } : null, null, effects, refs);
         await meta.put({ key: receiptKey, value: { payload, recoveryId, originalTitle: source.title, postRevision: post.revision, recoveryRevision: kept.revision } });
         effects.evidence = !!originalEvidence;
         return { post, recoveryId, replayed: false };
@@ -1938,11 +1973,10 @@
       }
       return result;
     }
-    // `received`: the write stores a post that already exists and is not one the person starts here:
-    // what account sync brought (another device's post, the copies a sync conflict keeps), a backup
-    // restored into its restore copy, the recovery copy of a format transition. The 200 cap below
-    // does not apply to it.
-    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null, received = false) {
+    // A workspace holds any number of posts and drafts (owner decision 10, 2026-11-16: the earlier cap
+    // of 200 is gone). The write changes this post's list row only (and the transition's whole-list
+    // row, see readPostList).
+    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
         // The bundle's content is read (and the whole bundle validated) only by
         // the source checks below; a plain post write checks the workspace only.
         const meta = tx.objectStore('meta'); let checked = null;
@@ -1981,8 +2015,7 @@
         if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
         if (previous) photoPost().validate(previous);
         assertPostFormatUpgrade(previous, value);
-        let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-        const countBefore = index.length;
+        const removed = [];
         if (value.status === 'saved' && value.replaces) {
           const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
           if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
@@ -2018,39 +2051,16 @@
           }
           const materialRevision = await moveMaterialWritingOutputs(meta, workspaceId, target.id, value.id);
           if (materialRevision !== null) effects.materialRevision = materialRevision;
-          await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
+          await meta.delete(targetKey); removed.push(target.id); value.createdAt = target.createdAt; value.replaces = null;
           // The post keeps the time it was first written, which another device's clock may have set
           // ahead of this one: the finished revision is then written at that time, never before it.
           if (value.updatedAt < value.createdAt) value.updatedAt = value.createdAt;
         }
         value.revision = baseRevision + 1; photoPost().validate(value);
-        const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
-        const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
-        // The cap stops a new post or draft the person starts on this device, and only a write that
-        // makes the list longer. It never stops `received` writes (a device that refused those kept a
-        // different list from the account for good), saving a post or draft that is already here, or
-        // the one editing draft of a saved post that is here: the editor edits a saved post through a
-        // new draft that names it (`replaces`), and finishing that draft takes the list back to its
-        // length. A second editing draft of the same post, or one naming a post or revision that is
-        // not here, is a new draft like any other.
-        if (!received && index.length > 200 && index.length > countBefore && !(await editsStoredPost(meta, workspaceId, value, index)))
-          throw fault('photo_post_limit', '글과 초안은 합계 200개까지입니다. 쓰지 않는 초안이나 복구 사본을 지운 뒤 다시 저장해 주세요.');
-        await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
+        await meta.put({ key, value }); await writePostRows(meta, workspaceId, [photoSummary(value)], removed);
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
         if (naver) naver.assertCurrent();
         return clone(value);
-    }
-    // True for a new draft that edits a saved post stored here at exactly the named revision, when no
-    // other draft here already edits that post. Read only when the cap would refuse the write.
-    async function editsStoredPost(meta, workspaceId, value, index) {
-      if (value.status !== 'draft' || !value.replaces) return false;
-      const target = (await meta.get(`photo-post:${workspaceId}:${value.replaces.id}`))?.value;
-      if (!target || target.status !== 'saved' || target.revision !== value.replaces.revision) return false;
-      for (const row of index) {
-        if (row.status !== 'draft' || row.id === value.id) continue;
-        if ((await meta.get(`photo-post:${workspaceId}:${row.id}`))?.value?.replaces?.id === target.id) return false;
-      }
-      return true;
     }
     function checkedEvidence(refs, workspaceId) {
       if (!Array.isArray(refs) || refs.length > 64) throw fault('invalid_source_reference', '원문 근거는 64개까지 보관할 수 있습니다.');
@@ -2116,9 +2126,8 @@
       assertCurrent();
       return savePhotoPost(workspaceId, input, 0, null, null, { request, assertCurrent });
     }
-    // A post brought back from a backup into the copy its restore made (full-backup.js). It existed
-    // before, so the 200 cap for posts started on this device does not apply. Only a workspace a
-    // restore marked as its copy takes it, and only as a new post there.
+    // A post brought back from a backup into the copy its restore made (full-backup.js). Only a
+    // workspace a restore marked as its copy takes it, and only as a new post there.
     async function restorePhotoPost(workspaceId, input, evidenceRefs = null) {
       collectionScope(workspaceId); photoPost().validate(input);
       const value = photoPost().compact(input);
@@ -2127,7 +2136,7 @@
       const effects = {};
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         if (!(await restoredCopyValue(tx.objectStore('meta'), workspaceId))) throw fault('restored_copy_invalid', '복원으로 만든 사본에만 글을 되살릴 수 있습니다.');
-        return writePhotoPost(tx, workspaceId, value, 0, evidence, null, effects, [], null, true);
+        return writePhotoPost(tx, workspaceId, value, 0, evidence, null, effects, []);
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
@@ -2766,8 +2775,7 @@
         photoPost().validate(post);
         const evidence = await meta.get(`post-evidence:${workspaceId}:${post.id}`); refs = checkedEvidence(evidence === undefined ? [] : evidence.value.refs, workspaceId);
         if (post.status === 'saved') {
-          const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-          for (const summary of index) if (summary.status === 'draft' && !summary.archived) {
+          for (const summary of (await readPostList(meta, workspaceId)).list) if (summary.status === 'draft' && !summary.archived) {
             const draft = (await meta.get(`photo-post:${workspaceId}:${summary.id}`))?.value;
             if (!draft) throw fault('photo_post_missing', '수정 중인 글을 찾지 못했습니다. 기존 준비와 글을 유지합니다.');
             photoPost().validate(draft);
@@ -2870,7 +2878,7 @@
         }
         throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
       }
-      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs, null, true);
+      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
       const blog = root.HaedoLife?.Blog || require('./blog.js');
       const state = materialBlogState(output.postId, blogRow?.workspace_id || remoteWorkspaceId, output.revision, blog.pack(original), saved.revision);
       state.publication = clone(blogRow?.publication || null);
@@ -3231,21 +3239,162 @@
       if (!bundle) throw fault('workspace_not_found', '보관할 작업공간을 찾지 못했습니다.');
       core().validateWorkspace(bundle); return bundle;
     }
+    // ---- Post list (owner decisions 8 and 10, 2026-11-16; docs/design-review/post-index-rebuild.md) ----
+    // Each post's list row is a meta row of its own, `photo-summary:${ws}:${id}`, beside its document
+    // `photo-post:${ws}:${id}`: a save writes that post's row, never the others', and the list has no
+    // length limit. The documents stay the source of truth: a row that is missing, malformed or behind
+    // its document is rebuilt from the document, and a row whose document is gone is dropped.
+    // Transition (one release): app versions up to haedo-v220 read and write the whole-list row
+    // `photo-posts:${ws}`. It is kept complete, with every post's exact id, title, state, revision,
+    // update time and counts, and its text cut to LEGACY_BODY characters: it is still rewritten on
+    // every save, and the text was most of its size. Such an app writes its own entry in full, so a
+    // post it wrote shows as an entry that differs from the post's row, and is read again from its
+    // document.
+    const LEGACY_BODY = 300;
+    const LEGACY_FIELDS = Object.freeze(['id', 'title', 'status', 'revision', 'updatedAt', 'body', 'photos', 'attachments', 'archived']);
+    const summaryPrefix = workspaceId => `photo-summary:${workspaceId}:`;
+    const postPrefix = workspaceId => `photo-post:${workspaceId}:`;
+    const legacyListKey = workspaceId => `photo-posts:${workspaceId}`;
+    const keyRange = prefix => root.IDBKeyRange?.bound(prefix, prefix + '\uffff');
     function photoSummary(doc) {
-      return { id: doc.id, title: doc.title, status: doc.status, revision: doc.revision, updatedAt: doc.updatedAt,
+      return { id: doc.id, title: doc.title, status: doc.status, revision: doc.revision, createdAt: doc.createdAt, updatedAt: doc.updatedAt,
         body: photoPost().plainText(doc), photos: doc.photos.length, attachments: (doc.attachments || []).length, archived: doc.archived === true };
+    }
+    function summaryShape(row, id) {
+      return plain(row) && row.id === id && typeof row.title === 'string' && (row.status === 'saved' || row.status === 'draft') &&
+        Number.isSafeInteger(row.revision) && row.revision >= 1 && typeof row.createdAt === 'string' && typeof row.updatedAt === 'string' &&
+        typeof row.body === 'string' && Number.isSafeInteger(row.photos) && row.photos >= 0 &&
+        Number.isSafeInteger(row.attachments) && row.attachments >= 0 && typeof row.archived === 'boolean';
+    }
+    // The text an earlier app version lists, searches and shows an excerpt of: a longer text from its
+    // first non-space character (an excerpt trims it anyway, and a text with something in it never reads
+    // as empty there), cut to whole characters.
+    function legacyBody(body) {
+      if (body.length <= LEGACY_BODY) return body;
+      const start = Math.max(0, body.search(/\S/));
+      let cut = body.slice(start, start + LEGACY_BODY);
+      if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1);
+      return cut;
+    }
+    // A post's entry in the whole-list row, as app versions up to haedo-v220 write it (no createdAt).
+    function legacyEntry(summary) {
+      return { id: summary.id, title: summary.title, status: summary.status, revision: summary.revision, updatedAt: summary.updatedAt,
+        body: legacyBody(summary.body), photos: summary.photos, attachments: summary.attachments, archived: summary.archived };
+    }
+    const SUMMARY_FIELDS = Object.freeze([...LEGACY_FIELDS, 'createdAt']);
+    const sameSummary = (row, summary) => plain(row) && Object.keys(row).length === SUMMARY_FIELDS.length && SUMMARY_FIELDS.every(name => row[name] === summary[name]);
+    // Whether an entry says what the summary says: 'cut' with its text cut as this version writes it,
+    // 'whole' with the whole text as earlier versions write it, or '' (it does not). Read for every post
+    // on every list, so it compares fields in place.
+    function legacyMatch(entry, summary) {
+      if (entry.revision !== summary.revision || entry.updatedAt !== summary.updatedAt || entry.title !== summary.title || entry.status !== summary.status ||
+          entry.photos !== summary.photos || entry.attachments !== summary.attachments || entry.archived !== summary.archived || entry.id !== summary.id ||
+          typeof entry.body !== 'string' || Object.keys(entry).length !== LEGACY_FIELDS.length) return '';
+      if (entry.body === summary.body) return summary.body.length <= LEGACY_BODY ? 'cut' : 'whole';
+      return entry.body.length <= LEGACY_BODY && entry.body === legacyBody(summary.body) ? 'cut' : '';
+    }
+    const sameLegacy = (entry, summary) => legacyMatch(entry, summary) !== '';
+    // The whole-list row's entries by id, or null when it is missing or malformed.
+    function legacyEntries(row) {
+      if (row === undefined || !Array.isArray(row.value)) return null;
+      const entries = new Map();
+      for (const entry of row.value) { if (!plain(entry) || typeof entry.id !== 'string' || entries.has(entry.id)) return null; entries.set(entry.id, entry); }
+      return entries;
+    }
+    const byCreated = (a, b) => a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    // One post's summary from its stored row and whole-list entry, or from its document when those
+    // cannot be trusted (missing, malformed, or not saying the same: another app version wrote the post).
+    // kind: 'row' (row and entry agree), 'whole' (they agree; the entry holds the whole text as earlier
+    // versions write it), 'doc' (built from the document), 'missing' (no document), 'broken' (the
+    // document fails validation: it is shown as the earlier list showed it, by its row, else by its
+    // whole-list entry, and never rewritten from here; scanLocalPosts reports it, and opening it,
+    // syncing it or backing it up reports the failure as before). Any other error (a missing module, a
+    // programming error) is thrown rather than read as "no post".
+    async function resolvePost(meta, workspaceId, id, row, entry) {
+      const match = entry && summaryShape(row, id) ? legacyMatch(entry, row) : '';
+      if (match) return { summary: row, kind: match === 'whole' ? 'whole' : 'row' };
+      const doc = (await meta.get(postPrefix(workspaceId) + id))?.value;
+      if (doc === undefined) return { summary: null, kind: 'missing' };
+      try {
+        photoPost().validate(doc); if (doc.id !== id) throw fault('invalid_photo_post', '글과 저장 식별자가 다릅니다.');
+        return { summary: photoSummary(doc), kind: 'doc' };
+      } catch (error) {
+        if (typeof error?.code !== 'string') throw error;
+        const shown = summaryShape(row, id) ? row : plain(entry) ? { ...entry, createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : entry.updatedAt } : null;
+        return { summary: shown, kind: 'broken' };
+      }
+    }
+    // One workspace's list as its documents hold it (oldest first by createdAt), and what to write so
+    // that the stored rows say the same (resolvePost decides each post). Writes nothing.
+    async function readPostList(meta, workspaceId) {
+      const docs = postPrefix(workspaceId), rows = summaryPrefix(workspaceId);
+      const ids = (await meta.getAllKeys(keyRange(docs))).filter(key => typeof key === 'string' && key.startsWith(docs)).map(key => key.slice(docs.length));
+      const stored = new Map();
+      for (const entry of await meta.getAll(keyRange(rows))) if (typeof entry?.key === 'string' && entry.key.startsWith(rows)) stored.set(entry.key.slice(rows.length), entry.value);
+      const legacyRow = await meta.get(legacyListKey(workspaceId)), legacy = legacyEntries(legacyRow);
+      const present = new Set(ids), list = [], put = [], broken = new Set();
+      // A workspace without posts may have no whole-list row: earlier versions read that as empty.
+      let legacyStale = !legacy && (legacyRow !== undefined || ids.length > 0);
+      for (const id of ids) {
+        const row = stored.get(id), entry = legacy?.get(id), { summary, kind } = await resolvePost(meta, workspaceId, id, row, entry);
+        if (kind === 'missing') continue;
+        if (kind === 'broken') { broken.add(id); if (summary) list.push(summary); continue; }
+        list.push(summary);
+        // An entry an earlier version wrote holds the whole text: rewritten once in this version's form.
+        if (kind === 'whole') legacyStale = true;
+        if (kind === 'doc') {
+          if (!sameSummary(row, summary)) put.push(summary);
+          if (!entry || legacyMatch(entry, summary) !== 'cut') legacyStale = true;
+        }
+      }
+      const drop = [...stored.keys()].filter(id => !present.has(id));
+      if (legacy && !legacyStale) for (const id of legacy.keys()) if (!present.has(id)) { legacyStale = true; break; }
+      list.sort(byCreated);
+      let next = null;
+      if (legacyStale) {
+        // Entries keep their place; a broken document's entry stays as it was; new posts go last.
+        const listed = new Map(list.map(summary => [summary.id, summary])), placed = new Set(); next = [];
+        if (legacy) for (const [id, entry] of legacy) {
+          if (broken.has(id)) { next.push(entry); placed.add(id); } else if (listed.has(id)) { next.push(legacyEntry(listed.get(id))); placed.add(id); }
+        }
+        for (const summary of list) if (!placed.has(summary.id)) next.push(legacyEntry(summary));
+      }
+      return { list, put, drop, legacy: next, dirty: put.length > 0 || drop.length > 0 || next !== null };
+    }
+    async function writePostList(meta, workspaceId, state) {
+      for (const summary of state.put) await meta.put({ key: summaryPrefix(workspaceId) + summary.id, value: summary });
+      for (const id of state.drop) await meta.delete(summaryPrefix(workspaceId) + id);
+      if (state.legacy) await meta.put({ key: legacyListKey(workspaceId), value: state.legacy });
+    }
+    // The whole-list row before a write changes one entry of it. A missing or malformed one is first
+    // rebuilt from the documents, so an earlier app version never reads a partial list.
+    async function legacyListForWrite(meta, workspaceId) {
+      const row = await meta.get(legacyListKey(workspaceId));
+      if (legacyEntries(row)) return row.value;
+      const state = await readPostList(meta, workspaceId);
+      await writePostList(meta, workspaceId, state);
+      return state.legacy || [];
+    }
+    // The rows of posts whose documents this transaction wrote (`summaries`) or removed (`removed` ids).
+    async function writePostRows(meta, workspaceId, summaries, removed = []) {
+      let legacy = await legacyListForWrite(meta, workspaceId);
+      if (removed.length) {
+        for (const id of removed) await meta.delete(summaryPrefix(workspaceId) + id);
+        legacy = legacy.filter(item => !removed.includes(item.id));
+      }
+      for (const summary of summaries) {
+        await meta.put({ key: summaryPrefix(workspaceId) + summary.id, value: summary });
+        const entry = legacyEntry(summary), at = legacy.findIndex(item => item.id === summary.id);
+        if (at < 0) legacy.push(entry); else legacy[at] = entry;
+      }
+      await meta.put({ key: legacyListKey(workspaceId), value: legacy });
     }
     async function readPreservationCatalog(workspaceId, options) {
       collectionScope(workspaceId); const settings = preservationOptions(options);
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const bundle = await preservationBundle(tx, workspaceId, settings.unowned), meta = tx.objectStore('meta');
-        const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-        if (!Array.isArray(index) || index.some(row => !plain(row) || typeof row.id !== 'string' || !['saved', 'draft'].includes(row.status)) || new Set(index.map(row => row.id)).size !== index.length) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다. 기존 자료를 보존했습니다.');
-        const posts = index.filter(row => row.status === 'saved').map(row => {
-          if (typeof row.title !== 'string' || typeof row.body !== 'string' || typeof row.updatedAt !== 'string' || !Number.isSafeInteger(row.revision) || row.revision < 1 || !Number.isSafeInteger(row.photos) || row.photos < 0) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다.');
-          return { id: row.id, title: row.title, status: row.status, revision: row.revision, updatedAt: row.updatedAt,
-            body: row.body, photos: row.photos, attachments: row.attachments || 0, archived: row.archived === true };
-        });
+        const posts = (await readPostList(meta, workspaceId)).list.filter(row => row.status === 'saved').map(row => ({ id: row.id, title: row.title, status: row.status,
+          revision: row.revision, updatedAt: row.updatedAt, body: row.body, photos: row.photos, attachments: row.attachments, archived: row.archived }));
         const state = await nineBoardValue(meta, workspaceId);
         return clone({ workspace: { workspaceId, title: bundle.title, revision: bundle.revision }, posts,
           boards: state.boards.map(board => ({ id: board.id, title: board.title, areas: board.areas.length, itemCount: board.areas.reduce((sum, area) => sum + area.items.length, 0) })) });
@@ -3337,7 +3486,7 @@
           await meta.put({ key: `photo-post:${workspaceId}:${doc.id}`, value: doc });
           await meta.put({ key: `post-evidence:${workspaceId}:${doc.id}`, value: evidence });
         }
-        await meta.put({ key: `photo-posts:${workspaceId}`, value: posts.map(({ doc }) => photoSummary(doc)) });
+        await writePostRows(meta, workspaceId, posts.map(({ doc }) => photoSummary(doc)));
         await meta.put({ key: `nine-board:${workspaceId}`, value: state });
         await meta.put({ key: activeKey, value: workspaceId });
         return clone(value);
@@ -3474,8 +3623,11 @@
         Number.isSafeInteger(state.revision) && state.revision >= 1 && Number.isSafeInteger(state.remoteRevision) && state.remoteRevision >= 0 &&
         Number.isSafeInteger(state.localRevision) && state.localRevision >= 0;
     }
-    async function listBlogSyncStates(workspaceId) {
+    // `{ posts: false }`: only the sync states and deletions (no post list read), for a screen that
+    // shows publication states.
+    async function listBlogSyncStates(workspaceId, options = {}) {
       blogAccountScope(workspaceId);
+      if (!plain(options) || options.posts !== undefined && typeof options.posts !== 'boolean') throw fault('invalid_request', '읽을 동기화 상태를 확인해 주세요.');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const prefix = `blog-sync:${workspaceId}:`, deleted = `blog-delete:${workspaceId}:`, states = [], tombstones = [], issues = [];
@@ -3492,8 +3644,8 @@
             else issues.push({ remoteId: key.slice(deleted.length), code: 'invalid_blog_tombstone' });
           }
         }
-        const posts = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-        return { posts: clone(Array.isArray(posts) ? posts : []), states, tombstones, issues };
+        if (options.posts === false) return { states, tombstones, issues };
+        return { posts: clone((await readPostList(meta, workspaceId)).list), states, tombstones, issues };
       });
     }
     async function commitBlogSync(workspaceId, input, options = {}) {
@@ -3546,10 +3698,9 @@
           const materialRevision = await retireMaterialWritingOutput(meta, workspaceId, postId, effects);
           if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(key); await meta.delete(bindingKey); await meta.delete(`post-evidence:${workspaceId}:${postId}`);
-          const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-          await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
+          await writePostRows(meta, workspaceId, [], [postId]);
         } else {
-          if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects, [], null, true); assertCurrent(); }
+          if (post) { post.revision = baseRevision; saved = await writePhotoPost(tx, workspaceId, post, baseRevision, null, null, effects, []); assertCurrent(); }
           if (binding) {
             const value = { ...binding, revision: bindingRevision + 1, localRevision: saved ? saved.revision : binding.localRevision };
             if (!blogBindingShape(value)) throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.');
@@ -3557,8 +3708,8 @@
           }
         }
         let copied = null;
-        for (const copy of copies) { const written = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects, [], null, true); copied ||= written; assertCurrent(); }
-        if (edit) { await writePhotoPost(tx, workspaceId, edit, edit.revision, null, null, effects, [], null, true); assertCurrent(); }
+        for (const copy of copies) { const written = await writePhotoPost(tx, workspaceId, copy, 0, null, null, effects, []); copied ||= written; assertCurrent(); }
+        if (edit) { await writePhotoPost(tx, workspaceId, edit, edit.revision, null, null, effects, []); assertCurrent(); }
         return { postId, revision: remove ? 0 : saved ? saved.revision : current?.revision || 0, copyId: copied?.id || null, removed: remove };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
@@ -3589,8 +3740,7 @@
           if (blogBindingShape(binding) && (binding.remoteRevision > 0 || binding.pending))
             await meta.put({ key: blogDeleteKey(workspaceId, binding.remoteId), value: blogTombstone(binding, workspaceId, 'deleted') });
         }
-        const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
-        await meta.put({ key: `photo-posts:${workspaceId}`, value: index.filter(item => item.id !== postId) });
+        await writePostRows(meta, workspaceId, [], [postId]);
         return { postId, remoteId: binding?.remoteId || null };
       });
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
@@ -5840,21 +5990,18 @@
       } catch (_) { return null; }
     }
     async function copyUnownedPosts(meta, fromId, toId, toBundle, remap, skip = new Set()) {
-      const ids = new Set(), index = (await meta.get(`photo-posts:${fromId}`))?.value, prefix = `photo-post:${fromId}:`;
+      const ids = new Set(), index = (await meta.get(legacyListKey(fromId)))?.value, prefix = postPrefix(fromId);
       if (Array.isArray(index)) for (const row of index) if (typeof row?.id === 'string') ids.add(row.id);
       // A document missing from the summary list is still the owner's post.
-      for (const key of await meta.getAllKeys()) if (typeof key === 'string' && key.startsWith(prefix)) ids.add(key.slice(prefix.length));
-      let target = (await meta.get(`photo-posts:${toId}`))?.value || [];
-      const copied = [], skipped = [];
+      for (const key of await meta.getAllKeys(keyRange(prefix))) if (typeof key === 'string' && key.startsWith(prefix)) ids.add(key.slice(prefix.length));
+      const copied = [], skipped = [], summaries = [];
       for (const id of [...ids].sort()) {
         if (skip.has(id)) continue;
         const doc = (await meta.get(prefix + id))?.value;
         try { photoPost().validate(doc); if (doc.id !== id) throw fault('invalid_photo_post', '글 식별자가 다릅니다.'); }
         catch (_) { skipped.push({ id, code: 'invalid_photo_post' }); continue; }
         if (await meta.get(`photo-post:${toId}:${id}`)) { copied.push(id); continue; }
-        if (target.length >= 200) { skipped.push({ id, code: 'photo_post_limit' }); continue; }
-        await meta.put({ key: `photo-post:${toId}:${id}`, value: clone(doc) });
-        target = target.filter(row => row.id !== id).concat(photoSummary(doc));
+        await meta.put({ key: `photo-post:${toId}:${id}`, value: clone(doc) }); summaries.push(photoSummary(doc));
         const evidence = (await meta.get(`post-evidence:${fromId}:${id}`))?.value;
         if (Array.isArray(evidence?.refs) && evidence.refs.length) {
           const refs = remapUnownedEvidence(evidence.refs, toId, toBundle, remap);
@@ -5862,7 +6009,7 @@
         }
         copied.push(id);
       }
-      await meta.put({ key: `photo-posts:${toId}`, value: target });
+      await writePostRows(meta, toId, summaries);
       return { copied, skipped };
     }
     async function importUnownedWorkspace(workspaceId, options = {}) {
@@ -6538,7 +6685,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePhotoPostOver, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPostSummaries, readPhotoPost, readPhotoPosts, savePhotoPost, savePhotoPostOver, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, readMaterialContinuityOutputDeletion, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,

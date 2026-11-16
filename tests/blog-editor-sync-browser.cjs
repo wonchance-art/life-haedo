@@ -403,6 +403,18 @@ async function main() {
         // The Mac reads the finished post a little late, so it first hears that the revision left the server and then
         // stores the finished post. At that store the editor starts to follow; in that moment a link input opens
         // (right after the editor's own handler): the follow must see it and stay.
+        // The phone sends the finished post and then deletes the revision: two requests. A Mac list between them
+        // sees the finished post while the revision is still there, so the Mac stores the post before it hears the
+        // revision left (the other order: its clean editor follows at remote_gone, the check above). That window
+        // was 62 ms against the Mac's list every ~150 ms (base c76e693) and 158 ms with the per-post list rows
+        // (2026-11-16: the phone's sync reads the list rows between the two requests), where this check then failed
+        // without testing what it is for. The Mac's lists wait until the revision is gone from the server, so the
+        // order this check needs is set, not left to timing.
+        const revision = serverPosts(server).find(item => item.status === 'draft' && /맥 입력/.test(item.text)).id;
+        await a.context.route(cloud + '/rest/v1/rpc/life_blog_sync_list', async route => {
+          for (let n = 0; n < 300 && serverPosts(server).some(item => item.id === revision); n++) await sleep(100);
+          return route.fallback();
+        });
         let slow = true;
         await a.context.route(cloud + '/rest/v1/rpc/life_blog_read', async route => {
           if (slow && route.request().postDataJSON()?.p_post_id === id) { slow = false; await sleep(2000); }
