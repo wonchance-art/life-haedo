@@ -369,10 +369,10 @@ select (select count(*) from haedo_news_wide_private.feeds) as feeds,
 | `supabase/functions/haedo-news-wide/topics.mjs` | `cf290574d7d60a33286577609ff9fd2752276a238d477c1cc8e580da979600a4` |
 | `supabase/functions/haedo-news-wide/upstream.mjs` | `103a0a4db3230a2a69bc978bd5f2f39930f803e38d546c11aa10ec95f9c60d7c` |
 | `supabase/functions/haedo-news-wide/items.mjs` | `438e125e69074af3eeea9d75fc64780d1d84451a677214118db4eecfe60c2955` |
-| `supabase/functions/haedo-news-wide/xml.mjs` | `1f6424e765f4ae8fbfd27acdc59b82908da4ecc95d9ba92b5bb6a713596c1477` |
+| `supabase/functions/haedo-news-wide/xml.mjs` | `a6a8f3937b45ef74c19f87f8edff9ebf1fcda1e2c50236e9aab828d143ad557e` |
 | `supabase/functions/haedo-news-wide/suppliers/google-news.mjs` | `0be7fa9825f54565eea0d74793d6586a87f627497e90a374f526d865a7d26bc3` |
 | `supabase/functions/_shared/supabase-keys.mjs` | `21c146952d2b4d1b58fe54ae571facd8447c4b7cb21ddd48f20919a9859f3707` |
-| `supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs` | `438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55` |
+| `supabase/functions/haedo-rss/vendor/fast-xml-parser.mjs` | `e26d0aed2252e8a9c9c1226229a90f2dec4d3d29e4d8a7f1c1fcf976aa1e5e10` |
 | `supabase/migrations/20261111130000_news_wide_feed.sql` | `7825f9fb5ae538a3254f6d9fde7f7dffecd17d212c79fd6c77ce841886fe84ed` |
 | `supabase/operations/20261111-news-wide-allow-first-account.sql` | `407be756008f2bc62e758ac9728448da397d135c99bfbd02ed37e42c8a572cfb` |
 | `supabase/operations/20261112-news-wide-allow-owner-accounts.sql` | `45a9e24c8a7c30aa9e5e6d7a5eba3206efa847855ee831f90ab33b2c0d076019` |

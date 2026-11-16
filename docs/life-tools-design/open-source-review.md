@@ -1279,8 +1279,9 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - GDELT DOC 2.0: 연결 뒤 12초 만에 끊기고 다른 경로에서 HTTP 503이 두 번 왔다. 형식을 확인하지 못해 보류한다.
   - 네이버 뉴스 검색 API: 약관이 다른 내용과 섞기·순위 수정·저장을 금지해 캐시·병합과 맞지 않는다.
   - 유료 뉴스 API: 비용 조건에서 제외.
-- **파서: 새 의존성 없이 기존 묶음을 재사용한다.** `haedo-rss`가 이미 보관한 [fast-xml-parser](https://www.npmjs.com/package/fast-xml-parser) 5.12.0(MIT) 번들(SHA-256 `438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55`)을 새 함수의 `index.ts`가 그대로 가져온다. 사본을 하나 더 두지 않는다.
+- **파서: 새 의존성 없이 기존 묶음을 재사용한다.** `haedo-rss`가 이미 보관한 [fast-xml-parser](https://www.npmjs.com/package/fast-xml-parser) 5.12.1(MIT) 번들(SHA-256 `e26d0aed2252e8a9c9c1226229a90f2dec4d3d29e4d8a7f1c1fcf976aa1e5e10`)을 새 함수의 `index.ts`가 그대로 가져온다. 사본을 하나 더 두지 않는다.
   - 같은 날 npm 레지스트리 조회: `latest`가 5.12.0(마지막 배포 2026-11-03)이라 고정 판이 최신이다. `tests/fixtures/rss`의 고정 lock으로 `npm audit --json`을 돌려 알려진 권고 0건(운영 의존성 9개)을 받았다. 조회 시점의 공식 목록 기준이며 안전 보증이 아니다.
+  - 2026-11-16 보안 갱신: [GHSA-7cfw-w2rf-f3jc](https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-7cfw-w2rf-f3jc)(Moderate, 2026-11-13) — 5.12.0 이하의 `XMLValidator.validate`가 이름 없는 `=` 앞 공백을 다시 훑어 제곱 시간이 걸린다. 두 함수 모두 파싱 전에 이 검사를 부르므로 5.12.1(2026-11-13 배포, 전이 의존성은 fast-xml-builder 1.3.1→1.3.2만 바뀜, 둘 다 MIT·라이선스 본문 동일)로 올렸다. 5.12.1의 소스 변경은 검사기 공백 건너뛰기, 속성 값 정규식(지연 일치+역참조 → 따옴표별 부정 문자 집합), 태그 안 따옴표 값 한 번에 건너뛰기뿐이며 결과는 같고 시간만 줄어든다. fast-xml-builder는 번들에 들어가지 않는다. 이름 없는 `=` 앞 공백 80,000자 입력의 검사 시간: 5.12.0 약 15 s → 5.12.1 수 ms.
   - [rss-parser](https://www.npmjs.com/package/rss-parser) 3.13.0(MIT, 마지막 배포 2023-04-11)은 xml2js에 의존하고 `<source url>` 같은 항목별 속성을 따로 꺼내야 한다. 새 의존성을 들일 이유가 없다.
   - 정규식으로 직접 파싱하는 방법은 엔티티·CDATA 처리에서 틀리기 쉬워 제외했다.
 - **직접 만든 부분과 이유:** `haedo-rss/feed.mjs`의 파서 설정은 본문 보존·Atom·페이지 이동용이라 `<source>`를 내보내지 않는다. 그래서 같은 거절 규칙(DOCTYPE·엔티티 선언·처리 명령·UTF-8 외 인코딩·깊이·노드 수)을 쓰는 작은 읽기 모듈(`xml.mjs`)과 Google 항목 추출(`suppliers/google-news.mjs`)을 새로 두었다. 숫자 문자 참조(`&#39;`)를 글자로 바꾸는 `htmlEntities` 설정을 켰고, 이름 있는 HTML 엔티티는 파싱 전에 거절한다.

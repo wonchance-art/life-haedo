@@ -1,5 +1,5 @@
 /* Strict XML reading for supplier feeds, on the fast-xml-parser bundle that
- * haedo-rss already vendors (../haedo-rss/vendor, MIT, pinned 5.12.0). The
+ * haedo-rss already vendors (../haedo-rss/vendor, MIT, pinned 5.12.1). The
  * parser is injected by index.ts; nothing here imports a dependency.
  *
  * Same refusals as haedo-rss/feed.mjs: no DOCTYPE or ENTITY, no processing
