@@ -91,9 +91,8 @@
 
   function create({ storage, core, host, getBundle, isDisposed = () => false, announce = () => {}, open, go, links = {} }) {
     let disposed = false, generation = 0, visible = false, filter = 'all';
-    let stopWatch = null, watchTimer = null, observer = null, createdScope = null;
+    let stopWatch = null, watchTimer = null, observer = null;
     const entryStops = new Set();
-    const createdCache = new Map();
     const urls = new Set();
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.isConnected;
@@ -113,12 +112,11 @@
       const posts = [], excerpts = [];
       if (photo.status === 'fulfilled' && Array.isArray(photo.value?.posts)) {
         const saved = photo.value.posts.filter(post => post.status === 'saved' && !post.archived);
-        // A calendar places a post on the day it was written (createdAt), so editing an old post
-        // does not move it to today. The list index has no createdAt; each library is read once.
-        const written = await createdTimes(saved, workspaceId);
+        // A calendar places a post on the day it was written (createdAt), as the 일정 list orders it
+        // (HomeUI.writtenAt, owner decision 8), so editing an old post does not move it to today.
         for (const post of saved)
           posts.push({ kind: 'photo', id: post.id, workspaceId: post.workspaceId || workspaceId, title: post.title, body: post.body,
-            at: written.get((post.workspaceId || workspaceId) + '/' + post.id) || post.updatedAt, photos: post.photos || 0 });
+            at: life.HomeUI.writtenAt(post), photos: post.photos || 0 });
         if (photo.value.failed) errors.push('일부 자료공간의 글');
       } else errors.push('사진 글');
       if (workbench.status === 'fulfilled' && workbench.value?.workspaceId === workspaceId) {
@@ -145,34 +143,6 @@
         rows = plan.value.rows || [];
       } else if (plan.status !== 'fulfilled') errors.push('연간 계획');
       return { days: data().group({ posts, excerpts, plans }), posts, plans, rows, errors };
-    }
-    // createdAt of saved photo posts, one read per library; an unreadable post keeps its list time.
-    // Kept across renders by (library, post, revision, updatedAt): only new or changed posts are read.
-    // The cache belongs to one account and open library; either change empties it.
-    function createdKey(ws, post) { return JSON.stringify([ws, post.id, post.revision ?? null, post.updatedAt ?? null]); }
-    async function createdTimes(saved, workspaceId) {
-      const scope = JSON.stringify([storage.account?.userId ?? null, workspaceId]);
-      if (createdScope !== scope) { createdCache.clear(); createdScope = scope; }
-      const byLibrary = new Map(), out = new Map(), used = new Set();
-      for (const post of saved) {
-        const ws = post.workspaceId || workspaceId, key = createdKey(ws, post); used.add(key);
-        if (createdCache.has(key)) { out.set(ws + '/' + post.id, createdCache.get(key)); continue; }
-        if (!byLibrary.has(ws)) byLibrary.set(ws, []); byLibrary.get(ws).push(post);
-      }
-      if (byLibrary.size && typeof storage.readPhotoPosts === 'function') await Promise.all([...byLibrary].map(async ([ws, posts]) => {
-        try {
-          const docs = await storage.readPhotoPosts(ws, posts.map(post => post.id));
-          // A pass that started under another account or library does not fill this cache.
-          if (createdScope !== scope) return;
-          docs.forEach((doc, i) => {
-            const post = posts[i];
-            if (doc?.id !== post.id || typeof doc.createdAt !== 'string') return;
-            createdCache.set(createdKey(ws, post), doc.createdAt); out.set(ws + '/' + post.id, doc.createdAt);
-          });
-        } catch (_) { /* Not cached: the list time places the post and the next render reads it again. */ }
-      }));
-      if (createdScope === scope) for (const key of [...createdCache.keys()]) if (!used.has(key)) createdCache.delete(key);
-      return out;
     }
     // A photo post's first photo, read only when the thumbnail is about to show.
     function thumb(context, post, label) {
@@ -637,7 +607,7 @@
       entryStops.forEach(stop => { try { stop(); } catch (_) {} }); entryStops.clear();
       generation += 1; visible = false; clearMedia();
     }
-    function dispose() { leave(); disposed = true; createdCache.clear(); createdScope = null; }
+    function dispose() { leave(); disposed = true; }
     return Object.freeze({ render, leave, dispose });
   }
 

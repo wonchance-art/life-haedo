@@ -114,19 +114,25 @@ test('stale source revision, malformed evidence and occupied recovery IDs leave 
 });
 
 // Rule change (core review M6, 2026-11-11): the transition's recovery copy is a copy of a post that is
-// already here, not a post the person starts, so the 200 cap does not refuse it. This check used to
-// require photo_post_limit and a rollback for an in-place draft at 200; before that change a
-// replacement was refused from 201 and an in-place draft from 200.
-test('the transition and its recovery copy are stored at and above the 200-post cap; a new post is still refused', async t => {
+// already here, not a post the person starts, so a cap never refused it. Rule change (owner decision
+// 10, 2026-11-16): there is no cap at all. This check used to pad the whole-list row with entries and
+// require photo_post_limit for a new post at 200 and 204; the list now follows the documents (an
+// entry without one is not a post), so the library holds that many real posts and a new post is stored.
+test('the transition and its recovery copy are stored beside 200 and 204 posts, and so is a new post', async t => {
   for (const total of [200, 204]) for (const draft of [false, true]) {
-    const f = await fixture(t, { draft }), indexKey = `photo-posts:${f.ws}`, index = f.memory.rows.get('meta').get(key(indexKey)).value;
-    while (index.length < total) index.push({ ...index[0], id: Core.id() });
-    const result = await f.run(), label = `${total} posts, ${draft ? 'in-place draft' : 'replacement'}`;
+    const f = await fixture(t, { draft }), label = `${total} posts, ${draft ? 'in-place draft' : 'replacement'}`;
+    for (let n = (await f.storage.listPhotoPosts(f.ws)).length; n < total; n++) {
+      const other = Photo.create(Core.id, '2026-11-04T00:00:00.000Z'); other.title = '다른 글 ' + n; other.ops = [{ insert: '본문\n' }]; other.status = 'saved';
+      await f.storage.savePhotoPost(f.ws, other, 0);
+    }
+    assert.equal((await f.storage.listPhotoPosts(f.ws)).length, total, label);
+    const result = await f.run();
     // A replacement removes the post it replaces; an in-place draft keeps its place. Both add the recovery copy.
     assert.equal((await f.storage.listPhotoPosts(f.ws)).length, draft ? total + 1 : total, label);
     assert.equal((await f.storage.readPhotoPost(f.ws, result.recoveryId)).title, '복구 사본 · 원래 제목', label);
     const fresh = Photo.create(Core.id, '2026-11-06T00:00:00.000Z'); fresh.title = '새 글'; fresh.ops = [{ insert: '본문\n' }];
-    await assert.rejects(f.storage.savePhotoPost(f.ws, fresh, 0), { code: 'photo_post_limit' }, label);
+    await f.storage.savePhotoPost(f.ws, fresh, 0);
+    assert.equal((await f.storage.listPhotoPosts(f.ws)).length, (draft ? total + 1 : total) + 1, label);
   }
 });
 
