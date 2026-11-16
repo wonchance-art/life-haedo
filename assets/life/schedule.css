@@ -183,7 +183,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-week-head { display: flex; align-items: baseline; gap: 8px; width: 100%; min-height: 48px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }
 .schedule-week-name { color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
 .schedule-week-number { font-size: var(--haedo-text-title); font-weight: var(--haedo-weight-semibold); font-variant-numeric: tabular-nums; }
-.schedule-week-number { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; margin-left: -6px; padding: 0 6px; border-radius: 18px; box-sizing: border-box; }
+.schedule-week-number { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 18px; box-sizing: border-box; }
 .schedule-week-head[data-today] .schedule-week-number { background: var(--haedo-ink); color: #fff; }
 .schedule-week-day .schedule-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
 .schedule-week-day .schedule-mark { display: none; }
@@ -345,11 +345,16 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 @media (max-width: 760px) {
   .life-toolbar[data-schedule] .life-schedule-views, .life-toolbar[data-schedule] .schedule-help { display: none; }
   /* ‹ › stay on every unit (another year, month or day). */
-  /* Up link and actions share the top row; the period title takes the full next row (iOS 캘린더). */
-  .life-toolbar[data-schedule] { flex-wrap: wrap; row-gap: 0; }
-  .life-toolbar[data-schedule] .haedo-heading-title { display: contents; }
-  .life-toolbar[data-schedule] .haedo-heading-actions { order: 1; margin-left: auto; }
-  .life-toolbar[data-schedule] .haedo-heading-title > h1 { order: 2; flex-basis: 100%; padding-bottom: 8px; }
+  /* 2026-11-16 노션 방향 (contract 일정 iPhone): the up link (‹ 2026), 통합 검색 and the 글쓰기 pencil share the top row;
+   * the period title and 오늘 ‹ › the next one (iOS 캘린더). The second row reaches under the pencil's column. */
+  .life-toolbar[data-schedule] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: 44px auto; grid-template-areas: "up up find" "title today step"; align-items: center; column-gap: 4px; row-gap: 0; }
+  .life-toolbar[data-schedule] .haedo-heading-title, .life-toolbar[data-schedule] .haedo-heading-actions { display: contents; }
+  .life-toolbar[data-schedule] .schedule-up { grid-area: up; justify-self: start; }
+  .life-toolbar[data-schedule] #lifeFindOpen { grid-area: find; justify-self: end; }
+  .life-toolbar[data-schedule] .haedo-heading-title > h1 { grid-area: title; min-width: 0; padding-bottom: 8px; }
+  .life-toolbar[data-schedule] .schedule-today { grid-area: today; align-self: start; }
+  .life-toolbar[data-schedule] .schedule-step { grid-area: step; align-self: start; margin-right: calc(-1 * max(52px, calc(env(safe-area-inset-right, 0px) + 44px)) + max(8px, env(safe-area-inset-right, 0px))); }
+  .life-toolbar[data-schedule] > .life-refresh { grid-column: 1 / -1; }
   /* The iOS back chevron is pulled 12px left (expert brief 3-1). */
   .schedule-up { display: inline-flex; align-items: center; min-height: 44px; margin-left: -12px; padding-right: 8px; color: var(--haedo-ink); font-size: var(--haedo-text-body); text-decoration: none; font-variant-numeric: tabular-nums; }
   .schedule-up > .life-glyph { width: 20px; height: 20px; }

@@ -185,8 +185,12 @@ async function main() {
       await page.locator(tab('schedule')).click(); await shown(page, 'month');
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-10-28'); await ready(page); await shown(page, 'month');
       await page.locator('#lifeSchedule [data-schedule-filter="posts"]').click();
-      await page.evaluate(() => scrollTo({ top: 200, behavior: 'instant' })); const monthScroll = await page.evaluate(() => scrollY);
+      // The position is read when the day is pressed: Playwright's click first scrolls the cell clear of the page's
+      // scroll padding (the 2026-11-16 W2 page title made M tall enough at 600px for that to move it, e.g. 200 → 211).
+      await page.evaluate(() => { scrollTo({ top: 200, behavior: 'instant' }); addEventListener('pointerdown', () => { window.__monthScroll = scrollY; }, { once: true, capture: true }); });
       await page.locator('[data-focus-key="schedule:day:2026-10-29"]').click(); await shown(page, 'day');
+      const monthScroll = await page.evaluate(() => window.__monthScroll);
+      assert.ok(monthScroll >= 200, 'M was scrolled (' + monthScroll + ')');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'D keeps the filter');
       await page.goBack(); await shown(page, 'month');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'M keeps the filter');

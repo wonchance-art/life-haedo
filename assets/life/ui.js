@@ -290,6 +290,10 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
+    // 노트·일정 from 1101px keep their large title after the toolbar (renderHeader); the screen's title is found in either.
+    const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
+    const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
+    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
     main = node('main', null, 'life-main');
@@ -1785,7 +1789,7 @@
       }
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || pageHeading();
       // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
       if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
@@ -2240,7 +2244,7 @@
       if (disposed || state.mode !== mode) return;
       const control = root.querySelector('[data-schedule-view="' + mode + '"]');
       if (control?.checkVisibility?.()) control.focus({ preventScroll: true });
-      else toolbar.querySelector('h1')?.focus({ preventScroll: true });
+      else pageHeading()?.focus({ preventScroll: true });
     }
     // A day, week or month opened from a calendar cell (a new screen, so it is pushed).
     async function openScheduleView(mode, date) {
@@ -2282,7 +2286,7 @@
       const to = scheduleDate(), moved = from && to && from !== to && focusKey.includes(from) ? focusKey.split(from).join(to) : null;
       const target = find(focusKey) || (moved && find(moved)) ||
         // 지우기 exists only on a day with a value; a habit not due on the new day has no box.
-        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || toolbar.querySelector('h1');
+        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || pageHeading();
       target?.focus({ preventScroll: true });
     }
     function scheduleDayCheck() {
@@ -2538,7 +2542,7 @@
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
     // tabindex, so the toolbar heading is tried next instead of leaving focus on <body>.
     function focusFirstHeading() {
-      for (const heading of [main.querySelector('h1,h2'), toolbar.querySelector('h1')]) {
+      for (const heading of [main.querySelector('h1,h2'), pageHeading()]) {
         heading?.focus({ preventScroll: true });
         if (document.activeElement && document.activeElement !== document.body) return;
       }
@@ -2563,7 +2567,7 @@
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (receivedActions.length === 1 ? receivedActions[0] : null) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
-          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || pageHeading();
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
@@ -2611,6 +2615,7 @@
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
       toolbar.replaceChildren();
       root.querySelector('#lifePhotoScreenHeading')?.remove();
+      root.querySelector(':scope > .haedo-title-band')?.remove();
       planningNavigation.replaceChildren();
       planningNavigation.hidden = state.mode !== 'annual-plan';
       if (!planningNavigation.hidden) {
@@ -2680,7 +2685,21 @@
         heading.classList.add('life-sr-only');
         toolbar.before(heading);
       } else headingGroup.append(heading);
-      if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
+      // 노트·일정 (2026-11-16 노션 방향): from 1101px the sticky 44px top row is the path and the actions, and the title
+      // is the large page title at the top of the body, after that row, so it scrolls away (home.css). The path repeats
+      // the menu's current item, so it is not read twice. Up to 1100px the one-row heading stays.
+      if (!postHeading && (state.mode === 'home' || scheduleParts) && wideHeading?.matches) {
+        const path = node('span', section === 'notes' ? '노트' : '일정', 'haedo-heading-path');
+        path.setAttribute('aria-hidden', 'true');
+        toolbar.dataset.pageHead = 'true';
+        toolbar.append(path);
+        const band = node('div', null, 'haedo-title-band');
+        band.append(headingGroup);
+        toolbar.after(band);
+      } else {
+        delete toolbar.dataset.pageHead;
+        if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
+      }
       const actions = node('div', null, 'haedo-heading-actions');
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (scheduleParts) { toolbar.dataset.schedule = state.mode; actions.append(scheduleParts.views, scheduleParts.today, scheduleParts.step); }
@@ -5994,7 +6013,7 @@
       top.append(heading, iconButton('복원 안내 닫기', 'close', guarded(() => {
         state.restoreReturn = null;
         panel.remove();
-        (books ? main.querySelector('#wbBookList') : toolbar.querySelector('h1'))?.focus({ preventScroll: true });
+        (books ? main.querySelector('#wbBookList') : pageHeading())?.focus({ preventScroll: true });
       })));
       panel.append(top);
       const info = books ? node('details', null, 'life-details') : panel;
@@ -6027,11 +6046,11 @@
         connectSubscription();
         render();
         global.scrollTo({ top: 0, behavior: 'instant' });
-        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+        pageHeading()?.focus({ preventScroll: true });
         announce('이전 작업공간을 열었습니다. 복원한 사본도 그대로 보관됩니다.');
         try { await refreshData(); render(); }
         catch (_) { throw new Error('이전 작업공간을 열었고 복원 사본도 보관돼 있습니다. 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
-        finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
+        finally { pageHeading()?.focus({ preventScroll: true }); }
       })));
       content.prepend(panel);
     }
@@ -6906,6 +6925,7 @@
     }
     unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
     global.addEventListener('popstate', popstate);
+    wideHeading?.addEventListener?.('change', pageHeadingWidth);
     return { dispose, flushDraft, checkpoint };
 
     async function checkpoint() {
@@ -7024,6 +7044,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
+      cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));
       cleanup(() => root?.removeEventListener('focusin', keepFocusVisible));
