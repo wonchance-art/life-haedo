@@ -96,7 +96,10 @@ class MarkdownPublishCloud extends LocalSQLBlogCloud {
     assert.notEqual(headers.apikey, SECRET, 'service key must never reach the browser');
     if (publish && request.method() === 'POST') {
       const body = request.postDataJSON();
-      assert.deepEqual(Object.keys(body).sort(), ['p_author', 'p_copies', 'p_expected_publication_revision', 'p_expected_revision', 'p_operation_id', 'p_photo_ids', 'p_post_id']);
+      // Publication intent only. Since 2026-11-16 the app also names its attachment choice; a
+      // request recorded before that date (a legacy pending request) has exactly the seven fields.
+      const fields = ['p_author', 'p_copies', 'p_expected_publication_revision', 'p_expected_revision', 'p_operation_id', 'p_photo_ids', 'p_post_id'];
+      assert.deepEqual(Object.keys(body).sort(), Object.hasOwn(body, 'p_attachments') ? ['p_attachments', ...fields] : fields);
       this.edgeRequests.push({ device, owner: this.owner(request), body: structuredClone(body) });
     }
     const response = await (publish ? this.publishHandler : this.mediaHandler)(new Request(request.url(), {

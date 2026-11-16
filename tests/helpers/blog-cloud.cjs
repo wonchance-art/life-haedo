@@ -54,6 +54,18 @@ return class BlogCloud extends BaseCloud {
     }
     assert.equal(method, 'POST'); const rpc = url.pathname.split('/').at(-1), body = request.postDataJSON();
     this.blogCalls.push({ owner, device, rpc, body: copy(body) });
+    // The owner's public name and intro (20261116120000): read and saved per owner only.
+    if (rpc === 'life_blog_get_public_profile' || rpc === 'life_blog_set_public_profile') {
+      this.profiles ||= new Map();
+      if (rpc === 'life_blog_set_public_profile') {
+        const author = body.p_author;
+        if (!author || typeof author.name !== 'string' || typeof author.intro !== 'string' || Object.keys(author).length !== 2) return send({ code: '22023', message: 'life_invalid_request' }, 400);
+        this.profiles.set(owner, { author: copy(author), token: this.profiles.get(owner)?.token || require('node:crypto').randomUUID() });
+      }
+      const saved = this.profiles.get(owner);
+      return send({ author: copy(saved?.author || { name: '', intro: '' }), saved: !!saved, blogToken: saved?.token || null,
+        posts: [...this.posts.values()].filter(row => row.owner === owner && row.publication?.active).length });
+    }
     if (rpc === 'life_blog_sync_list') return send([...this.posts.values()].filter(row => row.owner === owner).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision,
       status: row.data.status, title: row.data.title, updated_at: row.updated_at, document_updated_at: row.data.updatedAt, photos: row.data.photos.length,
       archived: row.data.archived === true, publication: copy(row.publication || null) })));

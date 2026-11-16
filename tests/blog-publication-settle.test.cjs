@@ -54,7 +54,9 @@ function publicationNet(cloud) {
       const row = cloud.rows.get(id);
       if (!row || row.revision !== revision || (row.publication?.revision || 0) !== (options.expectedPublicRevision || 0)) throw fault('blog_conflict');
       row.publication = { token: row.publication?.active ? row.publication.token : Core.id(), blogToken: row.publication?.blogToken || Core.id(), revision: (options.expectedPublicRevision || 0) + 1, active: true };
-      row.published = { photoIds: clone(options.photoIds || []), author: clone(options.author), digests: (options.copies || []).map(copy => copy.digest) };
+      row.published = { photoIds: clone(options.photoIds || []), author: clone(options.author), digests: (options.copies || []).map(copy => copy.digest),
+        // The SQL copies the chosen attachments of the stored post (none without a choice, 20261116120000).
+        cards: (options.attachments || []).map(position => clone(row.data.attachments[position])) };
       result = { status: 'stored', ...row.publication }; receipts.set(operation, result); return clone(result);
     },
     unpublish(id, revision, operation) {
@@ -92,7 +94,7 @@ function publicationNet(cloud) {
   // The anonymous public reading of one post (what a visitor gets).
   const reader = { async read(token) {
     const row = [...cloud.rows.values()].find(value => value.publication?.active && value.publication.token === token);
-    return row ? { token, snapshot: { author: clone(row.published.author), photos: row.published.digests.map(digest => ({ digest })) } } : null;
+    return row ? { token, snapshot: { author: clone(row.published.author), photos: row.published.digests.map(digest => ({ digest })), attachments: clone(row.published.cards || []) } } : null;
   }, async list(token) { const row = [...cloud.rows.values()].find(value => value.publication?.active && value.publication.blogToken === token); return { blogToken: token, author: clone(row?.published.author || { name: '', intro: '' }), posts: [], nextCursor: null }; } };
   const holdNext = kind => control.hold = { kind, entered: deferred(), release: deferred() };
   return { receipts, calls, control, apply, attach, reader, holdNext, sent: kind => calls.filter(call => call.kind === kind && call.reached), tried: kind => calls.filter(call => call.kind === kind) };
@@ -118,12 +120,13 @@ function tab(cloud, net, dev, name, { locks = null, storage = dev.storage, timer
     timers, interval: 30000, publicReader: net.reader });
   return view;
 }
-async function saved(t, { photos = 0, locks = null } = {}) {
+async function saved(t, { photos = 0, locks = null, attachments = [] } = {}) {
   const cloud = server(), time = clock(), dev = await device(cloud, 'mac', { time }), net = publicationNet(cloud);
   dev.sync.dispose();
   const a = tab(cloud, net, dev, 'tab-a', { locks }), tabs = [a];
   t.after(() => { for (const view of tabs) view.sync.dispose(); dev.storage.close(); });
-  const doc = await a.storage.savePhotoPost(a.ws, await post({ title: '공개할 글', photos }), 0); await a.sync.syncNow();
+  const draft = await post({ title: '공개할 글', photos }); draft.attachments = clone(attachments);
+  const doc = await a.storage.savePhotoPost(a.ws, draft, 0); await a.sync.syncNow();
   const state = () => a.storage.readBlogSyncState(a.ws, doc.id), row = () => cloud.rows.get(doc.id);
   const view = async (from = a) => { const value = await from.sync.getState(a.ws, doc.id); return { status: value.publicationStatus, notice: value.publicationNotice }; };
   const status = async from => (await view(from)).status;
@@ -274,6 +277,38 @@ test('M3: an unanswered update of a public post arrives first: the new choice is
   assert.notEqual(requests[2].operation, requests[1].operation);
   const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publication.revision, 3);
   assert.deepEqual(await f.view(), { status: 'public', notice: null });
+});
+
+// Review m2 (2026-11-16): an earlier request of this device is recognized by the attachments it chose
+// (title and address of each), not by how many. Another publication with the same name, photos and
+// number of attachments is not this device's request, so the new choice is not sent once more.
+test('m2: a public copy with as many attachments as the earlier request, but other ones, is not taken for that request', async t => {
+  const cards = [{ type: 'book', title: '익명 첨부 하나', creator: '', url: 'https://example.com/one' }, { type: 'book', title: '익명 첨부 둘', creator: '', url: 'https://example.com/two' }];
+  const f = await saved(t, { attachments: cards }), author = { name: '익명', intro: '' };
+  await f.publish({ author, attachments: [] });
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ author, attachments: [0], expectedPublicRevision: 1 }), { code: 'network_error' });
+  f.net.control.block = null;
+  assert.deepEqual((await f.state()).publishPending.attachmentCards, [{ title: '익명 첨부 하나', url: 'https://example.com/one' }], 'the request records the cards it chose');
+  // Another device publishes the second card, same name, no photos, one attachment, before this one arrives.
+  f.net.control.before = { kind: 'publish', run: async () => { f.net.apply.publish(f.doc.id, f.row().revision, Core.id(), { photoIds: [], author, attachments: [1], expectedPublicRevision: 1 }); } };
+  await assert.rejects(f.publish({ author, attachments: [], expectedPublicRevision: 1 }), error => error.code === 'blog_conflict' && error.ownRequest === false);
+  assert.deepEqual(f.row().published.cards.map(card => card.title), ['익명 첨부 둘'], 'the other publication stays; nothing was sent once more over it');
+  assert.equal(f.net.sent('publish').filter(call => call.tab === 'tab-a').length, 2, 'the first publication and the refused one only');
+});
+
+test('m2: the earlier request arriving first with exactly its chosen cards is recognized, and the new choice is sent once more', async t => {
+  const cards = [{ type: 'book', title: '익명 첨부 하나', creator: '', url: 'https://example.com/one' }, { type: 'book', title: '익명 첨부 둘', creator: '', url: 'https://example.com/two' }];
+  const f = await saved(t, { attachments: cards }), author = { name: '익명', intro: '' };
+  await f.publish({ author, attachments: [] });
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ author, attachments: [0], expectedPublicRevision: 1 }), { code: 'network_error' });
+  f.net.control.block = null;
+  const old = f.net.tried('publish').at(-1);
+  f.net.control.before = { kind: 'publish', run: async () => { f.late(old); } };
+  const published = await f.publish({ author, attachments: [1], expectedPublicRevision: 1 });
+  assert.equal(published.revision, 3);
+  assert.deepEqual(f.row().published.cards.map(card => card.title), ['익명 첨부 둘'], 'the last reviewed choice is what is public');
 });
 
 test('M3: a first publication that arrives before it could be ended is recorded; the new choice is reviewed against it, or updates it', async t => {
@@ -1175,33 +1210,62 @@ test('the account overview read settles this device too, so the post screen cann
   assert.equal(rows[0].publication.active, true); assert.equal(await f.status(), 'public');
 });
 
-test('M3/m1: the public profile is read anonymously while a post is public; with none public the last published values of this device are offered and marked', async t => {
-  const f = await saved(t), lists = [], list = f.net.reader.list;
-  f.net.reader.list = async (token, options) => { lists.push({ token, options }); return list(token); };
-  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '', intro: '' }, posts: 0 });
-  assert.equal(lists.length, 0, 'nothing public: no public request at all');
-  await f.publish({ author: { name: '익명A', intro: '익명 소개' } });
-  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: true, author: { name: '익명A', intro: '익명 소개' }, posts: 1 });
-  assert.deepEqual(lists, [{ token: f.row().publication.blogToken, options: { limit: 1 } }]);
-  f.net.reader.list = async () => { throw fault('network_error'); };
+// 2026-11-16 owner decision 7 replaces the rule of the two tests that stood here (the name and
+// intro read anonymously from the public list, or remembered from this device's last publish):
+// the owner reads and saves them through the owner-only RPCs, and publishing never changes them.
+test('decision 7: the public name and intro are read and saved through the owner RPCs; the visitor reading is never used and publishing does not save them', async t => {
+  const f = await saved(t), calls = [], lists = [], token = 'b1b1b1b1-1111-4111-8111-111111111111';
+  let stored = null;
+  const answer = () => ({ author: clone(stored || { name: '', intro: '' }), saved: !!stored, blogToken: stored ? token : null, posts: f.row().publication?.active ? 1 : 0 });
+  f.a.remote.publicProfile = async () => { calls.push('read'); if (f.net.control.failRead) throw fault('network_error'); return answer(); };
+  f.a.remote.savePublicProfile = async author => { calls.push('save'); stored = clone(author); return answer(); };
+  f.net.reader.list = async value => { lists.push(value); throw Error('the visitor reading must not be used'); };
+  const events = []; t.after(f.a.sync.subscribe(event => events.push(event)));
+  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { author: { name: '', intro: '' }, saved: false, blogToken: null, posts: 0, visible: false });
+  const savedValue = await f.a.sync.savePublicProfile(f.a.ws, { name: '익명A', intro: '익명 소개' });
+  assert.deepEqual(savedValue.author, { name: '익명A', intro: '익명 소개' }); assert.equal(savedValue.saved, true);
+  assert.deepEqual(events.filter(event => event.type === 'public_profile'), [{ type: 'public_profile', workspaceId: f.a.ws }]);
+  await f.publish({ author: { name: '미리보기에서 읽은 다른 이름', intro: '' } });
+  assert.deepEqual(calls, ['read', 'save'], 'publishing neither reads nor saves the profile');
+  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { author: { name: '익명A', intro: '익명 소개' }, saved: true, blogToken: token, posts: 1, visible: true });
+  f.net.control.failRead = true;
   await assert.rejects(f.a.sync.publicProfile(f.a.ws), { code: 'network_error' });
-  // The only public post is withdrawn: the server shows no profile, the device still knows what it published.
-  await f.a.sync.unpublish(f.a.ws, f.doc.id);
-  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '익명A', intro: '익명 소개' }, posts: 0, remembered: true });
+  f.net.control.failRead = false;
+  assert.deepEqual(lists, [], 'the anonymous list is never read for the profile');
+  // An engine whose server client has no profile RPC (an app mixed with older modules) says so.
+  delete f.a.remote.publicProfile; delete f.a.remote.savePublicProfile;
+  await assert.rejects(f.a.sync.publicProfile(f.a.ws), { code: 'schema_missing' });
+  await assert.rejects(f.a.sync.savePublicProfile(f.a.ws, { name: '', intro: '' }), { code: 'schema_missing' });
 });
 
-test('r2-m5: with nothing public the remembered name and intro are those of the most recent publication on this device', async t => {
-  const f = await saved(t);
-  const second = await f.a.storage.savePhotoPost(f.a.ws, await post({ title: '두 번째 글' }), 0); await f.a.sync.syncNow();
-  const publish = (doc, author) => f.a.sync.publish(f.a.ws, doc.id, { expectedLocalRevision: doc.revision, author });
-  await publish(f.doc, { name: '먼저 쓴 이름', intro: '먼저 쓴 소개' }); await f.withdraw();
-  f.time.advance(60000);
-  await publish(second, { name: '나중에 쓴 이름', intro: '' }); await f.a.sync.unpublish(f.a.ws, second.id);
-  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '나중에 쓴 이름', intro: '' }, posts: 0, remembered: true });
-  // The other order of posts: still by the time of publication, not by the order of the posts.
-  f.time.advance(60000);
-  await publish(f.doc, { name: '가장 나중 이름', intro: '가장 나중 소개' }); await f.withdraw();
-  assert.deepEqual(await f.a.sync.publicProfile(f.a.ws), { visible: false, author: { name: '가장 나중 이름', intro: '가장 나중 소개' }, posts: 0, remembered: true });
+test('decision 9: a publish request carries the attachment choice, none unless chosen; a request recorded without one is replayed exactly only for a post without attachments', async t => {
+  const f = await saved(t), author = { name: '익명', intro: '' };
+  await f.publish({ author });
+  assert.deepEqual(f.net.tried('publish').map(call => call.options.attachments), [[]], 'no choice given: none');
+  await f.withdraw();
+  // A request recorded by an app before 2026-11-16 has no attachments; its answer was lost.
+  const lost = Core.id(), state = await f.state();
+  const legacy = { operationId: lost, expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication.revision, localRevision: f.doc.revision, selection: { photoIds: [], author } };
+  await f.a.storage.writeBlogSyncState(f.a.ws, f.doc.id, { ...state, publishPending: legacy }, state.revision);
+  await f.publish({ author, expectedPublicRevision: state.publication.revision });
+  const replay = f.net.tried('publish').at(-1);
+  assert.equal(replay.operation, lost, 'the same choice on a post without attachments replays the recorded operation');
+  assert.equal(Object.hasOwn(replay.options, 'attachments'), false, 'with exactly its recorded arguments');
+  assert.equal((await f.state()).publishPending, null);
+  // A post with attachments: the recorded request is another choice than "none".
+  await f.withdraw();
+  const doc = await f.a.storage.readPhotoPost(f.a.ws, f.doc.id);
+  const withCards = await f.a.storage.savePhotoPost(f.a.ws, { ...doc, attachments: [{ type: 'book', title: '익명 첨부', creator: '', url: '' }] }, doc.revision);
+  await f.a.sync.syncNow();
+  const next = await f.state(), other = Core.id();
+  const old = { operationId: other, expectedRevision: next.remoteRevision, expectedPublicRevision: next.publication.revision, localRevision: withCards.revision, selection: { photoIds: [], author } };
+  await f.a.storage.writeBlogSyncState(f.a.ws, f.doc.id, { ...next, publishPending: old }, next.revision);
+  const before = f.net.tried('publish').length;
+  await f.a.sync.publish(f.a.ws, f.doc.id, { expectedLocalRevision: withCards.revision, author, attachments: [0], expectedPublicRevision: next.publication.revision });
+  const sent = f.net.tried('publish').slice(before);
+  assert.equal(sent.some(call => call.operation === other), false, 'the recorded request is never resent as this choice');
+  assert.deepEqual(sent.at(-1).options.attachments, [0], 'the new request names its choice');
+  assert.equal(f.row().publication.active, true);
 });
 
 test('r2-m3: an action that waits for another tab says so after the wait limit and sends nothing; the cycle never waits', async t => {

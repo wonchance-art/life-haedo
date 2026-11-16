@@ -30,6 +30,8 @@ async function main() {
       "create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$; grant execute on function auth.jwt() to authenticated,service_role;");
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql'), 'utf8'));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    apply(require('./helpers/blog-public-choice-sql.cjs').after('20261111120000'));
   }
   await server.initialize(); await fs.mkdir(output, { recursive: true });
   report.sources = [];

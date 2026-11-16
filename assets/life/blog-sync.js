@@ -660,8 +660,10 @@
     //   kept on the post (publicationEarlier, notice 'earlier_choice_public') until the owner
     //   publishes again or withdraws.
     // A failed read or request leaves the state as it was (still "unknown") and throws.
-    const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
-      selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}) });
+    const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies, attachmentCards }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
+      selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}), ...(attachmentCards ? { attachmentCards: structuredClone(attachmentCards) } : {}) });
+    // What identifies a public attachment: its title and address (the copy carries the card as stored).
+    const cardKey = card => ({ title: card.title, url: card.url });
     // The author and photo copies of a public copy, read the way a visitor reads it (no private
     // session). null: not readable as public now. undefined: this page has no public reader.
     // `timeoutMs`: a shorter limit for a read whose answer is optional (BlogPublic's own is 15 s).
@@ -670,15 +672,20 @@
       if (typeof reader?.read !== 'function') return undefined;
       try {
         const post = await reader.read(publication.token); guard(c);
-        return post ? { author: { name: post.snapshot.author.name, intro: post.snapshot.author.intro }, photos: post.snapshot.photos.map(photo => photo.digest) } : null;
+        return post ? { author: { name: post.snapshot.author.name, intro: post.snapshot.author.intro }, photos: post.snapshot.photos.map(photo => photo.digest), attachments: (post.snapshot.attachments || []).map(cardKey) } : null;
       } catch (error) { guard(c); throw fault(['schema_missing', 'invalid_remote_data', 'request_cancelled'].includes(error?.code) ? error.code : 'network_error'); }
       finally { if (!publicReader) reader.dispose?.(); }
     }
     // Whether a public copy is what one publish request of this device asked for: the same name
-    // and intro and exactly its photo copies. Without a public reader the request's revision is
-    // the only evidence (the caller already matched it).
+    // and intro, exactly its photo copies and exactly the attachments it chose (title and address
+    // of each, in order: attachmentCards, recorded with the request). A request recorded before
+    // attachments were chosen names none and is not compared on them. Without a public reader the
+    // request's revision is the only evidence (the caller already matched it).
+    const sameAttachments = (facts, request) => Array.isArray(request.attachmentCards) ? canonical(facts.attachments) === canonical(request.attachmentCards.map(cardKey))
+      : !Array.isArray(request.selection.attachments) || facts.attachments.length === request.selection.attachments.length;
     const sameRequest = (facts, request) => facts === undefined || !!facts && canonical(facts.author) === canonical(request.selection.author) &&
-      canonical([...facts.photos].sort()) === canonical((request.copies || []).map(copy => copy.digest).sort()) && facts.photos.length === request.selection.photoIds.length;
+      canonical([...facts.photos].sort()) === canonical((request.copies || []).map(copy => copy.digest).sort()) && facts.photos.length === request.selection.photoIds.length &&
+      sameAttachments(facts, request);
     // A state write that follows a server answer must not be lost to another tab's write of the
     // same binding (a document upload, a status): read again and apply the same fields.
     async function patch(c, change) {
@@ -1296,13 +1303,10 @@
       }
       const latest = await readHead(state.remoteId); guard(c);
       const publication = latest?.publication || { token: result.token, blogToken: result.blogToken, revision: result.revision, active: true };
-      // The name and intro this request set for the whole public list, kept with the post on this
-      // device (publicProfile reads it back while nothing is public and the server shows none).
-      const publishedAuthor = { name: pending.selection.author.name, intro: pending.selection.author.intro, at: new Date(now()).toISOString() };
       // A withdrawal still recorded for an earlier publication revision can only end in conflict now
       // (the same choice was published again before that withdrawal got an answer): it is over.
       const overtaken = stored => stored?.unpublishPending && stored.unpublishPending.expectedRevision < result.revision;
-      await patch(c, stored => ({ publication, publishedAuthor, publicationDoubt: null, publicationEarlier: null, publicationLog: null, choiceUnsent: null, ...(mine(stored) ? { publishPending: null } : {}), ...(overtaken(stored) ? { unpublishPending: null } : {}) }));
+      await patch(c, stored => ({ publication, publicationDoubt: null, publicationEarlier: null, publicationLog: null, choiceUnsent: null, ...(mine(stored) ? { publishPending: null } : {}), ...(overtaken(stored) ? { unpublishPending: null } : {}) }));
       if (!latest?.publication?.active || latest.publication.revision !== result.revision) throw fault('blog_conflict');
       return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
     }
@@ -1338,6 +1342,20 @@
       try { const state = await storage.readBlogSyncState(ws, id); prior = publicationStatus(state) === 'unknown' || !!state?.publishPending || !!state?.choiceUnsent; } catch (_) { /* Unknown: treated as none. */ }
       return publicationFault(kind + (prior ? '_unsent_prior' : '_unsent'));
     }
+    // What one publish request asks for. `attachments` (2026-11-16, owner decision 9): the chosen
+    // attachment positions; none unless chosen. A request recorded before that date has no
+    // `attachments`; when it is replayed it is sent with exactly what it recorded (its receipt),
+    // and whether it is this choice is decided by sameSelection.
+    const selectionOf = options => ({ photoIds: options.photoIds || [], attachments: Array.isArray(options.attachments) ? [...options.attachments] : [],
+      author: options.author || { name: '', intro: '' } });
+    // Whether a recorded request asks for this choice. A request recorded without attachments
+    // published every attachment on the server before 20261116120000 and none after it, so it
+    // is this choice only for a post that has no attachment (`count` 0): then both mean exactly
+    // the same public copy whichever server answers. For a post with attachments it is another
+    // choice and is settled first, never replayed as this one.
+    const sameSelection = (recorded, selection, count) => !!recorded && (canonical(recorded) === canonical(selection) ||
+      !Object.hasOwn(recorded, 'attachments') && count === 0 && !selection.attachments.length &&
+      canonical({ photoIds: recorded.photoIds, author: recorded.author }) === canonical({ photoIds: selection.photoIds, author: selection.author }));
     async function publish(ws, id, options = {}) {
       const sent = { value: false }, trace = { prior: undefined };
       try {
@@ -1357,7 +1375,7 @@
       const network = explain(error)?.code === 'network_error';
       if (!sent.value && !network) return;
       const c = context(ws, id);
-      const choice = { photoIds: options.photoIds || [], author: options.author || { name: '', intro: '' } };
+      const choice = selectionOf(options);
       try {
         await serial(ws, id, () => patch(c, latest => {
           if (sent.value) return latest?.choiceUnsent ? { choiceUnsent: null } : null;
@@ -1366,7 +1384,7 @@
           // may already have ended it by moving the publication revision).
           if (!earlier) return null;
           if (publicRevision(latest?.publication) !== (earlier.expectedPublicRevision || 0)) return latest?.choiceUnsent ? { choiceUnsent: null } : null;
-          if (earlier.localRevision === options.expectedLocalRevision && canonical(earlier.selection) === canonical(choice)) return latest?.choiceUnsent ? { choiceUnsent: null } : null;
+          if (earlier.localRevision === options.expectedLocalRevision && sameSelection(earlier.selection, choice, trace.attachments)) return latest?.choiceUnsent ? { choiceUnsent: null } : null;
           const unsent = { ...descriptor(earlier), localRevision: earlier.localRevision };
           return canonical(latest?.choiceUnsent ?? null) === canonical(unsent) ? null : { choiceUnsent: unsent };
         }));
@@ -1375,10 +1393,11 @@
     async function publishNow(ws, id, options, sent, trace = {}) {
       const choices = structuredClone(options), c = context(ws, id); await verified(c);
       const initial = await readPost(c);
+      trace.attachments = (initial.attachments || []).length;
       if (initial.revision !== choices.expectedLocalRevision) throw fault('local_changed');
       if (initial.status !== 'saved') throw fault('invalid_request');
       let before = await readState(c); trace.prior = before?.publishPending ?? null;
-      const selection = { photoIds: choices.photoIds || [], author: choices.author || { name: '', intro: '' } };
+      const selection = selectionOf(choices);
       const needsCopies = selection.photoIds.length > 0;
       // A request recorded before public copies existed would publish an
       // original; it is replaced by a new request with copies.
@@ -1389,7 +1408,7 @@
       // The same choice as the unacknowledged request replays that request (its receipt answers
       // when the server already applied it).
       if ((usable(before?.publishPending) || legacyMarkdown(before?.publishPending)) &&
-          before.publishPending.localRevision === initial.revision && canonical(before.publishPending.selection) === canonical(selection)) {
+          before.publishPending.localRevision === initial.revision && sameSelection(before.publishPending.selection, selection, trace.attachments)) {
         return serial(ws, id, async () => {
           let state = await readState(c); const latest = await readPost(c);
           if (latest.revision !== initial.revision || canonical(state?.publishPending) !== canonical(before.publishPending)) throw fault('local_changed');
@@ -1445,14 +1464,16 @@
           if (canonical(head.publication ?? null) !== canonical(state.publication ?? null)) state = await writeState(c, state, { publication: head.publication ?? null });
         }
         if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
-        if (usable(state.publishPending) && canonical(state.publishPending.selection) !== canonical(selection)) throw fault('operation_mismatch');
+        if (usable(state.publishPending) && !sameSelection(state.publishPending.selection, selection, trace.attachments)) throw fault('operation_mismatch');
         // The earlier request can only contest a request for the same post and publication revision.
         if (contested && (contested.expectedRevision !== state.remoteRevision || contested.expectedPublicRevision !== (state.publication?.revision || 0))) contested = null;
         if (!usable(state.publishPending)) {
           for (const copy of copies) { await remote.uploadPublicCopy(state.remoteId, copyMeta(copy), copy.blob); guard(c); }
           state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection,
             ...(latest.format === 'life-post-md-v1' ? { documentFormat: latest.format } : {}),
-            ...(copies.length ? { copies: copies.map(copyMeta) } : {}), ...(contested ? { contested: true } : {}) } });
+            ...(copies.length ? { copies: copies.map(copyMeta) } : {}), ...(contested ? { contested: true } : {}),
+            // The cards this request chose, as stored at the reviewed revision, to recognize its public copy later.
+            attachmentCards: selection.attachments.map(position => cardKey((latest.attachments || [])[position] || {})) } });
         }
         return finishPublication(c, state, { sent, contested });
       });
@@ -1539,37 +1560,24 @@
           localPostId: entry?.localPostId || null, localWorkspaceId: entry?.ws || null, localRevision: entry?.post.revision || null };
       });
     }
-    // The public name and intro above the account's public post list. The server keeps one
-    // profile per account and every publish request replaces it, so a review must start from
-    // the current values (2026-11-11). They are readable only through the public list of a
-    // blog token, and only while a post is public. `visible: false`: nothing is public, so no
-    // visitor sees a name or intro and there is nothing to keep.
+    // The public name and intro above the account's public post list (2026-11-16, owner decision
+    // 7): one per account, read and saved by the owner here; publishing does not change them. A
+    // review shows the saved values and publishes with them, so a review that cannot read them
+    // does not publish. `visible`: a post is public, so visitors see them now.
     async function publicProfile(ws) {
       const c = context(ws, 'profile'); await verified(c);
-      const rows = await remote.syncList(); guard(c);
-      const shown = rows.filter(row => row.publication?.active);
-      if (!shown.length) {
-        // Nothing is public, so the server returns no name or intro. The last values this device
-        // published (account-scoped local bindings, never another account's) are offered instead
-        // and marked as such; without them the review starts blank as before.
-        let last = null;
-        for (const entry of (await snapshot(c)).byRemote.values()) {
-          const value = entry.state.publishedAuthor;
-          if (value && typeof value.name === 'string' && typeof value.intro === 'string' && (!last || String(value.at) > String(last.at))) last = value;
-        }
-        guard(c);
-        return { visible: false, author: { name: last?.name || '', intro: last?.intro || '' }, posts: 0, ...(last && (last.name || last.intro) ? { remembered: true } : {}) };
-      }
-      // The same anonymous reading a visitor uses: the private session is never attached to it.
-      const reader = publicReader || root.HaedoLife?.BlogPublic?.createReader?.({ config: auth.config });
-      if (typeof reader?.list !== 'function') throw fault('schema_missing');
-      try {
-        const listed = await reader.list(shown[0].publication.blogToken, { limit: 1 }); guard(c);
-        return { visible: true, author: { name: listed.author.name, intro: listed.author.intro }, posts: shown.length };
-      } catch (error) { guard(c); throw fault(['schema_missing', 'invalid_remote_data', 'request_cancelled'].includes(error?.code) ? error.code : 'network_error'); }
-      finally { if (!publicReader) reader.dispose?.(); }
+      if (typeof remote.publicProfile !== 'function') throw fault('schema_missing');
+      const value = await remote.publicProfile(); guard(c);
+      return { ...value, visible: value.posts > 0 };
     }
-    const api = Object.freeze({ getState, statuses, publicationStatuses, publicationNotices, settlePublication, publicProfile, getStatus, saveDefault, save, connect: save, sync: save, publish, unpublish, cancelPublish, deletePost, catalog,
+    async function savePublicProfile(ws, author) {
+      const c = context(ws, 'profile'); await verified(c);
+      if (typeof remote.savePublicProfile !== 'function') throw fault('schema_missing');
+      const value = await remote.savePublicProfile(author); guard(c);
+      publish$({ type: 'public_profile', workspaceId: ws });
+      return { ...value, visible: value.posts > 0 };
+    }
+    const api = Object.freeze({ getState, statuses, publicationStatuses, publicationNotices, settlePublication, publicProfile, savePublicProfile, getStatus, saveDefault, save, connect: save, sync: save, publish, unpublish, cancelPublish, deletePost, catalog,
       syncNow, start, stop, noteLocalDraftSaved, holdPost,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; stop(); disposed = true; live.delete(api); listeners.clear(); remote.dispose?.(); } });

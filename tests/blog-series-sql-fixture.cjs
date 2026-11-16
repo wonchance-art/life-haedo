@@ -15,6 +15,8 @@ class LocalSQLSeriesCloud extends LocalSQLBlogCloud {
       await read('supabase/migrations/20261005120000_life_public_pages.sql'),
       await read('supabase/migrations/20261012010000_life_page_posts.sql'),
       await read('supabase/migrations/20261017144744_life_blog_originals.sql'), await read('supabase/migrations/20261101091500_life_blog_account_sync.sql'), await read('supabase/migrations/20261101160000_life_blog_delete_guard.sql'), await read('supabase/migrations/20261102110000_life_blog_ai_authorship.sql'), await read('supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'),
+      // The app publishes with an attachment choice and the saved public name (20261116120000).
+      require('./helpers/blog-public-choice-sql.cjs').after('20261102120000'),
       'insert into auth.users(id) values ' + Object.values(accounts).map(account => '(' + literal(account.id) + '::uuid)').join(',') + ';'].join('\n');
     this.docker(['exec', '-i', this.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', this.database], source);
   }

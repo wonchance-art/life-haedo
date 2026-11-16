@@ -38,7 +38,8 @@ async function main() {
         const docs = new Map([doc, make('draft-photo', '다시 쓰는 생각', 'draft'), make('archived-photo', '보관해 둔 여행', 'saved', true)].map(d => [d.id, d]));
         life.Writing = { isOwnSource: () => true, latestVersion: bundle => bundle.sourceVersions[0] };
         const state = { status: 'pending', remoteRevision: 0, publication: null };
-        window.testData = { docs, state, opens: [], legacy: [], openContexts: [], legacyContexts: [], publishCalls: [], readFail: false, syncFail: false, listFail: false, accountCurrent: true, previewSnapshots: [] };
+        window.testData = { docs, state, opens: [], legacy: [], openContexts: [], legacyContexts: [], publishCalls: [], readFail: false, syncFail: false, listFail: false, accountCurrent: true, previewSnapshots: [],
+          profile: { author: { name: '익명 공개 이름', intro: '익명 공개 소개' }, saved: true, blogToken: '66666666-6666-4666-8666-666666666666', posts: 0 }, profileSaves: [], profileReads: 0 };
         const actualRender = life.BlogPublicUI.render;
         life.BlogPublicUI = { ...life.BlogPublicUI, render(snapshot, options) { testData.previewSnapshots.push(structuredClone(snapshot)); return actualRender(snapshot, options); } };
         const storage = {
@@ -56,6 +57,9 @@ async function main() {
           async syncNow(options) { testData.syncRuns = (testData.syncRuns || 0) + 1; testData.syncOptions = structuredClone(options || null); if (!testData.syncFail) state.status = 'synced'; return { state: state.status }; },
           async deletePost(ws, id, options) { if (testData.deleteFail) throw Object.assign(Error('공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.'), { code: 'blog_post_published' }); if (docs.get(id)?.revision !== options.expectedRevision) throw Object.assign(Error('바뀐 글'), { code: 'photo_post_conflict' }); docs.delete(id); testData.deleted = [...(testData.deleted || []), id]; },
           subscribe() { return () => {}; },
+          // 2026-11-16 (decision 7): the owner-only read and explicit save of the public name and intro.
+          async publicProfile() { testData.profileReads++; if (testData.profileReadFail) throw Object.assign(Error('익명 읽기 실패'), { code: 'network_error' }); return { ...structuredClone(testData.profile), visible: testData.profile.posts > 0 }; },
+          async savePublicProfile(ws, author) { if (testData.profileSaveFail) throw Object.assign(Error('익명 저장 실패'), { code: 'network_error' }); testData.profileSaves.push(structuredClone(author)); testData.profile = { ...testData.profile, author: structuredClone(author), saved: true }; return { ...structuredClone(testData.profile), visible: testData.profile.posts > 0 }; },
           async publish(ws, id, options) { if (testData.syncFail) throw Object.assign(Error('준비되지 않은 서버'), { code: 'schema_missing' }); testData.publishCalls.push(structuredClone(options)); state.status = 'synced'; state.remoteRevision = 1; state.publication = { revision: (state.publication?.revision || 0) + 1, active: true }; if (testData.failAfterPublish) testData.syncFail = true; return { publicUrl: location.origin + '/blog.html?post=stable-public-token' }; },
           async unpublish() { state.publication = { revision: (state.publication?.revision || 0) + 1, active: false }; testData.unpublished = true; },
         };
@@ -117,7 +121,7 @@ async function main() {
       assert.equal(await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).count(), 0);
       assert.equal(await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).count(), 0);
       assert.equal(await page.locator('.blog-manager-preview input[type="checkbox"]:not([data-photo-id])').count(), 1, 'only the content consent remains');
-      assert.match(await page.locator('.blog-manager-preview fieldset').innerText(), /촬영·위치 정보를 뺀 사본으로 공개합니다/);
+      assert.match(await page.locator('.blog-manager-preview fieldset', { has: page.locator('legend', { hasText: '공개할 사진' }) }).innerText(), /촬영·위치 정보를 뺀 사본으로 공개합니다/);
       const previewed = await page.evaluate(async () => {
         const photo = testData.docs.get('saved-photo').photos[0], shown = testData.previewSnapshots.at(-1).photos[0];
         const src = document.querySelector('.blog-manager-public-preview img').src, bytes = new Uint8Array(await (await fetch(src)).arrayBuffer());
@@ -187,7 +191,8 @@ async function main() {
       await page.evaluate(() => { testData.holdRead = true; });
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       await page.waitForFunction(() => testData.readBlocked);
-      assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).isDisabled(), true);
+      assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).count(), 0, 'the review has no name input (decision 7)');
+      assert.equal(await page.locator('[data-photo-id="local-photo"]').isDisabled(), true);
       assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isDisabled(), true);
       assert.equal(await page.evaluate(() => manager.flush().then(() => false, () => true)), true);
       await page.evaluate(() => { document.querySelector('[aria-label="이 내용을 공개합니다"]').checked = false; testData.releaseRead(); });
@@ -199,6 +204,127 @@ async function main() {
       await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
       assert.equal(await page.evaluate(() => testData.publishCalls.length), 1);
       assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /공개 게시와 주소는 확인했습니다.*후속 상태 조회/);
+    });
+    await check('decision 9: attachments are chosen one by one, none at first; an update says it drops attachments not chosen again', async page => {
+      // Every manager action marks the manager busy until it ends (perform); wait for that, not for time.
+      const idle = () => page.locator('.blog-manager[aria-busy="false"]').waitFor();
+      await page.evaluate(() => { const doc = testData.docs.get('saved-photo'); doc.attachments = [{ type: 'book', title: '익명 첨부 책', creator: '익명 작가', url: 'https://example.com/book' }, { type: 'music', title: '익명 첨부 음악', creator: '', url: '' }]; });
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      const panel = page.locator('.blog-manager-preview');
+      await page.locator('.blog-manager-preview [data-attachment-position]').nth(1).waitFor();
+      assert.doesNotMatch(await panel.innerText(), /모든 첨부/);
+      assert.match(await panel.innerText(), /사진과 첨부는 아래에서 고른 것만 공개/);
+      const cards = panel.locator('[data-attachment-position]');
+      assert.equal(await cards.count(), 2);
+      assert.deepEqual(await cards.evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'none chosen at first');
+      assert.match(await panel.locator('legend', { hasText: '공개할 첨부' }).locator('..').innerText(), /익명 첨부 책 · 익명 작가 · example\.com/);
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
+      assert.deepEqual(await page.evaluate(() => testData.previewSnapshots.at(-1).attachments), [], 'the preview shows no attachment');
+      assert.equal(await page.locator('.blog-manager-public-preview .blog-attachments').count(), 0);
+      await cards.nth(1).check();
+      assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isChecked(), false);
+      assert.match(await panel.innerText(), /공개할 내용을 바꿨습니다/);
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
+      assert.deepEqual(await page.evaluate(() => testData.previewSnapshots.at(-1).attachments.map(item => item.title)), ['익명 첨부 음악']);
+      assert.match(await page.locator('.blog-manager-public-preview .blog-attachments').innerText(), /익명 첨부 음악/);
+      assert.equal(await page.evaluate(() => testData.previewSnapshots.at(-1).author.name), '익명 공개 이름', 'the byline is the saved public name');
+      await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
+      await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await idle();
+      await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
+      const call = (await page.evaluate(() => testData.publishCalls)).at(-1);
+      assert.deepEqual(call.attachments, [1]); assert.deepEqual(call.author, { name: '익명 공개 이름', intro: '익명 공개 소개' });
+      assert.deepEqual(await page.evaluate(() => testData.profileSaves), [], 'publishing never saves the name and intro');
+      // Now public: the review says, before publishing again, that an attachment not chosen again leaves.
+      await page.getByRole('button', { name: '공개 검토 닫기', exact: true }).click(); await idle();
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      // The review is drawn after its reads: wait for its attachment choices before reading them.
+      await page.locator('.blog-manager-preview [data-attachment-position]').nth(1).waitFor();
+      assert.deepEqual(await page.locator('[data-attachment-position]').evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'a new review starts from none again');
+      assert.match(await page.locator('.blog-manager-attachments-note').innerText(), /다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
+    });
+    await check('decision 7: the public name and intro are shown read-only in the review and edited and saved explicitly in their own place', async page => {
+      // Every manager action marks the manager busy until it ends (perform); wait for that, not for time.
+      const idle = () => page.locator('.blog-manager[aria-busy="false"]').waitFor();
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      const panel = page.locator('.blog-manager-preview');
+      await panel.locator('.blog-manager-profile[data-state="ready"]').waitFor();
+      assert.equal(await panel.getByRole('textbox').count(), 0, 'no name or intro input in the review');
+      assert.match(await panel.locator('.blog-manager-profile').innerText(), /공개 이름\s*익명 공개 이름[\s\S]*공개 소개\s*익명 공개 소개[\s\S]*바꾸려면 공개 이름·소개에서 저장합니다/);
+      // Choices made in the review stay while the name and intro are changed (review m4).
+      const photo = page.locator('[data-photo-id="local-photo"]');
+      await photo.check();
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
+      assert.equal(await page.evaluate(() => testData.previewSnapshots.at(-1).author.name), '익명 공개 이름');
+      // Opened from the keyboard; focus moves into the editor and comes back when it closes (review m5).
+      const fix = panel.getByRole('button', { name: '공개 이름·소개 고치기', exact: true });
+      await fix.focus(); await page.keyboard.press('Enter'); await idle();
+      const editor = page.locator('.blog-manager-profile-editor'), name = page.getByRole('textbox', { name: '공개 이름', exact: true }), intro = page.getByRole('textbox', { name: '공개 소개', exact: true });
+      await page.locator('.blog-manager-profile-editor[data-state="ready"]').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'blogPublicName', 'focus is in the editor');
+      assert.equal(await panel.count(), 1, 'the review stays open beside the editor'); assert.equal(await photo.isChecked(), true);
+      assert.equal(await name.inputValue(), '익명 공개 이름'); assert.equal(await intro.inputValue(), '익명 공개 소개');
+      await name.fill('바꾼 익명 이름');
+      // Unsaved input is never dropped by leaving or by opening a review.
+      assert.equal(await page.evaluate(() => manager.flush().then(() => false, error => /공개 이름·소개를 저장하거나 닫은 뒤 이동/.test(error.message))), true);
+      assert.equal(await page.evaluate(() => manager.dirty()), true);
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /공개 이름·소개를 저장하거나 닫은 뒤 공개 내용을 검토/);
+      assert.equal(await name.inputValue(), '바꾼 익명 이름');
+      await page.evaluate(() => { testData.profileSaveFail = true; });
+      await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
+      assert.equal(await name.inputValue(), '바꾼 익명 이름', 'a failed save keeps the input');
+      assert.deepEqual(await page.evaluate(() => testData.profileSaves), []);
+      await page.evaluate(() => { testData.profileSaveFail = false; });
+      await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
+      await page.waitForFunction(() => /공개 이름과 소개를 저장했습니다/.test(document.querySelector('.blog-manager > [role="status"]')?.textContent || ''));
+      assert.deepEqual(await page.evaluate(() => testData.profileSaves), [{ name: '바꾼 익명 이름', intro: '익명 공개 소개' }]);
+      assert.equal(await page.evaluate(() => manager.dirty()), false);
+      // The open review now shows the saved byline; its choices stay, and the preview made with the earlier byline ends.
+      assert.match(await panel.locator('.blog-manager-profile-values').innerText(), /바꾼 익명 이름/);
+      assert.equal(await photo.isChecked(), true, 'the chosen photo stays chosen');
+      assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isChecked(), false);
+      assert.match(await panel.locator('.blog-manager-public-preview').innerText(), /공개할 내용을 바꿨습니다/);
+      // Closing with unsaved input asks first; 취소 keeps it.
+      await intro.fill('고치다 만 소개');
+      await editor.getByRole('button', { name: '닫기', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: '저장하지 않은 공개 이름·소개' });
+      await dialog.getByRole('button', { name: '취소', exact: true }).click();
+      assert.equal(await intro.inputValue(), '고치다 만 소개');
+      await editor.getByRole('button', { name: '닫기', exact: true }).click();
+      await dialog.getByRole('button', { name: '버리고 닫기', exact: true }).click();
+      await editor.waitFor({ state: 'detached' }); await idle();
+      await page.waitForFunction(() => document.activeElement?.textContent === '공개 이름·소개 고치기');
+      assert.equal(await photo.isChecked(), true);
+      // Closing the review from the keyboard returns focus to the row's 공개 내용 검토 (review m5).
+      const closeReview = page.getByRole('button', { name: '공개 검토 닫기', exact: true });
+      await closeReview.focus(); await page.keyboard.press('Enter'); await idle();
+      await page.waitForFunction(() => document.activeElement?.dataset?.reviewPost === 'saved-photo');
+      // The next review shows the saved values; a review that cannot read them publishes nothing.
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      await page.locator('.blog-manager-profile[data-state="ready"]').waitFor();
+      assert.match(await page.locator('.blog-manager-profile').innerText(), /바꾼 익명 이름/);
+      await page.getByRole('button', { name: '공개 검토 닫기', exact: true }).click(); await idle();
+      await page.evaluate(() => { testData.profileReadFail = true; });
+      await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
+      await page.locator('.blog-manager-profile[data-state="failed"]').waitFor();
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /읽지 못해 미리보기를 만들지 않았습니다/);
+      await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
+      await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await idle();
+      assert.equal(await page.evaluate(() => testData.publishCalls.length), 0, 'nothing published without the saved values');
+      await page.evaluate(() => { testData.profileReadFail = false; });
+      await page.getByRole('button', { name: '공개 이름·소개 다시 읽기', exact: true }).click(); await idle();
+      await page.locator('.blog-manager-profile[data-state="ready"]').waitFor();
+      // The editor itself refuses to save over values it could not read.
+      await page.getByRole('button', { name: '공개 검토 닫기', exact: true }).click(); await idle();
+      await page.evaluate(() => { testData.profileReadFail = true; });
+      await page.getByRole('button', { name: '공개 이름·소개', exact: true }).click(); await idle();
+      await page.locator('.blog-manager-profile-editor[data-state="failed"]').waitFor();
+      assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).getAttribute('readonly'), '');
+      await page.locator('.blog-manager-profile-editor').getByRole('button', { name: '저장', exact: true }).click(); await idle();
+      assert.deepEqual(await page.evaluate(() => testData.profileSaves.length), 1, 'no save over unread values');
+      await page.locator('.blog-manager-profile-editor').getByRole('button', { name: '닫기', exact: true }).click(); await idle();
+      await page.waitForFunction(() => document.activeElement?.id === 'blogPublicProfile', null, { timeout: 5000 });
     });
     if (!process.env.BLOG_MANAGER_TEST_MATCH || /idb/i.test(process.env.BLOG_MANAGER_TEST_MATCH)) {
     const actual = await makeContext(browser, new FakeCloud(), 'manager-actual-idb', accounts.a);

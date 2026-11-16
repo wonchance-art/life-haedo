@@ -32,7 +32,7 @@
   }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, onMaterialUnavailable = () => {}, blogSync = null, compositionSync = null, libraryMetaSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, onMaterialReturn = async () => false, onMaterialUnavailable = () => {}, blogSync = null, compositionSync = null, libraryMetaSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, onOpenPublicProfile = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -1140,7 +1140,13 @@
       const intro = field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; } });
       const done = action('저장하고 돌아가기', async () => { await flush(); if (workspaceIs(session)) await onBlogReturn({ kind: 'profile', committed: true }); }, 'life-primary');
       done.id = 'wbProfileDone';
-      form.append(title.wrapper, intro.wrapper, toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); }, { id: 'wbShowIntro' }), notice('이름과 소개는 내 블로그와 선택 자료 페이지에서 사용합니다. 기존 공개 사본은 별도로 갱신해야 바뀝니다.'), done);
+      // 2026-11-16 (owner decision 7): the public post list has its own name and intro, saved in
+      // 글 공개·보관 → 공개 이름·소개; this form says so and links there. Merging the two is the owner's call.
+      const publicProfile = typeof onOpenPublicProfile === 'function' ? action('공개 이름·소개 열기', async () => { await flush(); if (workspaceIs(session)) await onOpenPublicProfile(); }) : null;
+      if (publicProfile) publicProfile.id = 'wbOpenPublicProfile';
+      form.append(title.wrapper, intro.wrapper, toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); }, { id: 'wbShowIntro' }),
+        notice('이름과 소개는 내 블로그와 선택 자료 페이지에 쓰이며, 이미 공개한 선택 자료 페이지는 다시 공개할 때 바뀝니다.'),
+        notice('공개 글 목록의 이름·소개는 글 공개·보관 → 공개 이름·소개에서 따로 저장합니다.'), ...(publicProfile ? [publicProfile] : []), done);
       bodyNode.append(form);
       if (saveControl) saveControl.hidden = true;
       onBlogModeChange({ mode: 'profile', kind: 'profile' });

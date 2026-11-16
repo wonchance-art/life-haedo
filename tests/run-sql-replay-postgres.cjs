@@ -30,6 +30,10 @@
  *     20261112120000) on a fresh replayed copy, applying that file once more on top: a deleted
  *     post's revisions are never handed out again. Run directly it also checks the earlier
  *     behaviour and the installation's refusal of drifted predecessors.
+ * 4.10 Runs the public name and attachment choice contract (tests/run-blog-public-choice-postgres.cjs,
+ *     20261116120000) on a fresh replayed copy: owner-only profile read/save, attachment choice on
+ *     every publish path, earlier argument sets (no attachment, same receipts). Run directly it also
+ *     checks the earlier behaviour, the install's refusal of drifted predecessors and its row guard.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -126,9 +130,18 @@ async function main() {
         assert.equal(rows.length, later.checks, path.basename(later.file) + ' result table');
         for (const row of rows) assert.equal(row.ok, true, `${path.basename(later.file)} check failed: ${row.check_name}`);
       }
+      // The one known effect of re-running the 2026-11-01 bundle on a current catalog: it grants
+      // EXECUTE on the unused private publish(6) to authenticated again, which 20261116120000
+      // revokes. Re-applying that file (the documented step after such a re-run) revokes it again,
+      // and then nothing else may differ.
+      const regranted = diff(before, await catalog(client));
+      assert.deepEqual(regranted.map(line => line.replace(/ def:.*? acl:/, ' acl:').replace(/^([-+]) function haedo_blog_private\.publish\(p_post_id uuid,.*?\) acl:/, '$1 publish(6) acl:')),
+        ['- publish(6) acl:{postgres=X/postgres}', '+ publish(6) acl:{postgres=X/postgres,authenticated=X/postgres}'],
+        'account sync install changed only the EXECUTE grant of the unused private publish(6):\n' + regranted.slice(0, 40).join('\n'));
+      await pgStub.applyFile(client, path.join(ROOT, 'supabase/migrations/20261116120000_life_blog_public_choice.sql'));
       const changed = diff(before, await catalog(client));
       assert.deepEqual(changed, [], 'account sync install changed the replayed catalog:\n' + changed.slice(0, 40).join('\n'));
-      pass(`account sync install + ${LATER_INSTALLS.length} later install(s) re-applied on top in ${Date.now() - installStart}ms: ${checks.length}+${LATER_INSTALLS.reduce((n, l) => n + l.checks, 0)} checks true, ${before.length} catalog entries unchanged`);
+      pass(`account sync install + ${LATER_INSTALLS.length} later install(s) re-applied on top in ${Date.now() - installStart}ms: ${checks.length}+${LATER_INSTALLS.reduce((n, l) => n + l.checks, 0)} checks true; its grant on the unused private publish(6) revoked again by re-applying 20261116120000; ${before.length} catalog entries unchanged`);
 
       const status = [].concat(await pgStub.applyFile(client, STATUS));
       const rows = status[status.length - 1].rows;
@@ -315,6 +328,15 @@ async function main() {
       finally { console.log = log; await db.end(); }
       assert(count >= 70, 'revision continuity checks ran: ' + count);
       pass(`revision continuity after deletion (20261112120000): ${count} checks on a fresh replayed copy`);
+    }
+
+    {
+      const choiceDb = await pg.cloneDatabase('replay_blog_public_choice'), db = await pg.connect(choiceDb);
+      const log = console.log; let count;
+      try { console.log = () => {}; count = await require('./run-blog-public-choice-postgres.cjs').contract(db, { installed: true }); }
+      finally { console.log = log; await db.end(); }
+      assert(count >= 70, 'public choice checks ran: ' + count);
+      pass(`public name and attachment choice (20261116120000): ${count} checks on a fresh replayed copy`);
     }
 
     const clone = await pg.cloneDatabase('replay_clone');

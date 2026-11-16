@@ -100,7 +100,8 @@ async function main() {
   if (process.argv.includes('--prepare-database')) {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
     const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql', 'supabase/migrations/20261101160000_life_blog_delete_guard.sql', 'supabase/migrations/20261102110000_life_blog_ai_authorship.sql', 'supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
-    server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], files.join('\n'));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], [...files, require('./helpers/blog-public-choice-sql.cjs').after('20261102120000')].join('\n'));
   }
   await server.initialize();
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });

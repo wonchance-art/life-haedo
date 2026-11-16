@@ -84,6 +84,9 @@
   const id = value => typeof value === 'string' && UUID.test(value);
   const rev = value => Number.isSafeInteger(value) && value >= 0;
   const clone = value => structuredClone(value);
+  // Strictly ascending attachment positions 0..11, [] for none (the SQL valid_attachment_choice).
+  const attachmentChoice = value => Array.isArray(value) && value.length <= 12 &&
+    value.every((position, index) => Number.isSafeInteger(position) && position >= 0 && position <= 11 && (index === 0 || position > value[index - 1]));
   const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
   function clean(error) {
     if (messages[error?.code]) return fault(error.code);
@@ -348,6 +351,11 @@
     }
     // `copies` names the uploaded public copy of every selected photo. A
     // text-only publication names none and uses the earlier RPC unchanged.
+    // `attachments` (2026-11-16, owner decision 9): the chosen attachment positions ([] for none).
+    // A request with it always goes through life_blog_publish_copies (copies {} without photos)
+    // or the Markdown Edge with p_attachments; the server then copies only those attachments and
+    // leaves the public name and intro as saved. A request recorded without it (before that
+    // date) is sent with exactly its original arguments and RPC, so its receipt still answers.
     async function publish(postId, expectedRevision, operationId, options = {}) {
       identity(postId); identity(operationId); if (!rev(expectedRevision) || expectedRevision < 1 || !Array.isArray(options.photoIds || []) || (options.photoIds || []).some(value => !PHOTO.test(value))) throw fault('invalid_request');
       if (!rev(options.expectedPublicRevision ?? 0)) throw fault('invalid_request');
@@ -374,10 +382,13 @@
         else named[item.id] = metadata;
       }
       if (markdown && selected.some(photoId => !Object.hasOwn(named, photoId))) throw fault('invalid_request');
+      const choice = Object.hasOwn(options, 'attachments');
+      if (choice && !attachmentChoice(options.attachments)) throw fault('invalid_request');
       const params = { p_post_id: postId, p_expected_revision: expectedRevision, p_expected_publication_revision: options.expectedPublicRevision ?? 0, p_operation_id: operationId, p_photo_ids: clone(options.photoIds || []), p_author: clone(markdown ? author : options.author || { name: '', intro: '' }) };
+      const chosen = choice ? { p_attachments: [...options.attachments] } : {};
       const result = markdown
-        ? await publishMarkdown({ ...params, p_copies: named })
-        : copies.length ? await rpc('life_blog_publish_copies', { ...params, p_copies: named }, { commit: true, timeout: publicationTimeout }) : await rpc('life_blog_publish', params, { commit: true, timeout: publicationTimeout });
+        ? await publishMarkdown({ ...params, p_copies: named, ...chosen })
+        : copies.length || choice ? await rpc('life_blog_publish_copies', { ...params, p_copies: named, ...chosen }, { commit: true, timeout: publicationTimeout }) : await rpc('life_blog_publish', params, { commit: true, timeout: publicationTimeout });
       if (result?.status !== 'published' && result?.status !== 'stored') { if (result?.status === 'conflict') throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       if (!id(result.token) || !id(result.blogToken) || !rev(result.revision) || result.revision < 1) throw fault('invalid_remote_data');
       return result;
@@ -397,7 +408,23 @@
       if (!['unpublished', 'stored'].includes(result?.status) || !rev(result.revision)) { if (['conflict', 'missing'].includes(result?.status)) throw fault('blog_conflict'); throw fault('invalid_remote_data'); }
       return result;
     }
-    return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish,
+    // The account's public name and intro (2026-11-16, owner decision 7): read and saved only
+    // here, by the owner; publishing no longer changes them. `saved: false`: never saved (the
+    // list then shows no name or intro).
+    const safeText = (value, limit) => typeof value === 'string' && value.length <= limit && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(value);
+    const profileAuthor = value => plain(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value)) && Reflect.ownKeys(value).length === 2 &&
+      Object.hasOwn(value, 'name') && Object.hasOwn(value, 'intro') && safeText(value.name, 500) && safeText(value.intro, 2000);
+    function profileAnswer(value) {
+      if (!plain(value) || !profileAuthor(value.author) || typeof value.saved !== 'boolean' || !(value.blogToken === null || id(value.blogToken)) ||
+        value.saved !== (value.blogToken !== null) || !rev(value.posts)) throw fault('invalid_remote_data');
+      return { author: { name: value.author.name, intro: value.author.intro }, saved: value.saved, blogToken: value.blogToken, posts: value.posts };
+    }
+    async function publicProfile() { return profileAnswer(await rpc('life_blog_get_public_profile', {})); }
+    async function savePublicProfile(author) {
+      if (!profileAuthor(author)) throw fault('invalid_request');
+      return profileAnswer(await rpc('life_blog_set_public_profile', { p_author: { name: author.name, intro: author.intro } }, { commit: true, timeout: publicationTimeout }));
+    }
+    return Object.freeze({ verify: () => verify(), list, syncList, read, save, prepareAsset, uploadAsset, uploadPublicCopy, downloadAsset, deletePost, removeAssets, publish, unpublish, publicProfile, savePublicProfile,
       dispose() { if (!disposed) { disposed = true; cancel(); unlisten?.(); } } });
   }
   return Object.freeze({ create, clean, fault, publicationFault, publicationNotes, publicationNote, checkViews, PUBLICATION_TIMEOUT, MARKDOWN_PUBLICATION_TIMEOUT });
