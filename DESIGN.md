@@ -165,7 +165,7 @@ components:
 
 ### 공통 조작·탐색·필드
 
-[탐색](assets/haedo-navigation.js)의 전역 메뉴는 **뉴스·일정·자료·설정**이다(2026-11-02 소유자 결정, [인계서](docs/design-review/soft-redesign-handoff.md)). 내부 목적지 ID는 news·schedule·records·manage이고, 이전 `home`·`tools`는 schedule의 별칭으로 남아 `index.html?section=home|tools…` 같은 기존 주소를 그대로 연다. 공개 표지·공개 페이지는 설정에 있다. 일정은 목록·Y·Q·M·W·D 단계 막대로 오가고, 연간 계획·목표·습관·연표는 같은 계획 탭의 계획 화면에서 관리한다(2026-11-08). `글쓰기`는 모든 화면의 같은 자리에 있고, 새 글을 쓰는 동안 현재 화면 표시(aria-current)를 받는다. 계정 경계는 그대로 유지한다. 틸 주 행동에는 짧은 행동 이름을 쓰고 보조 동작은 얇은 경계·글자·아이콘으로 표현한다. 현재 위치는 aria-current로 표시한다. 공통 초점은 틸 3px, 신형 작성·첨부는 지역 2px outline이며 하단 메뉴·sticky 조작에 가려지지 않아야 한다.
+[탐색](assets/haedo-navigation.js)의 전역 메뉴는 **뉴스·일정·자료·설정**이다(2026-11-02 소유자 결정, [인계서](docs/design-review/soft-redesign-handoff.md)). 2026-11-16 소유자 결정으로 **뉴스·일정·노트·자료·설정**으로 바뀐다(구현 전, [노트 메뉴·일정 정리 계약](docs/design-review/notes-menu.md)). 내부 목적지 ID는 news·schedule·records·manage이고, 이전 `home`·`tools`는 schedule의 별칭으로 남아 `index.html?section=home|tools…` 같은 기존 주소를 그대로 연다. 공개 표지·공개 페이지는 설정에 있다. 일정은 목록·Y·Q·M·W·D 단계 막대로 오가고, 연간 계획·목표·습관·연표는 같은 계획 탭의 계획 화면에서 관리한다(2026-11-08). `글쓰기`는 모든 화면의 같은 자리에 있고, 새 글을 쓰는 동안 현재 화면 표시(aria-current)를 받는다. 계정 경계는 그대로 유지한다. 틸 주 행동에는 짧은 행동 이름을 쓰고 보조 동작은 얇은 경계·글자·아이콘으로 표현한다. 현재 위치는 aria-current로 표시한다. 공통 초점은 틸 3px, 신형 작성·첨부는 지역 2px outline이며 하단 메뉴·sticky 조작에 가려지지 않아야 한다.
 
 목적별 배치는 [통합 동선 계약](docs/design-review/purpose-workflow-implementation.md)을 따른다. 기본 화면에는 본문과 가까운 조작만 두며 전문 목록은 자료 메뉴, 공개 관리는 블로그 메뉴, 뉴스 옵션은 목적별 설정으로 모은다. 설정 파일은 자료·글 / 계획·연표 두 그룹 안에서 기존 형식·복원 차이를 표시한다. 글별 관리·근거 파일은 읽던 정확한 글과 원래 목록으로 복귀한다.
 
