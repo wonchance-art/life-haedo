@@ -240,7 +240,7 @@ async function main() {
       // The review is drawn after its reads: wait for its attachment choices before reading them.
       await page.locator('.blog-manager-preview [data-attachment-position]').nth(1).waitFor();
       assert.deepEqual(await page.locator('[data-attachment-position]').evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'a new review starts from none again');
-      assert.match(await page.locator('.blog-manager-attachments-note').innerText(), /지금 공개 중입니다\. 다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
+      assert.match(await page.locator('.blog-manager-attachments-note').innerText(), /다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
     });
     await check('decision 7: the public name and intro are shown read-only in the review and edited and saved explicitly in their own place', async page => {
       // Every manager action marks the manager busy until it ends (perform); wait for that, not for time.
@@ -249,11 +249,19 @@ async function main() {
       const panel = page.locator('.blog-manager-preview');
       await panel.locator('.blog-manager-profile[data-state="ready"]').waitFor();
       assert.equal(await panel.getByRole('textbox').count(), 0, 'no name or intro input in the review');
-      assert.match(await panel.locator('.blog-manager-profile').innerText(), /공개 이름\s*익명 공개 이름[\s\S]*공개 소개\s*익명 공개 소개[\s\S]*게시해도 바뀌지 않으며/);
-      await panel.getByRole('button', { name: '공개 이름·소개 고치기', exact: true }).click(); await idle();
-      assert.equal(await page.locator('.blog-manager-public-preview').count(), 0, 'the review closed for the editor');
+      assert.match(await panel.locator('.blog-manager-profile').innerText(), /공개 이름\s*익명 공개 이름[\s\S]*공개 소개\s*익명 공개 소개[\s\S]*바꾸려면 공개 이름·소개에서 저장합니다/);
+      // Choices made in the review stay while the name and intro are changed (review m4).
+      const photo = page.locator('[data-photo-id="local-photo"]');
+      await photo.check();
+      await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
+      assert.equal(await page.evaluate(() => testData.previewSnapshots.at(-1).author.name), '익명 공개 이름');
+      // Opened from the keyboard; focus moves into the editor and comes back when it closes (review m5).
+      const fix = panel.getByRole('button', { name: '공개 이름·소개 고치기', exact: true });
+      await fix.focus(); await page.keyboard.press('Enter'); await idle();
       const editor = page.locator('.blog-manager-profile-editor'), name = page.getByRole('textbox', { name: '공개 이름', exact: true }), intro = page.getByRole('textbox', { name: '공개 소개', exact: true });
       await page.locator('.blog-manager-profile-editor[data-state="ready"]').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'blogPublicName', 'focus is in the editor');
+      assert.equal(await panel.count(), 1, 'the review stays open beside the editor'); assert.equal(await photo.isChecked(), true);
       assert.equal(await name.inputValue(), '익명 공개 이름'); assert.equal(await intro.inputValue(), '익명 공개 소개');
       await name.fill('바꾼 익명 이름');
       // Unsaved input is never dropped by leaving or by opening a review.
@@ -271,6 +279,11 @@ async function main() {
       await page.waitForFunction(() => /공개 이름과 소개를 저장했습니다/.test(document.querySelector('.blog-manager > [role="status"]')?.textContent || ''));
       assert.deepEqual(await page.evaluate(() => testData.profileSaves), [{ name: '바꾼 익명 이름', intro: '익명 공개 소개' }]);
       assert.equal(await page.evaluate(() => manager.dirty()), false);
+      // The open review now shows the saved byline; its choices stay, and the preview made with the earlier byline ends.
+      assert.match(await panel.locator('.blog-manager-profile-values').innerText(), /바꾼 익명 이름/);
+      assert.equal(await photo.isChecked(), true, 'the chosen photo stays chosen');
+      assert.equal(await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).isChecked(), false);
+      assert.match(await panel.locator('.blog-manager-public-preview').innerText(), /공개할 내용을 바꿨습니다/);
       // Closing with unsaved input asks first; 취소 keeps it.
       await intro.fill('고치다 만 소개');
       await editor.getByRole('button', { name: '닫기', exact: true }).click();
@@ -279,7 +292,13 @@ async function main() {
       assert.equal(await intro.inputValue(), '고치다 만 소개');
       await editor.getByRole('button', { name: '닫기', exact: true }).click();
       await dialog.getByRole('button', { name: '버리고 닫기', exact: true }).click();
-      await editor.waitFor({ state: 'detached' });
+      await editor.waitFor({ state: 'detached' }); await idle();
+      await page.waitForFunction(() => document.activeElement?.textContent === '공개 이름·소개 고치기');
+      assert.equal(await photo.isChecked(), true);
+      // Closing the review from the keyboard returns focus to the row's 공개 내용 검토 (review m5).
+      const closeReview = page.getByRole('button', { name: '공개 검토 닫기', exact: true });
+      await closeReview.focus(); await page.keyboard.press('Enter'); await idle();
+      await page.waitForFunction(() => document.activeElement?.dataset?.reviewPost === 'saved-photo');
       // The next review shows the saved values; a review that cannot read them publishes nothing.
       await page.getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle();
       await page.locator('.blog-manager-profile[data-state="ready"]').waitFor();
@@ -304,6 +323,8 @@ async function main() {
       assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).getAttribute('readonly'), '');
       await page.locator('.blog-manager-profile-editor').getByRole('button', { name: '저장', exact: true }).click(); await idle();
       assert.deepEqual(await page.evaluate(() => testData.profileSaves.length), 1, 'no save over unread values');
+      await page.locator('.blog-manager-profile-editor').getByRole('button', { name: '닫기', exact: true }).click(); await idle();
+      await page.waitForFunction(() => document.activeElement?.id === 'blogPublicProfile', null, { timeout: 5000 });
     });
     if (!process.env.BLOG_MANAGER_TEST_MATCH || /idb/i.test(process.env.BLOG_MANAGER_TEST_MATCH)) {
     const actual = await makeContext(browser, new FakeCloud(), 'manager-actual-idb', accounts.a);

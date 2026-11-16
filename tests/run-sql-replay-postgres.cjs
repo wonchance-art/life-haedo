@@ -130,9 +130,18 @@ async function main() {
         assert.equal(rows.length, later.checks, path.basename(later.file) + ' result table');
         for (const row of rows) assert.equal(row.ok, true, `${path.basename(later.file)} check failed: ${row.check_name}`);
       }
+      // The one known effect of re-running the 2026-11-01 bundle on a current catalog: it grants
+      // EXECUTE on the unused private publish(6) to authenticated again, which 20261116120000
+      // revokes. Re-applying that file (the documented step after such a re-run) revokes it again,
+      // and then nothing else may differ.
+      const regranted = diff(before, await catalog(client));
+      assert.deepEqual(regranted.map(line => line.replace(/ def:.*? acl:/, ' acl:').replace(/^([-+]) function haedo_blog_private\.publish\(p_post_id uuid,.*?\) acl:/, '$1 publish(6) acl:')),
+        ['- publish(6) acl:{postgres=X/postgres}', '+ publish(6) acl:{postgres=X/postgres,authenticated=X/postgres}'],
+        'account sync install changed only the EXECUTE grant of the unused private publish(6):\n' + regranted.slice(0, 40).join('\n'));
+      await pgStub.applyFile(client, path.join(ROOT, 'supabase/migrations/20261116120000_life_blog_public_choice.sql'));
       const changed = diff(before, await catalog(client));
       assert.deepEqual(changed, [], 'account sync install changed the replayed catalog:\n' + changed.slice(0, 40).join('\n'));
-      pass(`account sync install + ${LATER_INSTALLS.length} later install(s) re-applied on top in ${Date.now() - installStart}ms: ${checks.length}+${LATER_INSTALLS.reduce((n, l) => n + l.checks, 0)} checks true, ${before.length} catalog entries unchanged`);
+      pass(`account sync install + ${LATER_INSTALLS.length} later install(s) re-applied on top in ${Date.now() - installStart}ms: ${checks.length}+${LATER_INSTALLS.reduce((n, l) => n + l.checks, 0)} checks true; its grant on the unused private publish(6) revoked again by re-applying 20261116120000; ${before.length} catalog entries unchanged`);
 
       const status = [].concat(await pgStub.applyFile(client, STATUS));
       const rows = status[status.length - 1].rows;

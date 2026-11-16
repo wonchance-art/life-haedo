@@ -660,8 +660,10 @@
     //   kept on the post (publicationEarlier, notice 'earlier_choice_public') until the owner
     //   publishes again or withdraws.
     // A failed read or request leaves the state as it was (still "unknown") and throws.
-    const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
-      selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}) });
+    const descriptor = ({ operationId, expectedRevision, expectedPublicRevision, selection, copies, attachmentCards }) => ({ operationId, expectedRevision, expectedPublicRevision: expectedPublicRevision || 0,
+      selection: structuredClone(selection), ...(copies ? { copies: structuredClone(copies) } : {}), ...(attachmentCards ? { attachmentCards: structuredClone(attachmentCards) } : {}) });
+    // What identifies a public attachment: its title and address (the copy carries the card as stored).
+    const cardKey = card => ({ title: card.title, url: card.url });
     // The author and photo copies of a public copy, read the way a visitor reads it (no private
     // session). null: not readable as public now. undefined: this page has no public reader.
     // `timeoutMs`: a shorter limit for a read whose answer is optional (BlogPublic's own is 15 s).
@@ -670,17 +672,20 @@
       if (typeof reader?.read !== 'function') return undefined;
       try {
         const post = await reader.read(publication.token); guard(c);
-        return post ? { author: { name: post.snapshot.author.name, intro: post.snapshot.author.intro }, photos: post.snapshot.photos.map(photo => photo.digest), attachments: (post.snapshot.attachments || []).length } : null;
+        return post ? { author: { name: post.snapshot.author.name, intro: post.snapshot.author.intro }, photos: post.snapshot.photos.map(photo => photo.digest), attachments: (post.snapshot.attachments || []).map(cardKey) } : null;
       } catch (error) { guard(c); throw fault(['schema_missing', 'invalid_remote_data', 'request_cancelled'].includes(error?.code) ? error.code : 'network_error'); }
       finally { if (!publicReader) reader.dispose?.(); }
     }
     // Whether a public copy is what one publish request of this device asked for: the same name
-    // and intro, exactly its photo copies and as many attachments as it chose (a request recorded
-    // before attachments were chosen names none). Without a public reader the request's revision
-    // is the only evidence (the caller already matched it).
+    // and intro, exactly its photo copies and exactly the attachments it chose (title and address
+    // of each, in order: attachmentCards, recorded with the request). A request recorded before
+    // attachments were chosen names none and is not compared on them. Without a public reader the
+    // request's revision is the only evidence (the caller already matched it).
+    const sameAttachments = (facts, request) => Array.isArray(request.attachmentCards) ? canonical(facts.attachments) === canonical(request.attachmentCards.map(cardKey))
+      : !Array.isArray(request.selection.attachments) || facts.attachments.length === request.selection.attachments.length;
     const sameRequest = (facts, request) => facts === undefined || !!facts && canonical(facts.author) === canonical(request.selection.author) &&
       canonical([...facts.photos].sort()) === canonical((request.copies || []).map(copy => copy.digest).sort()) && facts.photos.length === request.selection.photoIds.length &&
-      (!Array.isArray(request.selection.attachments) || facts.attachments === request.selection.attachments.length);
+      sameAttachments(facts, request);
     // A state write that follows a server answer must not be lost to another tab's write of the
     // same binding (a document upload, a status): read again and apply the same fields.
     async function patch(c, change) {
@@ -1466,7 +1471,9 @@
           for (const copy of copies) { await remote.uploadPublicCopy(state.remoteId, copyMeta(copy), copy.blob); guard(c); }
           state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection,
             ...(latest.format === 'life-post-md-v1' ? { documentFormat: latest.format } : {}),
-            ...(copies.length ? { copies: copies.map(copyMeta) } : {}), ...(contested ? { contested: true } : {}) } });
+            ...(copies.length ? { copies: copies.map(copyMeta) } : {}), ...(contested ? { contested: true } : {}),
+            // The cards this request chose, as stored at the reviewed revision, to recognize its public copy later.
+            attachmentCards: selection.attachments.map(position => cardKey((latest.attachments || [])[position] || {})) } });
         }
         return finishPublication(c, state, { sent, contested });
       });

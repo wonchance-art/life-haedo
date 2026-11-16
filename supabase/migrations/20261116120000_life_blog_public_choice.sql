@@ -20,15 +20,18 @@
 --     haedo-blog-publish).
 --   The public copy holds exactly the chosen attachments in document order. A position outside
 --   the stored post is refused (life_blog_unknown_attachment). The empty-publication check
---   counts the chosen attachments only. With a choice the request does NOT write the profile's
---   name or intro (it only creates the profile row, with an empty name and intro, when the
---   account has none, for the public list token); p_author is the copy's byline as reviewed.
+--   counts the chosen attachments only.
+-- * No publish request writes the profile's name or intro any more, with or without a choice
+--   (owner decision 7: only set_public_profile does). A request only creates the profile row,
+--   with an empty name and intro, when the account has none (the public list token);
+--   p_author is the copy's byline as the request reviewed it.
 --   The receipt hash of such a request is
 --   ['publish',rev,photos,author,public rev,copies,{"attachments":[...]}], which no earlier
 --   request can have.
 -- * Without p_attachments (an earlier app, or a request recorded before this file), every path
---   behaves exactly as before except that the copy holds NO attachments: same hash and receipt
---   replay, same CAS and checks, same profile write. Less is published, never more.
+--   behaves as before except that the copy holds NO attachments and the saved name and intro
+--   are left as they are: same hash and receipt replay, same CAS and checks. Less is published,
+--   never more, and an earlier app can no longer replace the saved name and intro.
 --
 -- Signatures: public.life_blog_publish_copies, life_blog_markdown_publish_prepare and
 -- life_blog_markdown_publish_commit gain a trailing p_attachments jsonb default null (drop and
@@ -38,8 +41,11 @@
 -- without a choice. The private publish_copies, markdown_publish_hash, markdown_publish_prepare
 -- and markdown_publish_commit keep their signatures and forward to the new
 -- haedo_blog_private.publish_choice / markdown_choice_* without a choice.
--- haedo_blog_private.publish(6) (20261105051632) is not changed: no API function calls it since
--- 20261102120000, and the install bundles guard its md5.
+-- haedo_blog_private.publish(6) (20261105051632) keeps its body (the install bundles guard its
+-- md5); no API function has called it since 20261102120000, and it would still write the profile
+-- and every attachment, so EXECUTE on it is revoked from authenticated (it keeps no API role).
+-- The 2026-11-01 install bundle grants it again if that bundle is re-run; applying this file
+-- again revokes it again (it is the one statement repeated on an installed catalog).
 --
 -- Unchanged: unpublish, delete, save, reads, public reads/lists/media, every stored row and
 -- receipt, RLS and table privileges. Public copies already published keep their attachments
@@ -47,13 +53,16 @@
 --
 -- One SQL Editor statement: the DDL and the preservation checks share one atomic transaction
 -- even when an installer autocommits each top-level statement. Applying it again changes
--- nothing (an installed catalog is only verified). ASCII only; no backslash escapes.
+-- nothing (an installed catalog is verified; only the revoke above is repeated). A write by a
+-- syncing device during the install changes a row count or hash, so the install refuses and rolls
+-- back; run it again when the devices are idle. ASCII only; no backslash escapes.
 do $haedo_blog_choice$
 declare relation text; n bigint; h text; before_rows jsonb:='{}'; prior jsonb; sig text; want text;
  relations text[]:=array['haedo_blog_private.posts','haedo_blog_private.assets','haedo_blog_private.receipts','haedo_blog_private.publications','haedo_blog_private.profiles','haedo_blog_private.retired_posts'];
  installed boolean:=to_regprocedure('public.life_blog_publish_copies(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)') is not null;
  earlier jsonb:=jsonb_build_object(
   'haedo_blog_private.publish_copies(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','fa7f1208a0826e68d8f668eb57a9f850',
+  'haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)','d872bf11fc983b14e4d61ff36be6932d',
   'haedo_blog_private.markdown_publish_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','61a1318052863d5962a68dac78ac519a',
   'haedo_blog_private.markdown_publish_prepare(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','2acda7ffcb7a1022e0a30839245fee90',
   'haedo_blog_private.markdown_publish_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb)','34dcb685b3618f0e2196b0aa5f66c4ac',
@@ -65,14 +74,15 @@ declare relation text; n bigint; h text; before_rows jsonb:='{}'; prior jsonb; s
   'haedo_blog_private.valid_attachment_choice(jsonb)','bf2396750df4960fd4a7f2fc0ce41df0',
   'haedo_blog_private.picked_attachments(jsonb,jsonb)','1051f3cd08ac58c9429fbca898fa782f',
   'haedo_blog_private.publish_request_hash(bigint,text[],jsonb,bigint,jsonb,jsonb)','bd65635d990f7d774096826069e59c40',
-  'haedo_blog_private.publish_choice(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)','cbcfe1e3f9dc456b04c0415dfc7234b8',
+  'haedo_blog_private.publish_choice(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)','bfd3576259f12a7c9f35e90747aab337',
   'haedo_blog_private.publish_copies(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','9e710461ca227bc24884ea8413171452',
   'haedo_blog_private.markdown_choice_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)','a6413a04775ff4910750b27da3d3c456',
   'haedo_blog_private.markdown_choice_prepare(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)','f2bf656b49db16f132cce1ae8d756a91',
-  'haedo_blog_private.markdown_choice_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb,jsonb)','dad92281c054ee3e3537cee44d902b09',
+  'haedo_blog_private.markdown_choice_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb,jsonb)','2268d8723c0bee9ab11ff0a6c0c94284',
   'haedo_blog_private.markdown_publish_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','0a44bd28c2ca59d2f91cfc51bf06fad6',
   'haedo_blog_private.markdown_publish_prepare(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','e79a0028dfe2e15083d2da13410f0a32',
   'haedo_blog_private.markdown_publish_commit(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,uuid,uuid,text,jsonb)','13804bdfdd99720909f99e4efe7484f7',
+  'haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)','d872bf11fc983b14e4d61ff36be6932d',
   'haedo_blog_private.get_public_profile()','ab47a601e7919e9073b20a5d626aaa64',
   'haedo_blog_private.set_public_profile(jsonb)','4ca454ce39ad4e786d34f69fa57a3a63',
   'public.life_blog_publish(uuid,bigint,uuid,text[],jsonb,bigint)','8643627f00ef0dc03fe9fc482680143b',
@@ -101,7 +111,8 @@ declare relation text; n bigint; h text; before_rows jsonb:='{}'; prior jsonb; s
   'haedo_blog_private.picked_attachments(jsonb,jsonb)','',
   'haedo_blog_private.publish_request_hash(bigint,text[],jsonb,bigint,jsonb,jsonb)','',
   'haedo_blog_private.markdown_choice_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb,jsonb)','',
-  'haedo_blog_private.markdown_publish_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','');
+  'haedo_blog_private.markdown_publish_hash(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)','',
+  'haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)','');
  role_name text;
 begin
  if not installed then
@@ -201,13 +212,9 @@ begin
  if not chosen <@ known then raise exception using errcode='22023',message='life_blog_unknown_photo'; end if;
  if not haedo_blog_private.ready(who,p_post_id,p.data) then raise exception using errcode='22023',message='life_blog_assets_incomplete'; end if;
  picked:=haedo_blog_private.picked_attachments(coalesce(p.data->'attachments','[]'::jsonb),p_attachments);
- if p_attachments is null then
-  -- An earlier request: it still sets the public name and intro, as it always did.
-  insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;
- else
-  -- The public list token only; the name and intro are saved by set_public_profile.
-  insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;
- end if;
+ -- The public list token only, for every request (an earlier app's too): the name and intro are
+ -- saved by set_public_profile alone. A first publication without a profile row starts it empty.
+ insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;
  select * into f from haedo_blog_private.profiles where owner_id=who;
  for item in select * from jsonb_array_elements(p.data->'photos') loop
   if not(item->>'id'=any(chosen)) then continue; end if;
@@ -363,11 +370,7 @@ begin
  if not haedo_blog_private.valid_delta_document(projected,p_post_id) then raise exception using errcode='22023',message='life_invalid_request'; end if;
  if not haedo_blog_private.ready(who,p_post_id,p.data) then raise exception using errcode='22023',message='life_blog_assets_incomplete'; end if;
  picked:=haedo_blog_private.picked_attachments(p.data->'attachments',p_attachments);
- if p_attachments is null then
-  insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;
- else
-  insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;
- end if;
+ insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;
  select * into f from haedo_blog_private.profiles where owner_id=who;
  for item in select * from jsonb_array_elements(selected_photos) loop
   public_id:=gen_random_uuid()::text;
@@ -455,6 +458,8 @@ $choice_ddl$;
    if role_name<>'' then execute format('grant execute on function %s to %I',sig,role_name); end if;
   end loop;
  end if;
+ -- Repeated on an installed catalog: a re-run 2026-11-01 install bundle grants it again.
+ revoke all on function haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint) from public,anon,authenticated,service_role;
 
  -- The catalog this file leaves, whether it installed it now or earlier.
  for sig,want in select key,value#>>'{}' from jsonb_each(final) loop

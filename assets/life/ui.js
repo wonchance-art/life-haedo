@@ -369,6 +369,8 @@
       onManagePost: (postId, options) => openPostAction('blog', postId, options),
       onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
       onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),
+      // 프로필 편집 → 글 공개·보관 with 공개 이름·소개 open (2026-11-16, owner decision 7).
+      onOpenPublicProfile: () => navigate('blog', { openPublicProfile: true }),
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onBundleUpdated: bundle => {
         if (disposed || state.bundle?.workspaceId !== bundle.workspaceId || bundle.revision < state.bundle.revision) return;
@@ -1678,7 +1680,7 @@
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
       if (!['import', 'source'].includes(mode)) externalImportContext = null;
       blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed, postId: options?.blogPostId,
-        expectedRevision: options.exactPost?.revision ?? null } : null;
+        expectedRevision: options.exactPost?.revision ?? null, openProfile: options?.openPublicProfile === true } : null;
       preservationOpenOptions = mode === 'preservation' && options.exactPost ? { postIds: [options.exactPost.id], exactPost: options.exactPost } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;

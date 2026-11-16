@@ -49,7 +49,14 @@ async function main() {
     // Account install intentionally restores pre-AI definitions for unrelated
     // functions until later installs; the two D2 functions must independently
     // stay exact, not merely recover after a later install.
-    const after = await functions(db);
+    let after = await functions(db);
+    // 20261116120000 revokes EXECUTE on the unused private publish(6); the 2026-11-01 bundle grants
+    // it again, and re-applying 20261116120000 (the step after such a re-run) revokes it again.
+    const publishAcl = list => list.find(f => f.signature === 'haedo_blog_private.' + signatures[1])?.proacl;
+    if (publishAcl(after) !== publishAcl(before)) {
+     check([publishAcl(before), publishAcl(after)], ['{postgres=X/postgres}', '{postgres=X/postgres,authenticated=X/postgres}'], path.basename(file) + ': only grants the unused private publish(6) again');
+     await db.query(read('supabase/migrations/' + AFTER_MARKDOWN[0])); after = await functions(db);
+    }
     for (const signature of signatures) check(after.find(f => f.signature === 'haedo_blog_private.' + signature), before.find(f => f.signature === 'haedo_blog_private.' + signature), path.basename(file) + ': retains ' + signature);
     check(markdownFunctions(after),markdownFunctions(before),path.basename(file) + ': B3 parser trigger and private/public projection helpers stay exact');
     check(await rows(db),saved,path.basename(file) + ': populated rows unchanged');

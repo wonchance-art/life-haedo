@@ -4,7 +4,7 @@
 
 ## 요청과 인증
 
-POST JSON은 `p_post_id`, `p_expected_revision`, `p_expected_publication_revision`, `p_operation_id`, `p_photo_ids`, `p_author`, `p_copies` 일곱 필드와, 2026-11-16부터 선택 필드 `p_attachments`(공개할 첨부의 목록 위치, 오름차순 0~11, 없으면 `[]`)만 받는다. 사진 미선택은 `[]`와 `{}`다. `p_attachments`가 있으면 prepare·commit RPC에 그대로 넘기고 DB는 고른 첨부만 공개하며 공개 이름·소개를 바꾸지 않는다. 없는 요청(그 전 앱이 기록한 요청)은 넘기지 않으며, DB가 첨부 없이 공개하고 그 요청의 영수증 식별은 그대로다([공개 선택 설계](../../../docs/design-review/publish-choice.md)). 클라이언트 본문·ops·원문 해시·owner/session·공개 스냅샷은 받지 않는다.
+POST JSON은 `p_post_id`, `p_expected_revision`, `p_expected_publication_revision`, `p_operation_id`, `p_photo_ids`, `p_author`, `p_copies` 일곱 필드와, 2026-11-16부터 선택 필드 `p_attachments`(공개할 첨부의 목록 위치, 오름차순 0~11, 없으면 `[]`)만 받는다. 사진 미선택은 `[]`와 `{}`다. `p_attachments`가 있으면 prepare·commit RPC에 그대로 넘기고 DB는 고른 첨부만 공개하며 공개 이름·소개를 바꾸지 않는다. 없는 요청(그 전 앱이 기록한 요청)은 넘기지 않으며, DB가 첨부 없이 공개하고 그 요청의 영수증 식별은 그대로다. 어느 요청도 저장된 공개 이름·소개를 바꾸지 않는다([공개 선택 설계](../../../docs/design-review/publish-choice.md)). 클라이언트 본문·ops·원문 해시·owner/session·공개 스냅샷은 받지 않는다.
 
 1. 사용자 JWT 형태의 `Authorization: Bearer`가 필요하다. Auth `/auth/v1/user`가 실제 사용자·비익명 계정을 확인한다. `user_metadata`는 권한에 사용하지 않는다.
 2. 같은 사용자 JWT로 `life_blog_markdown_publish_prepare`를 호출한다. DB가 현재 세션과 글 소유권을 확인하고 원문·revision·원문 해시·DB에서 얻은 owner/session을 반환한다. 완료 영수증이 있으면 원문을 다시 투영하거나 게시하지 않는다.

@@ -927,7 +927,7 @@ async function main() {
     await openReview(page, p1.doc.id);
     assert.equal(await panel(page).getByRole('textbox').count(), 0, 'no name or intro input in the review');
     assert.deepEqual(await shownProfile(page), { name: '익명A', intro: '익명 소개' });
-    assert.match(await panel(page).locator('.blog-manager-profile').innerText(), /게시해도 바뀌지 않으며, 바꾸려면 공개 이름·소개에서 저장합니다/);
+    assert.match(await panel(page).locator('.blog-manager-profile').innerText(), /글쓴이로 함께 공개하며, 바꾸려면 공개 이름·소개에서 저장합니다/);
     assert.match(await panel(page).innerText(), /사진과 첨부는 아래에서 고른 것만 공개/); assert.doesNotMatch(await panel(page).innerText(), /모든 첨부/);
     const choices = () => panel(page).locator('[data-attachment-position]');
     assert.deepEqual(await choices().evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'no attachment chosen at first');
@@ -948,7 +948,7 @@ async function main() {
     assert.equal(await visitor.page.locator('#blogContent .blog-attachments').count(), 0);
     // Choosing the second one; an update of a public post says first that what is not chosen again leaves.
     await openReview(page, p1.doc.id);
-    assert.match(await panel(page).locator('.blog-manager-attachments-note').innerText(), /지금 공개 중입니다\. 다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
+    assert.match(await panel(page).locator('.blog-manager-attachments-note').innerText(), /다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
     await choices().nth(1).check(); await preview(page); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
     assert.deepEqual(snapshotOf(p1.remoteId).attachments, [cards[1]]);
     await visitor.page.reload(); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published');

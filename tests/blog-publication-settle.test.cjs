@@ -54,7 +54,9 @@ function publicationNet(cloud) {
       const row = cloud.rows.get(id);
       if (!row || row.revision !== revision || (row.publication?.revision || 0) !== (options.expectedPublicRevision || 0)) throw fault('blog_conflict');
       row.publication = { token: row.publication?.active ? row.publication.token : Core.id(), blogToken: row.publication?.blogToken || Core.id(), revision: (options.expectedPublicRevision || 0) + 1, active: true };
-      row.published = { photoIds: clone(options.photoIds || []), author: clone(options.author), digests: (options.copies || []).map(copy => copy.digest) };
+      row.published = { photoIds: clone(options.photoIds || []), author: clone(options.author), digests: (options.copies || []).map(copy => copy.digest),
+        // The SQL copies the chosen attachments of the stored post (none without a choice, 20261116120000).
+        cards: (options.attachments || []).map(position => clone(row.data.attachments[position])) };
       result = { status: 'stored', ...row.publication }; receipts.set(operation, result); return clone(result);
     },
     unpublish(id, revision, operation) {
@@ -92,7 +94,7 @@ function publicationNet(cloud) {
   // The anonymous public reading of one post (what a visitor gets).
   const reader = { async read(token) {
     const row = [...cloud.rows.values()].find(value => value.publication?.active && value.publication.token === token);
-    return row ? { token, snapshot: { author: clone(row.published.author), photos: row.published.digests.map(digest => ({ digest })) } } : null;
+    return row ? { token, snapshot: { author: clone(row.published.author), photos: row.published.digests.map(digest => ({ digest })), attachments: clone(row.published.cards || []) } } : null;
   }, async list(token) { const row = [...cloud.rows.values()].find(value => value.publication?.active && value.publication.blogToken === token); return { blogToken: token, author: clone(row?.published.author || { name: '', intro: '' }), posts: [], nextCursor: null }; } };
   const holdNext = kind => control.hold = { kind, entered: deferred(), release: deferred() };
   return { receipts, calls, control, apply, attach, reader, holdNext, sent: kind => calls.filter(call => call.kind === kind && call.reached), tried: kind => calls.filter(call => call.kind === kind) };
@@ -118,12 +120,13 @@ function tab(cloud, net, dev, name, { locks = null, storage = dev.storage, timer
     timers, interval: 30000, publicReader: net.reader });
   return view;
 }
-async function saved(t, { photos = 0, locks = null } = {}) {
+async function saved(t, { photos = 0, locks = null, attachments = [] } = {}) {
   const cloud = server(), time = clock(), dev = await device(cloud, 'mac', { time }), net = publicationNet(cloud);
   dev.sync.dispose();
   const a = tab(cloud, net, dev, 'tab-a', { locks }), tabs = [a];
   t.after(() => { for (const view of tabs) view.sync.dispose(); dev.storage.close(); });
-  const doc = await a.storage.savePhotoPost(a.ws, await post({ title: '공개할 글', photos }), 0); await a.sync.syncNow();
+  const draft = await post({ title: '공개할 글', photos }); draft.attachments = clone(attachments);
+  const doc = await a.storage.savePhotoPost(a.ws, draft, 0); await a.sync.syncNow();
   const state = () => a.storage.readBlogSyncState(a.ws, doc.id), row = () => cloud.rows.get(doc.id);
   const view = async (from = a) => { const value = await from.sync.getState(a.ws, doc.id); return { status: value.publicationStatus, notice: value.publicationNotice }; };
   const status = async from => (await view(from)).status;
@@ -274,6 +277,38 @@ test('M3: an unanswered update of a public post arrives first: the new choice is
   assert.notEqual(requests[2].operation, requests[1].operation);
   const state = await f.state(); assert.equal(state.publishPending, null); assert.equal(state.publication.revision, 3);
   assert.deepEqual(await f.view(), { status: 'public', notice: null });
+});
+
+// Review m2 (2026-11-16): an earlier request of this device is recognized by the attachments it chose
+// (title and address of each), not by how many. Another publication with the same name, photos and
+// number of attachments is not this device's request, so the new choice is not sent once more.
+test('m2: a public copy with as many attachments as the earlier request, but other ones, is not taken for that request', async t => {
+  const cards = [{ type: 'book', title: '익명 첨부 하나', creator: '', url: 'https://example.com/one' }, { type: 'book', title: '익명 첨부 둘', creator: '', url: 'https://example.com/two' }];
+  const f = await saved(t, { attachments: cards }), author = { name: '익명', intro: '' };
+  await f.publish({ author, attachments: [] });
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ author, attachments: [0], expectedPublicRevision: 1 }), { code: 'network_error' });
+  f.net.control.block = null;
+  assert.deepEqual((await f.state()).publishPending.attachmentCards, [{ title: '익명 첨부 하나', url: 'https://example.com/one' }], 'the request records the cards it chose');
+  // Another device publishes the second card, same name, no photos, one attachment, before this one arrives.
+  f.net.control.before = { kind: 'publish', run: async () => { f.net.apply.publish(f.doc.id, f.row().revision, Core.id(), { photoIds: [], author, attachments: [1], expectedPublicRevision: 1 }); } };
+  await assert.rejects(f.publish({ author, attachments: [], expectedPublicRevision: 1 }), error => error.code === 'blog_conflict' && error.ownRequest === false);
+  assert.deepEqual(f.row().published.cards.map(card => card.title), ['익명 첨부 둘'], 'the other publication stays; nothing was sent once more over it');
+  assert.equal(f.net.sent('publish').filter(call => call.tab === 'tab-a').length, 2, 'the first publication and the refused one only');
+});
+
+test('m2: the earlier request arriving first with exactly its chosen cards is recognized, and the new choice is sent once more', async t => {
+  const cards = [{ type: 'book', title: '익명 첨부 하나', creator: '', url: 'https://example.com/one' }, { type: 'book', title: '익명 첨부 둘', creator: '', url: 'https://example.com/two' }];
+  const f = await saved(t, { attachments: cards }), author = { name: '익명', intro: '' };
+  await f.publish({ author, attachments: [] });
+  f.net.control.block = 'publish';
+  await assert.rejects(f.publish({ author, attachments: [0], expectedPublicRevision: 1 }), { code: 'network_error' });
+  f.net.control.block = null;
+  const old = f.net.tried('publish').at(-1);
+  f.net.control.before = { kind: 'publish', run: async () => { f.late(old); } };
+  const published = await f.publish({ author, attachments: [1], expectedPublicRevision: 1 });
+  assert.equal(published.revision, 3);
+  assert.deepEqual(f.row().published.cards.map(card => card.title), ['익명 첨부 둘'], 'the last reviewed choice is what is public');
 });
 
 test('M3: a first publication that arrives before it could be ended is recorded; the new choice is reviewed against it, or updates it', async t => {

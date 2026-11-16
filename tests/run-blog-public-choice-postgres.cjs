@@ -8,9 +8,10 @@
  *
  * supabase/migrations/20261116120000_life_blog_public_choice.sql: owner-only read and save of
  * the public name and intro; every publish path takes an attachment choice (list positions,
- * default none) and, with a choice, never writes the name or intro. A request without a choice
- * (an earlier app or a request recorded before the file) keeps its hash, receipt and profile
- * write and publishes no attachment. */
+ * default none), and no publish request writes the name or intro any more (owner decision 7, the
+ * review of 2026-11-16 M1). A request without a choice (an earlier app or a request recorded
+ * before the file) keeps its hash and receipt and publishes no attachment. EXECUTE on the
+ * unused private publish(6) is revoked from authenticated. */
 'use strict';
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -28,9 +29,18 @@ const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 // stop a changed body, so a mutation also drops that check (the contract must catch it).
 const unguarded = sql => sql.replace("if to_regprocedure(sig) is null or (select md5(prosrc) from pg_proc where oid=to_regprocedure(sig)) is distinct from want\n", "if to_regprocedure(sig) is null\n");
 const MUTATIONS = {
-  // A request with a choice still writes the public name and intro.
-  'profile-write': sql => unguarded(sql).replace("  -- The public list token only; the name and intro are saved by set_public_profile.\n  insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;",
-    "  insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;"),
+  // A v1/v2 request still writes the public name and intro.
+  'profile-write': sql => unguarded(sql).replace(" -- saved by set_public_profile alone. A first publication without a profile row starts it empty.\n insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;",
+    " insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;"),
+  // Only a request without a choice (an earlier app) writes them, as before the review (M1).
+  'legacy-profile-write': sql => unguarded(sql).replace(" -- saved by set_public_profile alone. A first publication without a profile row starts it empty.\n insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;",
+    " if p_attachments is null then insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;\n else insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing; end if;"),
+  // A Markdown commit still writes them.
+  'markdown-profile-write': sql => unguarded(sql).replace(" picked:=haedo_blog_private.picked_attachments(p.data->'attachments',p_attachments);\n insert into haedo_blog_private.profiles(owner_id) values(who) on conflict(owner_id) do nothing;",
+    " picked:=haedo_blog_private.picked_attachments(p.data->'attachments',p_attachments);\n insert into haedo_blog_private.profiles(owner_id,author) values(who,p_author) on conflict(owner_id) do update set author=excluded.author;"),
+  // The unused private publish(6) keeps EXECUTE for authenticated.
+  'publish-grant': sql => sql.replace(",\n  'haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)','');", ");")
+    .replace(" revoke all on function haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint) from public,anon,authenticated,service_role;\n", ''),
   // Every attachment is published whatever was chosen.
   'all-attachments': sql => unguarded(sql).replace("picked:=haedo_blog_private.picked_attachments(coalesce(p.data->'attachments','[]'::jsonb),p_attachments);", "picked:=coalesce(p.data->'attachments','[]'::jsonb);"),
   // A request without a choice keeps publishing every attachment.
@@ -72,8 +82,8 @@ async function contract(db, { installed = false } = {}) {
     create or replace function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}')$$;
     grant execute on function auth.jwt() to authenticated,service_role;`);
   if (!installed) for (const file of AFTER_AUTH) await db.query(read(file));
-  const owner = randomUUID(), other = randomUUID(), sid = randomUUID(), otherSid = randomUUID(), workspace = randomUUID();
-  await db.query('insert into auth.users(id) values($1),($2)', [owner, other]);
+  const owner = randomUUID(), other = randomUUID(), fresh = randomUUID(), sid = randomUUID(), otherSid = randomUUID(), workspace = randomUUID();
+  await db.query('insert into auth.users(id) values($1),($2),($3)', [owner, other, fresh]);
   await db.query('insert into auth.sessions(id,user_id) values($1,$2),($3,$4)', [sid, owner, otherSid, other]);
   const as = async (role, who, sql, values = []) => {
     await db.query('begin');
@@ -117,6 +127,9 @@ async function contract(db, { installed = false } = {}) {
   // ---- Before this file (direct run): every attachment was published; record an earlier request ----
   const queued = v2(randomUUID(), { title: '설치 전에 보낸 게시 요청' }); check((await save(queued)).status, 'stored', 'a saved post with three attachments');
   const queuedOperation = randomUUID();
+  // A second request recorded by the earlier app before the install that never reached the
+  // server; it is sent only after the install (its post must exist then).
+  const unsentQueued = v2(randomUUID(), { title: '설치 전에 기록만 된 게시 요청' }); await save(unsentQueued);
   let queuedReceipt = null;
   if (!installed) {
     queuedReceipt = await earlierText(queued.id, { operation: queuedOperation, by: { name: '설치 전 이름', intro: '설치 전 소개' } });
@@ -150,6 +163,11 @@ async function contract(db, { installed = false } = {}) {
     const roles = ['anon', 'authenticated', 'service_role'], granted = [];
     for (const role of roles) granted.push(await privilege(role, signature));
     check(granted, roles.map(role => role === roleName), signature + ': only ' + roleName + ' may call it');
+  }
+  {
+    const granted = [];
+    for (const role of ['anon', 'authenticated', 'service_role']) granted.push(await privilege(role, 'haedo_blog_private.publish(uuid,bigint,uuid,text[],jsonb,bigint)'));
+    check(granted, [false, false, false], 'the unused private publish(6) keeps no API role');
   }
   check((await db.query("select to_regprocedure('public.life_blog_publish_copies(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)') is null and to_regprocedure('public.life_blog_markdown_publish_prepare(uuid,bigint,uuid,text[],jsonb,bigint,jsonb)') is null value")).rows[0].value, true,
     'the earlier public signatures are replaced, not overloaded');
@@ -209,18 +227,29 @@ async function contract(db, { installed = false } = {}) {
   await refused(choose(post.id, undefined, { expectedPublic: 5, operation }), error => error.message === 'life_operation_mismatch', 'and without a choice (the earlier argument set)');
   check(titles(await snapshot(post.id)), ['익명 첨부 하나'], 'the receipt did not publish again');
 
-  // ---- An earlier app: no attachment, same hash and receipt, profile still written ----
+  // ---- An earlier app: no attachment, same hash and receipt, the saved name and intro untouched ----
   const older = v2(randomUUID(), { title: '이전 앱의 게시' }); await save(older);
   const beforeEarlier = (await profileRow(owner)).author;
   const earlierOperation = randomUUID(), earlierAnswer = await earlierText(older.id, { operation: earlierOperation, by: { name: '이전 앱 이름', intro: '' } });
   check(earlierAnswer.status, 'stored', 'the earlier text publish still works');
   check(titles(await snapshot(older.id)), [], 'and now publishes no attachment');
-  check((await profileRow(owner)).author, { name: '이전 앱 이름', intro: '' }, 'an earlier app still sets the name and intro (accepted limit, documented)');
+  check((await profileRow(owner)).author, beforeEarlier, 'an earlier app no longer replaces the saved name and intro (owner decision 7)');
+  check((await snapshot(older.id)).author, { name: '이전 앱 이름', intro: '' }, 'its copy shows the byline it reviewed');
   check(await earlierCopies(older.id, { operation: earlierOperation, by: { name: '이전 앱 이름', intro: '' } }), earlierAnswer, 'the earlier publish_copies arguments replay the same receipt (same hash as before)');
   await refused(choose(older.id, [], { operation: earlierOperation, by: { name: '이전 앱 이름', intro: '' } }), error => error.message === 'life_operation_mismatch', 'a choice can never replay an earlier receipt');
   const legacyHash = (await db.query("select encode(sha256(convert_to(jsonb_build_array('publish',1::bigint,'{}'::text[],$1::jsonb,0::bigint)::text,'UTF8')),'hex') value", [{ name: '이전 앱 이름', intro: '' }])).rows[0].value;
   check((await db.query("select encode(request_hash,'hex') value from haedo_blog_private.receipts where operation_id=$1", [earlierOperation])).rows[0].value, legacyHash, 'the receipt hash is the earlier formula');
-  await rpc('life_blog_set_public_profile', { p_author: beforeEarlier });
+  check((await profileRow(owner)).author, beforeEarlier, 'replaying its receipt writes nothing either');
+  // The request recorded before the install and sent only now: published without attachments, the saved values kept.
+  check((await earlierText(unsentQueued.id, { by: { name: '기기에 남은 옛 이름', intro: '옛 소개' } })).status, 'stored', 'a request recorded before the install and sent after it is applied');
+  check(titles(await snapshot(unsentQueued.id)), [], 'with no attachment');
+  check((await profileRow(owner)).author, beforeEarlier, 'and without replacing the saved name and intro');
+  // An earlier app publishing first for an account without a profile row: the row starts empty.
+  const freshPost = v2(randomUUID(), { title: '처음 공개하는 계정의 글' }); await save(freshPost, fresh);
+  check((await rpc('life_blog_publish', { p_post_id: freshPost.id, p_expected_revision: 1, p_operation_id: randomUUID(), p_photo_ids: [], p_author: { name: '옛 앱에서 쓴 이름', intro: '옛 소개' },
+    p_expected_publication_revision: 0 }, { who: fresh })).status, 'stored', 'an earlier app publishes first for an account without a profile');
+  check((await profileRow(fresh)).author, empty, 'its profile row starts with an empty name and intro (documented)');
+  check((await rpc('life_blog_get_public_profile', {}, { who: fresh })).author, empty, 'and the owner reads it as empty until saving one');
   if (queuedReceipt) {
     // The request recorded before the file: its operation replays with the original arguments.
     check(await earlierText(queued.id, { operation: queuedOperation, by: { name: '설치 전 이름', intro: '설치 전 소개' } }), queuedReceipt, 'a request recorded before the install replays its receipt unchanged');
@@ -256,7 +285,7 @@ async function contract(db, { installed = false } = {}) {
   const oldIntent = intent(undefined, { expectedPublic: 1, by: { name: '이전 Edge 이름', intro: '' } }), oldPrepared = await rpc('life_blog_markdown_publish_prepare', oldIntent);
   check((await commit(oldIntent, oldPrepared)).revision, 2, 'an earlier Edge (no choice) still publishes Markdown');
   check(titles(await snapshot(markdown.id)), [], 'with no attachment');
-  check((await profileRow(owner)).author, { name: '이전 Edge 이름', intro: '' }, 'and, as before, sets the name and intro');
+  check((await profileRow(owner)).author, beforeEarlier, 'and does not replace the saved name and intro (owner decision 7)');
   await refused(rpc('life_blog_markdown_publish_commit', { ...intent([0], { expectedPublic: 2 }), p_owner_id: owner, p_session_id: sid, p_source_hash: oldPrepared.sourceHash, p_ops: [{ insert: '익명 본문\n' }] }),
     error => error.code === '42501', 'an owner session cannot call the Markdown commit');
   check(await rpc('life_blog_markdown_publish_prepare', intent([0], { expectedPublic: 2 }), { who: other }), { status: 'missing' }, 'another account preparing the owner Markdown post finds nothing');
