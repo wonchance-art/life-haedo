@@ -172,9 +172,10 @@
 
 /* 2026-11-08 S4: Y·Q 오른쪽 칸 — one line of links to the plan screens (same names as the plan tabs). */
 .schedule-plan-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2px; margin: 0; }
-.schedule-plan-links > a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 6px; border-radius: 8px; color: var(--color-primary); font-size: var(--haedo-text-control, 15px); font-weight: 600; text-decoration: none; }
+/* 2026-11-16 노션 방향: ink links with the quiet underline (teal is 글쓰기 alone in the frame). */
+.schedule-plan-links > a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 6px; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-ink, var(--ink)); font-size: 14px; font-weight: var(--haedo-weight-regular, 400); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 .schedule-plan-links > a:first-child { margin-inline-start: -6px; }
-.schedule-plan-links > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-plan-links > a:hover { text-decoration-color: currentColor; }
 .schedule-plan-links > a[aria-busy=true] { opacity: .6; }
 .schedule-plan-links > .schedule-plan-sep { color: var(--ink-soft); }
 .schedule-aside > .schedule-plan-links + * { margin-top: 16px; }
