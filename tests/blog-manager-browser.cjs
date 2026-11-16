@@ -283,12 +283,16 @@ async function main() {
       await page.evaluate(() => { testData.profileSaveFail = true; });
       await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
       assert.equal(await name.inputValue(), '바꾼 익명 이름', 'a failed save keeps the input');
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), false, 'a failed save stays on screen');
       assert.deepEqual(await page.evaluate(() => testData.profileSaves), []);
       await page.evaluate(() => { testData.profileSaveFail = false; });
       await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
       await page.waitForFunction(() => /공개 이름과 소개를 저장했습니다/.test(document.querySelector('.blog-manager > [role="status"]')?.textContent || ''));
       assert.deepEqual(await page.evaluate(() => testData.profileSaves), [{ name: '바꾼 익명 이름', intro: '익명 공개 소개' }]);
       assert.equal(await page.evaluate(() => manager.dirty()), false);
+      // 2026-11-16 owner: the settled save is said to screen readers only; the editor keeps its plain state line.
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), true, 'the save success is not on-screen text');
+      assert.equal(await editor.locator('.blog-manager-profile-state').innerText(), '현재 저장된 값입니다.');
       // The open review now shows the saved byline; its choices stay, and the preview made with the earlier byline ends.
       assert.match(await panel.locator('.blog-manager-profile-values').innerText(), /바꾼 익명 이름/);
       assert.equal(await photo.isChecked(), true, 'the chosen photo stays chosen');
@@ -319,6 +323,7 @@ async function main() {
       await page.locator('.blog-manager-profile[data-state="failed"]').waitFor();
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
       assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /읽지 못해 미리보기를 만들지 않았습니다/);
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), false, 'a message after a quiet save is shown again');
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await idle();
       assert.equal(await page.evaluate(() => testData.publishCalls.length), 0, 'nothing published without the saved values');

@@ -30,7 +30,9 @@
       publicStates = states; publicNotices = notices;
     };
     const valid = token => !disposed && isCurrent() && (token == null || token === epoch) && !!host?.isConnected;
-    const announce = message => { if (valid()) status.textContent = message; };
+    // 2026-11-16 owner: a settled save is said to screen readers only (quiet); every other message,
+    // failures included, is shown on the status line.
+    const announce = (message, { quiet = false } = {}) => { if (!valid()) return; status.textContent = message; status.classList.toggle('life-sr-only', quiet); };
     async function navigate(fn) { navigating = true; try { return await fn(); } finally { navigating = false; } }
     function button(label, handler, primary = false) {
       const n = el('button', label, 'life-button' + (primary ? ' life-primary' : '')); n.type = 'button';
@@ -646,9 +648,9 @@
         if (!loaded) throw new Error('현재 공개 이름과 소개를 읽지 못했습니다. 다시 읽은 뒤 저장해 주세요.');
         const value = await blogSync.savePublicProfile(workspaceId, { name: name.value, intro: intro.value });
         if (!current()) return;
-        ready(value); showNote(value); state.replaceChildren(document.createTextNode('저장했습니다.'));
+        ready(value); showNote(value); state.replaceChildren(document.createTextNode('현재 저장된 값입니다.'));
         reviewProfile?.(value);
-        announce(value.posts ? '공개 이름과 소개를 저장했습니다. 공개 글 목록에 바로 보입니다.' : '공개 이름과 소개를 저장했습니다.');
+        announce(value.posts ? '공개 이름과 소개를 저장했습니다. 공개 글 목록에 바로 보입니다.' : '공개 이름과 소개를 저장했습니다.', { quiet: true });
       }, true), button('닫기', async control => {
         if (dirty()) {
           const answer = await choose(control, { title: '저장하지 않은 공개 이름·소개', lines: ['고친 공개 이름과 소개를 저장하지 않았습니다. 닫으면 고친 내용은 버려집니다.'], choices: [['버리고 닫기', 'discard', true]] });
