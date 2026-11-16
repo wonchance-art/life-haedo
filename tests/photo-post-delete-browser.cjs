@@ -101,7 +101,7 @@ async function main() {
         await until(() => deletes.length > 0, 'server deletion request');
         assert.equal(deletes.length, 1, 'one server deletion');
         await page.waitForFunction(() => document.activeElement?.matches('h1.life-page-title'));
-        assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), '일정');
+        assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), '노트'); // 2026-11-16: the list is 노트 (until then 일정)
         assert.equal((await page.locator('#lifeSaveStatus').textContent()).trim(), DONE);
 
         // A reload shows the same list: the deletion was stored, not only hidden.

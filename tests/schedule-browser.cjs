@@ -1,6 +1,6 @@
-/* 일정 B1 (2026-11-02 부드러운 판): 목록·Y·Q·M·W·D on the real app, SDK and IDB with an
- * anonymous intercepted Auth only. npm run dev; node tests/schedule-browser.cjs
- * Checks: old addresses open the exact unit, list↔Y↔D keeps the list's scroll and search,
+/* 일정 B1 (2026-11-02 부드러운 판): Y·Q·M·W·D (and 노트, the former 목록, since 2026-11-16) on the real app, SDK and
+ * IDB with an anonymous intercepted Auth only. npm run dev; node tests/schedule-browser.cjs
+ * Checks: old addresses open 노트 or the exact unit, 노트↔Y↔D keeps the list's scroll and search,
  * the iPhone 연→월→일 hierarchy with ‹ and browser back/forward, late reads across a unit
  * change and an account change, and 1440·820·390 without horizontal overflow or errors.
  * SCHEDULE_OUTPUT keeps screenshots and static copies for scripts/check-alignment.cjs.
@@ -104,18 +104,21 @@ async function main() {
     finally { await context.close(); }
   }
   try {
-    await check('old addresses open the exact 일정 unit and a dated unit reopens after reload', async ({ page }) => {
+    // Rule change (2026-11-16 notes-menu address table): the former list addresses (none, section=home, section=schedule
+    // without a unit) open 노트; section=tools and a unit stay 일정. Until then every one of them was 일정.
+    await check('old addresses open 노트 or the exact 일정 unit and a dated unit reopens after reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const cases = [
-        ['/index.html', 'home', null], ['/index.html?section=home', 'home', null], ['/index.html?section=schedule', 'home', null],
-        ['/index.html?section=tools', 'tools', 'tools'], ['/index.html?section=schedule&view=tools', 'tools', 'tools'],
-        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null]
+        ['/index.html', 'home', null, 'notes'], ['/index.html?section=home', 'home', null, 'notes'], ['/index.html?section=schedule', 'home', null, 'notes'],
+        ['/index.html?section=notes', 'home', null, 'notes'],
+        ['/index.html?section=tools', 'tools', 'tools', 'schedule'], ['/index.html?section=schedule&view=tools', 'tools', 'tools', 'schedule'],
+        ['/index.html?section=tools&view=annual-plan', 'annual-plan', null, 'schedule']
       ];
       // 2026-11-08 S8: the former 연표 screen's address opens the 연표 목록 (workspace.html).
       await page.goto(base + '/index.html?view=time'); await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
-      for (const [address, expected, current] of cases) {
+      for (const [address, expected, current, section] of cases) {
         await page.goto(base + address); await ready(page); await shown(page, expected);
-        assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page', address + ' is 일정');
+        assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="' + section + '"]').getAttribute('aria-current'), 'page', address + ' is ' + section);
         if (current) assert.equal(await page.locator('[data-schedule-view="' + current + '"]').getAttribute('aria-current'), 'true', address);
         if (expected === 'annual-plan') {
           // Y의 계획 칸: the plan editor, returning to Y.
@@ -149,7 +152,9 @@ async function main() {
       await page.keyboard.press('t'); await shown(page, 'day'); assert.equal(new URL(page.url()).searchParams.get('date'), '2026-11-03');
     });
 
-    await check('list → Y → D → list keeps the list scroll, tab and search; Y and D open exact posts and return', async ({ page }) => {
+    // Rule change (2026-11-16 notes-menu): the list is 노트 and the 보기 단위 bar has no 목록; the list is left and
+    // reached again with the menu (노트 ↔ 일정), and keeps its scroll and search the same way.
+    await check('노트 → 일정 Y → D → 노트 keeps the list scroll, tab and search; Y and D open exact posts and return', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const fixture = await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
       // Date headings group the posts; the newest post comes first.
@@ -161,18 +166,24 @@ async function main() {
       await page.evaluate(() => scrollTo({ top: 900, behavior: 'instant' })); const listScroll = await page.evaluate(() => scrollY);
       // A pointer press on the sticky heading does not scroll (Playwright's own click would scroll the control into view).
       const press = selector => page.locator(selector).evaluate(node => node.click());
-      await press('[data-schedule-view="tools"]'); await shown(page, 'tools');
+      // 일정 opens with 월 (no unit shown before in this session).
+      await press('[data-haedo-navigation] [data-haedo-section="schedule"]'); await shown(page, 'month');
       assert.equal(await page.evaluate(() => scrollY), 0);
+      await press('[data-schedule-view="tools"]'); await shown(page, 'tools');
       await press('[data-schedule-view="day"]'); await shown(page, 'day');
       assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '11월 3일 화요일');
-      await press('[data-schedule-view="home"]'); await shown(page, 'home');
+      await press('[data-haedo-navigation] [data-haedo-section="notes"]'); await shown(page, 'home');
       assert.equal(await page.locator('#homePostSearch').inputValue(), '산책');
       await page.waitForFunction(top => Math.abs(scrollY - top) < 2, listScroll);
+      // 일정 again opens the unit shown last (D), not 월.
+      await press('[data-haedo-navigation] [data-haedo-section="schedule"]'); await shown(page, 'day');
       // A post opened from D returns to the same day.
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-29'); await ready(page); await shown(page, 'day');
       await page.locator('[data-schedule-item="photo:' + fixture.ids['비 오는 날 동네 도서관'] + '"]').click();
       await page.locator('#lifeMain[data-mode="page"]').waitFor(); await page.locator('.photo-article').waitFor();
       assert.match(await page.locator('.photo-article').innerText(), /비 오는 날 동네 도서관/);
+      // A post opened from a calendar unit stays under 일정 (its return goes back there).
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
       await page.locator('#lifeSubviewReturn, [data-subview-return]').first().click(); await shown(page, 'day');
       assert.equal(new URL(page.url()).searchParams.get('date'), '2026-10-29');
       await page.waitForFunction(id => document.activeElement?.dataset.scheduleItem === 'photo:' + id, fixture.ids['비 오는 날 동네 도서관']);
@@ -184,12 +195,16 @@ async function main() {
       assert.match(await page.locator('.schedule-other-years').innerText(), /2025[\s\S]*새 일 두 번째 달/);
     });
 
-    await check('iPhone opens the list first, goes 연 → 월 → 일, ‹ goes up and back/forward follow the levels', async ({ page }) => {
+    // Rule change (2026-11-16 notes-menu): the phone opens 노트 first and its 일정 tab opens 월; 연 is the top of
+    // 일정 (its former ‹ 목록 went to the list, which is now the 노트 tab). Until then 연 had an up link to the list.
+    await check('iPhone opens 노트 first, 일정 goes 월 → 연 → 월 → 일, ‹ goes up and back/forward follow the levels', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
+      assert.equal(await page.locator('#lifeApp nav[aria-label="보기 단위"]').count(), 0, '노트 has no unit bar');
+      await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); await shown(page, 'month');
       assert.equal(await page.locator('#lifeApp nav[aria-label="보기 단위"] [data-schedule-view="month"]').isVisible(), false, 'no unit buttons on a phone');
-      await page.locator('[data-schedule-view="tools"]').click(); await shown(page, 'tools');
-      assert.equal(await page.locator('[data-schedule-up="home"]').isVisible(), true);
+      await page.locator('[data-schedule-up="tools"]').click(); await shown(page, 'tools');
+      assert.equal(await page.locator('.schedule-up').count(), 0, '연 is the top of 일정');
       // Another year on a phone, then back; ‹ › replace the screen.
       await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
       assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '2025년');
@@ -208,13 +223,15 @@ async function main() {
       assert.equal(new URL(page.url()).searchParams.get('date'), '2026-10-28');
       await page.goBack(); await shown(page, 'month');
       await page.goBack(); await shown(page, 'tools');
+      await page.goBack(); await shown(page, 'month'); assert.equal(await page.locator('#lifeApp .life-page-title').innerText(), '11월');
       await page.goBack(); await shown(page, 'home');
+      await page.goForward(); await shown(page, 'month');
       await page.goForward(); await shown(page, 'tools');
       await page.goForward(); await shown(page, 'month');
       await page.goForward(); await shown(page, 'day'); assert.equal(new URL(page.url()).searchParams.get('date'), '2026-10-28');
       await page.locator('[data-schedule-up="month"]').click(); await shown(page, 'month');
       await page.locator('[data-schedule-up="tools"]').click(); await shown(page, 'tools');
-      await page.locator('[data-schedule-up="home"]').click(); await shown(page, 'home');
+      await page.locator('[data-haedo-navigation] [data-haedo-section="notes"]').click(); await shown(page, 'home');
     }, { width: 390, height: 844 });
 
     await check('a late plan read cannot replace the next unit or reveal account A after an account change', async ({ page, server, device }) => {
@@ -254,8 +271,12 @@ async function main() {
         return out;
       });
       assert.deepEqual(listed.slice(0, 4).map(row => row.slice(0, 2)), [['11월 2일 월요일', PRIVATE], ['10월 29일 목요일', '비 오는 날 동네 도서관'], ['10월 28일 수요일', '창가 자리에서 읽은 책'], ['10월 21일 수요일', '천변을 따라 걸은 날']]);
+      // Rule change (2026-11-16 notes-menu, Designer visual contract with decision 8): the row's time is when it was
+      // first written, as its day heading; a post changed on another day adds `수정 11월 2일`, one changed the same
+      // day only its time. Until then the time column was the edit time (this asserted 20:00).
       const edited = listed.find(row => row[1] === '천변을 따라 걸은 날');
-      assert.deepEqual(edited.slice(2), ['20:00', '수정 11월 2일'], 'the edited post keeps its edit time on its row (총괄 decision: row times unchanged)');
+      assert.deepEqual(edited.slice(2), ['14:30', '수정 11월 2일'], 'the edited post: written time, then its edit date');
+      assert.deepEqual(listed.find(row => row[1] === PRIVATE).slice(2), ['22:10', ''], 'a post not changed on another day: its time only');
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-21'); await ready(page); await shown(page, 'day');
       assert.match(await page.locator('#lifeSchedule').innerText(), /천변을 따라 걸은 날/);
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-02'); await ready(page); await shown(page, 'day');
@@ -263,6 +284,8 @@ async function main() {
       assert.match(await page.locator('#lifeSchedule').innerText(), new RegExp(PRIVATE));
     });
 
+    // Rule change (2026-11-16 notes-menu): the single-key shortcuts belong to 일정's calendar units; 노트 (the former
+    // list, where they were active) has none, and L (목록) is gone with the list's unit. The rest is unchanged.
     await check('single-key shortcuts never fire while typing or composing, and follow the physical key in the Korean layout', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
@@ -275,7 +298,11 @@ async function main() {
       await page.locator('#homePostSearch').fill(''); await cdp.send('Input.imeSetComposition', { text: 'ㅡ', selectionStart: 1, selectionEnd: 1 });
       await page.keyboard.press('KeyM'); await cdp.send('Input.insertText', { text: '므' });
       assert.equal(await mode(page), 'home');
+      // 노트 outside its fields: no calendar shortcut.
       await page.locator('#homePostSearch').fill(''); await page.locator('#lifeApp .life-page-title').focus();
+      await page.keyboard.press('m'); await page.keyboard.press('y'); await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day');
+      await page.locator('#lifeApp .life-page-title').focus();
       // A key event during composition (isComposing, or keyCode 229) is ignored outside fields as well.
       // KeyboardEventInit has no keyCode, so a composing keyCode 229 is set on the event itself.
       const press = init => page.evaluate(({ keyCode, ...init }) => {
@@ -283,16 +310,18 @@ async function main() {
         if (keyCode) Object.defineProperty(event, 'keyCode', { get: () => keyCode });
         document.activeElement.dispatchEvent(event);
       }, init);
-      await press({ key: 'ㅡ', code: 'KeyM', isComposing: true }); await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
-      await press({ key: 'm', code: 'KeyM', keyCode: 229 }); await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      await press({ key: 'ㅡ', code: 'KeyM', isComposing: true }); await page.waitForTimeout(300); assert.equal(await mode(page), 'day');
+      await press({ key: 'm', code: 'KeyM', keyCode: 229 }); await page.waitForTimeout(300); assert.equal(await mode(page), 'day');
       // 2-set Korean layout without composition: ㅡ is the M key, ㅛ the Y key.
       await press({ key: 'ㅡ', code: 'KeyM' }); await shown(page, 'month');
       await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅛ', code: 'KeyY' }); await shown(page, 'tools');
-      await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅣ', code: 'KeyL' }); await shown(page, 'home');
+      // L no longer names a unit (the list is 노트).
+      await page.locator('#lifeApp .life-page-title').focus(); await press({ key: 'ㅣ', code: 'KeyL' }); await press({ key: 'l', code: 'KeyL' });
+      await page.waitForTimeout(300); assert.equal(await mode(page), 'tools');
       // An ASCII key of another layout is that character: AZERTY `,` sits on KeyM, Dvorak `,` on KeyW.
       await page.locator('#lifeApp .life-page-title').focus();
       await press({ key: ',', code: 'KeyM' }); await press({ key: ',', code: 'KeyW' }); await press({ key: ';', code: 'KeyD' });
-      await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      await page.waitForTimeout(300); assert.equal(await mode(page), 'tools');
       // Every editable host counts as a field: plaintext-only and an inherited editable child.
       await page.evaluate(() => {
         const plain = document.createElement('div'); plain.id = 'scheduleEditablePlain'; plain.setAttribute('contenteditable', 'plaintext-only'); plain.tabIndex = 0; plain.textContent = '메모';
@@ -302,10 +331,10 @@ async function main() {
       });
       for (const id of ['scheduleEditablePlain', 'scheduleEditableChild']) {
         await page.locator('#' + id).focus(); await press({ key: 'm', code: 'KeyM' }); await press({ key: 'ㅡ', code: 'KeyM' });
-        await page.waitForTimeout(300); assert.equal(await mode(page), 'home', id);
+        await page.waitForTimeout(300); assert.equal(await mode(page), 'tools', id);
       }
       await page.locator('#scheduleEditablePlain').focus(); await page.keyboard.type('mdy');
-      await page.waitForTimeout(300); assert.equal(await mode(page), 'home');
+      await page.waitForTimeout(300); assert.equal(await mode(page), 'tools');
     });
 
     // Rule change (owner decision 8, 2026-11-16): each post's list row carries createdAt, so the calendar
@@ -345,7 +374,10 @@ async function main() {
     // 761–1100px is two rows, the title on one line. Rule change (review 3 m1, lead decision): the title row holds
     // the title alone; the next row is the 보기 단위 bar, 오늘, ‹ ›, 검색 and ?, so the visual order is the DOM (Tab)
     // order; the title is not glued to the top (review 2 m4: at least 12px, as the 1440 row).
-    await check('the list hides 오늘 and ‹ ›; iPad portrait has a two-row heading with a one-line title; W titles are 44px; D is 체크 → 기록 → 다른 해', async ({ page }) => {
+    // Rule change (2026-11-16 notes-menu): the list is 노트, whose heading has no 보기 단위, 오늘 or ‹ › at all (it is
+    // not a 일정 screen), so the list rows of this check moved to 노트's own heading assertions. D's 체크 (습관 + 행복도)
+    // moved into the side column (예정 → 습관·행복도 → 목표·계획); the body is 그날 기록 → 다른 해.
+    await check('노트 has no calendar controls; iPad portrait has a two-row heading with a one-line title; W titles are 44px; D is 기록 → 다른 해 beside 예정 → 체크 → 계획', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const heading = () => page.evaluate(() => {
         const box = node => { const b = node.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), w: b.width, h: b.height }; };
@@ -361,23 +393,23 @@ async function main() {
       });
       for (const [width, height] of [[1440, 960], [1100, 900], [820, 1180], [761, 1000]]) {
         await page.setViewportSize({ width, height });
-        for (const [address, expected] of [['/index.html', 'home'], ['/index.html?section=schedule&view=day&date=2026-10-28', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter']]) {
+        // 노트: its own heading, 노트 · 통합 검색 · 글 메뉴, with nothing of the calendar's.
+        await page.goto(base + '/index.html'); await ready(page); await shown(page, 'home');
+        const notes = await heading();
+        assert.equal(notes.lines, 1, '노트 ' + width + ': the title is on one line');
+        assert.deepEqual([notes.views.length, notes.today, notes.steps, notes.help.length, notes.disabled], [0, 0, 0, 0, 0], '노트 ' + width + ': no calendar control');
+        assert.deepEqual(notes.controls.map(control => control.name), ['통합 검색', '글 메뉴'], '노트 ' + width + ': 통합 검색 and 글 메뉴');
+        for (const [address, expected] of [['/index.html?section=schedule&view=day&date=2026-10-28', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter']]) {
           await page.goto(base + address); await ready(page); await shown(page, expected);
           const head = await heading(), scene = expected + ' ' + width;
           assert.equal(head.lines, 1, scene + ': the title is on one line');
           assert.deepEqual(head.units.filter(unit => unit.w < 44 || unit.h < 44), [], scene + ': each unit is 44px');
           assert.equal(head.disabled, 0, scene + ': no control is left disabled');
-          if (expected === 'home') {
-            assert.deepEqual([head.today, head.steps], [0, 0], scene + ': no 오늘 or ‹ › on the list');
-            // Not reachable either: Tab from the bar's last unit goes on to 검색.
-            await page.locator('[data-schedule-view="day"]').focus(); await page.keyboard.press('Tab');
-            assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFindOpen', scene + ': Tab skips the hidden controls');
-          }
-          else assert.deepEqual([head.today, head.steps], [1, 2], scene + ': 오늘 and ‹ › on a unit');
+          assert.deepEqual([head.today, head.steps], [1, 2], scene + ': 오늘 and ‹ › on a unit');
           if (width <= 1100) {
-            // Title row: the title alone (the list's 글 메뉴 follows it); the bar, 오늘, ‹ ›, 검색 and ? on the next row.
+            // Title row: the title alone; the bar, 오늘, ‹ ›, 검색 and ? on the next row.
             const second = head.controls.filter(control => control.top >= head.title.bottom - 2);
-            assert.deepEqual(head.controls.filter(control => control.top < head.title.bottom - 2).map(control => control.name), expected === 'home' ? ['글 메뉴'] : [], scene + ': the title row holds the title alone');
+            assert.deepEqual(head.controls.filter(control => control.top < head.title.bottom - 2).map(control => control.name), [], scene + ': the title row holds the title alone');
             assert.ok(head.find.top >= head.title.bottom - 2 && head.help[0].top >= head.title.bottom - 2 && head.views[0].top >= head.title.bottom - 2, scene + ': 검색 and ? are on the bar row');
             assert.equal(new Set(second.map(control => control.top)).size, 1, scene + ': one second row');
             assert.ok(head.title.top - head.toolbarTop >= 12, scene + ': the title is not glued to the top (' + (head.title.top - head.toolbarTop) + 'px)');
@@ -403,15 +435,16 @@ async function main() {
         const titles = await page.locator('.schedule-week-day .schedule-post-open').evaluateAll(nodes => nodes.map(n => n.getBoundingClientRect().height));
         assert.ok(titles.length >= 2 && titles.every(h => h >= 44), 'week ' + width + ': post titles are 44px (' + titles.join(', ') + ')');
       }
-      // D: 체크 (습관 + 행복도) → 그날 기록 → 다른 해, and no goal.
+      // D: the body is 그날 기록 → 다른 해; the side column 예정 → 체크 (습관 + 행복도) → 목표·계획 (links only), no goal.
       await page.setViewportSize({ width: 1440, height: 960 });
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day');
       const order = await page.evaluate(() => {
-        const nodes = ['.schedule-entries-day', '.schedule-day-records', '.schedule-other-years'].map(sel => document.querySelector('#lifeSchedule ' + sel));
+        const nodes = ['.schedule-primary .schedule-day-records', '.schedule-primary .schedule-other-years', '.schedule-aside [data-side="plans"]',
+          '.schedule-aside [data-side="habits"] .schedule-entries-day', '.schedule-aside [data-side="goals"] .schedule-plan-links'].map(sel => document.querySelector('#lifeSchedule ' + sel));
         return { found: nodes.map(Boolean), ordered: nodes.every((node, i) => !i || nodes[i - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING),
           goals: document.querySelectorAll('#lifeSchedule .schedule-goal').length };
       });
-      assert.deepEqual(order, { found: [true, true, true], ordered: true, goals: 0 });
+      assert.deepEqual(order, { found: [true, true, true, true, true], ordered: true, goals: 0 });
       assert.match(await page.locator('.schedule-day-records').innerText(), /창가 자리에서 읽은 책/);
       // Y (S4): the year's sentence under 올해 계획; a year without one links to the annual plan.
       await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
@@ -433,22 +466,23 @@ async function main() {
       const regions = () => page.evaluate(() => [...document.querySelectorAll('#lifeApp :is(section[aria-label], section[aria-labelledby], aside, nav)')].map(node =>
         node.getAttribute('aria-label') || document.getElementById(node.getAttribute('aria-labelledby') || '')?.textContent || ''));
       const slotReady = kind => page.waitForFunction(k => { const slot = document.querySelector('.schedule-entries-' + k); return slot?.getAttribute('aria-busy') === 'false' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; }, kind);
-      // 820: the list's 글 메뉴 opens below the second row (the 보기 단위 bar is never covered).
+      // 820: 노트's 글 메뉴 opens below its heading row and inside the screen (rule change 2026-11-16: the menu is at the
+      // end of 노트's own heading; until then it followed the 일정 title and opened below the 보기 단위 bar).
       await page.setViewportSize({ width: 820, height: 1180 });
       await page.goto(base + '/index.html'); await ready(page); await shown(page, 'home');
       await page.locator('#lifeApp .life-toolbar .life-feature-menu > summary').click();
-      const menu = await page.evaluate(() => ({ panel: document.querySelector('#lifeApp .life-toolbar .life-feature-menu-panel').getBoundingClientRect().top,
-        bar: document.querySelector('#lifeApp .life-schedule-views').getBoundingClientRect().bottom }));
-      assert.ok(menu.panel >= menu.bar, '820: the 글 메뉴 opens below the 보기 단위 bar (' + JSON.stringify(menu) + ')');
+      const menu = await page.evaluate(() => { const panel = document.querySelector('#lifeApp .life-toolbar .life-feature-menu-panel').getBoundingClientRect(), summary = document.querySelector('#lifeApp .life-toolbar .life-feature-menu > summary').getBoundingClientRect();
+        return { top: panel.top, left: panel.left, right: panel.right, summary: summary.bottom }; });
+      assert.ok(menu.top >= menu.summary - 1 && menu.left >= 0 && menu.right <= 820, '820: the 글 메뉴 opens below its button, inside the screen (' + JSON.stringify(menu) + ')');
       await page.keyboard.press('Escape');
-      // D (1440): h2 습관 · 행복도 · 그날 기록, the post titles h3 at the former title size.
+      // D (1440): h2 그날 기록 · 다른 해 in the body, 예정 · 습관 · 행복도 · 목표 · 계획 beside it; post titles h3 at the title size.
       await page.setViewportSize({ width: 1440, height: 960 });
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-10-28'); await ready(page); await shown(page, 'day'); await slotReady('day');
       const day = await page.evaluate(() => ({ h2: [...document.querySelectorAll('#lifeSchedule h2')].map(n => n.textContent),
         posts: [...document.querySelectorAll('#lifeSchedule .schedule-day-records .schedule-post-title')].map(n => n.tagName + ' ' + getComputedStyle(n).fontSize),
         title: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-title)'; document.body.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })(),
         records: document.querySelector('.schedule-day-records').getAttribute('aria-labelledby') }));
-      assert.deepEqual(day.h2.slice(0, 3), ['습관', '행복도', '그날 기록'], 'D: 습관 · 행복도 · 그날 기록 are h2');
+      assert.deepEqual(day.h2, ['그날 기록', '다른 해', '예정', '습관', '행복도', '목표 · 계획'], 'D: the h2 of the body, then of the side column');
       assert.ok(day.posts.length && day.posts.every(post => post === 'H3 ' + day.title), 'D: post titles are h3 at the title size (' + day.posts + ')');
       assert.equal(await page.getByRole('group', { name: '행복도' }).count(), 1, 'the 행복도 fieldset keeps its name');
       assert.equal(await page.getByRole('region', { name: '그날 기록' }).count(), 1);
@@ -458,13 +492,17 @@ async function main() {
       assert.equal(await page.locator('.schedule-entries-week h2').first().textContent(), '습관 · 행복도');
       names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'W: no two regions share a name');
       assert.equal(await page.getByRole('region', { name: '이번 주 습관과 행복도' }).count(), 1);
-      // Y: the aside is 올해 (its link line is the 계획 navigation); 올해 계획 · 예정 · 목표 are h2; no goal says so with 목표 추가.
+      // Y: the aside is 올해 (its link line is the 계획 navigation); 예정 · 습관 · 행복도 · 올해 계획 · 목표 are h2 (rule change
+      // 2026-11-16: the side column order 예정 → 습관·행복도 → 목표·계획 of every unit; until then 올해 계획 · 예정 · 목표);
+      // no goal says so with 목표 추가.
       await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools'); await slotReady('year');
       assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '올해');
-      assert.deepEqual(await page.locator('aside.schedule-aside h2, aside.schedule-aside h3').evaluateAll(nodes => nodes.map(n => n.tagName + ' ' + n.textContent)), ['H2 올해 계획', 'H2 예정', 'H2 목표']);
+      assert.deepEqual(await page.locator('aside.schedule-aside h2, aside.schedule-aside h3').evaluateAll(nodes => nodes.map(n => n.tagName + ' ' + n.textContent)), ['H2 예정', 'H2 습관 · 행복도', 'H2 올해 계획', 'H2 목표']);
       names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'Y: no two regions share a name (' + names + ')');
       const size = await bodySize(), teal = await planLinkColor();
-      const goalEmpty = await page.locator('.schedule-entries-year .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize, link: n.querySelector('a')?.getAttribute('href'), color: getComputedStyle(n.querySelector('a')).color, line: getComputedStyle(n.querySelector('a')).textDecorationLine }));
+      // Found and measured in one evaluation: the slot repaints on store notices, so a node resolved earlier can be detached
+      // by the time it is measured (seen under load: every computed value empty).
+      const goalEmpty = await page.evaluate(() => { const n = document.querySelector('.schedule-entries-year .schedule-empty'); return ({ text: n.textContent, size: getComputedStyle(n).fontSize, link: n.querySelector('a')?.getAttribute('href'), color: getComputedStyle(n.querySelector('a')).color, line: getComputedStyle(n.querySelector('a')).textDecorationLine }); });
       assert.deepEqual(goalEmpty, { text: '진행 중인 목표가 없어요. 목표 추가', size, link: 'goals.html', color: teal, line: 'none' }, 'Y: no goal, at body size, with a teal 목표 추가 link');
       // Another year: 이 해; its empty 올해 계획 link is the same teal link.
       await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
@@ -476,7 +514,10 @@ async function main() {
       // Phone: up labels without (으); the month's selected-day empty line at body size.
       await page.setViewportSize({ width: 390, height: 844 });
       const ups = [];
-      for (const [address, expected] of [['/index.html?section=tools', 'tools'], ['/index.html?section=schedule&view=month&date=2026-10-27', 'month'], ['/index.html?section=schedule&view=day&date=2026-10-27', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-27', 'quarter'], ['/index.html?section=schedule&view=week&date=2026-10-27', 'week']]) {
+      // Rule change (2026-11-16): 연 has no up link (its former 목록으로 올라가기 led to the list, now the 노트 tab).
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools');
+      assert.equal(await page.locator('.schedule-up').count(), 0, '연 is the top');
+      for (const [address, expected] of [['/index.html?section=schedule&view=month&date=2026-10-27', 'month'], ['/index.html?section=schedule&view=day&date=2026-10-27', 'day'], ['/index.html?section=schedule&view=quarter&date=2026-10-27', 'quarter'], ['/index.html?section=schedule&view=week&date=2026-10-27', 'week']]) {
         await page.goto(base + address); await ready(page); await shown(page, expected);
         ups.push(await page.locator('.schedule-up').getAttribute('aria-label'));
         if (expected === 'month') {
@@ -484,14 +525,14 @@ async function main() {
           assert.deepEqual(empty, ['이 날 기록이 없어요.', await bodySize()], 'M (phone): the selected day empty at body size');
         }
       }
-      assert.deepEqual(ups, ['목록으로 올라가기', '2026년으로 올라가기', '10월로 올라가기', '2026년으로 올라가기', '10월로 올라가기']);
+      assert.deepEqual(ups, ['2026년으로 올라가기', '10월로 올라가기', '2026년으로 올라가기', '10월로 올라가기']);
       assert.deepEqual(await page.evaluate(() => ['목록', '2026년', '10월', '11월', '3월', '분기', '2025'].map(HaedoLife.ScheduleUI.withRo)),
         ['목록으로', '2026년으로', '10월로', '11월로', '3월로', '분기로', '2025로']);
     });
 
     await check('every unit at 1440, 820 and 390 has no horizontal overflow and keeps accessible names', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
-      const scenes = [['list', '/index.html', 'home'], ['year', '/index.html?section=tools', 'tools'], ['quarter', '/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter'],
+      const scenes = [['notes', '/index.html', 'home'], ['year', '/index.html?section=tools', 'tools'], ['quarter', '/index.html?section=schedule&view=quarter&date=2026-10-28', 'quarter'],
         ['month', '/index.html?section=schedule&view=month&date=2026-10-28', 'month'], ['week', '/index.html?section=schedule&view=week&date=2026-10-28', 'week'],
         ['day', '/index.html?section=schedule&view=day&date=2026-10-29', 'day']];
       for (const [scene, address, expected] of scenes) {

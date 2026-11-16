@@ -85,6 +85,19 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-compact-go { grid-area: go; }
   .habit-compact-row { padding-block: 8px 12px; }
 }
+/* 일정 M's side column from 1101px (2026-11-16 notes-menu: 습관·행복도 sits in the 280px side column of every unit):
+   the same two-line row, and a dot never wider than its day's column (31 days in about 248px). */
+@media (min-width: 1101px) {
+  .schedule-aside :is(.habit-compact-head, .habit-compact-row) { grid-template-columns: minmax(0, 1fr) auto 16px; grid-template-areas: "name count go" "days days go"; row-gap: 8px; }
+  .schedule-aside .habit-compact-head > :is(.habit-compact-name, .habit-compact-count) { display: none; }
+  .schedule-aside .habit-compact-head { padding-bottom: 0; }
+  .schedule-aside .habit-compact-name { grid-area: name; }
+  .schedule-aside .habit-compact-count { grid-area: count; }
+  .schedule-aside .habit-compact-days { grid-area: days; max-width: none; }
+  .schedule-aside .habit-compact-go { grid-area: go; }
+  .schedule-aside .habit-compact-row { padding-block: 8px 12px; }
+  .schedule-aside .habit-compact-dot { width: min(10px, 100%); height: auto; aspect-ratio: 1; }
+}
 @media (max-width: 760px) {
   .habit-compact-dot { width: 8px; height: 8px; }
   .habit-compact-dot[data-state=kept]::before { width: 3px; height: 3px; }

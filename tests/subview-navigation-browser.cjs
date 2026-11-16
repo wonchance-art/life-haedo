@@ -225,7 +225,7 @@ async function main() {
       assert.deepEqual(await menu.locator('.life-feature-menu-panel button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label'))), ['글 공개·보관', '계정 보관 상태', '프로필 편집']);
       await menu.getByRole('button', { name: '계정 보관 상태', exact: true }).focus(); await page.keyboard.press('Enter'); await mode(page, 'account-blog');
       assert.equal(await heading(page).textContent(), '계정 보관 상태');
-      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '일정으로 돌아가기');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '노트로 돌아가기'); // 2026-11-16: the list is 노트 (until then 일정으로 돌아가기)
       await back(page, 'home'); await page.waitForFunction(() => document.activeElement?.id === 'homeAccountBlog');
       await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await mode(page, 'page');
       await page.locator('#wbPageTitle').waitFor(); assert.equal(await heading(page).textContent(), '프로필 편집');
@@ -363,7 +363,7 @@ async function main() {
       assert.equal(new URL(page.url()).searchParams.get('section'), null, 'The blog editor stays in home');
       // A never-saved new post reopens as the 글쓰기 screen (review minor 1); the section frame stays 일정.
       assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-compose]').getAttribute('aria-current'), 'page');
-      assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), 'schedule');
+      assert.equal(await page.evaluate(() => document.body.dataset.haedoSection), 'notes'); // 2026-11-16: posts are 노트's (until then 일정)
       assert.equal(await page.locator('#photoTitle').inputValue(), '새로고침 뒤에도 이어 쓸 글');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '한글 본문은 다시 불러와도 같은 편집기에 남습니다.');
       assert.equal((await photoPosts(page)).length, 1, 'Reload reopens the same draft instead of adding a copy');
@@ -388,7 +388,8 @@ async function main() {
       await compose(page).click(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('뒤로 가기로 닫을 글'); await page.locator('.ql-editor').fill('뒤로 가도 초안은 남습니다.');
       await page.goBack(); await mode(page, 'home');
-      assert.equal(new URL(page.url()).searchParams.get('section'), null);
+      // 2026-11-16 (notes-menu): the list's address is `?section=notes` (until then the plain index.html).
+      assert.equal(new URL(page.url()).searchParams.get('section'), 'notes');
       assert.equal((await durablePhoto(page, '뒤로 가기로 닫을 글')).status, 'draft');
       await page.goForward(); await mode(page, 'page'); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), '뒤로 가기로 닫을 글');
@@ -399,12 +400,11 @@ async function main() {
       await page.getByRole('button', { name: '백업·복원', exact: true }).click(); await mode(page, 'backup');
       await page.goBack(); await mode(page, 'manage');
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '백업·복원' || document.activeElement?.textContent?.includes('백업·복원'));
-      // 2026-11-02: the plan is 일정's second view, so it is two screens away from 설정.
-      await nav(page, 'home'); await mode(page, 'home');
-      await page.locator('[data-schedule-view="tools"]').click(); await mode(page, 'tools');
+      // The plan is two screens away from 설정: 일정 (opening 월; 2026-11-16 notes-menu, until then the list), then its
+      // plan link line (the same link line in 월 as in Y).
+      await nav(page, 'schedule'); await mode(page, 'month');
       await page.locator('#lifeMain .schedule-plan-links').getByRole('link', { name: '연간 계획', exact: true }).click(); await mode(page, 'annual-plan');
-      await page.goBack(); await mode(page, 'tools');
-      await page.goBack(); await mode(page, 'home');
+      await page.goBack(); await mode(page, 'month');
       await page.goBack(); await mode(page, 'manage');
       // The origin (the 일정 menu link) can be hidden at this width; focus must still land on the screen, never <body>.
       await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body && document.querySelector('#lifeMain')?.contains(document.activeElement) || document.activeElement?.closest?.('.life-toolbar,nav'));

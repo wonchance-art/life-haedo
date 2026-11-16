@@ -285,7 +285,7 @@
       return rows;
     }
     function postCover(context, row, article, open) {
-      // `article` is the row's content column (2026-11-02 일정 목록: time · icon · content).
+      // `article` is the row's content column (2026-11-02 list, 노트 since 2026-11-16: time · icon · content).
       if (row.kind !== 'photo' || !row.photos) return;
       const epoch = mediaGeneration;
       const frame = action(context, '', open, 'home-post-media');
@@ -340,7 +340,13 @@
       time.title = labels.title;
       return time;
     }
-    // 일정 목록 rows: a time column and an icon column before the content (decision 2026-11-02).
+    // The edit date of a row (2026-11-16 notes-menu, owner decision 8): only for a row changed on another day than
+    // it was first written. The row's time is when it was first written, under that day's heading.
+    function editedDate(row, prefix) {
+      const day = life.ScheduleData?.dayOf, written = day?.(writtenAt(row)), changed = day?.(row.updatedAt);
+      return written && changed && written === changed ? null : modifiedDate(row.updatedAt, prefix);
+    }
+    // 노트 rows (the former 일정 목록): a time column and an icon column before the content (decision 2026-11-02).
     function rowTime(value) {
       const text = life.ScheduleData?.timeOf(value) || '';
       const time = el('span', text, 'home-row-time'); if (!text) time.setAttribute('aria-hidden', 'true');
@@ -361,7 +367,7 @@
       else article.dataset.postId = row.id;
       const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : row.kind === 'photo' ? openPhoto(context, row) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
       const meta = el('p', null, 'life-meta home-post-meta');
-      const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
+      const time = editedDate(row, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
       // A post's original always stays private; a public copy, when there is one, is named
       // next to it. An unanswered publish or withdrawal is said as not confirmed, never as private.
@@ -385,7 +391,7 @@
       const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
       read.append(life.Icons.create('arrow'));
       footer.append(meta, read); body.append(footer);
-      article.append(rowTime(row.updatedAt), rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
+      article.append(rowTime(writtenAt(row)), rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
       return article;
     }
     // One account, one blog: a post kept in another library of this account
@@ -411,9 +417,9 @@
       copy.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글', 'life-meta'),
         el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
       if (row.title?.trim() && row.body?.trim()) copy.append(el('span', snippet(row.body), 'home-draft-excerpt'));
-      const time = modifiedDate(row.updatedAt);
+      const time = editedDate(row, '수정 ');
       if (time) { time.className = 'life-meta'; copy.append(time); }
-      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowTime(row.updatedAt), rowMark('write'), open); return article;
+      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowTime(writtenAt(row)), rowMark('write'), open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];

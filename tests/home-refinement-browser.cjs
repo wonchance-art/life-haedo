@@ -202,17 +202,28 @@ async function main() {
         await page.clock.setFixedTime(new Date(time));
         samples.push(...await page.evaluate(async time => {
           const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, p = HaedoLife.PagePosts, w = HaedoLife.Writing, workspaceId = await s.getActive();
-          const doc = m.create(c.id, time); doc.title = '서울 연도 경계 사진 글'; doc.status = 'saved'; doc.ops = [{ insert: '경계 시각에 저장한 익명 본문\n' }]; await s.savePhotoPost(workspaceId, doc, 0);
+          // Written earlier, edited at the boundary: its row names the edit date (2026-11-16 notes-menu rule).
+          const doc = m.create(c.id, time); doc.createdAt = '2025-11-20T03:00:00.000Z'; doc.title = '서울 연도 경계 사진 글'; doc.status = 'saved'; doc.ops = [{ insert: '경계 시각에 저장한 익명 본문\n' }]; await s.savePhotoPost(workspaceId, doc, 0);
           const wb = await s.readWorkbench(workspaceId), legacy = p.draft(wb.page.posts || [], c.id(), time); legacy.body = '서울 연도 경계 기존 첨부 글'; wb.page.posts = p.finish((wb.page.posts || []).concat(legacy), legacy.id, time).posts; await s.saveWorkbench(workspaceId, wb, wb.revision);
           const bundle = await s.read(workspaceId), draft = w.createDraft(bundle); draft.title = '서울 연도 경계 직접 글'; draft.text = '원문 기반 글의 저장 시각도 서울 기준으로 읽습니다.';
           const prepared = await w.prepareSave(bundle, draft), result = await s.commitLocal({ workspaceId, baseRevision: bundle.revision, operationId: c.id(), changes: prepared.changes }); if (result.status !== 'stored') throw new Error('Date-boundary source fixture failed');
-          return [{ selector: '[data-photo-post-id="' + doc.id + '"]', prefix: '수정 ', time }, { selector: '[data-post-id="' + legacy.id + '"]', prefix: '수정 ', time }, { selector: '[data-source-id="' + prepared.source.id + '"]', prefix: '저장 ', time }];
+          return [{ selector: '[data-photo-post-id="' + doc.id + '"]', prefix: '수정 ', time, edited: true }, { selector: '[data-post-id="' + legacy.id + '"]', prefix: '수정 ', time }, { selector: '[data-source-id="' + prepared.source.id + '"]', prefix: '저장 ', time }];
         }, time));
       }
       await page.clock.setFixedTime(new Date('2026-10-17T12:00:00.000Z')); await page.reload(); await ready(page); await homeReady(page);
       assert.equal(await page.locator('#homePosts .home-post').count(), 6);
       const observed = [];
       for (const sample of samples) {
+        // Rule change (2026-11-16 notes-menu, decision 8): a row's time is when it was first written, under that day's
+        // heading; the meta names an edit date only for a row changed on another day. Rows written and saved at the
+        // boundary say their Seoul day in the heading and their Seoul time on the row (until then the meta always named
+        // the save date); the photo post written earlier still names its boundary edit date in the meta, as before.
+        if (!sample.edited) {
+          const row = page.locator('#homePosts ' + sample.selector), seoul = sample.time.includes('14:59') ? ['23:59', '2025년 12월 31일 수요일'] : ['00:01', '1월 1일 목요일'];
+          assert.deepEqual([await row.locator('.home-row-time').innerText(), await row.evaluate(node => { let n = node.previousElementSibling; while (n && !n.classList.contains('home-day-heading')) n = n.previousElementSibling; return n?.textContent; })], seoul, sample.selector);
+          assert.equal(await row.locator('.home-post-meta time').count(), 0, 'no edit date for a row saved the day it was written');
+          observed.push({ prefix: sample.prefix.trim(), timestamp: sample.time, visible: seoul.join(' / ') }); continue;
+        }
         const time = page.locator('#homePosts ' + sample.selector + ' .home-post-meta time'), text = await time.innerText();
         assert.equal(await time.getAttribute('datetime'), sample.time); assert(text.startsWith(sample.prefix));
         if (sample.time.includes('14:59')) assert.match(text, /2025년\s*12월\s*31일/);

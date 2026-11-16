@@ -597,14 +597,14 @@ async function main() {
         await at(page, origin.split('?')[0]);
         await page.locator('[data-private]').first().waitFor({ state: 'visible' });
         assert.equal(await where(page), origin, '닫기 returns to the page 글쓰기 was opened from');
-        // Forward is the 일정 list, not an empty editor.
+        // Forward is 노트 (the former 일정 list), not an empty editor.
         await page.goForward(); await ready(page); await list(page);
-        assert.equal(await where(page), 'index.html'); assert.equal(await page.locator('#photoTitle').count(), 0);
+        assert.equal(await where(page), 'index.html?section=notes'); // 2026-11-16: 노트 (the former list, written plain index.html until then) assert.equal(await page.locator('#photoTitle').count(), 0);
         assert.equal(await page.locator('#lifeApp').evaluate(node => getComputedStyle(node).visibility), 'visible');
         await page.goBack(); await at(page, origin.split('?')[0]);
         // Back from there is what came before that page.
         await page.goBack(); await ready(page); await list(page);
-        assert.equal(await where(page), 'index.html'); assert.equal(await page.locator('#photoTitle').count(), 0);
+        assert.equal(await where(page), 'index.html?section=notes'); assert.equal(await page.locator('#photoTitle').count(), 0);
         assert.equal(await postCount(page), 1, 'the untouched new post left nothing behind');
       }, { viewport: width === 390 ? { width: 390, height: 844 } : { width: 1440, height: 960 } });
     }
@@ -633,7 +633,7 @@ async function main() {
       await page.goto('about:blank'); await page.goto(base + '/index.html?compose=1'); await ready(page);
       await page.locator('#photoTitle').waitFor();
       await page.getByRole('button', { name: '닫기', exact: true }).click();
-      await list(page); assert.equal(await where(page), 'index.html');
+      await list(page); assert.equal(await where(page), 'index.html?section=notes');
     });
     await check('m3: 글쓰기 opened from a page of the same name in another folder of this site, or on another site, closes to the list (only the app’s own pages are returned to)', async ({ page, context }) => {
       const html = '<!doctype html><meta charset="utf-8"><meta name="referrer" content="unsafe-url"><title>elsewhere</title><a id="go" href="' + base + '/index.html?compose=1">글쓰기</a>';
@@ -644,7 +644,7 @@ async function main() {
         await page.getByRole('button', { name: '닫기', exact: true }).click();
         await list(page);
         await page.waitForTimeout(1800); // a return to that page would have left by now
-        assert.equal(await where(page), 'index.html', '닫기 from ' + from + ' stays in the app');
+        assert.equal(await where(page), 'index.html?section=notes', '닫기 from ' + from + ' stays in the app');
         assert.equal(await page.locator('#lifeApp').evaluate(node => getComputedStyle(node).visibility), 'visible');
       }
     });

@@ -719,7 +719,7 @@ async function main() {
       let release; wide.hold = new Promise(resolve => { release = resolve; });
       await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
       const out = wide.requests.length;
-      await nav(page, 'schedule'); await list('the 일정 list');
+      await nav(page, 'home'); await list('the 노트 list'); // 2026-11-16: the list is 노트 (until then 일정)
       await page.evaluate(() => window.scrollTo({ top: 1200, behavior: 'instant' })); await frames(page);
       assert.ok(await page.evaluate(() => scrollY) > 800, 'the 일정 list is scrolled down: ' + await page.evaluate(() => scrollY));
       await nav(page, 'news'); await idle(page); await frames(page);
@@ -738,7 +738,7 @@ async function main() {
       // News's own place: scrolled here, then 일정 scrolled elsewhere, then news again.
       const box = await page.locator('#discoveryList').boundingBox(); await page.mouse.move(box.x + 40, box.y + 40); await page.mouse.wheel(0, 500);
       const own = await settle(); assert.ok(own > 300, 'news is scrolled: ' + own);
-      await nav(page, 'schedule'); await list('the 일정 list again');
+      await nav(page, 'home'); await list('the 노트 list again');
       await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })); await frames(page);
       assert.notEqual(await page.evaluate(() => scrollY), own, 'the 일정 list is somewhere else');
       await nav(page, 'news'); await idle(page); await frames(page);

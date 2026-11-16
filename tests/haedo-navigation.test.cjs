@@ -13,7 +13,8 @@ function fixture(search = '') {
     append(...children) { this.children.push(...children); }
     addEventListener(name, listener) { this.listeners[name] = listener; }
   }
-  const document = { body: { dataset: { page: 'home', haedoSection: 'schedule' } }, querySelectorAll: () => [], addEventListener() {}, createElement: tag => new Element(tag) };
+  // index.html's own initial section (2026-11-16: 노트, the screen after login).
+  const document = { body: { dataset: { page: 'home', haedoSection: 'notes' } }, querySelectorAll: () => [], addEventListener() {}, createElement: tag => new Element(tag) };
   const context = { document, location: { pathname: '/index.html', search, assign: href => moves.push(href) }, URLSearchParams, addEventListener() {} };
   vm.runInNewContext(fs.readFileSync(require.resolve('../assets/haedo-navigation.js'), 'utf8'), context);
   return { api: context.HaedoNavigation, document, moves };
@@ -30,9 +31,12 @@ test('legacy feature links select their current section and unknown views cannot
     ['?section=tools&view=annual-plan', 'schedule'], ['?section=schedule&view=tools', 'schedule']]) {
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
   }
-  assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'schedule');
+  // 2026-11-16 (notes-menu): the blog editor and reader are 노트's.
+  assert.equal(fixture('?view=page&compose=1').document.body.dataset.haedoSection, 'notes');
+  assert.equal(fixture('?view=page&blog=photo.p1').document.body.dataset.haedoSection, 'notes');
   // 통합 검색 keeps the area it was opened from (일정 통합 정리 S2); without a section it stays under 자료.
-  for (const [query, expected] of [['?section=schedule&view=find', 'schedule'], ['?section=news&view=find', 'news'], ['?section=manage&view=find', 'manage'],
+  for (const [query, expected] of [['?section=schedule&view=find', 'schedule'], ['?section=notes&view=find', 'notes'], ['?section=home&view=find', 'notes'],
+    ['?section=news&view=find', 'news'], ['?section=manage&view=find', 'manage'],
     ['?section=tools&view=find', 'schedule'], ['?view=find', 'records'], ['?section=unknown&view=find', 'records'], ['?section=__proto__&view=find', 'records']]) {
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query);
   }
@@ -40,17 +44,21 @@ test('legacy feature links select their current section and unknown views cannot
   for (const value of ['__proto__', 'constructor', 'toString', 'books-extra', null]) assert.equal(api.getSectionForView(value), null);
 });
 
-test('old section addresses open the new sections and only the four menu IDs or their aliases are accepted', () => {
-  // Every former ?section= value lands on its new section (home/tools are aliases of schedule).
-  for (const [query, expected] of [['', 'schedule'], ['?section=home', 'schedule'], ['?section=tools', 'schedule'], ['?section=schedule', 'schedule'],
-    ['?section=records', 'records'], ['?section=manage', 'manage'], ['?section=news', 'news'], ['?section=unknown', 'schedule'], ['?section=__proto__', 'schedule']]) {
+test('old section addresses open the new sections and only the five menu IDs or their aliases are accepted', () => {
+  // 2026-11-16 address table (notes-menu.md): the former list addresses (none, home, schedule without a unit) open
+  // 노트; a unit or a date opens 일정; tools (Y) stays 일정.
+  for (const [query, expected] of [['', 'notes'], ['?section=notes', 'notes'], ['?section=home', 'notes'], ['?section=schedule', 'notes'],
+    ['?section=tools', 'schedule'], ['?section=schedule&view=month', 'schedule'], ['?section=schedule&view=day&date=2026-11-16', 'schedule'],
+    ['?section=home&view=week&date=2026-11-16', 'schedule'], ['?section=schedule&date=2026-11-16', 'schedule'], ['?section=schedule&view=year', 'schedule'],
+    ['?section=schedule&view=annual-plan', 'schedule'], ['?view=time', 'schedule'], ['?view=blog', 'notes'], ['?view=account-blog', 'notes'],
+    ['?section=records', 'records'], ['?section=manage', 'manage'], ['?section=news', 'news'], ['?section=unknown', 'notes'], ['?section=__proto__', 'notes']]) {
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query || '(none)');
   }
   const { api } = fixture();
-  assert.deepEqual([...api.sections], ['news', 'schedule', 'records', 'manage']);
-  for (const [id, expected] of [['home', 'schedule'], ['tools', 'schedule'], ['schedule', 'schedule'], ['news', 'news'], ['records', 'records'],
+  assert.deepEqual([...api.sections], ['news', 'schedule', 'notes', 'records', 'manage']);
+  for (const [id, expected] of [['home', 'notes'], ['tools', 'schedule'], ['schedule', 'schedule'], ['notes', 'notes'], ['news', 'news'], ['records', 'records'],
     ['manage', 'manage'], ['compose', null], ['hasOwnProperty', null], ['__proto__', null], [undefined, null]]) assert.equal(api.normalizeSection(id), expected, String(id));
-  for (const [view, expected] of [['home', 'schedule'], ['blog', 'schedule'], ['account-blog', 'schedule'], ['tools', 'schedule'], ['annual-plan', 'schedule'],
+  for (const [view, expected] of [['home', 'notes'], ['blog', 'notes'], ['account-blog', 'notes'], ['tools', 'schedule'], ['year', 'schedule'], ['annual-plan', 'schedule'],
     ['public-cover', 'manage'], ['public-pages', 'manage'], ['sources', 'records'], ['time', 'schedule'], ['backup', 'manage'], ['external-discovery', 'news'],
     // 일정's calendar units (2026-11-02): tools is Y; Q·M·W·D are their own views.
     ['quarter', 'schedule'], ['month', 'schedule'], ['week', 'schedule'], ['day', 'schedule']]) assert.equal(api.getSectionForView(view), expected, view);

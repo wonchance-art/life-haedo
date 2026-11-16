@@ -84,11 +84,15 @@ async function main() {
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
-  // Opens a calendar unit the way a person does: the unit bar on a wide screen, the dateless address on a phone.
+  // Opens a calendar unit the way a person does: from 노트 (the first screen) the menu's 일정 and then the unit bar on a
+  // wide screen, the dateless address on a phone. (2026-11-16 notes-menu: the list is 노트 and has no unit bar.)
+  async function toCalendar(page) {
+    await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); await shown(page, 'month');
+  }
   async function openUnit(page, phone, view) {
     await page.goto(base + '/index.html'); await ready(page); await list(page);
     if (phone) { await page.goto(base + '/index.html?section=schedule&view=' + view); await ready(page); }
-    else await page.locator('[data-schedule-view="' + view + '"]').first().click();
+    else { await toCalendar(page); if (view !== 'month') await page.locator('[data-schedule-view="' + view + '"]').first().click(); }
     await shown(page, view);
   }
   try {
@@ -183,8 +187,7 @@ async function main() {
     await check('a control in use is not redrawn: an open dialog and a held goal bar finish first', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'goal-1', kind: 'goal', data: { title: '책 열두 권 읽기', progress: 40, target: '2027-06-30' } });
       await at(page, '2026-12-31T23:40:00+09:00');
-      await page.goto(base + '/index.html'); await ready(page); await list(page);
-      await page.locator('[data-schedule-view="tools"]').first().click(); await shown(page, 'tools');
+      await openUnit(page, false, 'tools');
       const bar = page.getByRole('slider', { name: '책 열두 권 읽기 진행률' }); await bar.waitFor();
       assert.equal((await snap(page)).title, '2026년');
       // The bar is held down while the year changes.
@@ -269,13 +272,14 @@ async function main() {
         await page.goto(base + href); await ready(page); await shown(page, 'day');
         assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
         await page.locator('a[href*="section=records"]').first().click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
-        await page.locator('nav a[href="index.html"]').first().click(); await list(page);
-        await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+        // 2026-11-16 (notes-menu): the menu's 일정 opens the unit shown last (D) at once; until then it opened the list
+        // and D was chosen on its unit bar (one more entry in between).
+        await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
         assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: false, today: true }, 'a D reached in the app shows today and follows');
         await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일');
         assert.equal((await snap(page)).date, '2026-11-12');
         // The entry that the address opened is still pinned: Back to it opens its date, pinned.
-        await page.goBack(); await list(page); await page.goBack(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
+        await page.goBack(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
         await page.goBack(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
         assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
       });
@@ -451,8 +455,7 @@ async function main() {
 
     await check('Back to a screen that showed today opens today, as its reload does; Back to a chosen day opens that day', async ({ page }) => {
       await at(page, '2026-11-11T23:40:00+09:00');
-      await page.goto(base + '/index.html'); await ready(page); await list(page);
-      await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day');
+      await openUnit(page, false, 'day');
       await step(page, -1); await titled(page, '11월 10일 화요일');
       await page.locator('[data-schedule-view="week"]').first().click(); await shown(page, 'week');
       await todayButton(page).click(); await titled(page, '11.9 – 11.15');
@@ -483,11 +486,14 @@ async function main() {
 
     await check('another screen overnight: the next calendar screen opens on the new day; a reload of a screen that showed today opens today', async ({ page }) => {
       await at(page, '2026-11-11T23:40:00+09:00');
+      // 2026-11-16 (notes-menu): the list is 노트 and has no 보기 단위 bar; 일정 is reached with the menu and opens the
+      // unit shown last (here D). Until then this went 목록 → D → 목록 → D with the bar.
       await page.goto(base + '/index.html'); await ready(page); await list(page);
+      await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); await shown(page, 'month');
       await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day');
-      await page.locator('[data-schedule-view="home"]').first().click(); await list(page);
+      await page.locator('[data-haedo-navigation] [data-haedo-section="notes"]').click(); await list(page);
       await overnight(page, '2026-11-12T07:30:00+09:00');
-      await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day');
+      await page.locator('[data-haedo-navigation] [data-haedo-section="schedule"]').click(); await shown(page, 'day');
       await titled(page, '11월 12일 목요일');
       // The tab is reloaded on a later day (its address still names the 12th): it showed today, so today opens.
       assert.equal((await snap(page)).date, '2026-11-12');

@@ -340,7 +340,6 @@
     function weekPanel() {
       const habits = s.items.filter(item => item.kind === 'habit' && week.some(day => model().scheduled(item.data, day)));
       // Named once, by the slot (이번 주 습관과 행복도, review 3 n3); the section has its h2.
-      const section = el('section', null, 'schedule-entry-section schedule-week-entries');
       const table = el('table', null, 'schedule-habit-grid');
       const head = el('tr'); head.append(el('th', '습관'));
       week.forEach((day, i) => { const th = el('th', WEEK[i]); th.scope = 'col'; if (day === today) th.dataset.today = 'true'; head.append(th); });
@@ -351,6 +350,14 @@
       // Its first cell lines up with the row headers (hidden at phone width), so the name spans
       // exactly the seven day columns.
       const label = (text, cls = '') => { const row = el('tr', null, 'schedule-grid-label ' + cls); row.setAttribute('aria-hidden', 'true'); const cell = el('td', text); cell.colSpan = 7; row.append(el('th'), cell); return row; };
+      // 2026-11-16 (notes-menu): no empty table. A week with neither a habit to do nor a 행복도 says so in one line
+      // each; the 행복도 row is drawn only when a day of the week has one (it is entered in D).
+      const moods = week.some(day => mood.on(day)?.score != null);
+      const section = el('section', null, 'schedule-entry-section schedule-week-entries');
+      section.append(el('h2', '습관 · 행복도', 'schedule-entry-title'));
+      if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'schedule-empty'));
+      if (!moods) section.append(el('p', '이번 주 행복도 기록이 없어요.', 'schedule-empty schedule-no-happiness'));
+      if (!habits.length && !moods) return [section];
       for (const item of habits) {
         tbody.append(label(item.data.title));
         const tr = el('tr'); const th = el('th', item.data.title); th.scope = 'row'; th.title = item.data.title; tr.append(th);
@@ -362,20 +369,21 @@
         });
         tbody.append(tr);
       }
-      tbody.append(label('행복도'));
-      const moodRow = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; moodRow.append(mh);
-      week.forEach((day, i) => {
-        const td = el('td'), value = mood.on(day), score = value?.score ?? null;
-        const link = el('button', score != null ? String(score) : '–', 'schedule-happiness-day'); link.type = 'button';
-        link.setAttribute('aria-label', WEEK[i] + '요일 행복도 ' + (score != null ? score : '기록 없음') + ', 그날 보기');
-        link.dataset.focusKey = 'schedule:happiness-day:' + day;
-        link.addEventListener('click', () => { if (alive()) go('day', day); });
-        td.append(link); moodRow.append(td);
-      });
-      tbody.append(moodRow); table.append(tbody);
+      if (moods) {
+        tbody.append(label('행복도'));
+        const moodRow = el('tr'); const mh = el('th', '행복도'); mh.scope = 'row'; moodRow.append(mh);
+        week.forEach((day, i) => {
+          const td = el('td'), value = mood.on(day), score = value?.score ?? null;
+          const link = el('button', score != null ? String(score) : '–', 'schedule-happiness-day'); link.type = 'button';
+          link.setAttribute('aria-label', WEEK[i] + '요일 행복도 ' + (score != null ? score : '기록 없음') + ', 그날 보기');
+          link.dataset.focusKey = 'schedule:happiness-day:' + day;
+          link.addEventListener('click', () => { if (alive()) go('day', day); });
+          td.append(link); moodRow.append(td);
+        });
+        tbody.append(moodRow);
+      }
+      table.append(tbody);
       const scroll = el('div', null, 'schedule-habit-scroll'); scroll.append(table);
-      section.append(el('h2', '습관 · 행복도', 'schedule-entry-title'));
-      if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'schedule-empty'));
       section.append(scroll);
       return [section];
     }
