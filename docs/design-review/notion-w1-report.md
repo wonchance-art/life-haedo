@@ -126,10 +126,22 @@
 - `npm run check`: 0 (22 HTML, 202 JS, 803 로컬 참조)
 - `npm test`: 0 (2860/2860)
 - `node scripts/check-markdown-links.cjs`: 허용 목록 밖 0
-- 브라우저 검사(`pages.yml` 묶음 1–7과 시작 성능): 결과는 아래 표
-- 공개 검사 4개(로컬 PostgreSQL 16 UTF8, 소켓 전용): 결과는 아래 표
+- 브라우저 검사(`pages.yml` 묶음 1–7, blog 작업, 공개 4개): 아래 표
 
-<!-- w1-suite-results -->
+**브라우저 검사 결과** (로컬 Chromium, W1 `20437c4` 기준 `fb3694b`, 실제 종료 코드)
+
+| 묶음 | 명령 | 종료 코드 0 | 비고 |
+| --- | --- | --- | --- |
+| `pages.yml` browser_suites 1–7 | 197 | 197 | 아래 "처음 실패와 원인" |
+| `pages.yml` blog 작업 | 28 | 25 | Docker가 필요한 3개는 이 환경에서 돌릴 수 없음(아래) |
+| 공개 4개: `blog-public-browser`·`public-cover-visual-browser --prepare-database`·`nine-public-browser`·`blog-series-public-browser` | 4 | 4 | 로컬 PostgreSQL 16 UTF8, 소켓 전용 |
+
+- 처음 실패와 원인 (W1 탓 아님, 다시 돌려 0):
+  - `purpose-workflow-browser`·`purpose-news-browser`·`account-library-browser`: 근거 폴더가 새것이어야 하는 검사다. 이 작업의 앞선 실행이 남긴 `.local/…` 폴더 때문에 실패했고, 폴더를 치운 뒤 다시 돌려 0이었다.
+  - `blog-completion-browser`·`account-wide-home-browser`: 같은 이름의 검사용 데이터베이스가 이미 있었고 컨테이너 이름을 따로 줘야 했다. 검사마다 데이터베이스 이름을 따로 주고 다시 돌려 0이었다.
+- 이 환경에서 돌리지 못함: `check-blog-backend`·`integrated-release-installation`·`material-continuity-backend`. 셋 다 Docker가 필요하다. GitHub CI의 blog 작업(PostgreSQL 17)에서는 `2dc6bbd`·`38458e4` 모두 통과했다.
+- GitHub CI(#261): `2dc6bbd`와 `38458e4` 모두 check·browser_suites 1–7·blog가 성공이었다(build·deploy는 PR이라 건너뜀).
+- 메뉴 폭 변경이 잡힌 두 검사(`planning-frame-browser`·`records-split-resize-browser`)는 위 "메뉴 폭에 맞춘 틀 시작선"에서 고친 뒤 통과했다. 기준판 `0a42b6f`에서 함께 실패하던 `sync-common-mixed-browser`·`post-markdown-manager-preview-browser`는 통합 브랜치의 이후 커밋(`56741cc`·`15fa340`)이 고쳤고, 새 기준에서 0이다.
 
 ## 확인하지 못한 것
 
