@@ -21,7 +21,7 @@ async function home(page) { await nav(page, 'home'); await homeReady(page); }
 async function instrument(context) {
   await context.route(`${base}/assets/life/storage.js`, async route => {
     const response = await route.fetch();
-    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readWorkbench(...values){if(window.__refinementFailWorkbench)throw new Error('Anonymous workbench read failure');return actual.readWorkbench(...values);},async readPhotoPost(...values){(window.__refinementPhotoReads ||= []).push(values[1]);return actual.readPhotoPost(...values);}});}});})();`;
+    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readWorkbench(...values){if(window.__refinementFailWorkbench)throw new Error('Anonymous workbench read failure');return actual.readWorkbench(...values);},async readPhotoPost(...values){(window.__refinementPhotoReads ||= []).push(values[1]);{const frame=new Error().stack.split(String.fromCharCode(10)).find(x=>x.includes('/assets/life/')&&!x.includes('/assets/life/storage.js'));if(frame&&frame.includes('/assets/life/home.js'))(window.__refinementHomeReads ||= []).push(values[1]);}return actual.readPhotoPost(...values);}});}});})();`;
     await route.fulfill({ response, body: await response.text() + hook });
   });
 }
@@ -191,7 +191,8 @@ async function main() {
       // 2026-11-16: twelve photo posts so that some rows start beyond the 320px look-ahead of a 320×568 screen
       // (W2 note rows are shorter); the premise is asserted. What is measured is the rendering path: a row's cover
       // is read and shown only once the row nears the screen. Storage reads are not counted here, because the
-      // account sync (BlogSync) also reads posts it has not uploaded yet, at its own pace (CI 43976093293).
+      // account sync (BlogSync) also reads posts it has not uploaded yet, at its own pace (CI 43976093293); reads
+      // made by home.js itself are attributed through the call site and must not include rows beyond the look-ahead.
       const refs = await populate(page, 12), lastId = refs.photos[refs.photos.length - 1], last = page.locator(`[data-photo-post-id="${lastId}"]`);
       for (const id of refs.photos) assert.equal(await page.locator(`[data-photo-post-id="${id}"] .home-post-media`).count(), 1);
       const placed = await page.evaluate(ids => ids.map(id => ({ id, top: document.querySelector(`[data-photo-post-id="${id}"] .home-post-media`).getBoundingClientRect().top })), refs.photos);
@@ -200,8 +201,12 @@ async function main() {
       const shown = ids => page.evaluate(ids => ids.filter(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return !!image?.getAttribute('src'); }), ids);
       // The rows on screen show their covers; meanwhile the rows beyond the look-ahead stay without one.
       await page.waitForFunction(ids => ids.every(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }), near);
+      // Observation window for a negative check: a wrong eager load starts with the observer's first callback, together
+      // with the on-screen rows, so it has shown by now; waiting longer only gives a violation more time to appear.
       await page.waitForTimeout(400);
       assert.deepEqual(await shown(outside), [], 'covers beyond the look-ahead are not read or shown at first render');
+      assert.deepEqual(await page.evaluate(ids => (window.__refinementHomeReads || []).filter(id => ids.includes(id)), outside), [], 'home reads no record beyond the look-ahead');
+      assert((await page.evaluate(() => window.__refinementHomeReads || [])).length > 0, 'home reads are attributed');
       assert.deepEqual(await page.evaluate(ids => ids.map(id => document.querySelector(`[data-photo-post-id="${id}"] .home-post-media`).getAttribute('aria-busy')), outside), outside.map(() => 'true'));
       await last.locator('.home-post-media').scrollIntoViewIfNeeded();
       await page.waitForFunction(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }, lastId);
