@@ -798,14 +798,14 @@
           // Only after a failure or a wait that has lasted: the first seconds of
           // waiting are the normal upload delay.
           const waited = account === "pending" && Date.now() - storedAt >= 15000;
-          const said = stateValue(account
+          // 2026-11-16 owner: as on the command row, a state that went well or is running is not shown:
+          // the 저장 row is left out (its words stay in the command row's live region) and comes back with
+          // a failure, a lasting wait or a notice.
+          const quietRow = account ? ["checking", "saving", "synced"].includes(account) || account === "pending" && !waited
+            : !!status?.classList.contains("life-save-quiet");
+          const state = quietRow ? el("dd") : row("저장", stateValue(account
             ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ")
-            : statusText?.textContent || "");
-          // 2026-11-16 owner: as on the command row, a state that went well or is running is for screen
-          // readers only; a failure, a lasting wait and a notice are shown.
-          said.classList.toggle("life-sr-only", account ? ["checking", "saving", "synced"].includes(account) || account === "pending" && !waited
-            : !!status?.classList.contains("life-save-quiet"));
-          const state = row("저장", said);
+            : statusText?.textContent || ""));
           if (account) state.dataset.state = account;
           state.append(el("p", (unstored
             // Over a limit: the same fact the status line states.
@@ -827,9 +827,9 @@
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
-          const value = serverState() || "checking", quiet = serverQuiet(value), said = stateValue(SERVER_LABELS[value] || SERVER_LABELS.error);
-          said.classList.toggle("life-sr-only", quiet);
-          const state = row("저장", said);
+          // 2026-11-16 owner: a quiet state (see serverQuiet) leaves the 저장 row out; #photoServerStatus says it.
+          const value = serverState() || "checking", quiet = serverQuiet(value);
+          const state = quiet ? el("dd") : row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
           state.dataset.state = value;
           if (!quiet && ["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
             const retry = button("계정에 다시 올리기", saveServer);
@@ -3801,6 +3801,8 @@
       unsubscribe?.();
       unsubscribeServer?.();
       unsubscribeServer = blogSync?.subscribe?.(event => {
+        // A pass ended (2026-11-16 review m3): whether a wait is still quiet depends on its lastError.
+        if (event.type === "status") { if (mode === "read" && current(epoch)) showServerStatus(); return; }
         if (event.workspaceId !== workspaceId || event.localPostId !== doc?.id || !current(epoch)) return;
         // A version from another device waits for the input here to be stored.
         if (event.type === "remote_waiting") { if (mode === "edit") showChangeNote("다른 기기에서도 바뀌었어요 · 지금 입력을 보관한 뒤 맞추고, 진 쪽은 복구 사본으로 남겨요"); return; }

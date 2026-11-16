@@ -2083,7 +2083,7 @@ function openPopTrip(t,ax,ay){
     <textarea class="dt-edit" data-f="pts" rows="4" style="width:100%;font-size:12px"
       placeholder="장소명 | 메모 — 한 줄에 하나">${esc((t.points||[]).map(p=>p.label+(p.date?' | '+p.date:'')).join('\n'))}</textarea>
     <div class="pe-row" style="justify-content:space-between;align-items:center">
-      <span data-s="geo" style="font-size:11px;color:var(--ink-soft)"></span>
+      <span data-s="geo" role="status" style="font-size:11px;color:var(--ink-soft)"></span>
       <span style="display:flex;gap:6px">
         <button class="btn btn-xs btn-soft btn-primary" data-a="savepts">장소 저장</button>
         <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
@@ -2097,7 +2097,7 @@ function openPopTrip(t,ax,ay){
   q('[data-f="note"]').onchange=e=>{t.note=e.target.value.trim();commit();};
   q('[data-a="savepts"]').onclick=async()=>{ /* 좌표는 새 장소만 검색 (Nominatim 1req/s) */
     const st=q('[data-s="geo"]'),docId=curDocId;
-    st.classList.remove('sr-only'); /* 2026-11-16: only the 저장됨 below is for screen readers only */
+    st.classList.remove('save-quiet'); /* 2026-11-16: only the 저장됨 below is for screen readers only */
     const lines=q('[data-f="pts"]').value.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){st.textContent='장소가 2곳 이상 필요';return;}
     const old=t.points||[]; const pts=[];
@@ -2113,7 +2113,7 @@ function openPopTrip(t,ax,ay){
       await new Promise(r=>setTimeout(r,1100));
     }
     if(curDocId!==docId||!st.isConnected||!DATA.trips.includes(t))return;
-    t.points=pts; st.textContent='저장됨'; st.classList.add('sr-only');
+    t.points=pts; st.textContent='저장됨'; st.classList.add('save-quiet'); /* keeps its box: the row's buttons stay put */
     commit();
   };
   q('[data-a="del"]').onclick=()=>{

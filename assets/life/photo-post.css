@@ -913,9 +913,6 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-info-line { display: inline-flex; align-items: center; gap: 6px; }
 .photo-info-line > svg { flex: none; width: 16px; height: 16px; }
 .photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
-/* 2026-11-16: a quiet save state (screen readers only) that a finished retry hands focus to shows while
-   it has that focus. */
-.photo-info-value.life-sr-only:focus { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; white-space: normal; }
 .photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
 .photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
 .photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }

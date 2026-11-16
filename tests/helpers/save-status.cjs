@@ -9,7 +9,10 @@ function inPage(element) {
     const style = getComputedStyle(node);
     if (node.hidden || style.display === 'none' || style.visibility === 'hidden' || /inset\(50%\)/.test(style.clipPath)) return { said, shown: '' };
   }
-  return { said, shown: element.getClientRects().length ? said : '' };
+  // Not Playwright's "visible" (a clipped 1px box counts as visible there): the computed clip-path above,
+  // and a real size here.
+  const box = element.getBoundingClientRect();
+  return { said, shown: element.getClientRects().length && box.width > 1 && box.height > 1 ? said : '' };
 }
 // locator: a Playwright locator of one status line.
 const saveStatus = locator => locator.evaluate(inPage);

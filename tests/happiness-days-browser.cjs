@@ -244,13 +244,17 @@ async function main() {
       await openDay(page, '2026-11-03');
       server.accountDocsOffline.add(device); page.__expectFailure = true;
       await page.getByRole('radio', { name: '행복도 6' }).check();
-      await statusText(page).filter({ hasText: /계정에 올리기 대기|계정에 올리지 못함/ }).waitFor({ timeout: 15000 });
+      // 2026-11-16 review M1: offline is said as a failure with its 다시 시도, and it is shown on screen.
+      await statusText(page).filter({ hasText: '계정에 올리지 못함' }).waitFor({ timeout: 15000 });
+      assert.deepEqual(await saveStatus(statusText(page)), { said: '계정에 올리지 못함 · 다시 시도', shown: '계정에 올리지 못함 · 다시 시도' }, 'an offline choice is shown');
       await page.reload(); await ready(page); await shown(page, 'day'); await entries(page);
       await page.waitForFunction(() => document.querySelector('.schedule-happiness input:checked')?.value === '6');
       assert.equal(entryOn(server, '2026-11-03'), null, 'not sent while offline');
       server.accountDocsOffline.delete(device);
       await page.evaluate(() => dispatchEvent(new Event('online')));
       await until(() => entryOn(server, '2026-11-03')?.v === 0.2, 'sent after reconnecting');
+      // Once it reached the account, the line goes quiet again (said, not shown).
+      await until(async () => { const value = await saveStatus(statusText(page)); return value.said === '저장됨 · 계정에 올림' && value.shown === ''; }, 'quiet after reconnecting');
     });
 
     await check('mixed versions: an older storage.js next to the new 일정 writes nothing and asks for a refresh; the choice stays on screen', async ({ page, context, server }) => {

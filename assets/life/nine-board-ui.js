@@ -47,7 +47,9 @@
       status.dataset.state=failure?'error':dirty()?'dirty':'saved';
       // 2026-11-16 owner: saving, and a stored board, are said to screen readers only (an older cached
       // helper without the quiet flag: everything but a failure is quiet).
-      status.classList.toggle('life-save-quiet',!failure&&!pendingFields.size&&!manual&&(!!saving||tick===stored&&(saved.quiet??saved.key!=='error')));
+      // 2026-11-16 review M2: an unsaved change is quiet too while the autosave will store it (every change
+      // schedules one, Korean input waits for its end), like the editor's 자동 저장 중….
+      status.classList.toggle('life-save-quiet',!failure&&!pendingFields.size&&!manual&&(!!saving||tick!==stored||(saved.quiet??saved.key!=='error')));
       importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}

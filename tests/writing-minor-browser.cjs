@@ -29,6 +29,12 @@ const info = async page => {
 const focusWindow = page => page.evaluate(() => dispatchEvent(new Event('focus')));
 // The 글 정보 sheet's save state: said is what a screen reader gets, shown what is on screen (2026-11-16).
 const sheetState = page => saveStatus(page.locator('dialog.photo-info [data-info-focus="save-state"]'));
+// A quiet state (uploading, uploaded, the first seconds of waiting) leaves the sheet's 저장 row out; the
+// command row's live region still says it (2026-11-16 review m4).
+const sheetQuiet = page => page.evaluate(() => ({
+  row: [...document.querySelectorAll('dialog.photo-info .photo-info-row > dt')].some(dt => dt.textContent === '저장'),
+  retry: !!document.querySelector('dialog.photo-info [data-info-focus="retry"]'),
+  said: document.querySelector('.photo-commandbar .photo-status')?.textContent ?? null }));
 
 H.run(__filename, {
   // m3: the 20-photo limit counts the photos the body uses, not ones already taken out.
@@ -143,8 +149,11 @@ H.run(__filename, {
     // Connection back: the retry beside the state uploads it and the state follows.
     net.down = false;
     await page.locator('dialog.photo-info').getByRole('button', { name: '계정에 다시 올리기', exact: true }).click();
-    await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'uploaded after the retry', 20000);
-    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올림', shown: '' }, 'uploaded: said, not shown');
+    await H.until(() => [...server.posts.values()].filter(row => row.data.status === 'draft').length, count => count === 1, 'uploaded after the retry', 20000);
+    // Uploaded: the 저장 row goes (nothing to act on), the retry with it, and focus stays in the sheet on its title.
+    await H.until(() => sheetQuiet(page), value => !value.row && !value.retry, 'the 저장 row leaves once the upload is done', 20000);
+    assert.deepEqual(await sheetQuiet(page), { row: false, retry: false, said: '자동 저장됨' }, 'uploaded: said in the live region, not shown');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'photoInfoTitle', 'focus stays in the sheet, on something visible');
     assert.equal([...server.posts.values()].filter(row => row.data.status === 'draft').length, 1);
     await page.keyboard.press('Escape');
     await H.until(() => page.locator('.photo-privacy').getAttribute('data-state'), state => state !== 'problem', 'the problem mark is gone');
@@ -152,12 +161,38 @@ H.run(__filename, {
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 이어 쓴 문장.');
     await draftWith(page, '이어 쓴 문장.');
     const waiting = await info(page);
-    assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기'), waiting);
-    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올리기 대기', shown: '' }, 'the normal upload delay: said, not shown');
-    // The first seconds of waiting are the normal upload delay: no retry is offered yet.
+    // The first seconds of waiting are the normal upload delay: no 저장 row and no retry yet.
+    assert.deepEqual(await sheetQuiet(page), { row: false, retry: false, said: '자동 저장됨' }, 'the normal upload delay: said, not shown');
     assert(!waiting.includes('계정에 다시 올리기'), 'no retry while the upload is simply due: ' + waiting);
-    await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'the open sheet follows the upload', 20000);
-    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올림', shown: '' });
+    await H.until(() => [...server.posts.values()].some(row => row.data.status === 'draft' && JSON.stringify(row.data).includes('이어 쓴 문장')), found => found, 'the open sheet follows the upload', 20000);
+    await H.sleep(500);
+    assert.deepEqual(await sheetQuiet(page), { row: false, retry: false, said: '자동 저장됨' }, 'uploaded: still nothing to show');
+  },
+  // 2026-11-16 review m3: the reader's account state is quiet while an upload is simply due, and shows the wait
+  // with 다시 시도 once a sync pass could not reach the account (lastError), without reopening the post.
+  async 'read-view-shows-a-stalled-upload'({ open }) {
+    const net = { down: false };
+    const { page, context } = await open({ page: { offline: () => net.down } });
+    await context.route(H.cloud + '/**', route => net.down ? route.abort('internetdisconnected') : route.fallback());
+    await H.home(page);
+    const post = await savedPost(page, '올리기가 멈춘 글', '원래 본문.');
+    await page.locator('#photoServerStatus[data-state="synced"]').waitFor({ timeout: 20000 });
+    assert.deepEqual(await saveStatus(page.locator('#photoServerStatus')), { said: '저장됨 · 계정에 올림', shown: '' }, 'uploaded: said, not shown');
+    assert.equal(await page.locator('#photoServerRetry').count(), 0);
+    // Offline, a newer local revision of the open post waits; a pass then fails to reach the account.
+    net.down = true;
+    await page.evaluate(async id => {
+      const s = HaedoLife.Shell.storage, ws = await s.getActive(), doc = await s.readPhotoPost(ws, id);
+      await s.savePhotoPost(ws, { ...doc, title: doc.title + ' 고침' }, doc.revision);
+      try { await HaedoLife.BlogSync.forStorage(s).syncNow({ force: true }); } catch (_) { /* The pass records lastError. */ }
+    }, post.id);
+    await H.until(() => saveStatus(page.locator('#photoServerStatus')), value => value.shown === '저장됨 · 계정에 올리기 대기', 'the stalled wait is shown', 20000);
+    assert.equal(await page.locator('#photoServerStatus').getAttribute('data-state'), 'pending');
+    assert.equal(await page.locator('#photoServerRetry').isVisible(), true, 'with its 다시 시도');
+    // Back online, the retry uploads it and the line goes quiet again.
+    net.down = false;
+    await page.locator('#photoServerRetry').click();
+    await H.until(() => saveStatus(page.locator('#photoServerStatus')), value => value.said === '저장됨 · 계정에 올림' && value.shown === '', 'quiet once uploaded', 20000);
   },
   // m8: input typed after the last autosave survives the page closing, and belongs to its account.
   async 'pagehide-recovery'({ open }) {

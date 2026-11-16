@@ -182,6 +182,11 @@ async function main() {
       await group.getByRole('button',{name:'이 묶음을 내 페이지에 추가',exact:true}).click();await save(page);await go(page,'page');
       const entry=page.locator('article[data-entry-id]').first(),entryId=await entry.getAttribute('data-entry-id');await openDetails(entry);
       await entry.getByLabel('내 코멘트',{exact:true}).fill('첫 코멘트를 먼저 저장');await save(page);
+      // 2026-11-16 review M2: from the keystrokes until the autosave stored them, the status line shows no words.
+      await page.evaluate((selector=>{const s=document.querySelector(selector);window.__shownWords=[];window.__watching=true;const look=()=>{const st=getComputedStyle(s);if(!s.hidden&&st.display!=='none'&&!/inset\(50%\)/.test(st.clipPath)&&s.getClientRects().length&&s.textContent)window.__shownWords.push(s.textContent);if(window.__watching)requestAnimationFrame(look);};look();}),'#wbStatus');
+      await entry.getByLabel('내 코멘트',{exact:true}).pressSequentially(' 덧붙임',{delay:40});
+      await page.waitForFunction(()=>document.getElementById('wbStatus')?.dataset.state==='saved'&&document.getElementById('wbStatus').textContent!=='이 기기에 저장 중…');
+      assert.deepEqual(await page.evaluate(()=>{window.__watching=false;return [...new Set(window.__shownWords)];}),[],'autosave: no words shown while typing and storing');
       const note='다시 고친 내 코멘트 <img src=x onerror="window.__wbInjection=1"> & 🌱';await entry.getByLabel('내 코멘트',{exact:true}).fill(note);
       await entry.locator(`[data-part-version-id="${f.refs[2].versionId}"] input[type=checkbox]`).uncheck();await save(page);
       await togglePreview(page);assert(await page.locator('#wbVisitor').isVisible());const text=await page.locator('#wbVisitor').textContent();assert(!text.includes(newBody));assert(!text.includes('혼자 남긴 질문:'));assert(text.includes(note));assert.equal(await page.locator('#wbVisitor img').count(),0);assert.equal(await page.evaluate(()=>window.__wbInjection),undefined);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');

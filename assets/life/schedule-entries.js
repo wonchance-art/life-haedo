@@ -76,7 +76,9 @@
         const record = await storage.readAccountDocRecord(happinessKey(storage.account));
         const engine = life.Shell?.accountDocsSync?.getStatus?.();
         m.sync = !record.exists || (record.sync && record.hash === record.sync.hash) ? 'ok'
-          : record.sync?.error || ['error', 'unavailable'].includes(engine?.state) ? 'error' : 'pending';
+          // 2026-11-16 review M1: offline (or a pass that could not reach the account) is said as a failure
+          // with its 다시 시도, so a choice made offline is not left without any sign on screen.
+          : record.sync?.error || ['error', 'unavailable', 'offline'].includes(engine?.state) ? 'error' : 'pending';
       } catch (_) { /* The value on screen stays; the status is refreshed on the next notice. */ }
     };
     // Old daily points of this account's timelines → the account document (absorbTimelineDays decides
@@ -458,11 +460,12 @@
       const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
       const unseen = s.recoveryUnseen;
       status.hidden = !dirty && state === 'ok' && !unseen && !mirrorError;
-      // 2026-11-16 owner: 저장됨 · 계정에 올림 and the upload that follows a change (계정에 올리기 대기: this
-      // line has no paused or offline state of its own) are said to screen readers only, out of the
-      // layout like the goals·habits·연표 line. A failure and the recovery-copy notice are shown. The line
-      // a successful retry hands keyboard focus to shows while it has that focus (schedule.css).
-      status.classList.toggle('life-sr-only', state !== 'error' && !unseen && !mirrorError);
+      // 2026-11-16 owner: 저장됨 · 계정에 올림 and the upload that follows a change (계정에 올리기 대기; offline is
+      // a failure here, see m.syncState) are said to screen readers only. The
+      // line keeps its box (.life-save-quiet, review m2) so a failure or focus does not move the panel. A
+      // failure and the recovery-copy notice are shown. The line a successful retry hands keyboard focus to
+      // shows while it has that focus (schedule.css).
+      status.classList.toggle('life-save-quiet', state !== 'error' && !unseen && !mirrorError);
       // The status line is a live region: it is rebuilt only when what it says changes (review 3 n1), so a
       // repaint for another reason (a 행복도 notice, a store notice) does not have it read out again.
       const said = JSON.stringify([state, unseen, mirrorError]);

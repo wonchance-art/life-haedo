@@ -377,7 +377,7 @@
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     workbench = global.HaedoLife.WorkbenchUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, managed: managedLibrary,
+      storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, sourceSync: sync, managed: managedLibrary,
       onManagePost: (postId, options) => openPostAction('blog', postId, options),
       onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
       onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),

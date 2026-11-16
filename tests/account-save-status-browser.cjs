@@ -72,10 +72,21 @@ async function main() {
       await page.waitForFunction(()=>!!window.releaseOldAck);await set('library','error');await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도');
       await page.evaluate(()=>releaseOldAck());await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도');
       await page.locator('#nbTitle').dispatchEvent('compositionstart');await page.locator('#nbTitle').fill('한글 조합 중 새 입력');
-      await set('library','synced');await expect('.nb-status','저장 전 변경 있음');
+      // 2026-11-16 review M2: a change the autosave will store (here once Korean input ends) is said only.
+      await set('library','synced');await expect('.nb-status','저장 전 변경 있음',false);
       assert(await page.locator('#nbTitle').evaluate(e=>e===window.savedTitle));assert.equal(await page.locator('#nbTitle').inputValue(),'한글 조합 중 새 입력');
       await page.locator('#nbTitle').dispatchEvent('compositionend');await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
       await set('library','synced');await expect('.nb-status','저장됨 · 계정에 올림');
+    });
+    await check('Typing in the nine-board editor shows no words from the keystroke until the autosave stored it', async () => {
+      await set('library','synced'); await expect('.nb-status','저장됨 · 계정에 올림');
+      await page.evaluate((selector=>{const s=document.querySelector(selector);window.__shownWords=[];window.__watching=true;const look=()=>{const st=getComputedStyle(s);if(!s.hidden&&st.display!=='none'&&!/inset\(50%\)/.test(st.clipPath)&&s.getClientRects().length&&s.textContent)window.__shownWords.push(s.textContent);if(window.__watching)requestAnimationFrame(look);};look();}),'.nb-status');
+      await page.locator('#nbTitle').pressSequentially(' 더함',{delay:40});
+      await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved'&&document.querySelector('.nb-status').textContent==='저장됨 · 계정에 올림');
+      assert.deepEqual(await page.evaluate(()=>{window.__watching=false;return [...new Set(window.__shownWords)];}),[],'no words shown while typing and storing');
+      // A stopped (paused) library sync is shown.
+      await set('library','paused'); await expect('.nb-status','저장됨 · 계정에 올리기 대기',true);
+      await set('library','synced'); await expect('.nb-status','저장됨 · 계정에 올림');
     });
     for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1000 }); await set('library','error'); await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도'); await page.screenshot({path:path.join(out,`status-${width}.png`),fullPage:true}); assert(await page.locator('.nb-sync-retry').isVisible()); assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)); }
     await check('Leaving the nine-board editor ignores its late status response and restores the page composition status', async () => {

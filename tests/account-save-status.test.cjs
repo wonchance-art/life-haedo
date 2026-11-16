@@ -29,6 +29,9 @@ test('a settled or about-to-run save is quiet; a stopped sync and a failure are 
   assert.equal(presentation(null, 7, options).quiet, true, 'a state not read yet does not flash');
   // not_enabled is the ordinary state of a composition never synced yet (a fresh account keeps it).
   assert.equal(presentation({ workspaceId: 'space-a', enabled: false, status: 'not_enabled', conflict: null, error: null }, 7, options).quiet, true, 'never synced yet');
+  // ... unless the originals' sync is stopped: the composition is switched on only after them (review m5).
+  const blocked = presentation({ workspaceId: 'space-a', enabled: false, status: 'not_enabled', conflict: null, error: null }, 7, { ...options, sourceStopped: true });
+  assert.deepEqual([blocked.key, blocked.label, blocked.quiet], ['pending', '저장됨 · 계정에 올리기 대기', false], 'originals stopped');
   // An explicit pause does not end by itself: its wait is shown.
   const paused = presentation({ ...ack, enabled: false, status: 'paused' }, 7, options);
   assert.deepEqual([paused.key, paused.label, paused.quiet], ['pending', '저장됨 · 계정에 올리기 대기', false]);
