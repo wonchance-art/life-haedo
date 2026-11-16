@@ -156,9 +156,11 @@ async function main() {
       await page.evaluate(() => { window.__blogForceStatus = null; });
       await page.locator('dialog.photo-info').getByRole('button', { name: '계정에 다시 올리기', exact: true }).click();
       await page.waitForFunction(() => window.__saveDefaultCalls === 1);
-      await page.waitForFunction(() => document.querySelector('dialog.photo-info [data-state]')?.dataset.state === 'synced');
-      const focus = await page.evaluate(() => ({ body: document.activeElement === document.body, inSheet: !!document.activeElement?.closest('dialog.photo-info') }));
-      assert.deepEqual(focus, { body: false, inSheet: true });
+      // 2026-11-16 (review m4): uploaded is quiet, so the sheet's 저장 row leaves (the reader's live region says it).
+      await page.waitForFunction(() => document.querySelector('#photoServerStatus')?.dataset.state === 'synced' &&
+        ![...document.querySelectorAll('dialog.photo-info .photo-info-row > dt')].some(dt => dt.textContent === '저장'));
+      const focus = await page.evaluate(() => ({ body: document.activeElement === document.body, inSheet: !!document.activeElement?.closest('dialog.photo-info'), title: document.activeElement?.id === 'photoInfoTitle' }));
+      assert.deepEqual(focus, { body: false, inSheet: true, title: true });
     });
 
     await check('공개하기 in 글 정보 opens the publish review and publishes nothing', { width: 1440, height: 1000 }, async ({ page, publishes }) => {
