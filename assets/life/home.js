@@ -235,8 +235,10 @@
     function section(context, title, id) {
       const container = el('section', null, 'home-section'); container.id = id;
       const heading = el('div', null, 'home-section-heading');
+      // Names the section for screen readers only (it is visually hidden), so it takes no focus: a return that focuses
+      // the first focusable heading lands on the screen title (노트), not on this hidden line. Until 2026-11-16 the
+      // profile row's h2 came first in 노트 and the hidden 내 글 heading was never reached.
       const name = el('h2', title); name.id = id + 'Title';
-      name.tabIndex = -1;
       container.setAttribute('aria-labelledby', name.id);
       heading.append(name);
       container.append(heading);
