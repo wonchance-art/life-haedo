@@ -193,6 +193,13 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 @media(max-width:1100px) and (min-width:761px) and (max-height:560px){
  .haedo-nav{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
 }
+/* W2 m3 (2026-11-16): up to 430px high (phone landscape) the slots are 48px, so 글쓰기 and all five tabs (설정 too)
+   are on screen from the start; each stays at least 44px. */
+@media(max-width:1100px) and (min-width:761px) and (max-height:430px){
+ .haedo-nav{padding-block:8px}
+ .haedo-nav .haedo-nav-link{height:48px;min-height:48px;flex-basis:48px;gap:2px;padding:4px}
+ .haedo-nav-compose{height:48px;min-height:48px;gap:2px;margin-bottom:4px;padding:4px}
+}
 @media(max-width:760px){
  :root{--haedo-nav-width:0px;--haedo-dock-clearance:calc(84px + env(safe-area-inset-bottom,0px));--haedo-header-height:60px}
  html:has(> body[data-writing-focus]){--haedo-dock-clearance:calc(16px + env(safe-area-inset-bottom,0px))}

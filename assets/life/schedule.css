@@ -1,15 +1,20 @@
 /* 일정 (2026-11-02 부드러운 판): heading row, 연·분기·월·주·일. Tokens come from haedo-shell.css/ui.css.
- * No grid lines: cells are soft surfaces (expert brief, 금지 목록). Spacing uses multiples of 4. */
+ * 2026-11-16 노션 방향 W2 (notion-visual-contract.md): ink and grey only; teal stays for focus, checks, the quote
+ * bar, progress and the chosen 행복도. Weights 400/500/600 (700 for titles), corners from the radius tokens.
+ * Spacing uses multiples of 4. */
 
 /* Heading row: 보기 단위 · 오늘 · ‹ › · 검색 · ? in one toolbar. */
 .life-toolbar[data-schedule] .haedo-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
-.life-toolbar[data-schedule] .life-schedule-views { gap: 0; padding: 0; }
+.life-toolbar[data-schedule] .life-schedule-views { gap: 0; padding: 0; border-radius: 0; background: transparent; }
+.life-toolbar[data-schedule] .life-schedule-view { border: 0; border-radius: 0; padding: 0 12px; background: transparent; color: var(--haedo-muted); font-weight: var(--haedo-weight-regular); box-shadow: inset 0 -2px 0 transparent; }
+.life-toolbar[data-schedule] .life-schedule-view:hover { background: var(--haedo-hover); color: var(--haedo-ink); }
+.life-toolbar[data-schedule] .life-schedule-view[aria-current=true] { background: transparent; color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); box-shadow: inset 0 -2px 0 var(--haedo-ink); }
 .schedule-view-icon { display: none; }
-.life-toolbar[data-schedule] .schedule-today { min-height: 44px; border: 0; padding: 0 12px; background: transparent; color: var(--ink); font-weight: 550; }
-.life-toolbar[data-schedule] .schedule-today:hover:not(:disabled) { background: var(--haedo-soft); }
+.life-toolbar[data-schedule] .schedule-today { min-height: 44px; border: 0; border-radius: var(--haedo-control-radius); padding: 0 12px; background: transparent; color: var(--ink); font-weight: var(--haedo-weight-medium); }
+.life-toolbar[data-schedule] .schedule-today:hover:not(:disabled) { background: var(--haedo-hover); }
 .schedule-step { display: inline-flex; }
 .schedule-glyph-next { transform: rotate(180deg); }
-.schedule-help { font-size: 16px; font-weight: 650; color: var(--ink-soft); }
+.schedule-help { font-size: 16px; font-weight: var(--haedo-weight-semibold); color: var(--ink-soft); }
 .schedule-up { display: none; }
 
 /* 일정 uses the width beside the label menu, so its heading row (and the 보기 단위 switch) stays in one
@@ -49,74 +54,93 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .life-schedule[aria-busy=true] .schedule-body { opacity: .72; transition: opacity 160ms ease-out; }
 .schedule-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 16px; }
 .schedule-notice > p { margin: 0; }
-/* Empty states are said at body size everywhere in 일정 (D, M, W, Y: review 2 m6); a link in one is the teal
- * link of the plan link line (연간 계획 · 목표 · 습관 · 연표, home.css), not a grey underline. */
-.schedule-empty { margin: 8px 0; color: var(--ink-soft); font-size: var(--haedo-text-body); line-height: 1.6; overflow-wrap: anywhere; }
+/* Empty states (2026-11-16 노션 방향): one line, 14px, the meta grey (#6f6e69, 5.11:1 on white); a link in one is
+ * ink with the quiet underline, as the plan link line (연간 계획 · 목표 · 습관 · 연표, home.css). */
+.schedule-empty { margin: 8px 0; color: var(--haedo-meta); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .schedule-more { margin: 8px 0; }
-.schedule-empty-link, .schedule-year-empty { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-primary); font-size: var(--haedo-text-control); font-weight: 600; text-decoration: none; }
+.schedule-empty-link, .schedule-year-empty { display: inline-flex; align-items: center; min-height: 44px; color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-medium); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 /* Inside a sentence the link takes the sentence size, so it reads as one line (review #2 re-check NIT). */
 .schedule-empty .schedule-empty-link { font-size: inherit; }
-.schedule-empty-link:hover, .schedule-year-empty:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-empty-link:hover, .schedule-year-empty:hover { text-decoration-color: currentColor; }
 .schedule-empty-link:focus-visible, .schedule-year-empty:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
-/* D: the empty day at body size (2026-11-08 S7). */
+/* D: the empty day, the same one line (2026-11-08 S7, 노션 방향 빈 상태). */
 .schedule-day-empty { margin: 16px 0; }
 .schedule-no-habits, .schedule-no-goals { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin: 0; }
 /* Every unit (2026-11-16): the body, and the side column 예정 → 습관·행복도 → 목표·계획 beside it from 1101px.
  * W's column is 308px: its habit week is seven 44px checks under each name (below). */
-.schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; column-gap: 48px; align-items: start; }
+.schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; column-gap: 32px; align-items: start; }
 .schedule-layout.schedule-week { grid-template-columns: minmax(0, 1fr) 308px; }
 .schedule-primary { min-width: 0; }
 .schedule-aside { min-width: 0; }
 .schedule-side { min-width: 0; }
+.schedule-side + .schedule-side { margin-top: 16px; border-top: 1px solid var(--haedo-line); }
+@media (min-width: 1101px) {
+  /* The line and its 24px sit outside the 280px (W 308px) content, so the side parts keep their width. */
+  .schedule-layout { grid-template-columns: minmax(0, 1fr) 305px; }
+  .schedule-layout.schedule-week { grid-template-columns: minmax(0, 1fr) 333px; }
+  .schedule-aside { align-self: stretch; padding-left: 24px; border-left: 1px solid var(--haedo-line); }
+}
 .schedule-side > .schedule-entries { margin-top: 0; }
 .schedule-side-line { margin: 0; }
 /* Y·Q's one 습관 link: a 44px target like the plan link line's links (home.css), the text at the line's start. */
 .schedule-habit-link { min-width: 44px; }
-.schedule-aside-title { margin: 24px 0 4px; font-size: var(--haedo-text-body); font-weight: 750; line-height: 1.5; }
+/* A part's name is a small label (13px 500 muted, as the 노트 date heading); its content leads. */
+.schedule-aside-title { margin: 16px 0 4px; color: var(--haedo-muted); font-size: var(--haedo-text-meta); font-weight: var(--haedo-weight-medium); line-height: 1.6; }
 .schedule-side:first-child > .schedule-aside-title:first-child { margin-top: 8px; }
 .schedule-side :is(.schedule-year-text, .schedule-year-empty) + .schedule-aside-title { margin-top: 24px; }
-.schedule-year-text { margin: 0; color: var(--ink); font-size: var(--haedo-text-control); line-height: 1.8; white-space: pre-line; }
+.schedule-year-text { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.8; white-space: pre-line; }
 
 /* Dots: one per day, colour steps by count; plans are dashed (예정에만 점선). */
 .schedule-dots { display: flex; gap: 3px; align-items: center; min-width: 0; cursor: pointer; }
 .schedule-dots-large { gap: 4px; }
 .schedule-dot { display: block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #dfe5e2; box-sizing: border-box; }
 .schedule-dots-large .schedule-dot { width: 12px; height: 12px; }
-/* Each step reaches 3:1 on white, #f4f7f5 and #eaf1ed, and the steps differ in lightness. */
-.schedule-dot[data-level="1"] { background: #579777; }
-.schedule-dot[data-level="2"] { background: #2e6b50; }
-.schedule-dot[data-level="3"] { background: #1b4f38; }
+/* Ink steps (2026-11-16 노션 방향): each reaches 3:1 on white and on the selected row (#f3f3f3), and the steps
+ * differ in lightness: #8a8984 3.50, #5f5e5b 6.48, #37352f 12.26 on white. */
+.schedule-dot { background: #ebebe9; }
+.schedule-dot[data-level="1"] { background: #8a8984; }
+.schedule-dot[data-level="2"] { background: #5f5e5b; }
+.schedule-dot[data-level="3"] { background: #37352f; }
 .schedule-dot[data-planned] { border: 1.5px dashed var(--ink-soft); background: transparent; }
-.schedule-dot[data-today] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--color-primary); }
-.schedule-dot[data-selected] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--ink); }
+/* Today (2026-11-16 노션 방향 틸 규칙): an ink ring; the chosen day a grey ring (#8a8984, 3.50:1). */
+.schedule-dot[data-today] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--haedo-ink); }
+.schedule-dot[data-selected] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--field-line); }
 .schedule-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-meta); }
 .schedule-legend-item { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 
-.schedule-filter { display: flex; gap: 4px; margin: 4px 0 0; box-shadow: inset 0 -1px 0 var(--line); }
-.schedule-filter-tab { min-width: 44px; min-height: 44px; border: 0; padding: 0 12px; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-control); }
-.schedule-filter-tab:first-child { padding-left: 0; }
-.schedule-filter-tab[aria-selected=true] { color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--color-primary); }
+/* 거르기 (contract 거르기·꼬리표): the visible surface is 28px, the target 44px. The chosen one is the selected
+ * surface and ink 600 (two cues); the rest are muted 400. */
+.schedule-filter { display: flex; gap: 4px; margin: 4px 0 0 -10px; }
+.schedule-filter-tab { position: relative; min-width: 44px; min-height: 44px; border: 0; padding: 0 10px; background: transparent; color: var(--haedo-muted); font: inherit; font-size: 14px; font-weight: var(--haedo-weight-regular); }
+.schedule-filter-tab::before { content: ''; position: absolute; z-index: -1; inset: 8px 0; border-radius: var(--haedo-control-radius); background: transparent; }
+.schedule-filter-tab { isolation: isolate; }
+.schedule-filter-tab:hover::before { background: var(--haedo-hover); }
+.schedule-filter-tab[aria-selected=true] { color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
+.schedule-filter-tab[aria-selected=true]::before { background: var(--haedo-selected); }
 
-.schedule-thumb { display: block; flex: none; width: 40px; height: 40px; overflow: hidden; border-radius: 8px; background: var(--haedo-soft); }
+.schedule-thumb { display: block; flex: none; width: 40px; height: 40px; overflow: hidden; border-radius: var(--haedo-control-radius); background: var(--haedo-soft); }
 .schedule-thumb > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* Y: twelve month rows. */
 .schedule-year-rows { display: grid; margin-top: 8px; }
-.schedule-year-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 84px; column-gap: 12px; align-items: center; min-height: 56px; margin-inline: -12px; padding-inline: 12px; border-radius: 14px; }
-.schedule-year-row[data-selected] { background: var(--haedo-soft); }
+.schedule-year-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 84px; column-gap: 12px; align-items: center; min-height: 56px; margin-inline: -12px; padding-inline: 12px; border-radius: var(--haedo-control-radius); }
+.schedule-year-row[data-selected] { background: var(--haedo-selected); }
+.schedule-year-row[data-selected] .schedule-month-label { font-weight: var(--haedo-weight-semibold); }
 .schedule-year-row { cursor: pointer; }
-.schedule-year-row:hover .schedule-month-label { color: var(--color-primary); }
-.schedule-month-label, .schedule-week-label { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--haedo-text-control); font-weight: 550; text-align: left; font-variant-numeric: tabular-nums; }
-.schedule-month-label:hover, .schedule-week-label:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
+.schedule-year-row:hover { background: var(--haedo-hover); }
+.schedule-year-row[data-selected]:hover { background: var(--haedo-selected); }
+.schedule-month-label, .schedule-week-label { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-medium); text-align: left; font-variant-numeric: tabular-nums; }
+.schedule-month-label:hover, .schedule-week-label:hover { text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 .schedule-year-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-block: 8px; }
 .schedule-lead { display: block; min-width: 0; height: 24px; overflow: hidden; color: var(--ink); font-size: var(--haedo-text-control); font-weight: 600; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-year-photos { display: flex; justify-content: flex-end; gap: 4px; }
 
 /* Q: week rows. */
 .schedule-quarter-rows { display: grid; margin-top: 8px; }
-.schedule-quarter-row { display: grid; grid-template-columns: 40px 112px auto minmax(0, 1fr) auto 36px; column-gap: 12px; align-items: center; min-height: 52px; margin-inline: -12px; padding-inline: 12px; border-radius: 14px; }
-.schedule-quarter-row[data-selected] { background: var(--haedo-soft); }
-.schedule-quarter-month { font-size: var(--haedo-text-control); font-weight: 700; }
+.schedule-quarter-row { display: grid; grid-template-columns: 40px 112px auto minmax(0, 1fr) auto 36px; column-gap: 12px; align-items: center; min-height: 52px; margin-inline: -12px; padding-inline: 12px; border-radius: var(--haedo-control-radius); }
+.schedule-quarter-row[data-selected] { background: var(--haedo-selected); }
+.schedule-quarter-row[data-selected] .schedule-week-label { font-weight: var(--haedo-weight-semibold); }
+.schedule-quarter-month { font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); }
 .schedule-quarter-photo { display: flex; justify-content: flex-end; }
 .schedule-quarter-photo > .schedule-thumb { width: 36px; height: 36px; }
 .schedule-count { color: var(--ink-soft); font-size: var(--haedo-text-meta); white-space: nowrap; }
@@ -135,31 +159,35 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-quarter-row > .schedule-quarter-photo { grid-area: photo; }
 }
 
-/* M: calendar of soft cells (no lines). */
-.schedule-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
-.schedule-weekday { align-self: end; padding: 0 0 4px 12px; color: var(--ink-soft); font-size: var(--haedo-text-meta); }
-.schedule-day-cell { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; min-height: 104px; overflow: hidden; border: 0; border-radius: 12px; padding: 8px 12px; background: var(--haedo-soft); color: var(--ink); font: inherit; text-align: left; }
-.schedule-day-cell:hover { background: var(--haedo-selected); }
-.schedule-day-cell[data-outside] { background: transparent; color: var(--ink-soft); }
-.schedule-day-cell[aria-current=date] { background: var(--haedo-selected); box-shadow: inset 0 0 0 2px var(--color-primary); }
-.schedule-day-number { font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
-.schedule-day-cell[data-today] .schedule-day-number { color: var(--color-primary); font-weight: 750; }
-.schedule-cell-title { overflow: hidden; font-size: var(--haedo-text-meta); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+/* M (2026-11-16 노션 방향): a 1px line grid of 104px cells and 13px dates. Each cell is one link; its post and
+ * plan lines are tags that are not pressed on their own: a post a grey fill, a plan a 1px ring. */
+.schedule-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin-top: 12px; border-top: 1px solid var(--haedo-line); border-left: 1px solid var(--haedo-line); }
+.schedule-weekday { align-self: end; padding: 6px 8px; border-right: 1px solid var(--haedo-line); border-bottom: 1px solid var(--haedo-line); color: var(--haedo-muted); font-size: var(--haedo-text-badge); }
+.schedule-day-cell { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; min-height: 104px; overflow: hidden; border: 0; border-right: 1px solid var(--haedo-line); border-bottom: 1px solid var(--haedo-line); border-radius: 0; padding: 8px; background: transparent; color: var(--ink); font: inherit; text-align: left; }
+.schedule-day-cell:hover { background: var(--haedo-hover); }
+.schedule-day-cell[data-outside] { background: transparent; color: var(--haedo-meta); }
+/* The chosen day: the selected surface and an ink ring inside (two cues; the 1px grid stays). */
+.schedule-day-cell[aria-current=date] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1px var(--haedo-ink); }
+/* Today: a 24px ink circle with the white number (12.26:1); every number sits in the same 24px box. */
+.schedule-day-number { display: inline-flex; flex: none; align-self: flex-start; align-items: center; justify-content: center; min-width: 24px; height: 24px; margin: -2px 0 0 -4px; padding: 0 4px; border-radius: 12px; font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; box-sizing: border-box; }
+.schedule-day-cell[data-today] .schedule-day-number { background: var(--haedo-ink); color: #fff; font-weight: var(--haedo-weight-semibold); }
+.schedule-cell-title { overflow: hidden; min-height: 22px; border-radius: 4px; padding: 2px 6px; background: #f1f1ef; color: var(--haedo-ink); font-size: var(--haedo-text-badge); font-weight: var(--haedo-weight-medium); line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-day-cell > .schedule-thumb { width: 100%; height: 40px; }
-.schedule-cell-plan { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; color: var(--ink-soft); font-size: var(--haedo-text-meta); white-space: nowrap; }
-.schedule-cell-plan > .life-glyph { flex: none; width: 16px; height: 16px; }
+.schedule-cell-plan { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 22px; overflow: hidden; border: 1px solid rgba(55, 53, 47, .16); border-radius: 4px; padding: 1px 6px; color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 18px; white-space: nowrap; }
+.schedule-cell-plan > .life-glyph { flex: none; width: 12px; height: 12px; }
 .schedule-cell-plan > span { overflow: hidden; text-overflow: ellipsis; }
 .schedule-cell-dot { display: none; }
 .schedule-month-chosen { display: none; }
 
 /* W: seven day columns. */
 .schedule-week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.schedule-week-day { min-width: 0; padding: 0 8px 16px; border-radius: 14px; }
+.schedule-week-day { min-width: 0; padding: 0 8px 16px; border-radius: var(--haedo-control-radius); }
 .schedule-week-day[data-selected] { background: var(--haedo-selected); }
 .schedule-week-head { display: flex; align-items: baseline; gap: 8px; width: 100%; min-height: 48px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }
-.schedule-week-name { color: var(--ink-soft); font-size: var(--haedo-text-meta); }
-.schedule-week-number { font-size: var(--haedo-text-title); font-weight: 750; font-variant-numeric: tabular-nums; }
-.schedule-week-head[data-today] .schedule-week-number { color: var(--color-primary); }
+.schedule-week-name { color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
+.schedule-week-number { font-size: var(--haedo-text-title); font-weight: var(--haedo-weight-semibold); font-variant-numeric: tabular-nums; }
+.schedule-week-number { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 18px; box-sizing: border-box; }
+.schedule-week-head[data-today] .schedule-week-number { background: var(--haedo-ink); color: #fff; }
 .schedule-week-day .schedule-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
 .schedule-week-day .schedule-mark { display: none; }
 .schedule-week-day .schedule-time { padding: 0; font-size: var(--haedo-text-badge); }
@@ -175,15 +203,15 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-mark > .life-glyph { width: 20px; height: 20px; }
 .schedule-row-content { min-width: 0; }
 .schedule-plan-body { margin: 0; font-size: var(--haedo-text-body); line-height: 1.6; }
-.schedule-post-title { margin: 0; font-size: var(--haedo-text-title); font-weight: 750; line-height: 1.35; letter-spacing: -.03em; }
-.schedule-post-title-compact { font-size: var(--haedo-text-control); font-weight: 650; letter-spacing: 0; }
+.schedule-post-title { margin: 0; font-size: var(--haedo-text-title); font-weight: var(--haedo-weight-bold); line-height: 1.35; letter-spacing: -.01em; }
+.schedule-post-title-compact { font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); letter-spacing: 0; }
 .schedule-post-open { display: block; width: 100%; min-height: 44px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; word-break: keep-all; }
 /* W and the phone month: a smaller title, still a 44px target (2026-11-08 S6). */
 .schedule-post-title-compact > .schedule-post-open { display: flex; align-items: center; min-height: 44px; }
-.schedule-post-open:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
+.schedule-post-open:hover { text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 .schedule-post-media { margin-top: 12px; }
-.schedule-post-media > .schedule-thumb { width: 100%; height: 240px; border-radius: 14px; }
-.schedule-post-body { margin: 12px 0 0; color: #2a3733; font-size: var(--haedo-text-body); line-height: 1.8; }
+.schedule-post-media > .schedule-thumb { width: 100%; height: 240px; border-radius: var(--haedo-radius); }
+.schedule-post-body { margin: 12px 0 0; color: var(--haedo-ink); font-size: var(--haedo-text-body); line-height: 1.8; }
 /* The quote bar sits in the icon column so the quote starts on the content line (decision 2026-11-02). */
 .schedule-quote { display: grid; grid-template-columns: 3px minmax(0, 1fr); column-gap: 12px; margin: 0 0 0 -15px; }
 .schedule-quote::before { content: ''; border-radius: 2px; background: var(--color-primary); }
@@ -191,26 +219,26 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-quote > figcaption { grid-column: 2; margin-top: 4px; }
 .schedule-week-day .schedule-quote > blockquote, .schedule-month-chosen .schedule-quote > blockquote { font-size: var(--haedo-text-meta); }
 .schedule-link { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-meta); text-align: left; }
-.schedule-link:hover { color: var(--color-primary); text-decoration: underline; }
+.schedule-link:hover { color: var(--haedo-ink); text-decoration: underline; text-underline-offset: 4px; }
 
 /* Links to the editors that own goals, habits and happiness. */
 .schedule-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 8px; }
-.schedule-link-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px 0 12px; border-radius: 12px; background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); text-decoration: none; }
+.schedule-link-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px 0 12px; border-radius: var(--haedo-control-radius); background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); text-decoration: none; }
 .schedule-link-chip:hover { background: var(--haedo-selected); }
-.schedule-link-chip > .life-glyph { flex: none; width: 20px; height: 20px; color: var(--color-primary); }
+.schedule-link-chip > .life-glyph { flex: none; width: 20px; height: 20px; color: var(--haedo-muted); }
 
 /* 습관·행복도·목표 칸 (B2): habits and goals are entered here (goals/habits store); 행복도 is shown
    only, and entered in the timeline editor (2026-11-04 owner decision). */
 .schedule-entries { min-width: 0; margin: 8px 0 16px; }
 .schedule-entries[aria-busy=true] { min-height: 44px; }
 .schedule-entry-section { min-width: 0; margin: 0 0 16px; }
-/* h2 since review 3 n2 (headings of one level); the letter spacing of the former h3 keeps the same look. */
-.schedule-entry-title { margin: 16px 0 4px; font-size: var(--haedo-text-body); font-weight: 750; line-height: 1.5; letter-spacing: -.02em; }
+/* What a side part holds (h3 under the part's h2, 2026-11-16 m5): 14px 600 ink. */
+.schedule-entry-title, .schedule-aside-sub { margin: 12px 0 4px; color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; letter-spacing: 0; }
 .schedule-habit { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: var(--haedo-text-control); }
 .schedule-habit > input, .schedule-habit-grid input[type=checkbox] { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
 .schedule-goals { display: grid; gap: 8px; }
 .schedule-goal { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 12px; min-width: 0; }
-.schedule-goal-title { min-width: 0; font-size: var(--haedo-text-control); font-weight: 650; word-break: keep-all; overflow-wrap: anywhere; }
+.schedule-goal-title { min-width: 0; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); word-break: keep-all; overflow-wrap: anywhere; }
 .schedule-goal-meta { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .schedule-goal > input[type=range] { grid-column: 1 / -1; width: 100%; min-height: 44px; margin: 0; accent-color: var(--color-primary); }
 .schedule-habit-scroll { max-width: 100%; overflow-x: auto; }
@@ -218,11 +246,12 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-habit-grid th, .schedule-habit-grid td { min-width: 44px; height: 44px; padding: 0 4px; text-align: center; font-weight: 500; }
 .schedule-habit-grid tbody th { max-width: 12em; padding-right: 12px; text-align: left; overflow-wrap: anywhere; }
 .schedule-grid-check { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; cursor: pointer; }
-.schedule-habit-grid thead th { color: var(--ink-soft); font-size: var(--haedo-text-meta); }
+.schedule-habit-grid thead th { color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
 .schedule-habit-grid tr > th:first-child { position: sticky; left: 0; z-index: 1; background: var(--paper); text-align: left; }
-.schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }
+/* Today's column: ink 600 with a 2px ink line under the date (a second cue beside the weight). */
+.schedule-habit-grid thead th[data-today] { color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); text-decoration: underline 2px; text-underline-offset: 6px; }
 .schedule-happiness { min-width: 0; margin: 8px 0 0; border: 0; padding: 0; }
-.schedule-happiness > legend { margin: 16px 0 4px; padding: 0; font-size: var(--haedo-text-body); font-weight: 750; }
+.schedule-happiness > legend { margin: 12px 0 4px; padding: 0; font-size: 14px; font-weight: var(--haedo-weight-semibold); }
 .schedule-happiness-title { margin: 0; font: inherit; letter-spacing: inherit; }
 /* 행복도 0–10: one row of eleven while each choice is at least 44px wide (11 × 44 + 10 × 4 = 524px), else two
  * rows, 0–5 and 6–10, at every width (2026-11-08 S7; review 3 m2: 1101–1300px is narrow too, beside the aside).
@@ -232,17 +261,18 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 @container schedule-day-entry (width < 524px) {
   .schedule-happiness-scale { grid-template-columns: repeat(6, minmax(44px, 1fr)); column-gap: clamp(0px, calc((100% - 264px) / 5), 4px); }
 }
-.schedule-happiness-option { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; border-radius: 12px; background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; cursor: pointer; }
+.schedule-happiness-option { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; border-radius: var(--haedo-control-radius); background: var(--haedo-soft); color: var(--ink); font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; cursor: pointer; }
 .schedule-happiness-option > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.schedule-happiness-option:has(input:checked) { background: var(--color-primary); color: var(--haedo-on-accent); font-weight: 750; }
-.schedule-happiness-option:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* The chosen 행복도 stays teal (a checked choice, contract 틸 유지) with white 600. */
+.schedule-happiness-option:has(input:checked) { background: var(--color-primary); color: var(--haedo-on-accent); font-weight: var(--haedo-weight-semibold); }
+.schedule-happiness-option:has(input:focus-visible) { outline: 2px solid var(--haedo-focus); outline-offset: 2px; }
 .schedule-happiness-option:has(input:disabled) { opacity: .5; cursor: default; }
 /* The day is held for its failed 행복도 choice (schedule-entries.js heldDay): nothing below the notice takes
    input, and it looks so. The notice and its two buttons sit outside this block at full contrast. */
 .schedule-entry-body[inert] { opacity: .5; }
 .schedule-happiness-clear { min-height: 44px; margin-top: 4px; }
-.schedule-happiness-day { min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
-.schedule-happiness-day:hover { background: var(--haedo-soft); }
+.schedule-happiness-day { min-width: 44px; min-height: 44px; border: 0; border-radius: var(--haedo-control-radius); background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
+.schedule-happiness-day:hover { background: var(--haedo-hover); }
 /* Phone width: all seven days fit without sideways scrolling; the habit name column shortens
    (the full name stays in each check box's label). */
 /* Phone width: each name gets a full line of its own above its seven days, so nothing is cut
@@ -267,7 +297,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 }
 /* Text actions in the entry status line (확인, 다시 시도, 보기): the shared tokens, 44px tall. */
 .schedule-entries .life-text-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--haedo-text-control); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
-.schedule-entries .life-text-button:hover { color: var(--color-primary); }
+.schedule-entries .life-text-button:hover { color: var(--haedo-ink); }
 .schedule-entries .life-text-button:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
 .schedule-entry-status { margin: 4px 0 0; }
 .schedule-entry-status[data-state=error] { color: var(--color-error); }
@@ -277,28 +307,28 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 
 .schedule-plan-list { display: grid; }
 .schedule-plan-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-items: center; width: 100%; min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }
-.schedule-plan-row:hover .schedule-plan-text { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
-.schedule-plan-date { display: flex; gap: 4px; color: var(--ink-soft); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; }
-.schedule-plan-date > strong { color: var(--ink); font-weight: 600; }
-.schedule-plan-text { min-width: 0; overflow: hidden; font-size: var(--haedo-text-control); text-overflow: ellipsis; white-space: nowrap; }
+.schedule-plan-row:hover .schedule-plan-text { text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.schedule-plan-date { display: flex; gap: 4px; color: var(--haedo-meta); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; }
+.schedule-plan-date > strong { color: var(--haedo-muted); font-weight: var(--haedo-weight-regular); }
+.schedule-plan-text { min-width: 0; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 
 .schedule-week-strip { display: none; }
 .schedule-other-years { max-width: 560px; padding-top: 4px; }
 .schedule-other-years[hidden] { display: none; }
-.schedule-other-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 12px; align-items: center; width: calc(100% + 16px); margin: 0 -8px; border: 0; border-radius: 14px; padding: 8px; background: transparent; color: var(--ink); font: inherit; text-align: left; }
-.schedule-other-row:hover { background: var(--haedo-soft); }
-.schedule-other-row > .schedule-thumb { width: 56px; height: 56px; border-radius: 10px; }
+.schedule-other-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 12px; align-items: center; width: calc(100% + 16px); margin: 0 -8px; border: 0; border-radius: var(--haedo-control-radius); padding: 8px; background: transparent; color: var(--ink); font: inherit; text-align: left; }
+.schedule-other-row:hover { background: var(--haedo-hover); }
+.schedule-other-row > .schedule-thumb { width: 56px; height: 56px; border-radius: var(--haedo-control-radius); }
 .schedule-other-row:not(:has(.schedule-thumb)) > .schedule-other-copy { grid-column: 1 / -1; }
 .schedule-other-copy { display: grid; min-width: 0; }
-.schedule-other-year { color: var(--ink-soft); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; }
+.schedule-other-year { color: var(--haedo-meta); font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; }
 .schedule-other-title { overflow: hidden; font-size: var(--haedo-text-control); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 
-.schedule-shortcuts { width: min(360px, calc(100vw - 32px)); border: 0; border-radius: 16px; padding: 24px; color: var(--ink); }
-.schedule-shortcuts::backdrop { background: rgba(24, 37, 34, .32); }
+.schedule-shortcuts { width: min(360px, calc(100vw - 32px)); border: 0; border-radius: var(--haedo-radius); padding: 24px; color: var(--ink); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
+.schedule-shortcuts::backdrop { background: rgba(15, 15, 15, .32); }
 .schedule-shortcuts h2 { margin: 0 0 16px; font-size: var(--haedo-text-body); }
 .schedule-shortcuts dl { display: grid; gap: 8px; margin: 0 0 24px; }
 .schedule-shortcuts dl > div { display: grid; grid-template-columns: 128px minmax(0, 1fr); column-gap: 12px; }
-.schedule-shortcuts dt { font-weight: 650; font-variant-numeric: tabular-nums; }
+.schedule-shortcuts dt { font-weight: var(--haedo-weight-semibold); font-variant-numeric: tabular-nums; }
 .schedule-shortcuts dd { margin: 0; color: var(--ink-soft); }
 
 /* iPad and narrow desktop: the right column moves under the calendar. */
@@ -307,7 +337,7 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-aside { max-width: 560px; }
   .schedule-week-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .schedule-week-day { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; padding: 4px 0 8px; border-radius: 0; box-shadow: inset 0 -1px 0 var(--line); }
-  .schedule-week-day[data-selected] { margin-inline: -12px; padding-inline: 12px; border-radius: 14px; box-shadow: none; }
+  .schedule-week-day[data-selected] { margin-inline: -12px; padding-inline: 12px; border-radius: var(--haedo-control-radius); box-shadow: none; }
   .schedule-week-day .schedule-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 12px; }
   .schedule-week-day .schedule-time { padding-top: 4px; font-size: var(--haedo-text-meta); }
   .schedule-week-day .schedule-day-rows > .schedule-empty { margin: 12px 0; }
@@ -318,13 +348,18 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 @media (max-width: 760px) {
   .life-toolbar[data-schedule] .life-schedule-views, .life-toolbar[data-schedule] .schedule-help { display: none; }
   /* ‹ › stay on every unit (another year, month or day). */
-  /* Up link and actions share the top row; the period title takes the full next row (iOS 캘린더). */
-  .life-toolbar[data-schedule] { flex-wrap: wrap; row-gap: 0; }
-  .life-toolbar[data-schedule] .haedo-heading-title { display: contents; }
-  .life-toolbar[data-schedule] .haedo-heading-actions { order: 1; margin-left: auto; }
-  .life-toolbar[data-schedule] .haedo-heading-title > h1 { order: 2; flex-basis: 100%; padding-bottom: 8px; }
+  /* 2026-11-16 노션 방향 (contract 일정 iPhone): the up link (‹ 2026), 통합 검색 and the 글쓰기 pencil share the top row;
+   * the period title and 오늘 ‹ › the next one (iOS 캘린더). The second row reaches under the pencil's column. */
+  .life-toolbar[data-schedule] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: 44px auto; grid-template-areas: "up up find" "title today step"; align-items: center; column-gap: 4px; row-gap: 0; }
+  .life-toolbar[data-schedule] .haedo-heading-title, .life-toolbar[data-schedule] .haedo-heading-actions { display: contents; }
+  .life-toolbar[data-schedule] .schedule-up { grid-area: up; justify-self: start; }
+  .life-toolbar[data-schedule] #lifeFindOpen { grid-area: find; justify-self: end; }
+  .life-toolbar[data-schedule] .haedo-heading-title > h1 { grid-area: title; min-width: 0; padding-bottom: 8px; }
+  .life-toolbar[data-schedule] .schedule-today { grid-area: today; align-self: start; }
+  .life-toolbar[data-schedule] .schedule-step { grid-area: step; align-self: start; margin-right: calc(-1 * max(52px, calc(env(safe-area-inset-right, 0px) + 44px)) + max(8px, env(safe-area-inset-right, 0px))); }
+  .life-toolbar[data-schedule] > .life-refresh { grid-column: 1 / -1; }
   /* The iOS back chevron is pulled 12px left (expert brief 3-1). */
-  .schedule-up { display: inline-flex; align-items: center; min-height: 44px; margin-left: -12px; padding-right: 8px; color: var(--color-primary); font-size: var(--haedo-text-body); text-decoration: none; font-variant-numeric: tabular-nums; }
+  .schedule-up { display: inline-flex; align-items: center; min-height: 44px; margin-left: -12px; padding-right: 8px; color: var(--haedo-ink); font-size: var(--haedo-text-body); text-decoration: none; font-variant-numeric: tabular-nums; }
   .schedule-up > .life-glyph { width: 20px; height: 20px; }
 
   .schedule-filter, .schedule-legend, .schedule-dots-small { display: none; }
@@ -337,29 +372,31 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-quarter-month, .schedule-quarter-photo, .schedule-count, .schedule-quarter-row > .schedule-dots { display: none; }
   .schedule-dots-large .schedule-dot { width: 8px; height: 8px; }
 
-  .schedule-month-grid { gap: 0; }
-  .schedule-weekday { padding: 0 0 4px; text-align: center; font-size: var(--haedo-text-badge); }
-  .schedule-day-cell { align-items: center; gap: 4px; min-height: 52px; padding: 4px 0; background: transparent; border-radius: 12px; }
+  .schedule-month-grid { gap: 0; margin-inline: -16px; border: 0; }
+  .schedule-weekday { padding: 0 0 4px; border: 0; text-align: center; font-size: var(--haedo-text-badge); }
+  .schedule-day-cell { align-items: center; gap: 4px; min-height: 52px; padding: 4px 0; border: 0; background: transparent; border-radius: var(--haedo-control-radius); }
+  /* iPhone: today a 32px ink circle (white 12.26:1); the chosen day, when it is not today, a 1.5px ink ring and 600. */
   .schedule-day-cell[aria-current=date] { background: transparent; box-shadow: none; }
-  .schedule-day-cell[aria-current=date] .schedule-day-number { background: var(--ink); color: #fff; font-weight: 750; }
-  .schedule-day-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; }
+  .schedule-day-number { align-self: center; width: 32px; min-width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 50%; font-size: var(--haedo-text-control); }
+  .schedule-day-cell[aria-current=date]:not([data-today]) .schedule-day-number { box-shadow: inset 0 0 0 1.5px var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
   .schedule-day-cell > :is(.schedule-cell-title, .schedule-cell-plan) { display: none; }
   .schedule-day-cell > .schedule-thumb { width: 16px; height: 16px; border-radius: 4px; }
   .schedule-day-cell > .schedule-thumb ~ .schedule-cell-dot { display: none; }
-  .schedule-cell-dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: transparent; }
-  .schedule-cell-dot:not([data-level="0"]) { background: #579777; }
-  .schedule-cell-dot[data-planned] { border: 1.5px dashed var(--ink-soft); box-sizing: border-box; }
+  .schedule-cell-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: transparent; }
+  .schedule-cell-dot:not([data-level="0"]) { background: var(--haedo-ink); }
+  .schedule-cell-dot[data-planned] { width: 6px; height: 6px; border: 1.5px dashed var(--haedo-muted); box-sizing: border-box; }
   .schedule-week-day .schedule-plan-body { font-size: var(--haedo-text-control); }
   .schedule-month-chosen { display: block; margin-top: 16px; }
-  .schedule-chosen-title { margin: 0; font-size: var(--haedo-text-body); font-weight: 700; }
+  .schedule-chosen-title { margin: 0; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); }
 
   .schedule-week-day { grid-template-columns: 72px minmax(0, 1fr); }
-  .schedule-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 -8px 8px; }
+  /* The days reach 16px into the side gutters so each is at least 44px wide at 320 (280 + 32 = 312, 7 × 44.6). */
+  .schedule-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 -16px 8px; }
   .schedule-strip-day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 60px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; }
-  .schedule-strip-name { color: var(--ink-soft); font-size: var(--haedo-text-badge); }
-  .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
-  .schedule-strip-day[aria-current=date] .schedule-strip-number { background: var(--ink); color: #fff; font-weight: 750; }
-  .schedule-strip-day[data-today]:not([aria-current=date]) .schedule-strip-number { color: var(--color-primary); font-weight: 750; }
+  .schedule-strip-name { color: var(--haedo-muted); font-size: var(--haedo-text-badge); }
+  .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
+  .schedule-strip-day[data-today] .schedule-strip-number { background: var(--haedo-ink); color: #fff; font-weight: var(--haedo-weight-semibold); }
+  .schedule-strip-day[aria-current=date]:not([data-today]) .schedule-strip-number { box-shadow: inset 0 0 0 1.5px var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
   .schedule-day .schedule-post-title { font-size: 20px; }
   /* Same columns as the 일정 list rows (time 44 · icon 20, 8px gaps), so content shares the list's line. */
   .schedule-row { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }

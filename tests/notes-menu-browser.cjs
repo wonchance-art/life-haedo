@@ -185,8 +185,14 @@ async function main() {
       await page.locator(tab('schedule')).click(); await shown(page, 'month');
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-10-28'); await ready(page); await shown(page, 'month');
       await page.locator('#lifeSchedule [data-schedule-filter="posts"]').click();
-      await page.evaluate(() => scrollTo({ top: 200, behavior: 'instant' })); const monthScroll = await page.evaluate(() => scrollY);
+      // M is scrolled to its end, as before the 2026-11-16 W2 page title (then 200 was past M's end at 600px, so the
+      // check always ran at the end). A position short of the end comes back 3–25px further down in Chromium today,
+      // also on the base commit (the root's smooth scrolling meets the browser's own history restore): reported
+      // separately, not part of this visual unit. The position is read at the click itself.
+      await page.evaluate(() => { scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }); addEventListener('click', () => { window.__monthScroll = scrollY; }, { once: true, capture: true }); });
       await page.locator('[data-focus-key="schedule:day:2026-10-29"]').click(); await shown(page, 'day');
+      const monthScroll = await page.evaluate(() => window.__monthScroll);
+      assert.ok(monthScroll >= 200, 'M was scrolled (' + monthScroll + ')');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'D keeps the filter');
       await page.goBack(); await shown(page, 'month');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'M keeps the filter');

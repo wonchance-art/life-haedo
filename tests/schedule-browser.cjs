@@ -381,7 +381,8 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const heading = () => page.evaluate(() => {
         const box = node => { const b = node.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), w: b.width, h: b.height }; };
-        const title = document.querySelector('#lifeApp .life-toolbar h1'), range = document.createRange(); range.selectNodeContents(title);
+        // From 1101px 노트·일정 keep the large title in its band after the heading row (2026-11-16 노션 방향).
+        const title = document.querySelector('#lifeApp .life-toolbar h1, #lifeApp .haedo-title-band h1'), range = document.createRange(); range.selectNodeContents(title);
         // Shown = rendered and visible (a wide list keeps 오늘 and ‹ › in place but unseen, so the bar does not move).
         const shown = selector => [...document.querySelectorAll('#lifeApp .life-toolbar ' + selector)].filter(node => node.checkVisibility({ visibilityProperty: true }));
         // Every shown control of the heading in DOM order, with where it is drawn (the 글 메뉴 panel aside).
@@ -413,7 +414,9 @@ async function main() {
             assert.ok(head.find.top >= head.title.bottom - 2 && head.help[0].top >= head.title.bottom - 2 && head.views[0].top >= head.title.bottom - 2, scene + ': 검색 and ? are on the bar row');
             assert.equal(new Set(second.map(control => control.top)).size, 1, scene + ': one second row');
             assert.ok(head.title.top - head.toolbarTop >= 12, scene + ': the title is not glued to the top (' + (head.title.top - head.toolbarTop) + 'px)');
-          } else assert.ok(head.views[0].top < head.title.bottom && head.find.top < head.title.bottom, scene + ': one row on a wide screen');
+          // Rule change 2026-11-16 노션 방향 (contract 머리줄): from 1101px the 44px heading row holds the path and the controls,
+          // and the large title is under it (until then title and controls shared one row).
+          } else assert.ok(head.views[0].bottom <= head.title.top && head.find.bottom <= head.title.top, scene + ': on a wide screen the controls are on the row above the title');
           // Seen left to right, top to bottom, the controls come in DOM order (the Tab order).
           const drawn = [...head.controls].sort((a, b) => Math.abs(a.top - b.top) > 2 ? a.top - b.top : a.left - b.left).map(control => control.name);
           assert.deepEqual(drawn, head.controls.map(control => control.name), scene + ': the visual order is the DOM order');
@@ -482,14 +485,18 @@ async function main() {
         posts: [...document.querySelectorAll('#lifeSchedule .schedule-day-records .schedule-post-title')].map(n => n.tagName + ' ' + getComputedStyle(n).fontSize),
         title: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-title)'; document.body.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })(),
         records: document.querySelector('.schedule-day-records').getAttribute('aria-labelledby') }));
-      assert.deepEqual(day.h2, ['그날 기록', '다른 해', '예정', '습관', '행복도', '목표 · 계획'], 'D: the h2 of the body, then of the side column');
+      // Rule change 2026-11-16 노션 방향 m5: every side part opens with the same h2 (예정 · 습관 · 행복도 · 목표 · 계획); D's 습관 and 행복도 are h3 in it.
+      assert.deepEqual(day.h2, ['그날 기록', '다른 해', '예정', '습관 · 행복도', '목표 · 계획'], 'D: the h2 of the body, then of the side column');
+      assert.deepEqual(await page.locator('.schedule-side-habits h3').allTextContents(), ['습관', '행복도'], 'D: 습관 and 행복도 under the part');
       assert.ok(day.posts.length && day.posts.every(post => post === 'H3 ' + day.title), 'D: post titles are h3 at the title size (' + day.posts + ')');
       assert.equal(await page.getByRole('group', { name: '행복도' }).count(), 1, 'the 행복도 fieldset keeps its name');
       assert.equal(await page.getByRole('region', { name: '그날 기록' }).count(), 1);
       let names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'D: no two regions share a name');
       // W: the habit table has an h2; the slot alone carries 이번 주 습관과 행복도.
       await page.goto(base + '/index.html?section=schedule&view=week&date=2026-10-28'); await ready(page); await shown(page, 'week'); await slotReady('week');
-      assert.equal(await page.locator('.schedule-entries-week h2').first().textContent(), '습관 · 행복도');
+      // Rule change 2026-11-16 노션 방향 m5: the part's h2 names the habit table (the slot's own h2 went).
+      assert.deepEqual(await page.locator('.schedule-side-habits h2').allTextContents(), ['습관 · 행복도']);
+      assert.equal(await page.locator('.schedule-entries-week h2').count(), 0);
       names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'W: no two regions share a name');
       assert.equal(await page.getByRole('region', { name: '이번 주 습관과 행복도' }).count(), 1);
       // Y: the aside is 올해 (its link line is the 계획 navigation); 예정 · 습관 · 행복도 · 올해 계획 · 목표 are h2 (rule change
@@ -497,17 +504,20 @@ async function main() {
       // no goal says so with 목표 추가.
       await page.goto(base + '/index.html?section=tools'); await ready(page); await shown(page, 'tools'); await slotReady('year');
       assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '올해');
-      assert.deepEqual(await page.locator('aside.schedule-aside h2, aside.schedule-aside h3').evaluateAll(nodes => nodes.map(n => n.tagName + ' ' + n.textContent)), ['H2 예정', 'H2 습관 · 행복도', 'H2 올해 계획', 'H2 목표']);
+      assert.deepEqual(await page.locator('aside.schedule-aside h2, aside.schedule-aside h3').evaluateAll(nodes => nodes.map(n => n.tagName + ' ' + n.textContent)), ['H2 예정', 'H2 습관 · 행복도', 'H2 목표 · 계획', 'H3 올해 계획', 'H3 목표']);
       names = await regions(); assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), [], 'Y: no two regions share a name (' + names + ')');
       const size = await bodySize(), teal = await planLinkColor();
       // Found and measured in one evaluation: the slot repaints on store notices, so a node resolved earlier can be detached
       // by the time it is measured (seen under load: every computed value empty).
-      const goalEmpty = await page.evaluate(() => { const n = document.querySelector('.schedule-entries-year .schedule-empty'); return ({ text: n.textContent, size: getComputedStyle(n).fontSize, link: n.querySelector('a')?.getAttribute('href'), color: getComputedStyle(n.querySelector('a')).color, line: getComputedStyle(n.querySelector('a')).textDecorationLine }); });
-      assert.deepEqual(goalEmpty, { text: '진행 중인 목표가 없어요. 목표 추가', size, link: 'goals.html', color: teal, line: 'none' }, 'Y: no goal, at body size, with a teal 목표 추가 link');
+      const goalEmpty = await page.evaluate(() => { const n = document.querySelector('.schedule-entries-year .schedule-empty'); return ({ text: n.textContent, size: getComputedStyle(n).fontSize, color: getComputedStyle(n).color, link: n.querySelector('a')?.getAttribute('href'), linkColor: getComputedStyle(n.querySelector('a')).color, line: getComputedStyle(n.querySelector('a')).textDecorationLine }); });
+      // Rule change 2026-11-16 노션 방향 (contract 빈 상태, 틸 규칙): an empty line is 14px in the meta grey and its link is ink with the quiet
+      // underline, as the plan link line (until then body size and teal links).
+      assert.deepEqual(goalEmpty, { text: '진행 중인 목표가 없어요. 목표 추가', size: '14px', color: 'rgb(111, 110, 105)', link: 'goals.html', linkColor: teal, line: 'underline' }, 'Y: no goal, one 14px meta line, with an ink 목표 추가 link');
+      assert.equal(teal, 'rgb(55, 53, 47)', 'the plan links are ink');
       // Another year: 이 해; its empty 올해 계획 link is the same teal link.
       await page.locator('[data-schedule-step="-1"]').click(); await shown(page, 'tools');
       assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '이 해');
-      assert.deepEqual(await page.locator('.schedule-year-empty').evaluate(n => [getComputedStyle(n).color, getComputedStyle(n).textDecorationLine]), [teal, 'none']);
+      assert.deepEqual(await page.locator('.schedule-year-empty').evaluate(n => [getComputedStyle(n).color, getComputedStyle(n).textDecorationLine]), [teal, 'underline']);
       // Q: 이 분기.
       await page.goto(base + '/index.html?section=schedule&view=quarter&date=2026-10-28'); await ready(page); await shown(page, 'quarter');
       assert.equal(await page.locator('aside.schedule-aside').getAttribute('aria-label'), '이 분기');
@@ -522,7 +532,7 @@ async function main() {
         ups.push(await page.locator('.schedule-up').getAttribute('aria-label'));
         if (expected === 'month') {
           const empty = await page.locator('.schedule-month-chosen .schedule-empty').evaluate(n => [n.textContent, getComputedStyle(n).fontSize]);
-          assert.deepEqual(empty, ['이 날 기록이 없어요.', await bodySize()], 'M (phone): the selected day empty at body size');
+          assert.deepEqual(empty, ['이 날 기록이 없어요.', '14px'], 'M (phone): the selected day empty, one 14px line (Rule change 2026-11-16 노션 방향)');
         }
       }
       assert.deepEqual(ups, ['2026년으로 올라가기', '10월로 올라가기', '2026년으로 올라가기', '10월로 올라가기']);

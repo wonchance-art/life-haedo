@@ -120,7 +120,7 @@ async function main() {
     await check('empty home offers one first write and completes private save/read/home', async page => {
       await openHome(page);
       assert.equal(await page.locator('.home-list-controls').isVisible(), false);
-      const layout = await page.locator('#homeFirstWrite').evaluate(button => ({ y: button.getBoundingClientRect().top, bottom: button.getBoundingClientRect().bottom, profileBottom: document.querySelector('.home-profile-bar').getBoundingClientRect().bottom, dockTop: document.querySelector('[data-haedo-navigation]').getBoundingClientRect().top, overflow: document.documentElement.scrollWidth > innerWidth }));
+      const layout = await page.locator('#homeFirstWrite').evaluate(button => ({ y: button.getBoundingClientRect().top, bottom: button.getBoundingClientRect().bottom, profileBottom: document.querySelector('#lifeApp .life-page-title').getBoundingClientRect().bottom, dockTop: document.querySelector('[data-haedo-navigation]').getBoundingClientRect().top, overflow: document.documentElement.scrollWidth > innerWidth }));
       assert(layout.y >= layout.profileBottom); assert(layout.bottom <= layout.dockTop); assert.equal(layout.overflow, false);
       await page.locator('#homeFirstWrite').click(); await page.locator('.ql-editor').waitFor(); await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor'));
       await page.locator('.ql-editor').fill('첫 문장으로 시작한 비공개 글 🌱'); await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
@@ -145,7 +145,9 @@ async function main() {
       assert.equal(await page.locator('.home-profile-bar button').count(), 0);
       await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
       const toggle = page.locator('#wbShowIntro'); await toggle.check(); await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await homeReady(page);
-      assert.equal(await page.locator('.home-blog-description').innerText(), '직접 설정한 한글 소개'); assert.equal(await page.locator('.home-blog-description').isVisible(), true);
+      // Rule change 2026-11-16 노션 방향 (Designer default 2): 노트 has no blog profile row; name, intro, avatar and 소개 표시 live in 글 메뉴 → 프로필 편집. The choice is kept in the profile.
+      assert.equal(await page.locator('#lifeHome .home-blog-description').count(), 0);
+      assert.deepEqual(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => [page.intro, page.showIntro])), ['직접 설정한 한글 소개', true]);
     });
     await check('search reveals accessibly and preserves exact archived result/tab/query on return', async page => {
       const refs = await populate(page); const toggle = page.locator('.home-search-toggle'), input = page.locator('#homePostSearch');
@@ -185,14 +187,22 @@ async function main() {
       await page.locator('.home-search-clear').click(); await page.locator('#homeFirstWrite').waitFor();
       assert.equal(await page.locator('.home-list-controls').isVisible(), false); await page.waitForFunction(() => document.activeElement?.id === 'homeFirstWrite');
     });
-    await check('every photo card retains an actionable frame and later covers load on demand', async page => {
+    await check('every photo card keeps its photo frame, opens from the row, and later covers load on demand', async page => {
       const refs = await populate(page), last = page.locator(`[data-photo-post-id="${refs.photos[5]}"]`);
       for (const id of refs.photos) assert.equal(await page.locator(`[data-photo-post-id="${id}"] .home-post-media`).count(), 1);
       const early = await page.evaluate(() => [...new Set(window.__refinementPhotoReads || [])]); assert(early.length < refs.photos.length, 'Offscreen photo records must not all be fetched at first render');
       await last.locator('.home-post-media').scrollIntoViewIfNeeded();
       await page.waitForFunction(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }, refs.photos[5]);
       assert((await page.evaluate(() => window.__refinementPhotoReads)).includes(refs.photos[5]));
-      await last.locator('.home-post-media').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /공통낱말 산책 사진 6/);
+      // Rule change 2026-11-16 노션 방향 (Designer default 3): the photo is shown only, not a second button. The row's
+      // title button covers the row, so a press on the photo still opens the post (and nothing else takes the press).
+      assert.deepEqual(await last.locator('.home-post-media').evaluate(node => [node.tagName, node.getAttribute('role'), node.tabIndex, node.closest('button')]), ['DIV', null, -1, null]);
+      assert.equal(await last.locator('button').count(), 1, 'one button per row: its title');
+      // In the middle of the screen, clear of the sticky heading and the tab bar (instant: the root scrolls smoothly).
+      await last.locator('.home-post-media').evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      const photo = await last.locator('.home-post-media').boundingBox();
+      assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.classList.contains('home-post-open'), [photo.x + photo.width / 2, photo.y + photo.height / 2]), true, 'the photo lies under the title button\'s target');
+      await page.mouse.click(photo.x + photo.width / 2, photo.y + photo.height / 2); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /공통낱말 산책 사진 6/);
     });
     await check('Seoul year boundary shows prior year and correct saved or modified date', async page => {
       await page.clock.setFixedTime(new Date('2026-10-17T12:00:00.000Z')); await openHome(page);
@@ -235,13 +245,15 @@ async function main() {
     for (const tab of ['posts', 'drafts', 'archive']) await check(`workbench failure is recoverable from ${tab} and retry reconciles library`, async page => {
       const refs = await populate(page); await nav(page, 'tools'); await page.evaluate(() => { window.__refinementFailWorkbench = true; }); await home(page);
       if (tab !== 'posts') await page.locator('#homeTab-' + tab).click();
-      assert.equal(await page.locator('#homeFirstWrite').count(), 0); const error = page.locator('.home-profile-status'); await error.waitFor(); assert.match(await error.innerText(), /불러오지 못/);
+      // Rule change 2026-11-16 노션 방향 (Designer default 2): 노트 has no blog profile row; name, intro, avatar and 소개 표시 live in 글 메뉴 → 프로필 편집. The failed read of the blog record is the list's error line on every tab, with its retry.
+      assert.equal(await page.locator('#homeFirstWrite').count(), 0); const error = page.locator('.home-posts-error'); await error.waitFor(); assert.match(await error.innerText(), /기존 글을 불러오지 못/);
+      assert.equal(await page.locator('#lifeHome :is(.home-profile-status, .home-profile-bar)').count(), 0);
       assert.equal(await page.locator('#homeBooks').count(), 0); assert.equal(await page.locator('#homeGroups').count(), 0);
-      await page.evaluate(() => { window.__refinementFailWorkbench = false; }); await error.getByRole('button', { name: '프로필 다시 불러오기', exact: true }).click(); await homeReady(page);
+      await page.evaluate(() => { window.__refinementFailWorkbench = false; }); await error.getByRole('button', { name: '다시 불러오기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('#homeTab-' + tab).getAttribute('aria-selected'), 'true'); assert.equal(await page.locator('.home-posts-error').count(), 0);
       // 2026-11-08 S3: groups and books are 자료's (no list block); the retried read restores the profile.
       assert.equal(await page.locator('.home-library, #homeGroups, #homeBooks').count(), 0);
-      assert.match(await page.locator('.home-profile-bar').innerText(), /익명의 산책 기록/);
+      assert.equal(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => page.title)), '익명의 산책 기록');
       if (tab === 'posts') { assert.equal(await page.locator('#homePosts .home-post').count(), 8); await page.locator(`[data-source-id="${refs.source}"][data-version-id="${refs.version}"] .home-post-open`).click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), refs.sourceText); }
     });
   } finally { report.capturedAt = new Date().toISOString(); await browser.close(); await fs.writeFile(path.join(out, process.env.REFINEMENT_REPORT_NAME || (process.env.REFINEMENT_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json')), JSON.stringify(report, null, 2) + '\n'); }

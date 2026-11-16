@@ -1,14 +1,6 @@
 /* A personal journal: strong authored type, a quiet reading surface, one action ink. */
 .life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
-.home-blog-lead { padding: 8px 0 12px; }
-.home-profile-bar { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.home-profile-copy { display: grid; flex: 1; grid-template-columns: 44px minmax(0,1fr); column-gap: 12px; align-content: center; min-width: 0; min-height: 44px; }
-.home-profile-open { display: contents; }
-.home-avatar { display: flex; grid-column: 1; grid-row: 1 / 3; align-self: center; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: var(--soft); color: var(--color-primary); font-size: 15px; font-weight: 700; line-height: 1; letter-spacing: -.03em; }
-.home-profile-open > .home-author-name { display: -webkit-box; grid-column: 2; grid-row: 1; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; min-width: 0; margin: 0; color: var(--ink); font-size: 28px; font-weight: 750; line-height: 1.3; letter-spacing: -.03em; }
-.home-blog-description { display: -webkit-box; grid-column: 2; grid-row: 2; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
-.home-blog-description[hidden] { display: none; }
 #homePosts { margin-top: 0; }
 #homePosts > .home-section-heading { min-height: 52px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 #homePosts > .home-section-heading > h2 { position: relative; padding: 14px 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
@@ -42,11 +34,6 @@
 .home-load-error > .life-button { margin-top: 12px; }
 .home-error { margin-top: 0; }
 @media (max-width: 760px) {
-  .home-blog-lead { padding-top: 4px; padding-bottom: 12px; }
-  .home-profile-bar { gap: 8px; }
-  .home-profile-open { gap: 10px; }
-  .home-profile-open > .home-author-name { font-size: 24px; font-weight: 700; }
-  .home-blog-description { margin-left: 0; }
   .home-post { margin-inline: -20px; padding: 28px 20px; }
   .home-post-open { font-size: 24px; }
   .home-post-prose { font-size: 16px; }
@@ -78,8 +65,6 @@
 .home-search-scope { margin-top: 8px; margin-bottom: 8px; font-size: 12px; line-height: 1.75; }
 .home-search-clear { flex: none; min-height: 44px; margin: 0; border: 0; padding: 8px 0 8px 8px; color: var(--ink-soft); background: transparent; font-size: 12px; }
 .home-search-clear[hidden] { display: none; }
-.home-profile-status:not([hidden]) { margin-top: 12px; padding-block: 0; }
-.home-profile-status > .life-button { min-height: 44px; margin-top: 4px; }
 .home-post-list { min-height: 220px; }
 .home-post-list > .home-loading { min-height: 220px; padding-block: 32px; }
 .home-draft { border-bottom: 1px solid var(--line); }
@@ -144,8 +129,6 @@
 .home-post-footer { min-height: 44px; margin-top: 8px; }
 .home-draft-open { min-height: 72px; padding: 12px 0; }
 .home-draft > .home-row-time, .home-draft > .home-row-mark { padding-top: 16px; }
-/* The blog name starts on the rows' content line (time 52 + 12 + icon 20 + 12). */
-.home-profile-copy { grid-template-columns: 84px minmax(0, 1fr); }
 @media (max-width: 760px) {
   .home-post, .home-draft { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
   .home-post { margin-inline: 0; padding: 12px 0 16px; }
@@ -153,7 +136,6 @@
   .home-post-prose { font-size: 16px; }
   .home-post-media { aspect-ratio: 4 / 3; }
   .home-draft-open { padding-block: 12px; }
-  .home-profile-copy { grid-template-columns: 72px minmax(0, 1fr); column-gap: 8px; }
 }
 
 /* 2026-11-08 일정 통합 정리 S3: from 761px the posts search is a field in the tab row
@@ -172,9 +154,116 @@
 
 /* 2026-11-08 S4: Y·Q 오른쪽 칸 — one line of links to the plan screens (same names as the plan tabs). */
 .schedule-plan-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2px; margin: 0; }
-.schedule-plan-links > a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 6px; border-radius: 8px; color: var(--color-primary); font-size: var(--haedo-text-control, 15px); font-weight: 600; text-decoration: none; }
+/* 2026-11-16 노션 방향: ink links with the quiet underline (teal is 글쓰기 alone in the frame). */
+.schedule-plan-links > a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 6px; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-ink, var(--ink)); font-size: 14px; font-weight: var(--haedo-weight-regular, 400); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 .schedule-plan-links > a:first-child { margin-inline-start: -6px; }
-.schedule-plan-links > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-plan-links > a:hover { text-decoration-color: currentColor; }
 .schedule-plan-links > a[aria-busy=true] { opacity: .6; }
 .schedule-plan-links > .schedule-plan-sep { color: var(--ink-soft); }
 .schedule-aside > .schedule-plan-links + * { margin-top: 16px; }
+
+/* 2026-11-16 노션 방향 W2 머리 (notion-visual-contract.md 머리줄): 노트 and 일정 from 1101px. The sticky top row is 44px:
+ * the path (14px muted, the menu's current item, aria-hidden) and the actions. The title is the large page title
+ * (34px 700) in its own band after that row, so it scrolls with the body (ui.js renderHeader). Up to 1100px the one-row
+ * heading stays as it was. */
+.haedo-heading-path { display: none; }
+@media (min-width: 1101px) {
+  .haedo-shell .life-toolbar.haedo-page-heading[data-page-head] { min-height: 44px; margin-bottom: 0; }
+  .life-toolbar[data-page-head] > .haedo-heading-path { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 44px; color: var(--haedo-muted); font-size: 14px; line-height: 1.5; }
+  .haedo-title-band { max-width: none; margin: 24px 0 8px; }
+  .haedo-title-band > .haedo-heading-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .haedo-title-band h1.life-page-title { margin: 0; color: var(--haedo-ink); font: var(--haedo-weight-bold) var(--haedo-text-page-title) / 1.25 var(--haedo-font); letter-spacing: -.01em; overflow-wrap: anywhere; word-break: keep-all; }
+  .haedo-title-band h1.life-page-title:focus { outline: none; }
+  .haedo-title-band h1.life-page-title:focus-visible { outline: 2px solid var(--haedo-focus); outline-offset: 4px; border-radius: 4px; }
+}
+/* A heading control that is open or current: the selected surface and a 1.5px ink ring (a second cue). */
+.haedo-shell .life-toolbar[data-page-head] :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true]),
+.haedo-shell .life-toolbar[data-page-head] .life-feature-menu[open] > summary { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* 글 메뉴 (⋯): a floating menu, white with the defined shadow and 8px corners; items stay 44px. */
+.haedo-shell #lifeBlogMenu > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
+.haedo-shell #lifeBlogMenu .life-destination { border-radius: var(--haedo-control-radius); }
+.haedo-shell #lifeBlogMenu .life-destination:hover { background: var(--haedo-hover); }
+
+/* 2026-11-16 노션 방향 W2 노트 목록 (contract 공통 부품·노트): letter tabs, a soft 작성하던 글 line, 13px 500 date headings,
+ * rows divided by a line with title 16px 600 · excerpt 14px muted · one 13px meta line. Overrides the grey segmented
+ * tabs of haedo-motion.css (the public blog keeps its own). */
+.haedo-shell .life-home .home-list-toolbar { border-bottom: 1px solid var(--haedo-line); }
+.haedo-shell .life-home .home-tabs { flex: 1; gap: 0; padding: 0; border-radius: 0; background: transparent; }
+.haedo-shell .life-home .home-tabs > .home-tab { flex: none; min-width: 44px; min-height: 44px; border-radius: 0; padding: 0 12px; background: transparent; color: var(--haedo-muted); font-size: 14px; font-weight: var(--haedo-weight-regular); box-shadow: none; }
+.haedo-shell .life-home .home-tabs > .home-tab:first-child { margin-left: -12px; }
+.haedo-shell .life-home .home-tabs > .home-tab:hover:not(:disabled) { background: var(--haedo-hover); color: var(--haedo-ink); }
+.haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true] { background: transparent; color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); box-shadow: none; }
+.haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true]::after { display: block; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--haedo-ink); }
+.haedo-shell .life-home .home-search-toggle { border-radius: var(--haedo-control-radius); }
+.haedo-shell .life-home .home-search-toggle[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+.haedo-shell .life-home .home-search { min-height: 44px; border-radius: var(--haedo-control-radius); }
+/* 작성하던 글 · 제목 · 이어쓰기: one line on the soft fill. */
+.haedo-shell .life-home .home-resume { gap: 12px; min-height: 44px; margin-top: 16px; border-radius: var(--haedo-control-radius); padding: 8px 12px; background: var(--haedo-soft); }
+.haedo-shell .life-home .home-resume:hover:not(:disabled) { background: var(--haedo-selected); }
+.haedo-shell .life-home .home-resume > .life-meta { color: var(--haedo-muted); font-size: 13px; }
+.haedo-shell .life-home .home-resume-title { color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-medium); }
+.haedo-shell .life-home .home-draft-resume { color: var(--haedo-muted); font-size: 13px; font-weight: var(--haedo-weight-medium); }
+/* Date heading: 13px 500 muted, 28px above. */
+.haedo-shell .life-home .home-day-heading { margin: 28px 0 0; padding-bottom: 4px; color: var(--haedo-muted); font-size: 13px; font-weight: var(--haedo-weight-medium); }
+.haedo-shell .life-home .home-post-list > .home-day-heading:first-child, .haedo-shell .life-home .home-post-list > .home-archive-note + .home-day-heading { margin-top: 20px; }
+/* Rows: [kind icon] content; a 1px line under each row. */
+.haedo-shell .life-home :is(.home-post, .home-draft) { grid-template-columns: 20px minmax(0, 1fr); column-gap: 12px; margin-inline: 0; border-bottom: 1px solid var(--haedo-line); }
+.haedo-shell .life-home .home-post { padding: 12px 0; }
+.haedo-shell .life-home .home-row-mark { padding-top: 2px; color: var(--haedo-meta); }
+.haedo-shell .life-home .home-post-open { -webkit-line-clamp: 2; min-height: 0; color: var(--haedo-ink); font-size: 16px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; letter-spacing: 0; }
+.haedo-shell .life-home .home-post-open.home-post-prose { font-weight: var(--haedo-weight-regular); }
+.haedo-shell .life-home .home-post-open:hover:not(:disabled), .haedo-shell .life-home .home-post-open:active:not(:disabled) { color: var(--haedo-ink); text-decoration-color: rgba(55, 53, 47, .4); }
+.haedo-shell .life-home .home-post-excerpt { -webkit-line-clamp: 1; margin-top: 2px; color: var(--haedo-muted); font-size: 14px; font-weight: var(--haedo-weight-regular); line-height: 1.6; }
+.haedo-shell .life-home .home-post-attachments { margin-top: 2px; color: var(--haedo-muted); font-size: 13px; }
+.haedo-shell .life-home .home-post-footer { min-height: 0; margin-top: 4px; }
+.haedo-shell .life-home :is(.home-post-meta, .home-draft-meta) { color: var(--haedo-meta); font-size: 13px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.haedo-shell .life-home .home-row-time { padding: 0; color: inherit; font-size: inherit; }
+.haedo-shell .life-home .home-draft-open { min-height: 0; padding: 12px 0; gap: 16px; border-radius: 0; }
+.haedo-shell .life-home .home-draft-open:hover:not(:disabled) { background: transparent; }
+.haedo-shell .life-home .home-draft-open:hover .home-draft-copy > strong { text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.haedo-shell .life-home .home-draft-copy { gap: 2px; }
+.haedo-shell .life-home .home-draft-copy > strong { color: var(--haedo-ink); font-size: 16px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; }
+.haedo-shell .life-home .home-draft-excerpt { max-height: none; color: var(--haedo-muted); font-size: 14px; line-height: 1.6; }
+.haedo-shell .life-home .home-draft > .home-row-mark { padding-top: 14px; }
+.haedo-shell .life-home .home-more { min-height: 44px; border-radius: var(--haedo-control-radius); }
+.haedo-shell .life-home .home-archive-note { color: var(--haedo-meta); font-size: 13px; }
+/* Empty: the sentence (14px) and its note (14px meta), then one action: 첫 글 쓰기 is the teal primary button
+ * (contract 틸 유지: 빈 상태의 첫 행동), over the shell's secondary rule for the list's write buttons. */
+.haedo-shell .life-home .home-first-post { padding: 28px 0; }
+.haedo-shell .life-home .home-first-post > h3 { color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-medium); line-height: 1.6; letter-spacing: 0; }
+.haedo-shell .life-home .home-first-post > .home-text { max-width: none; margin-top: 2px; color: var(--haedo-meta); font-size: 14px; line-height: 1.6; }
+.haedo-shell .life-home .home-first-post > .life-button { min-height: 44px; margin-top: 16px; border-radius: var(--haedo-control-radius); padding-inline: 16px; font-size: 14px; font-weight: var(--haedo-weight-semibold); }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary { background: var(--haedo-accent); border-color: var(--haedo-accent); color: #fff; }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:hover:not(:disabled) { background: var(--haedo-accent-hover); border-color: var(--haedo-accent-hover); color: #fff; }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:active:not(:disabled) { background: var(--haedo-accent-active); border-color: var(--haedo-accent-active); color: #fff; }
+@media (max-width: 760px) {
+  .haedo-shell .life-home .home-tabs > .home-tab { flex: 1; }
+  .haedo-shell .life-home .home-tabs > .home-tab:first-child { margin-left: 0; }
+  .haedo-shell .life-home .home-post-excerpt { -webkit-line-clamp: 2; }
+  .haedo-shell .life-home .home-draft-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+}
+
+/* 2026-11-16 노션 방향 W2, Designer default 3: a row is opened by its title button alone (no kind icon, no 글 읽기
+ * button, no photo button). The button stays as it was (h3 > button); its target is stretched over the whole row. */
+.haedo-shell .life-home :is(.home-post, .home-draft) { position: relative; grid-template-columns: minmax(0, 1fr); }
+.haedo-shell .life-home .home-post-open::after { content: ''; position: absolute; inset: 0; }
+/* The button's own box is 44px too (10px above and below a one-line title, taken back by the margins). */
+.haedo-shell .life-home .home-post-open { min-height: 44px; margin-block: -10px; padding-block: 10px; box-sizing: border-box; }
+/* No press scale here: a transform makes the button the box of its stretched target, which would then shrink under
+ * the pointer between press and release, and a press on the photo or excerpt would not open the row. */
+.haedo-shell #lifeHome .home-post-open:active:not(:disabled), .haedo-shell #lifeHome .home-post-open:active { transform: none; }
+.haedo-shell .life-home .home-post:hover .home-post-open { text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.haedo-shell .life-home .home-post-media { pointer-events: none; }
+
+/* 2026-11-16 노션 방향 W2, Designer default 4: a row's photo is a 72px square on the right of its title, excerpt and
+ * meta (64px on a phone), not a 4:3 picture under them. A photo that could not be shown says so across the row. */
+.haedo-shell .life-home .home-post-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "content media" "footer media"; column-gap: 0; align-items: start; }
+.haedo-shell .life-home .home-post-content { grid-area: content; }
+.haedo-shell .life-home .home-post-footer { grid-area: footer; }
+.haedo-shell .life-home .home-post-media { grid-area: media; width: 72px; height: 72px; min-height: 0; aspect-ratio: auto; margin: 0 0 0 16px; border-radius: var(--haedo-control-radius); background: var(--haedo-soft); }
+.haedo-shell .life-home .home-post-media > .home-photo-loading { max-width: none; padding: 4px; font-size: 11px; line-height: 1.4; }
+.haedo-shell .life-home .home-post-media:has(.home-photo-error) { grid-area: auto; grid-column: 1 / -1; width: auto; height: auto; margin: 8px 0 0; place-items: start; background: transparent; }
+.haedo-shell .life-home .home-post-media > .home-photo-error { max-width: none; margin: 0; padding: 0; text-align: left; }
+@media (max-width: 760px) {
+  .haedo-shell .life-home .home-post-media { width: 64px; height: 64px; margin-left: 12px; }
+}
