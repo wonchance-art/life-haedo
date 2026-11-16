@@ -270,3 +270,16 @@
 .haedo-shell #lifeHome .home-post-open:active:not(:disabled), .haedo-shell #lifeHome .home-post-open:active { transform: none; }
 .haedo-shell .life-home .home-post:hover .home-post-open { text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
 .haedo-shell .life-home .home-post-media { pointer-events: none; }
+
+/* 2026-11-16 노션 방향 W2, Designer default 4: a row's photo is a 72px square on the right of its title, excerpt and
+ * meta (64px on a phone), not a 4:3 picture under them. A photo that could not be shown says so across the row. */
+.haedo-shell .life-home .home-post-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "content media" "footer media"; column-gap: 0; align-items: start; }
+.haedo-shell .life-home .home-post-content { grid-area: content; }
+.haedo-shell .life-home .home-post-footer { grid-area: footer; }
+.haedo-shell .life-home .home-post-media { grid-area: media; width: 72px; height: 72px; min-height: 0; aspect-ratio: auto; margin: 0 0 0 16px; border-radius: var(--haedo-control-radius); background: var(--haedo-soft); }
+.haedo-shell .life-home .home-post-media > .home-photo-loading { max-width: none; padding: 4px; font-size: 11px; line-height: 1.4; }
+.haedo-shell .life-home .home-post-media:has(.home-photo-error) { grid-area: auto; grid-column: 1 / -1; width: auto; height: auto; margin: 8px 0 0; place-items: start; background: transparent; }
+.haedo-shell .life-home .home-post-media > .home-photo-error { max-width: none; margin: 0; padding: 0; text-align: left; }
+@media (max-width: 760px) {
+  .haedo-shell .life-home .home-post-media { width: 64px; height: 64px; margin-left: 12px; }
+}
