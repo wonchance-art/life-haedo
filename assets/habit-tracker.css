@@ -26,12 +26,13 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 /* A check on a day no longer scheduled (the days were changed later): kept and shown, not changeable. */
 .habit-tracker-day[data-state=done]:disabled { border-color: var(--ink-soft); background: var(--ink-soft); cursor: default; }
 .habit-tracker-day > .life-glyph { flex: none; width: 16px; height: 16px; }
-/* Today: the bold number with a short straight line under it (16 × 2px), whatever the cell's shape.
-   Teal (#145b50, 7.95:1 on white) on outlined and plain cells; white on a filled (done) cell (15.83:1). */
+/* Today: the 600 number with a short straight line under it (16 × 2px), whatever the cell's shape.
+   Ink (#37352f, 12.26:1 on white; 2026-11-16 노션 방향, today is ink) on outlined and plain cells; white on a
+   filled (done) cell (12.26:1). */
 .habit-tracker-number { position: relative; display: inline-block; }
-.habit-tracker-day[aria-current=date] { gap: 6px; font-weight: 750; }
-.habit-tracker-day[aria-current=date] > .habit-tracker-number::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 16px; height: 2px; margin-left: -8px; border-radius: 1px; background: var(--color-primary); }
-.habit-tracker-day[aria-current=date]:not([data-state=open]):not([data-state=done]) { color: var(--color-primary); }
+.habit-tracker-day[aria-current=date] { gap: 6px; font-weight: var(--haedo-weight-semibold, 600); }
+.habit-tracker-day[aria-current=date] > .habit-tracker-number::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 16px; height: 2px; margin-left: -8px; border-radius: 1px; background: var(--ink); }
+.habit-tracker-day[aria-current=date]:not([data-state=open]):not([data-state=done]) { color: var(--ink); }
 .habit-tracker-day[data-state=done][aria-current=date] > .habit-tracker-number::after { background: #fff; }
 /* The month line of habits.html: ‹ 2026년 11월 › 이번 달. */
 .habit-month-nav { display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -63,7 +64,7 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
 .habit-compact-head > .habit-compact-days { container: habit-compact-days / inline-size; }
 .habit-compact-number { color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @container habit-compact-days (width < 500px) { .habit-compact-number:last-child { justify-self: end; } }
-.habit-compact-number[data-today] { color: var(--color-primary); font-weight: 750; }
+.habit-compact-number[data-today] { color: var(--ink); font-weight: var(--haedo-weight-semibold, 600); text-decoration: underline 2px; text-underline-offset: 3px; }
 .habit-compact-go { display: flex; align-items: center; justify-content: center; color: var(--ink-soft); }
 .habit-compact-go > .life-glyph { width: 16px; height: 16px; }
 .habit-compact-dot { position: relative; display: block; flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; }

@@ -110,12 +110,13 @@ async function main() {
       assert.deepEqual(at('09'), ['09', 'future', true, 'false'], 'a scheduled day after today');
       assert.equal(cells.filter(c => !c[2]).length, 3, 'only 11-02, 11-04, 11-06 take a tap');
       assert.equal(await card.locator('[aria-current=date]').getAttribute('data-date'), '2026-11-07');
-      // Today: a short straight line under the bold number (not a shadow that bends with the corners).
+      // Today: a short straight line under the bold number (not a shadow that bends with the corners). Rule change
+      // 2026-11-16 노션 방향 W2 (틸 규칙: today is ink, weights 400/500/600/700): ink #37352f 600, was teal 750.
       const todayMark = await page.evaluate(() => [...document.querySelectorAll('#habitList [aria-current=date]')].map(n => {
         const line = getComputedStyle(n.querySelector('.habit-tracker-number'), '::after');
         return [n.dataset.state, getComputedStyle(n).boxShadow, getComputedStyle(n).fontWeight, line.width, line.height, line.backgroundColor];
       }));
-      assert.deepEqual(todayMark, [['off', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)']]);
+      assert.deepEqual(todayMark, [['off', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)'], ['open', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)'], ['open', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)']]);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-02 완료 취소' }).count(), 1);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-04 완료', exact: true }).count(), 1);
       // Created mid-month: days before 11-04 take no tap; 11-05 done.

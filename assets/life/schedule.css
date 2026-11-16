@@ -99,7 +99,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-dot[data-level="2"] { background: #5f5e5b; }
 .schedule-dot[data-level="3"] { background: #37352f; }
 .schedule-dot[data-planned] { border: 1.5px dashed var(--ink-soft); background: transparent; }
-.schedule-dot[data-today] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--color-primary); }
+/* Today (2026-11-16 노션 방향 틸 규칙): an ink ring; the chosen day a grey ring (#8a8984, 3.50:1). */
+.schedule-dot[data-today] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--haedo-ink); }
 .schedule-dot[data-selected] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--field-line); }
 .schedule-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0 0; color: var(--ink-soft); font-size: var(--haedo-text-meta); }
 .schedule-legend-item { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
@@ -164,8 +165,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-day-cell[data-outside] { background: transparent; color: var(--haedo-meta); }
 /* The chosen day: the selected surface and an ink ring inside (two cues; the 1px grid stays). */
 .schedule-day-cell[aria-current=date] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
-.schedule-day-number { align-self: flex-start; font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; }
-.schedule-day-cell[data-today] .schedule-day-number { color: var(--color-primary); font-weight: 750; }
+/* Today: a 24px ink circle with the white number (12.26:1); every number sits in the same 24px box. */
+.schedule-day-number { display: inline-flex; flex: none; align-self: flex-start; align-items: center; justify-content: center; min-width: 24px; height: 24px; margin: -2px 0 0 -4px; padding: 0 4px; border-radius: 12px; font-size: var(--haedo-text-meta); font-variant-numeric: tabular-nums; box-sizing: border-box; }
+.schedule-day-cell[data-today] .schedule-day-number { background: var(--haedo-ink); color: #fff; font-weight: var(--haedo-weight-semibold); }
 .schedule-cell-title { overflow: hidden; min-height: 22px; border-radius: 4px; padding: 2px 6px; background: #f1f1ef; color: var(--haedo-ink); font-size: var(--haedo-text-badge); font-weight: var(--haedo-weight-medium); line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-day-cell > .schedule-thumb { width: 100%; height: 40px; }
 .schedule-cell-plan { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 22px; overflow: hidden; border: 1px solid rgba(55, 53, 47, .16); border-radius: 4px; padding: 1px 6px; color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 18px; white-space: nowrap; }
@@ -181,7 +183,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-week-head { display: flex; align-items: baseline; gap: 8px; width: 100%; min-height: 48px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }
 .schedule-week-name { color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
 .schedule-week-number { font-size: var(--haedo-text-title); font-weight: var(--haedo-weight-semibold); font-variant-numeric: tabular-nums; }
-.schedule-week-head[data-today] .schedule-week-number { color: var(--color-primary); }
+.schedule-week-number { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; margin-left: -6px; padding: 0 6px; border-radius: 18px; box-sizing: border-box; }
+.schedule-week-head[data-today] .schedule-week-number { background: var(--haedo-ink); color: #fff; }
 .schedule-week-day .schedule-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
 .schedule-week-day .schedule-mark { display: none; }
 .schedule-week-day .schedule-time { padding: 0; font-size: var(--haedo-text-badge); }
@@ -242,7 +245,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-grid-check { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; cursor: pointer; }
 .schedule-habit-grid thead th { color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
 .schedule-habit-grid tr > th:first-child { position: sticky; left: 0; z-index: 1; background: var(--paper); text-align: left; }
-.schedule-habit-grid thead th[data-today] { color: var(--color-primary); font-weight: 750; }
+/* Today's column: ink 600 with a 2px ink line under the date (a second cue beside the weight). */
+.schedule-habit-grid thead th[data-today] { color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); text-decoration: underline 2px; text-underline-offset: 6px; }
 .schedule-happiness { min-width: 0; margin: 8px 0 0; border: 0; padding: 0; }
 .schedule-happiness > legend { margin: 16px 0 4px; padding: 0; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold); }
 .schedule-happiness-title { margin: 0; font: inherit; letter-spacing: inherit; }
@@ -363,9 +367,10 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-month-grid { gap: 0; border: 0; }
   .schedule-weekday { padding: 0 0 4px; border: 0; text-align: center; font-size: var(--haedo-text-badge); }
   .schedule-day-cell { align-items: center; gap: 4px; min-height: 52px; padding: 4px 0; border: 0; background: transparent; border-radius: var(--haedo-control-radius); }
+  /* iPhone: today a 32px ink circle (white 12.26:1); the chosen day, when it is not today, a 1.5px ink ring and 600. */
   .schedule-day-cell[aria-current=date] { background: transparent; box-shadow: none; }
-  .schedule-day-cell[aria-current=date] .schedule-day-number { background: var(--ink); color: #fff; font-weight: 750; }
-  .schedule-day-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; }
+  .schedule-day-number { align-self: center; width: 32px; min-width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 50%; font-size: var(--haedo-text-control); }
+  .schedule-day-cell[aria-current=date]:not([data-today]) .schedule-day-number { box-shadow: inset 0 0 0 1.5px var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
   .schedule-day-cell > :is(.schedule-cell-title, .schedule-cell-plan) { display: none; }
   .schedule-day-cell > .schedule-thumb { width: 16px; height: 16px; border-radius: 4px; }
   .schedule-day-cell > .schedule-thumb ~ .schedule-cell-dot { display: none; }
@@ -380,9 +385,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 -8px 8px; }
   .schedule-strip-day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 60px; border: 0; padding: 4px 0; background: transparent; color: var(--ink); font: inherit; }
   .schedule-strip-name { color: var(--haedo-muted); font-size: var(--haedo-text-badge); }
-  .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
-  .schedule-strip-day[aria-current=date] .schedule-strip-number { background: var(--ink); color: #fff; font-weight: 750; }
-  .schedule-strip-day[data-today]:not([aria-current=date]) .schedule-strip-number { color: var(--color-primary); font-weight: 750; }
+  .schedule-strip-number { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: var(--haedo-text-control); font-variant-numeric: tabular-nums; }
+  .schedule-strip-day[data-today] .schedule-strip-number { background: var(--haedo-ink); color: #fff; font-weight: var(--haedo-weight-semibold); }
+  .schedule-strip-day[aria-current=date]:not([data-today]) .schedule-strip-number { box-shadow: inset 0 0 0 1.5px var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
   .schedule-day .schedule-post-title { font-size: 20px; }
   /* Same columns as the 일정 list rows (time 44 · icon 20, 8px gaps), so content shares the list's line. */
   .schedule-row { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
