@@ -87,10 +87,12 @@
  * 뉴스(data-wide=news / data-split=news, assets/life/discovery.css)도 같은 틀을 쓴다.
  * 목록만 볼 때: 틀의 왼쪽 시작선은 다른 화면과 같고, 목록은 화면 너비를 따라 최대 960px까지 넓어진다.
  * 원문을 열면: 오른쪽 24px 여백까지 채우고, 목록(기본 400px, 끌어서 280px~) · 구분선 44px · 읽기 칸(420px 이상)이다.
- * 읽기 칸의 본문은 720px 이하로 가운데에 두고 남는 폭은 양옆 여백이 된다. 구분선은 assets/life/split-resize.js. */
+ * 읽기 칸의 본문은 720px 이하로 가운데에 두고 남는 폭은 양옆 여백이 된다. 구분선은 assets/life/split-resize.js.
+ * 메뉴 면이 240px인 1101–1103px에서는 틀의 왼쪽 시작선을 조금 당겨 목록 280 + 구분선 44 + 읽기 칸 420(+ 틀 안쪽 여백 48)인
+ * 792px를 남긴다(노션 방향 W1, 2026-11-16). 그보다 넓으면 시작선은 다른 화면과 같다. */
 .records-pane { display: none; }
 @media (min-width: 1101px) {
-  body.haedo-shell .life-app:has(> #lifeMain:is([data-split], [data-wide])) { width: auto; max-width: none; margin-left: max(16px, calc((100% - 768px) / 2)); margin-right: 24px; }
+  body.haedo-shell .life-app:has(> #lifeMain:is([data-split], [data-wide])) { width: auto; max-width: none; margin-left: max(16px, min(calc((100% - 768px) / 2), calc(100% - 24px - 792px))); margin-right: 24px; }
   body.haedo-shell .life-app:has(> #lifeMain[data-wide]) { max-width: 1008px; }
   .life-app:has(> #lifeMain:is([data-split], [data-wide])) > :is(.life-toolbar, .life-status, .life-error) { max-width: none; }
   #lifeMain:is([data-split], [data-wide]) { max-width: none; }

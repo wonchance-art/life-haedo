@@ -272,7 +272,7 @@ async function main() {
       state = await split(page, '#lifeMain'); assert.equal(state.now, 480); assert.equal(state.stored, '480', 'a touch drag stores its width');
       // Reading in the middle with recent scroll intent (a wheel turn): dragging reflows the column and the module
       // scrolls to keep the line; that program scroll must not be saved as the reading position.
-      await page.locator('#lifeMain > .haedo-split-handle').focus(); await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, 700);
+      await page.locator('#lifeMain > .haedo-split-handle').focus(); await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, state.max); assert(state.max - 400 >= 280, 'room for the 400px drag: ' + state.max);
       await page.evaluate(() => scrollTo({ top: 2400, behavior: 'instant' })); await frames(page);
       const position = () => page.evaluate(async () => JSON.stringify(await HaedoLife.Shell.storage.readReadingPosition(await HaedoLife.Shell.storage.getActive())));
       await page.waitForTimeout(600); const before = await position();
@@ -280,7 +280,7 @@ async function main() {
       for (let step = 1; step <= 8; step++) { await page.mouse.move(state.x - step * 50, state.y); await frames(page); }
       await page.mouse.up(); await frames(page);
       const held = await page.evaluate(() => ({ y: scrollY, now: document.querySelector('#lifeMain > .haedo-split-handle').getAttribute('aria-valuenow'), h: document.documentElement.scrollHeight }));
-      assert(held.y !== 2400 && held.now === '300', 'the reading line was held by a program scroll: ' + JSON.stringify(held));
+      assert(held.y !== 2400 && held.now === String(state.max - 400), 'the reading line was held by a program scroll: ' + JSON.stringify(held));
       await page.waitForTimeout(1200);
       assert.equal(await position(), before, 'no reading position from the resize scroll');
       assert.equal(await page.evaluate(() => HaedoLife.SplitResize.adjusting()), false);
