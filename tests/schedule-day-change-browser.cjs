@@ -2,6 +2,9 @@
  * day changes, and the owner comes back without a reload. The screen that showed today follows the
  * new today; a chosen past date stays; 오늘 and ‹ › move from the date on screen; a habit check is
  * stored for the date on screen; a control in use is not redrawn under the hand.
+ * 2026-11-16 owner decision 11 (rule change): a date (or 습관 month) the address named when the screen was
+ * opened is pinned and stays when the day changes, also when it was today; Back and a reload of that entry keep
+ * it. Addresses without a date, dates chosen in the app and entries recorded as today follow as before.
  * Real app, SDK and IDB with the anonymous intercepted Auth and in-memory owner-scoped tables.
  * npm run dev; node tests/schedule-day-change-browser.cjs
  * Never uses real Google, production Supabase or Apple-device claims (a hidden→visible page is
@@ -10,6 +13,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { readFileSync } = require('node:fs');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { PlatformTables } = require('./schedule-entries-browser.cjs');
@@ -33,6 +37,11 @@ async function shown(page, mode) {
 }
 const titled = (page, text) => page.waitForFunction(t => document.querySelector('#lifeApp .life-page-title')?.innerText === t && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false', text);
 const entries = page => page.waitForFunction(() => { const slot = document.querySelector('.schedule-entries'); return slot && slot.getAttribute('aria-busy') === 'false' && slot.dataset.happiness !== 'loading' && slot.querySelector('.schedule-entry-body')?.childElementCount > 0; });
+// The day check draws the calendar screen again; count the schedule surfaces put into the page from here on.
+const countDraws = page => page.evaluate(() => { window.__draws = 0; new MutationObserver(list => { for (const change of list) for (const node of change.addedNodes) if (node.id === 'lifeSchedule') window.__draws++; })
+  .observe(document.querySelector('#lifeMain'), { childList: true }); });
+const redrawn = page => page.waitForFunction(() => window.__draws > 0 && document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false');
+const recorded = page => page.evaluate(() => { const entry = history.state?.haedo?.entry || {}; return { date: entry.scheduleDate, pinned: entry.schedulePinned === true, today: entry.scheduleToday === true }; });
 const list = page => page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'home' && document.querySelector('#homePosts')?.getAttribute('aria-busy') === 'false');
 const step = (page, n) => page.locator('[data-focus-key="schedule:step:' + n + '"]').click();
 const todayButton = page => page.locator('[data-focus-key="schedule:today"]');
@@ -200,19 +209,120 @@ async function main() {
       await titled(page, '2028년');
     });
 
-    await check('an address that names today, and today reached again with ‹ ›, follow the new day (2026-11-11 review; owner’s call recorded in schedule-consolidation.md)', async ({ page }) => {
+    // Rule change 2026-11-16 (owner decision 11, recorded in schedule-consolidation.md): until then an address that
+    // named today followed the new day; now the date the address names stays.
+    await check('an address that names today keeps that date the next day (pinned); today reached again with ‹ › follows the new day', async ({ page }) => {
       await at(page, '2026-11-11T23:40:00+09:00');
       await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day');
       assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined });
-      await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일');
-      assert.equal((await snap(page)).date, '2026-11-12');
-      // Away and back to today with ‹ ›: the screen shows today again, and follows.
-      await step(page, -1); await titled(page, '11월 11일 수요일'); await step(page, 1); await titled(page, '11월 12일 목요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      await countDraws(page);
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined }, 'the pinned date stays, drawn for the new day');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      // ‹ › choose in the app: today reached that way follows.
+      await step(page, 1); await titled(page, '11월 12일 목요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-12', pinned: false, today: true });
       await overnight(page, '2026-11-13T07:30:00+09:00'); await titled(page, '11월 13일 금요일');
       // One day back is a chosen day: it stays.
       await step(page, -1); await titled(page, '11월 12일 목요일');
       await overnight(page, '2026-11-14T07:30:00+09:00'); await page.waitForTimeout(1200);
       assert.equal((await snap(page)).title, '11월 12일 목요일');
+    });
+
+    await check('a pinned date: another unit keeps it, Back and a reload on a later day keep it; 오늘 on a pinned today lets it go', async ({ page }) => {
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day');
+      // Another unit of the same date (the unit bar names no date): still the address's date.
+      await page.locator('[data-schedule-view="week"]').first().click(); await shown(page, 'week'); await titled(page, '11.9 – 11.15');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      await countDraws(page);
+      await overnight(page, '2026-11-16T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11.9 – 11.15', date: '2026-11-11', today: undefined }, 'the pinned week stays (today is in the next week)');
+      // Back to the day: the pinned date, not the new today.
+      await page.goBack(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      // A reload on a later day keeps it.
+      await at(page, '2026-11-17T09:00:00+09:00');
+      await page.reload(); await ready(page); await shown(page, 'day');
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined });
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      // 오늘 on a pinned today is a choice in the app: the screen follows from then on.
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-17'); await ready(page); await shown(page, 'day');
+      assert.deepEqual(await recorded(page), { date: '2026-11-17', pinned: true, today: false });
+      await todayButton(page).click(); await page.waitForFunction(() => history.state?.haedo?.entry?.scheduleToday === true);
+      assert.deepEqual(await recorded(page), { date: '2026-11-17', pinned: false, today: true });
+      await overnight(page, '2026-11-18T07:30:00+09:00'); await titled(page, '11월 18일 수요일');
+      assert.equal((await snap(page)).date, '2026-11-18');
+    });
+
+    // Review 11-16 M1: the pin belongs to the screen the address opened. Leaving the calendar (menu 자료, then 일정 and D
+    // again) lets it go, so an app left open over midnight moves to today again (the 11-11 daily entry). The second round
+    // opens the address the timeline's 일정에서 고치기 makes (scheduleDayHref, read from assets/app.js) and checks that it is
+    // the same address as the first round; the timeline screen's own click is not driven here.
+    const scheduleDayHref = new Function('return ' + /const scheduleDayHref=(d=>[^;]+);/.exec(readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'))[1])();
+    for (const start of ['address', 'the address the timeline link makes (same as the address round)']) {
+      await check('a pinned date is let go when the calendar is left (' + start + '): menu 자료 → 일정 → D, and the next day opens today; Back to the pinned entry pins it again', async ({ page }) => {
+        await at(page, '2026-11-11T23:40:00+09:00');
+        const href = start === 'address' ? '/index.html?section=schedule&view=day&date=2026-11-11' : '/' + scheduleDayHref('2026-11-11');
+        assert.equal(href, '/index.html?section=schedule&view=day&date=2026-11-11');
+        await page.goto(base + href); await ready(page); await shown(page, 'day');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+        await page.locator('a[href*="section=records"]').first().click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
+        await page.locator('nav a[href="index.html"]').first().click(); await list(page);
+        await page.locator('[data-schedule-view="day"]').first().click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: false, today: true }, 'a D reached in the app shows today and follows');
+        await overnight(page, '2026-11-12T07:30:00+09:00'); await titled(page, '11월 12일 목요일');
+        assert.equal((await snap(page)).date, '2026-11-12');
+        // The entry that the address opened is still pinned: Back to it opens its date, pinned.
+        await page.goBack(); await list(page); await page.goBack(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'sources');
+        await page.goBack(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+        assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      });
+    }
+
+    // Review 11-16 R2: a screen opened over the pinned screen (통합 검색, a post read from the day) returns to it in the app
+    // with the pin, as Back does; leaving for another section (M1 above) still lets it go.
+    await check('a pinned date is kept through 통합 검색 and 일정으로 돌아가기, and through a post read from the day and closed in the app', async ({ page }) => {
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day');
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+        const doc = m.create(c.id, new Date('2026-11-11T21:00:00+09:00').toISOString()); doc.title = '저녁 산책 메모'; doc.status = 'saved';
+        doc.ops = [{ insert: '퇴근길에 천변을 따라 걸었다.\n' }]; await s.savePhotoPost(ws, doc, 0);
+      });
+      await page.reload(); await ready(page); await shown(page, 'day');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      // 통합 검색 and back with its own return.
+      await page.locator('#lifeFindOpen').click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'find');
+      await page.locator('#lifeSubviewReturn').click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false }, 'returned pinned');
+      await countDraws(page);
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined }, 'the pinned date stays after 통합 검색');
+      // A post of that day, read and closed in the app.
+      await page.locator('#lifeSchedule [data-schedule-item^="photo:"]').first().click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'page');
+      await page.locator('#lifeSubviewReturn').click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false }, 'returned pinned from the post');
+      await countDraws(page);
+      await overnight(page, '2026-11-13T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined }, 'the pinned date stays after reading the post');
+    });
+
+    await check('a pinned day whose 행복도 choice failed is not held: the screen stays on its day, with its warning and input', async ({ page }) => {
+      await at(page, '2026-11-11T23:50:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day'); await entries(page);
+      await patchHappinessWrite(page); await page.evaluate(() => { window.__fail = true; });
+      await page.getByRole('radio', { name: '행복도 3', exact: true }).check();
+      await page.waitForFunction(() => { const notice = document.querySelector('.schedule-happiness-error'); return notice && !notice.hidden; });
+      await countDraws(page);
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await redrawn(page); await entries(page);
+      const state = await held(page);
+      assert.deepEqual([(await snap(page)).title, state.shown, state.inert, state.checked], ['11월 11일 수요일', false, false, ['3']], 'nothing to hold: the day does not move');
+      await page.evaluate(() => { window.__fail = false; });
+      await page.getByRole('radio', { name: '행복도 5', exact: true }).check();
+      await page.waitForFunction(() => !HaedoLife.ScheduleEntries.saving() && !HaedoLife.ScheduleEntries.failed().length);
+      assert.deepEqual(await happiness(page), [['2026-11-11', 0]], 'stored for the pinned day');
     });
 
     await check('a 행복도 choice on its way to the store holds the screen until it is stored, then the screen follows (no input is lost)', async ({ page }) => {
@@ -421,6 +531,27 @@ async function main() {
       await overnight(page, '2027-01-01T07:30:00+09:00'); await page.waitForTimeout(1200);
       assert.deepEqual(await habits(), { month: '2026년 11월', search: '?month=2026-11', thisMonth: true, today: [] });
     }, { width: 390, height: 844 });
+
+    await check('습관 화면: a month the address names (일정 M\'s row link) is pinned, also when it was this month; 이번 달 lets it go', async ({ page, tables }) => {
+      tables.seed('haedo_items', accounts.a.id, { id: 'habit-1', kind: 'habit', data: habit([]) });
+      const habits = () => page.evaluate(() => ({ month: document.querySelector('#habitMonthLabel')?.innerText, search: location.search, thisMonth: !document.querySelector('#habitThisMonth').hidden,
+        today: [...document.querySelectorAll('#habitList [aria-current="date"]')].map(n => n.getAttribute('aria-label')) }));
+      await at(page, '2026-11-30T23:40:00+09:00');
+      await openUnit(page, false, 'month');
+      const row = page.locator('.schedule-entries-month .habit-compact-row').first();
+      assert.equal(await row.getAttribute('href'), 'habits.html?month=2026-11');
+      await row.click(); await page.waitForURL(/habits\.html\?month=2026-11$/); await page.locator('#habitList [aria-current="date"]').waitFor();
+      assert.deepEqual(await habits(), { month: '2026년 11월', search: '?month=2026-11', thisMonth: false, today: ['아침 산책 2026-11-30 완료'] });
+      await overnight(page, '2026-12-01T07:30:00+09:00');
+      await page.waitForFunction(() => !document.querySelector('#habitThisMonth').hidden);
+      assert.deepEqual(await habits(), { month: '2026년 11월', search: '?month=2026-11', thisMonth: true, today: [] }, 'November stays; 이번 달 is offered');
+      // 이번 달 is a choice on the page: December, and it follows from then on.
+      await page.locator('#habitThisMonth').click();
+      await page.waitForFunction(() => document.querySelector('#habitMonthLabel')?.innerText === '2026년 12월');
+      assert.equal((await habits()).search, '');
+      await overnight(page, '2027-01-01T07:30:00+09:00');
+      await page.waitForFunction(() => document.querySelector('#habitMonthLabel')?.innerText === '2027년 1월');
+    });
 
     await check('목표 화면: a deadline that passed overnight is said after the return', async ({ page, tables }) => {
       tables.seed('haedo_items', accounts.a.id, { id: 'goal-1', kind: 'goal', data: { title: '책 열두 권 읽기', progress: 40, target: '2026-11-30' } });

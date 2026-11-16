@@ -297,6 +297,10 @@
 .discovery-news .discovery-wide-notice { margin: 10px 0 0; color: var(--news-muted); font-size: var(--haedo-text-meta, 13px); line-height: 1.6; }
 .discovery-news .discovery-wide-settings { display: grid; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--news-line); }
 .discovery-news .discovery-wide-settings > p { margin: 0; }
+/* AI 추천: the same quiet text mark and settings block as 넓게 찾기. */
+.discovery-news .discovery-pick-mark { flex: none; margin-left: 4px; padding: 0 6px; border: 1px solid var(--news-line); border-radius: 6px; color: #5d6b65; font-size: 12px; line-height: 20px; }
+.discovery-news .discovery-pick-settings { display: grid; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--news-line); }
+.discovery-news .discovery-pick-settings > p { margin: 0; }
 .discovery-news .discovery-wide-topics { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .discovery-news .discovery-wide-topics > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; font-size: var(--haedo-text-control, 15px); line-height: 1.6; }
 .discovery-news .discovery-wide-topic { min-width: 0; overflow-wrap: anywhere; }

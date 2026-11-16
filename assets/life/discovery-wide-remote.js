@@ -17,8 +17,14 @@
     wide_auth: '로그인 계정을 다시 확인해 주세요.', wide_cancelled: '계정이나 화면이 바뀌어 이전 요청을 중단했습니다.',
     wide_not_enabled: '이 계정에서는 넓게 찾기를 쓸 수 없습니다.', wide_refused: '넓게 찾기 요청이 받아들여지지 않았습니다.',
     wide_invalid_topic: '서버가 받지 않는 주제가 있습니다.', wide_unavailable: '넓게 찾기를 지금 가져오지 못했습니다.',
-    wide_invalid: '받은 결과의 형식을 확인하지 못했습니다.'
+    wide_invalid: '받은 결과의 형식을 확인하지 못했습니다.',
+    // AI 추천 (news_pick on haedo-ai) uses the same account-guarded request; only these answers differ.
+    pick_not_allowed: '이 계정에서는 AI 추천을 쓸 수 없습니다.', pick_limit: '이번 달 AI 추천에 쓸 수 있는 금액을 다 썼습니다.'
   };
+  // haedo-ai answers a refused account with 403 ai_not_allowed and the cap with 429 ai_monthly_limit.
+  const PICK_TIMEOUT_MS = 75000;
+  const wideRefusal = code => code === 'not_enabled_for_account' ? 'wide_not_enabled' : code === 'invalid_topic' ? 'wide_invalid_topic' : 'wide_refused';
+  const pickRefusal = code => code === 'ai_not_allowed' ? 'pick_not_allowed' : code === 'ai_monthly_limit' ? 'pick_limit' : 'wide_refused';
   const fault = code => Object.assign(new Error(messages[code] || messages.wide_unavailable), { code: messages[code] ? code : 'wide_unavailable' });
   const check = (value, code = 'wide_invalid') => { if (!value) throw fault(code); };
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -181,6 +187,7 @@
     check(storage?.isAccountScoped && storage.account && auth?.verify && auth.client?.auth?.getSession && typeof fetcher === 'function', 'wide_auth');
     const owner = { ...storage.account }, baseUrl = String(auth.config?.url || '').replace(/\/$/, '');
     const endpoint = new URL(baseUrl + '/functions/v1/haedo-news-wide'), clearEndpoint = new URL(baseUrl + '/rest/v1/rpc/life_news_wide_clear');
+    const pickEndpoint = new URL(baseUrl + '/functions/v1/haedo-ai');
     check(endpoint.protocol === 'https:' && new URL(owner.projectUrl).origin === endpoint.origin && typeof auth.config.key === 'string' && auth.config.key.length > 0, 'wide_auth');
     let disposed = false, generation = 0; const controllers = new Set();
     function cancel() { generation++; for (const controller of controllers) controller.abort(); controllers.clear(); }
@@ -193,11 +200,11 @@
       check(!disposed && generation === context.generation && auth.epoch === context.epoch && isCurrent(context.workspaceId) && auth.user?.id === owner.userId &&
         auth.getAccount?.()?.userId === owner.userId && auth.getAccount?.()?.projectUrl === owner.projectUrl && String(auth.config?.url || '').replace(/\/$/, '') === owner.projectUrl.replace(/\/$/, ''), 'wide_cancelled');
     }
-    async function send(url, body, { workspaceId, signal }, read) {
+    async function send(url, body, { workspaceId, signal }, read, { refusal = wideRefusal, timeoutMs = TIMEOUT_MS } = {}) {
       const context = { generation, epoch: auth.epoch, workspaceId }; guard(context);
       const controller = new AbortController(); controllers.add(controller);
       const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
-      let timedOut = false; const timer = root.setTimeout(() => { timedOut = true; abort(); }, TIMEOUT_MS);
+      let timedOut = false; const timer = root.setTimeout(() => { timedOut = true; abort(); }, timeoutMs);
       try {
         check(!controller.signal.aborted, 'wide_cancelled');
         const user = await abortable(auth.verify(), controller.signal); guard(context); check(user?.id === owner.userId, 'wide_auth');
@@ -208,10 +215,10 @@
         guard(context);
         // Only 401 is a sign-in problem. A 5xx is temporary and never drops the session.
         if (response.status === 401) throw fault('wide_auth');
-        if (response.status === 403 || response.status === 400) {
+        if (response.status === 403 || response.status === 400 || refusal !== wideRefusal && response.status === 429) {
           let code = null; try { code = (await abortable(readJSON(response), controller.signal))?.error; } catch (_) { code = null; }
           guard(context);
-          throw fault(code === 'not_enabled_for_account' ? 'wide_not_enabled' : code === 'invalid_topic' ? 'wide_invalid_topic' : 'wide_refused');
+          throw fault(refusal(code));
         }
         check(response.ok, 'wide_unavailable');
         const data = await abortable(readJSON(response), controller.signal); guard(context);
@@ -237,7 +244,15 @@
         return { status: data.status, removed: data.removed ?? 0 };
       });
     }
-    return Object.freeze({ load, clear, cancel, dispose() { if (disposed) return; disposed = true; cancel(); unlisten?.(); } });
+    // AI 추천: one news_pick request to haedo-ai with the same account, workspace and screen guard. `body` is
+    // DiscoveryPick.prepare(...).body (built and size-checked there); `read` checks the answer against what was sent.
+    // Only the request's own shape is checked here: the task name and the four allow-listed keys. A request outside it
+    // is a rejected promise, like every other failure, and nothing is sent.
+    async function pick({ body, read, workspaceId, signal } = {}) {
+      check(plain(body) && body.task === 'news_pick' && JSON.stringify(Object.keys(body).sort()) === '["candidates","requestId","task","topics"]' && typeof read === 'function', 'wide_refused');
+      return send(pickEndpoint, body, { workspaceId, signal }, read, { refusal: pickRefusal, timeoutMs: PICK_TIMEOUT_MS });
+    }
+    return Object.freeze({ load, clear, pick, cancel, dispose() { if (disposed) return; disposed = true; cancel(); unlisten?.(); } });
   }
   return Object.freeze({ SUPPLIER, SUPPLIER_LABEL, LINK_PREFIX, LIMITS, LANGUAGES, REASONS, EXAMPLES, TIMEOUT_MS, normalizeTopic, checkTopic, topicKey, refusalKey, plan, merge, languages, requestKey, link, validate, toArticle, create, messages });
 });

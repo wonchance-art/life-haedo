@@ -171,13 +171,24 @@
   function publicSnapshotFromManifest(value, options = {}) { return publicSnapshot(manifestDocument(value), options); }
   // Owner-only reading (private series view): the same projection, AI marks kept.
   function privateReadingSnapshot(doc, options = {}) { return project(doc, options, true); }
-  function project(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null } = {}, reading) {
+  // An attachment choice (2026-11-16 owner decision 9): strictly ascending positions of the
+  // post's attachment list, [] for none. Publication always sends one; the server copies only
+  // those attachments. The same rule is checked by BlogRemote and the SQL publish routines.
+  const ATTACHMENTS = 12;
+  function attachmentChoice(value, count = ATTACHMENTS) {
+    return Array.isArray(value) && value.length <= ATTACHMENTS && value.every((position, index) => Number.isSafeInteger(position) && position >= 0 &&
+      position < Math.min(count, ATTACHMENTS) && (index === 0 || position > value[index - 1]));
+  }
+  function project(doc, { photoIds = [], author = { name: "", intro: "" }, copies = null, attachments } = {}, reading) {
     const ops = model().validatedBody(doc);
     // Markdown remains the private stored source. Public/reading copies keep
     // their established, validated Delta shape, so anonymous readers do not
     // need a new format or a Markdown parser. This is a projection, not a save.
     check(doc.status === "saved" && !doc.archived, "blog_post_not_saved");
     check(Array.isArray(photoIds) && photoIds.every((id) => typeof id === "string") && new Set(photoIds).size === photoIds.length, "invalid_blog_selection");
+    // Without a choice (private reading views, earlier callers) every attachment is kept.
+    const stored = doc.attachments || [];
+    check(attachments === undefined || attachmentChoice(attachments, stored.length), "invalid_blog_selection");
     const selected = new Set(photoIds), available = new Set(doc.photos.map((p) => p.id));
     check(photoIds.every((id) => available.has(id)), "invalid_blog_selection");
     const used = new Set(ops.filter((op) => typeof op.insert !== "string").map((op) => op.insert.photo.id));
@@ -203,7 +214,7 @@
       // An original is never projected publicly when copies are given; the
       // public photo for that position is its copy. A HEIC original is never
       // projected even privately: its JPEG view stands in for it.
-      attachments: copy(doc.attachments || []), photos: selectedPhotos.map((p) => {
+      attachments: copy(attachments === undefined ? stored : attachments.map((position) => stored[position])), photos: selectedPhotos.map((p) => {
         const { type, width, height, size, digest } = copied ? copied.get(p.id) : needsView(p) ? p.view : p;
         return { id: mapping.get(p.id), type, width, height, size, digest };
       }), author: copy(author) };
@@ -213,5 +224,5 @@
     checkSnapshot(snapshot, reading);
     return snapshot;
   }
-  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, publicSnapshotFromManifest, validateSnapshot, privateReadingSnapshot, validateReadingSnapshot });
+  return Object.freeze({ LIMITS, pack, validateManifest, hydrate, publicSnapshot, publicSnapshotFromManifest, validateSnapshot, privateReadingSnapshot, validateReadingSnapshot, attachmentChoice });
 });

@@ -51,6 +51,8 @@ async function main() {
       "create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$; grant execute on function auth.jwt() to authenticated,service_role;");
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql'), 'utf8'));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    apply(require('./helpers/blog-public-choice-sql.cjs').after('20261111120000'));
   }
   await server.initialize(); assert.equal(server.sql('select count(*)::int from haedo_blog_private.posts;'),0,'Every run needs a fresh QA database: Storage fixture bytes live only for this run.'); await fs.mkdir(output, { recursive: true });
   report.testHash=createHash('sha256').update(await fs.readFile(__filename)).digest('hex');

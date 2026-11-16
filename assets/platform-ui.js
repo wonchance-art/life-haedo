@@ -522,11 +522,15 @@
   // screen that showed this month follows the new month; a chosen earlier month stays, and 오늘 marks,
   // "이번 달" and the cells that can be checked are drawn again for the new day (dayCheck below).
   let shownDay = HaedoData.localDate();
+  // A month the address named (`?month=`, also 일정 M's links here) is pinned (2026-11-16 owner decision 11): it
+  // stays when the month changes, also when it was this month. A month chosen on the page (‹ › 이번 달) lets it go.
+  // A future month is shown as this month and is not pinned.
+  let habitMonthPin = habitMonth && habitMonth <= HaedoHabitTracker.monthOf(shownDay) ? habitMonth : null;
   function renderHabits() {
     const today = HaedoData.localDate(),
       tracker = HaedoHabitTracker,
       current = tracker.monthOf(today);
-    if (shownDay !== today && habitMonth === tracker.monthOf(shownDay) && habitMonth !== current) { habitMonth = current; habitAddress(); }
+    if (shownDay !== today && habitMonth === tracker.monthOf(shownDay) && habitMonth !== current && habitMonth !== habitMonthPin) { habitMonth = current; habitAddress(); }
     if (!habitMonth || habitMonth > current) habitMonth = current;
     const habits = store.items.filter((item) => item.kind === "habit");
     // Announced (aria-live) when the month changes; an unchanged label is not rewritten on repaints.
@@ -567,7 +571,7 @@
     } catch (_) { /* The month on screen stays; only the address is not updated. */ }
   }
   function showHabitMonth(month) {
-    habitMonth = month;
+    habitMonth = month; habitMonthPin = null;
     render();
     habitAddress();
     // A month button that is now disabled or hidden would drop focus to the page: keep it on the label.

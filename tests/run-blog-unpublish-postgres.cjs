@@ -106,6 +106,10 @@ async function contract(db, { installed = false, connect } = {}) {
     // ---- Installing: nothing but the one function changes ----
     const seeded = v2(randomUUID(), '이미 공개했다 철회한 글'); await save(seeded);
     const seededPublished = await publish(seeded.id, 0, { author: { name: '기존 공개 이름', intro: '기존 소개' } }); await withdraw(seeded.id, 1);
+    // Since 20261116120000 publishing no longer sets the public name and intro (owner decision 7):
+    // on a catalog that has it, the existing values are saved the way the owner saves them.
+    if ((await db.query("select to_regprocedure('public.life_blog_set_public_profile(jsonb)') is not null value")).rows[0].value)
+      await rpc('life_blog_set_public_profile', [{ name: '기존 공개 이름', intro: '기존 소개' }]);
     const beforeRows = await rows(), beforeCatalog = await catalog(), earlier = await definition();
     await db.query(installation());
     check(await rows(), beforeRows, 'installing changes no blog row');

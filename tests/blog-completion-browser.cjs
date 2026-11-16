@@ -168,8 +168,10 @@ async function main() {
     server.docker(['exec', '-i', container, 'createdb', '-U', 'postgres', database]);
     const bootstrap = await fs.readFile(path.resolve(__dirname, '../supabase/tests/blog-bootstrap.sql'), 'utf8');
     const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101091500_life_blog_account_sync.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101160000_life_blog_delete_guard.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102110000_life_blog_ai_authorship.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261102120000_life_blog_public_photo_copies.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261112120000_life_blog_revision_continuity.sql'), 'utf8');
-    server.docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], bootstrap + '\n' + migration);
-    migrationSha256 = digest(Buffer.from(migration));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    const choice = require('./helpers/blog-public-choice-sql.cjs').after('20261102120000');
+    server.docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], bootstrap + '\n' + migration + '\n' + choice);
+    migrationSha256 = digest(Buffer.from(migration + '\n' + choice));
   }
   await server.initialize();
   const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], expectedErrors: 0, migrationSha256, syncScriptHashes: {}, syncScriptLoads: [],
@@ -225,10 +227,21 @@ async function main() {
     await serverState(p, doc.id, expectedServerState);
     return { doc, workspaceId: stored.workspaceId };
   };
+  // The public name and intro are saved in 공개 이름·소개 (2026-11-16, owner decision 7); the review
+  // shows them read-only and publishes them as the byline. Saved once for the account.
+  const author = { name: '익명 검수 블로그', intro: '직접 고른 글만 보여 줍니다.' };
+  const savedAuthor = () => server.sql("select coalesce((select author from haedo_blog_private.profiles where owner_id='" + accounts.a.id + "'),'null'::jsonb)");
   const review = async (p, id, selected = []) => {
+    if (JSON.stringify(savedAuthor()) !== JSON.stringify(author)) {
+      await click(p, '공개 이름·소개'); await p.locator('.blog-manager-profile-editor[data-state="ready"]').waitFor();
+      await p.locator('#blogPublicName').fill(author.name); await p.locator('#blogPublicIntro').fill(author.intro);
+      const editor = p.locator('.blog-manager-profile-editor');
+      await editor.getByRole('button', { name: '저장', exact: true }).click(); await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
+      assert.deepEqual(savedAuthor(), author);
+      await editor.getByRole('button', { name: '닫기', exact: true }).click(); await editor.waitFor({ state: 'detached' });
+    }
     await row(p, id).getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await p.locator('.blog-manager-preview').waitFor();
-    await p.getByRole('textbox', { name: '공개 이름', exact: true }).fill('익명 검수 블로그');
-    await p.getByRole('textbox', { name: '공개 소개', exact: true }).fill('직접 고른 글만 보여 줍니다.');
+    assert.equal(await p.locator('.blog-manager-preview').getByRole('textbox').count(), 0, 'the review has no name or intro input');
     for (const id of selected) await p.locator('input[data-photo-id="' + id + '"]').check();
     await click(p, '공개 미리보기 갱신');
     await p.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();

@@ -231,6 +231,15 @@ async function main() {
       await page.locator('#wbPageTitle').waitFor(); assert.equal(await heading(page).textContent(), '프로필 편집');
       await back(page, 'home'); await page.waitForFunction(() => document.activeElement?.id === 'homeProfileEdit');
       assert.deepEqual(await current(page), before);
+      // 2026-11-16 (owner decision 7): 프로필 편집 says where the public list's name and intro are
+      // saved and opens that editor in 글 공개·보관.
+      await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await mode(page, 'page');
+      const form = page.locator('#wbProfileSettings'); await form.waitFor();
+      assert.match(await form.innerText(), /공개 글 목록의 이름·소개는 글 공개·보관 → 공개 이름·소개에서 따로 저장합니다/);
+      assert.doesNotMatch(await form.innerText(), /기존 공개 사본은 별도로 갱신해야 바뀝니다/);
+      await page.locator('#wbOpenPublicProfile').click(); await mode(page, 'blog');
+      await page.locator('.blog-manager-profile-editor').waitFor();
+      assert.equal(await heading(page).textContent(), '글 공개·보관');
     }, 1440);
     for (const width of [1440, 820, 390]) await check('search, tool and management origins and active menu roots ' + width, async ({ page }) => {
       await fixture(page, { many: true }); await nav(page, 'records'); await mode(page, 'sources');
