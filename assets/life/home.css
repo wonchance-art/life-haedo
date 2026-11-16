@@ -247,6 +247,8 @@
  * button, no photo button). The button stays as it was (h3 > button); its target is stretched over the whole row. */
 .haedo-shell .life-home :is(.home-post, .home-draft) { position: relative; grid-template-columns: minmax(0, 1fr); }
 .haedo-shell .life-home .home-post-open::after { content: ''; position: absolute; inset: 0; }
+/* The button's own box is 44px too (10px above and below a one-line title, taken back by the margins). */
+.haedo-shell .life-home .home-post-open { min-height: 44px; margin-block: -10px; padding-block: 10px; box-sizing: border-box; }
 /* No press scale here: a transform makes the button the box of its stretched target, which would then shrink under
  * the pointer between press and release, and a press on the photo or excerpt would not open the row. */
 .haedo-shell #lifeHome .home-post-open:active:not(:disabled), .haedo-shell #lifeHome .home-post-open:active { transform: none; }
