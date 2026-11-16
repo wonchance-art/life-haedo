@@ -69,7 +69,8 @@ async function main(){
  {const original=HaedoLife.NineBoardUI.create;HaedoLife.NineBoardUI.create=options=>original({...options,storage:{...options.storage,isAccountScoped:false,account:null}});}
  `}));
   await page.setViewportSize({width:1440,height:1000});await go();await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
-  assert.equal(await page.locator('.nb-status').textContent(),'저장됨');await page.locator('.nb-files > summary').click();
+  // 2026-11-16 owner: 저장됨 is said to screen readers only (the line is clipped, its box kept).
+  assert.deepEqual(await page.locator('.nb-status').evaluate(n=>[n.textContent,/inset\(50%\)/.test(getComputedStyle(n).clipPath)]),['저장됨',true]);await page.locator('.nb-files > summary').click();
   assert.match(await page.locator('.nb-files > p.life-help').first().textContent(),/^원래 구성은 이 브라우저에 보관됩니다\. 선택 영역 공개는 별도로 검토하며/);
   await context.unroute(base+'/assets/life/nine-board-ui.js');report.checks.push('A store without an account keeps the browser-only status and file note; account stores never show them');
   await page.evaluate(()=>Promise.all(window.__rssStartReports));

@@ -45,7 +45,10 @@ const records = page => page.evaluate(async () => {
 });
 // `detail` is the longer reason shown on its own line under the command row; `note` is the separate
 // line that says what storing changed (the save state itself stays in `text`).
+// shown: what a sighted reader sees of the status line; a quiet save state (2026-11-16) keeps its words
+// for screen readers in text and shows nothing.
 const status = page => page.evaluate(() => ({ text: document.querySelector('.photo-status-text')?.textContent ?? null, state: document.querySelector('.photo-status')?.dataset.state ?? null,
+  shown: (node => { if (!node) return null; for (let n = node; n; n = n.parentElement) { const style = getComputedStyle(n); if (n.hidden || style.display === 'none' || /inset\(50%\)/.test(style.clipPath)) return ''; } return node.textContent; })(document.querySelector('.photo-status-text')),
   detail: [...document.querySelectorAll('.photo-recovery-reason')].find(node => node.getClientRects().length)?.textContent ?? '',
   note: [...document.querySelectorAll('.photo-edit-note')].find(node => node.getClientRects().length)?.textContent ?? '' }));
 const mode = page => page.evaluate(() => document.querySelector('.photo-posts')?.dataset.mode ?? null);

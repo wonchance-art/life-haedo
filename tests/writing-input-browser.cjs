@@ -53,7 +53,7 @@ H.run(__filename, {
     assert.deepEqual(rows[0].ops.filter(op => op.attributes?.list).map(op => op.attributes.list), ['bullet'], 'stored as the nearest supported list');
     await H.until(() => H.contents(page), ops => ops.some(op => op.attributes?.list === 'bullet') && !ops.some(op => op.attributes?.list === 'unchecked'), 'the screen shows what was stored');
     // Said on its own line; the save state beside it stays the real one.
-    await H.until(() => H.status(page), value => value.note === '체크 목록은 글머리 목록으로 바꿨어요' && value.text === '자동 저장됨' && value.state === 'draft', 'the change is said in one line and the save state stays true');
+    await H.until(() => H.status(page), value => value.note === '체크 목록은 글머리 목록으로 바꿨어요' && value.text === '자동 저장됨' && value.shown === '' && value.state === 'draft', 'the change is said in one line and the save state stays true');
     assert((await H.bodyText(page)).includes(PARAGRAPH), 'typed text is untouched by the alignment');
     // The caret stayed at the end of the paragraph: typing continues there.
     await page.keyboard.type(' 끝.');
@@ -110,7 +110,7 @@ H.run(__filename, {
     const rows = await draftWith(page, PARAGRAPH);
     assert(rows[0].text.includes('끼어\n든 글자'), 'stored clean');
     await H.until(() => H.bodyText(page), text => text.includes('끼어\n든 글자') && !UNSAFE.test(text.replace(/\n/g, '')), 'the screen shows what was stored');
-    await H.until(() => H.status(page), value => value.note === '쓸 수 없는 문자를 뺐어요' && value.text === '자동 저장됨', 'the change is said in one line');
+    await H.until(() => H.status(page), value => value.note === '쓸 수 없는 문자를 뺐어요' && value.text === '자동 저장됨' && value.shown === '', 'the change is said in one line');
   },
   // C: the link box takes "naver.com" as https and refuses what is not an http(s) address.
   async 'links'({ open }) {
@@ -130,7 +130,7 @@ H.run(__filename, {
     const box = await link('mail', 'mailto:a@example.org');
     assert.equal(await box.getAttribute('aria-invalid'), 'true', 'the box says the address is refused');
     assert(await box.isVisible(), 'the link box stays open for a correction');
-    assert.equal((await H.status(page)).text, '링크는 http·https 주소만 넣을 수 있어요');
+    assert.deepEqual(await H.status(page).then(value => [value.text, value.shown]), ['링크는 http·https 주소만 넣을 수 있어요', '링크는 http·https 주소만 넣을 수 있어요'], 'a refusal is shown');
     assert(!(await H.contents(page)).some(op => /mailto/.test(op.attributes?.link || '')), 'the refused address never reaches the text');
     await box.fill('example.org/path'); await page.keyboard.press('Enter');
     await H.until(() => H.contents(page), ops => ops.some(op => op.insert === 'mail' && op.attributes?.link === 'https://example.org/path'), 'the corrected address is applied');
@@ -141,7 +141,7 @@ H.run(__filename, {
     await page.keyboard.type(' ' + PARAGRAPH);
     const rows = await draftWith(page, PARAGRAPH);
     assert.deepEqual(rows[0].ops.filter(op => op.attributes?.link).map(op => op.attributes.link), ['https://naver.com', 'https://example.org/path'], 'only http(s) links are stored');
-    await H.until(() => H.status(page), value => value.note === '주소가 아닌 링크는 풀었어요' && value.text === '자동 저장됨', 'the removed link is said');
+    await H.until(() => H.status(page), value => value.note === '주소가 아닌 링크는 풀었어요' && value.text === '자동 저장됨' && value.shown === '', 'the removed link is said');
     await reloaded(page);
     assert((await H.bodyText(page)).includes(PARAGRAPH));
     await saveSucceeds(page);
@@ -498,7 +498,7 @@ H.run(__filename, {
       // The store accepts again: the next attempt stores it and the error goes.
       await page.evaluate(() => { IDBObjectStore.prototype.put = window.__put; });
       await page.keyboard.type('.');
-      await H.until(() => H.status(page), value => value.text === '자동 저장됨', width + ': stored once the store accepts');
+      await H.until(() => H.status(page), value => value.text === '자동 저장됨' && value.shown === '', width + ': stored once the store accepts (said, not shown)');
       await H.stored(page, rows => rows[0].text.includes('가나다라마한글.'), 'all of it is stored');
       await context.close();
     }

@@ -10,6 +10,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(node => node.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; }, add: name => { if (!names().includes(name)) node.className = [...names(), name].join(' '); }, remove: name => { node.className = names().filter(value => value !== name).join(' '); } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }
@@ -59,6 +60,23 @@ async function fixture(t, options = {}) {
   const preview = async () => { await click('#pcReview'); get('#pcConsent').checked = true; };
   return { ui, get, host, click, input, add, preview, calls, saves, holds, Core, M, ws, rows, document, storage, db: () => clone(db), setDb: value => { db = clone(value); }, setBeforeSave: value => { beforeSave = value; }, setScope: value => { scope = value; }, setFailRead: value => { failRead = value; }, setMetadata: value => { metadata = value; }, setPartial: value => { catalogFailure = value; }, setCursor: value => { cursor = value; } };
 }
+
+function recordStatus(node) {
+  const seen = []; let className = node.className;
+  Object.defineProperty(node, 'className', { configurable: true, get: () => className, set: value => { className = value; seen.push({ text: node.textContent, quiet: String(value).split(' ').includes('life-save-quiet') }); } });
+  return seen;
+}
+// 2026-11-16 review N2: typing (plain and Korean composition) shows no words from the first keystroke until
+// the autosave stored it; the words stay for screen readers.
+test('typing shows no status words until the autosave stored it', async t => {
+  const f = await fixture(t), seen = recordStatus(f.get('#pcSaveStatus')), title = f.get('#pcTitle');
+  await f.input('#pcTitle', '자동 저장을 기다리는 표지');
+  await title.emit('compositionstart'); title.value = '자동 저장을 기다리는 표지 한글'; await title.emit('input'); await title.emit('compositionend');
+  await new Promise(resolve => setTimeout(resolve, 600)); await f.ui.flush();
+  assert.ok(seen.length > 2, 'the line was rewritten while typing');
+  assert.deepEqual(seen.filter(value => !value.quiet), [], 'nothing shown while typing and storing');
+  assert.equal(f.get('#pcSaveStatus').textContent, '계정에 비공개로 자동 저장됨');
+});
 
 test('direct selection and order edits autosave only public URL pointers; full preview is shared and consent starts off', async t => {
   const f = await fixture(t), title = await f.input('#pcTitle', '여행 읽기 안내'), intro = await f.input('#pcIntro', '직접 적은 소개'); await f.add(0); await f.add(2);

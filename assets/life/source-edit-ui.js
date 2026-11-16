@@ -75,6 +75,9 @@
       status.textContent = session.stage.state === 'applied' ? '저장됨' : session.recordSaving ? '저장 중' : session.error ? '입력 유지 · 저장 필요' :
         session.saving ? '초안 보관 중' : dirtySession(session) ? '수정 중' : session.stage.revision ? '이 브라우저에 초안 보관됨' : '변경 없음';
       status.dataset.state = session.error ? 'error' : session.stage.state === 'applied' ? 'stored' : dirtySession(session) ? 'dirty' : session.stage.revision ? 'draft' : 'clean';
+      // 2026-11-16 owner: a save that went well or is running (저장됨, 저장 중, 초안 보관 중·보관됨, 수정 중
+      // while the autosave waits) is said to screen readers only. A failure, and 변경 없음, stay shown.
+      status.classList.toggle('life-save-quiet', !session.error && status.textContent !== '변경 없음');
       const blocked = !!session.recordSaving || !!session.openingSaved || session.stage.state === 'applied';
       saveButton.disabled = blocked || !!session.composing.size;
       previewButton.disabled = blocked || !!session.composing.size;
