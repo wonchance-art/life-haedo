@@ -25,14 +25,14 @@ async function instrument(context) {
     await route.fulfill({ response, body: await response.text() + hook });
   });
 }
-async function seed(page) {
-  return page.evaluate(async () => {
+async function seed(page, photoCount = 6) {
+  return page.evaluate(async photoCount => {
     const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, p = HaedoLife.PagePosts, w = HaedoLife.Writing;
     const workspaceId = await s.getActive(), refs = { photos: [] };
     const canvas = document.createElement('canvas'); canvas.width = 72; canvas.height = 48;
     const draw = canvas.getContext('2d'); draw.fillStyle = '#4e7163'; draw.fillRect(0, 0, 72, 48); draw.fillStyle = '#bcd6d9'; draw.fillRect(0, 0, 72, 24);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < photoCount; i++) {
       const doc = m.create(c.id, `2026-10-${String(17 - i).padStart(2, '0')}T00:00:00.000Z`);
       const image = await m.readPhoto(new File([blob], `anonymous-${i}.png`, { type: 'image/png' }), c.id);
       doc.status = 'saved'; doc.title = '공통낱말 산책 사진 ' + (i + 1);
@@ -53,9 +53,9 @@ async function seed(page) {
     await s.saveWorkbench(workspaceId, wb, wb.revision);
     return refs;
     function assertStored(result) { if (result.status !== 'stored') throw new Error('Anonymous source fixture failed'); }
-  });
+  }, photoCount);
 }
-async function populate(page) { await openHome(page); const refs = await seed(page); await page.reload(); await ready(page); await homeReady(page); return refs; }
+async function populate(page, photoCount) { await openHome(page); const refs = await seed(page, photoCount); await page.reload(); await ready(page); await homeReady(page); return refs; }
 async function search(page, text) {
   const input = page.locator('#homePostSearch');
   if (!await input.isVisible()) await page.locator('.home-search-toggle').click();
@@ -188,12 +188,24 @@ async function main() {
       assert.equal(await page.locator('.home-list-controls').isVisible(), false); await page.waitForFunction(() => document.activeElement?.id === 'homeFirstWrite');
     });
     await check('every photo card keeps its photo frame, opens from the row, and later covers load on demand', async page => {
-      const refs = await populate(page), last = page.locator(`[data-photo-post-id="${refs.photos[5]}"]`);
+      // 2026-11-16: twelve photo posts so that some rows start beyond the 320px look-ahead of a 320×568 screen
+      // (W2 note rows are shorter); the premise is asserted. What is measured is the rendering path: a row's cover
+      // is read and shown only once the row nears the screen. Storage reads are not counted here, because the
+      // account sync (BlogSync) also reads posts it has not uploaded yet, at its own pace (CI 43976093293).
+      const refs = await populate(page, 12), lastId = refs.photos[refs.photos.length - 1], last = page.locator(`[data-photo-post-id="${lastId}"]`);
       for (const id of refs.photos) assert.equal(await page.locator(`[data-photo-post-id="${id}"] .home-post-media`).count(), 1);
-      const early = await page.evaluate(() => [...new Set(window.__refinementPhotoReads || [])]); assert(early.length < refs.photos.length, 'Offscreen photo records must not all be fetched at first render');
+      const placed = await page.evaluate(ids => ids.map(id => ({ id, top: document.querySelector(`[data-photo-post-id="${id}"] .home-post-media`).getBoundingClientRect().top })), refs.photos);
+      const near = placed.filter(row => row.top < 568).map(row => row.id), outside = placed.filter(row => row.top > 568 + 320).map(row => row.id);
+      assert(near.length > 0 && outside.length > 0, 'rows both on screen and beyond the look-ahead: ' + JSON.stringify(placed.map(row => Math.round(row.top))));
+      const shown = ids => page.evaluate(ids => ids.filter(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return !!image?.getAttribute('src'); }), ids);
+      // The rows on screen show their covers; meanwhile the rows beyond the look-ahead stay without one.
+      await page.waitForFunction(ids => ids.every(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }), near);
+      await page.waitForTimeout(400);
+      assert.deepEqual(await shown(outside), [], 'covers beyond the look-ahead are not read or shown at first render');
+      assert.deepEqual(await page.evaluate(ids => ids.map(id => document.querySelector(`[data-photo-post-id="${id}"] .home-post-media`).getAttribute('aria-busy')), outside), outside.map(() => 'true'));
       await last.locator('.home-post-media').scrollIntoViewIfNeeded();
-      await page.waitForFunction(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }, refs.photos[5]);
-      assert((await page.evaluate(() => window.__refinementPhotoReads)).includes(refs.photos[5]));
+      await page.waitForFunction(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }, lastId);
+      assert((await page.evaluate(() => window.__refinementPhotoReads)).includes(lastId));
       // Rule change 2026-11-16 노션 방향 (Designer default 3): the photo is shown only, not a second button. The row's
       // title button covers the row, so a press on the photo still opens the post (and nothing else takes the press).
       assert.deepEqual(await last.locator('.home-post-media').evaluate(node => [node.tagName, node.getAttribute('role'), node.tabIndex, node.closest('button')]), ['DIV', null, -1, null]);
@@ -202,7 +214,7 @@ async function main() {
       await last.locator('.home-post-media').evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
       const photo = await last.locator('.home-post-media').boundingBox();
       assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.classList.contains('home-post-open'), [photo.x + photo.width / 2, photo.y + photo.height / 2]), true, 'the photo lies under the title button\'s target');
-      await page.mouse.click(photo.x + photo.width / 2, photo.y + photo.height / 2); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /공통낱말 산책 사진 6/);
+      await page.mouse.click(photo.x + photo.width / 2, photo.y + photo.height / 2); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), new RegExp('공통낱말 산책 사진 ' + refs.photos.length + '(?!\\d)'));
     });
     await check('Seoul year boundary shows prior year and correct saved or modified date', async page => {
       await page.clock.setFixedTime(new Date('2026-10-17T12:00:00.000Z')); await openHome(page);
