@@ -1423,7 +1423,9 @@ async function preservationFixture(t) {
 test('preservation catalog avoids blobs and snapshot reads selected saved posts, evidence and required exact board dependencies atomically', async t => {
   const f = await preservationFixture(t), before = f.control.transactions.length;
   const catalog = await f.a.readPreservationCatalog(f.ws);
-  assert.deepEqual(catalog.posts.map(row => row.id), [f.selected.id, f.dependency.id]);
+  // The list is ordered by createdAt, then id (2026-11-16 per-post list rows; before, the order the posts
+  // were stored). These two are created in the same millisecond, so only the set is fixed.
+  assert.deepEqual(catalog.posts.map(row => row.id).sort(), [f.selected.id, f.dependency.id].sort());
   assert.deepEqual(catalog.boards, [{ id: f.nine.boards[0].id, title: '내가 선택한 근거', areas: 1, itemCount: 2 }]);
   assert.equal(f.control.transactions.length, before + 1);
   const count = f.control.transactions.length;
