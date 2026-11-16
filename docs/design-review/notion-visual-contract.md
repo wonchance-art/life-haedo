@@ -16,6 +16,7 @@
 - **독립 검수:** 다른 에이전트가 두 번 검수했다.
   - 1차(`1522d97`): MAJOR 10·MINOR 13·NIT 4건 → 반영
   - 2차(`ce98036`): 앞 27건 중 22건 해결·5건 부분, 새 MAJOR 2·MINOR 7·NIT 4건 → 모두 이 판에 반영
+  - 3차(`7e76423`): 새 MAJOR 2건 해결 확인, BLOCKER·MAJOR 0. 남은 부분 2건(노트 행 수정 날짜 조건, 320px 읽기 도구 줄)과 MINOR·NIT를 이 판에서 고쳤다
   - 작업자에게 넘기기 전에 총괄이 한 번 더 확인한다.
 
 ## Designer 기본값 (소유자가 바꿀 수 있음)
@@ -164,7 +165,8 @@
   - 그 아래 `작성하던 글 · 제목 · 이어쓰기` 한 줄을 `--haedo-soft` 바탕으로 둔다.
   - 그다음 날짜 머리(처음 쓴 날, 결정 8)와 행이 온다.
   - 머리는 `통합 검색` · `글 메뉴`(⋯: 글 공개·보관, 계정 보관 상태, 프로필 편집)와 iPhone `글쓰기`다.
-  - 행 메타는 `처음 쓴 시각 · (나중에 고친 글이면 지금 문구 그대로 `수정 11월 11일`) · 공개 표시 문구`다. 날짜 머리와 같은 기준(결정 8)이다.
+  - 행 메타는 "처음 쓴 시각 · 수정 날짜 · 공개 표시 문구" 순서다. 날짜 머리와 같은 기준(결정 8)이다.
+    - 수정 날짜(지금 문구 그대로 `수정 11월 11일`)는 **처음 쓴 날과 다른 날에 고친 글에만** 붙인다. 같은 날 고친 글은 시각만 보인다.
     - 지금 왼쪽 시각 칸은 `updatedAt`(`home.js:358`)이라 바뀐다. notes-menu 작업자가 이 기준으로 함께 정하고, 다르게 정하면 Designer에 알린다.
   - 데스크톱의 `내 글 찾기`는 탭 줄 오른쪽의 입력칸이다(761px 이상 입력칸, `DESIGN.md` 홈 절과 11-08 S3). 760px 이하는 지금처럼 탭 옆 조작으로 펼친다. 돋보기 아이콘은 머리의 `통합 검색` 하나다.
 - **일정(모든 단위 같은 틀):**
@@ -172,7 +174,7 @@
   - **M 칸:**
     - 1px 선 격자, 칸 높이 104px, 날짜 13px. 오늘은 24px 먹색 원에 흰 글자다.
     - 칸 전체가 하나의 링크(44px 이상)다. **접근 이름은 지금 `dayLabel` 그대로**다(`schedule-ui.js:428-443`). 이미 요일·글·발췌 수(`schedule-data.js` `countLabel`)·예정 수·선택·오늘을 담으므로 더하지 않는다.
-    - 칸 안의 글·예정 줄(`:452-454`)은 회색 꼬리표 모양이고 따로 누르지 않는다.
+    - 칸 안의 글·예정 줄(`:452-454`)은 꼬리표 모양이고 따로 누르지 않는다. 글은 회색 채움, 예정은 1px 테두리(`rgba(55,53,47,.16)`)로 구분한다.
   - **iPhone:**
     - 단계 막대가 없다(소유자 결정). `‹ 2026`(연으로), `통합 검색`, `글쓰기`가 한 줄이고, 제목과 `오늘 ‹ ›`가 한 줄이다.
     - 날짜 44px, 오늘 32px 먹색 원, 글 있는 날 4px 먹색 점이다.
@@ -183,8 +185,11 @@
 - **글 읽기(11-02 결정과 D1 배치 유지):**
   - **도구 줄:** 한 줄이다. `뒤로` · 공개 알약(Lucide `lock`, 지금 `글 정보` 동작과 문제 표시 그대로) · `수정`(숨긴 글이면 `목록에 다시 보이기`) · `통합 검색` · `⋯` · iPhone `글쓰기`.
     - 데스크톱도 `뒤로` 버튼(지금 돌아가기 버튼, 이름 그대로)을 두고, 그 오른쪽에 경로를 둔다.
-    - 360px 미만에서는 `수정`을 아이콘(`edit`)만으로 보이고 이름 `수정`은 유지한다. 그래야 320px에서도 한 줄이다.
-    - 머리줄 통합은 이미 코드에 있다(`ui.js:2678-2688`, `13ba336`). 다시 만들지 않는다. 다만 `통합 검색`이 `⋯` 뒤에 붙는 한 줄(`ui.js:2686`의 append)은 W3가 `⋯` 앞으로 고친다. 이 한 줄만 W3 담당이다.
+    - 360px 미만에서는 공개 알약과 `수정`을 아이콘만으로 보인다(알약은 `lock`, 수정은 `edit`). 접근 가능한 이름은 그대로다.
+      - 그러면 `뒤로`·알약·`수정`·`통합 검색`·`⋯` 다섯 개가 44px씩이고 간격 4px×4를 더해 236px이다. 320px에서 쓸 수 있는 폭(본문 280 − 오른쪽 연필 자리 44, `photo-post.css:299`)과 같다.
+      - 알약에 문제 표시(`올리기 실패` 등)가 붙으면 글자를 보이고 줄바꿈을 허용한다. 문제 알림을 아이콘에 묻지 않는다.
+      - W3는 320px에서 실제로 재서 보고한다.
+    - 머리줄 통합은 이미 코드에 있다(`ui.js:2678-2688`, `13ba336`). 다시 만들지 않는다. 다만 `통합 검색`이 `⋯` 뒤에 붙는 한 줄(`ui.js:2687`의 append)은 W3가 `⋯` 앞으로 고친다. 이 한 줄만 W3 담당이다.
     - 지금 줄에 따로 보이는 `사진 포함 백업`은 `⋯` 안으로 옮긴다. 순서는 `사진 포함 백업` → (지금 메뉴 항목) → `삭제`(맨 아래)다.
   - **본문:** 제목 바로 아래 본문이다. **제목과 본문 사이에는 아무것도 두지 않는다.** 제목은 편집기와 같은 28px다.
   - **글 끝 줄:** 1px 선 아래에 지금처럼 날짜(`updatedAt`), `숨긴 글`·`초안` 표시, 저장 상태(`#photoServerStatus`, role=status)와 `다시 시도`, `내 글로 돌아가기`를 둔다. 모양만 새 토큰을 쓰고 버튼은 44px이다.
@@ -234,7 +239,7 @@
 | --- | --- | --- | --- | --- |
 | **W1 바탕·토큰** | Designer 구현 · 다른 에이전트 검수 | `haedo-shell.css`, `haedo-type.css`, `ui.css`(토큰 별칭·채움 이전·`a` 색·`--soft` 사용처), `home.css`·`workbench.css`의 채움 줄만, `icons.js`, `vendor/lucide/`(`file-text`), `DESIGN.md`(`:143`·`:145`·`:174`·`:186` 등 틀·색 문장), `.impeccable/design.json` | 없음 | `unified-home-browser.cjs:442`(글쓰기 흰 글자·틸 바탕), `app-motion-browser.cjs:160`(현재 탭 750·틸), `habit-tracker-browser.cjs:135`·`:298`(옛 먹색 `rgb(24, 37, 34)`), `sns-blog-experience-browser.cjs:105`(메뉴 폭 216), `tests/icons.test.cjs` |
 | **W2 노트·일정 본문** | notes-menu 작업자(구조와 한 번에, **커밋은 구조 → 시각으로 나눈다**) | **notes-menu가 정한 파일 전부**(탐색·주소·`manifest.webmanifest` `start_url`·`subviewTitles`·돌아가기 이름 등) + 시각 파일 `home.js`, `home.css`(W1 줄 제외), `schedule.css`, `schedule-entries.js`, `schedule-ui.js`, `schedule-data.js`, `habit-tracker.js`, `habit-tracker.css`, `ui.js` `renderHeader`의 노트·일정 가지 | W1 | `habit-tracker-browser.cjs:118`(오늘 표시 750·틸), `life-naver-capture-browser.cjs:509`(`.home-post-read` → 제목 버튼), `.home-post-media`를 쓰는 `home-refinement`·`home-startup-performance`·`post-markdown-thumbnails`, 프로필 줄을 쓰는 `home-refinement`·`sns-blog-experience`·`blog-user-journeys`·`feature-flow`, 일정 검사들, `habit-tracker-browser` |
-| **W3 글 읽기** | 작업자 | `photo-post-ui.js`, `photo-post.css`, `ui.js:2686`의 한 줄(`통합 검색` 자리)만 | W1 | `sns-blog-experience-browser.cjs:224`, `minor-defects-ui-browser.cjs:127`·`:157`(보이는 `사진 포함 백업` → `⋯` 안), `photo-post-d1-browser`, `subview-navigation-browser` |
+| **W3 글 읽기** | 작업자 | `photo-post-ui.js`, `photo-post.css`, `ui.js:2687`의 한 줄(`통합 검색` 자리)만 | W1 | `sns-blog-experience-browser.cjs:224`, `minor-defects-ui-browser.cjs:127`·`:157`(보이는 `사진 포함 백업` → `⋯` 안), `photo-post-d1-browser`, `subview-navigation-browser` |
 | **W4 자료·뉴스·설정** | 작업자 | `ui.js` `renderHeader`의 자료 가지(`:2648-2675`)·`featureMenu`(`:2790`)·자료 목록과 행(`:4100-4430` 부근), `records-list.js`, `source-folders-ui.js`, `source-folders.css`, `records.css`, `discovery-ui.js`, `discovery.css`, `settings-ui.js`, `settings.css` | W1, **W2 병합 뒤**(`ui.js` 순서) | `#lifeSearchCount`: `search-quality-browser.cjs:75`·`:96`, `obsidian-reading-scale-browser.cjs:60`, `life-collections-browser.cjs:152`, `source-merge-browser.cjs:262`. `news-card-feed-browser.cjs:348`(사진 모서리 14px). `settings-browser`. `가져오기`·`기록 선택`·`통합 검색`을 쓰는 검사는 이름을 유지하므로 깨지지 않아야 한다 |
 | **W5 마무리** | Designer 구현 · 다른 에이전트 검수 | W1–W4 밖의 CSS(`workbench.css`, `platform.css`, `timeline-shell.css` 등)의 굵기 750·650·550·450과 옛 모서리를 토큰으로. **예외:** 습관 확인 칸 12px, 데이터 색, 공개 페이지 CSS | W2–W4 병합 | 통합본에서 아래 검사 전체 |
 
@@ -253,6 +258,7 @@
   - 독립 검수자는 그 단위의 구현자가 아닌 에이전트다. W1·W5는 Designer가 구현하므로 다른 에이전트가 검수한다.
 - **총괄의 병합 할 일(작업자 금지 범위):**
   - 배포마다 `sw.js` CACHE 판올림, 새 브라우저 검사의 CI 등록
+  - 아래 문장 갱신은 **1단계 배포 때** 한다. 그래야 1단계 뒤 검수자가 옛 규칙을 기준으로 위반을 올리지 않는다.
   - AGENTS 스킬 절의 시각 체계 문장("흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작…·실제 사진 피드") 갱신
   - `.agents/skills/life-haedo-design/SKILL.md:32`, `.agents/skills/unslop/INSTALLATION.md:27`의 초록 캔버스·틸 문장 갱신
 - **진행 중인 작업과의 충돌:** 총괄 기록상 notes-menu는 "작업자 A·C 병합 뒤"다. W1은 공통 CSS가 중심이라 A·C와 겹칠 가능성이 낮지만, 착수 시점은 총괄이 정한다.
