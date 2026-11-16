@@ -1,9 +1,12 @@
 /* 2026-11-11 자료 읽기: Markdown 서식 보기에서 구절을 고른 채 `발췌와 주제 연결`을 누를 때.
- * 서식 화면의 선택으로는 발췌 위치(locator)를 만들지 않는다. 같은 글자열이 원문의 다른 자리(서식 기호 뒤, 링크 주소 안,
- * 다른 목록 항목·표 칸·인용 문단)에 있을 수 있어서, 글자열이 원문에 한 번뿐이어도 고른 자리를 증명하지 못한다.
- * (정확 일치 경로를 넣었다가 독립 검수에서 다른 자리로 저장되는 사례가 확인돼 철회했다: 아래 사례가 그 목록이다.)
- * 그래서: 발췌 패널로 건너뛰지 않고, 읽던 문단을 같은 화면 높이에 둔 채 원문 보기로 바꾸며, 도구 줄 아래에
- * 원문 텍스트에서 다시 선택하라는 안내를 보인다. 원문 보기에서 고른 구절은 이전처럼 글자 단위로 정확히 저장된다.
+ * 서식 화면의 선택은 일반 문단 안에서만 발췌 위치(locator)가 된다(2026-11-16 소유자 결정 12): 원문 한 줄이고, 화면 글자가
+ * 원문 글자와 한 글자씩 같은 문단(강조·링크·코드·escape·entity·줄바꿈·겹친 공백 없음). 그 문단의 원문 시작 + 화면 글자
+ * 위치가 locator이고, 저장 전에 그 자리의 원문이 고른 글자와 같은지 다시 확인한다.
+ * 그 밖의 선택은 이전처럼 거절한다. 같은 글자열이 원문의 다른 자리(서식 기호 뒤, 링크 주소 안, 다른 목록 항목·표 칸·
+ * 인용 문단)에 있을 수 있어서, 글자열이 원문에 한 번뿐이어도 고른 자리를 증명하지 못한다(11-11에 정확 일치 경로를 넣었다가
+ * 독립 검수에서 다른 자리로 저장되는 사례가 확인돼 철회했다: 아래 `refused`가 그 목록과 이번에 더한 사례다). 거절하면 발췌
+ * 패널로 건너뛰지 않고, 읽던 문단을 같은 화면 높이에 둔 채 원문 보기로 바꾸며, 도구 줄 아래에 원문 텍스트에서 다시
+ * 선택하라는 안내를 보인다. 원문 보기에서 고른 구절은 이전처럼 글자 단위로 정확히 저장된다.
  * npm run dev; node tests/reader-markdown-excerpt-browser.cjs
  * Chromium with a real mouse drag, triple-click and the keyboard. A real touch selection is not covered. */
 'use strict';
@@ -14,8 +17,9 @@ const pad = (from, count) => Array.from({ length: count }, (_, index) => `채움
 const NOTICE = '발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.';
 const INSTRUCTION = '원문에서 발췌할 구절을 선택하세요.';
 // Each case: the raw text, a rendered block (by text it contains), what is picked there, and where that place is in the raw text.
-// In the first seven the picked words stand somewhere else in the raw text too (or only there): a locator from them would be wrong.
-const cases = [
+// In the first eight the picked words stand somewhere else in the raw text too (or only there): a locator from them would be wrong.
+// The rest are not plain paragraphs either (the rendered text is not the source character for character).
+const refused = [
   { name: 'the same words later in the same paragraph (formatting inside the first)', raw: '# 가\n\n' + pad(1, 12) + '\n\n**중요한 것은** 꾸준함이다. 그러나 중요한 것은 꾸준함이 아니라고도 한다.\n\n' + pad(13, 12),
     block: '중요한 것은 꾸준함이다', pick: '중요한 것은 꾸준함이', rawStart: '**중요한 것은**' },
   { name: 'another list item holds the plain words', raw: '# 나\n\n' + pad(1, 12) + '\n\n- **사과** 맛있다\n- 배는 시원하다\n- 사과 맛있다고 친구가 말했다\n\n' + pad(13, 12),
@@ -32,10 +36,29 @@ const cases = [
     block: '핵심 문장이다.', triple: true, rawStart: '핵심 *문장*' },
   { name: 'the selection ends in the gap after the block; the plain sentence is far below', raw: '# 자\n\n' + pad(1, 12) + '\n\n시작 *문단*이다.\n\n' + pad(13, 8) + '\n\n마지막 문단: 시작 문단이다.',
     block: '시작 문단이다.', pick: '시작 문단이다.', endInGap: true, rawStart: '시작 *문단*' },
-  // Not even a plain passage that is unique: a formatted selection is never a locator.
-  { name: 'a plain passage that occurs once', raw: '# 사\n\n' + pad(1, 12) + '\n\n앞 문단이다.\n\n여기에 하나뿐인 구절이 들어 있다.\n\n' + pad(13, 12),
-    block: '하나뿐인 구절', pick: '하나뿐인 구절', rawStart: '여기에 하나뿐인' },
+  // 2026-11-16: more that are not plain paragraphs. An escape and an entity: the screen shows another character than the source.
+  { name: 'an escape in the paragraph', raw: '# 차\n\n' + pad(1, 12) + '\n\n별\\*표 하나가 문장에 있다. 별*표 하나가 문장에 있다고 다시 쓴다.\n\n' + pad(13, 12),
+    block: '별*표 하나가 문장에 있다.', pick: '별*표 하나', rawStart: '별\\*표' },
+  { name: 'a numeric entity in the paragraph', raw: '# 카\n\n' + pad(1, 12) + '\n\n가&#45;나 사이의 줄표를 적는다.\n\n' + pad(13, 12),
+    block: '가-나 사이', pick: '사이의 줄표', rawStart: '가&#45;나' },
+  { name: 'a soft line break (two source lines, one paragraph)', raw: '# 타\n\n' + pad(1, 12) + '\n\n첫 줄의 끝과\n둘째 줄의 시작이 한 문단이다.\n\n' + pad(13, 12),
+    block: '둘째 줄의 시작', pick: '둘째 줄의 시작', rawStart: '첫 줄의 끝과' },
+  { name: 'a heading', raw: '# 파\n\n' + pad(1, 12) + '\n\n## 제목으로 쓴 문장\n\n' + pad(13, 12),
+    block: '제목으로 쓴 문장', pick: '제목으로 쓴', rawStart: '## 제목으로' },
+  { name: 'inline code beside plain words', raw: '# 하\n\n' + pad(1, 12) + '\n\n설정 값은 `기본값` 그대로 두었다.\n\n' + pad(13, 12),
+    block: '설정 값은', pick: '그대로 두었다', rawStart: '설정 값은 `' },
+  { name: 'a fenced code block', raw: '# 거\n\n' + pad(1, 12) + '\n\n```\n코드 안의 문장이다\n```\n\n' + pad(13, 12),
+    block: '코드 안의 문장', pick: '코드 안의 문장', rawStart: '```\n코드' },
+  { name: 'a link beside plain words', raw: '# 너\n\n' + pad(1, 12) + '\n\n이야기는 [여기](https://example.invalid/a)에 있다.\n\n' + pad(13, 12),
+    block: '이야기는 여기', pick: '이야기는', rawStart: '이야기는 [' },
+  { name: 'a plain list item', raw: '# 더\n\n' + pad(1, 12) + '\n\n- 목록 항목의 평범한 문장\n- 둘째 항목\n\n' + pad(13, 12),
+    block: '목록 항목의 평범한', pick: '목록 항목의 평범한', rawStart: '- 목록 항목' },
+  { name: 'two spaces in a row (one on screen)', raw: '# 러\n\n' + pad(1, 12) + '\n\n두  칸 띄운 문장이다.\n\n' + pad(13, 12),
+    block: '칸 띄운 문장', pick: '칸 띄운 문장', rawStart: '두  칸' },
+  { name: 'a drag from a plain paragraph into the next one', raw: '# 머\n\n' + pad(1, 12) + '\n\n앞의 평범한 문단이다.\n\n뒤의 평범한 문단이다.\n\n' + pad(13, 12),
+    block: '앞의 평범한 문단', across: '뒤의 평범한', rawStart: '앞의 평범한' },
 ];
+const cases = refused;
 
 async function fixture(raw, options = {}) {
   const opened = await S.open(options);
@@ -81,6 +104,7 @@ const view = page => page.evaluate(() => ({ mode: document.querySelector('#lifeS
   save: !document.querySelector('#lifeSourceExcerptSave').disabled, toBlog: !document.querySelector('#lifeSourceToBlog').disabled,
   notice: document.querySelector('#lifeReaderNotice').hidden ? null : document.querySelector('#lifeReaderNotice').textContent,
   selection: getSelection().rangeCount ? getSelection().getRangeAt(0).toString() : '', y: scrollY, focus: document.activeElement?.id }));
+const blockTop = (page, text) => page.evaluate(text => [...document.querySelectorAll('#lifeSourceText [data-source-block]')].find(node => node.textContent.includes(text)).getBoundingClientRect().top, text);
 const records = async page => (await R.bundle(page)).records;
 // Where a raw substring is on screen in the original-text view.
 const rawTop = (page, marker) => page.evaluate(marker => {
@@ -100,6 +124,16 @@ async function dragRaw(page, start, end) {
   await dragSelect(page, ends);
 }
 
+// A plain paragraph (2026-11-16 owner decision 12). The same words stand plainly earlier in a list item, after formatting
+// marks in another paragraph, and inside a link address: a locator from the words alone would name one of those.
+const plainParagraph = '여기에 하나뿐인 구절이 들어 있다. 중요한 것은 꾸준함이다.';
+const plainRaw = '# 사\n\n' + pad(1, 12) + '\n\n- 중요한 것은 꾸준함이다\n\n**중요한 것은** 꾸준함이다.\n\n[링크](<https://example.invalid/중요한 것은 꾸준함이다>)\n\n앞 문단이다.\n\n' + plainParagraph + '\n\n바로 뒤의 *강조* 문단이다.\n\n' + pad(13, 12);
+const plainAt = (phrase, raw = plainRaw, paragraph = plainParagraph) => { const start = raw.indexOf(paragraph) + paragraph.indexOf(phrase); return { start, end: start + phrase.length }; };
+const savedFor = async (page, versionId) => (await records(page)).filter(record => record.sourceRefs.some(ref => ref.sourceVersionId === versionId));
+async function saveWith(page, topic) {
+  await page.locator('#lifeSourceTopic').fill(topic); await page.locator('#lifeSourceExcerptSave').click(); await settle(page); await frames(page);
+}
+
 async function main() {
   await S.start();
   try {
@@ -109,6 +143,10 @@ async function main() {
       const f = await fixture(item.raw, { width, height, touch });
       const box = await showBlock(f.page, item.block);
       if (item.triple) await f.page.mouse.click(box.left + 30, box.top + 12, { clickCount: 3 });
+      else if (item.across) {
+        const from = await phraseEnds(f.page, item.block, item.block), to = await phraseEnds(f.page, item.across, item.across);
+        await dragSelect(f.page, { from: from.from, to: to.to });
+      }
       else if (item.endInGap) await f.page.evaluate(({ block, pick }) => {
         const element = [...document.querySelectorAll('#lifeSourceText [data-source-block]')].find(node => node.textContent.includes(block));
         const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), first = walker.nextNode(), range = document.createRange();
@@ -140,6 +178,93 @@ async function main() {
       assert.equal(opened.panel, true); assert.equal(opened.picked, INSTRUCTION); assert.equal(opened.save, false, 'no selection was made for the person');
       assert.deepEqual(await records(f.page), before, 'nothing was stored');
       await f.context.close();
+    });
+
+    for (const [width, height, touch] of [[1440, 900, false], [390, 844, true]]) await S.check('picked in a plain paragraph of the formatted view (' + width + '): the panel opens there and the excerpt is that exact place, though the same words stand earlier', async () => {
+      const f = await fixture(plainRaw, { width, height, touch });
+      const phrase = '중요한 것은 꾸준함이다', want = plainAt(phrase);
+      assert(plainRaw.indexOf(phrase) < want.start, 'the same words stand earlier in the raw text');
+      await showBlock(f.page, '하나뿐인 구절');
+      await dragSelect(f.page, await phraseEnds(f.page, '하나뿐인 구절', phrase));
+      let state = await view(f.page);
+      assert.equal(state.selection, phrase, 'the drag picked the phrase');
+      assert.deepEqual([state.mode, state.picked, state.save, state.toBlog], ['formatted', phrase, true, true], 'the plain pick can be stored and carried');
+      const top = await blockTop(f.page, '하나뿐인 구절');
+      await R.pressAt(f.page, '#lifeExcerptToggle');
+      state = await view(f.page);
+      assert.deepEqual([state.mode, state.panel, state.notice, state.picked, state.save], ['formatted', true, null, phrase, true], 'the panel opens in the formatted view with that passage');
+      if (width === 390) await S.capture(f.page, 'formatted-plain-pick-' + width);
+      await saveWith(f.page, '서식에서 고름');
+      const saved = await savedFor(f.page, f.versionId);
+      assert.equal(saved.length, 1);
+      assert.deepEqual(saved[0].sourceRefs[0].locator, want, 'the plain paragraph, not the list item, the formatted paragraph or the link address');
+      assert.equal(plainRaw.slice(want.start, want.end), phrase); assert.equal(saved[0].text, phrase, 'the stored text is the selected text');
+      const after = await view(f.page);
+      assert.equal(after.mode, 'formatted', 'reading goes on in the formatted view'); const now = await blockTop(f.page, '하나뿐인 구절');
+      assert(Math.abs(now - top) <= 12, 'the paragraph stays at its height (' + top + ' → ' + now + ')');
+      await f.context.close();
+    });
+
+    await S.check('a triple-click on a plain paragraph (BOM and CRLF in the original): the whole paragraph, exactly', async () => {
+      const first = '첫 문단은 평범한 한국어 문장이다.', raw = '﻿' + first + '\r\n\r\n' + pad(1, 12).replace(/\n/g, '\r\n') + '\r\n';
+      const f = await fixture(raw);
+      const box = await showBlock(f.page, '첫 문단은');
+      await f.page.mouse.click(box.left + 30, box.top + 12, { clickCount: 3 }); await frames(f.page);
+      await R.pressAt(f.page, '#lifeExcerptToggle');
+      const state = await view(f.page);
+      assert.deepEqual([state.mode, state.panel, state.picked, state.save], ['formatted', true, first, true]);
+      await saveWith(f.page, '세 번 눌러 고름');
+      const saved = await savedFor(f.page, f.versionId);
+      assert.deepEqual(saved[0].sourceRefs[0].locator, { start: 1, end: 1 + first.length }, 'after the BOM, without the line break');
+      assert.equal(saved[0].text, first);
+      await f.context.close();
+    });
+
+    await S.check('a plain pick widened into the next (formatted) paragraph, or a paragraph whose text on screen was changed: nothing to store, and the notice', async () => {
+      const f = await fixture(plainRaw);
+      const box = await showBlock(f.page, '하나뿐인 구절');
+      await dragSelect(f.page, await phraseEnds(f.page, '하나뿐인 구절', '하나뿐인 구절'));
+      assert.equal((await view(f.page)).save, true);
+      // (From the paragraph's first word: a press inside the earlier selection would drag that text instead.)
+      const from = await phraseEnds(f.page, '하나뿐인 구절', '여기에'), to = await phraseEnds(f.page, '바로 뒤의', '바로 뒤의');
+      await dragSelect(f.page, { from: from.from, to: to.to });
+      let state = await view(f.page);
+      assert(state.selection.includes('바로 뒤의'), 'the selection reaches the next paragraph');
+      assert.deepEqual([state.picked, state.save, state.toBlog], [INSTRUCTION, false, false], 'the earlier pick is gone: nothing to store or carry');
+      await R.pressAt(f.page, '#lifeExcerptToggle');
+      state = await view(f.page);
+      assert.deepEqual([state.mode, state.panel, state.notice, state.save], ['raw', false, NOTICE, false]);
+      assert(Math.abs((await rawTop(f.page, '여기에 하나뿐인')).top - box.top) <= 12);
+      assert.deepEqual(await records(f.page), [], 'nothing was stored');
+      await f.context.close();
+      // The paragraph's text is changed on screen (as a page translation does). It no longer is the original character
+      // for character, so a pick in it is refused.
+      const g = await fixture(plainRaw);
+      await g.page.evaluate(() => { const block = [...document.querySelectorAll('#lifeSourceText [data-source-block]')].find(node => node.textContent.includes('하나뿐인 구절')); block.firstChild.data = block.firstChild.data.replace('구절', '문구'); });
+      await showBlock(g.page, '하나뿐인 문구');
+      await dragSelect(g.page, await phraseEnds(g.page, '하나뿐인 문구', '하나뿐인'));
+      state = await view(g.page);
+      assert.deepEqual([state.selection, state.save], ['하나뿐인', false], 'a changed paragraph is not a plain paragraph');
+      await R.pressAt(g.page, '#lifeExcerptToggle');
+      assert.deepEqual([(await view(g.page)).mode, (await view(g.page)).notice], ['raw', NOTICE]);
+      assert.deepEqual(await records(g.page), [], 'nothing was stored');
+      await g.context.close();
+    });
+
+    await S.check('touch tap on a plain pick, also when the selection is gone by the time of the click (simulated): the panel opens with it', async () => {
+      for (const cleared of [false, true]) {
+        const f = await fixture(plainRaw, { width: 390, height: 844, touch: true });
+        await showBlock(f.page, '하나뿐인 구절');
+        await dragSelect(f.page, await phraseEnds(f.page, '하나뿐인 구절', '하나뿐인 구절'));
+        if (cleared) await f.page.evaluate(() => document.querySelector('#lifeExcerptToggle').addEventListener('mousedown', () => getSelection().removeAllRanges(), { once: true }));
+        const button = await R.rect(f.page, '#lifeExcerptToggle');
+        await f.page.touchscreen.tap(button.left + button.width / 2, button.top + button.height / 2); await frames(f.page);
+        const state = await view(f.page);
+        assert.deepEqual([state.mode, state.panel, state.notice, state.picked, state.save], ['formatted', true, null, '하나뿐인 구절', true], 'cleared=' + cleared);
+        await saveWith(f.page, '눌러 고름');
+        assert.deepEqual((await savedFor(f.page, f.versionId))[0].sourceRefs[0].locator, plainAt('하나뿐인 구절'), 'cleared=' + cleared);
+        await f.context.close();
+      }
     });
 
     await S.check('picked in the original text after the notice: the excerpt is that exact place, character for character', async () => {
@@ -185,7 +310,7 @@ async function main() {
     // button is pressed; that is simulated here by clearing it between the press and the click. Not a real iOS check.
     await S.check('touch tap, also when the selection is gone by the time of the click (simulated): no jump to the panel, the same notice', async () => {
       for (const cleared of [false, true]) {
-        const item = cases[8], f = await fixture(item.raw, { width: 390, height: 844, touch: true });
+        const item = cases[3], f = await fixture(item.raw, { width: 390, height: 844, touch: true });
         const box = await showBlock(f.page, item.block);
         await dragSelect(f.page, await phraseEnds(f.page, item.block, item.pick));
         if (cleared) await f.page.evaluate(() => document.querySelector('#lifeExcerptToggle').addEventListener('mousedown', () => getSelection().removeAllRanges(), { once: true }));
@@ -200,8 +325,8 @@ async function main() {
     });
 
     await S.check('with nothing picked the button behaves as before: original text and the panel', async () => {
-      const f = await fixture(cases[8].raw);
-      await showBlock(f.page, cases[8].block);
+      const f = await fixture(plainRaw);
+      await showBlock(f.page, '하나뿐인 구절');
       await f.page.evaluate(() => getSelection().removeAllRanges());
       await R.pressAt(f.page, '#lifeExcerptToggle');
       const state = await view(f.page);

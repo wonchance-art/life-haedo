@@ -88,6 +88,23 @@
       return { ...result, kind: 'properties', reason: null, entries };
     } catch (_) { return intent ? result : null; }
   }
+  // A plain paragraph (2026-11-16 owner decision 12): one source line whose rendered text is exactly a slice of
+  // the original, character for character. Only there can a passage picked in the formatted view name its place
+  // in the original (block start + offset in the rendered text). Everything else is refused: emphasis, links,
+  // code, escapes and entities (the parser's text differs from the source), soft and hard breaks, NUL (replaced
+  // by the parser), and runs of spaces or tabs (collapsed on screen). The check is by equality, not by a list of
+  // syntax: whatever makes the parser's text differ from the source slice is not plain.
+  function plainParagraph(raw, lines, begin, end, inline) {
+    if (end - begin !== 1 || inline?.type !== 'inline' || inline.children?.length !== 1) return null;
+    const text = inline.children[0], content = inline.content;
+    if (text.type !== 'text' || typeof content !== 'string' || !content || text.content !== content || /[\t\n\r\f]| {2}/.test(content)) return null;
+    let offset = lines[begin], line = raw.slice(offset, begin + 1 < lines.length ? lines[begin + 1] : raw.length).replace(/(?:\r\n|\r|\n)$/, '');
+    // The parser reads the text without a leading BOM.
+    if (begin === 0 && line[0] === '\uFEFF') { line = line.slice(1); offset++; }
+    const lead = line.length - line.trimStart().length;
+    if (line.slice(lead, lead + content.length) !== content || line.slice(lead + content.length).trim() !== '') return null;
+    return { start: offset + lead, end: offset + lead + content.length };
+  }
   function prepare(raw) {
     if (typeof raw !== 'string') throw new TypeError('원문 문자열이 필요합니다.');
     if (raw.length > LIMITS.bytes || new TextEncoder().encode(raw).byteLength > LIMITS.bytes) return { formatted: false, reason: 'too_large' };
@@ -115,7 +132,8 @@
       };
       visit(tokens, 0);
       const blocks = header ? [{ start: 0, end: header.end }] : [];
-      for (const token of tokens) {
+      for (let at = 0; at < tokens.length; at++) {
+        const token = tokens[at];
         if (token.level !== 0 || token.hidden || !token.tag || token.nesting < 0 || !token.map) continue;
         const [begin, end] = token.map;
         if (!Number.isInteger(begin) || !Number.isInteger(end) || begin < 0 || end <= begin || begin >= lines.length || end > lines.length) throw new Error('mapping');
@@ -123,7 +141,8 @@
         if (blocks.length && start < blocks[blocks.length - 1].end) throw new Error('mapping');
         const index = blocks.length;
         token.attrSet('data-source-block', String(index));
-        blocks.push({ start, end: finish });
+        const plain = token.type === 'paragraph_open' ? plainParagraph(raw, lines, begin, end, tokens[at + 1]) : null;
+        blocks.push(plain ? { start, end: finish, plain } : { start, end: finish });
       }
       const escape = md.utils.escapeHtml;
       let properties = '';
@@ -191,9 +210,38 @@
             code.textContent = raw.slice(plan.frontmatter.start, plan.frontmatter.end);
           }
         }
-        return Object.freeze({ element: node, ...plan.blocks[index] });
+        const mapped = plan.blocks[index], plain = mapped.plain, only = node.childNodes.length === 1 ? node.firstChild : null;
+        // The plain paragraph is checked again in the page: one text node that is exactly the source slice.
+        const exact = !!plain && node.tagName.toLowerCase() === 'p' && only?.nodeType === 3 && only.data === raw.slice(plain.start, plain.end);
+        return Object.freeze({ element: node, start: mapped.start, end: mapped.end, ...(exact ? { plain: Object.freeze({ start: plain.start, end: plain.end }), textNode: only } : {}) });
       });
-      const adapter = Object.freeze({ raw,
+      const plainBlocks = blocks.filter(block => block.textNode);
+      // Where a range picked in the formatted view begins and ends in the source: only inside one plain paragraph.
+      // A range that also covers characters of any other block (or any rendered text outside that paragraph) is
+      // refused. Returns { start, end, text } with raw.slice(start, end) === text, or null.
+      function locate(range) {
+        if (!range || range.collapsed || !element.contains(range.startContainer) || !element.contains(range.endContainer)) return null;
+        const doc = element.ownerDocument;
+        const between = (fromNode, fromOffset, toNode, toOffset) => { const part = doc.createRange(); part.setStart(fromNode, fromOffset); part.setEnd(toNode, toOffset); return part.toString(); };
+        const overlap = block => {
+          const text = block.textNode;
+          if (text.parentNode !== block.element || text.data !== raw.slice(block.plain.start, block.plain.end)) return null;
+          const from = range.startContainer === text ? range.startOffset : range.comparePoint(text, 0) === 0 ? 0 : null;
+          const to = range.endContainer === text ? range.endOffset : range.comparePoint(text, text.length) === 0 ? text.length : null;
+          return from !== null && to !== null && from < to ? { block, text, from, to } : null;
+        };
+        const hits = plainBlocks.map(overlap).filter(Boolean);
+        if (hits.length !== 1) return null;
+        const { block, text, from, to } = hits[0];
+        // Outside the paragraph's text the range may hold only the line breaks between blocks (no rendered character).
+        if (range.startContainer !== text && !/^\n*$/.test(between(range.startContainer, range.startOffset, text, 0))) return null;
+        if (range.endContainer !== text && !/^\n*$/.test(between(text, text.length, range.endContainer, range.endOffset))) return null;
+        const start = block.plain.start + from, end = block.plain.start + to;
+        if (bound(raw, start) !== start || bound(raw, end) !== end) return null;
+        const picked = text.data.slice(from, to);
+        return raw.slice(start, end) === picked ? Object.freeze({ start, end, text: picked }) : null;
+      }
+      const adapter = Object.freeze({ raw, locate,
         clampOffset: value => bound(raw, value),
         visibleOffset() {
           const viewport = document.defaultView?.innerHeight || root.innerHeight;

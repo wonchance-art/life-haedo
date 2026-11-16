@@ -220,6 +220,13 @@
     // date never chosen means that day, not the clock at each call, so the title, the address, 오늘, ‹ › and
     // the day's checks all use the one date on screen. scheduleRollover() moves it when the day changes.
     let scheduleDay = null, scheduleDayTimer = null, scheduleDayRetry = null, scheduleDayWatch = null, scheduleDayMoving = false, scheduleDayFocus = null;
+    // A date the address named when the screen was opened (`&date=`, 2026-11-16 owner decision 11) is pinned: that
+    // screen keeps it when the day changes, also when it was today's date. It stays pinned while the screen shows it
+    // (another unit of the same date included) and is let go when a date is chosen in the app (‹ ›, 오늘, a calendar
+    // cell). A history entry records it (schedulePinned), so Back and a reload of that entry keep it too. Screens
+    // without a date in the address, dates reached in the app and entries recorded as today (scheduleToday) follow
+    // today as before. null, or the same date as state.scheduleDate.
+    let schedulePin = null;
     const scheduleDate = () => {
       const sd = global.HaedoLife.ScheduleData;
       if (!sd) return null;
@@ -227,13 +234,13 @@
       return sd.valid(state.scheduleDate) ? state.scheduleDate : scheduleDay;
     };
     // The day changed since the schedule was drawn: a screen that showed today follows the new today, a
-    // chosen past or future date stays. True when the day moved.
+    // chosen past or future date and a pinned date stay. True when the day moved.
     function scheduleRollover() {
       const sd = global.HaedoLife.ScheduleData;
       if (!sd) return false;
       const now = sd.today();
       if (scheduleDay === now) return false;
-      if (scheduleDay && state.scheduleDate === scheduleDay) state.scheduleDate = now;
+      if (scheduleDay && state.scheduleDate === scheduleDay && state.scheduleDate !== schedulePin) state.scheduleDate = now;
       scheduleDay = now;
       return true;
     }
@@ -1644,7 +1651,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, schedulePinned, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = externalImport.article.privateReader === true
@@ -1686,6 +1693,8 @@
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
       // A navigation is drawn with the current day (the date an option names is applied after it).
       scheduleRollover();
+      // A date named here is chosen in the app (not pinned), unless it reopens a pinned history entry.
+      if (Object.prototype.hasOwnProperty.call(viewOptions, 'scheduleDate')) schedulePin = schedulePinned === true ? viewOptions.scheduleDate : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1872,7 +1881,9 @@
       // 일정's calendar units keep their date in the address (a reload opens the same period).
       if (calendarModes.has(view) || section === 'tools') {
         const date = params.get('date');
-        if (global.HaedoLife.ScheduleData?.valid(date)) state.scheduleDate = date;
+        // A date the address names is pinned (2026-11-16 owner decision 11); an address without one follows today.
+        if (global.HaedoLife.ScheduleData?.valid(date)) { state.scheduleDate = date; schedulePin = date; }
+        else schedulePin = null;
         return calendarModes.has(view) ? view : 'tools';
       }
       if ((section === 'home' || section === 'schedule') && !view) return 'home';
@@ -1967,7 +1978,12 @@
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) Object.assign(entry, { task: 'blog', blog: blogRoute, ...(blogComposing ? { compose: true } : {}) });
       if (mode === 'page' && materialWritingTask && materialHistorySeed) Object.assign(entry, { task: 'material', material: materialHistorySeed, materialReader: materialReaderOrigin || null });
       // scheduleToday: the entry showed today. A tab reopened on a later day (reload) opens that day's today.
-      if (calendarModes.has(mode) && scheduleDate()) { entry.scheduleDate = scheduleDate(); if (entry.scheduleDate === scheduleDay) entry.scheduleToday = true; }
+      // schedulePinned: the entry shows a date its address named (kept on Back and reload, whatever the day).
+      if (calendarModes.has(mode) && scheduleDate()) {
+        entry.scheduleDate = scheduleDate();
+        if (schedulePin && entry.scheduleDate === schedulePin) entry.schedulePinned = true;
+        else if (entry.scheduleDate === scheduleDay) entry.scheduleToday = true;
+      }
       if (mode === 'find' && findSection) entry.findSection = findSection;
       const origin = viewOrigins.get(mode);
       if (origin?.workspaceId === entry.workspaceId) entry.viewOrigin = origin;
@@ -1999,7 +2015,7 @@
           Object.assign(position, { offset: reading.offset, top: Math.round(reading.top), viewport: reading.viewport, ...(Number.isFinite(reading.ratio) ? { ratio: Math.min(1, Math.max(0, Math.round(reading.ratio * 1000) / 1000)) } : {}) });
         out.reading = position;
       }
-      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday']) if (typeof value[key] === 'boolean') out[key] = value[key];
+      for (const key of ['featureNavigation', 'blogPageTask', 'materialWritingTask', 'compose', 'scheduleToday', 'schedulePinned']) if (typeof value[key] === 'boolean') out[key] = value[key];
       if (returnPagePattern.test(value.returnPage || '')) out.returnPage = value.returnPage;
       if (value.postTarget && typeof value.postTarget.id === 'string' && historyIdPattern.test(value.postTarget.id) && Number.isSafeInteger(value.postTarget.revision))
         out.postTarget = { id: value.postTarget.id, revision: value.postTarget.revision };
@@ -2073,9 +2089,9 @@
       if (mode === 'external-discovery') url.searchParams.delete('view');
       else if (['tools', 'annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'import', 'write', 'sync', 'backup', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', 'quarter', 'month', 'week', 'day', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
-      // Q·M·W·D name their date; Y names it only for another year than this one.
+      // Q·M·W·D name their date; Y names it only for another year than this one, or when the address pinned it.
       const date = scheduleDate(), sd = global.HaedoLife.ScheduleData;
-      if (sd && calendarModes.has(mode) && (mode !== 'tools' || sd.parts(date).year !== sd.parts(sd.today()).year)) url.searchParams.set('date', date);
+      if (sd && calendarModes.has(mode) && (mode !== 'tools' || date === schedulePin || sd.parts(date).year !== sd.parts(sd.today()).year)) url.searchParams.set('date', date);
       else url.searchParams.delete('date');
       // The app's own screen hashes stay where they belong: 설정's items within 설정 (its
       // sub-screens keep them so back restores the row used), the old backup anchors on 백업·복원.
@@ -2208,8 +2224,9 @@
     }
     // ‹ › and 오늘 update the same screen: the entry is replaced, not added.
     // The same date is drawn again only when the day changed after this screen was drawn (its 오늘 marks are old).
+    // A pinned date chosen again (오늘 on a pinned today) is drawn again as chosen in the app: it follows today from then on.
     async function scheduleMove(date) {
-      if (!calendarModes.has(state.mode) || date === scheduleDate() && scheduleDay === global.HaedoLife.ScheduleData.today()) return;
+      if (!calendarModes.has(state.mode) || date === scheduleDate() && scheduleDay === global.HaedoLife.ScheduleData.today() && date !== schedulePin) return;
       const focusKey = main.contains(document.activeElement) || toolbar.contains(document.activeElement) ? document.activeElement?.dataset.focusKey : null;
       if (await navigate(state.mode, { preserveContext: true, scheduleDate: date, historyAction: 'replace', navigationMotion: 'tab', sectionPosition: { scrollY: global.scrollY } }) === false) return;
       if (disposed || !focusKey) return;
@@ -2258,7 +2275,8 @@
       // date changed and takes no other input for that day, until the owner stores the choice again or drops it
       // (ScheduleEntries.holdDay). Nothing is polled meanwhile.
       const shown = scheduleDate();
-      if (state.mode === 'day' && shown === scheduleDay && entries?.failed?.().includes(shown)) { entries.holdDay(shown); return; }
+      // (A pinned day does not move, so nothing is held for it.)
+      if (state.mode === 'day' && shown === scheduleDay && shown !== schedulePin && entries?.failed?.().includes(shown)) { entries.holdDay(shown); return; }
       if (scheduleInUse()) {
         if (!scheduleDayRetry) scheduleDayRetry = global.setTimeout(() => { scheduleDayRetry = null; scheduleDayCheck(); }, 1000);
         return;
@@ -2359,9 +2377,11 @@
         restoreViewOrigin: entry.viewOrigin || null, historyTask: entry.blog ? 'blog' : entry.material ? 'material' : null };
       if (entry.homeState) options.homeState = entry.homeState;
       // An entry that showed today reopens on today, as a reload of it does (mount): back to "today's" screen on a
-      // later day is not yesterday's screen.
-      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate))
-        options.scheduleDate = entry.scheduleToday === true ? global.HaedoLife.ScheduleData.today() : entry.scheduleDate;
+      // later day is not yesterday's screen. An entry whose address pinned its date reopens on that date, pinned.
+      if (calendarModes.has(entry.mode) && global.HaedoLife.ScheduleData?.valid(entry.scheduleDate)) {
+        if (entry.schedulePinned === true) Object.assign(options, { scheduleDate: entry.scheduleDate, schedulePinned: true });
+        else options.scheduleDate = entry.scheduleToday === true ? global.HaedoLife.ScheduleData.today() : entry.scheduleDate;
+      }
       if (entry.mode === 'source' && entry.sourceId) { seedReaderPosition(entry); Object.assign(options, { sourceId: entry.sourceId, sourceVersionId: entry.sourceVersionId, returnContext: entry.returnContext || null, locator: null }); }
       if (entry.mode === 'page' && entry.blog) {
         const blog = await openBlogRoute(state.bundle.workspaceId, entry.blog, entry.compose === true);
@@ -4601,6 +4621,8 @@
       state.sourceVersionId = version.id;
       const lifecycle = core.sourceState(state.bundle, source.id), sourceActive = lifecycle.status === 'active';
       let changeReaderMode = null, currentReaderOffset = () => null, optionOffset = null;
+      // The chosen passage, checked against the original before anything is stored or carried (set with the reader below).
+      let exactSelection = () => state.sourceSelection;
       const batch = currentBatch();
       if (batch && batch.items.some(item => item.result?.sourceVersionId === version.id)) {
         const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back);
@@ -4626,12 +4648,12 @@
       tools.append(back, arrange, info);
       arrange.disabled = !sourceActive;
       const useQuote = button('선택 구절로 글 쓰기', guarded(() => {
-        const locator = state.sourceSelection && { ...state.sourceSelection };
+        const locator = exactSelection() && { ...state.sourceSelection };
         if (!locator || locator.start >= locator.end) throw new Error('먼저 본문에서 인용할 구절을 선택해 주세요.');
         return navigate('blog', { evidenceSeed: { sourceId: source.id, versionId: version.id, locator } });
       }));
       const useNine = button('선택 구절을 9칸에 담기', guarded(async () => {
-        const locator = state.sourceSelection && { ...state.sourceSelection };
+        const locator = exactSelection() && { ...state.sourceSelection };
         if (!locator || locator.start >= locator.end) throw new Error('먼저 본문에서 담을 구절을 선택해 주세요.');
         const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
         const reference = await global.HaedoLife.SourceReference.build({ bundle: state.bundle, sourceId: source.id, versionId: version.id, locator });
@@ -4973,12 +4995,13 @@
       const topic = field('주제 (선택)', 'text', 'lifeSourceTopic', sourceDraft.topic);
       const note = field('연결 이유 또는 메모 (선택)', 'textarea', 'lifeSourceNote', sourceDraft.note);
       const saveExcerpt = button('선택 구절 모음에 추가', guarded(async () => {
-        const range = state.sourceSelection;
+        const range = exactSelection();
         if (!sourceActive || !core.isSourceActive(state.bundle, source.id)) throw new Error('자료를 복원한 뒤 새 구절을 저장해 주세요.');
         if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
         const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
         const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
-        state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
+        // A passage picked in the formatted view reopens the formatted view where it was read (a raw range would open the original text).
+        state.readerPositions.set(version.id, formattedPick ? { start: range.start, end: range.start, mode: 'formatted', scrollY: readingScrollY } : { start: range.start, end: range.end, scrollY: readingScrollY });
         await commit(changes);
         state.sourceDrafts.delete(version.id); storeSourceDrafts();
         render();
@@ -5047,18 +5070,45 @@
         state.readerPositions.set(version.id, { ...(formattedView ? { start: offset, end: offset } : state.sourceSelection || { start: 0, end: 0 }),
           mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY, anchor });
       };
-      const remember = (start, end) => {
+      // A passage picked in the formatted view (2026-11-16 owner decision 12): only inside one plain paragraph, where the
+      // rendered text is the original character for character (SourceMarkdown adapter.locate). Its offsets are the
+      // block's source start plus the offsets in that paragraph's text; the picked text is kept to check against the
+      // original again before it is stored. null: the current choice is not such a pick.
+      let formattedPick = null;
+      // exact: the offsets name the original itself (the raw text node, the keyboard copy of the original, or a checked
+      // plain-paragraph pick). Only an exact choice can be stored or carried.
+      const remember = (start, end, { exact = !formattedView, text = null } = {}) => {
+        formattedPick = text === null ? null : { start, end, text };
         state.sourceSelection = { start, end };
         if (state.sourceDrafts.has(version.id)) { state.sourceDrafts.get(version.id).range = { start, end }; storeSourceDrafts(); }
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
-        saveExcerpt.disabled = !sourceActive || formattedView || start >= end;
-        useQuote.disabled = useNine.disabled = !sourceActive || formattedView || start >= end;
+        saveExcerpt.disabled = !sourceActive || !exact || start >= end;
+        useQuote.disabled = useNine.disabled = !sourceActive || !exact || start >= end;
         savePosition();
       };
+      // The formatted pick is replaced by a selection that is not one (wider, elsewhere, collapsed): nothing is left to store.
+      const forgetFormattedPick = () => {
+        if (!formattedPick) return;
+        formattedPick = null; state.sourceSelection = null;
+        if (state.sourceDrafts.has(version.id)) { state.sourceDrafts.get(version.id).range = null; storeSourceDrafts(); }
+        picked.textContent = instruction; quote.dataset.hasSelection = 'false';
+        saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
+        savePosition();
+      };
+      const formattedRefusal = '발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.';
+      exactSelection = () => {
+        const range = state.sourceSelection;
+        // A formatted pick is stored only while it is still the same place and the original there is the text that was picked.
+        if (range && formattedPick && (formattedPick.start !== range.start || formattedPick.end !== range.end || version.contentText.slice(range.start, range.end) !== formattedPick.text)) {
+          forgetFormattedPick(); throw new Error(formattedRefusal);
+        }
+        return range;
+      };
+      const pickInFormatted = range => formattedView && markdown?.formatted ? markdown.adapter.locate(range) : null;
       const capture = event => {
         if (['pointerup', 'keyup'].includes(event?.type)) readerInteracted = true;
-        if (formattedView || !sourceActive || !reader.isConnected || document.activeElement?.matches('input,textarea')) return;
+        if (!sourceActive || !reader.isConnected || document.activeElement?.matches('input,textarea')) return;
         // A textarea selection leaves the document's earlier Range intact.
         // Keep the keyboard choice when opening/closing tools; only a fresh
         // interaction with the readable body makes that Range authoritative.
@@ -5067,6 +5117,12 @@
         if (!selection || selection.rangeCount !== 1) return;
         const range = selection.getRangeAt(0);
         if (!reader.contains(range.startContainer) || !reader.contains(range.endContainer)) return;
+        if (formattedView) {
+          selectionOrigin = 'dom';
+          const pick = range.collapsed ? null : pickInFormatted(range);
+          if (pick) remember(pick.start, pick.end, { exact: true, text: pick.text }); else forgetFormattedPick();
+          return;
+        }
         const offset = (container, value) => container === originalText ? value : container === reader ? (value === 0 ? 0 : version.contentText.length) : null;
         const start = offset(range.startContainer, range.startOffset), end = offset(range.endContainer, range.endOffset);
         if (start === null || end === null) return;
@@ -5141,12 +5197,13 @@
         // The next press or key (starting the new selection) takes it away; not the press that produced it.
         global.setTimeout(() => { if (noticeTimer !== null) { document.addEventListener('pointerdown', hideNotice, true); document.addEventListener('keydown', hideNotice, true); } }, 0);
       };
-      // A passage picked in the formatted view is not a place in the original: the rendered text has no raw
+      // A passage picked in the formatted view is in general not a place in the original: the rendered text has no raw
       // offsets, and the same words can stand elsewhere in the raw text (inside a link address, after formatting
-      // marks, in another list item). An excerpt is therefore picked in the original text only
-      // (docs/design-review/material-markdown-edit-delete.md). Pressing the excerpt button with something picked in
-      // the formatted view shows that paragraph as original text at the same height and asks for the passage
-      // there. Nothing is selected for the person and no locator is made from the formatted selection.
+      // marks, in another list item). Only a pick inside one plain paragraph is one (pickInFormatted above, 2026-11-16
+      // owner decision 12): the excerpt panel then opens in the formatted view with it. Any other pick is refused
+      // (docs/design-review/material-markdown-edit-delete.md): pressing the excerpt button shows that paragraph as
+      // original text at the same height and asks for the passage there. Nothing is selected for the person and no
+      // locator is made from that selection.
       const pickedPlace = () => {
         if (!formattedView || !markdown?.formatted) return null;
         const selection = global.getSelection();
@@ -5158,22 +5215,31 @@
         // Where that block starts in the original (the parser's block map) and where it is on screen now.
         return block ? { start: block.start, top: block.element.getBoundingClientRect().top } : {};
       };
+      const pickedNow = () => {
+        const selection = global.getSelection();
+        return selection && selection.rangeCount === 1 && !selection.isCollapsed ? pickInFormatted(selection.getRangeAt(0)) : null;
+      };
       // A touch on the button can clear the page selection before the click arrives; note at the press that there was one.
-      let pressedPlace = null;
-      quote.addEventListener('pointerdown', () => { pressedPlace = pickedPlace(); }, { capture: true });
+      let pressedPlace = null, pressedPick = null;
+      quote.addEventListener('pointerdown', () => { pressedPick = pickedNow(); pressedPlace = pressedPick ? null : pickedPlace(); }, { capture: true });
       quote.addEventListener('click', event => {
-        const place = formattedView && panel.hidden ? pickedPlace() || pressedPlace : null; pressedPlace = null;
-        if (!formattedView) return;
+        const opening = formattedView && panel.hidden;
+        const pick = opening ? pickedNow() || pressedPick : null;
+        const place = opening && !pick ? pickedPlace() || pressedPlace : null; pressedPlace = pressedPick = null;
+        // Closing the panel keeps the view it was read in.
+        if (!opening) return;
+        // A plain-paragraph pick: the panel opens here, in the formatted view, with that passage.
+        if (pick) { remember(pick.start, pick.end, { exact: true, text: pick.text }); return; }
         changeReaderMode?.('raw', false);
         // Nothing picked (or the panel is closing): the original text and the panel, as before.
         if (!place) return;
         event.stopImmediatePropagation();
-        global.getSelection()?.removeAllRanges(); state.sourceSelection = null;
+        global.getSelection()?.removeAllRanges(); state.sourceSelection = null; formattedPick = null;
         picked.textContent = instruction; quote.dataset.hasSelection = 'false'; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
         const top = Number.isInteger(place.start) ? charTop(place.start) : null;
         if (top !== null) global.scrollTo({ top: Math.max(0, global.scrollY + top - place.top), behavior: 'instant' });
         reader.focus({ preventScroll: true });
-        showNotice('발췌할 구절은 원문 텍스트에서 다시 선택해 주세요.');
+        showNotice(formattedRefusal);
         // The button's own hover label would sit on the notice it just produced; it returns when the pointer leaves.
         quote.dataset.tooltipDismissed = 'true';
       }, { capture: true });
@@ -5233,7 +5299,7 @@
         // in by a script fires no event to undo it at; check here first. Putting the original back leaves only a
         // caret, so a selection that was made in other text is dropped.
         keepKeyboardText();
-        remember(displayToRaw(version.contentText, keyboardReader.input.selectionStart), displayToRaw(version.contentText, keyboardReader.input.selectionEnd));
+        remember(displayToRaw(version.contentText, keyboardReader.input.selectionStart), displayToRaw(version.contentText, keyboardReader.input.selectionEnd), { exact: true });
       };
       ['select', 'keyup', 'pointerup'].forEach(name => keyboardReader.input.addEventListener(name, captureKeyboard));
       keyboard.append(node('p', 'Shift + 화살표로 구절을 선택하세요. 원문 내용은 바뀌지 않습니다.', 'life-help'),
@@ -5290,7 +5356,7 @@
         readerWatch?.suppress(); readerWatch?.close(); readerWatch = null;
         formattedView = next === 'formatted'; state.readerModes.set(version.id, next);
         reader = formattedView ? markdown.element : rawReader; installReader();
-        state.sourceSelection = null; picked.textContent = instruction; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
+        state.sourceSelection = null; formattedPick = null; picked.textContent = instruction; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
         quote.dataset.hasSelection = 'false';
         if (formattedView) { global.getSelection()?.removeAllRanges(); markdown.adapter.scrollToOffset(offset); }
         else { const range = restoreSelection({ start: offset, end: offset }); const rect = rangeRect(range); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
@@ -6709,9 +6775,14 @@
     if (state.mode === 'find') findSection = addressFindSection();
     syncHistoryPosition();
     // An entry that showed today reopens on today (a tab the browser reloads on a later day), not on the day it was written.
+    // A reload of a recorded entry keeps what it was: pinned by its address, today, or a date chosen in the app. Only an
+    // address opened anew (no record of it in this tab) pins the date it names.
     if (calendarModes.has(state.mode)) {
       const recorded = global.history.state?.haedo?.v === 1 ? global.history.state.haedo.entry : null;
-      if (recorded?.mode === state.mode && recorded.scheduleToday === true && recorded.scheduleDate === state.scheduleDate) state.scheduleDate = null;
+      if (recorded?.mode === state.mode && recorded.scheduleDate === state.scheduleDate) {
+        if (recorded.scheduleToday === true) state.scheduleDate = null;
+        if (recorded.schedulePinned !== true) schedulePin = null;
+      }
     }
     const startBlogRoute = new URLSearchParams(global.location.search).get('blog');
     let startMissingPost = false;
