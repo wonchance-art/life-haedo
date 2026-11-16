@@ -1285,3 +1285,69 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
   - 정규식으로 직접 파싱하는 방법은 엔티티·CDATA 처리에서 틀리기 쉬워 제외했다.
 - **직접 만든 부분과 이유:** `haedo-rss/feed.mjs`의 파서 설정은 본문 보존·Atom·페이지 이동용이라 `<source>`를 내보내지 않는다. 그래서 같은 거절 규칙(DOCTYPE·엔티티 선언·처리 명령·UTF-8 외 인코딩·깊이·노드 수)을 쓰는 작은 읽기 모듈(`xml.mjs`)과 Google 항목 추출(`suppliers/google-news.mjs`)을 새로 두었다. 숫자 문자 참조(`&#39;`)를 글자로 바꾸는 `htmlEntities` 설정을 켰고, 이름 있는 HTML 엔티티는 파싱 전에 거절한다.
 - **바꿀 조건:** Supabase Edge의 IP에서 Google이 동의 화면·429로 계속 답하면 공급원을 다시 고른다(GDELT 형식 확인부터). 수신처를 바꾸는 일은 소유자 승인이 먼저다. 파서 번들을 올릴 때는 `haedo-rss`와 이 함수가 같은 파일을 쓰므로 두 검사 묶음을 함께 돌린다.
+
+## 노션풍 화면의 참고 오픈소스·스킬 — 2026-11-16 KST
+
+소유자 요청: "노션 디자인 오픈소스나 스킬을 여러 개 찾아 종합하라. 신뢰성 있는 것 위주로, 다른 방안도." 시안·진단은 [노션 방향 시안](../design-review/notion-direction.md)에 있다. 앱 코드는 바꾸지 않았다. 조사는 두 작업자에게 나눠 맡겼고, 핵심 사실(npm 판·날짜·라이선스, 대비 계산)은 Designer가 다시 확인했다.
+
+- **판단 기준:**
+  - 빌드 없는 일반 JS·CSS이고 vendor에는 판·라이선스·SHA-256을 고정한다.
+  - Pretendard·`keep-all`, iPad·iPhone 터치(호버 전용 조작 불가), 조작 44px, 글자 대비 4.5:1을 지킨다.
+  - 글 정본은 제한 Markdown이다. 편집 엔진은 이미 Tiptap 3.32.2로 정했다(위 D2 절).
+- **확인 방법:**
+  - npm 레지스트리 메타데이터, `npm pack`, `git clone --depth 1`으로 원문을 직접 읽었다.
+  - npm 일괄 보안 권고를 조회했다.
+  - api.github.com·github.com 웹, notion.com, tiptap.dev, radix-ui.com, getdesign.md, figma.com은 이 세션의 네트워크에서 막혔다. 문서 사이트는 문서 저장소 원문(tiptap-docs `86c8d38`, radix-ui/website `402e749`)으로 대신했다.
+
+**디자인 명세·스킬**
+
+| 이름 | 값의 출처 | 라이선스·최근 변경 | 판단 |
+| --- | --- | --- | --- |
+| [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) 노션 v1(`fc722f6`) | notion.com **홍보 사이트**에서 뽑은 값. 절차는 밝히지 않음 | MIT, 2026-05-01 | 참고(선·그림자 절제 수치 몇 개). 앱 값이 아니다 |
+| 같은 저장소 노션 v2(현재 main), shadcn.io·nexu-io 등 복사본 | v1·v2의 복사·번역 | MIT·Apache-2.0, 일부는 CC BY-NC-SA로 다시 붙음 | **쓰지 않는다.** v2는 보라 버튼·남색 머리·파스텔 카드다. "노션이 아니다" 이슈(#421)가 닫혔지만 파일은 그대로다. 라이선스 사슬도 흐리다 |
+| [awesome-design-md-jp](https://github.com/kzhrknt/awesome-design-md-jp) 노션 | notion.so/ja의 computed style 실측, 비공식이라고 밝힘 | MIT, 2026-04-07 | 참고. 노션은 CJK 글꼴·자간을 따로 두지 않고 OS에 맡긴다. 그래서 "노션처럼"을 이유로 Pretendard·`keep-all`을 바꿀 필요가 없다 |
+| 노션 이름의 스킬(ihlamury `notion-ui-skills` 등), [skillui](https://github.com/amaancoderx/npxskillui) | 스크린샷 AI 분석, 또는 사이트 긁기 | LICENSE 파일 없음 등 | **쓰지 않는다.** 강조색 대비 1.75:1, 입력칸 높이 0px 같은 오류가 있다. 브랜드를 복제하는 도구다 |
+| [anthropics/skills `frontend-design`](https://github.com/anthropics/skills/tree/main/skills/frontend-design) | 공식 일반 지침. 노션 값은 없다 | Apache-2.0, 2026-09-03 | 참고. "강조는 한 곳", 같은 카드·같은 그림자 반복과 `A · B · C` 메타 문자열을 AI 기본값으로 짚는다. Impeccable·unslop과 겹쳐 설치하지 않는다 |
+| [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill), [ui-craft](https://github.com/educlopez/ui-craft) | 제3자 지침·데이터 | MIT, 2026-11 | 참고(문장 몇 개). 하나는 한글 조합 중 Enter(`isComposing`·`keyCode 229`) 지침이고 D2에서 인용한다. 다른 하나는 강조 화면당 1곳 지침이다. Tailwind·Inter 전제이고, 데이터 오류("Notion-style" → 네오브루탈리즘)가 있다 |
+| [google-labs-code/design.md](https://github.com/google-labs-code/design.md) `lint` | 공식 형식·검사기. 노션 값은 없다 | Apache-2.0, npm 0.4.0(2026-07-27), 형식 alpha | **보류.** 해도 `DESIGN.md`와 같은 앞머리 형식이라 토큰 참조·대비를 기계로 검사할 수 있다. 다만 아래 두 가지 때문에 보류한다 |
+| tweakcn·Figma 노션 키트 | tweakcn에는 노션 프리셋이 없다. Figma 키트는 화면 재현물이다 | — | 쓰지 않는다. Tailwind 전제이고, 상표·화면 복제 위험이 있다 |
+
+`design.md` 0.4.0을 보류한 이유:
+- 격리 폴더에 `--ignore-scripts`로 설치하고 `npm audit`을 돌렸다. 의존성 `zod` 3.x에 고위험 권고 [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)(큰 입력에서 메모리 고갈)가 있고 고친 판이 없다. 우리 파일만 읽는 로컬 도구라 실제 위험은 낮다.
+- 실제 실행 시험은 이 세션의 권한 검사에서 막혀 하지 못했다.
+
+**색·토큰 라이브러리** (대비는 WCAG 2, 반투명 값은 실제 바탕에 합성해 계산)
+
+| 이름 | 라이선스·판 | 노션 색조와의 거리 | 판단 |
+| --- | --- | --- | --- |
+| [Radix Colors](https://www.npmjs.com/package/@radix-ui/colors) sand | MIT, 3.0.0(2023-10-02). 값은 그 뒤로 바뀌지 않았다 | OKLCH H 92–107, C ≤ 0.008로 **가장 가깝다** | **참고(값 차용).** 그대로 쓰면 본문 `#21201C`(16.3:1)로 노션보다 거칠고, 3단계(10번) `#82827C`는 3.87:1로 미달이다. 밝은 화면은 시안 값을 유지한다. 어두운 화면을 만들 때 sand-dark 12·11단계를 바탕으로 하고 메타만 직접 맞춘다. 옮겨 적은 값에는 MIT 고지를 둔다 |
+| [Open Props](https://www.npmjs.com/package/open-props) stone/sand | MIT, 1.7.23(2026-01-31) | 차가운 색조(H 128–228) | 쓰지 않는다. `--gray-hue`·`--gray-chroma`로 단계를 만드는 방식만 참고한다 |
+| [Tailwind CSS](https://www.npmjs.com/package/tailwindcss) stone·taupe·olive | MIT, 4.3.5(2026-11-06) | 붉은 갈색·누런 기 | 쓰지 않는다(대조용) |
+| [react-notion-x](https://github.com/NotionX/react-notion-x) `styles.css` | MIT, 8.0.8(2026-09-03) | 노션 2020–21 값 | 참고. 다음 값을 읽었다(파일·줄은 작업 노트). 본문 16/1.5, 제목 40/600, 꼬리표 20px·좌우 6px·모서리 3px, 속성 이름 폭 160·높이 34, 머리 45px, 링크는 글자색에 옅은 밑줄. 보조 글자 `.6` 알파는 흰 바탕 3.64:1로 미달이다 |
+| [notion-enhancer](https://github.com/notion-enhancer/notion-enhancer) | MIT, npm 0.11.0(2021-12-31). 2024-11 이후 멈춤 | 2022-12 값(dev): 사이드바 `#FBFBFA`, 선 `rgb(233,233,231)`, 보조 `rgba(25,23,17,.6)` | 값의 역사 자료로만 쓴다 |
+| AFFiNE `@toeverything/theme` | MPL-2.0, 1.1.23 | 차가운 회색. 보조 4.29:1 미달 | 쓰지 않는다 |
+
+**노션풍 편집기 화면 패턴**
+
+| 이름 | 라이선스·판 | 판단 |
+| --- | --- | --- |
+| `@tiptap/extensions` Placeholder·Focus | MIT, 3.32.2. 이미 `vendor/tiptap` lock 안에 있다 | **D2 도입 후보, 새 의존성 0.** 빈 줄 안내와 현재 블록 표시다. `entry.mjs`에서 내보내기만 더하면 된다 |
+| [`@tiptap/suggestion`](https://www.npmjs.com/package/@tiptap/suggestion) | MIT, 3.34.0(2026-11-13). 3.32.2도 있다 | **D2 도입 후보.** `/` 메뉴의 바탕으로 쓰고, Markdown으로 저장되는 항목만 둔다. 번들 실험 결과 기본 295,200 B(gzip 90,962) → 320,038 B(gzip 100,226)다. iPhone은 보이는 `+`·`⋯` 버튼을 주 진입으로 둔다 |
+| [`@tiptap/extension-drag-handle`](https://www.npmjs.com/package/@tiptap/extension-drag-handle) | MIT, 3.34.0 | 보류. 협업 모듈(yjs)을 끌고 오고(gzip +44 KB, stub alias로 줄일 수 있음), `mousemove`·HTML5 끌기로만 동작한다. 터치에서는 블록 `⋯` 메뉴의 `위로/아래로 옮기기`로 대신한다. Editor.js처럼 캐럿 블록에 도구를 붙이는 패턴을 참고한다 |
+| Tiptap Notion-like 템플릿, slash·drag context menu 부품 | 유료(Start plan, Pro License), React, 협업·AI JWT 필요(tiptap-docs 원문) | 쓰지 않는다 |
+| BlockNote | MPL-2.0, `xl-*`는 GPL-3.0, 0.57.0(2026-10-30) | 쓰지 않는다. React UI이고 Markdown 내보내기가 손실형이며, Tiptap 위에 엔진이 하나 더 생긴다 |
+| Novel / Yoopta / Plate | Apache-2.0 / MIT / MIT. Novel은 2025-01 이후 멈춤 | 쓰지 않는다(React) |
+| AppFlowy·Docmost / Outline | AGPL-3.0 / BSL 1.1 | 쓰지 않는다. 화면 관찰만 하고 CSS 조각도 복사하지 않는다 |
+
+- **알게 된 것:**
+  - 노션 앱의 기본 글꼴은 Inter가 아니라 시스템 글꼴이다(react-notion-x 2~5행).
+  - "노션 강조색"은 출처마다 다르다: `#2383E2`, `#0075DE`, `#5645D4` 등.
+  - 노션이 차분해 보이는 이유 중 하나는 4.5:1에 못 미치는 옅은 회색 보조 글자다. 해도는 이 부분을 옮기지 않고 시안처럼 더 짙은 회색(`#5F5E5B`·`#6F6E69`)을 쓴다. 의도한 차이다.
+- **선택:**
+  - 노션 값을 통째로 들이지 않는다. 노션 원칙을 해도 `DESIGN.md` 하나에 옮긴다. DESIGN.md 파일을 둘로 만들지 않는다.
+  - 색은 직접 정한 값을 유지하고, Radix sand로 대조한다. 어두운 화면의 출처도 Radix sand-dark다.
+  - 편집기의 노션 느낌은 D2에서 이미 들인 Tiptap의 MIT 확장으로 낸다.
+- **바꿀 조건:**
+  - `design.md`가 zod 4로 올라가 권고가 사라지면 격리 실행을 1회 시험하고 CI 편입을 총괄에 제안한다.
+  - 소유자가 어두운 화면을 요청하면 Radix sand-dark 값과 MIT 고지를 함께 들인다.
+  - Tiptap 무료 부품에 터치 블록 이동이 생기면 drag-handle을 다시 본다.
