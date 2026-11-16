@@ -223,16 +223,16 @@
           catch (_) { status.textContent = '설정을 저장하지 못했습니다. 다시 골라 주세요.'; syncSchedule(); return; }
           status.textContent = '';
           syncSchedule();
-          pending.then(result => {
+          // 결과 그대로 안내한다: localSaved(이 브라우저 연표 사본), accountSaved(계정 문서). 사본만 바뀐 경우는
+          // 기록에 '올리지 않음'으로 남아 다음 동기화가 다시 넣는다.
+          const tell = result => {
             if (disposed || !isCurrent()) return;
-            status.textContent = result.localSaved ? '' : '계정에는 저장했지만 이 브라우저의 연표에는 적용하지 못했습니다. 저장소 설정을 확인해 주세요.';
+            const local = !!result?.localSaved, account = !!result?.accountSaved;
+            status.textContent = local && account ? '' : account ? '계정에는 저장했지만 이 브라우저의 연표에는 적용하지 못했습니다. 저장소 설정을 확인해 주세요.'
+              : local ? '이 브라우저에는 적용했고, 계정에는 다음 동기화 때 다시 저장합니다.' : '설정을 저장하지 못했습니다. 다시 골라 주세요.';
             syncSchedule();
-          }, () => {
-            if (disposed || !isCurrent()) return;
-            // 사본은 이미 바뀌었고 기록에 '올리지 않음'으로 남아 다음 동기화가 다시 넣는다.
-            status.textContent = '이 브라우저에는 적용했고, 계정에는 다음 동기화 때 다시 저장합니다.';
-            syncSchedule();
-          });
+          };
+          pending.then(tell, () => tell(null));
           return;
         }
         const saved = write(key, value);

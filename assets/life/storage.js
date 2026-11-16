@@ -1248,27 +1248,47 @@
       }
       return out;
     }
-    // Whose copies these are. Copies another account left unput are held for that account (one account at a
-    // time) and never put into this one. null: a third account's values already wait, so nothing is touched.
-    function displayPlan(snap, nowMs) {
+    // Values held for other accounts, by owner hash: { [owner]: items }. 'unknown': values without an owner whose
+    // first account cannot be told (kept in this browser, never sent). The single { owner, items } of a9f5301 is read too.
+    function displayHeld(record) {
+      const held = {}, raw = plain(record?.held) ? record.held : null;
+      const put = (owner, items) => { const kept = Array.isArray(items) ? items.filter(displayItem).map(clone) : []; if (kept.length) held[owner] = kept; };
+      if (raw && typeof raw.owner === 'string' && Array.isArray(raw.items)) put(raw.owner, raw.items);
+      else if (raw) for (const [owner, items] of Object.entries(raw)) put(owner, items);
+      return held;
+    }
+    function displayHold(held, owner, items) {
+      if (!items.length) return;
+      held[owner] = [...(held[owner] || []).filter(item => !items.some(other => other.key === item.key)), ...items.map(clone)];
+    }
+    // Values without an owner (written before any signed-in pass of this release recorded one, e.g. by the timeline
+    // editor right after the update) belong to the first account that signed in on this browser. The account
+    // document change cursor marks an account that synced here: with no other account's cursor this account is the
+    // first; with exactly one other's and none of its own, that other one is; otherwise it cannot be told.
+    async function displayClaim() {
+      const prefix = 'accountDocCursor:';
+      const keys = await transaction(['meta'], 'readonly', async tx => (await tx.objectStore('meta').getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff')))
+        .filter(key => typeof key === 'string' && key.startsWith(prefix)));
+      const others = keys.filter(key => key !== accountDocCursorKey()), synced = keys.includes(accountDocCursorKey());
+      return !others.length ? 'mine' : others.length === 1 && !synced ? accountDocHash(others[0].slice(prefix.length)) : 'unknown';
+    }
+    // Whose copies these are. Values another account left unput are held for that account and never put into
+    // this one; they go to it when it next runs a pass here. This account's values reach the copies either way.
+    function displayPlan(snap, nowMs, claim = 'mine') {
       const me = displayOwner(), record = snap.record, owner = typeof record?.owner === 'string' ? record.owner : null;
-      const held = plain(record?.held) && typeof record.held.owner === 'string' && Array.isArray(record.held.items) ? record.held : null;
-      const mine = held?.owner === me ? held.items.filter(displayItem).map(clone) : [];
-      const next = { owner: me };
-      if (!owner || owner === me) {
+      const held = displayHeld(record), mine = held[me] || [];
+      delete held[me];
+      const next = { owner: me }, local = displayPending(snap, nowMs);
+      if (owner === me || (!owner && claim === 'mine')) {
         for (const field of DISPLAY_FIELDS) { const entry = displayEntry(field, record?.[field]); if (entry) next[field] = clone(entry); }
-        if (held && held.owner !== me) next.held = clone(held);
-        return { record: next, pending: [...mine, ...displayPending(snap, nowMs)] };
+        if (Object.keys(held).length) next.held = held;
+        return { record: next, mine, pending: [...mine, ...local] };
       }
-      const theirs = displayPending(snap, nowMs);
-      if (theirs.length && held && held.owner !== me && held.owner !== owner) return null;
-      if (theirs.length) {
-        const kept = held?.owner === owner ? held.items.filter(item => displayItem(item) && !theirs.some(other => other.key === item.key)).map(clone) : [];
-        next.held = { owner, items: [...kept, ...theirs] };
-      } else if (held && held.owner !== me) next.held = clone(held);
+      displayHold(held, owner || claim, local);
+      if (Object.keys(held).length) next.held = held;
       // The other account's values stay on screen until this account's document has its own; they are not sent.
       for (const field of DISPLAY_FIELDS) { const v = displayValue(field, snap.raws[field]); if (v !== undefined) next[field] = { v, at: DISPLAY_EPOCH, up: true }; }
-      return { record: next, pending: mine };
+      return { record: next, mine, pending: mine };
     }
     async function readTimelineDisplay() {
       timelineDisplayScope();
@@ -1280,7 +1300,9 @@
     async function absorbTimelineDisplay({ given = [] } = {}) {
       timelineDisplayScope();
       const store = displayStore(), nowMs = Date.now();
-      const snap = store ? displaySnapshot(store) : null, plan = snap ? displayPlan(snap, nowMs) : null;
+      const snap = store ? displaySnapshot(store) : null;
+      const claim = snap && typeof snap.record?.owner !== 'string' && displayPending(snap, nowMs).length ? await displayClaim() : 'mine';
+      const plan = snap ? displayPlan(snap, nowMs, claim) : null;
       const pending = [...(plan?.pending || []), ...given.map(item => ({ ...item, force: true }))];
       const result = await transaction(['meta'], pending.length ? 'readwrite' : 'readonly', async tx => {
         const meta = tx.objectStore('meta'), previous = await timelineDisplayValue(meta);
@@ -1294,8 +1316,18 @@
             items.set(item.key, { key: item.key, v: item.v, at: item.force && existing ? displayLater(existing.at, happinessTime(item.at)) : item.at }); changed = true;
           } else lost.push({ key: item.key, v: item.v, at: item.at });
         }
-        // 이 브라우저의 값이 계정의 더 늦은 값에 지면, 사본을 덮기 전에 그 값을 이 기기의 복구 사본으로 남긴다.
-        for (const item of lost) await addAccountDocRecovery(meta, timelineDisplayKey(), { items: [item] }, 'timeline_import');
+        // 이 브라우저의 값이 계정의 더 늦은 값에 지면, 사본을 덮기 전에 그 값을 이 기기의 복구 사본으로 남긴다. 사본을 못 써서
+        // 같은 값이 주기마다 다시 지면, 이미 남긴 복구 사본과 같은 내용은 다시 넣지 않는다(다른 복구 사본을 밀어내지 않게).
+        if (lost.length) {
+          const prefix = `accountDocRecovery:${timelineDisplayKey()}:`, kept = new Set();
+          for (const key of await meta.getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff')))
+            if (typeof key === 'string' && key.startsWith(prefix)) kept.add(stablePayload((await meta.get(key))?.value?.value ?? null));
+          for (const item of lost) {
+            const copy = { items: [item] }, text = stablePayload(copy);
+            if (kept.has(text)) continue;
+            kept.add(text); await addAccountDocRecovery(meta, timelineDisplayKey(), copy, 'timeline_import');
+          }
+        }
         if (!changed) return { value: previous, stored: false };
         const value = { revision: previous.revision + 1, format: DISPLAY_FORMAT, items: [...items.values()].sort((a, b) => a.key.localeCompare(b.key)) };
         validateTimelineDisplay(value);
@@ -1305,7 +1337,6 @@
       if (result.stored) accountDocChanged(timelineDisplayKey());
       let status = 'synced', mirrored = false;
       if (!snap) status = 'unavailable';
-      else if (!plan) status = 'held';
       else if (disposed) status = 'closed'; // The account changed meanwhile: this account's values never reach the copies.
       else if (!displayUnchanged(store, snap)) status = 'retry'; // Changed meanwhile: the next pass reads them again.
       else {
@@ -1316,9 +1347,10 @@
             if (displayValue(item.key, snap.raws[item.key]) !== item.v) { store.setItem(DISPLAY_KEYS[item.key], String(item.v)); mirrored = true; }
             record[item.key] = { v: item.v, at: item.at, up: true };
           }
-          // Nothing chosen anywhere yet: no record is written (opening 설정 adds no key to this browser).
-          const text = JSON.stringify(record), empty = snap.text === null && Object.keys(record).length === 1;
-          if (text !== snap.text && !empty) store.setItem(DISPLAY_RECORD, text);
+          // Signed in, the record always names this account, even with nothing chosen (review M1, 2026-11-16): a
+          // later change in the timeline editor is then this account's, never taken by the next account to sign in.
+          const text = JSON.stringify(record);
+          if (text !== snap.text) store.setItem(DISPLAY_RECORD, text);
         } catch (_) { status = 'local_failed'; }
       }
       if (result.stored || mirrored) {
@@ -1330,28 +1362,34 @@
       return { status, stored: result.stored, revision: result.value.revision, values };
     }
     // A choice made in 설정: written to this browser's copy at once (the timeline reads it), then put into the
-    // account document. Returns a promise; the copy is already written when this returns.
+    // account document. The promise always settles with what happened: localSaved (this browser's copy holds the
+    // choice) and accountSaved (this device's account document holds it; AccountDocsSync sends it).
     function saveTimelineDisplay(changes) {
       timelineDisplayScope();
       const fields = plain(changes) ? Object.keys(changes) : [];
       if (!fields.length || fields.some(key => !DISPLAY_FIELDS.includes(key) || !displayKnown(key, changes[key]))) throw fault('invalid_request', '연표 표시 설정 값을 확인해 주세요.');
-      const store = displayStore(), nowMs = Date.now(), snap = store ? displaySnapshot(store) : null;
-      const owner = typeof snap?.record?.owner === 'string' ? snap.record.owner : null;
-      if (snap && (!owner || owner === displayOwner())) {
+      const store = displayStore(), nowMs = Date.now(), snap = store ? displaySnapshot(store) : null, me = displayOwner();
+      const settle = (pass, localSaved) => pass.then(
+        result => ({ ...result, accountSaved: true, localSaved: localSaved ?? (result.status === 'synced' || result.status === 'retry') }),
+        error => ({ status: 'failed', stored: false, accountSaved: false, localSaved: !!localSaved, error: { code: typeof error?.code === 'string' ? error.code : 'storage_failed', message: error?.message || '' } }));
+      // Values without an owner that wait to be sent need the first-account check (displayClaim): those go below.
+      const plan = snap && (typeof snap.record?.owner === 'string' || !displayPending(snap, nowMs).length) ? displayPlan(snap, nowMs, 'mine') : null;
+      if (plan) {
         let written = false;
         try {
-          const record = snap.record ? clone(snap.record) : {};
-          record.owner = displayOwner();
+          const record = clone(plan.record);
+          // This account's held values stay held until the pass below puts them into its document.
+          if (plan.mine.length) record.held = { ...(record.held || {}), [me]: plan.mine };
           for (const field of fields) {
             store.setItem(DISPLAY_KEYS[field], String(changes[field]));
-            record[field] = { v: changes[field], at: displayLater(displayEntry(field, record[field])?.at, nowMs), up: false };
+            record[field] = { v: changes[field], at: displayLater(displayEntry(field, snap.record?.[field])?.at, nowMs), up: false };
           }
           store.setItem(DISPLAY_RECORD, JSON.stringify(record)); written = true;
         } catch (_) { /* This browser cannot keep it: the account document still takes the choice below. */ }
-        if (written) return absorbTimelineDisplay().then(result => ({ ...result, localSaved: true }));
+        if (written) return settle(absorbTimelineDisplay(), true);
       }
       const at = new Date(nowMs).toISOString();
-      return absorbTimelineDisplay({ given: fields.map(key => ({ key, v: changes[key], at })) }).then(result => ({ ...result, localSaved: false }));
+      return settle(absorbTimelineDisplay({ given: fields.map(key => ({ key, v: changes[key], at })) }), null);
     }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);

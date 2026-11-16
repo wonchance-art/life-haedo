@@ -238,7 +238,7 @@ test('account switch: one account\'s values never reach the other, and unsent on
   assert.deepEqual(serverItems(server, accountA), { age: 'kr', curve: 60 }, 'nor to A while B is signed in');
   assert.equal(shared.local.getItem(MA), '0', 'B\'s own value reaches the copy');
   assert.equal(shared.local.getItem(AGE), 'intl', 'B has no age of its own: the copy is left as it is');
-  assert.equal(record(shared.local).held.items[0].key, 'age');
+  assert.deepEqual(Object.values(record(shared.local).held).map(items => items.map(item => [item.key, item.v])), [[['age', 'intl']]], 'held for A');
   // A signs in again: its held age goes up to A only.
   a = shared.base.forAccount(accountA);
   await engine(a, server).syncNow();
@@ -260,17 +260,125 @@ test('late response: a pass of a closed account scope never writes that account\
   assert.equal(local.local.getItem(MA), null, 'A\'s curve was not written after the switch');
 });
 
+// Deterministic race (review m7, 2026-11-16): the timeline editor writes right after the pass read the copies
+// (a microtask queued at that read), before the pass writes them back.
 test('a copy changed while the pass ran is not overwritten; the next pass takes it', async t => {
   const server = fakeServer(), mac = device(); t.after(() => mac.base.close());
   const a = mac.base.forAccount(accountA);
   await a.saveTimelineDisplay({ curve: 60 }); await engine(a, server).syncNow();
-  const pass = a.absorbTimelineDisplay();
-  await tick(); timelineEditor(mac.local).curve(0); // Another tab (the editor) writes during the pass.
-  const result = await pass;
-  assert.equal(mac.local.getItem(MA), '0');
-  if (result.status === 'retry') assert.equal(record(mac.local).curve.up, false);
+  const editor = timelineEditor(mac.local), realGet = mac.local.getItem;
+  let armed = true;
+  mac.local.getItem = key => { const value = realGet(key); if (armed && key === RECORD) { armed = false; Promise.resolve().then(() => editor.curve(0)); } return value; };
+  const result = await a.absorbTimelineDisplay();
+  mac.local.getItem = realGet;
+  assert.equal(armed, false, 'the editor wrote during the pass');
+  assert.equal(result.status, 'retry', 'the pass saw the copy change and wrote nothing back');
+  assert.equal(mac.local.getItem(MA), '0', 'the editor value stays');
+  assert.equal(record(mac.local).curve.up, false, 'still to be put into the account');
   await engine(a, server).syncNow();
   assert.deepEqual(serverItems(server), { curve: 0 });
+  assert.equal(record(mac.local).curve.up, true);
+});
+
+// Review M1 (2026-11-16): with nothing chosen, A's pass still records A as the owner, so a later timeline-editor
+// change is A's and the next account to sign in (B) never takes it.
+test('M1: nothing chosen, A signs in, the editor changes the age, B signs in: the age goes to A only', async t => {
+  const server = fakeServer(), shared = device(); t.after(() => shared.base.close());
+  const a = shared.base.forAccount(accountA); await engine(a, server).syncNow();
+  assert.equal(typeof record(shared.local).owner, 'string', 'a signed-in pass writes the owner even with nothing chosen');
+  timelineEditor(shared.local).age('kr');
+  const b = shared.base.forAccount(accountB); await engine(b, server, accountB).syncNow();
+  assert.equal(server.docs(accountB.userId).has(docKey(accountB)), false, 'nothing reaches B');
+  assert.equal(server.docs(accountA.userId).has(docKey(accountA)), false, 'nor A while B is signed in');
+  const back = shared.base.forAccount(accountA); await engine(back, server).syncNow();
+  assert.deepEqual(serverItems(server, accountA), { age: 'kr' });
+  assert.equal(server.docs(accountB.userId).has(docKey(accountB)), false);
+});
+
+// Values without an owner (the editor wrote them before any pass of this release ran here) belong to the first
+// account that signed in on this browser, told by the account-document change cursors (storage displayClaim).
+test('values without an owner go to the first account of this browser only', async t => {
+  // B signs in first after the update, but A had synced here before: the values are held for A.
+  const server = fakeServer(), shared = device(); t.after(() => shared.base.close());
+  await shared.base.forAccount(accountA).writeAccountDocCursor(0); // A synced account documents here before.
+  timelineEditor(shared.local).age('kr');
+  assert.equal(record(shared.local).owner, undefined, 'the editor writes no owner');
+  const b = shared.base.forAccount(accountB); await engine(b, server, accountB).syncNow();
+  assert.equal(server.docs(accountB.userId).has(docKey(accountB)), false, 'not sent to B');
+  const a = shared.base.forAccount(accountA); await engine(a, server).syncNow();
+  assert.deepEqual(serverItems(server, accountA), { age: 'kr' }, 'sent to A');
+  // The only account of this browser claims them.
+  const server2 = fakeServer(), single = device(); t.after(() => single.base.close());
+  timelineEditor(single.local).curve(0);
+  const only = single.base.forAccount(accountA); await engine(only, server2).syncNow();
+  assert.deepEqual(serverItems(server2), { curve: 0 });
+  // Both accounts synced here before: the first one cannot be told, so neither gets them; they stay in the record.
+  const server3 = fakeServer(), both = device(); t.after(() => both.base.close());
+  await both.base.forAccount(accountB).writeAccountDocCursor(0); await both.base.forAccount(accountA).writeAccountDocCursor(0);
+  timelineEditor(both.local).curve(60);
+  const again = both.base.forAccount(accountA); await engine(again, server3).syncNow();
+  assert.equal(server3.docs(accountA.userId).has(docKey(accountA)), false);
+  assert.deepEqual(record(both.local).held.unknown.map(item => [item.key, item.v]), [['curve', 60]]);
+  assert.equal(both.local.getItem(MA), '60', 'the copy is left as it is');
+});
+
+// Review m2 (2026-11-16): three accounts on one browser. A and B left unsent values; C signs in and chooses.
+test('three accounts: C\'s choice reaches the copy at once, A\'s and B\'s waiting values stay held for each', async t => {
+  const server = fakeServer(), shared = device(); t.after(() => shared.base.close());
+  const accountC = { ...accountA, userId: 'anonymous-c' };
+  let s = shared.base.forAccount(accountA);
+  await s.saveTimelineDisplay({ curve: 60 }); await engine(s, server).syncNow();
+  timelineEditor(shared.local).age('kr'); // A, unsent
+  s = shared.base.forAccount(accountB); await engine(s, server, accountB).syncNow();
+  timelineEditor(shared.local).curve(0); // B, unsent
+  s = shared.base.forAccount(accountC);
+  assert.equal((await s.absorbTimelineDisplay()).status, 'synced');
+  const pending = s.saveTimelineDisplay({ curve: 36 });
+  assert.equal(shared.local.getItem(MA), '36', 'the copy holds C\'s choice at once');
+  const result = await pending;
+  assert.equal(result.localSaved, true); assert.equal(result.accountSaved, true);
+  await engine(s, server, accountC).syncNow();
+  assert.deepEqual(serverItems(server, accountC), { curve: 36 });
+  assert.equal(Object.keys(record(shared.local).held).length, 2, 'A\'s and B\'s values are held apart');
+  s = shared.base.forAccount(accountB); await engine(s, server, accountB).syncNow();
+  assert.deepEqual(serverItems(server, accountB), { curve: 0 });
+  s = shared.base.forAccount(accountA); await engine(s, server).syncNow();
+  assert.deepEqual(serverItems(server, accountA), { age: 'kr', curve: 60 });
+  assert.deepEqual(serverItems(server, accountC), { curve: 36 });
+});
+
+// Review m1 (2026-11-16): the copy cannot be written, so the same losing value loses again every pass. It is kept
+// once; other recovery copies of the document are not pushed out.
+test('a losing value that cannot leave the copy is kept as one recovery copy, not one per pass', async t => {
+  const server = fakeServer(), mac = device(), ipad = device();
+  t.after(() => { mac.base.close(); ipad.base.close(); });
+  const a = mac.base.forAccount(accountA), b = ipad.base.forAccount(accountA);
+  const ma = engine(a, server), pb = engine(b, server);
+  await a.saveTimelineDisplay({ curve: 60 }); await ma.syncNow(); await pb.syncNow();
+  for (let i = 0; i < 2; i++) await b.saveAccountDocRecovery(docKey(), { items: [{ key: 'age', v: 'kr', at: EPOCH }], marker: i }, 'conflict');
+  timelineEditor(ipad.local).curve(0); await tick();
+  await a.saveTimelineDisplay({ curve: 36 }); await ma.syncNow();
+  const realSet = ipad.local.setItem;
+  ipad.local.setItem = (key, value) => { if (key === RECORD || key === MA) throw new Error('quota'); return realSet(key, value); };
+  for (let i = 0; i < 5; i++) await pb.syncNow();
+  ipad.local.setItem = realSet;
+  const kept = await b.listAccountDocRecoveries(docKey());
+  // Kept once: the engine's merge already kept it (merge_conflict); the later passes find that same copy.
+  assert.equal(kept.filter(row => JSON.stringify(row.value).includes('"v":0')).length, 1, 'the losing value is kept once');
+  assert.equal(kept.filter(row => row.reason === 'conflict').length, 2, 'the earlier recovery copies remain');
+});
+
+test('a 설정 choice reports what was saved: the copy and the account document separately', async t => {
+  const local = device(); t.after(() => local.base.close());
+  const a = local.base.forAccount(accountA);
+  const ok = await a.saveTimelineDisplay({ curve: 60 });
+  assert.equal(ok.localSaved, true); assert.equal(ok.accountSaved, true);
+  // The account scope closes before its document write: the copy holds the choice, the document does not.
+  const pending = a.saveTimelineDisplay({ curve: 0 });
+  local.base.forAccount(accountB);
+  const closed = await pending;
+  assert.equal(closed.localSaved, true); assert.equal(closed.accountSaved, false);
+  assert.equal(local.local.getItem(MA), '0'); assert.equal(record(local.local).curve.up, false, 'sent on a later pass of A');
 });
 
 test('validator: unknown steps are refused, a newer format is not written over, newer items are kept', async t => {
