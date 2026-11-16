@@ -158,7 +158,7 @@ async function main() {
       assert.equal(ai.requests.length, 0, 'no request while off'); assert.equal(await picked(page).count(), 0); assert.equal(await page.locator('#discoveryPickNotice').count(), 0);
     });
 
-    await check('on: one request with exactly the five fields; typed topics; candidates are list metadata only; liked, saved and read articles are not sent', async ({ page, ai, messages }) => {
+    await check('on: one request with exactly the four fields; typed topics; candidates are list metadata only; liked, saved and read articles are not sent', async ({ page, ai, messages }) => {
       // Reactions first: a saved card, a liked article and a read one. None of them may be sent.
       await page.locator('#discoveryList [data-discovery-id="fixed-0"] [data-discovery-reaction=bookmarked]').click(); await idle(page);
       await page.locator('#discoveryList [data-discovery-id="fixed-3"] [data-discovery-select]').click(); await frames(page);
@@ -169,8 +169,8 @@ async function main() {
       assert.equal(ai.requests.length, 1);
       const sent = ai.requests[0];
       assert.equal(sent.authorization, true); assert.equal(sent.cookie, null); assert.equal(sent.referer, null);
-      assert.deepEqual(Object.keys(sent.body), ['requestId', 'task', 'topics', 'language', 'candidates']);
-      assert.equal(sent.body.task, 'news_pick'); assert.deepEqual(sent.body.topics, ['합성 도서관', '합성 기후']); assert.equal(sent.body.language, 'any');
+      assert.deepEqual(Object.keys(sent.body), ['requestId', 'task', 'topics', 'candidates'], 'four fields; no language');
+      assert.equal(sent.body.task, 'news_pick'); assert.deepEqual(sent.body.topics, ['합성 도서관', '합성 기후']);
       assert.match(sent.body.requestId, /^[0-9a-f-]{36}$/);
       sent.body.candidates.forEach((row, index) => { assert.deepEqual(Object.keys(row), ['n', 'title', 'publisher', 'publishedAt']); assert.equal(row.n, index + 1); });
       const titles = sent.body.candidates.map(row => row.title);
@@ -236,14 +236,14 @@ async function main() {
       await refreshNow(page); await settled(async () => ai.requests.length, 2, '지금 갱신 asks');
       await addTopic(page, '합성 기후'); await settled(async () => ai.requests.length, 3, 'a new topic asks');
       assert.deepEqual(ai.requests[2].body.topics, ['합성 도서관', '합성 기후']);
-      // Content language: English only.
+      // Content language: Korean only (the choice is a key, not a field).
       await page.evaluate(async () => {
         const storage = HaedoLife.Shell.storage, id = await storage.getActive(), current = await storage.readDiscoveryLanguageSettings(id);
         await storage.saveDiscoveryLanguageSettings(id, HaedoLife.DiscoveryLanguageSettings.update(current, { contentLanguages: ['ko'] }, { expectedRevision: current.revision }), current.revision);
       });
       await closeSettings(page); await nav(page, 'schedule'); await nav(page, 'news'); await idle(page);
       await settled(async () => ai.requests.length, 4, 'a changed language asks when news opens');
-      assert.equal(ai.requests[3].body.language, 'ko');
+      assert(!('language' in ai.requests[3].body), 'the language is not sent');
       // The timer.
       await page.clock.install({ time: new Date() });
       await page.locator('#discoveryNewsSettings').click();
@@ -308,6 +308,70 @@ async function main() {
       // Undo from the same menu.
       await page.locator(`#discoveryList [data-discovery-id="${id}"] .discovery-card-more > summary`).click();
       assert.equal(await page.locator(`#discoveryList [data-discovery-id="${id}"] [data-discovery-like]`).getAttribute('aria-pressed'), 'true');
+    });
+
+    await check('지금 갱신 pressed again while a pick is on its way sends nothing more: one request, one count', async ({ page, ai }) => {
+      await start(page, ai, ['합성 도서관']);
+      const counted = () => page.evaluate(() => JSON.parse(localStorage.getItem(HaedoLife.DiscoveryPick.COUNT_KEY)).count);
+      assert.equal(await counted(), 1);
+      let release; ai.hold = new Promise(resolve => { release = resolve; });
+      await refreshNow(page); await settled(async () => ai.requests.length, 2, 'asked');
+      await refreshNow(page); await refreshNow(page); await page.waitForTimeout(500);
+      assert.equal(ai.requests.length, 2, 'the request on its way is not cut and sent again');
+      assert.equal(await counted(), 2, 'counted once for the day');
+      release(); ai.hold = null;
+      await until(page, () => !document.querySelector('#discoveryPickNotice')?.textContent.includes('고르는 중'), null, 'answer drawn');
+      assert.equal(await picked(page).count(), 3);
+    });
+
+    await check('articles marked read in the reading comparison are not candidates', async ({ page, ai }) => {
+      // A real comparison record (DiscoveryReading.createComparison over the shown catalog), saved to the account:
+      // its first article marked 일부 읽음, the second 본문을 읽음, the rest left unanswered.
+      const marked = await page.evaluate(async () => {
+        const st = HaedoLife.Shell.storage, id = await st.getActive(), Reading = HaedoLife.DiscoveryReading;
+        const raw = await (await fetch('assets/life/discovery-feed.json', { cache: 'no-store' })).json(), checked = HaedoLife.Discovery.validateFeed(raw, { now: Date.now() });
+        const feed = { schemaVersion: checked.schemaVersion, generatedAt: checked.generatedAt, sources: checked.sources.map(({ images, ...source }) => source), articles: checked.articles.map(({ imageUrl, ...article }) => article) };
+        const [profile, feedback, actions, language, reading] = await Promise.all([st.readInterestProfile(id), st.readDiscoveryProfile(id), st.readDiscoveryActions(id), st.readDiscoveryLanguageSettings(id), st.readDiscoveryReading(id)]);
+        const input = { feed, profile: { workspaceId: id, revision: profile.revision, manual: profile.manual.map(({ id, label }) => ({ id, label })) }, feedback, knownUrls: [], contentLanguages: language.contentLanguages,
+          actions, translationTarget: language.translationTarget, baselineMode: 'latest', personalAllowed: false };
+        let now = new Date().toISOString(), next = await Reading.createComparison(reading, structuredClone(input), { expectedRevision: reading.revision, now, sessionId: 'synthetic-pick-reading' });
+        const urls = next.session.reviews.map(review => review.canonicalUrl);
+        // Each step is saved as the reading UI saves it: one revision at a time.
+        const save = async (value, base) => { const result = await st.saveDiscoveryReading(id, value, base); if (result.status !== 'stored') throw new Error('comparison not stored: ' + result.status); return value; };
+        await save(next, reading.revision);
+        next = await save(Reading.setReview(next, urls[0], { reading: 'partial' }, { expectedRevision: next.revision, now }), next.revision);
+        next = await save(Reading.setReview(next, urls[1], { reading: 'full' }, { expectedRevision: next.revision, now }), next.revision);
+        return { read: urls.slice(0, 2), other: urls.slice(2) };
+      });
+      assert.equal(marked.read.length, 2);
+      await start(page, ai, ['합성 도서관']);
+      const sent = ai.requests[0].body.candidates.map(row => row.title);
+      const titleOf = url => feed().articles.concat(feed().extended.articles).find(row => row.url === url)?.title;
+      for (const url of marked.read) assert(!sent.includes(titleOf(url)), 'a read article is not sent: ' + titleOf(url));
+      for (const url of marked.other) assert(sent.includes(titleOf(url)), 'an unanswered article is a candidate: ' + titleOf(url));
+      assert.equal(sent.length, 12 - marked.read.length, 'every other article is still a candidate');
+    });
+
+    await check('picks of found links only: after 넓게 찾기 is turned off the line says so and offers to ask again; the switch alone asks nothing', async ({ page, ai, wide }) => {
+      ai.reply = body => ({ status: 200, body: { ...answer(body), picks: body.candidates.filter(row => row.title.startsWith('넓게 합성')).map(row => ({ n: row.n, reason: '넓게' })) } });
+      await addTopic(page, '합성 도서관');
+      await setOption(page, 'discoveryWideSearch', 'wideSearch', true); await settled(async () => wide.requests.length, 1, 'wide asked');
+      await setPick(page, true); await settled(async () => ai.requests.length, 1, 'pick asked'); await closeSettings(page);
+      await until(page, () => document.querySelectorAll('#discoveryList .discovery-pick-mark').length === 1, null, 'the found link is picked');
+      await setOption(page, 'discoveryWideSearch', 'wideSearch', false); await closeSettings(page); await page.waitForTimeout(500);
+      assert.equal(ai.requests.length, 1, 'turning 넓게 찾기 off asks nothing by itself');
+      assert.equal(await picked(page).count(), 0);
+      assert.equal(await notice(page), '추천한 글이 지금 목록에 없어요');
+      ai.reply = body => ({ status: 200, body: answer(body) });
+      await page.locator('#discoveryPickAgain').click(); await settled(async () => ai.requests.length, 2, '다시 추천받기 asks');
+      await until(page, () => document.querySelectorAll('#discoveryList .discovery-pick-mark').length === 3, null, 'new picks drawn');
+      assert.equal(await page.locator('#discoveryPickAgain').count(), 0);
+      // 넓게 찾기 on/off is part of the key: the next opening asks for the new state.
+      await setOption(page, 'discoveryWideSearch', 'wideSearch', true); await settled(async () => wide.requests.length, 2, 'wide asked again'); await closeSettings(page);
+      await page.waitForTimeout(400); assert.equal(ai.requests.length, 2, 'not on the switch');
+      await nav(page, 'schedule'); await nav(page, 'news'); await idle(page);
+      await settled(async () => ai.requests.length, 3, 'the next opening asks');
+      assert(ai.requests[2].body.candidates.some(row => row.title.startsWith('넓게 합성')), 'found links are candidates again');
     });
 
     for (const width of [820, 390]) await check('AI 추천 at ' + width + 'px: marked cards, 44px targets, no overflow', async ({ page, ai }) => {

@@ -246,10 +246,10 @@
     }
     // AI 추천: one news_pick request to haedo-ai with the same account, workspace and screen guard. `body` is
     // DiscoveryPick.prepare(...).body (built and size-checked there); `read` checks the answer against what was sent.
-    // Only the request's own shape is checked here: the task name and the five allow-listed keys. A request outside it
+    // Only the request's own shape is checked here: the task name and the four allow-listed keys. A request outside it
     // is a rejected promise, like every other failure, and nothing is sent.
     async function pick({ body, read, workspaceId, signal } = {}) {
-      check(plain(body) && body.task === 'news_pick' && JSON.stringify(Object.keys(body).sort()) === '["candidates","language","requestId","task","topics"]' && typeof read === 'function', 'wide_refused');
+      check(plain(body) && body.task === 'news_pick' && JSON.stringify(Object.keys(body).sort()) === '["candidates","requestId","task","topics"]' && typeof read === 'function', 'wide_refused');
       return send(pickEndpoint, body, { workspaceId, signal }, read, { refusal: pickRefusal, timeoutMs: PICK_TIMEOUT_MS });
     }
     return Object.freeze({ load, clear, pick, cancel, dispose() { if (disposed) return; disposed = true; cancel(); unlisten?.(); } });

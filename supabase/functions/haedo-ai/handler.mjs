@@ -33,8 +33,8 @@
  * the answer is constrained with output_config.format (json_schema). Content
  * blocks are read by type because thinking blocks may come first.
  *
- * news_pick (owner approval 2026-11-16, docs/design-review/news-pick.md): the owner's typed news topics, the
- * content language and a numbered list of public candidate metadata ({n, title, publisher, publishedAt}) go to
+ * news_pick (owner approval 2026-11-16, docs/design-review/news-pick.md): the owner's typed news topics and a
+ * numbered list of public candidate metadata ({n, title, publisher, publishedAt}) go to
  * Claude Haiku 5.5, which answers candidate numbers only. Its own allow list (validatePickInput) refuses every
  * other field (likes, saved or read items, IDs, e-mail, URLs). The answer is cut down to numbers that were sent
  * and short reasons; no URL, title or date of the model's is passed on. News may not spend the second half of the
@@ -65,8 +65,13 @@ const FIELDS = ['requestId', 'task', 'selection', 'guidance', 'instruction', 'so
  * text limits keep the request under LIMITS.body; the device also stops adding candidates at a byte budget. */
 export const PICK_TASK = 'news_pick';
 export const PICK = Object.freeze({ model: MODELS.haiku, effort: 'low', maxTokens: 4000, topics: 8, topicLength: 40, candidates: 150,
-  title: 300, publisher: 100, picks: 20, reason: 60, clusters: 20, clusterSize: 10, languages: Object.freeze(['ko', 'en', 'any']) });
-const PICK_FIELDS = ['requestId', 'task', 'topics', 'language', 'candidates'];
+  title: 300, publisher: 100, picks: 20, reason: 60, clusters: 20, clusterSize: 10,
+  // The reservation's input bound (request bytes + overhead) must stay within life_ai_reserve's 100,000; a pick
+  // whose provider request would be larger is refused as invalid_request before any reservation.
+  maxInputTokens: 100000 });
+// No language field (2026-11-16 orchestrator decision: the approval covers typed topics and candidate metadata only);
+// the device leaves out other-language candidates before sending.
+const PICK_FIELDS = ['requestId', 'task', 'topics', 'candidates'];
 const CANDIDATE_FIELDS = ['n', 'title', 'publisher', 'publishedAt'];
 // News stops when a pick would leave less than this for the writing tasks (half of the $10 project cap).
 export const NEWS_PICK_FLOOR_MICRO_USD = 5000000;
@@ -129,6 +134,10 @@ export function validateInput(input) {
 
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z$/;
 const CONTROL = /[\u0000-\u001f\u007f]/;
+// Taken out of a reason before it is checked: C0/C1 controls, direction controls and zero-width characters. The same
+// list is in assets/life/discovery-pick.js (INVISIBLE); tests/news-pick.test.cjs runs both on the same strings.
+const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g;
+export const cleanReason = value => typeof value === 'string' ? value.replace(INVISIBLE, '').trim() : '';
 const codePoints = value => [...value].length;
 /* news_pick's allow list: exactly these five keys, every one required. A candidate is exactly {n, title,
  * publisher, publishedAt} with n = its place in the list (1, 2, 3, ...), so "a number that was sent" is
@@ -138,7 +147,6 @@ export function validatePickInput(input) {
   const keys = Object.keys(input);
   check(keys.length === PICK_FIELDS.length && keys.every(key => PICK_FIELDS.includes(key)));
   check(typeof input.requestId === 'string' && UUID.test(input.requestId) && input.task === PICK_TASK);
-  check(typeof input.language === 'string' && PICK.languages.includes(input.language));
   check(Array.isArray(input.topics) && input.topics.length <= PICK.topics);
   const seen = new Set();
   for (const topic of input.topics) {
@@ -155,7 +163,7 @@ export function validatePickInput(input) {
     check(candidate.publishedAt === null || typeof candidate.publishedAt === 'string' && STAMP.test(candidate.publishedAt) && Number.isFinite(Date.parse(candidate.publishedAt)));
     return { n: candidate.n, title: candidate.title, publisher: candidate.publisher, publishedAt: candidate.publishedAt };
   });
-  return { requestId: input.requestId.toLowerCase(), task: PICK_TASK, topics: [...input.topics], language: input.language, candidates };
+  return { requestId: input.requestId.toLowerCase(), task: PICK_TASK, topics: [...input.topics], candidates };
 }
 
 const EDIT_SCHEMA = Object.freeze({ type: 'object', properties: { suggestion: { type: 'string' }, reason: { type: 'string' } },
@@ -230,7 +238,6 @@ export function providerRequest(input, b = boundaryFor(input)) {
 
 /* The pick prompt. Topics and candidates are data inside boundary-tagged wrappers; candidates go one JSON object
  * per line in the order (and with the numbers) the device sent. */
-const LANGUAGE_NOTE = Object.freeze({ ko: '소유자는 한국어 글을 읽는다.', en: '소유자는 영어 글을 읽는다.', any: '소유자는 한국어와 영어 글을 모두 읽는다.' });
 function pickRequest(input, b) {
   const topics = `<${tag('topics', b)}>`, list = `<${tag('candidates', b)}>`;
   const system = [{ type: 'text', text: [
@@ -240,7 +247,6 @@ function pickRequest(input, b) {
     `관심 주제와 맞는 글을 먼저, 그다음 널리 중요한 새 소식을 고른다. 한 매체에 몰리지 않게 하고, 같은 사건을 다룬 글은 하나만 picks에 넣는다. 최대 ${PICK.picks}개, 읽을 순서대로.`,
     `clusters에는 같은 사건을 다룬 후보 번호들을 묶는다(묶을 것이 없으면 빈 배열). reason은 고른 까닭을 한국어 ${PICK.reason}자 안으로 적고, 주소·링크는 쓰지 않는다.`,
     '목록에 없는 번호, 제목, 주소, 날짜를 지어내지 않는다. 응답은 지정한 JSON 형식으로만 쓴다.',
-    LANGUAGE_NOTE[input.language],
   ].join('\n') }];
   const lines = input.candidates.map(candidate => JSON.stringify(candidate)).join('\n');
   return {
@@ -312,8 +318,8 @@ export function pickResult(input, value) {
   const picks = [], picked = new Set();
   for (const pick of value.picks.slice(0, PICK.picks * 3)) {
     if (!object(pick) || !valid(pick.n) || picked.has(pick.n) || picks.length >= PICK.picks) continue;
-    const reason = typeof pick.reason === 'string' ? pick.reason.trim() : '';
-    const keep = reason && codePoints(reason) <= PICK.reason && !ADDRESS.test(reason) && !CONTROL.test(reason) && !/[<>]/.test(reason) && !LONE_SURROGATE.test(reason);
+    const reason = cleanReason(pick.reason);
+    const keep = reason && codePoints(reason) <= PICK.reason && !ADDRESS.test(reason) && !/[<>]/.test(reason) && !LONE_SURROGATE.test(reason);
     picked.add(pick.n); picks.push({ n: pick.n, reason: keep ? reason : '' });
   }
   check(picks.length > 0, 'ai_invalid_response');
@@ -393,6 +399,9 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
 
       const spec = specFor(input.task), body = JSON.stringify(providerRequest(input));
       const maxInput = utf8(body) + INPUT_TOKEN_OVERHEAD;
+      // A pick whose worst-case input is above the reservation's bound is refused before any reservation (a request
+      // of up to 64 KiB can grow when its quotes are escaped again inside the provider request).
+      if (input.task === PICK_TASK) check(maxInput <= PICK.maxInputTokens);
       const reservation = await rpc('life_ai_reserve', { p_owner_id: owner, p_request_id: input.requestId, p_model: spec.model,
         p_max_input_tokens: maxInput, p_max_output_tokens: spec.maxTokens });
       if (reservation.status === 'limit') return finish('ai_monthly_limit');

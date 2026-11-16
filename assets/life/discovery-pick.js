@@ -1,8 +1,9 @@
 /* AI 추천 (news_pick, docs/design-review/news-pick.md). The device collects and checks the candidates; Claude Haiku 5.5
  * on the haedo-ai function only answers candidate numbers. What leaves the device is exactly:
- *   { requestId, task: 'news_pick', topics, language, candidates: [{ n, title, publisher, publishedAt }] }
- * topics are the interest topics typed in news settings and left checked (first eight), language is the content
- * language choice, and each candidate is public metadata of an article already in this list. No like, saved or read
+ *   { requestId, task: 'news_pick', topics, candidates: [{ n, title, publisher, publishedAt }] }
+ * topics are the interest topics typed in news settings and left checked (first eight), and each candidate is public
+ * metadata of an article already in this list (the content-language choice is applied here, by which rows become
+ * candidates; the language itself is not sent, 2026-11-16 orchestrator decision). No like, saved or read
  * item, word taken from them, account, workspace or post ID, address, e-mail or device detail is ever added.
  * An answer is read against the list that was sent: a number that was not sent is dropped, and the screen shows its
  * own candidate record for each number, so the model can bring in no address, title or date. Answers live in the
@@ -16,18 +17,24 @@
   'use strict';
   const TASK = 'news_pick', PROVIDER = 'Anthropic', MODEL = 'claude-haiku-5-5';
   // Same numbers as the server's PICK (supabase/functions/haedo-ai/handler.mjs). `bytes` is the device's budget for the
+  // whole request body; `provider` bounds the same candidates written once more inside the server's provider request
+  // (quotes and backslashes are escaped again there), so the server's 100,000 reservation bound is never reached.
   // whole request body, under the server's 64 KiB limit with room for JSON escapes the estimate does not see.
-  const LIMITS = Object.freeze({ topics: 8, topicLength: 40, candidates: 150, title: 300, publisher: 100, picks: 20, reason: 60, clusterSize: 10, bytes: 56 * 1024 });
+  const LIMITS = Object.freeze({ topics: 8, topicLength: 40, candidates: 150, title: 300, publisher: 100, picks: 20, reason: 60, clusterSize: 10, bytes: 56 * 1024, provider: 88000 });
   // A found link (넓게 찾기) older than this is not a candidate; fixed-source articles keep the catalog's own rules.
   const WIDE_WINDOW_MS = 72 * 60 * 60 * 1000, FUTURE_MS = 5 * 60 * 1000;
-  // A pick is asked when news opens, on 지금 갱신, and when topics or languages change; never by the timed refresh.
-  // The same topics and language reuse an answer this long; a refresh the person asks for always asks.
+  // A pick is asked when news opens, on 지금 갱신, and when topics, languages or 넓게 찾기 change; never by the timed refresh.
+  // The same key (topics, content languages, 넓게 찾기 on/off) reuses an answer this long; a refresh asked for always asks.
   const REUSE_MS = 30 * 60 * 1000;
   // At most this many picks a day on one device (see the cost estimate in the design note).
   const DAILY_LIMIT = 12;
   const COUNT_KEY = 'caeyeon_life_news_pick_calls';
   const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
   const CONTROL = /[\u0000-\u001f\u007f]/;
+  // Taken out of a reason before it is checked: C0/C1 controls, direction controls and zero-width characters
+  // (the server's cleanReason uses the same list).
+  const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g;
+  const cleanReason = value => typeof value === 'string' ? value.replace(INVISIBLE, '').trim() : '';
   const ADDRESS = /https?:|www\.|[a-z0-9-]+\.(?:com|net|org|kr|io|co|jp|dev|app|news)\b/i;
   const fault = (code = 'wide_invalid') => Object.assign(new Error('추천 결과를 확인하지 못했습니다.'), { code });
   const check = (value, code) => { if (!value) throw fault(code); };
@@ -37,12 +44,6 @@
   const clean = value => typeof value === 'string' ? value.normalize('NFC').replace(/\s+/gu, ' ').trim() : '';
   const bytes = value => new TextEncoder().encode(value).length;
 
-  // The content-language setting as one word: 한국어만, 영어만, or both / not chosen.
-  function language(contentLanguages) {
-    if (!Array.isArray(contentLanguages)) return 'any';
-    const ko = contentLanguages.includes('ko'), en = contentLanguages.includes('en');
-    return ko && !en ? 'ko' : en && !ko ? 'en' : 'any';
-  }
   // The typed topics that go: `manual` is the { id, label } list the person typed and left checked, in order.
   // The first eight distinct ones (case ignored) of 1-40 characters; nothing else can be passed in.
   function topics(manual) {
@@ -83,17 +84,17 @@
   }
   /* The request. Candidates are numbered 1, 2, 3, ... in that order and added while the body stays within the byte
    * budget. `sent` maps each number back to its candidate (canonical address) on this device only. */
-  function prepare({ requestId, topics: chosen, language: code, candidates: list }) {
+  function prepare({ requestId, topics: chosen, candidates: list }) {
     check(typeof requestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId), 'wide_refused');
     check(Array.isArray(chosen) && chosen.length <= LIMITS.topics && chosen.every(topic => text(topic, LIMITS.topicLength * 4) && codePoints(topic) <= LIMITS.topicLength), 'wide_refused');
-    check(['ko', 'en', 'any'].includes(code) && Array.isArray(list), 'wide_refused');
-    const body = { requestId, task: TASK, topics: [...chosen], language: code, candidates: [] }, sent = new Map();
-    let size = bytes(JSON.stringify(body));
+    check(Array.isArray(list), 'wide_refused');
+    const body = { requestId, task: TASK, topics: [...chosen], candidates: [] }, sent = new Map();
+    let size = bytes(JSON.stringify(body)), inner = 0;
     for (const candidate of list.slice(0, LIMITS.candidates)) {
       const record = { n: body.candidates.length + 1, title: candidate.title, publisher: candidate.publisher, publishedAt: candidate.publishedAt };
-      const cost = bytes(JSON.stringify(record)) + 1;
-      if (size + cost > LIMITS.bytes) break;
-      size += cost; body.candidates.push(record); sent.set(record.n, candidate.canonicalUrl);
+      const cost = bytes(JSON.stringify(record)) + 1, line = bytes(JSON.stringify(JSON.stringify(record))) + 2;
+      if (size + cost > LIMITS.bytes || inner + line > LIMITS.provider) break;
+      size += cost; inner += line; body.candidates.push(record); sent.set(record.n, candidate.canonicalUrl);
     }
     check(body.candidates.length > 0, 'pick_empty');
     return Object.freeze({ body, sent, bytes: size, provider: PROVIDER, model: MODEL });
@@ -108,8 +109,8 @@
     for (const pick of raw.picks.slice(0, LIMITS.picks * 3)) {
       if (!plain(pick) || !Number.isSafeInteger(pick.n) || !prepared.sent.has(pick.n) || seen.has(pick.n) || picks.length >= LIMITS.picks) continue;
       seen.add(pick.n);
-      const reason = typeof pick.reason === 'string' ? pick.reason.trim() : '';
-      const keep = reason && codePoints(reason) <= LIMITS.reason && !ADDRESS.test(reason) && !CONTROL.test(reason) && !/[<>]/.test(reason) && !LONE_SURROGATE.test(reason);
+      const reason = cleanReason(pick.reason);
+      const keep = reason && codePoints(reason) <= LIMITS.reason && !ADDRESS.test(reason) && !/[<>]/.test(reason) && !LONE_SURROGATE.test(reason);
       picks.push({ canonicalUrl: prepared.sent.get(pick.n), reason: keep ? reason : '' });
     }
     check(picks.length > 0);
@@ -138,7 +139,8 @@
     }
     return [...first, ...rows.filter(row => !used.has(url(row)))];
   }
-  const requestKey = (chosen, code) => JSON.stringify([chosen, code]);
+  // What a new answer depends on besides the list itself: the topics sent, the content-language choice and 넓게 찾기.
+  const requestKey = (chosen, contentLanguages, wide) => JSON.stringify([chosen, Array.isArray(contentLanguages) ? [...contentLanguages].sort() : null, !!wide]);
   // The local calendar day on this device.
   const day = now => { const d = new Date(now); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   /* Today's count of picks asked on this device. Browser storage holds { day, count } only; when it cannot be read
@@ -164,5 +166,5 @@
       }
     });
   }
-  return Object.freeze({ TASK, PROVIDER, MODEL, LIMITS, WIDE_WINDOW_MS, REUSE_MS, DAILY_LIMIT, COUNT_KEY, language, topics, candidates, prepare, read, order, requestKey, counter });
+  return Object.freeze({ TASK, PROVIDER, MODEL, LIMITS, WIDE_WINDOW_MS, REUSE_MS, DAILY_LIMIT, COUNT_KEY, topics, candidates, cleanReason, prepare, read, order, requestKey, counter });
 });

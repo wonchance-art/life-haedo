@@ -1145,15 +1145,23 @@
     function pickPlan() {
       if (!pickModel() || !current?.profile || !current.settings || !current.languageSettings) return null;
       const manual = settingsModel().effectiveProfile(current.profile, current.settings).manual.map(({ id, label }) => ({ id, label }));
-      const topics = pickModel().topics(manual), language = pickModel().language(current.languageSettings.contentLanguages);
-      return { topics, language, key: pickModel().requestKey(topics, language) };
+      // The content languages decide which rows become candidates (rank and wideRows already leave the others out);
+      // they are part of the key so a change asks again, but they are not sent.
+      const topics = pickModel().topics(manual);
+      return { topics, key: pickModel().requestKey(topics, current.languageSettings.contentLanguages, wideSaved()) };
     }
     // The candidates are the rows the latest list holds now (fixed sources and, when on, the found links), less the
-    // articles already liked or saved: nothing kept, read or judged is sent (read and judged ones are already out).
-    function pickRows() {
+    // articles already liked or saved and those marked 일부 읽음·본문을 읽음 in the reading comparison (`read`): nothing
+    // kept, read or judged is sent (읽음·관련 없음 and addresses already in 자료 are out of the list itself).
+    function pickRows(read = new Set()) {
       const feed = settingsModel().filterFeed(current.catalog.feed, desiredSettings()), fixed = client.rank(feed, { ...rankOptions(), mode: 'latest' }).items;
       const kept = new Set((current.actions?.entries || []).filter(entry => entry.liked || entry.bookmarked).map(entry => entry.canonicalUrl));
-      return [...fixed, ...wideRows(fixed)].filter(row => !kept.has(row.article.canonicalUrl));
+      return [...fixed, ...wideRows(fixed)].filter(row => !kept.has(row.article.canonicalUrl) && !read.has(row.article.canonicalUrl));
+    }
+    // Articles the reading comparison records as read in part or in full.
+    async function readInComparison() {
+      const profile = await storage.readDiscoveryReading(workspaceId);
+      return new Set((profile?.session?.reviews || []).filter(review => review.reading === 'partial' || review.reading === 'full').map(review => review.canonicalUrl));
     }
     function pickOrder(items) { return current.mode === 'pick' && current.pick.applied && pickModel() ? pickModel().order(items, current.pick.applied) : items; }
     // An answer that came while the list was in use waits behind `AI 추천 n건 보기`; choosing the order shows it.
@@ -1165,31 +1173,42 @@
     function pickSettingSaved() {
       if (!current?.pick) return;
       if (current.pick.activate && pickSaved()) { current.pick.activate = false; if (current.mode !== 'pick') { setMode('pick'); return; } }
-      refreshPick().catch(error => report(error));
+      // A saved topic or source choice asks when the key changed; turning 넓게 찾기 on or off alone waits for the next
+      // opening or refresh (the key carries it, so that one asks).
+      refreshPick({ soft: true }).catch(error => report(error));
     }
-    async function refreshPick({ force = false, retry = false } = {}) {
+    async function refreshPick({ force = false, retry = false, soft = false } = {}) {
       if (!scope() || suspended || !current?.pick || current.mode !== 'pick' || !pickSaved() || current.pick.notAllowed) return;
+      // Only 넓게 찾기 turned on or off since the last attempt: nothing now (the next opening or refresh asks).
+      const early = pickPlan();
+      if (soft && early && current.pick.triedKey === pickModel().requestKey(early.topics, current.languageSettings.contentLanguages, !wideSaved())) return;
       const wait = () => { current.pick.waiting = { force: force || !!current.pick.waiting?.force, retry: retry || !!current.pick.waiting?.retry }; };
       if (current.loading || !current.catalog?.feed) { if (current.loading) wait(); return; }
       if (wideSaved() && current.wide.status === 'loading') { wait(); return; }
       const remote = wideRemote(), plan = pickPlan(); if (!remote || !plan || !current.feedback || !current.actions) return;
-      if (!force && current.pick.status === 'loading' && current.pick.pendingKey === plan.key) return; // one request at a time
-      // The same topics and language: the last answer (or attempt) stands for a while, except a refresh asked for and,
-      // after a failure, opening news again.
+      // One request at a time for the same key, also when a refresh is asked for: a cut request would still be billed
+      // (at its reserved maximum) and counted for the day.
+      if (current.pick.status === 'loading' && current.pick.pendingKey === plan.key) return;
+      // The same key: the last answer (or attempt) stands for a while, except a refresh asked for and, after a failure,
+      // opening news again.
       if (!force && current.pick.triedKey === plan.key && Date.now() - current.pick.triedAt < pickModel().REUSE_MS && !(retry && current.pick.status === 'error')) return;
-      const list = pickModel().candidates(pickRows(), { isWide, publisherOf: article => isWide(article) ? article.sourceName : sourceName(article) });
-      if (!list.length) return;
-      let prepared;
-      try { prepared = pickModel().prepare({ requestId: root.crypto.randomUUID(), topics: plan.topics, language: plan.language, candidates: list }); } catch (_) { return; }
-      if (!pickCounter().take()) {
-        // No request today any more. The picks shown stay only when they were made for these topics and language.
-        if (current.pick.key !== plan.key) { current.pick.applied = null; current.pick.next = null; }
-        Object.assign(current.pick, { status: 'error', error: 'pick_daily', triedKey: plan.key, triedAt: Date.now() }); draw(); return;
-      }
       stopPick();
       const epoch = pickEpoch, token = generation, controller = new AbortController(); pickAborter = controller;
+      const before = { status: current.pick.status, error: current.pick.error };
       Object.assign(current.pick, { status: 'loading', pendingKey: plan.key, error: null, triedKey: plan.key, triedAt: Date.now() }); capture(); draw(); restore();
       try {
+        // Read before anything is built: an article marked read in the comparison is never a candidate.
+        const read = await readInComparison();
+        if (!valid(token) || epoch !== pickEpoch) return;
+        const list = pickModel().candidates(pickRows(read), { isWide, publisherOf: article => isWide(article) ? article.sourceName : sourceName(article) });
+        let prepared = null;
+        try { if (list.length) prepared = pickModel().prepare({ requestId: root.crypto.randomUUID(), topics: plan.topics, candidates: list }); } catch (_) { prepared = null; }
+        if (!prepared) { Object.assign(current.pick, { ...before, status: before.status === 'loading' ? 'idle' : before.status, triedKey: null }); return; }
+        if (!pickCounter().take()) {
+          // No request today any more. The picks shown stay only when they were made for this key.
+          if (current.pick.key !== plan.key) { current.pick.applied = null; current.pick.next = null; }
+          Object.assign(current.pick, { status: 'error', error: 'pick_daily' }); return;
+        }
         const answer = await remote.pick({ body: prepared.body, read: raw => pickModel().read(raw, prepared), workspaceId, signal: controller.signal });
         if (!valid(token) || epoch !== pickEpoch) return;
         if (!pickSaved()) { dropPick(); return; }
@@ -1222,7 +1241,7 @@
       const on = !!desired && settingsModel().newsPick(desired);
       const toggle = checkbox('AI 추천', 'discoveryNewsPick', on, enabled => changeSetting('newsPick', null, enabled));
       const limit = pickModel()?.DAILY_LIMIT || 12, most = pickModel()?.LIMITS.candidates || 150;
-      const help = node('p', '켜면 뉴스를 열 때, 지금 갱신을 누를 때, 관심 주제나 언어를 바꿀 때 위에 직접 적어 켜 둔 관심 주제(위에서부터 8개), 콘텐츠 언어, 지금 목록에 있는 글의 제목·매체 이름·발행 시각(최대 ' + most + '건)을 Anthropic에 보내 먼저 읽을 글을 고릅니다. 좋아요·담은 글·읽은 글과 계정 정보는 보내지 않습니다. 입력은 30일 안에 삭제됩니다(정책 위반 표시 시 더 길게 보관). 학습에는 쓰지 않습니다. 고른 결과는 이 화면에만 두고 저장하지 않습니다. 15분 자동 갱신 때는 묻지 않고, 하루 ' + limit + '번까지 묻습니다.', 'life-meta');
+      const help = node('p', '켜면 뉴스를 열 때, 지금 갱신을 누를 때, 관심 주제나 언어를 바꿀 때 위에 직접 적어 켜 둔 관심 주제(위에서부터 8개)와 지금 목록에 있는 글의 제목·매체 이름·발행 시각(최대 ' + most + '건)을 Anthropic에 보내 먼저 읽을 글을 고릅니다. 좋아요·담은 글·읽은 글과 계정 정보는 보내지 않습니다. 입력은 30일 안에 삭제됩니다(정책 위반 표시 시 더 길게 보관). 학습에는 쓰지 않습니다. 고른 결과는 이 화면에만 두고 저장하지 않습니다. 15분 자동 갱신 때는 묻지 않고, 하루 ' + limit + '번까지 묻습니다.', 'life-meta');
       help.id = 'discoveryPickHelp'; toggle.querySelector('input').setAttribute('aria-describedby', help.id); toggle.querySelector('input').disabled = !current.settings || !available;
       box.append(toggle, help);
       if (!available) box.append(node('p', '로그인한 계정에서만 쓸 수 있습니다.', 'life-meta'));
@@ -1790,8 +1809,11 @@
       } else if (result) {
         const items = discover, notice = wideNotice();
         if (notice) { const line = node('p', notice, 'discovery-wide-notice'); line.id = 'discoveryWideNotice'; line.setAttribute('role', 'status'); body.append(line); }
-        const picked = current.mode === 'pick' ? items.filter(item => item.pick).length : 0, pickLine = pickNotice() || (picked ? 'AI 추천 ' + picked + '건 · 그 뒤는 최신순' : '');
+        // Picks none of which is in the list any more (넓게 찾기 turned off, all kept or judged since): said so, with a way to ask again.
+        const picked = current.mode === 'pick' ? items.filter(item => item.pick).length : 0, gone = current.mode === 'pick' && !picked && !!current.pick.applied && current.pick.status === 'ready';
+        const pickLine = pickNotice() || (picked ? 'AI 추천 ' + picked + '건 · 그 뒤는 최신순' : gone ? '추천한 글이 지금 목록에 없어요' : '');
         if (pickLine) { const line = node('p', pickLine, 'discovery-wide-notice discovery-pick-notice'); line.id = 'discoveryPickNotice'; line.setAttribute('role', 'status'); body.append(line); }
+        if (gone) { const again = button('다시 추천받기', 'discoveryPickAgain', () => { capture(null, 'pick-again'); resetList(); refreshPick({ force: true }).catch(error => report(error)); }, 'discovery-quiet'); again.dataset.focusKey = 'pick-again'; body.append(again); }
         if (current.mode === 'pick' && current.pick.next) {
           // An answer that came while the list was in use: pressing shows it from the top, like 새 글 n건.
           const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');

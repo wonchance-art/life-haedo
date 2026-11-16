@@ -18,7 +18,7 @@ const PRICES = { 'claude-haiku-5-5': [100000, 500000], 'claude-sonnet-5-5': [200
 const cost = (model, input, output) => Math.ceil((input * PRICES[model][0] + output * PRICES[model][1]) / 1e6);
 const TOPICS = ['합성 도서관', '합성 기후'];
 const candidate = (n, change = {}) => ({ n, title: '합성 후보 제목 ' + n, publisher: '합성매체 ' + (n % 3), publishedAt: '2026-11-16T0' + (n % 10) + ':00:00.000Z', ...change });
-const pickBody = (change = {}, count = 5) => ({ requestId: randomUUID(), task: 'news_pick', topics: [...TOPICS], language: 'ko', candidates: Array.from({ length: count }, (_, i) => candidate(i + 1)), ...change });
+const pickBody = (change = {}, count = 5) => ({ requestId: randomUUID(), task: 'news_pick', topics: [...TOPICS], candidates: Array.from({ length: count }, (_, i) => candidate(i + 1)), ...change });
 
 /* Fake world: Auth, usage RPCs and the provider. `used` is what the project already spent this month. */
 function world({ provider, used = 0, user = { id: OWNER, role: 'authenticated' } } = {}) {
@@ -83,7 +83,7 @@ function assertCleanLogs(logs) {
   for (const fragment of ['합성', '후보', '도서관', '기후', '매체', SECRET.provider, SECRET.service, SECRET.session, OWNER]) assert(!text.includes(fragment), 'a log entry holds request text: ' + fragment);
 }
 
-test('news_pick allow list: exactly requestId, task, topics, language and {n, title, publisher, publishedAt} candidates; likes, IDs and links are refused', async () => {
+test('news_pick allow list: exactly requestId, task, topics and {n, title, publisher, publishedAt} candidates (no language); likes, IDs and links are refused', async () => {
   const { validatePickInput, validateInput } = await loadHandler();
   const good = pickBody();
   assert.deepEqual(validateInput(good), { ...good, requestId: good.requestId.toLowerCase() });
@@ -98,8 +98,8 @@ test('news_pick allow list: exactly requestId, task, topics, language and {n, ti
     pickBody({}, 151), withCandidate({ title: '가'.repeat(301) }), withCandidate({ title: '  ' }), withCandidate({ publisher: '' }), withCandidate({ publisher: '나'.repeat(101) }), withCandidate({ title: '줄\n바꿈' }),
     withCandidate({ publishedAt: 'yesterday' }), withCandidate({ publishedAt: 1731700000000 }), withCandidate({ n: '1' }),
     pickBody({ topics: ['가'.repeat(41)] }), pickBody({ topics: Array.from({ length: 9 }, (_, i) => '주제 ' + i) }), pickBody({ topics: ['Same', 'same'] }), pickBody({ topics: [' 앞 공백'] }), pickBody({ topics: [{ label: '객체' }] }),
-    pickBody({ language: 'ja' }), pickBody({ language: ['ko'] }), { ...pickBody(), requestId: 'not-a-uuid' },
-    (({ topics, ...rest }) => rest)(pickBody()), (({ language, ...rest }) => rest)(pickBody()), (({ candidates, ...rest }) => rest)(pickBody()),
+    pickBody({ language: 'ko' }), pickBody({ language: 'any' }), pickBody({ languages: ['ko'] }), { ...pickBody(), requestId: 'not-a-uuid' },
+    (({ topics, ...rest }) => rest)(pickBody()), (({ candidates, ...rest }) => rest)(pickBody()), (({ requestId, ...rest }) => rest)(pickBody()),
   ];
   for (const body of bad) {
     assert.throws(() => validatePickInput(body), e => e.code === 'invalid_request', JSON.stringify(body).slice(0, 90));
@@ -215,26 +215,31 @@ test('candidates: one per address, https only, found links within 72 hours, newe
 
 test('prepare: the body is exactly the five allow-listed fields; candidates are numbered and stop at the byte budget', () => {
   const list = Array.from({ length: 150 }, (_, i) => ({ canonicalUrl: 'https://www.synthetic-daily.example/' + i, title: '가'.repeat(200) + i, publisher: '나'.repeat(40), publishedAt: hours(i) }));
-  const prepared = Pick.prepare({ requestId: randomUUID(), topics: TOPICS, language: 'ko', candidates: list });
-  assert.deepEqual(Object.keys(prepared.body), ['requestId', 'task', 'topics', 'language', 'candidates']);
+  const prepared = Pick.prepare({ requestId: randomUUID(), topics: TOPICS, candidates: list });
+  assert.deepEqual(Object.keys(prepared.body), ['requestId', 'task', 'topics', 'candidates']);
   assert(prepared.body.candidates.length < 150 && prepared.body.candidates.length > 20, 'long titles stop at the budget: ' + prepared.body.candidates.length);
   assert(Buffer.byteLength(JSON.stringify(prepared.body)) <= Pick.LIMITS.bytes);
   prepared.body.candidates.forEach((c, i) => { assert.deepEqual(Object.keys(c), ['n', 'title', 'publisher', 'publishedAt']); assert.equal(c.n, i + 1); assert.equal(prepared.sent.get(c.n), list[i].canonicalUrl); });
   const json = JSON.stringify(prepared.body);
   assert(!json.includes('https://'), 'no address leaves the device');
   assert.equal(prepared.provider, 'Anthropic'); assert.equal(prepared.model, 'claude-haiku-5-5');
-  for (const bad of [{ topics: ['가'.repeat(41)] }, { topics: Array(9).fill('주제') }, { language: 'ja' }, { requestId: 'x' }, { candidates: [] }])
-    assert.throws(() => Pick.prepare({ requestId: randomUUID(), topics: TOPICS, language: 'ko', candidates: list.slice(0, 2), ...bad }));
+  for (const bad of [{ topics: ['가'.repeat(41)] }, { topics: Array(9).fill('주제') }, { requestId: 'x' }, { candidates: [] }])
+    assert.throws(() => Pick.prepare({ requestId: randomUUID(), topics: TOPICS, candidates: list.slice(0, 2), ...bad }));
+  // Even if a caller passes a language, it is not part of the body.
+  assert(!('language' in Pick.prepare({ requestId: randomUUID(), topics: TOPICS, language: 'ko', candidates: list.slice(0, 2) }).body));
 });
 
-test('topics and language: the typed and checked topics only, first eight; likes, saved items and inferred words have no way in', () => {
+test('topics and key: the typed and checked topics only, first eight; likes, saved items and inferred words have no way in', () => {
   const profile = { workspaceId: 'w', manual: [{ id: 'i1', label: ' 합성  도서관 ' }, { id: 'i2', label: '꺼 둔 주제' }, { id: 'i3', label: '합성 도서관' }, { id: 'i4', label: '' }, { id: 'i5', label: 'site:a "b"' },
     ...Array.from({ length: 10 }, (_, i) => ({ id: 'm' + i, label: '주제 ' + i }))], inferred: [{ label: '자동 낱말' }], liked: ['좋아요 제목'] };
   const settings = Settings.update(Settings.empty('w'), { disabledInterestIds: ['i2'], newsPick: true }, { expectedRevision: 0, now: '2026-11-16T00:00:00.000Z' });
   const topics = Pick.topics(Settings.effectiveProfile(profile, settings).manual);
   assert.deepEqual(topics, ['합성 도서관', 'site:a "b"', '주제 0', '주제 1', '주제 2', '주제 3', '주제 4', '주제 5']);
   for (const bad of [null, 'x', [{ id: 'x' }]]) assert.throws(() => Pick.topics(bad));
-  assert.equal(Pick.language(null), 'any'); assert.equal(Pick.language(['ko']), 'ko'); assert.equal(Pick.language(['en', 'ja']), 'en'); assert.equal(Pick.language(['ko', 'en']), 'any'); assert.equal(Pick.language(['ja']), 'any');
+  // The key changes with the topics, the content-language choice and 넓게 찾기 on/off (none of the last two is sent).
+  const key = Pick.requestKey(['가'], ['ko', 'en'], false);
+  assert.equal(key, Pick.requestKey(['가'], ['en', 'ko'], false));
+  for (const other of [Pick.requestKey(['나'], ['ko', 'en'], false), Pick.requestKey(['가'], ['ko'], false), Pick.requestKey(['가'], null, false), Pick.requestKey(['가'], ['ko', 'en'], true)]) assert.notEqual(other, key);
   // The option is a reserved entry an older settings model keeps (like 넓게 찾기), off by default.
   assert.equal(Settings.DEFAULT_NEWS_PICK, false); assert.equal(Settings.newsPick(Settings.empty('w')), false);
   assert.deepEqual(settings.disabledSourceIds, ['option-pick-on']);
@@ -245,7 +250,7 @@ test('topics and language: the typed and checked topics only, first eight; likes
 
 test('read: only numbers that were sent count; the device renders its own candidate for each, never a model address, title or date', () => {
   const list = [1, 2, 3, 4].map(n => ({ canonicalUrl: 'https://www.synthetic-daily.example/' + n, title: '합성 기사 ' + n, publisher: '합성일보', publishedAt: hours(n) }));
-  const prepared = Pick.prepare({ requestId: randomUUID(), topics: TOPICS, language: 'any', candidates: list });
+  const prepared = Pick.prepare({ requestId: randomUUID(), topics: TOPICS, candidates: list });
   const raw = { status: 'ok', requestId: prepared.body.requestId, task: 'news_pick', model: 'claude-haiku-5-5',
     picks: [{ n: 2, reason: '좋은 이유', url: 'https://evil.example/' }, { n: 2, reason: '다시' }, { n: 7, reason: '보내지 않은 번호' }, { n: 3, reason: 'https://evil.example 참고' }, { n: 1, title: '지어낸 제목', reason: '' }],
     clusters: [[2, 4], [1, 99]], usage: { inputTokens: 1, outputTokens: 1, remainingMicroUsd: 1 } };
@@ -288,7 +293,7 @@ function remote(fetcher) {
   return { remote: Wide.create({ auth, storage: { isAccountScoped: true, account: { ...owner } }, fetcher, isCurrent: () => current }), leave() { current = false; },
     switchAccount() { owner.userId = '22222222-2222-4222-8222-222222222222'; auth.user.id = owner.userId; auth.epoch++; for (const fn of listeners) fn(); } };
 }
-const preparedFor = () => Pick.prepare({ requestId: randomUUID(), topics: TOPICS, language: 'ko',
+const preparedFor = () => Pick.prepare({ requestId: randomUUID(), topics: TOPICS,
   candidates: [1, 2, 3].map(n => ({ canonicalUrl: 'https://www.synthetic-daily.example/' + n, title: '합성 기사 ' + n, publisher: '합성일보', publishedAt: hours(n) })) });
 const json = (data, init = {}) => new Response(typeof data === 'string' ? data : JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' }, ...init });
 
@@ -362,6 +367,41 @@ test('public catalog: no found link and no pick result is in it or can be publis
   }
   // Owner decision 3 (2026-11-16): article images stay off until chosen.
   assert.equal(Settings.DEFAULT_SHOW_IMAGES, false); assert.equal(Settings.showImages(Settings.empty('w')), false);
+});
+
+test('reasons: the server and the device take out the same controls, direction marks and zero-width characters, then check', async () => {
+  const { cleanReason, pickResult } = await loadHandler();
+  const samples = [
+    '보통 이유', '  앞뒤 공백  ', 'C1\u0085제어\u009f', '방향‮제어‪‫‬‭', '격리⁦⁧⁨⁩', '표시‎‏؜', '폭없음​‌‍⁠﻿',
+    'evil​.com 참고', 'w​ww.evil.example', 'ht⁠tps://evil.example', '줄\n바꿈\t탭\u0000', '‮​', '<b>태그</b>', '가'.repeat(60) + '​', '가'.repeat(61),
+  ];
+  const expected = ['보통 이유', '앞뒤 공백', 'C1제어', '방향제어', '격리', '표시', '폭없음', 'evil.com 참고', 'www.evil.example', 'https://evil.example', '줄바꿈탭', '', '<b>태그</b>', '가'.repeat(60), '가'.repeat(61)];
+  assert.deepEqual(samples.map(cleanReason), expected);
+  assert.deepEqual(samples.map(Pick.cleanReason), expected, 'the device uses the same list');
+  // After cleaning: an address, a tag sign or more than 60 characters leaves the reason empty, on both sides.
+  const kept = ['보통 이유', '앞뒤 공백', 'C1제어', '방향제어', '격리', '표시', '폭없음', '', '', '', '줄바꿈탭', '', '', '가'.repeat(60), ''];
+  const body = pickBody({}, samples.length), server = pickResult(body, { picks: samples.map((reason, i) => ({ n: i + 1, reason })), clusters: [] });
+  assert.deepEqual(server.picks.map(pick => pick.reason), kept);
+  const list = samples.map((_, i) => ({ canonicalUrl: 'https://www.synthetic-daily.example/r' + i, title: '합성 ' + i, publisher: '합성일보', publishedAt: null }));
+  const prepared = Pick.prepare({ requestId: randomUUID(), topics: [], candidates: list });
+  const device = Pick.read({ status: 'ok', requestId: prepared.body.requestId, task: 'news_pick', picks: samples.map((reason, i) => ({ n: i + 1, reason })), clusters: [] }, prepared);
+  assert.deepEqual(device.picks.map(pick => pick.reason), kept);
+});
+
+test('size: quote-heavy titles stop at the device budget, and a request too large for the reservation bound is refused before any reservation', async () => {
+  const { PICK } = await loadHandler();
+  const heavy = Array.from({ length: 150 }, (_, i) => ({ canonicalUrl: 'https://www.synthetic-daily.example/q' + i, title: '"\\'.repeat(140) + i, publisher: '"'.repeat(90), publishedAt: hours(1) }));
+  const prepared = Pick.prepare({ requestId: randomUUID(), topics: TOPICS, candidates: heavy });
+  assert(prepared.body.candidates.length < 150 && prepared.body.candidates.length > 10, 'stops at the budget: ' + prepared.body.candidates.length);
+  const w = world({ provider: () => message({ picks: [{ n: 1, reason: '' }], clusters: [] }) }), handler = await handlerFor(w);
+  let response = await handler(post(prepared.body)); assert.equal(response.status, 200, 'a device-built body fits the reservation bound');
+  const reserve = w.state.rpc.find(([name]) => name === 'life_ai_reserve')[1]; assert(reserve.p_max_input_tokens <= PICK.maxInputTokens, 'reserved input ' + reserve.p_max_input_tokens);
+  // Hand-built: as many quote-heavy candidates as fit in 64 KiB. Before, the reservation SQL refused it (500).
+  const big = pickBody({ candidates: [] });
+  for (let n = 1; n <= 150; n++) { const next = { ...big, candidates: [...big.candidates, candidate(n, { title: '"\\'.repeat(140) + n, publisher: '"'.repeat(90) })] }; if (Buffer.byteLength(JSON.stringify(next)) > 64 * 1024) break; big.candidates = next.candidates; }
+  const w2 = world({ provider: () => assert.fail('provider called') }), h2 = await handlerFor(w2);
+  response = await h2(post(big)); assert.equal(response.status, 400); assert.deepEqual(await response.json(), { error: 'invalid_request' });
+  assert.deepEqual(w2.state.rpc, [], 'no reservation');
 });
 
 test('handler source: news_pick adds no console use and the wide search keeps its own refusal codes', async () => {
