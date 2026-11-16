@@ -155,9 +155,10 @@ async function main() {
       const result = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { selected: selected.dataset.haedoSection, left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height), hidden: marker.getAttribute('aria-hidden') }; });
       assert.equal(result.selected, 'manage'); assert.equal(result.hidden, 'true');
       // 2026-11-02 decision: the phone tab bar has no selected pill; colour and weight mark the tab.
+      // 2026-11-16 W1 (notion-visual-contract.md): ink 600 for the current tab; teal is kept for 글쓰기.
       const phone = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]');
         return { indicator: getComputedStyle(nav.querySelector('.haedo-nav-indicator')).display, background: getComputedStyle(selected).backgroundColor, weight: getComputedStyle(selected.querySelector('.haedo-nav-text')).fontWeight, color: getComputedStyle(selected).color }; });
-      assert.deepEqual(phone, { indicator: 'none', background: 'rgba(0, 0, 0, 0)', weight: '750', color: 'rgb(20, 91, 80)' });
+      assert.deepEqual(phone, { indicator: 'none', background: 'rgba(0, 0, 0, 0)', weight: '600', color: 'rgb(55, 53, 47)' });
       // Wider layouts keep the moving indicator, painted inside the selected link.
       await page.setViewportSize({ width: 1440, height: 1000 }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await idle(page);
       const wide = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height) }; });

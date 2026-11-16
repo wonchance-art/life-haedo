@@ -3,17 +3,21 @@ name: 해도
 description: 글과 사진을 중심으로 쓰고 읽는 개인 블로그
 colors:
   primary: "#145b50"
-  ink: "#182522"
+  ink: "#37352f"
   primary-hover: "#104a41"
-  link: "#145b50"
+  link: "#37352f"
   focus: "#267a69"
   paper: "#ffffff"
-  canvas: "#f4f6f5"
-  soft: "#f4f7f5"
-  selected: "#eaf1ed"
-  muted: "#5d6b65"
-  line: "#e3e9e6"
-  field-line: "#86968d"
+  canvas: "#ffffff"
+  sidebar: "#f7f7f5"
+  soft: "#f7f7f5"
+  selected: "rgba(55,53,47,0.06)"
+  hover: "rgba(55,53,47,0.04)"
+  muted: "#5f5e5b"
+  meta: "#6f6e69"
+  mark: "#fbefc0"
+  line: "rgba(55,53,47,0.09)"
+  field-line: "#8a8984"
   button-line: "#d5d5db"
   selection: "#dcece4"
   error: "#a3243d"
@@ -24,10 +28,10 @@ typography:
     fontSize: "16px"
     lineHeight: 1.65
   page-title:
-    fontSize: "22px"
-    fontWeight: 750
+    fontSize: "24px"
+    fontWeight: 700
     lineHeight: 1.5
-    letterSpacing: "-0.025em"
+    letterSpacing: "-0.01em"
   feed-title:
     fontSize: "26px"
     fontWeight: 750
@@ -44,8 +48,9 @@ typography:
     fontSize: "12px"
     lineHeight: 1.75
 rounded:
-  control: "12px"
-  navigation: "14px"
+  control: "6px"
+  surface: "8px"
+  navigation: "6px"
   media: "14px"
   sample: "20px"
   pill: "999px"
@@ -78,10 +83,15 @@ components:
     rounded: "{rounded.control}"
     padding: "10px 12px"
   navigation:
-    backgroundColor: "{colors.selected}"
-    textColor: "{colors.primary}"
+    backgroundColor: "{colors.sidebar}"
+    textColor: "{colors.muted}"
     rounded: "{rounded.navigation}"
-    height: "52px"
+    height: "44px"
+  navigation-current:
+    backgroundColor: "{colors.selected}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.navigation}"
+    height: "44px"
   feed-row:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
@@ -107,7 +117,7 @@ components:
 
 ## Colors
 
-기계가 읽는 값은 frontmatter가 기준이며 [공통 셸](assets/haedo-shell.css)과 [자료 UI](assets/life/ui.css)에 대응한다. 짙은 본문색과 틸 주 행동색은 별도 역할이다. 링크는 틸, 키보드 초점은 더 밝은 틸, 흰색은 콘텐츠 면이다. 옅은 초록 회색은 바깥 캔버스, 선택색은 현재 위치·짧은 조작 상태에 쓴다. 보조 글자와 placeholder도 실제 표면에서 읽을 수 있어야 한다. 오류는 색·문제·복구 문구를 함께 표시한다.
+기계가 읽는 값은 frontmatter가 기준이며 [공통 셸](assets/haedo-shell.css)과 [자료 UI](assets/life/ui.css)에 대응한다. 2026-11-16 노션 방향 W1([구현 계약](docs/design-review/notion-visual-contract.md))부터 앱 화면은 흰 바탕 하나다. 회색 캔버스 위 흰 판을 두지 않고, 데스크톱 메뉴만 옅은 따뜻한 회색 면(`sidebar`)을 쓴다. 글자는 먹색(`ink`)·보조(`muted`)·메타(`meta`) 세 단계이고, 메타는 메뉴 면 위에 쓰지 않는다(호버·선택 위에서 4.5:1 미달). 구분은 옅은 선(`line`)으로 하고 그림자는 떠 있는 메뉴·시트에만 쓴다. 틸은 탐색·머리줄에서 `글쓰기` 하나이고, 초점·체크·인용 바·진행 막대·편집기와 대화상자의 주 버튼·빈 상태의 첫 행동에 남는다. 글 안 링크는 먹색과 밑줄이다. 선택·현재 상태는 선택 면만으로 나타내지 않고 굵기나 선을 하나 더 쓴다. 검색 일치 강조는 선택과 다른 `mark` 색이다. 공개 페이지는 `ui.css`의 이전 값을 그대로 쓴다. 보조 글자와 placeholder도 실제 표면에서 읽을 수 있어야 한다. 오류는 색·문제·복구 문구를 함께 표시한다.
 
 책·회고도 현재 공통 토큰을 사용한다. 이전 A 원고 중심의 읽기·편집·근거 구조는 보존하되 당시 보라 팔레트를 지역 예외로 고정하지 않는다. 연표의 곡선·예정·행복도 색은 데이터 의미를 보존한다.
 
@@ -140,9 +150,9 @@ components:
 - **자료 2단 읽기 예외(2026-11-03 부드러운 판 C, 2026-11-07 소유자 요청으로 갱신):** 1101px 이상에서 자료 목록만 볼 때는 읽기 칸 자리표시가 없다(뉴스도 같다, 아래 뉴스 절). 목록은 다른 화면과 같은 왼쪽 시작선에서 화면 너비를 따라 넓어지되 최대 960px다(행 제목·두 줄 문맥이 한눈에 읽히는 폭, 머리줄 조작도 같은 오른쪽 선). 목록에서 원문을 열면 2단(자료·뉴스 공통)이 1200px 상한 없이 오른쪽 24px 여백까지 채운다: 목록(자료 기본 400px·뉴스 기본 440px, 280px 이상) · 구분선 44px · 읽기 칸(420px 이상). 읽기 칸의 본문은 720px 이하로 칸 가운데에 두고, 남는 폭은 양옆 여백이다. 1100px 이하는 이전과 같다(목록 720px 열, 연 원문이 목록을 대신한다).
 - **목록 너비 구분선(2026-11-07):** 목록과 읽기 칸 사이의 구분선(`role=separator`, 이름 `목록 너비 조절`, `aria-valuenow/min/max`는 px)을 끌거나(마우스·펜·터치, 끄는 동안 글자 선택 없음, Esc는 시작 너비로 되돌림) 초점을 둔 뒤 ←/→(16px, Shift 64px)·Home/End(최소/최대)로 바꾼다. Enter나 두 번 누르기는 기본 너비로 되돌린다. 끌기 영역은 44px, 보이는 것은 1px 선과 화면 가운데의 6×40px 손잡이(초점 시 3px 초점 고리)다. 고른 너비는 창 크기에 따른 이 기기의 화면 상태라서 계정에 동기화하지 않고 이 브라우저의 `caeyeon_life_split_records`·`caeyeon_life_split_news`에만 둔다. 창이 좁아지면 보이는 너비만 줄이고 고른 너비는 넓어지면 되돌아온다. 구현은 `assets/life/split-resize.js`.
 
-- **1101px 이상:** 왼쪽 216px를 예약하고 192px 라벨 탐색을 둔다. 맨 위 `+ 글쓰기`(틸 44px 버튼) 아래에 뉴스·일정·자료·설정 44px 링크가 온다.
-- **761–1100px:** 왼쪽 88px 예약, 64px 탐색띠 안에 `글쓰기`와 네 목적지의 아이콘·짧은 라벨을 세로로 둔다. 터치에서도 뉴스·일정·자료·설정을 구별할 수 있게 한다.
-- **760px 이하:** 앱은 전체 너비·좌우 20px와 안전 영역. 전체 너비 하단 탭(뉴스·일정·자료·설정)은 64px+안전 영역, 링크는 56px 높이다. `글쓰기`는 오른쪽 위 연필(44px)이다. 고정 제목 행이 있는 앱 화면(index·life)은 그 행 오른쪽 끝에 두고 행이 자리를 비워 두며, 제목 행이 본문과 함께 스크롤되는 화면(목표·습관·연표 목록·연표·로그인·개인정보)은 연필을 그 제목 행 안에 넣는다. 원문 읽기 화면에도 같은 자리에 연필을 둔다(2026-11-05 #223). 그 화면의 읽기 도구 줄과 저장 상태 줄은 오른쪽에 연필 자리(52px+안전 영역)를 비워 둔다. 하단 탭은 선택 배경 없이 틸 색과 굵기로 현재 탭을 표시한다. 본문·초점에는 84px+하단 안전 영역을 예약한다. 작성 중에는 하단 탭과 연필을 감추고 16px+안전 영역으로 줄인다. 닫으면 해당 영역의 탐색을 복원한다.
+- **1101px 이상:** 왼쪽 240px 메뉴 면(`sidebar`, 화면 높이)을 둔다. 맨 위 `해도` 글자, 그 아래 `글쓰기`(틸 연필과 글자, 채움 없음, 44px), 그다음 목적지 44px 링크가 온다. 현재 링크는 선택 면·먹색·600이다(2026-11-16 W1).
+- **761–1100px:** 왼쪽 88px 메뉴 면(화면 높이) 안에 `글쓰기`(틸, 채움 없음)와 목적지의 아이콘·짧은 라벨을 세로로 둔다. 터치에서도 뉴스·일정·자료·설정을 구별할 수 있게 한다.
+- **760px 이하:** 앱은 전체 너비·좌우 20px와 안전 영역. 전체 너비 하단 탭은 64px+안전 영역, 링크는 56px 높이이고 칸 수만큼 같은 폭이다. 현재 탭은 먹색 600, 나머지는 메타 400이다(2026-11-16 W1). `글쓰기`는 오른쪽 위 틸 연필(44px)이다. 고정 제목 행이 있는 앱 화면(index·life)은 그 행 오른쪽 끝에 두고 행이 자리를 비워 두며, 제목 행이 본문과 함께 스크롤되는 화면(목표·습관·연표 목록·연표·로그인·개인정보)은 연필을 그 제목 행 안에 넣는다. 원문 읽기 화면에도 같은 자리에 연필을 둔다(2026-11-05 #223). 그 화면의 읽기 도구 줄과 저장 상태 줄은 오른쪽에 연필 자리(52px+안전 영역)를 비워 둔다. 하단 탭은 선택 배경 없이 틸 색과 굵기로 현재 탭을 표시한다. 본문·초점에는 84px+하단 안전 영역을 예약한다. 작성 중에는 하단 탭과 연필을 감추고 16px+안전 영역으로 줄인다. 닫으면 해당 영역의 탐색을 복원한다.
 - **700px 이하:** 프로필·공개 읽기·기존 도구의 지역 배치와 하단 시트가 대응한다.
 - **760px 이하(D1):** 신형 글 작성의 떠 있는 도구 막대는 사진·서식을 아이콘만으로 보이고(이름은 유지) 360px 미만에서는 `키보드 닫기`를 뺀다. 글 정보는 하단 시트다.
 - **홈 컨테이너 560px 이상:** 자료실의 출처와 날짜를 한 행에 놓을 수 있다.

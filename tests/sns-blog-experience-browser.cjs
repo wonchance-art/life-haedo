@@ -102,7 +102,8 @@ async function snap(page, scene) {
         // the reading column itself stays within 720px. 2026-11-07 owner request: that split fills the width up to
         // the 24px gutter (no 1200px cap), and the 자료·뉴스 list alone (no reading placeholder) widens up to 960px.
         const { split, wideList } = await page.evaluate(() => ({ split: !!document.querySelector('#lifeMain')?.dataset.split && innerWidth > 1100, wideList: !!document.querySelector('#lifeMain')?.dataset.wide && innerWidth > 1100 }));
-        const limit = scene === 'tools' ? 1152 : split ? size.width - 216 - 24 - 48 : wideList ? 960 : 720;
+        // The desktop menu reserves --haedo-nav-width (240px since 2026-11-16 W1, 216px before).
+        const limit = scene === 'tools' ? 1152 : split ? size.width - 240 - 24 - 48 : wideList ? 960 : 720;
         if (metrics.contentWidth > limit + 1) report.qualityFailures.push({ scene, width: size.width, check: scene === 'tools' ? 'calendarMaximum1152' : split ? 'splitWithinGutters' : wideList ? 'listMaximum960' : 'contentMaximum720', details: metrics.contentWidth });
         if (split) {
           const reader = await page.evaluate(() => { const node = document.querySelector('#lifeMain .records-reader-pane > .life-reader'); return node ? Math.round(node.getBoundingClientRect().width) : null; });

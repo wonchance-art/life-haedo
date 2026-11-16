@@ -128,11 +128,11 @@ async function main() {
       assert.deepEqual(await kept('h3', '2026-11-04'), ['done', true, '주말 정리 2026-11-04 완료(정한 요일 아님)']);
       assert.equal(await page.locator('.habit-tracker-card[data-habit="h3"] .habit-tracker-summary').textContent(), '이번 달 0/1회 · 연속 0회 · 토', 'the kept check is not counted');
       assert.equal(await second.locator(cell('habits', 'h2', '2026-11-07')).isDisabled(), false, 'today is open');
-      // Done is the ink fill with white (contrast on the real white surface).
+      // Done is the ink fill with white (contrast on the real white surface). Ink is #37352f since 2026-11-16 W1.
       // Styles and boxes are read in one page evaluation (a locator resolves first and runs later; a repaint
       // in between would hand over a detached cell).
       const look = await page.evaluate(sel => { const n = document.querySelector('#habitList ' + sel), s = getComputedStyle(n); return [s.backgroundColor, s.color, getComputedStyle(n.closest('main')).backgroundColor]; }, cell('habits', 'h1', '2026-11-02'));
-      assert.deepEqual(look, ['rgb(24, 37, 34)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)']);
+      assert.deepEqual(look, ['rgb(55, 53, 47)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)']);
       assert.match(await page.locator('.habit-note').textContent(), /정한 요일의 오늘까지 날짜를 체크하거나 취소할 수 있습니다\./);
       assert.doesNotMatch(await page.locator('#content').innerText(), /지난 7일/);
     });
@@ -295,7 +295,7 @@ async function main() {
       const doneToday = await page.evaluate(() => { const n = document.querySelector('#habitList [data-focus-key="habits:h3:2026-11-07"]');
         const line = getComputedStyle(n.querySelector('.habit-tracker-number'), '::after'), box = n.getBoundingClientRect(), mark = n.querySelector('.habit-tracker-number').getBoundingClientRect();
         return [n.dataset.state, n.getAttribute('aria-current'), getComputedStyle(n).backgroundColor, line.backgroundColor, line.width, mark.bottom + 4 <= box.bottom - 4]; });
-      assert.deepEqual(doneToday, ['done', 'date', 'rgb(24, 37, 34)', 'rgb(255, 255, 255)', '16px', true]);
+      assert.deepEqual(doneToday, ['done', 'date', 'rgb(55, 53, 47)', 'rgb(255, 255, 255)', '16px', true]);
       await layout(page, '#habitList', 'habits ' + width);
       const columns = await page.evaluate(() => new Set([...document.querySelectorAll('#habitList .habit-tracker-card')].map(c => Math.round(c.getBoundingClientRect().left))).size);
       if (width >= 1440) assert.equal(columns, 2, 'two columns in the 720px content column');
