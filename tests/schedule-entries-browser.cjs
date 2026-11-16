@@ -472,9 +472,10 @@ async function main() {
             const parts = [['check', '.schedule-entries-day'], ['records', '.schedule-day-records'], ['others', '.schedule-other-years']].map(([name, sel]) => [name, document.querySelector('#lifeSchedule ' + sel)]).filter(([, n]) => n);
             const sorted = [...parts].sort(([, a], [, b]) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1).map(([name]) => name);
             const slot = document.querySelector('.schedule-entries-day');
-            return { sorted, inSlot: [...slot.querySelectorAll('h2')].map(n => n.textContent), goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
+            // Rule change 2026-11-16 노션 방향 m5: the side part's h2 is 습관 · 행복도; what the slot holds is named by h3.
+            return { sorted, inSlot: [...slot.querySelectorAll('h3')].map(n => n.textContent), part: slot.closest('.schedule-side')?.querySelector(':scope > h2')?.textContent, slotH2: slot.querySelectorAll('h2').length, goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
           });
-          assert.deepEqual(order, { sorted: ['records', 'check'], inSlot: ['습관', '행복도'], goals: 0 }, 'the day shows its records, then its checks beside them, and no goal');
+          assert.deepEqual(order, { sorted: ['records', 'check'], inSlot: ['습관', '행복도'], part: '습관 · 행복도', slotH2: 0, goals: 0 }, 'the day shows its records, then its checks beside them, and no goal');
           // An empty day says so at body size.
           const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize,
             body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));

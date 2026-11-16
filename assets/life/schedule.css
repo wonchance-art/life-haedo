@@ -75,6 +75,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-side { min-width: 0; }
 .schedule-side + .schedule-side { margin-top: 16px; border-top: 1px solid var(--haedo-line); }
 @media (min-width: 1101px) {
+  /* The line and its 24px sit outside the 280px (W 308px) content, so the side parts keep their width. */
+  .schedule-layout { grid-template-columns: minmax(0, 1fr) 305px; }
+  .schedule-layout.schedule-week { grid-template-columns: minmax(0, 1fr) 333px; }
   .schedule-aside { align-self: stretch; padding-left: 24px; border-left: 1px solid var(--haedo-line); }
 }
 .schedule-side > .schedule-entries { margin-top: 0; }
