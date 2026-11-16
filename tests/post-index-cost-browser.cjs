@@ -4,7 +4,8 @@
  * storage.js of each version (the earlier one from tests/fixtures/post-index), anonymous synthetic posts
  * of 1,500 characters each. A page holding only the storage modules; no app screen, Auth or network.
  * Bytes are the JSON size (UTF-8) of every value put during the call; times are wall-clock medians of
- * five calls after one warm-up, at full speed and with CDP CPU throttling ×4. Prints the numbers; asserts
+ * five calls after one warm-up, at full speed and with CDP CPU throttling ×4. Each autosave is followed by
+ * the read the open editor makes (before: the whole list; after: two summaries, readPostSummaries). Prints the numbers; asserts
  * only that a save after the change writes fewer bytes than before and that both lists hold every post.
  *   python3 scripts/dev-server.py --port 4862 &
  *   BASE_URL=http://127.0.0.1:4862 CHROMIUM_PATH=... PW_MODULE_PATH=... node tests/post-index-cost-browser.cjs
@@ -57,16 +58,25 @@ async function measure(browser, version, throttle) {
     // new post or draft at 250, so both versions save one that is already there.
     let draft = await s.readPhotoPost(ws, docs[249].id);
     const saves = [];
-    for (let n = 0; n < 6; n++) { const current = draft; const result = await timed(() => s.savePhotoPost(ws, { ...current, ops: [{ insert: text(1000 + n) + '\n' }] }, current.revision)); draft = result.value; saves.push(result); }
+    // After each autosave the open editor reads the list rows it checks (photo-post-ui refreshEdit): before,
+    // the whole list; after, its own post and the post it revises (two summaries).
+    const editorRead = () => typeof s.readPostSummaries === 'function' ? s.readPostSummaries(ws, [draft.id, docs[0].id]) : s.listPhotoPosts(ws);
+    const reads = [];
+    for (let n = 0; n < 6; n++) {
+      const current = draft; const result = await timed(() => s.savePhotoPost(ws, { ...current, ops: [{ insert: text(1000 + n) + '\n' }] }, current.revision));
+      draft = result.value; saves.push(result); reads.push(await timed(editorRead));
+    }
     const rest = list => list.slice(1);
     return { firstList: { ms: first.ms, bytes: first.bytes, count: first.value.length },
       list: { ms: rest(lists).map(item => item.ms), bytes: rest(lists).map(item => item.bytes), count: lists[0].value.length },
-      save: { ms: rest(saves).map(item => item.ms), bytes: rest(saves).map(item => item.bytes) } };
+      save: { ms: rest(saves).map(item => item.ms), bytes: rest(saves).map(item => item.bytes) },
+      editorRead: { ms: rest(reads).map(item => item.ms) }, saveAndRead: { ms: rest(saves).map((item, n) => item.ms + rest(reads)[n].ms) } };
   });
   await context.close();
   assert.deepEqual(errors, [], version);
   return { version, throttle, firstList: result.firstList, listCount: result.list.count,
-    listMs: median(result.list.ms), listBytes: median(result.list.bytes), saveMs: median(result.save.ms), saveBytes: median(result.save.bytes), raw: result };
+    listMs: median(result.list.ms), listBytes: median(result.list.bytes), saveMs: median(result.save.ms), saveBytes: median(result.save.bytes),
+    editorReadMs: median(result.editorRead.ms), saveAndReadMs: median(result.saveAndRead.ms), raw: result };
 }
 
 async function main() {

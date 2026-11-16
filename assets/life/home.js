@@ -106,7 +106,8 @@
     const known = new Map();
     if (typeof storage.listBlogSyncStates !== 'function') return known;
     const status = life.BlogSync?.publicationStatus || (state => state?.publication?.active === true ? 'public' : 'private');
-    const lists = await Promise.allSettled(ids.map(id => Promise.resolve().then(() => storage.listBlogSyncStates(id))));
+    // Only the states: the post list itself is read once by listAccountPosts.
+    const lists = await Promise.allSettled(ids.map(id => Promise.resolve().then(() => storage.listBlogSyncStates(id, { posts: false }))));
     lists.forEach((result, index) => {
       if (result.status !== 'fulfilled' || !Array.isArray(result.value?.states)) return;
       for (const entry of result.value.states) { const value = status(entry.state); if (value !== 'private') known.set(ids[index] + '/' + entry.localPostId, value); }

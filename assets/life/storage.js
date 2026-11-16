@@ -1768,6 +1768,25 @@
       }
       return clone(state.list);
     }
+    // The list summaries of a few posts (the same rule as the list; null for a post that is not
+    // there), without reading the whole list: an open editor checks its own post and the one it
+    // revises after each save.
+    async function readPostSummaries(workspaceId, postIds) {
+      collectionScope(workspaceId);
+      if (!Array.isArray(postIds) || postIds.length > 100) throw fault('invalid_request', '읽을 글 목록을 확인해 주세요.');
+      postIds.forEach(id => requireId(id, '사진 글'));
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
+        const legacy = legacyEntries(await meta.get(legacyListKey(workspaceId))), result = [];
+        for (const id of postIds) {
+          const row = (await meta.get(summaryPrefix(workspaceId) + id))?.value, entry = legacy?.get(id);
+          // A row and entry that agree are trusted only while the document is there (the list reads its key).
+          const present = typeof meta.getKey === 'function' ? await meta.getKey(postPrefix(workspaceId) + id) !== undefined : (await meta.get(postPrefix(workspaceId) + id)) !== undefined;
+          result.push(present ? (await resolvePost(meta, workspaceId, id, row, entry)).summary : null);
+        }
+        return clone(result);
+      });
+    }
     async function readPhotoPost(workspaceId, postId) {
       collectionScope(workspaceId); requireId(postId, '사진 글');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
@@ -3283,11 +3302,30 @@
       return entries;
     }
     const byCreated = (a, b) => a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    // One post's summary from its stored row and whole-list entry, or from its document when those
+    // cannot be trusted (missing, malformed, or not saying the same: another app version wrote the post).
+    // kind: 'row' (row and entry agree), 'whole' (they agree; the entry holds the whole text as earlier
+    // versions write it), 'doc' (built from the document), 'missing' (no document), 'broken' (the
+    // document fails validation: it is shown as the earlier list showed it, by its row, else by its
+    // whole-list entry, and never rewritten from here; scanLocalPosts reports it, and opening it,
+    // syncing it or backing it up reports the failure as before). Any other error (a missing module, a
+    // programming error) is thrown rather than read as "no post".
+    async function resolvePost(meta, workspaceId, id, row, entry) {
+      const match = entry && summaryShape(row, id) ? legacyMatch(entry, row) : '';
+      if (match) return { summary: row, kind: match === 'whole' ? 'whole' : 'row' };
+      const doc = (await meta.get(postPrefix(workspaceId) + id))?.value;
+      if (doc === undefined) return { summary: null, kind: 'missing' };
+      try {
+        photoPost().validate(doc); if (doc.id !== id) throw fault('invalid_photo_post', '글과 저장 식별자가 다릅니다.');
+        return { summary: photoSummary(doc), kind: 'doc' };
+      } catch (error) {
+        if (typeof error?.code !== 'string') throw error;
+        const shown = summaryShape(row, id) ? row : plain(entry) ? { ...entry, createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : entry.updatedAt } : null;
+        return { summary: shown, kind: 'broken' };
+      }
+    }
     // One workspace's list as its documents hold it (oldest first by createdAt), and what to write so
-    // that the stored rows say the same. Reads a document only for a post whose row cannot be trusted:
-    // missing, malformed, or not what the whole-list row says (another app version wrote the post).
-    // A document that does not validate is not listed (scanLocalPosts reports it), and the rows that
-    // name it stay as they are. Writes nothing.
+    // that the stored rows say the same (resolvePost decides each post). Writes nothing.
     async function readPostList(meta, workspaceId) {
       const docs = postPrefix(workspaceId), rows = summaryPrefix(workspaceId);
       const ids = (await meta.getAllKeys(keyRange(docs))).filter(key => typeof key === 'string' && key.startsWith(docs)).map(key => key.slice(docs.length));
@@ -3298,23 +3336,16 @@
       // A workspace without posts may have no whole-list row: earlier versions read that as empty.
       let legacyStale = !legacy && (legacyRow !== undefined || ids.length > 0);
       for (const id of ids) {
-        const row = stored.get(id), entry = legacy?.get(id);
-        const match = entry && summaryShape(row, id) ? legacyMatch(entry, row) : '';
-        if (match) {
-          list.push(row);
-          // An entry an earlier version wrote holds the whole text: rewritten once in this version's form.
-          if (match === 'whole') legacyStale = true;
-          continue;
-        }
-        const doc = (await meta.get(docs + id))?.value;
-        let summary;
-        // A document that fails validation (a fault with its code) is broken; anything else (a missing
-        // module, a programming error) is thrown rather than read as "no post".
-        try { photoPost().validate(doc); if (doc.id !== id) throw fault('invalid_photo_post', '글과 저장 식별자가 다릅니다.'); summary = photoSummary(doc); }
-        catch (error) { if (typeof error?.code !== 'string') throw error; broken.add(id); continue; }
+        const row = stored.get(id), entry = legacy?.get(id), { summary, kind } = await resolvePost(meta, workspaceId, id, row, entry);
+        if (kind === 'missing') continue;
+        if (kind === 'broken') { broken.add(id); if (summary) list.push(summary); continue; }
         list.push(summary);
-        if (!sameSummary(row, summary)) put.push(summary);
-        if (!entry || legacyMatch(entry, summary) !== 'cut') legacyStale = true;
+        // An entry an earlier version wrote holds the whole text: rewritten once in this version's form.
+        if (kind === 'whole') legacyStale = true;
+        if (kind === 'doc') {
+          if (!sameSummary(row, summary)) put.push(summary);
+          if (!entry || legacyMatch(entry, summary) !== 'cut') legacyStale = true;
+        }
       }
       const drop = [...stored.keys()].filter(id => !present.has(id));
       if (legacy && !legacyStale) for (const id of legacy.keys()) if (!present.has(id)) { legacyStale = true; break; }
@@ -3324,7 +3355,7 @@
         // Entries keep their place; a broken document's entry stays as it was; new posts go last.
         const listed = new Map(list.map(summary => [summary.id, summary])), placed = new Set(); next = [];
         if (legacy) for (const [id, entry] of legacy) {
-          if (listed.has(id)) { next.push(legacyEntry(listed.get(id))); placed.add(id); } else if (broken.has(id)) next.push(entry);
+          if (broken.has(id)) { next.push(entry); placed.add(id); } else if (listed.has(id)) { next.push(legacyEntry(listed.get(id))); placed.add(id); }
         }
         for (const summary of list) if (!placed.has(summary.id)) next.push(legacyEntry(summary));
       }
@@ -3592,8 +3623,11 @@
         Number.isSafeInteger(state.revision) && state.revision >= 1 && Number.isSafeInteger(state.remoteRevision) && state.remoteRevision >= 0 &&
         Number.isSafeInteger(state.localRevision) && state.localRevision >= 0;
     }
-    async function listBlogSyncStates(workspaceId) {
+    // `{ posts: false }`: only the sync states and deletions (no post list read), for a screen that
+    // shows publication states.
+    async function listBlogSyncStates(workspaceId, options = {}) {
       blogAccountScope(workspaceId);
+      if (!plain(options) || options.posts !== undefined && typeof options.posts !== 'boolean') throw fault('invalid_request', '읽을 동기화 상태를 확인해 주세요.');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'); await ownedWorkspace(tx.objectStore('bundles'), workspaceId, meta);
         const prefix = `blog-sync:${workspaceId}:`, deleted = `blog-delete:${workspaceId}:`, states = [], tombstones = [], issues = [];
@@ -3610,6 +3644,7 @@
             else issues.push({ remoteId: key.slice(deleted.length), code: 'invalid_blog_tombstone' });
           }
         }
+        if (options.posts === false) return { states, tombstones, issues };
         return { posts: clone((await readPostList(meta, workspaceId)).list), states, tombstones, issues };
       });
     }
@@ -6650,7 +6685,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, readPhotoPosts, savePhotoPost, savePhotoPostOver, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, readMaterialWritingOutput, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPostSummaries, readPhotoPost, readPhotoPosts, savePhotoPost, savePhotoPostOver, savePostTransition, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, restorePhotoPost, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, readMaterialContinuityOutputDeletion, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,

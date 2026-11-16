@@ -124,24 +124,81 @@ test('a missing, malformed or partial whole-list row and damaged post rows are r
   }
 });
 
-test('a document that fails validation is not listed, and neither it nor its whole-list entry is removed', async () => {
+// Review M1 (27e291d): a document that fails validation is listed as the earlier list showed it (its row,
+// else its whole-list entry), so account sync keeps its binding and a backup reports it, never dropped.
+test('a document that fails validation stays listed by its row or whole-list entry, and nothing rewrites it', async () => {
   const { memory, idb } = counted(), storage = open(idb), ws = (await storage.createWorkspace('손상된 문서')).workspaceId;
   const kept = await storage.savePhotoPost(ws, await doc(1), 0), broken = await storage.savePhotoPost(ws, await doc(2), 0);
   const docKey = `photo-post:${ws}:${broken.id}`, damaged = { format: 'life-photo-post-v2', id: broken.id, title: '손상', revision: 9 };
   meta(memory).set(key(docKey), { key: docKey, value: damaged });
-  // While its row and entry still agree, the list shows the last valid summary without reading it (as the
-  // whole-list row did before). Once the row is gone the document is read, and it is not listed.
-  assert.deepEqual((await storage.listPhotoPosts(ws)).map(summary => summary.id).sort(), [kept.id, broken.id].sort());
+  const shown = async () => (await storage.listPhotoPosts(ws)).map(summary => [summary.id, summary.title, summary.revision]).sort();
+  const expectedRows = [[kept.id, '글 1', 1], [broken.id, '글 2', 1]].sort();
+  // Row and entry agree: listed without reading the document.
+  assert.deepEqual(await shown(), expectedRows);
+  // No row: the document is read, fails, and its whole-list entry is listed (with its update time as createdAt).
   meta(memory).delete(key(`photo-summary:${ws}:${broken.id}`));
-  assert.deepEqual((await storage.listPhotoPosts(ws)).map(summary => summary.id), [kept.id]);
+  assert.deepEqual(await shown(), expectedRows);
+  assert.equal((await storage.listPhotoPosts(ws)).find(summary => summary.id === broken.id).createdAt, broken.updatedAt);
+  assert.deepEqual((await storage.listBlogSyncStates(ws)).posts.map(summary => summary.id).sort(), [kept.id, broken.id].sort());
+  assert.deepEqual((await storage.readPostSummaries(ws, [broken.id]))[0].title, '글 2');
   assert.deepEqual(row(memory, docKey), damaged, 'the damaged document stays as it is');
-  assert.ok(row(memory, `photo-posts:${ws}`).some(entry => entry.id === broken.id), 'its entry stays for the versions that list it');
-  // A later save keeps it too, and the list does not try again on every read once nothing else changed.
+  assert.equal(row(memory, `photo-summary:${ws}:${broken.id}`), undefined, 'no row is made from a document that fails');
+  // A later save keeps its entry, and listing again writes nothing.
   await storage.savePhotoPost(ws, await doc(3), 0);
-  assert.equal(row(memory, `photo-posts:${ws}`).length, 3); assert.equal((await storage.listPhotoPosts(ws)).length, 2);
+  assert.equal(row(memory, `photo-posts:${ws}`).length, 3); assert.equal((await storage.listPhotoPosts(ws)).length, 3);
   const before = memory.control.writes.length; await storage.listPhotoPosts(ws);
   assert.deepEqual(writes(memory, before), [], 'no repair write for a document that cannot be repaired');
+  // Its row only (no entry): listed by the row. Neither: not listed (nothing to show it by).
+  const other = await storage.savePhotoPost(ws, await doc(4), 0), otherKey = `photo-post:${ws}:${other.id}`;
+  meta(memory).set(key(otherKey), { key: otherKey, value: { ...damaged, id: other.id } });
+  const list = row(memory, `photo-posts:${ws}`); list.splice(list.findIndex(entry => entry.id === other.id), 1);
+  assert.equal((await storage.listPhotoPosts(ws)).find(summary => summary.id === other.id)?.title, '글 4');
+  meta(memory).delete(key(`photo-summary:${ws}:${other.id}`));
+  assert.equal((await storage.listPhotoPosts(ws)).some(summary => summary.id === other.id), false);
+  assert.deepEqual(row(memory, otherKey), { ...damaged, id: other.id });
   storage.close();
+});
+
+test('a synced post whose document fails validation keeps its binding: sync downloads nothing again, and a backup reports it', async () => {
+  const cloud = server(), time = clock(Date.UTC(2026, 10, 11, 12)), a = await device(cloud, 'mac', { time });
+  const saved = await a.storage.savePhotoPost(a.ws, await post({ title: '사진 글', body: '본문', photos: 2, time: new Date(time.now - 3600000).toISOString() }), 0);
+  await a.sync.syncNow(); await a.sync.syncNow();
+  assert.equal(cloud.rows.size, 1);
+  const docKey = `photo-post:${a.ws}:${saved.id}`; meta(a.memory).get(key(docKey)).value.photos = 'broken';
+  meta(a.memory).delete(key(`photo-summary:${a.ws}:${saved.id}`));
+  const downloads = cloud.stats.downloads, saves = cloud.stats.saves.length;
+  for (let n = 0; n < 5; n++) { time.advance(31000); await a.sync.syncNow(); }
+  assert.equal(cloud.stats.downloads - downloads, 0, 'no download per cycle (review probe P7: 10 in 5 cycles)');
+  assert.equal(cloud.stats.saves.length - saves, 0); assert.equal(cloud.rows.size, 1);
+  assert.deepEqual((await a.storage.listPhotoPosts(a.ws)).map(summary => summary.id), [saved.id]);
+  // The full backup lists it and reports that it could not be read, as before the per-post rows.
+  const data = new Map([[PlatformData.keys(owner.userId).registry, JSON.stringify({ docs: [], current: null })]]);
+  const context = { storage: a.storage, timeline: () => Full.timelineSnapshot({ platformData: PlatformData, localStorage: { getItem: name => data.has(name) ? data.get(name) : null }, uid: owner.userId }), originals: null };
+  const plan = await Full.plan(context);
+  assert.equal(plan.tasks.filter(task => task.kind === 'photoPosts' && task.postId === saved.id).length, 1, 'the backup plans it');
+  const failed = await Full.writer(plan, context, { appVersion: 'haedo-test' }).collect();
+  assert.equal(failed.length, 1, 'and reports one failure, never leaves it out silently');
+  assert.match(JSON.stringify(failed[0]), new RegExp('photoPosts:[0-9]+:' + saved.id));
+});
+
+test('readPostSummaries reads a few posts by the list rule; listBlogSyncStates({ posts: false }) reads no list', async () => {
+  const { memory, idb } = counted(), storage = open(idb), ws = (await storage.createWorkspace('몇 개만')).workspaceId, ids = [];
+  for (let n = 0; n < 5; n++) ids.push((await storage.savePhotoPost(ws, await doc(n), 0)).id);
+  const list = await storage.listPhotoPosts(ws), byId = new Map(list.map(summary => [summary.id, summary]));
+  assert.deepEqual(await storage.readPostSummaries(ws, [ids[3], 'missing-synthetic-id', ids[0]]), [byId.get(ids[3]), null, byId.get(ids[0])]);
+  // A write by an earlier version (its entry differs from the row) is read from the document.
+  const earlier = open(idb, Previous), old = await earlier.readPhotoPost(ws, ids[1]);
+  await earlier.savePhotoPost(ws, { ...old, title: '이전 판 제목' }, old.revision); earlier.close();
+  const [fresh] = await storage.readPostSummaries(ws, [ids[1]]);
+  assert.deepEqual([fresh.title, fresh.revision, fresh.createdAt], ['이전 판 제목', 2, old.createdAt]);
+  // A row and entry left behind by a raw deletion are not trusted without the document.
+  meta(memory).delete(key(`photo-post:${ws}:${ids[2]}`));
+  assert.deepEqual(await storage.readPostSummaries(ws, [ids[2]]), [null]);
+  await assert.rejects(storage.readPostSummaries(ws, ['']), { code: 'invalid_request' });
+  storage.close();
+  const synced = await device(server(), 'mac'), states = await synced.storage.listBlogSyncStates(synced.ws, { posts: false });
+  assert.deepEqual(Object.keys(states).sort(), ['issues', 'states', 'tombstones']);
+  await assert.rejects(synced.storage.listBlogSyncStates(synced.ws, { posts: 'no' }), { code: 'invalid_request' });
 });
 
 test('a save with the list row damaged first rebuilds it, so an earlier version never reads a partial list', async () => {
