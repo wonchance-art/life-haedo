@@ -1,14 +1,6 @@
 /* A personal journal: strong authored type, a quiet reading surface, one action ink. */
 .life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
-.home-blog-lead { padding: 8px 0 12px; }
-.home-profile-bar { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.home-profile-copy { display: grid; flex: 1; grid-template-columns: 44px minmax(0,1fr); column-gap: 12px; align-content: center; min-width: 0; min-height: 44px; }
-.home-profile-open { display: contents; }
-.home-avatar { display: flex; grid-column: 1; grid-row: 1 / 3; align-self: center; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: var(--soft); color: var(--color-primary); font-size: 15px; font-weight: 700; line-height: 1; letter-spacing: -.03em; }
-.home-profile-open > .home-author-name { display: -webkit-box; grid-column: 2; grid-row: 1; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; min-width: 0; margin: 0; color: var(--ink); font-size: 28px; font-weight: 750; line-height: 1.3; letter-spacing: -.03em; }
-.home-blog-description { display: -webkit-box; grid-column: 2; grid-row: 2; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
-.home-blog-description[hidden] { display: none; }
 #homePosts { margin-top: 0; }
 #homePosts > .home-section-heading { min-height: 52px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 #homePosts > .home-section-heading > h2 { position: relative; padding: 14px 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
@@ -42,11 +34,6 @@
 .home-load-error > .life-button { margin-top: 12px; }
 .home-error { margin-top: 0; }
 @media (max-width: 760px) {
-  .home-blog-lead { padding-top: 4px; padding-bottom: 12px; }
-  .home-profile-bar { gap: 8px; }
-  .home-profile-open { gap: 10px; }
-  .home-profile-open > .home-author-name { font-size: 24px; font-weight: 700; }
-  .home-blog-description { margin-left: 0; }
   .home-post { margin-inline: -20px; padding: 28px 20px; }
   .home-post-open { font-size: 24px; }
   .home-post-prose { font-size: 16px; }
@@ -78,8 +65,6 @@
 .home-search-scope { margin-top: 8px; margin-bottom: 8px; font-size: 12px; line-height: 1.75; }
 .home-search-clear { flex: none; min-height: 44px; margin: 0; border: 0; padding: 8px 0 8px 8px; color: var(--ink-soft); background: transparent; font-size: 12px; }
 .home-search-clear[hidden] { display: none; }
-.home-profile-status:not([hidden]) { margin-top: 12px; padding-block: 0; }
-.home-profile-status > .life-button { min-height: 44px; margin-top: 4px; }
 .home-post-list { min-height: 220px; }
 .home-post-list > .home-loading { min-height: 220px; padding-block: 32px; }
 .home-draft { border-bottom: 1px solid var(--line); }
@@ -144,8 +129,6 @@
 .home-post-footer { min-height: 44px; margin-top: 8px; }
 .home-draft-open { min-height: 72px; padding: 12px 0; }
 .home-draft > .home-row-time, .home-draft > .home-row-mark { padding-top: 16px; }
-/* The blog name starts on the rows' content line (time 52 + 12 + icon 20 + 12). */
-.home-profile-copy { grid-template-columns: 84px minmax(0, 1fr); }
 @media (max-width: 760px) {
   .home-post, .home-draft { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
   .home-post { margin-inline: 0; padding: 12px 0 16px; }
@@ -153,7 +136,6 @@
   .home-post-prose { font-size: 16px; }
   .home-post-media { aspect-ratio: 4 / 3; }
   .home-draft-open { padding-block: 12px; }
-  .home-profile-copy { grid-template-columns: 72px minmax(0, 1fr); column-gap: 8px; }
 }
 
 /* 2026-11-08 일정 통합 정리 S3: from 761px the posts search is a field in the tab row

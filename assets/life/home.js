@@ -200,11 +200,6 @@
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
       mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear();
     }
-    function initials(name) { return !name || name === '내 블로그' ? '나' : Array.from(String(name).replace(/\s+/g, '')).slice(0, 2).join(''); }
-    function avatar(context) {
-      const mark = el('span', initials(context.profile.name), 'home-avatar');
-      mark.setAttribute('aria-hidden', 'true'); return mark;
-    }
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
     function action(context, label, task, className = '', { keepFocus = true } = {}) {
@@ -265,15 +260,6 @@
         return;
       }
       await openSource(info.source.id, info.version.id);
-    }
-    function profileHeader(context) {
-      const header = el('div', null, 'home-profile-bar');
-      const profile = el('div', null, 'home-profile-open');
-      profile.append(avatar(context), el('h2', context.profile.name, 'home-author-name'));
-      const copy = el('div', null, 'home-profile-copy');
-      const intro = el('p', '', 'home-blog-description'); intro.hidden = true;
-      copy.append(profile, intro);
-      header.append(copy); return header;
     }
     function latestOwnPosts(bundle) {
       const rows = [];
@@ -439,13 +425,6 @@
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
         life.Workbench.validate(state); context.workbenchState = state;
         rows.push(...(state.page.posts || []).filter(post => post.status === 'saved').map(post => ({ ...post, kind: 'plain', tab: 'posts' })));
-        const title = String(state.page.title || '').trim();
-        context.profile.name = title && title !== '내 페이지' ? title : '내 블로그';
-        context.surface.querySelectorAll('.home-author-name').forEach(node => { node.textContent = context.profile.name; });
-        context.surface.querySelectorAll('.home-avatar').forEach(node => { node.textContent = initials(context.profile.name); });
-        const intro = context.surface.querySelector('.home-blog-description');
-        intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
-        intro.hidden = !intro.textContent;
       });
       read('photo', '글·초안·숨긴 글', value => {
         if (!Array.isArray(value?.posts)) throw new Error('invalid_posts');
@@ -464,7 +443,6 @@
         rows.push(...stages.filter(stage => life.Writing?.isDraft(stage) && stage.state === 'draft').map(stage => ({ ...stage,
           id: stage.stageId, body: stage.text, kind: 'source-draft', tab: 'drafts', editing: !!stage.sourceId })));
       });
-      context.profileStatus.hidden = !!context.workbenchState;
       rows.forEach(row => { if (!row.tab) row.tab = 'posts'; });
       // Newest first by when each was first written; a row's own time line still says when it was last changed.
       const timestamp = row => Number.isFinite(Date.parse(writtenAt(row))) ? Date.parse(writtenAt(row)) : 0;
@@ -605,7 +583,9 @@
         seen.dataset.focusKey = 'home:delete-refused'; refused.append(seen); fragment.append(refused);
       }
       if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록에 다시 보이게 할 수 있어요.', 'life-meta home-archive-note'));
-      const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
+      // The blog's own record (기존 글 and the profile) is said on every tab: since 2026-11-16 (Designer default 2) 노트 has
+      // no profile row, whose line said it before; the profile itself is seen and edited in 글 메뉴 → 프로필 편집.
+      const applicable = errors.filter(error => error.key === 'photo' || error.key === 'workbench' || (listState.tab === 'drafts' && ['plainDrafts', 'sourceDrafts'].includes(error.key)));
       if (applicable.length) {
         const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');
         error.append(el('p', applicable.map(item => item.label).join(', ') + '을 불러오지 못했어요. 확인된 글만 표시합니다.', 'life-meta'),
@@ -678,21 +658,17 @@
       adoptState(bundle.workspaceId, options.homeState);
       clearMedia();
       const surface = el('div', null, 'life-home'); surface.id = 'lifeHome';
-      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' },
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface,
         results: {}, photoDrafts: new Map(), draftRead: 0, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
-      const lead = el('div', null, 'home-blog-lead');
-      context.profileStatus = el('div', null, 'home-profile-status home-load-error'); context.profileStatus.hidden = true;
-      context.profileStatus.setAttribute('role', 'status');
-      context.profileStatus.append(el('p', '프로필과 기존 글 정보를 불러오지 못했어요.', 'life-meta'),
-        action(context, '프로필 다시 불러오기', () => load(context, ['workbench'])));
-      lead.append(profileHeader(context), context.profileStatus);
+      // Designer default 2 (2026-11-16 노션 방향): no blog profile row here. Name, intro, avatar and 소개 표시 are in
+      // 글 메뉴 → 프로필 편집; a failed read of them is the list's error line with its 다시 불러오기, on every tab.
       context.resume = action(context, '', () => context.resumeRow && openRow(context, context.resumeRow), 'home-resume');
       context.resume.dataset.focusKey = 'home:resume'; context.resume.hidden = true;
       context.resumeLabel = el('span', null, 'home-resume-title');
       context.resume.append(el('span', '작성하던 글', 'life-meta'), context.resumeLabel, el('span', '이어쓰기', 'home-draft-resume'));
-      surface.append(lead, context.error);
+      surface.append(context.error);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition'; composition.setAttribute('aria-busy', 'true');
       const posts = section(context, '내 글', 'homePosts'); posts.querySelector('.home-section-heading').classList.add('life-sr-only');
       context.area = posts; listControls(context, posts);
