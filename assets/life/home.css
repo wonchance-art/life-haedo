@@ -201,3 +201,62 @@
 .haedo-shell #lifeBlogMenu > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
 .haedo-shell #lifeBlogMenu .life-destination { border-radius: var(--haedo-control-radius); }
 .haedo-shell #lifeBlogMenu .life-destination:hover { background: var(--haedo-hover); }
+
+/* 2026-11-16 노션 방향 W2 노트 목록 (contract 공통 부품·노트): letter tabs, a soft 작성하던 글 line, 13px 500 date headings,
+ * rows divided by a line with title 16px 600 · excerpt 14px muted · one 13px meta line. Overrides the grey segmented
+ * tabs of haedo-motion.css (the public blog keeps its own). */
+.haedo-shell .life-home .home-list-toolbar { border-bottom: 1px solid var(--haedo-line); }
+.haedo-shell .life-home .home-tabs { flex: 1; gap: 0; padding: 0; border-radius: 0; background: transparent; }
+.haedo-shell .life-home .home-tabs > .home-tab { flex: none; min-width: 44px; min-height: 44px; border-radius: 0; padding: 0 12px; background: transparent; color: var(--haedo-muted); font-size: 14px; font-weight: var(--haedo-weight-regular); box-shadow: none; }
+.haedo-shell .life-home .home-tabs > .home-tab:first-child { margin-left: -12px; }
+.haedo-shell .life-home .home-tabs > .home-tab:hover:not(:disabled) { background: var(--haedo-hover); color: var(--haedo-ink); }
+.haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true] { background: transparent; color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); box-shadow: none; }
+.haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true]::after { display: block; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--haedo-ink); }
+.haedo-shell .life-home .home-search-toggle { border-radius: var(--haedo-control-radius); }
+.haedo-shell .life-home .home-search-toggle[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+.haedo-shell .life-home .home-search { min-height: 44px; border-radius: var(--haedo-control-radius); }
+/* 작성하던 글 · 제목 · 이어쓰기: one line on the soft fill. */
+.haedo-shell .life-home .home-resume { gap: 12px; min-height: 44px; margin-top: 16px; border-radius: var(--haedo-control-radius); padding: 8px 12px; background: var(--haedo-soft); }
+.haedo-shell .life-home .home-resume:hover:not(:disabled) { background: var(--haedo-selected); }
+.haedo-shell .life-home .home-resume > .life-meta { color: var(--haedo-muted); font-size: 13px; }
+.haedo-shell .life-home .home-resume-title { color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-medium); }
+.haedo-shell .life-home .home-draft-resume { color: var(--haedo-muted); font-size: 13px; font-weight: var(--haedo-weight-medium); }
+/* Date heading: 13px 500 muted, 28px above. */
+.haedo-shell .life-home .home-day-heading { margin: 28px 0 0; padding-bottom: 4px; color: var(--haedo-muted); font-size: 13px; font-weight: var(--haedo-weight-medium); }
+.haedo-shell .life-home .home-post-list > .home-day-heading:first-child, .haedo-shell .life-home .home-post-list > .home-archive-note + .home-day-heading { margin-top: 20px; }
+/* Rows: [kind icon] content; a 1px line under each row. */
+.haedo-shell .life-home :is(.home-post, .home-draft) { grid-template-columns: 20px minmax(0, 1fr); column-gap: 12px; margin-inline: 0; border-bottom: 1px solid var(--haedo-line); }
+.haedo-shell .life-home .home-post { padding: 12px 0; }
+.haedo-shell .life-home .home-row-mark { padding-top: 2px; color: var(--haedo-meta); }
+.haedo-shell .life-home .home-post-open { -webkit-line-clamp: 2; min-height: 0; color: var(--haedo-ink); font-size: 16px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; letter-spacing: 0; }
+.haedo-shell .life-home .home-post-open.home-post-prose { font-weight: var(--haedo-weight-regular); }
+.haedo-shell .life-home .home-post-open:hover:not(:disabled), .haedo-shell .life-home .home-post-open:active:not(:disabled) { color: var(--haedo-ink); text-decoration-color: rgba(55, 53, 47, .4); }
+.haedo-shell .life-home .home-post-excerpt { -webkit-line-clamp: 1; margin-top: 2px; color: var(--haedo-muted); font-size: 14px; font-weight: var(--haedo-weight-regular); line-height: 1.6; }
+.haedo-shell .life-home .home-post-attachments { margin-top: 2px; color: var(--haedo-muted); font-size: 13px; }
+.haedo-shell .life-home .home-post-footer { min-height: 0; margin-top: 4px; }
+.haedo-shell .life-home :is(.home-post-meta, .home-draft-meta) { color: var(--haedo-meta); font-size: 13px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.haedo-shell .life-home .home-row-time { padding: 0; color: inherit; font-size: inherit; }
+.haedo-shell .life-home .home-draft-open { min-height: 0; padding: 12px 0; gap: 16px; border-radius: 0; }
+.haedo-shell .life-home .home-draft-open:hover:not(:disabled) { background: transparent; }
+.haedo-shell .life-home .home-draft-open:hover .home-draft-copy > strong { text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.haedo-shell .life-home .home-draft-copy { gap: 2px; }
+.haedo-shell .life-home .home-draft-copy > strong { color: var(--haedo-ink); font-size: 16px; font-weight: var(--haedo-weight-semibold); line-height: 1.5; }
+.haedo-shell .life-home .home-draft-excerpt { max-height: none; color: var(--haedo-muted); font-size: 14px; line-height: 1.6; }
+.haedo-shell .life-home .home-draft > .home-row-mark { padding-top: 14px; }
+.haedo-shell .life-home .home-more { min-height: 44px; border-radius: var(--haedo-control-radius); }
+.haedo-shell .life-home .home-archive-note { color: var(--haedo-meta); font-size: 13px; }
+/* Empty: the sentence (14px) and its note (14px meta), then one action: 첫 글 쓰기 is the teal primary button
+ * (contract 틸 유지: 빈 상태의 첫 행동), over the shell's secondary rule for the list's write buttons. */
+.haedo-shell .life-home .home-first-post { padding: 28px 0; }
+.haedo-shell .life-home .home-first-post > h3 { color: var(--haedo-ink); font-size: 14px; font-weight: var(--haedo-weight-medium); line-height: 1.6; letter-spacing: 0; }
+.haedo-shell .life-home .home-first-post > .home-text { max-width: none; margin-top: 2px; color: var(--haedo-meta); font-size: 14px; line-height: 1.6; }
+.haedo-shell .life-home .home-first-post > .life-button { min-height: 44px; margin-top: 16px; border-radius: var(--haedo-control-radius); padding-inline: 16px; font-size: 14px; font-weight: var(--haedo-weight-semibold); }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary { background: var(--haedo-accent); border-color: var(--haedo-accent); color: #fff; }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:hover:not(:disabled) { background: var(--haedo-accent-hover); border-color: var(--haedo-accent-hover); color: #fff; }
+.haedo-shell #lifeMain[data-mode=home] #homeFirstWrite.life-primary:active:not(:disabled) { background: var(--haedo-accent-active); border-color: var(--haedo-accent-active); color: #fff; }
+@media (max-width: 760px) {
+  .haedo-shell .life-home .home-tabs > .home-tab { flex: 1; }
+  .haedo-shell .life-home .home-tabs > .home-tab:first-child { margin-left: 0; }
+  .haedo-shell .life-home .home-post-excerpt { -webkit-line-clamp: 2; }
+  .haedo-shell .life-home .home-draft-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+}

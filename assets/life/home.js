@@ -346,7 +346,7 @@
       const day = life.ScheduleData?.dayOf, written = day?.(writtenAt(row)), changed = day?.(row.updatedAt);
       return written && changed && written === changed ? null : modifiedDate(row.updatedAt, prefix);
     }
-    // 노트 rows (the former 일정 목록): a time column and an icon column before the content (decision 2026-11-02).
+    // 노트 rows: the time a row was first written opens its meta line (2026-11-16 노션 방향; was its own column).
     function rowTime(value) {
       const text = life.ScheduleData?.timeOf(value) || '';
       const time = el('span', text, 'home-row-time'); if (!text) time.setAttribute('aria-hidden', 'true');
@@ -366,7 +366,10 @@
       else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
       else article.dataset.postId = row.id;
       const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : row.kind === 'photo' ? openPhoto(context, row) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
+      // One meta line (2026-11-16 노션 방향, decision 8): when it was first written · the edit date · visibility.
       const meta = el('p', null, 'life-meta home-post-meta');
+      const written = rowTime(writtenAt(row));
+      if (written.textContent) meta.append(written, document.createTextNode(' · '));
       const time = editedDate(row, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
       // A post's original always stays private; a public copy, when there is one, is named
@@ -391,7 +394,7 @@
       const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
       read.append(life.Icons.create('arrow'));
       footer.append(meta, read); body.append(footer);
-      article.append(rowTime(writtenAt(row)), rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
+      article.append(rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
       return article;
     }
     // One account, one blog: a post kept in another library of this account
@@ -414,12 +417,15 @@
       const open = action(context, '', () => openRow(context, row), 'home-draft-open');
       open.dataset.focusKey = 'home:draft:' + row.kind + ':' + row.id;
       const copy = el('span', null, 'home-draft-copy');
-      copy.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글', 'life-meta'),
-        el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
+      copy.append(el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
       if (row.title?.trim() && row.body?.trim()) copy.append(el('span', snippet(row.body), 'home-draft-excerpt'));
-      const time = editedDate(row, '수정 ');
-      if (time) { time.className = 'life-meta'; copy.append(time); }
-      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowTime(writtenAt(row)), rowMark('write'), open); return article;
+      // The same meta line as a post: first written · edit date · what kind of draft it is.
+      const meta = el('span', null, 'life-meta home-draft-meta'), written = rowTime(writtenAt(row)), time = editedDate(row, '수정 ');
+      if (written.textContent) meta.append(written, document.createTextNode(' · '));
+      if (time) meta.append(time, document.createTextNode(' · '));
+      meta.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글'));
+      copy.append(meta);
+      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowMark('write'), open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];
@@ -687,10 +693,12 @@
       context.resume.dataset.focusKey = 'home:resume'; context.resume.hidden = true;
       context.resumeLabel = el('span', null, 'home-resume-title');
       context.resume.append(el('span', '작성하던 글', 'life-meta'), context.resumeLabel, el('span', '이어쓰기', 'home-draft-resume'));
-      lead.append(context.resume); surface.append(lead, context.error);
+      surface.append(lead, context.error);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition'; composition.setAttribute('aria-busy', 'true');
       const posts = section(context, '내 글', 'homePosts'); posts.querySelector('.home-section-heading').classList.add('life-sr-only');
       context.area = posts; listControls(context, posts);
+      // 작성하던 글 sits under the tab row and 내 글 찾기 (2026-11-16 노션 방향, contract 노트), before the rows.
+      context.list.before(context.resume);
       const loading = el('p', '글과 초안을 불러오는 중…', 'life-meta home-loading'); loading.setAttribute('role', 'status'); context.list.append(loading);
       posts.setAttribute('aria-busy', 'true'); composition.append(posts);
       surface.append(composition); host.append(surface);
