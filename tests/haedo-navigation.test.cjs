@@ -50,6 +50,8 @@ test('old section addresses open the new sections and only the five menu IDs or 
   for (const [query, expected] of [['', 'notes'], ['?section=notes', 'notes'], ['?section=home', 'notes'], ['?section=schedule', 'notes'],
     ['?section=tools', 'schedule'], ['?section=schedule&view=month', 'schedule'], ['?section=schedule&view=day&date=2026-11-16', 'schedule'],
     ['?section=home&view=week&date=2026-11-16', 'schedule'], ['?section=schedule&date=2026-11-16', 'schedule'], ['?section=schedule&view=year', 'schedule'],
+    // A date the app's router would not read is the former list address: 노트 from the first frame.
+    ['?section=schedule&date=bad', 'notes'], ['?section=schedule&date=2026-02-30', 'notes'], ['?section=home&date=1800-01-01', 'notes'],
     ['?section=schedule&view=annual-plan', 'schedule'], ['?view=time', 'schedule'], ['?view=blog', 'notes'], ['?view=account-blog', 'notes'],
     ['?section=records', 'records'], ['?section=manage', 'manage'], ['?section=news', 'news'], ['?section=unknown', 'notes'], ['?section=__proto__', 'notes']]) {
     assert.equal(fixture(query).document.body.dataset.haedoSection, expected, query || '(none)');

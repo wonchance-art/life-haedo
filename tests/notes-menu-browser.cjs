@@ -114,6 +114,8 @@ async function main() {
         ['/index.html?section=schedule&view=week&date=2026-10-28', 'week', 'schedule', '/index.html?section=schedule&view=week&date=2026-10-28'],
         ['/index.html?section=home&view=day&date=2026-10-28', 'day', 'schedule', '/index.html?section=schedule&view=day&date=2026-10-28'],
         ['/index.html?section=schedule&date=2026-10-28', 'month', 'schedule', '/index.html?section=schedule&date=2026-10-28&view=month'],
+        // A date the router does not read is the former list address: 노트.
+        ['/index.html?section=schedule&date=2026-02-30', 'home', 'notes', '/index.html?section=notes'],
         ['/index.html?section=tools', 'tools', 'schedule', '/index.html?section=schedule&view=tools'],
         ['/index.html?section=tools&view=annual-plan', 'annual-plan', 'schedule', '/index.html?section=schedule&view=annual-plan'],
         ['/life.html?section=schedule', 'home', 'notes', '/life.html?section=notes']
@@ -147,6 +149,16 @@ async function main() {
     await check('노트 ↔ 글 읽기·편집 ↔ 노트 keeps scroll, search and tab; 일정 ↔ D ↔ 일정 keeps the unit, scroll and filter', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const fixture = await seed(page);
       await page.reload(); await ready(page); await shown(page, 'home');
+      // 노트 keeps the single-key / (통합 검색) and ? (단축키 도움말); the calendar's keys do nothing here.
+      await page.locator('#lifeApp .life-page-title').focus();
+      await page.keyboard.press('m'); await page.keyboard.press('t'); await page.waitForTimeout(300);
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home', 'no calendar key on 노트');
+      await page.keyboard.press('?'); await page.locator('#scheduleShortcuts[open]').waitFor();
+      await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('#scheduleShortcuts'));
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('life-page-title')), true, 'focus returns from the help');
+      await page.keyboard.press('/'); await page.locator('#lifeMain[data-mode="find"]').waitFor(); await settle(page);
+      assert.equal(await current(page), 'notes', '통합 검색 from 노트 is 노트\'s');
+      await page.locator('#lifeSubviewReturn').click(); await shown(page, 'home');
       // Reading: search, scroll, open a post, come back with the app's return.
       await page.locator('#homePostSearch').fill('산책');
       await page.waitForFunction(() => document.querySelectorAll('#homePostList .home-post').length > 10);
@@ -249,6 +261,10 @@ async function main() {
       assert.equal(await page.locator('#lifeSchedule .schedule-aside table').count(), 0, 'W: no habit or 행복도 table without either');
       assert.equal(await page.locator('#lifeSchedule .schedule-week-grid').innerText().then(text => /이번 주 예정 익명/.test(text)), false, 'W: no plan in a date column');
       assert.match(week.goals, /연간 계획\s*·\s*목표\s*·\s*습관\s*·\s*연표/);
+      // A past week: its past day keeps its plan in the date column (as D does); 예정 has none left.
+      const pastWeek = await side('?section=schedule&view=week&date=2026-10-28');
+      assert.match(pastWeek.plans, /이 주의 남은 예정이 없어요\./);
+      assert.match(await page.locator('#lifeSchedule .schedule-week-day[aria-label^="10월 27일"]').innerText(), /지난 예정 익명/, 'W: a past day shows its plan');
       const month = await side('?section=schedule&view=month&date=2026-11-03');
       assert.match(month.plans, /이번 주 예정 익명[\s\S]*제주 여행/); assert.match(month.habits, /습관 추가/);
       const year = await side('?section=schedule&view=tools');

@@ -257,6 +257,13 @@
   if (loginNext) root.document.querySelectorAll('[data-login-link], #accessState a, #timelineAccess a').forEach(link => {
     link.href = 'login.html?next=' + encodeURIComponent(loginNext);
   });
+  // YYYY-MM-DD naming a day that exists (ScheduleData.valid's rule; that module may not be loaded on this page).
+  function civilDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value : '');
+    if (!match || +match[1] < 1900 || +match[1] > 2199) return false;
+    const day = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
+    return day.getUTCFullYear() === +match[1] && day.getUTCMonth() === +match[2] - 1 && day.getUTCDate() === +match[3];
+  }
   const query = new URLSearchParams(root.location.search);
   const fromQuery = query.get('section');
   const page = root.document.body.dataset.page;
@@ -272,7 +279,8 @@
     else if (query.get('view') === 'find' && normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
     // An address naming a date opens that period in 일정 (its month when no unit is named).
-    else if (query.has('date') && ['home', 'schedule'].includes(fromQuery)) initialSection = 'schedule';
+    // Only a real civil date does (as the app's router reads it); any other value is the former list address, 노트.
+    else if (civilDate(query.get('date')) && ['home', 'schedule'].includes(fromQuery)) initialSection = 'schedule';
     // 일정 without a unit is the former list address: 노트 (2026-11-16 address table).
     else if (fromQuery === 'schedule') initialSection = 'notes';
     else if (normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);

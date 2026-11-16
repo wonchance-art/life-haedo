@@ -2336,12 +2336,15 @@
       return nav;
     }
     unbindScheduleKeys = global.HaedoLife.ScheduleUI?.bindShortcuts({
-      active: () => !disposed && !!state.bundle && !state.busy && global.HaedoLife.ScheduleUI.scheduleMode(state.mode) && !document.querySelector('dialog[open]'),
+      // A calendar unit takes every shortcut; 노트 (the former list, 2026-11-16) keeps / (통합 검색) and ? (도움말).
+      active: name => !disposed && !!state.bundle && !state.busy && !document.querySelector('dialog[open]') &&
+        (global.HaedoLife.ScheduleUI.scheduleMode(state.mode) || state.mode === 'home' && (name === 'find' || name === 'help')),
       onKey: key => {
         if (key === 'today') return guarded(() => scheduleToday())();
         if (key === 'prev' || key === 'next') return guarded(() => scheduleStep(key === 'prev' ? -1 : 1))();
         if (key === 'find') return guarded(() => navigate('find'))();
-        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help'));
+        // On 노트 there is no ? button: focus returns to where it was.
+        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help') || document.activeElement);
         if (calendarModes.has(key)) return guarded(() => switchScheduleView(key))();
       }
     }) || (() => {});

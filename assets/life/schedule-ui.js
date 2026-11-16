@@ -527,7 +527,8 @@
       const wrap = el('div', null, 'schedule-layout schedule-week');
       const primary = el('section', null, 'schedule-primary'); primary.setAttribute('aria-label', data().title('week', context.date) + ' 기록');
       const grid = el('div', null, 'schedule-week-grid');
-      // A day column holds its records only; the week's plans are in 예정 beside it (2026-11-16).
+      // A day column holds its records; the week's remaining plans are in 예정 beside it (2026-11-16). A past day keeps its
+      // plans in its column, as D does (they are no longer remaining, so 예정 does not list them).
       const draw = () => {
         grid.replaceChildren();
         for (const day of week) {
@@ -538,7 +539,7 @@
           head.setAttribute('aria-label', dayLabel(day, entry) + (day === now ? ', 오늘' : ''));
           if (day === now) head.dataset.today = 'true';
           head.append(el('span', data().WEEKDAYS[data().weekday(day)], 'schedule-week-name'), el('span', data().parts(day).day, 'schedule-week-number'));
-          column.append(head, dayRows(context, day, { compact: true, quiet: true }));
+          column.append(head, dayRows(context, day, { compact: true, quiet: true, plans: day < now }));
           grid.append(column);
         }
       };
@@ -757,16 +758,17 @@
     const latin = CODES[event.code];
     return latin === '/' && event.shiftKey ? '?' : latin || null;
   }
-  // Single-key shortcuts while a schedule screen is shown, no field has focus and no IME is composing.
+  // Single-key shortcuts while no field has focus and no IME is composing. `active(name)` says whether the named
+  // shortcut applies on the shown screen (the units, 오늘 and ‹ › on a calendar unit only; / and ? on 노트 too).
   function bindShortcuts({ active, onKey }) {
     const handler = event => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229 || !active()) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229) return;
       const target = event.target;
       // isContentEditable covers every editable host (true, plaintext-only, inherited).
       if (target?.isContentEditable || target?.closest?.('input,textarea,select,dialog,[role=tablist],details[open]')) return;
       const key = shortcutKey(event);
       const map = { y: 'tools', q: 'quarter', m: 'month', w: 'week', d: 'day', t: 'today', p: 'prev', n: 'next', ArrowLeft: 'prev', ArrowRight: 'next', '/': 'find', '?': 'help' };
-      if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?') return;
+      if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?' || !active(map[key])) return;
       event.preventDefault(); onKey(map[key]);
     };
     document.addEventListener('keydown', handler);

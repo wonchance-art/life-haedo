@@ -599,7 +599,8 @@ async function main() {
         assert.equal(await where(page), origin, '닫기 returns to the page 글쓰기 was opened from');
         // Forward is 노트 (the former 일정 list), not an empty editor.
         await page.goForward(); await ready(page); await list(page);
-        assert.equal(await where(page), 'index.html?section=notes'); // 2026-11-16: 노트 (the former list, written plain index.html until then) assert.equal(await page.locator('#photoTitle').count(), 0);
+        // 2026-11-16: 노트 (the former list, written plain index.html until then).
+        assert.equal(await where(page), 'index.html?section=notes'); assert.equal(await page.locator('#photoTitle').count(), 0);
         assert.equal(await page.locator('#lifeApp').evaluate(node => getComputedStyle(node).visibility), 'visible');
         await page.goBack(); await at(page, origin.split('?')[0]);
         // Back from there is what came before that page.

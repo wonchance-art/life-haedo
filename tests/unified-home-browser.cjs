@@ -28,13 +28,26 @@ async function nav(page, section) {
   if (section === 'tools') {
     // A phone has no 보기 단위 bar: 일정 opens a unit and its ‹ goes up to 연 (월 → 연, 일 → 월 → 연).
     if ((page.viewportSize()?.width || 1440) > 760) { await planSwitch.click(); await settle(page); }
-    else for (let step = 0; step < 3; step++) {
-      const up = page.locator('#lifeApp .schedule-up');
-      await page.locator('#lifeMain[data-mode="tools"], #lifeApp .schedule-up').first().waitFor();
-      if (!await up.count()) break;
-      const from = await page.locator('#lifeMain').getAttribute('data-mode');
-      await up.click();
-      await page.waitForFunction(mode => document.querySelector('#lifeMain')?.dataset.mode !== mode, from); await settle(page);
+    else {
+      for (let step = 0; step < 3; step++) {
+        const up = page.locator('#lifeApp .schedule-up');
+        await page.locator('#lifeMain[data-mode="tools"], #lifeApp .schedule-up').first().waitFor();
+        if (!await up.count()) break;
+        const from = await page.locator('#lifeMain').getAttribute('data-mode');
+        await up.click();
+        await page.waitForFunction(mode => document.querySelector('#lifeMain')?.dataset.mode !== mode, from); await settle(page);
+      }
+      await page.locator('#lifeMain[data-mode="tools"]').waitFor();
+      // The ‹ up is a back motion (translateX for 200ms) that starts once Y is drawn: a caller measures the rows where
+      // they come to rest. Wait for the calendar's read, two frames (the motion starts after it), then the finite
+      // animations of the main area (as blog-writing-completion-browser waits for them). Only this phone path moves by
+      // ‹; the wide path's bar switch is unchanged (its callers hold reads across it and measure nothing moving).
+      await page.waitForFunction(() => document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false');
+      await page.evaluate(async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const main = document.querySelector('#lifeMain');
+        await Promise.all(main.getAnimations({ subtree: true }).filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})));
+      });
     }
     await page.locator('#lifeMain[data-mode="tools"]').waitFor();
   }
