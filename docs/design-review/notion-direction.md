@@ -26,7 +26,7 @@
 확인일 2026-11-16. 노션 앱에 직접 로그인해 재지는 않았다. 공식 도움말·출시 노트·디자인 블로그와, 노션 화면을 재현하는 공개 코드에서 읽은 값이다.
 
 - 노션 디자인 쪽이 밝힌 기준은 절제다. "Good tools get out of your way."라고 했고, 간격은 이웃 블록에 따라 정한다(목록은 촘촘하게, 문단은 넉넉하게)[B1]. 디자인 책임자는 "새 도구가 모두 소리치면 안 된다"며 새로움보다 품질을 택한다고 했다[B2][F]. 2025년 Notion Mail은 "토글·라벨·버튼이 너무 많다"를 고칠 문제로 꼽았다[B3].
-- 면은 둘뿐이다. 흰 본문과 아주 옅은 따뜻한 회색 사이드바(2022년 값 `#F7F6F3`)다. 경계는 그림자 대신 1px 옅은 선(`rgb(237,237,236)`)이다[NE][RNX].
+- 면은 둘뿐이다. 흰 본문과 아주 옅은 따뜻한 회색 사이드바다. 사이드바 값은 2020–21년 `#F7F6F3`[RNX], 2022-12 `#FBFBFA`[NE dev]로 바뀌어 왔다. 경계는 그림자 대신 1px 옅은 선(`rgb(237,237,236)`, 2022-12 `rgb(233,233,231)`)이다[NE][RNX].
 - 글자색 하나(`#37352F`)에 투명도 단계만 둔다. 보조 글자, 구분선, 호버(8%)와 눌림(16%)을 같은 공식으로 만든다[RNX][NE][MF].
 - 강조색은 선택·체크·주 행동에만 쓴다. 링크는 글자색에 옅은 밑줄이다[NE][RNX].
 - 꼬리표는 높이 20px, 좌우 6px, 모서리 3px이다. 옅은 배경에 같은 계열의 짙은 글자를 쓴다[NE][RNX][API].
@@ -39,8 +39,8 @@
 
 - 호버에만 의존하는 조작은 쓰지 않는다. 해도는 iPad·iPhone 터치가 주 사용 환경이다. 시안은 항상 보이는 `⋯` 하나로 대신했다.
 - 노션 파랑 `#2383E2`는 흰 바탕에서 글자 대비가 3.9:1이다. 4.5:1에 못 미친다. 캔버스의 파랑 선택지는 `#1A6FC3`(흰 바탕 5.1:1, `#F7F7F5` 4.8:1)으로 어둡게 했다.
-- 사이드바는 `#F7F7F5`로 두었다. 노션 2022년 값보다 노란 기가 적어 해도의 흰 읽기 면과 덜 갈린다. 메타 글자 `#6F6E69`가 이 바탕에서 4.76:1이다.
-- 선택 바탕은 노션 호버(8%)보다 옅은 6%로 두었다. 이 바탕 위 메타 글자가 4.5:1을 넘게 하려는 것이다.
+- 사이드바는 `#F7F7F5`로 두었다. `#F7F6F3`보다 노란 기가 적고, `#FBFBFA`보다 흰 읽기 면과 구분된다. 메타 글자 `#6F6E69`가 이 바탕에서 4.76:1이다.
+- 선택 바탕은 노션 호버(8%)보다 옅은 6%로 두었다. 흰 바탕 위 선택에서는 메타 글자가 4.60:1로 통과한다. 사이드바 위 선택(`#EBEBE9`)에서는 메타 글자가 4.28:1로 미달이므로, 사이드바 항목에는 보조 글자(`#5F5E5B`, 5.43:1) 이상만 쓴다. 시안의 사이드바는 이 규칙을 지킨다.
 
 출처:
 
@@ -53,7 +53,7 @@
 | B3 | [Q&A with Notion Mail founders](https://www.notion.com/blog/qa-with-notion-mail-founders) |
 | F | [Fortune 2026-06-12, Randy Hunt 인터뷰](https://fortune.com/2026/06/12/it-isnt-our-goal-for-design-to-be-distinctive-says-notion-design-head-randy-hunt-on-prioritizing-quality-over-novelty-when-building-ai-apps/) |
 | API | [Notion API property object](https://developers.notion.com/reference/property-object) |
-| NE | npm `notion-enhancer` 0.11.0(2022, MIT). 노션 인라인 스타일을 덮어쓰는 코드라 당시 값이 들어 있다 |
+| NE | `notion-enhancer`(MIT). npm 0.11.0은 2021-12-31 게시, dev 브랜치 `src/core/variables.css`에 2022-12~2023-01 값. 2024-11 이후 멈췄다. 노션 인라인 스타일을 덮어쓰는 코드라 당시 값이 들어 있다 |
 | RNX | npm `react-notion-x` 8.0.8(2026-09). 노션 페이지를 재현하는 코드 |
 | MF | [matthiasfrank.de Notion colors](https://matthiasfrank.de/en/notion-colors/)(2차 출처, 검색 요약으로 확인) |
 | ZN | [zenn.dev 실측 메모](https://zenn.dev/ikenohi/scraps/f0d8482d1362d5)(2차 출처) |
