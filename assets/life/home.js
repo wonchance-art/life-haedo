@@ -284,12 +284,12 @@
       });
       return rows;
     }
-    function postCover(context, row, article, open) {
+    function postCover(context, row, article) {
       // `article` is the row's content column (2026-11-02 list, 노트 since 2026-11-16: time · icon · content).
       if (row.kind !== 'photo' || !row.photos) return;
       const epoch = mediaGeneration;
-      const frame = action(context, '', open, 'home-post-media');
-      frame.setAttribute('aria-label', '사진이 있는 글 열기'); frame.dataset.focusKey = 'home:photo:' + row.id;
+      // Shown only (2026-11-16 노션 방향, Designer default 3): the row opens from its title, whose target covers the row.
+      const frame = el('div', null, 'home-post-media');
       frame.setAttribute('aria-busy', 'true');
       const image = el('img', null, 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
       const status = el('span', '사진 불러오는 중…', 'life-meta home-photo-loading');
@@ -352,7 +352,6 @@
       const time = el('span', text, 'home-row-time'); if (!text) time.setAttribute('aria-hidden', 'true');
       return time;
     }
-    function rowMark(glyph) { const mark = el('span', null, 'home-row-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(life.Icons.create(glyph)); return mark; }
     function dayHeading(value) {
       const day = life.ScheduleData?.dayOf(value);
       if (!day) return el('h2', '날짜 미확인', 'home-day-heading');
@@ -389,12 +388,12 @@
         content.append(attached);
       }
       const body = el('div', null, 'home-post-body');
-      body.append(content); postCover(context, row, body, open);
+      body.append(content); postCover(context, row, body);
+      // One way to open a row: its title button (Designer default 3, 2026-11-16; the 글 읽기 → button and the kind icon
+      // went with the photo button).
       const footer = el('div', null, 'home-post-footer');
-      const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
-      read.append(life.Icons.create('arrow'));
-      footer.append(meta, read); body.append(footer);
-      article.append(rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
+      footer.append(meta); body.append(footer);
+      article.append(body);
       return article;
     }
     // One account, one blog: a post kept in another library of this account
@@ -425,7 +424,7 @@
       if (time) meta.append(time, document.createTextNode(' · '));
       meta.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글'));
       copy.append(meta);
-      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowMark('write'), open); return article;
+      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];

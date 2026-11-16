@@ -185,14 +185,22 @@ async function main() {
       await page.locator('.home-search-clear').click(); await page.locator('#homeFirstWrite').waitFor();
       assert.equal(await page.locator('.home-list-controls').isVisible(), false); await page.waitForFunction(() => document.activeElement?.id === 'homeFirstWrite');
     });
-    await check('every photo card retains an actionable frame and later covers load on demand', async page => {
+    await check('every photo card keeps its photo frame, opens from the row, and later covers load on demand', async page => {
       const refs = await populate(page), last = page.locator(`[data-photo-post-id="${refs.photos[5]}"]`);
       for (const id of refs.photos) assert.equal(await page.locator(`[data-photo-post-id="${id}"] .home-post-media`).count(), 1);
       const early = await page.evaluate(() => [...new Set(window.__refinementPhotoReads || [])]); assert(early.length < refs.photos.length, 'Offscreen photo records must not all be fetched at first render');
       await last.locator('.home-post-media').scrollIntoViewIfNeeded();
       await page.waitForFunction(id => { const image = document.querySelector(`[data-photo-post-id="${id}"] .home-post-cover`); return image?.complete && image.naturalWidth > 0; }, refs.photos[5]);
       assert((await page.evaluate(() => window.__refinementPhotoReads)).includes(refs.photos[5]));
-      await last.locator('.home-post-media').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /공통낱말 산책 사진 6/);
+      // Rule change 2026-11-16 노션 방향 (Designer default 3): the photo is shown only, not a second button. The row's
+      // title button covers the row, so a press on the photo still opens the post (and nothing else takes the press).
+      assert.deepEqual(await last.locator('.home-post-media').evaluate(node => [node.tagName, node.getAttribute('role'), node.tabIndex, node.closest('button')]), ['DIV', null, -1, null]);
+      assert.equal(await last.locator('button').count(), 1, 'one button per row: its title');
+      // In the middle of the screen, clear of the sticky heading and the tab bar (instant: the root scrolls smoothly).
+      await last.locator('.home-post-media').evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      const photo = await last.locator('.home-post-media').boundingBox();
+      assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.classList.contains('home-post-open'), [photo.x + photo.width / 2, photo.y + photo.height / 2]), true, 'the photo lies under the title button\'s target');
+      await page.mouse.click(photo.x + photo.width / 2, photo.y + photo.height / 2); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /공통낱말 산책 사진 6/);
     });
     await check('Seoul year boundary shows prior year and correct saved or modified date', async page => {
       await page.clock.setFixedTime(new Date('2026-10-17T12:00:00.000Z')); await openHome(page);

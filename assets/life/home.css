@@ -260,3 +260,13 @@
   .haedo-shell .life-home .home-post-excerpt { -webkit-line-clamp: 2; }
   .haedo-shell .life-home .home-draft-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
 }
+
+/* 2026-11-16 노션 방향 W2, Designer default 3: a row is opened by its title button alone (no kind icon, no 글 읽기
+ * button, no photo button). The button stays as it was (h3 > button); its target is stretched over the whole row. */
+.haedo-shell .life-home :is(.home-post, .home-draft) { position: relative; grid-template-columns: minmax(0, 1fr); }
+.haedo-shell .life-home .home-post-open::after { content: ''; position: absolute; inset: 0; }
+/* No press scale here: a transform makes the button the box of its stretched target, which would then shrink under
+ * the pointer between press and release, and a press on the photo or excerpt would not open the row. */
+.haedo-shell #lifeHome .home-post-open:active:not(:disabled), .haedo-shell #lifeHome .home-post-open:active { transform: none; }
+.haedo-shell .life-home .home-post:hover .home-post-open { text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.haedo-shell .life-home .home-post-media { pointer-events: none; }
