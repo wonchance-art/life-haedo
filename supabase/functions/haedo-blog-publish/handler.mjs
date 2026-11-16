@@ -20,11 +20,17 @@ const keys = (value, names) => object(value) && Object.keys(value).length === na
 const integer = (value, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= minimum && value <= maximum;
 const text = (value, max) => typeof value === 'string' && value.length <= max && !INVALID_TEXT.test(value);
 const INPUT_FIELDS = ['p_post_id', 'p_expected_revision', 'p_expected_publication_revision', 'p_operation_id', 'p_photo_ids', 'p_author', 'p_copies'];
+// 2026-11-16: the attachment choice (strictly ascending list positions, [] for none). A request
+// without it (an app before that date) is passed on without it: the database then publishes no
+// attachment and keeps that request's earlier receipt identity.
+const CHOICE_FIELDS = [...INPUT_FIELDS, 'p_attachments'];
+const attachmentChoice = value => Array.isArray(value) && value.length <= 12 &&
+  value.every((position, index) => integer(position, 0, 11) && (index === 0 || position > value[index - 1]));
 
 // This endpoint accepts publication intent only. A caller cannot supply a
 // document, ops, title, owner/session, source hash or a prebuilt public snapshot.
 export function validateInput(value) {
-  need(keys(value, INPUT_FIELDS));
+  need(keys(value, INPUT_FIELDS) || keys(value, CHOICE_FIELDS) && attachmentChoice(value.p_attachments));
   need(uuid(value.p_post_id) && uuid(value.p_operation_id));
   need(integer(value.p_expected_revision, 1) && integer(value.p_expected_publication_revision, 0, Number.MAX_SAFE_INTEGER - 1));
   need(Array.isArray(value.p_photo_ids) && value.p_photo_ids.length <= 20 && value.p_photo_ids.every(id => typeof id === 'string' && PHOTO.test(id)) &&
@@ -146,7 +152,8 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       let ops;
       try {
         ops = await project(prepared.document, { photoIds: input.p_photo_ids, author: input.p_author,
-          copies: Object.entries(input.p_copies).map(([id, copy]) => ({ id, ...copy })) });
+          copies: Object.entries(input.p_copies).map(([id, copy]) => ({ id, ...copy })),
+          ...(Object.hasOwn(input, 'p_attachments') ? { attachments: input.p_attachments } : {}) });
       } catch (_) { throw fail('invalid_remote_data'); }
       active();
       // Reverify the same caller immediately before privileged publication.

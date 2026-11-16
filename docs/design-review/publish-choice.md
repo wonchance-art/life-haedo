@@ -1,0 +1,60 @@
+# 공개 이름·소개 분리와 첨부 하나씩 고르기 (2026-11-16)
+
+소유자 결정 7·9([로드맵 11-16 구간](../life-tools-design/roadmap.md))의 설계·구현 기록이다. 작업 지시서 B, 브랜치 `core3/publish-choice`.
+
+## 결정과 사용 장면
+
+- **결정 7 — 공개 이름·소개를 글별 공개와 분리한다.** 전에는 글마다 `공개하기`에서 이름·소개를 입력했고, 게시할 때마다 서버가 계정 하나의 프로필(공개 글 목록 맨 위)을 그 값으로 덮었다. 같은 값이 그 글의 글쓴이 표시도 됐다.
+  - 이제: `글 메뉴 → 글 공개·보관` 화면의 `공개 이름·소개`에서 읽고 고쳐 `저장`할 때만 바뀐다. `공개하기`는 저장된 값을 읽기 전용으로 보여 주고 글쓴이로 함께 게시하며, 게시는 프로필을 바꾸지 않는다. 값을 읽지 못하면 미리보기·게시를 하지 않는다(전과 같다).
+  - 시작 조건: 로그인한 소유자. 입력: 이름(100자 입력 칸, 서버 한도 500)·소개(500자 칸, 서버 한도 2000). 종료 결과: 서버 프로필이 그 값, 공개 글 목록 맨 위가 바로 바뀜. 이미 공개한 글의 글쓴이 표시는 그 글을 다시 게시할 때 바뀐다(화면에 그렇게 적는다).
+- **결정 9 — 공개할 때 첨부를 하나씩 고른다, 기본 0개.** 첨부는 글 v2·Markdown의 `{type,title,creator,url}` 링크 카드(최대 12개)다. 전에는 모두 공개됐다.
+  - 이제: `공개하기`의 `공개할 첨부`에서 사진처럼 체크박스로 고른다. 검토를 열 때마다 모두 해제 상태에서 시작한다. 미리보기는 고른 첨부만 보인다. 공개 중인 글이면 게시 전에 "다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다"를 보인다.
+  - 종료 결과: 공개 사본에는 고른 첨부만 문서 순서대로 들어간다. 제목·본문이 비고 사진·첨부를 하나도 고르지 않으면 공개할 내용이 없다고 막는다(서버도 같은 규칙).
+
+## 바뀐 것
+
+| 층 | 파일 | 내용 |
+| --- | --- | --- |
+| SQL | `supabase/migrations/20261116120000_life_blog_public_choice.sql` | 소유자 전용 `life_blog_get_public_profile()`·`life_blog_set_public_profile(p_author)`. `life_blog_publish_copies`·`life_blog_markdown_publish_prepare`·`..._commit`에 끝 인자 `p_attachments jsonb default null`(서명 교체, 같은 한 역할에 권한 재부여). 선택이 있으면 고른 첨부만, 프로필 쓰기 없음(목록 토큰용 행만 없을 때 생성), 영수증 식별 `['publish',…,copies,{"attachments":[…]}]`. 선택이 없으면(이전 앱·이전 요청) 영수증 식별·CAS·프로필 쓰기 모두 그대로이고 첨부만 0개. |
+| 확인 | `supabase/operations/20261116-blog-public-choice-verify.sql` | 적용 전후에 돌리는 읽기 전용 확인(함수 md5·소유자·definer·실행 역할, 행 수). 본문·이름·토큰은 읽지 않는다. |
+| Edge | `supabase/functions/haedo-blog-publish/handler.mjs`·`projection.mjs`·`README.md` | `p_attachments`는 선택 필드. 있으면 검사(오름차순 0~11, 12개 이하) 뒤 prepare·projection·commit에 넘기고, 없으면 넘기지 않는다. |
+| 앱 | `assets/life/blog.js` | `publicSnapshot(doc, { attachments })`: 고른 위치만, 없으면 이전 투영(비공개 읽기용) 그대로. `Blog.attachmentChoice`. |
+| 앱 | `assets/life/blog-remote.js` | 선택이 있는 요청은 항상 `life_blog_publish_copies`(사진 없으면 `p_copies {}`) 또는 Edge에 `p_attachments`. 선택 없는(기록된 이전) 요청은 원래 RPC·인자 그대로. `publicProfile()`·`savePublicProfile()`과 응답 형식 검사. |
+| 앱 | `assets/life/blog-sync.js` | 요청 선택 `{photoIds, attachments, author}`(고르지 않으면 `[]`). `publicProfile`은 소유자 RPC로 읽고(익명 공개 목록·기기 기억값 읽기 제거), `savePublicProfile` 추가. 이전 형식 대기 요청은 첨부 없는 글에서만 같은 선택으로 보고 그대로 재전송한다. |
+| 화면 | `assets/life/blog-manager.js`·`.css` | `공개 이름·소개` 편집기(별도 자리, 명시 저장, 미저장 입력이 있으면 이동·검토 열기·닫기에서 지키거나 묻는다), `공개하기`의 읽기 전용 표시와 `공개할 첨부` 체크박스, 문구 교체. |
+
+## 호환과 순서
+
+- **이전 앱(열어 둔 탭·설치한 PWA)**: 옛 인자로 게시하면 첨부 0개로 공개된다(덜 공개될 뿐). 그 게시는 여전히 프로필을 그 시트에 입력한 값으로 덮는다. 소유자 한 명이고 새 앱에서 다시 저장하면 되므로 받아들인 한계다.
+- **이미 대기 중인 요청**: 기록된 인자 그대로 다시 보낸다(영수증 그대로). 첨부가 있는 글에서는 기록된 이전 요청을 "첨부 0개" 새 선택과 같은 것으로 보지 않는다. 마이그레이션 전에 반영됐다면 모든 첨부가 공개된 상태일 수 있어서, 새 선택은 정산(`settleLocked`) 뒤 따로 보내 마지막 선택이 공개되게 한다.
+- **이미 공개된 사본**: 다시 게시하거나 철회할 때까지 기존 첨부·글쓴이를 유지한다. 적용 전 확인 SQL의 `publications active with attachments` 행 수가 그 범위다.
+- **적용 순서**: 마이그레이션 → Edge `haedo-blog-publish` → 앱(Pages). 앱이 먼저 나가면 게시가 실패한다(`p_attachments`·프로필 RPC 없음 → 서버 준비 필요 안내, 공개는 바뀌지 않음). Edge가 마이그레이션보다 먼저면 새 앱의 Markdown 게시가 실패한다. 이전 앱은 어느 순서에서도 동작한다.
+- **바꾸지 않은 것**: `haedo_blog_private.publish`(6인자)는 2026-11-02 뒤 어떤 API 함수도 부르지 않고 설치 묶음 두 개가 md5로 지키므로 그대로 두었다. `public.life_blog_publish`(6인자)는 서명·본문 그대로이며(11-01 설치 묶음이 그 서명에 권한을 준다), 이미 부르던 `publish_copies`가 선택 없이 넘겨 첨부 0개가 된다.
+
+## 고른 방식과 대안
+
+- **서명 교체(끝 인자 기본값 null) vs 새 함수 이름 vs 오버로드**: 오버로드는 PostgREST 후보 선택과 검사 하네스("RPC overloads require explicit review")에 위험해 뺐다. 새 이름은 서버가 깔끔하지만 공개 경로를 이름으로 가로채는 검사·운영 확인이 많아 바뀌는 범위가 커진다. 서명 교체는 이전 앱의 이름·인자 그대로 호출이 같은 함수로 가고(기본값), 새 앱은 같은 이름에 인자 하나를 더한다. `life_blog_publish`(6인자)만 11-01 설치 묶음의 권한 문장 때문에 교체하지 않고, 새 앱은 사진 없는 게시도 `life_blog_publish_copies`로 보낸다.
+- **글쓴이(`p_author`)를 서버 프로필로 강제할지**: 강제하면 다른 기기가 막 바꾼 값과 미리보기가 어긋날 때 게시를 거절해야 하고 새 오류 경로가 생긴다. 지시서대로 앱이 서버에서 읽은 값을 보내고, 서버는 그 값을 사본의 글쓴이로만 쓴다(프로필은 쓰지 않는다). 두 기기가 동시에 이름을 바꾸는 좁은 경우 글쓴이와 목록 머리가 한 번 다를 수 있다.
+- **편집 위치**: 계약상 프로필 편집 자리는 `글 메뉴`다. 기존 `프로필 편집`(내 페이지의 블로그 이름·소개, 작업공간 구성 문서)은 다른 저장소·동기화 경로라 합치지 않고, `글 메뉴 → 글 공개·보관`에 `공개 이름·소개`를 두었다. 편집기에 "프로필 편집의 블로그 이름·소개와는 따로 저장됩니다"를 적었다. 두 이름을 하나로 합칠지는 실제 사용 뒤 소유자 판단으로 남긴다.
+- **프로필 저장 CAS**: 두지 않았다. 작은 설정이고 2026-11-01 규칙(최신 쪽 채택)에 맞다. 편집기는 열 때 한 번 읽고, 입력 중인 칸을 늦은 응답으로 덮지 않는다.
+
+## 검사
+
+- SQL: `node tests/run-blog-public-choice-postgres.cjs`(직접 실행: 설치 전 동작·드리프트 거절·행 보존·재적용 포함), 같은 계약을 `npm run test:sql-replay` 4.10 단계에서 전체 재생 사본에 돌린다. 이름 붙인 변이 8개(`--mutation=`)가 모두 실패해야 한다.
+- 단위: `tests/blog-public-choice.test.cjs`(투영·BlogRemote 경로와 검사·프로필 응답 검사·Edge 입력과 handler 전달), `tests/blog-publication-settle.test.cjs`의 `decision 7`·`decision 9`.
+- 브라우저: `tests/blog-manager-browser.cjs`(decision 7·9 두 묶음), `tests/publish-recovery-browser.cjs`(decisions 7 and 9, 실제 SQL·익명 읽기), 그리고 실제 SQL로 게시하는 기존 묶음들(설치 목록에 `tests/helpers/blog-public-choice-sql.cjs`를 더함).
+
+## 운영 적용 순서 (총괄)
+
+1. 적용 전 기록: `supabase/operations/20261116-blog-public-choice-verify.sql`을 실행한다. 모든 `fn` 행이 `before`(새 함수는 `missing`, `public.life_blog_publish`는 `both`)이고 `ok`가 모두 true여야 한다. 행 수를 기록한다.
+2. 적용: 마이그레이션 파일 전체(DO 한 문장, ASCII, 백슬래시 없음). 2026-11-12 절차대로 base64로 보내 `encode(sha256(decode('<base64>','base64')),'hex')`가 파일 SHA-256과 같은지 본 뒤 실행한다. 설치 문장이 소유자·md5를 먼저 확인하고, 블로그 표 6개의 행 수·행 해시가 바뀌면 되돌린다. 기기 동기화가 쉬는 때 적용한다.
+3. 적용 후: 같은 확인 SQL에서 모든 `fn` 행이 `after`(교체된 옛 서명은 `missing`), `ok` 모두 true, 행 수 1과 같음.
+4. Edge `haedo-blog-publish` 배포(소유자 CLI, `verify_jwt=false`): `index.ts`·`handler.mjs`·`projection.mjs`와 그 정적 import(`assets/life/blog.js` 포함). 배포 뒤 소스 해시를 저장소와 대조한다.
+5. 앱 배포(총괄 병합). `sw.js` CACHE 판올림은 통합 담당이 한다.
+6. 되돌리기(소유자 승인 뒤): 앱을 되돌려도 서버는 이전 인자를 받는다(첨부 0개). 서버를 되돌리려면 교체한 함수 7개(비공개 4개는 `create or replace`, 서명이 바뀐 공개 3개는 새 서명을 지우고 옛 서명으로)를 저장소의 이전 정의로 다시 만들고 새 함수 11개(비공개 9·공개 2)를 지운다(`drop`이므로 승인 필요). 사용자 행은 바뀌지 않는다.
+
+## 확인하지 못한 것
+
+- 실제 Supabase(PostgREST의 기본값 인자 해석, 운영 기본 권한)와 Edge 배포본. 격리 PostgreSQL 16.15와 검사 하네스로만 확인했다.
+- 실제 Apple 기기·Safari·한글 입력기로 편집기 입력·저장, 좁은 화면의 체크박스 조작.
+- 이전 앱 판과 섞인 기간의 실제 동작(옛 인자 호출은 SQL 계약으로만 확인).

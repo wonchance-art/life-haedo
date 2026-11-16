@@ -37,6 +37,8 @@ async function main() {
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261105081055_life_post_markdown_publish.sql'), 'utf8'));
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261111120000_life_blog_withdraw_before_publication.sql'), 'utf8'));
     apply(await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261112120000_life_blog_revision_continuity.sql'), 'utf8'));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    apply(require('./helpers/blog-public-choice-sql.cjs').after('20261112120000'));
   }
   await server.initialize(); await fs.mkdir(output, { recursive: true });
   report.sources = [];
@@ -50,7 +52,7 @@ async function main() {
   report.browser = browser.version(); const contexts = [], dialogs = [];
   // Requests this suite fails on purpose; every other console error fails the run.
   const offlineCut = { on: false };
-  const deliberate = /\/rest\/v1\/rpc\/life_blog_(?:publish|publish_copies|unpublish|read|public_list|sync_list)$|\/functions\/v1\/haedo-blog-media/;
+  const deliberate = /\/rest\/v1\/rpc\/life_blog_(?:publish|publish_copies|unpublish|read|public_list|sync_list|get_public_profile)$|\/functions\/v1\/haedo-blog-media/;
   function watch(page, name) {
     page.setDefaultTimeout(25000);
     page.on('pageerror', error => report.pageErrors.push({ name, message: error.message }));
@@ -119,9 +121,31 @@ async function main() {
     return { doc, remoteId: (await state(page, doc.id)).remoteId };
   };
   const openReview = async (page, id) => { await row(page, id).getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await panel(page).waitFor(); await idle(page); };
+  // The public name and intro are saved in 공개 이름·소개 (2026-11-16, owner decision 7), never typed
+  // in a review. A flow that wants another byline saves it there (the review closes for the editor)
+  // and opens the same review again.
+  const saveProfile = async (page, value) => {
+    if (await panel(page).count()) await click(page, '공개 이름·소개 고치기', panel(page));
+    else await click(page, '공개 이름·소개');
+    const editor = page.locator('.blog-manager-profile-editor[data-state="ready"]'); await editor.waitFor();
+    await page.locator('#blogPublicName').fill(value.name); await page.locator('#blogPublicIntro').fill(value.intro);
+    await click(page, '저장', editor);
+    assert.deepEqual(profile(), value, 'saved in 공개 이름·소개');
+    await click(page, '닫기', editor);
+  };
+  const shownProfile = async page => {
+    const values = await panel(page).locator('.blog-manager-profile-values dd').allInnerTexts();
+    return { name: values[0] === '없음' ? '' : values[0], intro: values[1] === '없음' ? '' : values[1] };
+  };
   const preview = async (page, { selected = null, name, intro } = {}) => {
-    if (name !== undefined) await page.getByRole('textbox', { name: '공개 이름', exact: true }).fill(name);
-    if (intro !== undefined) await page.getByRole('textbox', { name: '공개 소개', exact: true }).fill(intro);
+    if (name !== undefined || intro !== undefined) {
+      const saved = profile() || { name: '', intro: '' }, wanted = { name: name ?? saved.name, intro: intro ?? saved.intro };
+      if (wanted.name !== saved.name || wanted.intro !== saved.intro) {
+        const id = await panel(page).getAttribute('data-post-id');
+        await saveProfile(page, wanted); await openReview(page, id);
+      }
+      assert.deepEqual(await shownProfile(page), wanted, 'the review shows the saved name and intro');
+    }
     if (selected) for (const box of await page.locator('input[data-photo-id]').all()) await box.setChecked(selected.includes(await box.getAttribute('data-photo-id')));
     await click(page, '공개 미리보기 갱신');
     await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
@@ -139,6 +163,9 @@ async function main() {
   const shot = async (page, name) => { const file = path.join(output, name + '.png'); await page.screenshot({ path: file }); report.screenshots.push(path.basename(file)); };
   const pass = name => { report.checks.push({ name, pass: true }); console.log('PASS ' + name); };
   // Publication requests of one kind that the page sent, by what this suite did with them.
+  // Since 2026-11-16 every request of this app names its attachment choice and so goes through
+  // life_blog_publish_copies (copies {} without photos); life_blog_publish is only the earlier
+  // argument set, used below for what another (older) device sends.
   const sentPublish = remoteId => server.blogRequests.filter(request => ['life_blog_publish', 'life_blog_publish_copies'].includes(request.rpc) && request.body.p_post_id === remoteId);
   const sentUnpublish = remoteId => server.blogRequests.filter(request => request.rpc === 'life_blog_unpublish' && request.body.p_post_id === remoteId);
   // Fails every exact post read of this device: the publication cannot be settled meanwhile.
@@ -214,8 +241,10 @@ async function main() {
     // ---- m6 + m1: first reading of a public post; the profile after the only public post is withdrawn ----
     const z = await savedPost(page, '첫 공개 이름 글');
     await manager(page); await openReview(page, z.doc.id);
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '', 'nothing was published from this device yet');
+    assert.equal(await panel(page).getByRole('textbox').count(), 0, 'the review has no name or intro input (decision 7)');
+    assert.deepEqual(await shownProfile(page), { name: '', intro: '' }, 'nothing saved yet: shown as none');
     await preview(page, { name: '익명Z', intro: '기억할 소개' }); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
+    assert.deepEqual(profile(), { name: '익명Z', intro: '기억할 소개' }, 'publishing left the saved values as they were');
     // The post was read as 비공개 before it was published: opening it again must not start from that.
     await page.evaluate(() => {
       window.__pill = [];
@@ -228,14 +257,13 @@ async function main() {
     assert.equal(drawn.includes('private'), false, 'never drawn as 비공개 on the way: ' + drawn.join(' > ')); assert.equal(drawn.at(-1), 'public');
     await manager(page); await openReview(page, z.doc.id); await click(page, '공개 철회', panel(page)); assert.equal(publication(z.remoteId).active, false); await click(page, '공개 검토 닫기');
     await openReview(page, z.doc.id);
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '익명Z', 'the last published name of this device');
-    assert.equal(await page.getByRole('textbox', { name: '공개 소개', exact: true }).inputValue(), '기억할 소개');
-    assert.equal(await panel(page).locator('.blog-manager-profile').getAttribute('data-state'), 'remembered');
-    assert.match(await panel(page).locator('.blog-manager-profile').innerText(), /지금 공개 중인 글이 없어 서버의 값을 읽을 수 없습니다\. 이 기기에서 마지막으로 게시한 이름과 소개를 채웠으니 확인해 주세요/);
+    // Nothing is public now: the saved values are still read from the account (no device memory).
+    assert.equal(await panel(page).locator('.blog-manager-profile').getAttribute('data-state'), 'ready');
+    assert.deepEqual(await shownProfile(page), { name: '익명Z', intro: '기억할 소개' }, 'the saved name and intro, read from the server with nothing public');
     await preview(page); await publish(page); await publishedLink(page).waitFor();
-    assert.deepEqual(profile(), { name: '익명Z', intro: '기억할 소개' }, 'publishing again without retyping does not blank the profile');
+    assert.deepEqual(profile(), { name: '익명Z', intro: '기억할 소개' }, 'publishing again keeps the saved profile');
     await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
-    pass('m6 + m1: a public post is never first drawn as 비공개; with no public post the review offers the last published name and intro, marked as this device\'s');
+    pass('m6 + decision 7: a public post is never first drawn as 비공개; with no public post the review shows the saved name and intro, which publishing never changes');
 
     // ---- B1: the server published, the answer was lost -------------------------------------
     const a = await savedPost(page, '응답 유실 글', files);
@@ -413,7 +441,7 @@ async function main() {
     // ---- No implicit publication; a withdrawal is sent again ---------------------------------
     const n = await savedPost(page, '자동 재전송 없음 글');
     await manager(page); await openReview(page, n.doc.id); await preview(page, { name: '익명 검수' });
-    const unsentText = await neverArrives(owner.context, 'life_blog_publish', { then: () => reads.start() });
+    const unsentText = await neverArrives(owner.context, 'life_blog_publish_copies', { then: () => reads.start() });
     await publish(page); await unsentText.stop(); await click(page, '공개 검토 닫기');
     assert.equal(await publicStatus(page, n.doc.id), 'unknown');
     // m8: the list follows the settlement while it is on screen (publishing changes no post document).
@@ -468,7 +496,7 @@ async function main() {
     const tabB = await owner.context.newPage(); watch(tabB, 'recovery-owner-tab-b'); await tabB.goto(base + '/index.html'); await ready(tabB); await settle(tabB);
     const t2 = await savedPost(page, '두 탭 게시 글');
     await manager(page); await openReview(page, t2.doc.id); await preview(page, { name: '익명 검수', intro: '' });
-    let flying = await inFlight(owner.context, 'life_blog_publish');
+    let flying = await inFlight(owner.context, 'life_blog_publish_copies');
     await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await flying.arrived;
     await cycle(tabB);
     let during = await state(tabB, t2.doc.id);
@@ -541,7 +569,7 @@ async function main() {
     // from this device's own request by content. It is never withdrawn.
     const w3 = await savedPost(page, '철회 뒤 다른 기기의 같은 이름 게시 글');
     await manager(page); await openReview(page, w3.doc.id); await preview(page, { name: '익명 검수', intro: '' });
-    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop();
     await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
     assert.deepEqual(published(w3.remoteId), { active: false, revision: 1 });
     const theirs = server.rpc(accounts.a.id, 'life_blog_publish', { p_post_id: w3.remoteId, p_expected_revision: lateRequest.bodies[0].p_expected_revision, p_operation_id: uuid(), p_photo_ids: [],
@@ -553,7 +581,7 @@ async function main() {
     assert.deepEqual(publication(w3.remoteId), theirCopy, 'the other device\'s publication is not withdrawn');
     assert.deepEqual(sentUnpublish(w3.remoteId).map(request => request.body.p_expected_revision), [0], 'no withdrawal after it');
     assert.equal(await mark(page, w3.doc.id), '공개 중');
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict', 'this device\'s own request can no longer be applied');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict', 'this device\'s own request can no longer be applied');
     await openReview(page, w3.doc.id); await click(page, '공개 철회', panel(page)); assert.equal(publication(w3.remoteId).active, false); await click(page, '공개 검토 닫기');
     pass('R2-A: another device\'s later publication with the same name and no photos stays public; this device sends no withdrawal against it');
 
@@ -562,7 +590,7 @@ async function main() {
     // judged from what becomes public, and it ends when the server takes the withdrawal.
     const w4 = await savedPost(page, '옛 서버 정의의 철회 글');
     await manager(page); await openReview(page, w4.doc.id); await preview(page, { name: '익명 검수', intro: '' });
-    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop();
     let old = await earlierWithdrawal(owner.context);
     await click(page, '공개 철회', panel(page));
     assert.match(await statusLine(page), /앞서 보낸 공개 게시 요청을 서버에서 아직 끝내지 못했습니다\. 공개 상태는 확인 못 함으로 두고 철회 요청을 다시 보냅니다/);
@@ -580,15 +608,15 @@ async function main() {
     await kick(page); await until(() => published(w4.remoteId), value => value?.revision === 1, 'the cycle sends the withdrawal to the updated server');
     await until(() => publicStatus(page, w4.doc.id), value => value === 'private', 'settled as 비공개');
     assert.deepEqual(published(w4.remoteId), { active: false, revision: 1 }); assert.equal(sentUnpublish(w4.remoteId)[0].body.p_operation_id, old.refused[0].p_operation_id);
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict');
     // The same, and another device publishes the same name meanwhile: public, said, not withdrawn.
     const w5 = await savedPost(page, '옛 서버 정의에서 다른 기기 게시 글');
     await manager(page); await openReview(page, w5.doc.id); await preview(page, { name: '익명 검수', intro: '' });
-    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop();
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop();
     old = await earlierWithdrawal(owner.context);
     await click(page, '공개 철회', panel(page)); await click(page, '공개 검토 닫기');
     assert.equal(await publicStatus(page, w5.doc.id), 'unknown');
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', { ...lateRequest.bodies[0], p_operation_id: uuid() }).status, 'stored');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', { ...lateRequest.bodies[0], p_operation_id: uuid() }).status, 'stored');
     const otherCopy = publication(w5.remoteId); assert.equal(otherCopy.active, true);
     await kick(page); await until(() => publicStatus(page, w5.doc.id), value => value === 'public', 'the cycle reads the publication');
     await page.waitForFunction(() => /철회를 요청한 뒤에 게시가 반영되어 지금 공개 중입니다\. 비공개로 두려면 다시 철회해 주세요/.test(document.querySelector('.blog-manager [role="status"]')?.textContent || ''));
@@ -604,7 +632,7 @@ async function main() {
     // ---- r2-m4: the "not applied yet" notice ends when the owner ends the request ----------------------
     const cx = await savedPost(page, '게시 요청 취소 글');
     await manager(page); await openReview(page, cx.doc.id); await preview(page, { name: '익명 검수', intro: '' });
-    lateRequest = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lateRequest.stop(); await click(page, '공개 검토 닫기');
+    lateRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lateRequest.stop(); await click(page, '공개 검토 닫기');
     await kick(page); await until(() => mark(page, cx.doc.id), value => value === '앞서 보낸 게시 미반영', 'the list names the request that is not applied');
     await cycle(page); assert.equal(await mark(page, cx.doc.id), '앞서 보낸 게시 미반영', 'it stays until the owner acts'); assert.equal(sentUnpublish(cx.remoteId).length, 0);
     await openReview(page, cx.doc.id);
@@ -618,7 +646,7 @@ async function main() {
     assert.deepEqual({ state: (await current(page)).state, notice: await panel(page).locator('.blog-manager-current').getAttribute('data-notice') }, { state: 'private', notice: '' });
     assert.equal(await panel(page).getByRole('button', { name: '게시 요청 취소', exact: true }).count(), 0);
     assert.deepEqual(published(cx.remoteId), { active: false, revision: 1 }); assert.deepEqual(sentUnpublish(cx.remoteId).map(request => request.body.p_expected_revision), [0]);
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', lateRequest.bodies[0]).status, 'conflict', 'the cancelled request can never be applied');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', lateRequest.bodies[0]).status, 'conflict', 'the cancelled request can never be applied');
     await click(page, '공개 검토 닫기'); assert.equal(await mark(page, cx.doc.id), '');
     pass('r2-m4: 게시 요청 취소 ends a publish request that is not applied (keyboard, 1440/390); the notice ends and the late request is refused');
 
@@ -627,7 +655,7 @@ async function main() {
     await manager(page); await openReview(page, u.doc.id); await preview(page, { selected: u.doc.photos.map(photo => photo.id), name: '익명 검수' }); await publish(page); await publishedLink(page).waitFor();
     const urlU = await publishedLink(page).getAttribute('href');
     await preview(page, { selected: [] });
-    const lostUpdate = await neverArrives(owner.context, 'life_blog_publish'); await publish(page); await lostUpdate.stop(); await click(page, '공개 검토 닫기');
+    const lostUpdate = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await lostUpdate.stop(); await click(page, '공개 검토 닫기');
     assert.equal(await publicStatus(page, u.doc.id), 'unknown');
     await kick(page); await until(() => publicStatus(page, u.doc.id), value => value === 'public', 'the cycle settles the update as not applied');
     await until(() => mark(page, u.doc.id), value => value === '공개 중 · 앞서 보낸 갱신 미반영', 'the list names the unanswered update');
@@ -649,7 +677,7 @@ async function main() {
     await manager(page); await openReview(page, v.doc.id); await preview(page, { selected: v.doc.photos.map(photo => photo.id), name: '익명 검수' });
     let replacedRequest = await neverArrives(owner.context, 'life_blog_publish_copies'); await publish(page); await replacedRequest.stop();
     await preview(page, { selected: [] });
-    flying = await inFlight(owner.context, 'life_blog_publish');
+    flying = await inFlight(owner.context, 'life_blog_publish_copies');
     await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const secondBody = await flying.arrived;
     assert.equal(secondBody.p_expected_publication_revision, 1, 'the new choice is sent against the revision the withdrawal made');
     assert.deepEqual(published(v.remoteId), { active: false, revision: 1 }); assert.deepEqual(sentUnpublish(v.remoteId).map(request => request.body.p_expected_revision), [0]);
@@ -658,7 +686,7 @@ async function main() {
     assert.equal(await statusLine(page), '공개 게시를 확인했습니다. 같은 글의 갱신은 이 주소를 유지합니다.');
     let finalV = publication(v.remoteId);
     assert.deepEqual({ active: finalV.active, photos: finalV.photos, revision: finalV.revision }, { active: true, photos: 0, revision: 2 }, 'only the last reviewed choice became public');
-    assert.deepEqual(sentPublish(v.remoteId).map(request => [request.rpc, request.body.p_expected_publication_revision]), [['life_blog_publish', 1]]);
+    assert.deepEqual(sentPublish(v.remoteId).map(request => [request.rpc, request.body.p_expected_publication_revision]), [['life_blog_publish_copies', 1]]);
     await visit(visitor.page, await publishedLink(page).getAttribute('href'), 'published'); assert.equal(await visitor.page.locator('#blogContent img').count(), 0);
     // The post is public now: an unanswered update keeps the address, so the next choice shares its revision. When
     // the replaced update arrives first, the new choice is sent once more as an update.
@@ -813,9 +841,9 @@ async function main() {
     // A conflict that is not this device's earlier request: nothing is sent again, and the screen says what is public.
     const x = await savedPost(page, '다른 기기 경합 글', files);
     await manager(page); await openReview(page, x.doc.id); await preview(page, { selected: [], name: '익명 검수' });
-    flying = await inFlight(owner.context, 'life_blog_publish');
+    flying = await inFlight(owner.context, 'life_blog_publish_copies');
     await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const heldBody = await flying.arrived;
-    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish', { ...heldBody, p_operation_id: require('node:crypto').randomUUID(), p_author: { name: '다른 기기', intro: '' } }).status, 'stored');
+    assert.equal(server.rpc(accounts.a.id, 'life_blog_publish_copies', { ...heldBody, p_operation_id: require('node:crypto').randomUUID(), p_author: { name: '다른 기기', intro: '' } }).status, 'stored');
     await flying.release(); await idle(page);
     assert.match(await statusLine(page), /공개 내용이 그사이 다른 요청으로 바뀌어 이 게시는 적용하지 못했습니다\. 지금 공개 중인 사본에는 사진이 0장 있습니다\. 미리보기를 갱신한 뒤 다시 게시하거나 철회해 주세요/);
     assert.doesNotMatch(await statusLine(page), /다른 기기에서 먼저 바뀐 글/);
@@ -887,57 +915,92 @@ async function main() {
     assert.equal(await page.locator('dialog.blog-manager-dialog').count(), 0); assert.equal((await data(page)).docs.find(doc => doc.id === n.doc.id).archived, true);
     pass('M2: the list marks public posts; hiding a public post asks (keyboard, Escape, 820/390); a hidden public post can be withdrawn and then deleted');
 
-    // ---- M3: one public name and intro for the whole list --------------------------------------
+    // ---- Decisions 7 and 9 (2026-11-16): the name and intro saved on their own; attachments chosen one by one ----
     const p1 = await savedPost(page, '첫 공개 글'), p2 = await savedPost(page, '둘째 공개 글');
-    await manager(page); await openReview(page, p1.doc.id);
-    await preview(page, { name: '익명A', intro: '익명 소개' }); await publish(page); await publishedLink(page).waitFor();
-    const url1 = await publishedLink(page).getAttribute('href'); await click(page, '공개 검토 닫기');
-    assert.deepEqual(profile(), { name: '익명A', intro: '익명 소개' });
-    await openReview(page, p2.doc.id);
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '익명A', 'the current public name is filled in');
-    assert.equal(await page.getByRole('textbox', { name: '공개 소개', exact: true }).inputValue(), '익명 소개');
-    assert.match(await panel(page).locator('.blog-manager-profile').innerText(), /공개 글 목록 맨 위에 표시되며, 여기서 바꾸면 공개한 모든 글의 목록에서 함께 바뀝니다/);
-    assert.match(await panel(page).innerText(), /제목, 본문 전체와 모든 첨부를 공개합니다/); assert.doesNotMatch(await panel(page).innerText(), /고른 본문과 첨부만/);
-    await preview(page, { name: '익명B', intro: '바꾼 소개' });
-    const head = panel(page).locator('.blog-manager-list-head');
-    assert.match(await head.innerText(), /공개 글 목록 맨 위에 표시/); assert.match(await head.innerText(), /익명B의 블로그/); assert.match(await head.innerText(), /바꾼 소개/);
-    await shot(page, 'm3-review-1440');
+    const cards = [{ type: 'book', title: '익명 첨부 책', creator: '익명 작가', url: 'https://example.com/book' }, { type: 'music', title: '익명 첨부 음악', creator: '', url: '' }];
+    await page.evaluate(async ({ id, cards }) => {
+      const s = HaedoLife.Shell.storage, ws = await s.getActive(), doc = await s.readPhotoPost(ws, id);
+      await s.savePhotoPost(ws, { ...doc, attachments: cards }, doc.revision);
+    }, { id: p1.doc.id, cards });
+    await manager(page);
+    await saveProfile(page, { name: '익명A', intro: '익명 소개' });
+    await openReview(page, p1.doc.id);
+    assert.equal(await panel(page).getByRole('textbox').count(), 0, 'no name or intro input in the review');
+    assert.deepEqual(await shownProfile(page), { name: '익명A', intro: '익명 소개' });
+    assert.match(await panel(page).locator('.blog-manager-profile').innerText(), /게시해도 바뀌지 않으며, 바꾸려면 공개 이름·소개에서 저장합니다/);
+    assert.match(await panel(page).innerText(), /사진과 첨부는 아래에서 고른 것만 공개/); assert.doesNotMatch(await panel(page).innerText(), /모든 첨부/);
+    const choices = () => panel(page).locator('[data-attachment-position]');
+    assert.deepEqual(await choices().evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'no attachment chosen at first');
+    await shot(page, 'decision-review-1440');
     for (const width of [820, 390]) {
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await head.scrollIntoViewIfNeeded();
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await choices().first().scrollIntoViewIfNeeded();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), true, 'no sideways scroll at ' + width);
-      await shot(page, 'm3-review-' + width);
+      await shot(page, 'decision-review-' + width);
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
-    await visit(visitor.page, url1, 'published'); await visitor.page.locator('#blogBack').click();
+    await preview(page); await publish(page); await publishedLink(page).waitFor();
+    const url1 = await publishedLink(page).getAttribute('href'); await click(page, '공개 검토 닫기');
+    const snapshotOf = remoteId => server.sql("select coalesce((select snapshot from haedo_blog_private.publications where post_id=" + "'" + remoteId + "'" + " and active),'null'::jsonb)");
+    assert.deepEqual(snapshotOf(p1.remoteId).attachments, [], 'default 0: no attachment published');
+    assert.deepEqual(snapshotOf(p1.remoteId).author, { name: '익명A', intro: '익명 소개' }, 'the byline is the saved name and intro');
+    assert.deepEqual(profile(), { name: '익명A', intro: '익명 소개' }, 'publishing does not write the profile');
+    await visit(visitor.page, url1, 'published');
+    assert.equal(await visitor.page.locator('#blogContent .blog-attachments').count(), 0);
+    // Choosing the second one; an update of a public post says first that what is not chosen again leaves.
+    await openReview(page, p1.doc.id);
+    assert.match(await panel(page).locator('.blog-manager-attachments-note').innerText(), /지금 공개 중입니다\. 다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다/);
+    await choices().nth(1).check(); await preview(page); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
+    assert.deepEqual(snapshotOf(p1.remoteId).attachments, [cards[1]]);
+    await visitor.page.reload(); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published');
+    assert.match(await visitor.page.locator('#blogContent .blog-attachments').innerText(), /익명 첨부 음악/);
+    assert.doesNotMatch(await visitor.page.locator('#blogContent').innerText(), /익명 첨부 책/);
+    await openReview(page, p1.doc.id);
+    assert.deepEqual(await choices().evaluateAll(nodes => nodes.map(node => node.checked)), [false, false], 'a new review starts from none again');
+    await choices().nth(0).check(); await preview(page); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
+    assert.deepEqual(snapshotOf(p1.remoteId).attachments, [cards[0]], 'the attachment not chosen again left the public copy');
+    // The saved name and intro head the public list at once; the bylines of copies change when republished.
+    await saveProfile(page, { name: '익명B', intro: '바꾼 소개' });
+    await visitor.page.reload(); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published');
+    await visitor.page.locator('#blogBack').click();
     await visitor.page.waitForFunction(() => /익명B의 블로그/.test(document.querySelector('#blogContent')?.innerText || ''));
     assert.match(await visitor.page.locator('#blogContent').innerText(), /바꾼 소개/);
-    // Reviewing the first post again starts from the current values: updating does not blank them.
-    await openReview(page, p1.doc.id);
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '익명B');
-    assert.equal(await page.getByRole('textbox', { name: '공개 소개', exact: true }).inputValue(), '바꾼 소개');
+    assert.deepEqual(snapshotOf(p1.remoteId).author, { name: '익명A', intro: '익명 소개' }, 'an already-public copy keeps its byline until it is published again');
+    await openReview(page, p2.doc.id);
+    assert.deepEqual(await shownProfile(page), { name: '익명B', intro: '바꾼 소개' });
+    assert.equal(await panel(page).locator('[data-attachment-position]').count(), 0); assert.match(await panel(page).innerText(), /이 글에는 첨부가 없습니다/);
     await preview(page); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
-    assert.deepEqual(profile(), { name: '익명B', intro: '바꾼 소개' }, 'an untouched update keeps the list name and intro');
-    await visitor.page.locator('#blogRefresh').click(); await visitor.page.waitForFunction(() => /익명B의 블로그/.test(document.querySelector('#blogContent')?.innerText || ''));
-    // The current values cannot be read: nothing is published over them.
-    const noProfile = await neverArrives(owner.context, 'life_blog_public_list');
+    assert.deepEqual(snapshotOf(p2.remoteId).author, { name: '익명B', intro: '바꾼 소개' });
+    // The saved values cannot be read: nothing is published.
+    const noProfile = await neverArrives(owner.context, 'life_blog_get_public_profile');
     await openReview(page, p1.doc.id);
     assert.equal(await panel(page).locator('.blog-manager-profile').getAttribute('data-state'), 'failed');
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '');
     const before = sentPublish(p1.remoteId).length;
-    await preview(page); await publish(page);
-    assert.match(await statusLine(page), /현재 공개 이름과 소개를 읽지 못해 게시하지 않았습니다/);
-    assert.equal(sentPublish(p1.remoteId).length, before, 'no request with blank values'); assert.deepEqual(profile(), { name: '익명B', intro: '바꾼 소개' });
+    await click(page, '공개 미리보기 갱신');
+    assert.match(await statusLine(page), /읽지 못해 미리보기를 만들지 않았습니다/);
+    await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check(); await publish(page);
+    assert.match(await statusLine(page), /미리보기를 먼저 갱신해 주세요|읽지 못해 게시하지 않았습니다/);
+    assert.equal(sentPublish(p1.remoteId).length, before, 'no publish request without the saved values'); assert.deepEqual(profile(), { name: '익명B', intro: '바꾼 소개' });
     await noProfile.stop();
-    // m2: what the owner typed meanwhile is kept; only untouched fields take the values read.
-    await page.getByRole('textbox', { name: '공개 소개', exact: true }).fill('직접 고친 소개');
     await click(page, '공개 이름·소개 다시 읽기', panel(page));
-    assert.equal(await page.getByRole('textbox', { name: '공개 이름', exact: true }).inputValue(), '익명B');
-    assert.equal(await page.getByRole('textbox', { name: '공개 소개', exact: true }).inputValue(), '직접 고친 소개', 'the typed intro is not overwritten');
-    assert.match(await statusLine(page), /직접 입력한 칸은 그대로 두었습니다/);
+    assert.equal(await panel(page).locator('.blog-manager-profile').getAttribute('data-state'), 'ready');
     await preview(page); await publish(page); await publishedLink(page).waitFor(); await click(page, '공개 검토 닫기');
-    assert.deepEqual(profile(), { name: '익명B', intro: '직접 고친 소개' });
-    pass('M3: the review starts from the current public name and intro, says they head the whole list, previews that head, and never publishes blanks over values it could not read');
+    assert.deepEqual(snapshotOf(p1.remoteId).author, { name: '익명B', intro: '바꾼 소개' }); assert.deepEqual(snapshotOf(p1.remoteId).attachments, [], 'nothing chosen this time');
+    // Unsaved input in the editor is kept: leaving and reviewing are refused until it is saved or discarded.
+    await click(page, '공개 이름·소개');
+    await page.locator('.blog-manager-profile-editor[data-state="ready"]').waitFor();
+    await page.locator('#blogPublicName').fill('저장하지 않은 이름');
+    await row(page, p1.doc.id).getByRole('button', { name: '공개 내용 검토', exact: true }).click(); await idle(page);
+    assert.match(await statusLine(page), /공개 이름·소개를 저장하거나 닫은 뒤 공개 내용을 검토/);
+    assert.equal(await page.locator('#blogPublicName').inputValue(), '저장하지 않은 이름');
+    const editorSheet = page.locator('.blog-manager-profile-editor');
+    await editorSheet.scrollIntoViewIfNeeded(); await shot(page, 'decision-editor-1440');
+    await page.setViewportSize({ width: 390, height: 844 }); await editorSheet.scrollIntoViewIfNeeded();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), true, 'no sideways scroll in the editor at 390');
+    await shot(page, 'decision-editor-390'); await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('.blog-manager-profile-editor').getByRole('button', { name: '닫기', exact: true }).click();
+    await page.getByRole('dialog', { name: '저장하지 않은 공개 이름·소개' }).getByRole('button', { name: '버리고 닫기', exact: true }).click(); await idle(page);
+    assert.deepEqual(profile(), { name: '익명B', intro: '바꾼 소개' }, 'discarding saved nothing');
+    pass('decisions 7 and 9: the name and intro are saved only in 공개 이름·소개 and shown read-only in the review; attachments are chosen one by one (none at first), an update drops the ones not chosen again, and nothing is published without the saved values');
 
     // ---- m5: another device published; this device deletes before it knows ---------------------
     const d = await savedPost(page, '다른 기기 공개 글');

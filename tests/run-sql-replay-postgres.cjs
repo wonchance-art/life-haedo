@@ -30,6 +30,10 @@
  *     20261112120000) on a fresh replayed copy, applying that file once more on top: a deleted
  *     post's revisions are never handed out again. Run directly it also checks the earlier
  *     behaviour and the installation's refusal of drifted predecessors.
+ * 4.10 Runs the public name and attachment choice contract (tests/run-blog-public-choice-postgres.cjs,
+ *     20261116120000) on a fresh replayed copy: owner-only profile read/save, attachment choice on
+ *     every publish path, earlier argument sets (no attachment, same receipts). Run directly it also
+ *     checks the earlier behaviour, the install's refusal of drifted predecessors and its row guard.
  * 5. Optional arguments: repository .sql files (for example a production SQL change under
  *    review) applied in order to a fresh copy of the replayed database.
  * Skips (exit 0) when the machine has no PostgreSQL server binaries, unless
@@ -315,6 +319,15 @@ async function main() {
       finally { console.log = log; await db.end(); }
       assert(count >= 70, 'revision continuity checks ran: ' + count);
       pass(`revision continuity after deletion (20261112120000): ${count} checks on a fresh replayed copy`);
+    }
+
+    {
+      const choiceDb = await pg.cloneDatabase('replay_blog_public_choice'), db = await pg.connect(choiceDb);
+      const log = console.log; let count;
+      try { console.log = () => {}; count = await require('./run-blog-public-choice-postgres.cjs').contract(db, { installed: true }); }
+      finally { console.log = log; await db.end(); }
+      assert(count >= 70, 'public choice checks ran: ' + count);
+      pass(`public name and attachment choice (20261116120000): ${count} checks on a fresh replayed copy`);
     }
 
     const clone = await pg.cloneDatabase('replay_clone');

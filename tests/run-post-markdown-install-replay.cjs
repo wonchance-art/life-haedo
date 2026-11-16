@@ -10,7 +10,11 @@ const ROOT = path.resolve(__dirname, '..');
 const FILES = ['supabase/operations/20261101-account-sync-install.sql', 'supabase/operations/20261102-blog-ai-authorship-install.sql'];
 const MARKDOWN = '20261105051632_life_post_markdown.sql';
 const MARKDOWN_PUBLISH = '20261105081055_life_post_markdown_publish.sql';
-const isPreMarkdown = file => ![MARKDOWN,MARKDOWN_PUBLISH].includes(path.basename(file));
+// Later migrations that replace Markdown publication functions can only follow the Markdown
+// migrations (20261116120000 checks the definitions it replaces), so a pre-D2 schema leaves them out
+// and the fresh path applies them after B3, in their real order.
+const AFTER_MARKDOWN = ['20261116120000_life_blog_public_choice.sql'];
+const isPreMarkdown = file => ![MARKDOWN,MARKDOWN_PUBLISH,...AFTER_MARKDOWN].includes(path.basename(file));
 const markdownFunctions = list => list.filter(f=>f.signature.includes('.markdown_') || f.signature.includes('.life_blog_markdown_'));
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 if (process.argv.length !== 2) throw Error('This isolated test accepts no arguments.');
@@ -107,6 +111,7 @@ async function main() {
    check(result.failures,0,'fresh pre-D2 legacy AI validation/public projection ('+result.passed+' assertions)');
    await fresh.query(read('supabase/migrations/'+MARKDOWN));
    await fresh.query(read('supabase/migrations/'+MARKDOWN_PUBLISH));
+   for(const name of AFTER_MARKDOWN)await fresh.query(read('supabase/migrations/'+name));
    const full=await pg.connect(pg.database);
    try{check(await functions(fresh),await functions(full),'installers then B1 and B3 migrations produce exact latest function catalog');}finally{await full.end();}
   }finally{await fresh.end();}

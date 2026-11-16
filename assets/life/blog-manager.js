@@ -12,6 +12,9 @@
     // Publication of each post as this device knows it ('public' | 'private' | 'unknown'), read
     // locally from BlogSync. `panelPublic` redraws an open review's own status line.
     let publicStates = {}, publicNotices = {}, panelPublic = null, refusedDelete = false, openDialog = null;
+    // 공개 이름·소개 (2026-11-16, owner decision 7): its own editor and explicit save, in its own
+    // host so closing a review never takes typed input with it.
+    let profileHost = null, profileEditor = null;
     const readPublic = async () => {
       const states = blogSync?.publicationStatuses ? await blogSync.publicationStatuses(workspaceId) : {};
       const notices = blogSync?.publicationNotices ? await blogSync.publicationNotices(workspaceId) : {};
@@ -334,6 +337,8 @@
       return state;
     }
     async function preparePreview(row) {
+      if (profileEditor?.dirty()) throw new Error('공개 이름·소개를 저장하거나 닫은 뒤 공개 내용을 검토해 주세요.');
+      closeProfile();
       const doc = await storage.readPhotoPost(workspaceId, row.id);
       if (!valid()) return;
       if (doc.status !== 'saved' || doc.archived) throw new Error('숨기지 않은 저장 글만 공개할 수 있습니다. 목록을 다시 확인해 주세요.');
@@ -341,8 +346,9 @@
       let capturedState = null;
       try { capturedState = await reviewState(row.id); } catch (_) { /* Preview remains local; publication still requires a working server. */ }
       if (!valid()) return;
-      // The account's current public name and intro (one profile for the whole public list;
-      // every publish request replaces it). `profile` null: this engine cannot read it.
+      // The account's saved public name and intro (2026-11-16, owner decision 7): shown here as
+      // they are, published as the byline, never changed by publishing. `profile` null: this
+      // engine cannot read it, and then nothing is published.
       let profile = null, profileFailed = false;
       const readProfile = async () => {
         if (!blogSync?.publicProfile) return;
@@ -354,12 +360,13 @@
       let remoteRevision = capturedState?.remoteRevision || 0, publicRevision = capturedState?.publication?.revision || 0;
       preview = { doc, photoIds: [], snapshot: null, revision: doc.revision, remoteRevision, publicRevision };
       // D1 (soft redesign): the review reads as one 공개하기 sheet; its steps and checks are unchanged.
-      const panel = el('section', null, 'blog-manager-preview'); panel.setAttribute('aria-label', '공개하기');
-      // The title, the whole body and every attachment are published; only photos are chosen.
-      panel.append(el('h3', '공개하기'), meta('제목, 본문 전체와 모든 첨부를 공개합니다. 사진은 아래에서 고른 것만 공개하고, 고르지 않은 사진은 공개 본문에서도 빠집니다.'));
+      const panel = el('section', null, 'blog-manager-preview'); panel.setAttribute('aria-label', '공개하기'); panel.dataset.postId = doc.id;
+      // The title and the whole body are published; photos and attachments are chosen one by one,
+      // none at first, every time (2026-11-16, owner decision 9).
+      panel.append(el('h3', '공개하기'), meta('제목과 본문 전체를 공개합니다. 사진과 첨부는 아래에서 고른 것만 공개하고, 고르지 않은 사진은 공개 본문에서도 빠집니다.'));
       // What is public now, from this device's record of the server (settled above when unknown).
       const currentLine = el('p', '', 'life-meta blog-manager-current'); panel.append(currentLine);
-      let panelState = capturedState;
+      let panelState = capturedState, showAttachmentNote = null;
       // Set once the preview controls exist: ends a preview that is not what became public.
       let dropPreview = null;
       const showCurrent = () => {
@@ -395,6 +402,7 @@
         }));
         if (logText(panelState?.publicationLog)) currentLine.append(el('span', ' · ' + logText(panelState.publicationLog), 'blog-manager-current-log'));
         if (had) (currentLine.querySelector('button,a') || panel.querySelector('input'))?.focus({ preventScroll: true });
+        showAttachmentNote?.(value);
       };
       const syncPanel = async () => {
         if (!blogSync?.getState) return;
@@ -403,30 +411,24 @@
       panelPublic = () => { if (!busy) void syncPanel(); };
       showCurrent();
       const footer = el('div', null, 'blog-manager-publish-actions');
-      const authorLabel = el('label', '공개 이름'), author = el('input'); author.type = 'text'; author.maxLength = 100; author.setAttribute('aria-label', '공개 이름'); authorLabel.append(author); panel.append(authorLabel);
-      const introLabel = el('label', '공개 소개'), intro = el('textarea'); intro.maxLength = 500; intro.rows = 2; intro.setAttribute('aria-label', '공개 소개'); introLabel.append(intro); panel.append(introLabel);
-      // The review starts from the current values, so an update does not blank them.
-      const profileNote = el('p', '', 'life-meta blog-manager-profile'); panel.append(profileNote);
-      // A value the owner typed in this review is never replaced by a later read.
-      const typed = new Set();
-      author.addEventListener('input', () => typed.add(author)); intro.addEventListener('input', () => typed.add(intro));
-      const showProfile = fill => {
-        if (fill && profile) { if (!typed.has(author)) author.value = profile.author.name; if (!typed.has(intro)) intro.value = profile.author.intro; }
-        profileNote.dataset.state = profileFailed ? 'failed' : profile?.remembered ? 'remembered' : profile ? 'ready' : 'unavailable';
-        profileNote.replaceChildren(document.createTextNode('공개 이름과 소개는 이 글에만 쓰이지 않습니다. 공개 글 목록 맨 위에 표시되며, 여기서 바꾸면 공개한 모든 글의 목록에서 함께 바뀝니다.' +
-          (profile?.visible ? ` 지금 공개 글 ${profile.posts}개의 목록에 표시 중인 값을 채웠습니다.`
-            // Nothing is public, so the server shows no name or intro to read back.
-            : profile?.remembered ? ' 지금 공개 중인 글이 없어 서버의 값을 읽을 수 없습니다. 이 기기에서 마지막으로 게시한 이름과 소개를 채웠으니 확인해 주세요.' : '')));
-        if (profileFailed) {
-          const failed = el('span', ' 현재 공개 이름과 소개를 읽지 못했습니다. 읽기 전에는 게시하지 않습니다(빈칸으로 게시하면 목록의 이름과 소개가 지워집니다). ', 'blog-manager-profile-error'); failed.setAttribute('role', 'alert');
+      // The public name and intro, read only here: they are edited and saved in 공개 이름·소개.
+      const profileNote = el('div', null, 'life-meta blog-manager-profile'); panel.append(profileNote);
+      const showProfile = () => {
+        profileNote.dataset.state = profileFailed ? 'failed' : profile ? 'ready' : 'unavailable';
+        profileNote.replaceChildren();
+        if (profile) {
+          const values = el('dl', null, 'blog-manager-profile-values');
+          values.append(el('dt', '공개 이름'), el('dd', profile.author.name || '없음'), el('dt', '공개 소개'), el('dd', profile.author.intro || '없음'));
+          profileNote.append(values, el('p', '글쓴이로 함께 공개합니다. 공개 글 목록 맨 위에 보이는 이름·소개와 같습니다. 게시해도 바뀌지 않으며, 바꾸려면 공개 이름·소개에서 저장합니다.'));
+          profileNote.append(button('공개 이름·소개 고치기', async () => openProfile()));
+        } else if (profileFailed) {
+          const failed = el('p', '현재 공개 이름과 소개를 읽지 못했습니다. 읽기 전에는 게시하지 않습니다.', 'blog-manager-profile-error'); failed.setAttribute('role', 'alert');
           profileNote.append(failed, button('공개 이름·소개 다시 읽기', async () => {
             await readProfile(); if (!valid() || preview?.doc.id !== doc.id) return;
-            const kept = typed.size > 0;
-            showProfile(!!profile); if (profile) invalidate();
-            announce(!profile ? '공개 이름과 소개를 읽지 못했습니다. 연결을 확인한 뒤 다시 읽어 주세요.'
-              : kept ? '현재 공개 이름과 소개를 읽었습니다. 직접 입력한 칸은 그대로 두었습니다. 미리보기를 갱신해 확인해 주세요.' : '현재 공개 이름과 소개를 읽었습니다. 미리보기를 갱신해 확인해 주세요.');
+            showProfile(); if (profile) invalidate();
+            announce(profile ? '현재 공개 이름과 소개를 읽었습니다. 미리보기를 갱신해 확인해 주세요.' : '공개 이름과 소개를 읽지 못했습니다. 연결을 확인한 뒤 다시 읽어 주세요.');
           }));
-        }
+        } else profileNote.append(el('p', '공개 이름과 소개를 읽을 수 없어 게시하지 않습니다. 앱을 새로고침한 뒤 다시 열어 주세요.', 'blog-manager-profile-error'));
       };
       const photos = el('fieldset'); photos.append(el('legend', '공개할 사진'));
       const selected = new Map();
@@ -444,6 +446,24 @@
       if (doc.photos.length) photos.append(meta('고른 사진은 촬영·위치 정보를 뺀 사본으로 공개합니다. 원본은 비공개로 남습니다.'));
       else photos.append(meta('이 글에는 사진이 없습니다.'));
       panel.append(photos);
+      // Attachments, chosen one by one like photos: none at first, every time (decision 9).
+      const cards = el('fieldset'), chosenCards = []; cards.append(el('legend', '공개할 첨부'));
+      (doc.attachments || []).forEach((item, position) => {
+        const label = el('label', null, 'blog-manager-check'), check = el('input'); check.type = 'checkbox'; check.dataset.attachmentPosition = String(position);
+        let host = ''; try { host = item.url ? new URL(item.url).host : ''; } catch (_) { /* Shown without an address. */ }
+        label.append(check, document.createTextNode([item.title, item.creator, host].filter(Boolean).join(' · '))); cards.append(label); chosenCards.push(check);
+      });
+      const cardsNote = meta(''); cardsNote.classList.add('blog-manager-attachments-note');
+      if (chosenCards.length) cards.append(cardsNote); else cards.append(meta('이 글에는 첨부가 없습니다.'));
+      // An update replaces the public copy: an attachment not chosen again leaves it. Said before publishing.
+      showAttachmentNote = value => {
+        if (!chosenCards.length) return;
+        cardsNote.textContent = '고른 첨부만 공개합니다.' + (value === 'public' ? ' 이 글은 지금 공개 중입니다. 다시 게시하면 이번에 고르지 않은 첨부는 공개 글에서 빠집니다.'
+          : value === 'unknown' ? ' 이 글이 공개 중이라면 다시 게시할 때 이번에 고르지 않은 첨부는 공개 글에서 빠집니다.' : '');
+        cardsNote.dataset.publication = value;
+      };
+      showAttachmentNote(currentLine.dataset.publication || 'unknown');
+      panel.append(cards);
       const result = el('div', null, 'blog-manager-public-preview'); panel.append(result);
       const consentLabel = el('label', null, 'blog-manager-check'), consent = el('input'); consent.type = 'checkbox'; consent.setAttribute('aria-label', '이 내용을 공개합니다'); consentLabel.append(consent, document.createTextNode('미리보기의 내용을 공개합니다.')); panel.append(consentLabel);
       let changed = true;
@@ -451,8 +471,8 @@
       const copies = new Map();
       function invalidate() { changed = true; consent.checked = false; result.replaceChildren(meta('공개할 내용을 바꿨습니다. 미리보기를 갱신해 확인해 주세요.')); preview.snapshot = null; }
       dropPreview = () => { changed = true; consent.checked = false; preview.snapshot = null; result.replaceChildren(meta('이 미리보기는 게시되지 않았습니다. 미리보기를 갱신해 현재 공개 상태를 확인해 주세요.')); };
-      author.addEventListener('input', invalidate); intro.addEventListener('input', invalidate); selected.forEach(check => check.addEventListener('change', invalidate));
-      showProfile(true);
+      selected.forEach(check => check.addEventListener('change', invalidate)); chosenCards.forEach(check => check.addEventListener('change', invalidate));
+      showProfile();
       footer.append(button('공개 미리보기 갱신', async () => {
         if (!valid() || preview?.doc.id !== doc.id) return;
         if (blogSync?.getState) {
@@ -461,7 +481,10 @@
           remoteRevision = state?.remoteRevision || 0; publicRevision = state?.publication?.revision || 0;
           panelState = state; showCurrent();
         }
+        if (!profile) throw new Error('현재 공개 이름과 소개를 읽지 못해 미리보기를 만들지 않았습니다. 공개 이름·소개 다시 읽기를 누른 뒤 갱신해 주세요.');
         const photoIds = [...selected].filter(([, check]) => check.checked).map(([id]) => id);
+        const attachments = chosenCards.filter(check => check.checked).map(check => Number(check.dataset.attachmentPosition));
+        const author = { name: profile.author.name, intro: profile.author.intro };
         const included = doc.photos.filter(p => photoIds.includes(p.id));
         if (included.some(p => !copies.has(p.id))) announce('공개할 사진의 사본을 만드는 중입니다.');
         for (const p of included) {
@@ -469,20 +492,21 @@
           if (!valid() || preview?.doc.id !== doc.id) return;
         }
         const shown = included.map(p => copies.get(p.id)), uploaded = shown;
-        const snapshot = await life.Blog.publicSnapshot(doc, { photoIds, author: { name: author.value, intro: intro.value }, copies: uploaded });
+        let snapshot;
+        try { snapshot = await life.Blog.publicSnapshot(doc, { photoIds, attachments, author, copies: uploaded }); }
+        catch (failure) {
+          // Nothing would be public: a post with no title or body and nothing chosen.
+          if (!photoIds.length && !attachments.length && life.PhotoPost?.isEmpty?.({ ...doc, attachments: [] })) throw new Error('공개할 내용이 없습니다. 제목이나 본문이 없는 글은 사진이나 첨부를 하나 이상 골라 주세요.');
+          throw failure;
+        }
         if (!valid() || preview?.doc.id !== doc.id) return;
         urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
         // The preview shows the exact bytes that become public.
         const photoUrls = new Map();
         snapshot.photos.forEach((p, index) => { const url = URL.createObjectURL(shown[index].blob); urls.push(url); photoUrls.set(p.id, url); });
-        // The head of the public post list changes with this request too: shown with the post.
-        const head = el('div', null, 'blog-manager-list-head'), name = author.value.trim();
-        head.append(meta('공개 글 목록 맨 위에 표시'), el('p', name ? name + '의 블로그' : '공개 글', 'blog-manager-list-title'));
-        if (intro.value.trim()) head.append(el('p', intro.value, 'blog-manager-list-intro'));
-        else head.append(meta('소개 없음'));
-        result.replaceChildren(head, meta('이 글의 공개 화면'), life.BlogPublicUI.render(snapshot, { document, photoUrl: p => photoUrls.get(p.id) || null, allowOriginal: true }));
-        preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, copies: uploaded, author: { name: author.value, intro: intro.value } }; changed = false; consent.checked = false;
-        announce('이 미리보기와 같은 본문·선택 사진으로 공개합니다.');
+        result.replaceChildren(meta('이 글의 공개 화면'), life.BlogPublicUI.render(snapshot, { document, photoUrl: p => photoUrls.get(p.id) || null, allowOriginal: true }));
+        preview = { doc, revision: doc.revision, remoteRevision, publicRevision, snapshot, photoIds, attachments, copies: uploaded, author }; changed = false; consent.checked = false;
+        announce('이 미리보기와 같은 본문·선택 사진·선택 첨부로 공개합니다.');
       }));
       footer.append(button('공개 게시·갱신', async () => {
         if (changed || !preview?.snapshot) throw new Error('공개 미리보기를 먼저 갱신해 주세요.');
@@ -491,12 +515,11 @@
         if (!valid()) return;
         if (changed || !preview?.snapshot || !consent.checked) throw new Error('공개 내용이 바뀌었습니다. 미리보기를 갱신하고 공개 범위를 다시 확인해 주세요.');
         if (current.revision !== preview.revision || current.archived || current.status !== 'saved') throw new Error('글이 바뀌었습니다. 공개 내용 검토를 다시 열어 최신 글을 확인해 주세요.');
-        // Every publish request replaces the account's public name and intro: never with values
-        // the review could not start from.
-        if (profileFailed) throw new Error('현재 공개 이름과 소개를 읽지 못해 게시하지 않았습니다. 공개 이름·소개 다시 읽기를 누른 뒤 게시해 주세요.');
+        // The byline is the saved public name and intro: never values this review could not read.
+        if (profileFailed || !profile) throw new Error('현재 공개 이름과 소개를 읽지 못해 게시하지 않았습니다. 공개 이름·소개 다시 읽기를 누른 뒤 게시해 주세요.');
         let published;
         try {
-          published = await blogSync.publish(workspaceId, doc.id, { photoIds: [...preview.photoIds], author: { ...preview.author }, copies: preview.copies, expectedLocalRevision: preview.revision,
+          published = await blogSync.publish(workspaceId, doc.id, { photoIds: [...preview.photoIds], attachments: [...preview.attachments], author: { ...preview.author }, copies: preview.copies, expectedLocalRevision: preview.revision,
             expectedRemoteRevision: preview.remoteRevision, expectedPublicRevision: preview.publicRevision });
         } catch (failure) {
           if (!valid()) return;
@@ -559,6 +582,57 @@
       }));
       footer.append(button('공개 검토 닫기', async () => clearPreview())); panel.append(footer); detail.append(panel); panel.querySelector('input')?.focus({ preventScroll: true });
     }
+    function closeProfile() { profileEditor = null; profileHost?.replaceChildren(); }
+    // The account's public name and intro: read from the server, saved only by 저장. Publishing
+    // shows and uses the saved values; it never changes them.
+    async function openProfile() {
+      if (profileEditor) { profileEditor.focus(); return; }
+      clearPreview();
+      const token = epoch;
+      requireSync('publicProfile');
+      const section = el('section', null, 'blog-manager-profile-editor'); section.setAttribute('aria-label', '공개 이름·소개');
+      section.append(el('h3', '공개 이름·소개'), meta('공개 글 목록 맨 위에 보이는 이름과 소개입니다. 글을 공개하면 글쓴이로도 함께 나갑니다. 글을 공개할 때는 바뀌지 않고 여기서 저장할 때만 바뀝니다. 프로필 편집의 블로그 이름·소개와는 따로 저장됩니다.'));
+      // Results are announced on the manager's one status line; this line keeps the current state.
+      const state = el('p', '현재 값을 읽는 중입니다.', 'life-meta blog-manager-profile-state');
+      const nameLabel = el('label', '공개 이름'), name = el('input'); name.type = 'text'; name.maxLength = 100; name.id = 'blogPublicName'; name.setAttribute('aria-label', '공개 이름'); nameLabel.append(name);
+      const introLabel = el('label', '공개 소개'), intro = el('textarea'); intro.maxLength = 500; intro.rows = 3; intro.id = 'blogPublicIntro'; intro.setAttribute('aria-label', '공개 소개'); introLabel.append(intro);
+      const note = meta(''); note.classList.add('blog-manager-profile-note');
+      const actions = el('div', null, 'blog-manager-publish-actions');
+      let loaded = null;
+      const current = () => valid(token) && profileEditor === editor;
+      const dirty = () => !!loaded && (name.value !== loaded.author.name || intro.value !== loaded.author.intro);
+      const showNote = value => { note.textContent = value.posts ? `지금 공개 글 ${value.posts}개의 목록 맨 위에 바로 보입니다. 이미 공개한 글의 글쓴이 표시는 그 글을 다시 게시할 때 바뀝니다.` : '지금 공개 중인 글이 없습니다. 글을 공개하면 목록 맨 위와 글쓴이로 보입니다.'; };
+      // Until the current values are read, nothing can be saved over them.
+      const ready = value => { loaded = value; name.readOnly = intro.readOnly = !value; section.dataset.state = value ? 'ready' : 'failed'; };
+      const read = async () => {
+        let value = null;
+        try { value = await blogSync.publicProfile(workspaceId); } catch (_) { value = null; }
+        if (!current()) return;
+        // Typed input is kept: only an editor that holds nothing new takes the values read.
+        if (value && !dirty()) { name.value = value.author.name; intro.value = value.author.intro; }
+        ready(value || loaded);
+        if (value) { showNote(value); state.replaceChildren(document.createTextNode('현재 저장된 값입니다.')); }
+        else state.replaceChildren(document.createTextNode('현재 공개 이름과 소개를 읽지 못했습니다. 읽기 전에는 저장하지 않습니다. '), button('다시 읽기', read));
+      };
+      const editor = { dirty, focus: () => name.focus({ preventScroll: true }) };
+      actions.append(button('저장', async () => {
+        if (!loaded) throw new Error('현재 공개 이름과 소개를 읽지 못했습니다. 다시 읽은 뒤 저장해 주세요.');
+        const value = await blogSync.savePublicProfile(workspaceId, { name: name.value, intro: intro.value });
+        if (!current()) return;
+        ready(value); showNote(value); state.replaceChildren(document.createTextNode('저장했습니다.'));
+        announce(value.posts ? '공개 이름과 소개를 저장했습니다. 공개 글 목록에 바로 보입니다.' : '공개 이름과 소개를 저장했습니다.');
+      }, true), button('닫기', async control => {
+        if (dirty()) {
+          const answer = await choose(control, { title: '저장하지 않은 공개 이름·소개', lines: ['고친 공개 이름과 소개를 저장하지 않았습니다. 닫으면 고친 내용은 버려집니다.'], choices: [['버리고 닫기', 'discard', true]] });
+          if (answer !== 'discard' || !current()) return;
+        }
+        closeProfile(); announce('공개 이름·소개를 닫았습니다.');
+      }));
+      section.append(state, nameLabel, introLabel, note, actions);
+      ready(null); profileEditor = editor; profileHost.replaceChildren(section);
+      await read();
+      if (current()) editor.focus();
+    }
     async function chooseEvidence(seed = {}) {
       if (!life.BlogEvidence?.create || !storage.savePhotoPostWithEvidence) throw new Error('근거를 연결할 준비가 되지 않았습니다. 원문과 글은 그대로 있습니다.');
       if (evidence?.dirty?.()) await evidence.flush();
@@ -582,12 +656,13 @@
     async function flush() {
       if (navigating) return true;
       if (busy) throw new Error('글 처리 결과를 확인한 뒤 이동해 주세요.');
+      if (profileEditor?.dirty()) throw new Error('공개 이름·소개를 저장하거나 닫은 뒤 이동해 주세요.');
       if (evidence?.dirty?.()) { if (evidence.flush) await evidence.flush(); else throw new Error('선택한 인용과 내 생각을 적용하거나 취소해 주세요.'); }
       return true;
     }
     async function mount(target, { evidenceSeed = null, viewState = null, postId = null, expectedRevision = null } = {}) {
       if (disposed) throw new Error('종료한 글 관리 화면입니다.');
-      if (host) { await flush(); clearPreview(); openDialog?.close(); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
+      if (host) { await flush(); clearPreview(); closeProfile(); openDialog?.close(); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
       focusedPostId = typeof postId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(postId) ? postId : null;
       if (postId !== null && !focusedPostId) throw new Error('관리할 글의 식별자를 확인해 주세요.');
       if (expectedRevision !== null && (!focusedPostId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1)) throw new Error('관리할 글의 정확한 판을 확인해 주세요.');
@@ -610,8 +685,13 @@
         const account = button('계정 보관 상태', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
         account.dataset.focusKey = 'blog:account-list'; account.id = 'blogAccountList'; surface.append(account);
       }
+      if (!focusedPostId && blogSync?.publicProfile && blogSync.savePublicProfile) {
+        const profileButton = button('공개 이름·소개', () => openProfile());
+        profileButton.dataset.focusKey = 'blog:public-profile'; profileButton.id = 'blogPublicProfile'; surface.append(profileButton);
+      }
       if (!focusedPostId) surface.append(button('자료 인용으로 새 글 쓰기', () => chooseEvidence()));
-      surface.append(detail, evidenceHost, list);
+      profileHost = el('div');
+      surface.append(profileHost, detail, evidenceHost, list);
       host.replaceChildren(surface);
       if (blogSync?.subscribe) subscriptions.push(blogSync.subscribe(event => {
         if (!valid()) return;
@@ -636,7 +716,7 @@
       await load();
       if (evidenceSeed && valid()) await chooseEvidence(evidenceSeed);
     }
-    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.(), dispose() { disposed = true; epoch++; clearPreview(); openDialog?.close(); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
+    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.() || !!profileEditor?.dirty(), dispose() { disposed = true; epoch++; clearPreview(); closeProfile(); openDialog?.close(); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
   }
   life.BlogManager = Object.freeze({ create });
 })(globalThis);

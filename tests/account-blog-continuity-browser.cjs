@@ -77,7 +77,8 @@ async function main() {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
     const bootstrap = await fs.readFile(path.resolve(__dirname, '../supabase/tests/blog-bootstrap.sql'), 'utf8');
     const sources = await Promise.all(migrations.map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
-    server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], [bootstrap, ...sources].join('\n'));
+    // The app publishes with an attachment choice and the saved public name (20261116120000).
+    server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], [bootstrap, ...sources, require('./helpers/blog-public-choice-sql.cjs').after('20261102120000')].join('\n'));
   }
   await server.initialize();
   const report = { pass: false, checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], servedHashes: [],
@@ -204,7 +205,8 @@ async function main() {
       await row.getByRole('button', { name: '공개 내용 검토', exact: true }).click();
       const preview = a.page.locator('.blog-manager-preview'); await preview.waitFor();
       assert.equal(await preview.locator('input[data-photo-id]:checked').count(), 0, 'no photo is public by default');
-      await a.page.getByRole('textbox', { name: '공개 이름', exact: true }).fill('합성 여행 블로그');
+      // The byline is the saved public name (2026-11-16, decision 7): saved in 공개 이름·소개, not typed here.
+      assert.equal(await preview.getByRole('textbox').count(), 0, 'the review has no name input');
       await preview.locator('input[data-photo-id="' + first.photos[0].id + '"]').check();
       await a.page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await a.page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
       await a.page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
