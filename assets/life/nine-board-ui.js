@@ -44,7 +44,11 @@
       status.dataset.syncState=saved.key;
       const retry=host.querySelector('.nb-sync-retry');if(retry){retry.hidden=saved.key!=='error'||!libraryMetaSync;retry.disabled=syncRetrying;}
       status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?(synced?'저장 중…':'이 브라우저에 저장 중…'):tick!==stored?'저장 전 변경 있음':saved.label;
-      status.dataset.state=failure?'error':dirty()?'dirty':'saved';importUpdate?.();onDirty();
+      status.dataset.state=failure?'error':dirty()?'dirty':'saved';
+      // 2026-11-16 owner: saving, and a stored board, are said to screen readers only (an older cached
+      // helper without the quiet flag: everything but a failure is quiet).
+      status.classList.toggle('life-save-quiet',!failure&&!pendingFields.size&&!manual&&(!!saving||tick===stored&&(saved.quiet??saved.key!=='error')));
+      importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
     function clear(){failure=null;if(error){error.textContent='';error.hidden=true;}const recovery=host?.querySelector('.nb-recovery');if(recovery)recovery.hidden=true;message();}

@@ -148,7 +148,9 @@ async function flow(browser, { label, viewport, hasTouch = false }) {
       await shot('marked');
       await durable(page, d => d.status === 'draft' && aiRuns(d.ops).join('') === 'AI suggested sentence.', 'autosaved mark');
       // The short note gives way to the save state once the autosave completes.
-      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent === '자동 저장됨', null, { timeout: 5000, label: 'save state shown again after the note' });
+      // 2026-11-16 owner: the save state is then said to screen readers only (the status line is clipped).
+      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent === '자동 저장됨' &&
+        /inset\(50%\)/.test(getComputedStyle(document.querySelector('.photo-commandbar .photo-status')).clipPath), null, { timeout: 5000, label: 'save state said again after the note, not shown' });
     });
     await check('② owner typing inside AI text is the owner\'s; one undo removes it', async () => {
       const before = await editorState(page);

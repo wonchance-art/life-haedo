@@ -16,19 +16,25 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   // Only an acknowledgement for this saved revision may claim account storage.
+  // quiet (2026-11-16 owner): the label is said to screen readers only. A save that went well, or an
+  // upload that is about to run, is not shown; a failure is, and so is a wait the sync engine reports
+  // as paused (an explicit pause(): it does not end by itself). not_enabled is not shown: it is the
+  // ordinary state of a composition never synced yet (a fresh account keeps it), with nothing to do;
+  // a state not read yet (null) is not a stop either, it would flash on every open.
   function savedPresentation(state, revision, { account, workspaceId, error = null } = {}) {
-    if (!account) return { key: 'local', label: '저장됨' };
+    if (!account) return { key: 'local', label: '저장됨', quiet: true };
     const binding = state?.binding;
     const matching = state?.workspaceId === workspaceId && binding?.remoteId === workspaceId &&
       binding?.userId === account.userId && binding?.projectUrl === account.projectUrl;
     if (error || state?.error || state?.conflict || state?.status === 'error' || state?.status === 'account_mismatch' || binding && !matching) {
-      return { key: 'error', label: '저장됨 · 계정에 올리지 못함 · 다시 시도' };
+      return { key: 'error', label: '저장됨 · 계정에 올리지 못함 · 다시 시도', quiet: false };
     }
     if (matching && state.enabled && state.status === 'synced' && !state.outbox &&
         state.remoteRevision > 0 && Number.isSafeInteger(revision) && revision >= 0 && state.syncedLocalRevision === revision) {
-      return { key: 'synced', label: '저장됨 · 계정에 올림' };
+      return { key: 'synced', label: '저장됨 · 계정에 올림', quiet: true };
     }
-    return { key: 'pending', label: '저장됨 · 계정에 올리기 대기' };
+    const stopped = state?.status === 'paused';
+    return { key: 'pending', label: '저장됨 · 계정에 올리기 대기', quiet: !stopped };
   }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
@@ -128,8 +134,12 @@
       const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
       const saved = savedPresentation(session.syncState, session.baseRevision, { account: storage.account, workspaceId: session.workspaceId, error: session.syncError });
       statusNode.dataset.syncState = saved.key;
+      const settled = !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty &&
+        session.edit === session.stored && session.remoteRevision <= session.baseRevision;
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? (managed ? '변경 반영 중…' : '이 기기에 저장 중…') : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
         hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : saved.label;
+      // 2026-11-16 owner: saving, and a settled save that went well, are said to screen readers only.
+      statusNode.classList.toggle('life-save-quiet', !!session.state && !session.error && (session.saving || settled && saved.quiet));
       statusNode.hidden = managed && !storage.account && !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
       if (syncRetry) { syncRetry.hidden = saved.key !== 'error' || !compositionSync; syncRetry.disabled = !!session.syncRetrying; }
       statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';

@@ -119,6 +119,8 @@
   }
   // Two steps (2026-11-02 decision 4): this device saved, then the account.
   // Read-only projections of BlogSync's statusOf; never "all devices".
+  // Since 2026-11-16 (owner) checking/saving/synced and a short pending are said to screen readers
+  // only (serverQuiet, .life-save-quiet); the words stay for them.
   const SERVER_LABELS = {
     checking: "저장됨 · 계정 확인 중",
     saving: "저장됨 · 계정에 올리는 중",
@@ -532,6 +534,11 @@
           : !e && !authorText && message === "자동 저장됨" && draftState() === "error" ? " · 계정에 올리지 못함" : "";
         if (statusDetail && statusDetail.textContent !== detail) statusDetail.textContent = detail;
         status.dataset.state = state;
+        // 2026-11-16 owner: the editor's 한글 입력 중…/자동 저장 중…/자동 저장됨 and the reader's 비공개 글을
+        // 저장했어요 are said to screen readers only (the draft list shows what was kept). A failure, a
+        // notice, and the recovery-copy sentence stay shown; an upload problem shows in the privacy pill.
+        status.classList.toggle("life-save-quiet", mode === "edit" ? state === "pending" || state === "draft" :
+          mode === "read" && state === "success" && !committedOver);
         // A long error does not fit the one-line slot on a phone (about 110px):
         // the stylesheet gives it its own line under the command row.
         if (e instanceof Error && !e.detail && String(message).length > 24) status.dataset.long = "true";
@@ -788,9 +795,17 @@
           // This device first, then the account, in the words a saved post uses.
           const account = doc.revision > 0 && dirtyTick === storedTick && !error && !composing ? draftState() : null;
           const failed = !unstored && error instanceof Error;
-          const state = row("저장", stateValue(account
+          // Only after a failure or a wait that has lasted: the first seconds of
+          // waiting are the normal upload delay.
+          const waited = account === "pending" && Date.now() - storedAt >= 15000;
+          const said = stateValue(account
             ? (SERVER_LABELS[account] || SERVER_LABELS.error).replace(/^저장됨 · /, "자동 저장됨 · ")
-            : statusText?.textContent || ""));
+            : statusText?.textContent || "");
+          // 2026-11-16 owner: as on the command row, a state that went well or is running is for screen
+          // readers only; a failure, a lasting wait and a notice are shown.
+          said.classList.toggle("life-sr-only", account ? ["checking", "saving", "synced"].includes(account) || account === "pending" && !waited
+            : !!status?.classList.contains("life-save-quiet"));
+          const state = row("저장", said);
           if (account) state.dataset.state = account;
           state.append(el("p", (unstored
             // Over a limit: the same fact the status line states.
@@ -803,9 +818,6 @@
               ? "이 기기에는 보관했지만 계정에는 올리지 못했습니다. 다시 올리기 전에는 다른 기기에서 보이지 않습니다."
               : "초안은 이 기기에 먼저 보관하고 곧 계정에 비공개로 올립니다. 올린 뒤에는 로그인한 다른 기기에서 이어 쓸 수 있습니다.") +
             " 글 저장을 눌러야 글 목록에 올라갑니다.", "photo-info-note photo-server-scope"));
-          // Only after a failure or a wait that has lasted: the first seconds of
-          // waiting are the normal upload delay.
-          const waited = account === "pending" && Date.now() - storedAt >= 15000;
           if ((["not_enabled", "error"].includes(account) || waited) && !draftBusy && blogSync?.saveDefault) {
             const retry = button("계정에 다시 올리기", uploadDraft);
             retry.classList.add("photo-info-action");
@@ -815,10 +827,11 @@
           if (doc.replaces)
             row("수정", el("span", "저장한 글을 고치는 중입니다. 글 저장을 누르면 원래 글을 이 내용으로 바꿉니다.", "photo-info-value"));
         } else if (saved) {
-          const value = serverState() || "checking";
-          const state = row("저장", stateValue(SERVER_LABELS[value] || SERVER_LABELS.error));
+          const value = serverState() || "checking", quiet = serverQuiet(value), said = stateValue(SERVER_LABELS[value] || SERVER_LABELS.error);
+          said.classList.toggle("life-sr-only", quiet);
+          const state = row("저장", said);
           state.dataset.state = value;
-          if (["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
+          if (!quiet && ["not_enabled", "pending", "error"].includes(value) && !serverBusy) {
             const retry = button("계정에 다시 올리기", saveServer);
             retry.classList.add("photo-info-action");
             retry.dataset.infoFocus = "retry";
@@ -1999,14 +2012,20 @@
         if (readStale) refreshRead();
       }
     }
+    // 2026-11-16 owner: checking, uploading and uploaded are said to screen readers only, and so is a
+    // wait for the upload that follows a save. A wait is shown (with its retry) only once a sync pass
+    // could not reach the account (offline, sign-in expired), the same sign the draft's state reads.
+    const serverQuiet = (state) => ["checking", "saving", "synced"].includes(state) || state === "pending" && !blogSync?.getStatus?.()?.lastError;
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
       const state = serverState() || "checking";
       serverStatus.textContent = SERVER_LABELS[state] || SERVER_LABELS.error;
       serverStatus.dataset.state = state;
       serverStatus.dataset.postId = doc.id;
+      const quiet = serverQuiet(state);
+      serverStatus.classList.toggle("life-save-quiet", quiet);
       serverActions.replaceChildren();
-      if (["not_enabled", "pending", "error"].includes(state)) {
+      if (!quiet && ["not_enabled", "pending", "error"].includes(state)) {
         // Next to "계정에 올리지 못함": the visible label is the action itself.
         const retry = button("다시 시도", saveServer);
         retry.id = "photoServerRetry";

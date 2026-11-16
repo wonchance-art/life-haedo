@@ -58,7 +58,9 @@ async function posts(page) {
 }
 const serverPosts = server => [...server.posts.values()].map(row => ({ id: row.id, status: row.data.status, title: row.data.title, text: (row.data.ops || []).map(op => typeof op.insert === 'string' ? op.insert : '').join('').trim() }));
 const editor = page => page.evaluate(() => ({ title: document.querySelector('#photoTitle')?.value ?? null, body: document.querySelector('.ql-editor')?.innerText.trim() ?? null,
-  status: document.querySelector('.photo-status')?.textContent ?? null, note: document.querySelector('.photo-edit-note')?.textContent ?? '' }));
+  status: document.querySelector('.photo-status')?.textContent ?? null, note: document.querySelector('.photo-edit-note')?.textContent ?? '',
+  // 2026-11-16: a quiet save state is said to screen readers (status) and clipped off screen.
+  quiet: !!document.querySelector('.photo-status') && /inset\(50%\)/.test(getComputedStyle(document.querySelector('.photo-status')).clipPath) }));
 const typeTop = (page, text) => page.evaluate(value => Quill.find(document.querySelector('.ql-container')).insertText(0, value, 'user'), text);
 async function writeDraft(page, title, body) {
   await page.locator('[data-haedo-compose]:visible').first().click();
@@ -326,7 +328,7 @@ async function main() {
         await until(async () => { await kick(a.page); return editor(a.page); }, value => /이 수정을 글로 저장했어요 · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요/.test(value.note), 'the Mac says so and keeps the editor');
         assert.equal(await a.page.locator('.ql-editor').count(), 1);
         await a.page.locator('#photoTitle').evaluate(n => { n.value = '맥이 나중에 고친 제목'; n.dispatchEvent(new CompositionEvent('compositionend', { data: '' })); });
-        await until(async () => editor(a.page), value => value.status === '자동 저장됨', 'the Mac input is stored');
+        await until(async () => editor(a.page), value => value.status === '자동 저장됨' && value.quiet, 'the Mac input is stored (said, not shown)');
         await a.page.getByRole('button', { name: '글 저장', exact: true }).click(); await a.page.locator('.photo-article').waitFor();
         const converged = list => list.filter(item => item.status === 'saved').length === 1 && list.some(item => item.status === 'saved' && item.title === '맥이 나중에 고친 제목') &&
           list.some(item => item.status === 'draft' && item.title === KEPT + '다듬는 글' && /폰 마무리 둘/.test(item.text));

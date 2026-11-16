@@ -262,6 +262,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 .schedule-entries .life-text-button:focus-visible { outline: 2px solid var(--haedo-focus, #3156d3); outline-offset: 2px; border-radius: 4px; }
 .schedule-entry-status { margin: 4px 0 0; }
 .schedule-entry-status[data-state=error] { color: var(--color-error); }
+/* 2026-11-16: a quiet state line (screen readers only) that a finished retry hands focus to shows while
+   it has that focus, so the keyboard focus is never on something invisible. */
+.schedule-entry-status.life-sr-only:focus { position: static; width: auto; height: auto; margin: 4px 0 0; overflow: visible; clip-path: none; white-space: normal; }
 
 .schedule-plan-list { display: grid; }
 .schedule-plan-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; align-items: center; width: 100%; min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }

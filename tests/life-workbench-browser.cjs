@@ -24,6 +24,8 @@ async function storedState(page, view) {
   const status=page.locator('#wbStatus[data-state="saved"]'); await status.waitFor({state:'attached'});
   // This account-scoped fixture has no account upload acknowledgement.
   assert.equal(await status.textContent(),'저장됨 · 계정에 올리기 대기');
+  // 2026-11-16 owner: an upload about to run is said to screen readers only.
+  assert.equal(await status.evaluate(n=>/inset\(50%\)/.test(getComputedStyle(n).clipPath)),true,'said, not shown');
   if(view==='workbench-backup') {
     assert.equal(await status.isHidden(),true);
     assert.equal(await page.locator('#wbBackupDownload').isVisible(),true);

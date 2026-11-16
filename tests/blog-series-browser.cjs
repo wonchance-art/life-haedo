@@ -248,6 +248,7 @@ async function main() {
       // This account-scoped fixture saved locally without an account upload acknowledgement.
       assert.equal(await f.page.locator('#wbStatus').getAttribute('data-state'), 'saved');
       assert.equal((await f.page.locator('#wbStatus').textContent()).trim(), '저장됨 · 계정에 올리기 대기');
+      assert.equal(await f.page.locator('#wbStatus').evaluate(n => /inset\(50%\)/.test(getComputedStyle(n).clipPath)), true, '2026-11-16: said to screen readers, not shown');
       const marks = f.page.locator('.blog-series-reader-body .blog-ai-text');
       assert.deepEqual(await marks.allTextContents(), ['AI가 다듬은 문장', '밑줄 친 AI 문장', '링크 단 AI 문장'], 'only the marked sentences are shown as AI text');
       // The dotted line is a background image, so an underline or a link on the same text cannot cover it (review m1).

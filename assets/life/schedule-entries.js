@@ -140,7 +140,7 @@
     return m;
   }
   global.document?.addEventListener('haedo:signed-out', () => { current?.stop(); current = null; });
-  // Two-step save state (2026-11-02 owner decision).
+  // Two-step save state (2026-11-02 owner decision; since 2026-11-16 only the error is shown, see paint()).
   // The error state is followed by its own [다시 시도] button (2026-11-08 S9, the same line as platform-ui.js), so
   // the words are not said twice.
   const STATE_TEXT = { ok: '저장됨 · 계정에 올림', pending: '계정에 올리기 대기', error: '계정에 올리지 못함 ·' };
@@ -458,6 +458,11 @@
       const state = [itemState, moodState].includes('error') ? 'error' : [itemState, moodState].includes('pending') ? 'pending' : 'ok';
       const unseen = s.recoveryUnseen;
       status.hidden = !dirty && state === 'ok' && !unseen && !mirrorError;
+      // 2026-11-16 owner: 저장됨 · 계정에 올림 and the upload that follows a change (계정에 올리기 대기: this
+      // line has no paused or offline state of its own) are said to screen readers only, out of the
+      // layout like the goals·habits·연표 line. A failure and the recovery-copy notice are shown. The line
+      // a successful retry hands keyboard focus to shows while it has that focus (schedule.css).
+      status.classList.toggle('life-sr-only', state !== 'error' && !unseen && !mirrorError);
       // The status line is a live region: it is rebuilt only when what it says changes (review 3 n1), so a
       // repaint for another reason (a 행복도 notice, a store notice) does not have it read out again.
       const said = JSON.stringify([state, unseen, mirrorError]);

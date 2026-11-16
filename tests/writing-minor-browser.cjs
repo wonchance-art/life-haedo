@@ -8,6 +8,7 @@
 const H = require('./helpers/writing-input.cjs'), { assert } = H;
 const { session: accountSession } = require('./life-sync-browser.cjs');
 const { ready, settle } = require('./unified-home-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 const draftWith = (page, text) => H.stored(page, rows => rows.some(row => row.status === 'draft' && row.text.includes(text)), 'draft holding ' + JSON.stringify(text.slice(0, 20)));
 const blocks = page => page.locator('.photo-block').count();
 const blockIds = page => page.evaluate(() => [...document.querySelectorAll('.photo-block')].map(node => node.dataset.photoId));
@@ -26,6 +27,8 @@ const info = async page => {
   return text;
 };
 const focusWindow = page => page.evaluate(() => dispatchEvent(new Event('focus')));
+// The 글 정보 sheet's save state: said is what a screen reader gets, shown what is on screen (2026-11-16).
+const sheetState = page => saveStatus(page.locator('dialog.photo-info [data-info-focus="save-state"]'));
 
 H.run(__filename, {
   // m3: the 20-photo limit counts the photos the body uses, not ones already taken out.
@@ -129,17 +132,19 @@ H.run(__filename, {
     await page.locator('#photoTitle').fill('연결 없이 쓰는 초안');
     await page.locator('.ql-editor').click(); await page.keyboard.type('연결 없이 쓴 문장.');
     await draftWith(page, '연결 없이 쓴 문장.');
-    assert.equal((await H.status(page)).text, '자동 저장됨', 'this device stored it');
+    assert.deepEqual(await H.status(page).then(value => [value.text, value.shown]), ['자동 저장됨', ''], 'this device stored it: said, not shown');
     await H.until(() => page.locator('.photo-privacy').getAttribute('data-state'), state => state === 'problem', 'the top line shows the upload problem', 20000);
     assert((await page.locator('.photo-privacy').innerText()).includes('올리기 실패'));
     const offline = await info(page);
     assert(offline.includes('자동 저장됨 · 계정에 올리지 못함'), offline);
+    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올리지 못함', shown: '자동 저장됨 · 계정에 올리지 못함' }, 'a failed upload is shown');
     assert(!/계정에 비공개로 자동 보관되어/.test(offline), 'no claim that the account has it: ' + offline);
     assert.equal(server.posts.size, 0);
     // Connection back: the retry beside the state uploads it and the state follows.
     net.down = false;
     await page.locator('dialog.photo-info').getByRole('button', { name: '계정에 다시 올리기', exact: true }).click();
     await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'uploaded after the retry', 20000);
+    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올림', shown: '' }, 'uploaded: said, not shown');
     assert.equal([...server.posts.values()].filter(row => row.data.status === 'draft').length, 1);
     await page.keyboard.press('Escape');
     await H.until(() => page.locator('.photo-privacy').getAttribute('data-state'), state => state !== 'problem', 'the problem mark is gone');
@@ -148,9 +153,11 @@ H.run(__filename, {
     await draftWith(page, '이어 쓴 문장.');
     const waiting = await info(page);
     assert(waiting.includes('자동 저장됨 · 계정에 올리기 대기'), waiting);
+    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올리기 대기', shown: '' }, 'the normal upload delay: said, not shown');
     // The first seconds of waiting are the normal upload delay: no retry is offered yet.
     assert(!waiting.includes('계정에 다시 올리기'), 'no retry while the upload is simply due: ' + waiting);
     await H.until(() => page.locator('dialog.photo-info').innerText(), text => text.includes('자동 저장됨 · 계정에 올림'), 'the open sheet follows the upload', 20000);
+    assert.deepEqual(await sheetState(page), { said: '자동 저장됨 · 계정에 올림', shown: '' });
   },
   // m8: input typed after the last autosave survives the page closing, and belongs to its account.
   async 'pagehide-recovery'({ open }) {
@@ -282,7 +289,7 @@ H.run(__filename, {
     await b.locator('#photoServerStatus[data-state="synced"]').waitFor({ timeout: 20000 });
     await a.bringToFront(); await focusWindow(a);
     await H.until(() => a.locator('.photo-article').innerText(), text => text.includes('다른 기기에서 고친 문장.'), 'the reading device shows the new content without a reload', 45000);
-    await H.until(() => a.locator('#photoServerStatus').innerText(), text => text === '저장됨 · 계정에 올림', 'with the state of what is shown', 20000);
+    await H.until(() => saveStatus(a.locator('#photoServerStatus')), value => value.said === '저장됨 · 계정에 올림' && value.shown === '', 'with the state of what is shown (said, not shown)', 20000);
     assert.equal(await H.mode(a), 'read');
   },
   // m4: an address kept from before an edit opens the post that took its place; an unknown one opens the list with a notice, never an empty editor.

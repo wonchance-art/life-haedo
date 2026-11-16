@@ -45,7 +45,8 @@ async function main() {
     await openCompatibility(p);
     await p.getByRole('button', { name: '글쓰기', exact: true }).waitFor();
   };
-  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '자동 저장됨');
+  // 2026-11-16: 자동 저장됨 stays in the live region for screen readers and is clipped off screen.
+  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '자동 저장됨' && /inset\(50%\)/.test(getComputedStyle(document.querySelector('.photo-status')).clipPath));
   const read = () => page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, w = await s.getActive(), index = await s.listPhotoPosts(w);
     return { w, index, docs: await Promise.all(index.map(v => s.readPhotoPost(w, v.id))) };
