@@ -114,6 +114,7 @@ const PINNED = {
     "Discovery",
     "DiscoveryActions",
     "DiscoveryLanguageSettings",
+    "DiscoveryPick",
     "DiscoveryPrivateRemote",
     "DiscoveryProfile",
     "DiscoveryReaderUI",
