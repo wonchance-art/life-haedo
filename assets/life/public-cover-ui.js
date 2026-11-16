@@ -33,6 +33,8 @@
     function notice() {
       if (!alive()) return;
       saveStatus.textContent = saveFailure ? '저장하지 못함 · 입력 유지' : loading ? '표지를 불러오는 중…' : composing.size ? '입력 중' : pending.size ? '문자·길이 확인 필요 · 입력 유지' : saving ? '보관 중…' : tick !== stored ? '보관 전 변경 있음' : '계정에 비공개로 자동 저장됨';
+      // 2026-11-16 owner: saving, and a stored state, are said to screen readers only (.life-save-quiet keeps the line's box).
+      saveStatus.classList.toggle('life-save-quiet', !saveFailure && !loading && !composing.size && !pending.size && (!!saving || tick === stored));
       saveStatus.dataset.state = saveFailure || pending.size ? 'error' : dirty() ? 'dirty' : 'saved'; surface.setAttribute('aria-busy', String(loading || acting || !!saving));
       renderErrors(); onDirty();
     }

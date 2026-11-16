@@ -22,6 +22,8 @@
     function message() {
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? (synced ? '저장 중…' : '이 브라우저에 저장 중…') : tick !== stored ? '저장 전 변경 있음' : synced ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨';
+      // 2026-11-16 owner: saving, and a stored state, are said to screen readers only (.life-save-quiet keeps the line's box).
+      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !sourceLoading && !sources?.pending() && !composing.size && (!!saving || tick === stored));
       updateControls();
     }
     function updateControls() {
@@ -339,7 +341,7 @@
       if (!persisted?.output || JSON.stringify({ ...persisted, output: null }) !== baseline) throw fault('material_writing_conflict', '글 초안은 보관했습니다. 다른 탭에서 준비가 바뀌어 현재 입력은 유지했습니다. 내 변경을 새 준비 사본으로 보관해 주세요.');
       owner.output = clone(persisted.output); state = { ...clone(latest), plans: latest.plans.map(value => value.id === owner.id ? owner : clone(value)) }; clear(); renderOutput();
       if (version !== tick || composing.size || pendingFields.size || sources?.pending()) {
-        status.textContent = '글 초안은 보관했습니다. 그동안의 입력은 이 화면에 남아 있습니다. 입력을 마친 뒤 이어서 쓰기를 눌러 주세요.'; return;
+        status.textContent = '글 초안은 보관했습니다. 그동안의 입력은 이 화면에 남아 있습니다. 입력을 마친 뒤 이어서 쓰기를 눌러 주세요.'; status.classList.remove('life-save-quiet'); return;
       }
       if (typeof onOpenPost !== 'function') throw new Error('글 초안은 보관했습니다. 기존 작성기를 열 수 없으니 글 목록에서 다시 열어 주세요.');
       if (owner.output.postId !== result.postId) { const current = await storage.readPhotoPost(workspaceId, owner.output.postId); if (!mounted(token)) return; result = { ...result, postId: current.id, revision: current.revision }; }

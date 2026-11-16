@@ -21,6 +21,8 @@
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력을 확인해 주세요 · 입력 유지' : composing.size ? '입력 중' : saving ? '이 브라우저에 저장 중…' : tick !== stored ? '저장 전 변경 있음' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
+      // 2026-11-16 owner: saving, and a stored state, are said to screen readers only (.life-save-quiet keeps the line's box).
+      status.classList.toggle('life-save-quiet', !failure && !pendingFields.size && !composing.size && (!!saving || tick === stored));
       const recovery = surface.querySelector('.bs-recovery');
       if (recovery) { recovery.hidden = !failure; recovery.querySelector('#bsRecover').hidden = !conflict(); }
       onDirty();
@@ -200,7 +202,7 @@
         if (!mounted(candidate.epoch)) return;
         if (version !== tick || composing.size || pendingFields.size) throw fault('blog_series_conflict', '모음 사본은 보관했습니다. 현재 입력을 유지했으니 입력을 마친 뒤 새 모음으로 보관해 주세요.');
         M.validate(next); state = clone(next); selected = result.seriesId; stored = tick; importReceipt = null; clear(); render();
-        status.textContent = '현재 계정의 새 비공개 모음으로 불러왔습니다. 기존 모음은 유지했습니다.';
+        status.textContent = '현재 계정의 새 비공개 모음으로 불러왔습니다. 기존 모음은 유지했습니다.'; status.classList.remove('life-save-quiet');
       }, { id: 'bsImportConfirm', primary: true }), button('파일 취소', () => { clearImport(); surface.querySelector('#bsImport')?.focus(); }, { id: 'bsImportCancel' }));
       surface.querySelector('.bs-toolbar').after(panel);
     }
@@ -220,7 +222,7 @@
         throw fault('blog_series_conflict', '사본은 보관했습니다. 그동안 입력한 변경은 이 화면에 남아 있습니다. 현재 변경도 새 모음으로 보관해 주세요.');
       }
       state = clone(saved); selected = copy.id; stored = tick; clear(); render();
-      status.textContent = '내 변경을 새 모음에 보관했습니다. 다른 탭의 모음도 유지했습니다.';
+      status.textContent = '내 변경을 새 모음에 보관했습니다. 다른 탭의 모음도 유지했습니다.'; status.classList.remove('life-save-quiet');
     }
     function renderEditor() {
       editor.replaceChildren(); entries = null; candidates = null;

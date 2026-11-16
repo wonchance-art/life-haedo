@@ -122,7 +122,10 @@
       const state = local || text === '계정에 올리지 못함' ? 'error' : text === '저장 중…' ? 'saving' : text ? current.account : 'none';
       surface.dataset.saveState = state;
       // Like goals·habits·연표: a settled 저장됨 · 계정에 올림 (or nothing to say) stays for screen readers only.
-      value.parentElement.dataset.idle = String(state === 'ok' || state === 'none');
+      // 2026-11-16 owner: so do 저장 중… and an upload about to run (계정에 올리기 대기 while online); offline
+      // the wait does not end by itself and is shown.
+      const waiting = state === 'pending' && root.navigator?.onLine !== false;
+      value.parentElement.dataset.idle = String(state === 'ok' || state === 'none' || state === 'saving' || waiting);
       surface.dataset.dirty = String(dirty()); surface.setAttribute('aria-busy', String(!!writing || !!current.reading));
       const error = surface.querySelector('#apError'); error.textContent = current.error || ''; error.hidden = !current.error;
       const notice = surface.querySelector('#apNotice'), said = notice.querySelector('span');

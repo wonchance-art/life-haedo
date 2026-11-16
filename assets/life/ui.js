@@ -536,7 +536,8 @@
         const origin = viewOrigins.get('write');
         const returnContext = origin?.mode === 'home' && origin.workspaceId === workspaceId ? { ...origin, homeState: { ...origin.homeState, tab: 'posts' }, homeAnchor: { kind: 'source', id: sourceId, committed: true } } : null;
         await navigate('source', { sourceId, sourceVersionId, locator: null, ...(returnContext ? { returnContext } : {}) });
-        announce('비공개 글을 저장했습니다.');
+        // 2026-11-16 owner: a save that went well is said to screen readers only.
+        announce('비공개 글을 저장했습니다.', { quiet: true });
       }
     });
 
@@ -666,6 +667,10 @@
       state.status = saved.prefix + ' · ' + presentation.label;
       status.textContent = state.status;
       status.dataset.saveState = presentation.key;
+      // 2026-11-16 owner: 모음에 반영됨 · 저장됨 (· 계정에 올림 / an upload about to run) is said to screen
+      // readers only; a failure with its 다시 시도, and a paused sync, are shown. An older cached helper
+      // without the quiet flag: everything but a failure is quiet.
+      status.classList.toggle('life-sr-only', presentation.quiet ?? presentation.key !== 'error');
       if (presentation.key === 'error' && sync) status.append(button('다시 시도', guarded(async () => {
         await sync.syncNow(saved.workspaceId);
         if (sourceSaveNotice === saved) await refreshSync();
@@ -910,7 +915,7 @@
             state.savedTick = tick;
             state.stageFailed = false;
             markBatchStageSaved(saved);
-            if (!dirty()) announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
+            if (!dirty()) announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.', { quiet: true });
           }
         } catch (cause) {
           state.stageFailed = true;
@@ -1244,7 +1249,7 @@
           actions.append(button('입력 확인', guarded(() => openBatchItem(item))), button('다시 초안 보관', guarded(async () => {
             const saved = await storage.saveStage(item.unsaved);
             item.stageId = saved.stageId; item.status = 'draft'; delete item.unsaved; item.message = '';
-            await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
+            await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.', { quiet: true });
           })));
         }
         if (!batch.reading && ['failed', 'unread'].includes(item.status) && !item.unsaved && !item.stageId) {
@@ -1286,6 +1291,9 @@
       libraryReview.hidden = presentation.key !== 'conflict';
       const materialView = ['sources', 'topics', 'sync', 'manage', 'activities', 'collection', 'page', 'reflection', 'books'].includes(state.mode);
       libraryStatus.hidden = state.mode === 'manage' || !materialView && !['error', 'conflict'].includes(presentation.key);
+      // 2026-11-16 owner: 계정 자료 확인 중…, 계정에 보관 중… and 계정에 보관됨 are said to screen readers
+      // only; 연결되면 보관합니다 (with its 다시 시도), a conflict and a failure are shown.
+      libraryStatus.classList.toggle('life-sr-only', ['checking', 'syncing', 'synced'].includes(presentation.key));
       const managementStatus = main.querySelector('#lifeManagementSyncStatus');
       if (managementStatus) managementStatus.textContent = presentation.label;
       const syncStatus = main.querySelector('#lifeSyncStatus');
