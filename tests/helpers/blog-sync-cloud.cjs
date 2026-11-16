@@ -3,8 +3,11 @@
  * (serialized in-memory IndexedDB adapter) and BlogSync; they share only a
  * synthetic private blog server that follows the SQL CAS/receipt/deletion
  * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql,
- * 20261101160000_life_blog_delete_guard.sql and the public photo copies of
- * 20261102120000_life_blog_public_photo_copies.sql. */
+ * 20261101160000_life_blog_delete_guard.sql, the public photo copies of
+ * 20261102120000_life_blog_public_photo_copies.sql and the revision continuity of
+ * 20261112120000_life_blog_revision_continuity.sql (a post created again under a deleted
+ * identity continues after the highest revision it reached). server({ reuseRevisions: true })
+ * keeps the earlier rule (created again at revision 1) for checks that show what it loses. */
 const assert = require('node:assert/strict');
 const { createStorage } = require('../../assets/life/storage.js');
 const Core = require('../../assets/life/core.js'), Photo = require('../../assets/life/photo-post.js'), Blog = require('../../assets/life/blog.js');
@@ -58,8 +61,8 @@ function memoryIdb() {
   } } };
 }
 
-function server() {
-  const rows = new Map(), assets = new Map(), receipts = new Map(), stats = { saves: [], uploads: [], copyUploads: [], downloads: 0, deletes: [], removed: [], publishes: [] };
+function server({ reuseRevisions = false } = {}) {
+  const rows = new Map(), assets = new Map(), receipts = new Map(), retired = new Map(), stats = { saves: [], uploads: [], copyUploads: [], downloads: 0, deletes: [], removed: [], publishes: [] };
   const control = { failUpload: null, failSave: null, loseSave: false, holdUpload: null };
   // The server commit time (updated_at) follows the devices' shared test
   // clock once a device joins, like clock_timestamp() on the real server; it
@@ -128,7 +131,7 @@ function server() {
         if (existing && existing.revision !== request.expectedRevision) return { status: 'conflict', revision: existing.revision };
         if (existing?.data.status === 'saved' && request.data.status === 'draft') throw fault('invalid_request');
         if (!ready(request.postId, request.data)) throw fault('invalid_request');
-        const revision = request.expectedRevision + 1;
+        const revision = existing ? existing.revision + 1 : reuseRevisions ? 1 : (retired.get(request.postId) || 0) + 1;
         rows.set(request.postId, { id: request.postId, workspace_id: request.workspaceId, revision, data: copy(request.data), updated_at: stamp(), publication: existing?.publication || null });
         const result = { status: 'stored', revision }; receipts.set(request.operationId, { request: copy(request), result });
         if (control.loseSave) { control.loseSave = false; throw fault('network_error'); }
@@ -139,7 +142,7 @@ function server() {
         const row = rows.get(postId);
         if (row && expected !== null && row.revision !== expected) return { status: 'conflict', revision: row.revision };
         if (row?.publication?.active) return { status: 'published', revision: row.revision }; // 20261101160000
-        if (row) { rows.delete(postId); for (const [at, asset] of assets) if (at.startsWith(USER + '/' + postId + '/')) asset.deleted = true; }
+        if (row) { rows.delete(postId); retired.set(postId, Math.max(retired.get(postId) || 0, row.revision)); for (const [at, asset] of assets) if (at.startsWith(USER + '/' + postId + '/')) asset.deleted = true; }
         const paths = [...assets].filter(([at, asset]) => at.startsWith(USER + '/' + postId + '/') && asset.deleted).map(([at]) => at).sort();
         return { status: row ? 'deleted' : 'missing', revision: row?.revision || 0, paths };
       },
@@ -160,7 +163,7 @@ function server() {
       dispose() { disposed = true; }, get disposed() { return disposed; }
     };
   }
-  return { rows, assets, receipts, stats, control, client, useClock(time) { serverClock ||= time; } };
+  return { rows, assets, receipts, retired, stats, control, client, useClock(time) { serverClock ||= time; } };
 }
 
 function clock(start = Date.UTC(2026, 10, 1, 12)) { const value = { now: start }; value.advance = ms => { value.now += ms; }; return value; }

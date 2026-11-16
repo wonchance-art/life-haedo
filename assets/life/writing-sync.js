@@ -60,7 +60,7 @@
           if (event.type === 'writing_sync_changed') listener({ workspaceId: id, type: 'composition_sync_changed' });
         })
       };
-      const sourceAdapter = { getState: () => sourceSync.getState(ws), syncNow: () => sourceSync.syncNow(ws),
+      const sourceAdapter = { getState: () => sourceSync.getState(ws, LIGHT), syncNow: () => sourceSync.syncNow(ws),
         subscribe: listener => sourceSync.subscribe(event => { if (event.workspaceId === ws) listener({ workspaceId: id }); }) };
       const transport = { read: () => remote.read(ws, id), write: request => remote.write({ ...request, workspaceId: ws, draftId: id }) };
       // A new piece of writing (no original it edits, not yet saved as a record) points at no
@@ -73,6 +73,10 @@
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
     }
+    // The originals' state is read here only for enabled, binding, status and remoteRevision: the display
+    // summary (2026-11-12, getSyncState's light read) is enough and does not copy the workspace. A sync
+    // engine that does not know the option ignores it.
+    const LIGHT = Object.freeze({ light: true });
     async function getState(ws, id) {
       guard(); const epoch = auth.epoch;
       const stage = await storage.getStage(id); guard(epoch);
@@ -89,10 +93,10 @@
     }
     async function sourceReady(ws, floor = 1) {
       guard(); const epoch = auth.epoch;
-      const before = await sourceSync.getState(ws); guard(epoch);
+      const before = await sourceSync.getState(ws, LIGHT); guard(epoch);
       if (!before.enabled || !same(before.binding)) throw fault('writing_source_pending');
       await sourceSync.syncNow(ws); guard(epoch);
-      const after = await sourceSync.getState(ws); guard(epoch);
+      const after = await sourceSync.getState(ws, LIGHT); guard(epoch);
       if (!after.enabled || !same(after.binding) || after.status !== 'synced' || after.remoteRevision < floor) throw fault('writing_source_pending');
     }
     async function listRemote(ws, after = null) {
@@ -151,7 +155,7 @@
         for (let next = targets; ; ) {
           guard(); const epoch = auth.epoch; let ready = false;
           for (const ws of next ? next.filter(value => waiting.has(value)) : [...waiting]) {
-            let state = null; try { state = await sourceSync.getState(ws); } catch (_) { /* Not ready yet. */ }
+            let state = null; try { state = await sourceSync.getState(ws, LIGHT); } catch (_) { /* Not ready yet. */ }
             guard(epoch);
             if (originalsReady(state)) { waiting.delete(ws); ready = true; }
           }
@@ -172,7 +176,7 @@
       // An originals event that lands while this read is in flight may already be past: check again.
       const seen = sourceEvents, wait = () => { waiting.add(ws); if (sourceEvents !== seen) onSource({ type: 'state', workspaceId: ws }); };
       let source;
-      try { source = await sourceSync.getState(ws); } catch (error) { wait(); throw error; }
+      try { source = await sourceSync.getState(ws, LIGHT); } catch (error) { wait(); throw error; }
       guard(epoch);
       if (originalsReady(source)) waiting.delete(ws); else wait();
       if (!source?.enabled || !same(source.binding)) return;
@@ -283,9 +287,16 @@
         } while (again && !disposed);
       } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
     }
-    function nudge() {
-      if (disposed || suspended || parked || soon) return;
-      soon = root.setTimeout(() => { soon = null; wake(); }, 3000); soon?.unref?.();
+    // A visible page gathers saves for 3 s. A save of its own that lands while the page is hidden
+    // (typed, switched away at once, and the autosave came after the switch) goes out a quarter
+    // of a second later, as BlogSync sends a hidden page's saves: the system may freeze a hidden
+    // page within seconds (2026-11-12, 11-11 sync review m1: 3 s before).
+    let soonDue = 0;
+    function nudge(delay = 3000) {
+      if (disposed || suspended || parked) return;
+      if (soon) { if (soonDue <= Date.now() + delay) return; root.clearTimeout(soon); }
+      soonDue = Date.now() + delay;
+      soon = root.setTimeout(() => { soon = null; wake(); }, delay); soon?.unref?.();
     }
     // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
     // reads no body for drafts that did not change on either side.
@@ -294,7 +305,7 @@
       if (event.local === true) mine.add(event.workspaceId + '/' + event.stageId);
       // A hidden page reacts to its own saves only.
       else if (hidden()) return;
-      nudge();
+      nudge(hidden() ? 250 : 3000);
     }
     function start() { guard(); if (started) return; started = true;
       wiring = syncLifecycle()?.attach(root, {

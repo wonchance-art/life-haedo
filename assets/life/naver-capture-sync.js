@@ -237,7 +237,7 @@
     const receipts = () => root.HaedoLife?.NaverMediaReceipt || (typeof require === 'function' && require('./naver-media-receipt.js'));
     async function sourceReady(c) {
       if (!storage.getSyncState) return false;
-      const state = await step(c, () => storage.getSyncState(c.workspaceId));
+      const state = await step(c, () => storage.getSyncSummary ? storage.getSyncSummary(c.workspaceId) : storage.getSyncState(c.workspaceId));
       const bundle = await step(c, () => storage.read(c.workspaceId));
       return state?.enabled === true && state.status === 'synced' && !state.outbox && !state.conflict &&
         state.binding?.userId === owner.userId && state.binding?.projectUrl === owner.projectUrl &&

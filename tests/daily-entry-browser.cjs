@@ -545,6 +545,9 @@ async function main() {
     const chart = page => asked(page, () => ({ page: location.pathname.split('/').pop(), text: document.querySelector('#timelineAccessMessage')?.innerText ?? null, retry: document.querySelector('#timelineRetry') ? !document.querySelector('#timelineRetry').hidden : null }));
     await check('m2: timeline.html whose account check takes 25 seconds: opened again with 다시 확인 it says the connection is slow, offers 다시 확인 at 10 s while the check goes on, and goes on when the check is answered', async ({ page, context }) => {
       await watchAuth(page, true);
+      // Nothing of the account is read before its check is answered (the safety rule in AGENTS.md).
+      const documents = []; page.on('request', request => { if (/\/rest\/v1\/haedo_documents/.test(request.url())) documents.push(request.url()); });
+      const unopened = () => asked(page, () => ({ context: window.HAEDO_CONTEXT === undefined, app: !document.querySelector('script[src="assets/app.js"]') }));
       await page.goto(base + '/timeline.html');
       await checks.out(page, 1); await pageShown(page);
       assert.deepEqual(await chart(page), { page: 'timeline.html', text: CHECKING, retry: false });
@@ -563,12 +566,18 @@ async function main() {
       assert.deepEqual([await chart(page), (await timeline(page)).checks[0].ended], [{ page: 'timeline.html', text: '연표를 열지 못했습니다. 연결이 끊겼거나 느립니다. 다시 확인해 주세요. 기기 사본은 보존했습니다.', retry: true }, null],
         'the notice and the button, with the same check still out');
       await page.clock.runFor(15000);
+      assert.deepEqual([documents.length, await unopened()], [0, { context: true, app: true }], 'no document of the account read and no 연표 code run while the check is out');
       // Answered at 25 s: the page goes on to read its documents, and says so instead of the notice (no 다시 확인).
       let read; const reading = new Promise(resolve => { read = resolve; });
       await context.route(/\/rest\/v1\/haedo_documents/, async route => { await reading; await route.fallback().catch(() => { /* The page moved on. */ }); });
       await checks.answer(page, 1);
       await until(async () => (await chart(page))?.text === '연표를 불러오고 있습니다.', 'the timeline page to say it is reading');
       assert.deepEqual(await chart(page), { page: 'timeline.html', text: '연표를 불러오고 있습니다.', retry: false });
+      // The account is checked now (accountChecked): the connection or the screen coming back while it
+      // reads does not open the page again, although 다시 확인 had set those listeners up.
+      await page.evaluate(() => { window.__checked = true; });
+      await signal(page, 'online'); await signal(page, 'visibilitychange'); await page.waitForTimeout(500);
+      assert.deepEqual([await asked(page, () => window.__checked === true), await chart(page)], [true, { page: 'timeline.html', text: '연표를 불러오고 있습니다.', retry: false }], 'the same document, still reading');
       // This account has no 연표 yet, so the page goes on to the list of them (workspace.html), which checks the account itself.
       read();
       await until(async () => (await chart(page))?.page === 'workspace.html' && await asked(page, () => window.__auth?.checks.length >= 1), 'the timeline page to go on to its list');

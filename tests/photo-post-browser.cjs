@@ -118,14 +118,36 @@ async function main(){
   await check('A failed IndexedDB write blocks departure, keeps the same editor/caret and can be retried without changing the saved original',async()=>{
    await page.locator('[data-photo-post-id="'+first+'"]').click();await page.locator('.photo-article').waitFor();await click('글 수정');await page.locator('#photoTitle').waitFor();await page.evaluate(()=>{window.__photoPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=__photoPut.apply(this,args);if(args[0]?.key?.startsWith('photo-post:'))this.transaction.abort();return r;};window.__photoTitle=document.querySelector('#photoTitle');});await page.locator('#photoTitle').fill('실패해도 남는 수정 입력');await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.equal(await page.locator('#photoTitle').evaluate(n=>n===__photoTitle),true);await page.setViewportSize({width:1440,height:1000});await page.locator('[data-haedo-navigation] [data-haedo-section=schedule]').click();await page.locator('#lifeError:not([hidden])').waitFor();assert.equal(await page.locator('.life-workbench').getAttribute('data-mode'),'page');assert.equal(await page.locator('#photoTitle').inputValue(),'실패해도 남는 수정 입력');assert.equal((await read()).docs.find(v=>v.id===first).title,'산책에서 남긴 두 장의 사진');await page.evaluate(()=>IDBObjectStore.prototype.put=__photoPut);await click('초안 다시 저장');await saved();await page.getByRole('button',{name:'글 저장',exact:true}).focus();await page.keyboard.press('Enter');await page.locator('.photo-article').waitFor();first=(await read()).docs.find(v=>v.status==='saved'&&v.title==='실패해도 남는 수정 입력').id;
   });
-  await check('Concurrent saved-post edits preserve the competing original and offer an explicit new saved copy',async()=>{
-   await go(other);await page.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();await page.locator('#photoTitle').fill('내 탭 수정');await saved();await other.locator('[data-photo-post-id="'+first+'"]').click();await other.locator('.photo-article').waitFor();await other.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();await other.locator('#photoTitle').fill('다른 탭의 저장본');await other.getByRole('button',{name:'글 저장',exact:true}).click();await other.locator('.photo-article').waitFor();await click('글 저장');await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.equal(await page.locator('#photoTitle').inputValue(),'내 탭 수정');await click('새 글로 저장');await page.locator('.photo-article').waitFor();const titles=(await read()).docs.filter(v=>v.status==='saved').map(v=>v.title);assert(titles.includes('내 탭 수정'));assert(titles.includes('다른 탭의 저장본'));
+  // 2026-11-12 (account sync review M2/M3 and m-1, owner rules 11-01/11-02): two tabs revising one saved post continue one
+  // revision draft. Input that was outside storage when the other tab saved stays a revision of that post, based on the
+  // version it started from; saving it updates the post and keeps the version saved first as a recovery copy (one post,
+  // one `복구 사본`, no manual choice). The earlier "both saves are posts" result was the former manual 새 글로 저장.
+  await check('Two tabs revising one saved post: the later save updates it and the version saved first is kept as a recovery copy',async()=>{
+   await go(other);await page.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();await page.locator('#photoTitle').fill('내 탭 수정');await saved();
+   const base=(await read()).docs.find(v=>v.id===first);
+   await other.locator('[data-photo-post-id="'+first+'"]').click();await other.locator('.photo-article').waitFor();await other.locator('.photo-posts').getByRole('button',{name:'글 수정',exact:true}).click();
+   assert.equal(await other.locator('#photoTitle').inputValue(),'내 탭 수정','the other tab continues the same revision');
+   await page.locator('#photoTitle').evaluate(n=>n.dispatchEvent(new CompositionEvent('compositionstart',{data:''})));
+   await other.locator('#photoTitle').fill('다른 탭의 저장본');await other.getByRole('button',{name:'글 저장',exact:true}).click();await other.locator('.photo-article').waitFor();
+   await page.locator('#photoTitle').evaluate(n=>{n.value='내 탭 수정 이어서';n.dispatchEvent(new CompositionEvent('compositionend',{data:''}));});
+   await page.waitForFunction(()=>/이 수정을 먼저 글로 저장했어요 · 지금 입력을 저장하면 그쪽은 복구 사본으로 남겨요/.test(document.querySelector('.photo-edit-note')?.textContent||''));await saved();
+   assert.notEqual(await page.locator('.photo-status').getAttribute('role'),'alert');assert.equal(await page.locator('#photoTitle').inputValue(),'내 탭 수정 이어서');
+   let docs=(await read()).docs;const otherSave=docs.find(v=>v.status==='saved'&&v.title==='다른 탭의 저장본');assert(otherSave,'the other tab\'s save stays until this save');
+   const kept=docs.find(v=>v.status==='draft'&&v.title==='내 탭 수정 이어서');assert(kept,'this tab\'s input is stored');assert.deepEqual(kept.replaces,{id:first,revision:base.revision},'a revision of the post, based on the version it started from');
+   await click('글 저장');await page.locator('.photo-article').waitFor();
+   docs=(await read()).docs;const saves=docs.filter(v=>v.status==='saved').map(v=>v.title);
+   assert(saves.includes('내 탭 수정 이어서'));assert(!saves.includes('다른 탭의 저장본'),'one post, not two');assert.equal(docs.some(v=>v.id===otherSave.id),false,'the later save took its place');
+   const copy=docs.find(v=>v.title==='복구 사본 · 다른 탭의 저장본');assert(copy,'the version saved first is a recovery copy');assert.equal(copy.status,'draft');assert.equal(copy.replaces,null);
+   assert.match(await page.locator('.photo-status').innerText(),/다른 곳에서 바뀐 판은 복구 사본으로 남겼어요/);
   });
   await check('Invalid photo types, remote image paste and failed imports do not replace text or install hidden photos',async()=>{
    await click('사진 글 목록');await click('글쓰기');await page.locator('.ql-editor').fill('붙여넣기 전의 문장');await page.locator('#photoFiles').setInputFiles({name:'unsupported.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')});await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.match(await page.locator('.ql-editor').textContent(),/붙여넣기 전의 문장/);assert.equal(await page.locator('.photo-block').count(),0);
    await page.locator('.ql-editor').evaluate(n=>{const d=new DataTransfer();d.setData('text/html','<img src="https://blocked.example.invalid/private.jpg"><script>window.photoBad=true</script>');d.setData('text/plain','안전한 붙여넣기');n.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:d}));});assert.equal(await page.locator('.photo-block,img[src^="https://blocked"]').count(),0);assert.equal(await page.evaluate(()=>!!window.photoBad),false);await click('닫기');const before=(await read()).index.length;if(!await page.locator('.photo-files').evaluate(n=>n.open))await page.locator('.photo-files > summary').click();await page.getByLabel('사진 글 ZIP 백업',{exact:true}).setInputFiles({name:'bad.zip',mimeType:'application/zip',buffer:Buffer.from('invalid zip')});await page.waitForFunction(()=>document.querySelector('.photo-status')?.getAttribute('role')==='alert');assert.equal((await read()).index.length,before);
   });
-  await check('A conflicted draft can make a fresh memory copy even when its original CAS fails; copy failure retains the same editor and every original byte',async()=>{
+  // 2026-11-12: the same draft changed in another tab while this tab's input is outside storage. The input is stored
+  // over it and the other tab's version is kept as a recovery copy, with every original byte. A separate copy made by
+  // hand (사본으로 이어 쓰기) that fails retains the same editor and changes nothing; retried, it succeeds.
+  await check('A draft changed in another tab keeps that version as a recovery copy with exact original bytes; a failed hand copy retains the same editor',async()=>{
    await click('글쓰기');
    assert.equal(await page.locator('.ql-editor').evaluate(n=>n===document.activeElement),true);
    await page.locator('#photoTitle').fill('동일 초안의 처음 입력');
@@ -133,27 +155,33 @@ async function main(){
    await page.locator('#photoFiles').setInputFiles({name:'recovery-original.jpg',mimeType:images[1].type,buffer:Buffer.from(images[1].data,'base64')});
    await page.locator('.photo-block').waitFor();await saved();
    const draft=(await read()).docs.find(v=>v.title==='동일 초안의 처음 입력');
-   const fingerprint=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),rows=await s.listPhotoPosts(w),d=await s.readPhotoPost(w,rows.find(v=>v.title==='내 탭에 남긴 초안 입력').id);return Promise.all(d.photos.map(async p=>({id:p.id,digest:p.digest,actual:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await p.blob.arrayBuffer())),v=>v.toString(16).padStart(2,'0')).join(''),width:p.width,height:p.height,size:p.size})));});
+   const fingerprint=title=>page.evaluate(async title=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),rows=await s.listPhotoPosts(w),d=await s.readPhotoPost(w,rows.find(v=>v.title===title).id);return Promise.all(d.photos.map(async p=>({id:p.id,digest:p.digest,actual:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await p.blob.arrayBuffer())),v=>v.toString(16).padStart(2,'0')).join(''),width:p.width,height:p.height,size:p.size})));},title);
+   const original=createHash('sha256').update(Buffer.from(images[1].data,'base64')).digest('hex');
+   await page.locator('#photoTitle').evaluate(n=>n.dispatchEvent(new CompositionEvent('compositionstart',{data:''})));
    await go(other);await require('./photo-post-entry.cjs').openPost(other,draft.id);
    await other.locator('#photoTitle').fill('다른 탭의 초안 입력');
    await other.waitForFunction(()=>document.querySelector('.photo-status')?.textContent==='자동 저장됨');
-   await page.locator('#photoTitle').fill('내 탭에 남긴 초안 입력');
-   await page.locator('.photo-status[role=alert]').waitFor();
+   await page.locator('#photoTitle').evaluate(n=>{n.value='내 탭에 남긴 초안 입력';n.dispatchEvent(new CompositionEvent('compositionend',{data:''}));});
+   await page.waitForFunction(()=>/복구 사본으로 남겼어요/.test(document.querySelector('.photo-edit-note')?.textContent||''));await saved();
+   assert.notEqual(await page.locator('.photo-status').getAttribute('role'),'alert');
+   let rows=(await read()).docs;const kept=rows.find(v=>v.title==='복구 사본 · 다른 탭의 초안 입력');
+   assert(rows.some(v=>v.id===draft.id&&v.title==='내 탭에 남긴 초안 입력'),'the later input stays in the draft');
+   assert(kept);assert.equal(kept.replaces,null);assert.equal(kept.status,'draft');assert.deepEqual(kept.ops,draft.ops);
+   for(const title of ['내 탭에 남긴 초안 입력','복구 사본 · 다른 탭의 초안 입력']){const bytes=await fingerprint(title);assert.equal(bytes[0].actual,original,title);assert.equal(bytes[0].digest,bytes[0].actual);}
    const before=await read();
    await page.locator('.photo-editor').evaluate(n=>window.__recoveryEditor=n);
    await page.evaluate(()=>{window.__recoveryAborts=0;window.__recoveryPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=__recoveryPut.apply(this,args);if(args[0]?.key?.startsWith('photo-post:')){__recoveryAborts++;this.transaction.abort();}return r;};});
-   await click('현재 입력을 새 초안으로 보관');
+   const copyByHand=async()=>{const more=page.locator('.photo-editor .photo-more');if(!await more.evaluate(n=>n.open))await more.locator(':scope > summary').click();await page.locator('.photo-editor .photo-more-menu').getByRole('button',{name:'사본으로 이어 쓰기',exact:true}).click();};
+   await copyByHand();
    await page.waitForFunction(()=>__recoveryAborts>0&&document.querySelector('.photo-posts')?.getAttribute('aria-busy')==='false'&&document.querySelector('.photo-status')?.getAttribute('role')==='alert');
    assert.equal(await page.locator('.photo-editor').evaluate(n=>n===__recoveryEditor),true);
    assert.equal(await page.locator('#photoTitle').inputValue(),'내 탭에 남긴 초안 입력');
    assert.deepEqual(await read(),before);
    await page.evaluate(()=>IDBObjectStore.prototype.put=__recoveryPut);
-   await click('현재 입력을 새 초안으로 보관');await saved();
-   const rows=(await read()).docs,copy=rows.find(v=>v.id!==draft.id&&v.title==='내 탭에 남긴 초안 입력');
-   assert(rows.some(v=>v.id===draft.id&&v.title==='다른 탭의 초안 입력'));
-   assert(copy);assert.equal(copy.replaces,null);assert.equal(copy.status,'draft');
-   assert.deepEqual(copy.ops,draft.ops);assert.deepEqual(copy.photos.map(p=>({id:p.id,digest:p.digest,width:p.width,height:p.height,size:p.size})),draft.photos.map(p=>({id:p.id,digest:p.digest,width:p.width,height:p.height,size:p.size})));
-   const bytes=await fingerprint();assert.equal(bytes[0].actual,createHash('sha256').update(Buffer.from(images[1].data,'base64')).digest('hex'));assert.equal(bytes[0].digest,bytes[0].actual);
+   await copyByHand();await saved();
+   rows=(await read()).docs;const copy=rows.filter(v=>v.title==='내 탭에 남긴 초안 입력'&&v.id!==draft.id);
+   assert.equal(copy.length,1);assert.equal(copy[0].replaces,null);assert.equal(copy[0].status,'draft');
+   assert.deepEqual(copy[0].photos.map(p=>({id:p.id,digest:p.digest,width:p.width,height:p.height,size:p.size})),draft.photos.map(p=>({id:p.id,digest:p.digest,width:p.width,height:p.height,size:p.size})));
    await click('닫기');
   });
   await check('A competing save cannot replace file-review choices; rereading waits for explicit restore or cancellation',async()=>{

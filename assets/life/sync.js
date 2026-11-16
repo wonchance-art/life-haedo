@@ -103,6 +103,12 @@
     }
     function endCycle(context) { const cycle = context.cycle; context.cycle = null; cycle?.end?.(); }
     function binding(context, remoteId) { return { projectUrl: context.account.projectUrl, userId: context.account.userId, remoteId }; }
+    // The state without its snapshots (storage getSyncSummary, 2026-11-12): every decision here that
+    // needs only status, binding, revisions and whether something waits. A storage without it (an
+    // older page's module, test doubles) gives the whole state, which carries the same fields.
+    function summary(workspaceId) {
+      return typeof storage.getSyncSummary === 'function' ? storage.getSyncSummary(workspaceId) : storage.getSyncState(workspaceId);
+    }
     function checkedBinding(context, state) {
       guard(context);
       const expected = binding(context, context.workspaceId);
@@ -170,7 +176,7 @@
       const workspaces = await storage.listWorkspaces();
       for (const workspace of workspaces) {
         if (disposed || generation !== epoch || !account) return;
-        const state = await storage.getSyncState(workspace.workspaceId);
+        const state = await summary(workspace.workspaceId);
         if (disposed || generation !== epoch || !account) return;
         if (state?.enabled && sameBinding(state.binding, { projectUrl: account.projectUrl, userId: account.userId, remoteId: workspace.workspaceId })) {
           watch(workspace.workspaceId);
@@ -308,14 +314,29 @@
     }
     function getAccount() { return clone(account); }
     function getConfig() { return clone(config); }
-    async function getState(workspaceId) {
+    // { light: true }: the recorded difference without the server copy (conflict { missing,
+    // remoteRevision, localRevision }); what a status line or the account library needs. The
+    // comparison screen reads the full state, row included.
+    // { light: true, localRevision }: a screen that holds the workspace passes its revision. A record
+    // ahead of it (another tab saved since, or a damaged record) is read in full: the full read
+    // answers for the stored workspace and stops on a record that is really ahead, so the screen
+    // shows a read error and never a synced state the light read cannot check.
+    async function getState(workspaceId, options = {}) {
+      if (!options || typeof options !== 'object' || Array.isArray(options) || Reflect.ownKeys(options).some(key => !['light', 'localRevision'].includes(key)) ||
+          options.light !== undefined && typeof options.light !== 'boolean' ||
+          options.localRevision !== undefined && (options.light !== true || !Number.isSafeInteger(options.localRevision) || options.localRevision < 0)) throw fault('remote_invalid');
+      const light = options.light === true, held = options.localRevision;
       live();
       const generation = epoch;
       // Before shared Auth verification, a scoped manager exposes no source/conflict snapshot.
       if (storage.account && !account) return { status: 'auth_required', enabled: false, binding: null,
         remoteRevision: 0, syncedLocalRevision: -1, conflict: null, error: null, account: null };
       localAccount(account);
-      const state = await storage.getSyncState(workspaceId);
+      let state = await (light ? summary(workspaceId) : storage.getSyncState(workspaceId));
+      if (light && held !== undefined && state && Math.max(state.syncedLocalRevision, state.outbox?.localRevision ?? -1, state.conflict?.localRevision ?? -1) > held) {
+        live(); if (generation !== epoch) throw fault('stale_session');
+        state = await storage.getSyncState(workspaceId);
+      }
       live();
       if (generation !== epoch) throw fault('stale_session');
       localAccount(account);
@@ -328,14 +349,15 @@
       // run will not settle it either, so whoever shows the state need not wait for one.
       const unmergeable = !!state?.conflict && !state.conflict.missing && unmerged.get(workspaceId) === state.conflict.remoteRevision + ':' + state.conflict.localRevision;
       return { status, enabled: !!state?.enabled, binding: clone(state?.binding || null), remoteRevision: state?.remoteRevision ?? 0,
-        syncedLocalRevision: state?.syncedLocalRevision ?? -1, conflict: clone(state?.conflict || null), error: state?.error ? { code: state.error.code, message: safeError(state.error).message } : null, account: getAccount(),
+        syncedLocalRevision: state?.syncedLocalRevision ?? -1,
+        conflict: light ? state?.conflict ? { missing: state.conflict.missing, remoteRevision: state.conflict.remoteRevision, localRevision: state.conflict.localRevision } : null : clone(state?.conflict || null), error: state?.error ? { code: state.error.code, message: safeError(state.error).message } : null, account: getAccount(),
         ...(unmergeable ? { unmergeable: true } : {}) };
     }
     async function enable(workspaceId) {
       const context = scope(workspaceId);
       return serial(context, async () => {
         await verified(context);
-        const state = await storage.getSyncState(workspaceId); guard(context);
+        const state = await summary(workspaceId); guard(context);
         const expected = binding(context, workspaceId);
         if (state && !sameBinding(state.binding, expected)) throw fault('account_mismatch');
         if (!state) {
@@ -352,6 +374,7 @@
       const context = scope(workspaceId);
       const nextGeneration = (spaceEpochs.get(workspaceId) || 0) + 1;
       spaceEpochs.set(workspaceId, nextGeneration); context.spaceEpoch = nextGeneration;
+      // The full read: a record that does not match the workspace is refused before pausing writes anything.
       const state = await storage.getSyncState(workspaceId);
       guard(context);
       if (!state || !sameBinding(state.binding, binding(context, workspaceId))) throw fault(state ? 'account_mismatch' : 'not_enabled');
@@ -386,7 +409,7 @@
         const expected = binding(context, remoteId);
         let result;
         if (spaces.some(item => item.workspaceId === remoteId)) {
-          const state = await storage.getSyncState(remoteId); guard(context);
+          const state = await summary(remoteId); guard(context);
           if (!state) throw fault('workspace_conflict');
           checkedBinding(context, state);
           const local = await storage.read(remoteId); guard(context);
@@ -410,7 +433,7 @@
       const context = scope(workspaceId);
       return serial(context, async () => {
         await verified(context);
-        const previous = await storage.getSyncState(workspaceId); guard(context);
+        const previous = await summary(workspaceId); guard(context);
         const expected = binding(context, workspaceId);
         if (previous) {
           if (!sameBinding(previous.binding, expected)) throw fault('account_mismatch');
@@ -487,7 +510,9 @@
       try {
         await verified(context);
         for (let pass = 0; pass < 8; pass++) {
-          const state = await storage.getSyncState(context.workspaceId); guard(context);
+          let state = await summary(context.workspaceId); guard(context);
+          // A waiting request is sent as stored: its snapshot comes from the full state.
+          if (state?.outbox && !state.outbox.data) { state = await storage.getSyncState(context.workspaceId); guard(context); }
           const expected = checkedBinding(context, state);
           if (state.conflict) {
             // This page already tried to merge exactly this difference and could not. Until the

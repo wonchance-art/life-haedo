@@ -113,6 +113,22 @@
     });
     return known;
   }
+  // Posts and drafts of one library are capped (storage writePhotoPost, `photo_post_limit`: a write
+  // that would make a library's list longer than 200, for a post or draft started on this device).
+  // From 190 on, the list says how many are left; at the cap, how many to delete and where they are.
+  // The count is the library's whole list, as the cap counts it (hidden, empty and restored-copy rows too).
+  const POST_LIMIT = 200, POST_LIMIT_NOTICE = 190;
+  function postCapacity(count) {
+    if (!Number.isSafeInteger(count) || count < POST_LIMIT_NOTICE) return null;
+    return { count, limit: POST_LIMIT, remaining: Math.max(0, POST_LIMIT - count), full: count >= POST_LIMIT, toDelete: Math.max(0, count - POST_LIMIT + 1) };
+  }
+  // What the line says; `drafts`: how many of the counted rows are drafts (what to delete first).
+  function limitText(capacity, drafts) {
+    const head = '글·초안 ' + capacity.count + '/' + capacity.limit + '개 · ';
+    if (!capacity.full) return head + capacity.remaining + '개 더 저장할 수 있어요.';
+    const what = drafts >= capacity.toDelete ? '쓰지 않는 초안이나 복구 사본을' : drafts > 0 ? '초안 ' + drafts + '개와 쓰지 않는 글을 합쳐' : '쓰지 않는 글을';
+    return head + '새 글을 저장하려면 ' + what + ' ' + capacity.toDelete + '개 지워 주세요.';
+  }
   async function listAccountPosts(storage, workspaceId, { contentCache } = {}) {
     let ids = [workspaceId], libraries = [];
     if (typeof storage.listAccountLibraries === 'function') {
@@ -136,7 +152,10 @@
     }
     const posts = [], publication = await publicationOf(storage, [...read.keys()]);
     for (const [ws, rows] of read) posts.push(...rows.filter(post => !hidden.has(ws + '/' + post.id)).map(post => ({ ...post, workspaceId: ws, publication: publication.get(ws + '/' + post.id) || 'private' })));
-    return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids };
+    // counts: each read library's whole list, as the cap counts it (postCapacity).
+    return { posts, failed: lists.some(result => result.status !== 'fulfilled' || !Array.isArray(result.value)), workspaces: ids,
+      counts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.length])),
+      drafts: Object.fromEntries([...read].map(([ws, rows]) => [ws, rows.filter(row => row.status === 'draft').length])) };
   }
   // A row's date and its full form. Formatters are made once (2026-11-04: two new
   // Intl.DateTimeFormat per row were ~3% of the main thread while the first list was drawn);
@@ -169,7 +188,14 @@
     const contentCache = new Map();
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0, stopWatch = null, watchTimer = null, stopPublic = null, publicTimer = null;
-    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
+    // The server refused a deletion sent from this device (the post is public there: another device
+    // published it before this one knew) and the post came back. Said once on this list, until 확인.
+    let refusedDelete = false;
+    const REFUSED_DELETE = '공개 중인 글이라 서버에서 삭제하지 않았어요. 다음 동기화에서 이 글을 다시 받아요. 공개를 철회한 뒤 삭제해 주세요.';
+    // cap: only the rows the 200 cap counts (this library's posts and drafts), set by the cap notice's
+    // buttons: true, or 'copies' (and only the recovery copies, while the search is the copies' words).
+    // It holds only while the notice is shown (updateList clears it when the count drops below 190).
+    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20, cap: false };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '숨긴 글' };
     // ≥761px the posts search is an always-visible field; ≤760 it opens from the tab row's icon.
@@ -178,12 +204,12 @@
     const searchAlwaysShown = () => !!wideSearch?.matches;
     function captureState() { return { ...listState }; }
     function adoptState(workspaceId, incoming) {
-      if (listState.workspaceId !== workspaceId) listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT };
+      if (listState.workspaceId !== workspaceId) listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT, cap: false };
       if (incoming?.workspaceId !== workspaceId) return;
       listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
         searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
-        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT };
+        limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT, cap: incoming.cap === true || incoming.cap === 'copies' ? incoming.cap : false };
     }
     function clearMedia() {
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
@@ -452,14 +478,14 @@
       const tabs = el('div', null, 'home-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '내 글 상태');
       for (const [key, label] of Object.entries(TAB_LABELS)) {
         const button = action(context, label, () => {
-          listState.tab = key; listState.limit = ROW_LIMIT; updateList(context, true);
+          listState.tab = key; listState.cap = false; listState.limit = ROW_LIMIT; updateList(context, true);
         }, 'home-tab');
         button.id = 'homeTab-' + key; button.dataset.homeTab = key; button.dataset.focusKey = 'home:tab:' + key;
         button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', 'homePostList');
         button.addEventListener('keydown', event => {
           const keys = Object.keys(TAB_LABELS), at = keys.indexOf(listState.tab);
           const next = event.key === 'ArrowRight' ? keys[(at + 1) % keys.length] : event.key === 'ArrowLeft' ? keys[(at + keys.length - 1) % keys.length] : event.key === 'Home' ? keys[0] : event.key === 'End' ? keys[keys.length - 1] : null;
-          if (!next) return; event.preventDefault(); listState.tab = next; listState.limit = ROW_LIMIT; updateList(context, true); tabs.querySelector('[data-home-tab="' + next + '"]').focus({ preventScroll: true });
+          if (!next) return; event.preventDefault(); listState.tab = next; listState.cap = false; listState.limit = ROW_LIMIT; updateList(context, true); tabs.querySelector('[data-home-tab="' + next + '"]').focus({ preventScroll: true });
         });
         tabs.append(button);
       }
@@ -528,8 +554,16 @@
       context.searchInput.placeholder = always ? '내 글 찾기' : TAB_LABELS[listState.tab] + '에서 검색';
       context.searchClear.hidden = !listState.query;
     }
-    function matchesQuery(row) {
-      const query = listState.query.trim().toLocaleLowerCase('ko-KR');
+    // A row the 200 cap counts: a post or draft of this library's post list (not 첨부 글·기록 글 drafts,
+    // not another library's posts).
+    const counted = (context, row) => (row.kind === 'photo' || row.kind === 'photo-draft') && (row.workspaceId || context.workspaceId) === context.workspaceId;
+    const COPY_PREFIX = () => life.BlogSync?.CONFLICT_PREFIX || '복구 사본 · ', COPY_QUERY = () => COPY_PREFIX().replace(/[\s·]+$/, '');
+    // A recovery copy a sync conflict kept: a draft of this library whose title starts with the prefix.
+    const isCopy = (context, row) => row.tab === 'drafts' && counted(context, row) && String(row.title || '').startsWith(COPY_PREFIX());
+    const capped = (context, row) => !listState.cap || counted(context, row) && (listState.cap !== 'copies' || listState.query !== COPY_QUERY() || isCopy(context, row));
+    const shown = (context, row) => row.tab === listState.tab && matchesQuery(row) && capped(context, row);
+    function matchesQuery(row, text = listState.query) {
+      const query = text.trim().toLocaleLowerCase('ko-KR');
       return !query || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(item => item.title) : [])]
         .filter(Boolean).join('\n').toLocaleLowerCase('ko-KR').includes(query);
     }
@@ -538,12 +572,41 @@
         (requested.kind === 'photo' ? node.dataset.photoPostId : requested.kind === 'plain' ? node.dataset.postId : node.dataset.sourceId) === requested.id);
     }
     function focusAnchor(context, requested) {
-      const rows = resultRows(context).rows.filter(row => row.tab === listState.tab && matchesQuery(row));
+      const rows = resultRows(context).rows.filter(row => shown(context, row));
       const index = rows.findIndex(row => row.kind === requested.kind && row.id === requested.id);
       if (index >= listState.limit) { listState.limit = Math.ceil((index + 1) / ROW_LIMIT) * ROW_LIMIT; updateList(context); }
       const row = anchorRow(context, requested);
       if (!row) return false;
       row.querySelector('.home-post-open')?.focus({ preventScroll: true }); row.scrollIntoView({ block: 'start', behavior: 'instant' }); return true;
+    }
+    // The cap of the open library (where 글쓰기 starts a post), shown only near it. Its buttons go
+    // to what can be deleted: the 초안 tab, and the recovery copies a sync conflict kept there.
+    function limitNotice(context, rows) {
+      const photo = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
+      const capacity = postCapacity(photo?.counts?.[context.workspaceId]);
+      if (!capacity) return null;
+      // Drafts of this library's list as the cap counts them (empty ones too); the rest are posts.
+      const drafts = photo?.drafts?.[context.workspaceId] || 0;
+      const copyQuery = COPY_QUERY();
+      // Counted as the button shows them (shown with cap 'copies'): this library's recovery copies.
+      const copies = rows.filter(row => isCopy(context, row) && matchesQuery(row, copyQuery)).length;
+      const notice = el('div', null, 'home-limit'); notice.dataset.homeLimit = capacity.full ? 'full' : 'near';
+      notice.append(el('p', limitText(capacity, drafts), 'life-meta'));
+      const show = (label, query, cap, key) => {
+        const button = action(context, label, () => {
+          listState.tab = 'drafts'; listState.cap = cap; listState.query = query; listState.searchExpanded = !!query; listState.limit = ROW_LIMIT;
+          context.searchInput.value = query; updateList(context, true);
+          context.list.querySelector('.home-draft-open')?.focus({ preventScroll: true });
+        }, 'home-limit-action');
+        button.dataset.focusKey = 'home:limit:' + key; return button;
+      };
+      const here = listState.tab === 'drafts' && listState.cap;
+      const actions = el('div', null, 'home-limit-actions');
+      if (drafts && !(here && listState.cap === true && !listState.query.trim())) actions.append(show('초안 보기', '', true, 'drafts'));
+      if (copies && !(here && listState.cap === 'copies' && listState.query === copyQuery)) actions.append(show('복구 사본 ' + copies + '개 보기', copyQuery, 'copies', 'copies'));
+      if (here) actions.append(show('모든 초안 보기', '', false, 'all-drafts'));
+      if (actions.childElementCount) notice.append(actions);
+      return notice;
     }
     function updateList(context, userAction = false) {
       if (!showing(context)) return;
@@ -562,15 +625,25 @@
       context.resumeRow = rows.find(row => row.tab === 'drafts') || null;
       context.resume.hidden = !context.resumeRow || listState.tab !== 'posts' || !!query;
       if (context.resumeRow) context.resumeLabel.textContent = String(context.resumeRow.title || '').trim() || snippet(context.resumeRow.body) || '작성 중인 초안';
-      const counts = Object.fromEntries(Object.keys(TAB_LABELS).map(tab => [tab, rows.filter(row => row.tab === tab).length]));
+      // The filter of the cap notice holds only while the notice is shown.
+      if (listState.cap && !postCapacity(context.results.photo?.status === 'fulfilled' ? context.results.photo.value?.counts?.[context.workspaceId] : undefined)) listState.cap = false;
+      // A tab's count is what it lists without a search (with the notice's filter, the filtered rows).
+      const counts = Object.fromEntries(Object.keys(TAB_LABELS).map(tab => [tab, rows.filter(row => row.tab === tab && capped(context, row)).length]));
       for (const button of context.tabs.children) {
         const tab = button.dataset.homeTab, selected = tab === listState.tab;
         button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
         button.textContent = TAB_LABELS[tab] + (counts[tab] && tab !== 'posts' ? ' ' + counts[tab] : '');
       }
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
-      const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
+      const matched = rows.filter(row => shown(context, row));
       const fragment = document.createDocumentFragment();
+      if (refusedDelete) {
+        const refused = el('div', null, 'home-limit home-delete-refused'); refused.append(el('p', REFUSED_DELETE, 'life-meta'));
+        const seen = action(context, '확인', () => { refusedDelete = false; updateList(context, true); context.list.focus({ preventScroll: true }); }, 'home-limit-action');
+        seen.dataset.focusKey = 'home:delete-refused'; refused.append(seen); fragment.append(refused);
+      }
+      const limit = limitNotice(context, rows);
+      if (limit) fragment.append(limit);
       if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록에 다시 보이게 할 수 있어요.', 'life-meta home-archive-note'));
       const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
       if (applicable.length) {
@@ -605,7 +678,11 @@
       context.list.replaceChildren(fragment);
       context.renderedTab = listState.tab;
       if (userAction && previousTab && previousTab !== listState.tab) global.HaedoMotion?.enter(context.list, { kind: 'tab' });
-      if (focusKey) [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
+      const restored = focusKey && [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey);
+      restored?.focus({ preventScroll: true });
+      // A notice line's button that is gone with its line (the count dropped below 190 from another
+      // tab or device, or 확인): focus goes to the shown tab rather than the page body.
+      if (focusKey && !restored && focused?.closest?.('.home-limit')) context.tabs.querySelector('[data-home-tab="' + listState.tab + '"]')?.focus({ preventScroll: true });
       context.feedback.textContent = applicable.length ? '일부 목록을 확인하지 못했어요.' : TAB_LABELS[listState.tab] + ' ' + matched.length + '개' + (query ? ' 검색됨' : '');
       context.area.setAttribute('aria-busy', 'false');
       void enrichDrafts(context);
@@ -675,7 +752,7 @@
             const notice = el('div', null, 'home-saved-filter-notice'); notice.setAttribute('role', 'status');
             notice.append(el('p', '저장한 글이 현재 검색 조건이나 탭에 포함되지 않아 보이지 않아요.', 'life-meta'),
               action(context, listState.query.trim() ? '검색어 지우고 저장한 글 보기' : '저장한 글에서 보기', () => {
-                listState.tab = saved.tab; listState.query = ''; listState.limit = ROW_LIMIT;
+                listState.tab = saved.tab; listState.query = ''; listState.cap = false; listState.limit = ROW_LIMIT;
                 context.surface.querySelector('#homePostSearch').value = ''; updateList(context, true); notice.remove(); focusAnchor(context, requested);
               }));
             context.list.before(notice);
@@ -691,6 +768,11 @@
       try { sync = life.BlogSync?.forStorage?.(storage) || null; } catch (_) { sync = null; }
       if (typeof sync?.subscribe !== 'function') return;
       stopPublic = sync.subscribe(event => {
+        if (event?.type === 'delete_refused' && event.reason === 'published' && showing(context)) {
+          const value = context.results.photo?.status === 'fulfilled' ? context.results.photo.value : null;
+          if (!(value?.workspaces || [context.workspaceId]).includes(event.workspaceId)) return;
+          refusedDelete = true; updateList(context); context.feedback.textContent = REFUSED_DELETE; return;
+        }
         if (!event?.localPostId || !showing(context)) return;
         if (publicTimer) clearTimeout(publicTimer);
         publicTimer = setTimeout(async () => {
@@ -731,5 +813,5 @@
     function dispose() { leave(); disposed = true; contentCache.clear(); }
     return Object.freeze({ render, leave, dispose, captureState });
   }
-  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels });
+  life.HomeUI = Object.freeze({ create, listAccountPosts, restoredDuplicates, restoredContent, dateLabels, postCapacity, limitText, POST_LIMIT });
 })(globalThis);

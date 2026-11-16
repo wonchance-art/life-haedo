@@ -73,7 +73,7 @@
     }
     const blockedSync = state => state?.enabled && (state.outbox || state.conflict);
     async function cleanSync(context, workspaceId) {
-      const state = await step(context, () => storage.getSyncState(workspaceId));
+      const state = await step(context, () => storage.getSyncSummary ? storage.getSyncSummary(workspaceId) : storage.getSyncState(workspaceId));
       check(!blockedSync(state), 'account_material_sync_pending');
     }
     function pointer(row) {

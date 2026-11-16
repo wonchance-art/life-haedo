@@ -50,9 +50,9 @@ Cron의 worker 호출 주기와 활성 피드의 60분 수집 간격은 다르�
 
 ## XML 파서 선택과 재현
 
-기존 네이버 파서는 해당 서비스 전용이므로 일반 RSS/Atom 문법에 재사용하지 않았다. 기존 SNS 전략에서 검토한 MIT `fast-xml-parser` 5.12.0을 고정하고, 정규식만으로 XML을 직접 파싱하는 대안은 제외했다. 약 63.1 KiB의 ESM 번들은 Edge 전용이며 브라우저 셸에 포함하지 않는다. 의존성 라이선스는 `vendor/LICENSES.txt`, 전이 의존성 잠금은 `tests/fixtures/rss/package-lock.json`에 있다. DTD/ENTITY를 거절하고 깊이·확장·본문 바이트 제한을 별도로 둔다. 라이선스·현재 공식 자료 비교는 기존 `docs/life-tools-design/sns-automation-strategy.md`의 오픈소스 절도 참조한다.
+기존 네이버 파서는 해당 서비스 전용이므로 일반 RSS/Atom 문법에 재사용하지 않았다. 기존 SNS 전략에서 검토한 MIT `fast-xml-parser`를 고정하고(5.12.0에서 시작, 2026-11-16 `XMLValidator.validate` 속성 검사의 제곱 시간 권고 GHSA-7cfw-w2rf-f3jc 수정판 5.12.1로 올림), 정규식만으로 XML을 직접 파싱하는 대안은 제외했다. 약 63.2 KiB의 ESM 번들은 Edge 전용이며 브라우저 셸에 포함하지 않는다. 의존성 라이선스는 `vendor/LICENSES.txt`, 전이 의존성 잠금은 `tests/fixtures/rss/package-lock.json`에 있다. DTD/ENTITY를 거절하고 깊이·확장·본문 바이트 제한을 별도로 둔다. 라이선스·현재 공식 자료 비교는 기존 `docs/life-tools-design/sns-automation-strategy.md`의 오픈소스 절도 참조한다.
 
-번들 SHA-256: `438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55`.
+번들 SHA-256: `e26d0aed2252e8a9c9c1226229a90f2dec4d3d29e4d8a7f1c1fcf976aa1e5e10`.
 
 저장소 루트에서 재현:
 

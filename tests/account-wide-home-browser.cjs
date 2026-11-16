@@ -41,6 +41,17 @@ async function write(page, title, body) {
   return status.getAttribute('data-post-id');
 }
 
+// The posts search changes form at 761px in a matchMedia listener, which the page runs at its
+// next rendering step, not when the viewport call returns. Until then the list keeps the other
+// width's controls (800bd79 deploy: the 390px search toggle was read at 1440px and then hidden),
+// so a resize ends when the page shows its own controls for the new width.
+async function resize(page, width) {
+  await page.setViewportSize({ width, height: 1000 });
+  if (!await page.locator('.home-list-controls').count()) return;
+  const mode = await page.evaluate(() => matchMedia('(min-width: 761px)').matches ? 'field' : 'toggle');
+  await page.locator('.home-list-controls[data-search-mode="' + mode + '"]').waitFor({ state: 'attached' });
+}
+
 async function main() {
   assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname));
   await fs.mkdir(output, { recursive: true });
@@ -80,11 +91,11 @@ async function main() {
   async function capture(page, scene) {
     active = page;
     for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: 1000 }); await page.evaluate(() => document.fonts.ready);
+      await resize(page, width); await page.evaluate(() => document.fonts.ready);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, scene + ' ' + width);
       const file = scene + '-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: true }); report.visual.push({ scene, width, file });
     }
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    await resize(page, 1440);
   }
   async function check(name, fn) {
     console.log('START ' + name); await fn(); report.checks.push({ name, pass: true });

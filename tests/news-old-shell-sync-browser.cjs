@@ -297,6 +297,22 @@ async function main() {
         await syncNow(page);
         assert.deepEqual(stored('discoveryActions'), before.legacy); assert.deepEqual(stored('discoveryActionsExtended'), before.extended);
         assert.equal((await local(page, 'readDiscoveryActions')).value.entries.length, legacyCount + extendedCount);
+        // 2026-11-12: the notice asks for a copy. 사본 받기 saves every entry of the pair, and the file opens again as a copy.
+        assert.match(await page.locator('#discoveryActionsError').innerText(), /사본을 받거나/);
+        await page.locator('#discoveryNewsSettings').click(); await page.locator('#discoveryNewsSettingsPanel').waitFor();
+        // The button sits in nested disclosures: open them outermost first.
+        const exportButton = page.locator('#discoveryActionsExport'), depth = await exportButton.locator('xpath=ancestor::details').count();
+        for (let index = depth; index > 0; index--) {
+          const details = exportButton.locator('xpath=ancestor::details[' + index + ']');
+          if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+        }
+        const pending = page.waitForEvent('download'); await page.locator('#discoveryActionsExport').click();
+        const download = await pending, chunks = []; for await (const bytes of await download.createReadStream()) chunks.push(bytes);
+        const bytes = Buffer.concat(chunks), copy = JSON.parse(bytes.toString('utf8'));
+        assert.equal(copy.entries.length, legacyCount + extendedCount, 'the copy holds both documents');
+        // (The refused bookmark is still held, so this screen's 사본에서 추가 waits; the copy is read by the same model.)
+        assert.equal(Actions.previewCopy(copy).counts.total, legacyCount + extendedCount, 'the copy opens again');
+        assert.deepEqual(stored('discoveryActions'), before.legacy); assert.deepEqual(stored('discoveryActionsExtended'), before.extended);
       });
     }
     assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.external, [], 'external requests');

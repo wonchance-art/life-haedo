@@ -502,8 +502,11 @@ def author_name(value):
     # RSS <author> sometimes contains an email address; keep only an explicit display name.
     if '@' in value:
         match = re.search(r'\(([^()@]+)\)', value)
-        return plain(match.group(1), 120) if match else None
-    return value[:120] or None
+        value = plain(match.group(1), 120) if match else ''
+    name = value[:120]
+    # A doubly escaped `&amp;#64;` inside the parentheses decodes to `@` only here, and empty parentheses
+    # leave ''. Neither is a display name: publish no author rather than an address or an empty string.
+    return name if name and '@' not in name else None
 
 
 def article_date(article):
@@ -623,8 +626,35 @@ def previous_parts(previous):
             list(previous.get('articles', [])) + list(extended.get('articles', []) if isinstance(extended.get('articles'), list) else []))
 
 
+# The form of a plain() result: words separated by single spaces, no controls or bidi overrides. Its last
+# character can be a space only when plain() cut the text at its limit right after one (an arXiv author list
+# cut at 120 characters on 2026-11-12). plain() is not idempotent on its own output: a second pass trims
+# that space and reads `&`/`<` text as markup again, so a failed source's retained text never goes through it twice.
+PLAIN_FORM = re.compile(r'[^\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]+(?: [^\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]+)* ?')
+
+
+def collector_form(value, limit):
+    """True when plain()/author_name() could have written value: a trailing space only from a cut at the limit."""
+    return (isinstance(value, str) and len(value) <= limit and PLAIN_FORM.fullmatch(value) is not None and
+            (not value.endswith(' ') or len(value) == limit))
+
+
+def retained_text(value, limit):
+    """Last-good text kept byte for byte when it already has plain()'s output form; anything else is cleaned."""
+    return value if collector_form(value, limit) else plain(value, limit)
+
+
+def retained_author(value):
+    """Last-good author kept exactly when author_name() could have produced it; anything else is cleaned."""
+    return value if collector_form(value, 120) and '@' not in value else author_name(value)
+
+
 def previous_articles(previous, source):
-    """Retain only known public metadata from the last catalog, never unknown body fields."""
+    """Retain only known public metadata from the last catalog, never unknown body fields.
+
+    A failed source's last-good metadata stays exactly as last published (the deployment checks every
+    field). Text is cleaned again only when it is not in the form the collector itself writes.
+    """
     kept = []
     for item in previous_parts(previous)[1]:
         if not isinstance(item, dict) or item.get('sourceId') != source['id']:
@@ -632,15 +662,15 @@ def previous_articles(previous, source):
         try:
             url = approved_url(item['url'], source['allowedHosts'])
             canonical = approved_url(url, source['allowedHosts'], canonical=True)
-            title = plain(item.get('title'), 400)
+            title = retained_text(item.get('title'), 400)
             if not title:
                 continue
             safe = {key:copy.deepcopy(item[key]) for key in ('publishedAt','dateStatus','updatedAt','updatedDateStatus','dateBasis','author','language','fetchedAt') if key in item}
             safe.update({'id':'article-'+source['id']+'-'+hashlib.sha256(canonical.encode()).hexdigest()[:20],
                          'sourceId':source['id'],'url':url,'canonicalUrl':canonical,'title':title,
-                         'tags':list(dict.fromkeys(plain(tag,80) for tag in item.get('tags',[]) if isinstance(tag,str)))[:20],
+                         'tags':list(dict.fromkeys(retained_text(tag,80) for tag in item.get('tags',[]) if isinstance(tag,str)))[:20],
                          'summary':'','coverage':'link_only','rights':copy.deepcopy(source['rights'])})
-            safe['author'] = author_name(safe.get('author'))
+            safe['author'] = retained_author(safe.get('author'))
             safe['language'] = source['language']
             if source['id'] == 'frontiers-psychology':
                 safe['tags'] = []

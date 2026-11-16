@@ -120,6 +120,12 @@
 .home-saved-filter-notice { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .home-saved-filter-notice > .life-meta { font-size: 13px; line-height: 1.8; }
 .home-saved-filter-notice > .life-button { min-height: 44px; margin-top: 10px; }
+/* 2026-11-12: near the 200 posts-and-drafts cap only (home.js limitNotice); one line, no panel. */
+.home-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.home-limit > .life-meta { flex: 1 1 24ch; margin: 0; font-size: 13px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.home-limit[data-home-limit="full"] > .life-meta { color: var(--ink); }
+.home-limit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-limit-action { min-height: 44px; }
 
 /* 2026-11-02 일정 목록: date heading, then rows of time · icon · content (soft-home board).
  * Rows keep their own classes and actions; only the arrangement changes. */

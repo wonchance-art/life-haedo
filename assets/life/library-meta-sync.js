@@ -12,6 +12,8 @@
     const adapter = {
       account: storage.account,
       getCompositionState: id => storage.getLibraryMetaState(id),
+      // Status read without the whole originals workspace (2026-11-12); absent on an older storage module.
+      getCompositionSummary: typeof storage.getLibraryMetaSummary === 'function' ? id => storage.getLibraryMetaSummary(id) : undefined,
       bindCompositionSync: (...args) => storage.bindLibraryMetaSync(...args),
       pauseCompositionSync: (...args) => storage.pauseLibraryMetaSync(...args),
       prepareCompositionUpload: (...args) => storage.prepareLibraryMetaUpload(...args),

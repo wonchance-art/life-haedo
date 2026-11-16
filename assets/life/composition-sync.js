@@ -75,9 +75,12 @@
       pending.finally(() => { if (locks.get(key) === pending) locks.delete(key); }).catch(() => {});
       return pending;
     }
+    // A status read (2026-11-12): the storage's summary when it has one (the same value, without
+    // reading the whole originals workspace). The run below (checkedState) reads the full state.
+    const summary = workspaceId => typeof storage.getCompositionSummary === 'function' ? storage.getCompositionSummary(workspaceId) : storage.getCompositionState(workspaceId);
     async function getState(workspaceId) {
       const ctx = context(workspaceId);
-      const state = await storage.getCompositionState(workspaceId); guard(ctx);
+      const state = await summary(workspaceId); guard(ctx);
       return state ? { ...clone(state), status: state.enabled ? state.status : 'paused' } : { workspaceId, enabled: false, status: 'not_enabled', conflict: null, error: null, lastRecoveryId: null };
     }
     // One source head check per sync pass (2026-11-04 startup latency): inside run(), a later
@@ -85,6 +88,9 @@
     // local source is no longer clean or does not hold the revision it needs. A newer server
     // source is not required here, only one at least as new as the row's. compare() and
     // resolve() themselves still check every time.
+    // The originals' state is read for its status, binding and revision only (sync.getState light:
+    // no server copy of a recorded difference). An engine that ignores the option gives the full state.
+    const SOURCE_LIGHT = Object.freeze({ light: true });
     const ready = (state, minimum) => state.enabled && state.status === 'synced' && sameAccount(state.binding) && state.remoteRevision >= minimum;
     // sourceOptional (writing drafts): an item that points at no original does not wait for the
     // originals to finish syncing. It only needs their connection and a server revision the
@@ -94,7 +100,7 @@
     const known = (state, minimum) => state.enabled && sameAccount(state.binding) && state.remoteRevision >= Math.max(1, minimum);
     async function sources(ctx, minimum = 1) {
       guard(ctx);
-      const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
+      const initial = await sourceSync.getState(ctx.workspaceId, SOURCE_LIGHT); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
       const optional = sourceOptional ? await sourceOptional(ctx.workspaceId) === true : false; guard(ctx);
       if (optional && !ready(initial, minimum)) {
@@ -102,7 +108,7 @@
         // The row needs a newer originals revision: one attempt to receive it.
         try { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); } catch (_) { /* Decided by the state below. */ }
         guard(ctx);
-        const next = await sourceSync.getState(ctx.workspaceId); guard(ctx);
+        const next = await sourceSync.getState(ctx.workspaceId, SOURCE_LIGHT); guard(ctx);
         if (!known(next, minimum)) throw fault('composition_source_pending');
         return next;
       }
@@ -113,7 +119,7 @@
       const skip = ctx.reuseSource && ctx.sourceChecked && ready(initial, minimum);
       if (skip) ctx.sourceSkipped = true;
       else { await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx); }
-      const current = skip ? initial : await sourceSync.getState(ctx.workspaceId); guard(ctx);
+      const current = skip ? initial : await sourceSync.getState(ctx.workspaceId, SOURCE_LIGHT); guard(ctx);
       if (!ready(current, minimum)) throw fault('composition_source_pending');
       ctx.sourceChecked = true;
       return current;
@@ -304,7 +310,7 @@
             const state = await getState(row.workspaceId);
             if (state.enabled) { watch(row.workspaceId); schedule(row.workspaceId); }
             else if (autoEnable && !failedEnables.has(row.workspaceId)) {
-              const source = await sourceSync.getState(row.workspaceId); guard();
+              const source = await sourceSync.getState(row.workspaceId, SOURCE_LIGHT); guard();
               if (source?.enabled && source.status === 'synced' && sameAccount(source.binding)) await enable(row.workspaceId).catch(error => {
                 if (error?.code === 'composition_source_pending' && !retriedSources.has(row.workspaceId)) retriedSources.add(row.workspaceId);
                 else failedEnables.add(row.workspaceId);

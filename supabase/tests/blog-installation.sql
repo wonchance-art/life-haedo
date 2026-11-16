@@ -3,7 +3,10 @@ begin read only;
 select jsonb_build_object(
  'private_bucket',exists(select 1 from storage.buckets where id='haedo-blog-originals' and not public and file_size_limit=67108864),
  'private_schema',exists(select 1 from pg_namespace where nspname='haedo_blog_private'),
- 'five_tables_rls',(select count(*)=5 and bool_and(c.relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_blog_private' and c.relkind='r'),
+ -- The five original tables by name, and RLS on every table of the schema (later files add tables,
+ -- e.g. retired_posts in 20261112120000).
+ 'five_tables_rls',(select count(*)=5 and bool_and(c.relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_blog_private' and c.relkind='r' and c.relname in('posts','assets','receipts','profiles','publications'))
+  and (select bool_and(c.relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_blog_private' and c.relkind='r'),
  'owner_rpc_authenticated',has_function_privilege('authenticated','public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)','execute'),
  'owner_rpc_not_anon',not has_function_privilege('anon','public.life_blog_save(uuid,uuid,bigint,uuid,jsonb)','execute'),
  'public_read_anon',has_function_privilege('anon','public.life_blog_public_read(uuid)','execute'),

@@ -107,6 +107,41 @@ test('a device that opens this version while equal to the server keeps the base 
   assert.equal(await reopened.storage.getSyncNotice(reopened.ws), null);
 });
 
+// ---- A device that received another device's edit and then edits it (2026-11-12, 11-11 review MINOR) ----
+// On this version the device keeps the received snapshot as its base before its own edit
+// (keepSyncBase): no recovery copy. A device that did the same on the previous version kept no
+// base, and a received item leaves no receipt (applySyncRemote writes none), so what it started
+// from cannot be shown by content: the server's copy, which is the text it had received, becomes
+// one recovery copy at its first merge on this version. Nothing is lost. A number alone or the
+// absence of a trace on the server cannot stand in for that proof: a merge keeps the number of two
+// edits made at the same number, and the previous version's 내 변경 보내기 overwrites the server.
+for (const version of ['this version', 'the previous version']) {
+  test('received another device\'s edit, then edited it on ' + version + ': ' + (version === 'this version' ? 'no recovery copy' : 'one recovery copy of the received text, nothing lost'), async t => {
+    const old = version === 'this version' ? null : previousTree(fs.mkdtempSync(path.join(os.tmpdir(), 'haedo-previous-')));
+    const { server, a, b, ids } = await pair(t);
+    const o = createDevice('O', server, old ? { tree: old } : {});
+    t.after(() => { o.close(); if (old) fs.rmSync(old, { recursive: true, force: true }); });
+    await o.login(); o.ws = a.ws; await o.manager.download(a.ws);
+    await note(b, ids[0], 'B가 고친 메모'); assert.equal((await b.sync()).status, 'synced');
+    assert.equal((await o.sync()).status, 'synced'); assert.equal(noteOf(await o.read(), ids[0]), 'B가 고친 메모', 'O received the edit');
+    await note(o, ids[0], 'O가 받은 뒤 고친 메모');
+    await note(a, ids[1], 'A가 다른 발췌를 고침'); assert.equal((await a.sync()).status, 'synced');
+    let device = o;
+    if (old) {
+      assert.equal((await o.sync()).status, 'conflict', 'the previous version stops at the difference');
+      const rows = exportRows(o.rows); o.close();
+      device = createDevice('O updated', server, { rows }); device.ws = a.ws; t.after(() => device.close());
+      assert.equal(device.base(), null, 'the previous version kept no base'); await device.login();
+    }
+    assert.equal((await device.sync()).status, 'synced');
+    const final = server.row.data;
+    assert.deepEqual([noteOf(final, ids[0]), noteOf(final, ids[1])], ['O가 받은 뒤 고친 메모', 'A가 다른 발췌를 고침']);
+    assert.deepEqual(copies(final).map(record => record.note), old ? ['B가 고친 메모'] : []);
+    assert.equal(final.records.length, old ? 3 : 2);
+    for (const other of [a, b]) { assert.equal((await other.sync()).status, 'synced'); assert.equal(content(await other.read()), content(final)); }
+  });
+}
+
 // ---- The base across a refused upload and an upload in flight (the two silent-loss paths) ----
 test('a merge whose upload is refused merges again against the server row it had merged with: this device\'s edit stays', async t => {
   const { server, a, b, ids } = await pair(t);

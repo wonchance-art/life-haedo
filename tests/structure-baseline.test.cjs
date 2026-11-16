@@ -306,10 +306,13 @@ const FOR_ACCOUNT_API = [
   "forgetMaterialContinuity:function",
   "getActive:function",
   "getCompositionState:function",
+  "getCompositionSummary:function", // status read (2026-11-12)
   "getLibraryMetaState:function",
+  "getLibraryMetaSummary:function", // status read (2026-11-12)
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",
+  "getSyncSummary:function", // status read without snapshots (2026-11-12)
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
   "installBlogSeriesCopy:function",
@@ -419,6 +422,7 @@ const FOR_ACCOUNT_API = [
   "savePhotoPost:function",
   "savePhotoPostFromNaverCapture:function",
   "savePhotoPostFromNineBoard:function",
+  "savePhotoPostOver:function",
   "savePhotoPostWithEvidence:function",
   "savePostEvidence:function",
   "savePostTransition:function",
@@ -498,10 +502,13 @@ const STORAGE_API = [
   "forgetMaterialContinuity:function",
   "getActive:function",
   "getCompositionState:function",
+  "getCompositionSummary:function", // status read (2026-11-12)
   "getLibraryMetaState:function",
+  "getLibraryMetaSummary:function", // status read (2026-11-12)
   "getStage:function",
   "getSyncNotice:function", // originals merge
   "getSyncState:function",
+  "getSyncSummary:function", // status read without snapshots (2026-11-12)
   "getWritingSyncState:function",
   "importUnownedWorkspace:function",
   "installBlogSeriesCopy:function",
@@ -611,6 +618,7 @@ const STORAGE_API = [
   "savePhotoPost:function",
   "savePhotoPostFromNaverCapture:function",
   "savePhotoPostFromNineBoard:function",
+  "savePhotoPostOver:function",
   "savePhotoPostWithEvidence:function",
   "savePostEvidence:function",
   "savePostTransition:function",
