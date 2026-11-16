@@ -2352,7 +2352,7 @@
         if (key === 'prev' || key === 'next') return guarded(() => scheduleStep(key === 'prev' ? -1 : 1))();
         if (key === 'find') return guarded(() => navigate('find'))();
         // On 노트 there is no ? button: focus returns to where it was.
-        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help') || document.activeElement);
+        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help') || document.activeElement, { notes: state.mode === 'home' });
         if (calendarModes.has(key)) return guarded(() => switchScheduleView(key))();
       }
     }) || (() => {});

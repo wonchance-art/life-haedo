@@ -733,12 +733,14 @@
     return { views, today, step, help, up, title: D.title(unit, date) };
   }
   const SHORTCUTS = Object.freeze([['Y · Q · M · W · D', '연 · 분기 · 월 · 주 · 일'], ['T', '오늘'], ['← 또는 P', '이전'], ['→ 또는 N', '다음'], ['/', '통합 검색'], ['?', '이 도움말']]);
-  function helpDialog(trigger) {
+  // 노트 lists only the shortcuts it takes (/ and ?); a calendar unit lists them all.
+  const NOTES_SHORTCUTS = Object.freeze(SHORTCUTS.filter(([key]) => key === '/' || key === '?'));
+  function helpDialog(trigger, { notes = false } = {}) {
     document.getElementById('scheduleShortcuts')?.remove();
     const dialog = el('dialog', null, 'schedule-shortcuts'); dialog.id = 'scheduleShortcuts'; dialog.setAttribute('aria-labelledby', 'scheduleShortcutsTitle');
-    const title = el('h2', '일정 단축키'); title.id = 'scheduleShortcutsTitle';
+    const title = el('h2', notes ? '노트 단축키' : '일정 단축키'); title.id = 'scheduleShortcutsTitle';
     const list = el('dl');
-    for (const [key, text] of SHORTCUTS) { const row = el('div'); row.append(el('dt', key), el('dd', text)); list.append(row); }
+    for (const [key, text] of notes ? NOTES_SHORTCUTS : SHORTCUTS) { const row = el('div'); row.append(el('dt', key), el('dd', text)); list.append(row); }
     const close = plainButton('닫기', 'life-button'); close.addEventListener('click', () => dialog.close());
     dialog.append(title, list, close);
     dialog.addEventListener('close', () => { dialog.remove(); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); });

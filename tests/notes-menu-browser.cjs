@@ -154,6 +154,9 @@ async function main() {
       await page.keyboard.press('m'); await page.keyboard.press('t'); await page.waitForTimeout(300);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home', 'no calendar key on 노트');
       await page.keyboard.press('?'); await page.locator('#scheduleShortcuts[open]').waitFor();
+      // The help on 노트 lists only what 노트 takes.
+      assert.equal(await page.locator('#scheduleShortcutsTitle').innerText(), '노트 단축키');
+      assert.deepEqual(await page.locator('#scheduleShortcuts dt').allInnerTexts(), ['/', '?']);
       await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('#scheduleShortcuts'));
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('life-page-title')), true, 'focus returns from the help');
       await page.keyboard.press('/'); await page.locator('#lifeMain[data-mode="find"]').waitFor(); await settle(page);

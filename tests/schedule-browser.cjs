@@ -556,6 +556,8 @@ async function main() {
       }
       // The shortcut help is a real dialog that returns focus.
       await page.locator('.schedule-help').click(); await page.locator('#scheduleShortcuts[open]').waitFor();
+      assert.equal(await page.locator('#scheduleShortcutsTitle').innerText(), '일정 단축키');
+      assert.equal(await page.locator('#scheduleShortcuts dt').count(), 6, 'a calendar unit lists every shortcut');
       await page.keyboard.press('Escape'); await page.waitForFunction(() => document.activeElement?.classList.contains('schedule-help'));
     });
   } finally {
