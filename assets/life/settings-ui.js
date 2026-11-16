@@ -228,7 +228,9 @@
           const tell = result => {
             if (disposed || !isCurrent()) return;
             const local = !!result?.localSaved, account = !!result?.accountSaved;
-            status.textContent = local && account ? '' : account ? '계정에는 저장했지만 이 브라우저의 연표에는 적용하지 못했습니다. 저장소 설정을 확인해 주세요.'
+            // retry: 다른 탭·연표 편집기가 그사이 사본을 바꿔 이번에는 적지 않았다. 다음 동기화가 다시 맞춘다.
+            status.textContent = local && account ? '' : account && result.status === 'retry' ? '계정에 저장했습니다. 이 브라우저의 연표에는 다음 동기화 때 적용합니다.'
+              : account ? '계정에는 저장했지만 이 브라우저의 연표에는 적용하지 못했습니다. 저장소 설정을 확인해 주세요.'
               : local ? '이 브라우저에는 적용했고, 계정에는 다음 동기화 때 다시 저장합니다.' : '설정을 저장하지 못했습니다. 다시 골라 주세요.';
             syncSchedule();
           };

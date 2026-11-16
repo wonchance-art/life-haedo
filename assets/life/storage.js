@@ -1242,14 +1242,18 @@
         const v = displayValue(field, snap.raws[field]); if (v === undefined) continue;
         const entry = displayEntry(field, record?.[field]);
         if (entry && entry.v === v) { if (!entry.up) out.push({ key: field, v, at: entry.at }); continue; }
-        // 바뀐 시각을 모르는 값. 기록이 생기기 전부터 있던 값은 가장 이른 것(첫 동기화: 계정에 이미 있는 값이 이긴다),
-        // 기록이 생긴 뒤 옛 판 앱이 고친 값은 지금 본 시각으로 본다.
-        out.push({ key: field, v, at: entry ? displayLater(entry.at, nowMs) : typeof record?.owner === 'string' ? new Date(nowMs).toISOString() : DISPLAY_EPOCH });
+        // 바뀐 시각을 모르는 값. 기록이 생기기 전부터 있던 값(이전 판의 브라우저 공용 값, legacy)은 가장 이른 것(첫 동기화:
+        // 계정에 이미 있는 값이 이긴다), 기록이 생긴 뒤 옛 판 앱이 고친 값은 지금 본 시각으로 본다.
+        if (entry || typeof record?.owner === 'string') out.push({ key: field, v, at: entry ? displayLater(entry.at, nowMs) : new Date(nowMs).toISOString() });
+        else out.push({ key: field, v, at: DISPLAY_EPOCH, legacy: true });
       }
       return out;
     }
-    // Values held for other accounts, by owner hash: { [owner]: items }. 'unknown': values without an owner whose
-    // first account cannot be told (kept in this browser, never sent). The single { owner, items } of a9f5301 is read too.
+    // Values the timeline editor left without an owner and with a time: whose they are needs displayClaim.
+    const displayTimedOwnerless = (snap, nowMs) => typeof snap.record?.owner !== 'string' && displayPending(snap, nowMs).some(item => !item.legacy);
+    // Values held for other accounts, by owner hash: { [owner]: items }. The single { owner, items } of a9f5301 is read
+    // too. 'unknown' (930ca00: values without an owner whose first account could not be told) is no longer written;
+    // what it holds goes to the signed-in account at 1970 (displayPlan).
     function displayHeld(record) {
       const held = {}, raw = plain(record?.held) ? record.held : null;
       const put = (owner, items) => { const kept = Array.isArray(items) ? items.filter(displayItem).map(clone) : []; if (kept.length) held[owner] = kept; };
@@ -1264,7 +1268,9 @@
     // Values without an owner (written before any signed-in pass of this release recorded one, e.g. by the timeline
     // editor right after the update) belong to the first account that signed in on this browser. The account
     // document change cursor marks an account that synced here: with no other account's cursor this account is the
-    // first; with exactly one other's and none of its own, that other one is; otherwise it cannot be told.
+    // first; with exactly one other's and none of its own, that other one is; otherwise it cannot be told ('unknown').
+    // Only values the timeline editor left with a time (markDisplay) need this: a copy value from before any record
+    // (legacy) was shared by the whole browser in the earlier release and goes to the signed-in account at 1970.
     async function displayClaim() {
       const prefix = 'accountDocCursor:';
       const keys = await transaction(['meta'], 'readonly', async tx => (await tx.objectStore('meta').getAllKeys(root.IDBKeyRange?.bound(prefix, prefix + '\uffff')))
@@ -1277,18 +1283,24 @@
     function displayPlan(snap, nowMs, claim = 'mine') {
       const me = displayOwner(), record = snap.record, owner = typeof record?.owner === 'string' ? record.owner : null;
       const held = displayHeld(record), mine = held[me] || [];
-      delete held[me];
-      const next = { owner: me }, local = displayPending(snap, nowMs);
+      // 'unknown' values (930ca00 records) and values whose first account cannot be told: this account's, at 1970.
+      // A 1970 value loses to any real value of the account; the losing side is kept as a recovery copy.
+      const epoch = items => items.map(item => ({ key: item.key, v: item.v, at: DISPLAY_EPOCH }));
+      const unknown = epoch(held.unknown || []);
+      delete held[me]; delete held.unknown;
+      const next = { owner: me }, all = displayPending(snap, nowMs);
       if (owner === me || (!owner && claim === 'mine')) {
         for (const field of DISPLAY_FIELDS) { const entry = displayEntry(field, record?.[field]); if (entry) next[field] = clone(entry); }
         if (Object.keys(held).length) next.held = held;
-        return { record: next, mine, pending: [...mine, ...local] };
+        return { record: next, mine: [...mine, ...unknown], pending: [...mine, ...unknown, ...all] };
       }
-      displayHold(held, owner || claim, local);
+      const legacy = owner ? [] : all.filter(item => item.legacy), timed = owner ? all : all.filter(item => !item.legacy);
+      const ownerless = !owner && claim === 'unknown' ? epoch(timed) : [];
+      if (owner || claim !== 'unknown') displayHold(held, owner || claim, timed);
       if (Object.keys(held).length) next.held = held;
       // The other account's values stay on screen until this account's document has its own; they are not sent.
       for (const field of DISPLAY_FIELDS) { const v = displayValue(field, snap.raws[field]); if (v !== undefined) next[field] = { v, at: DISPLAY_EPOCH, up: true }; }
-      return { record: next, mine, pending: mine };
+      return { record: next, mine: [...mine, ...unknown], pending: [...mine, ...unknown, ...legacy, ...ownerless] };
     }
     async function readTimelineDisplay() {
       timelineDisplayScope();
@@ -1301,7 +1313,7 @@
       timelineDisplayScope();
       const store = displayStore(), nowMs = Date.now();
       const snap = store ? displaySnapshot(store) : null;
-      const claim = snap && typeof snap.record?.owner !== 'string' && displayPending(snap, nowMs).length ? await displayClaim() : 'mine';
+      const claim = snap && displayTimedOwnerless(snap, nowMs) ? await displayClaim() : 'mine';
       const plan = snap ? displayPlan(snap, nowMs, claim) : null;
       const pending = [...(plan?.pending || []), ...given.map(item => ({ ...item, force: true }))];
       const result = await transaction(['meta'], pending.length ? 'readwrite' : 'readonly', async tx => {
@@ -1370,10 +1382,11 @@
       if (!fields.length || fields.some(key => !DISPLAY_FIELDS.includes(key) || !displayKnown(key, changes[key]))) throw fault('invalid_request', '연표 표시 설정 값을 확인해 주세요.');
       const store = displayStore(), nowMs = Date.now(), snap = store ? displaySnapshot(store) : null, me = displayOwner();
       const settle = (pass, localSaved) => pass.then(
-        result => ({ ...result, accountSaved: true, localSaved: localSaved ?? (result.status === 'synced' || result.status === 'retry') }),
+        // The pass wrote the copies only when it reports 'synced' ('retry': another writer changed them first).
+        result => ({ ...result, accountSaved: true, localSaved: localSaved ?? result.status === 'synced' }),
         error => ({ status: 'failed', stored: false, accountSaved: false, localSaved: !!localSaved, error: { code: typeof error?.code === 'string' ? error.code : 'storage_failed', message: error?.message || '' } }));
       // Values without an owner that wait to be sent need the first-account check (displayClaim): those go below.
-      const plan = snap && (typeof snap.record?.owner === 'string' || !displayPending(snap, nowMs).length) ? displayPlan(snap, nowMs, 'mine') : null;
+      const plan = snap && !displayTimedOwnerless(snap, nowMs) ? displayPlan(snap, nowMs, 'mine') : null;
       if (plan) {
         let written = false;
         try {

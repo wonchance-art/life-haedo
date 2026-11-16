@@ -312,14 +312,70 @@ test('values without an owner go to the first account of this browser only', asy
   timelineEditor(single.local).curve(0);
   const only = single.base.forAccount(accountA); await engine(only, server2).syncNow();
   assert.deepEqual(serverItems(server2), { curve: 0 });
-  // Both accounts synced here before: the first one cannot be told, so neither gets them; they stay in the record.
+  // Both accounts synced here before: the first one cannot be told. Rule change (2026-11-16 coordinator decision,
+  // replacing 930ca00's held.unknown): the signed-in account takes them at 1970, so any real value of that account
+  // wins and nothing waits unseen in the record.
   const server3 = fakeServer(), both = device(); t.after(() => both.base.close());
   await both.base.forAccount(accountB).writeAccountDocCursor(0); await both.base.forAccount(accountA).writeAccountDocCursor(0);
   timelineEditor(both.local).curve(60);
   const again = both.base.forAccount(accountA); await engine(again, server3).syncNow();
-  assert.equal(server3.docs(accountA.userId).has(docKey(accountA)), false);
-  assert.deepEqual(record(both.local).held.unknown.map(item => [item.key, item.v]), [['curve', 60]]);
-  assert.equal(both.local.getItem(MA), '60', 'the copy is left as it is');
+  assert.deepEqual(server3.docs(accountA.userId).get(docKey(accountA)).data.items.map(item => [item.key, item.v, item.at]), [['curve', 60, EPOCH]]);
+  assert.equal(record(both.local).held, undefined, 'nothing is left unknown');
+  assert.equal(both.local.getItem(MA), '60');
+  // A 930ca00 record still holding 'unknown' values: they go to the signed-in account at 1970 and leave 'unknown'.
+  const server4 = fakeServer(), dev = device(); t.after(() => dev.base.close());
+  const four = dev.base.forAccount(accountA); await engine(four, server4).syncNow();
+  const old = record(dev.local); old.held = { unknown: [{ key: 'age', v: 'kr', at: '2026-11-16T00:00:00.000Z' }] }; dev.local.setItem(RECORD, JSON.stringify(old));
+  await engine(four, server4).syncNow();
+  assert.deepEqual(server4.docs(accountA.userId).get(docKey(accountA)).data.items.map(item => [item.key, item.v, item.at]), [['age', 'kr', EPOCH]]);
+  assert.equal(record(dev.local).held, undefined);
+  assert.equal(dev.local.getItem(AGE), 'kr');
+});
+
+// Coordinator decision 2026-11-16 (reviewer p12-1): a browser where two accounts synced before still has copy values
+// from the earlier release (no record at all, shared by the whole browser). The signed-in account takes them at 1970:
+// a real value of that account from another device wins, and the copy value is kept as one recovery copy.
+test('earlier-release copy values on a browser two accounts used go to the signed-in account at 1970', async t => {
+  const server = fakeServer(), shared = device({ [MA]: '0', [AGE]: 'kr' }), ipad = device();
+  t.after(() => { shared.base.close(); ipad.base.close(); });
+  await shared.base.forAccount(accountB).writeAccountDocCursor(0); await shared.base.forAccount(accountA).writeAccountDocCursor(0);
+  // No real value yet: the 1970 values become the account's.
+  const a = shared.base.forAccount(accountA); await engine(a, server).syncNow();
+  assert.deepEqual(server.docs(accountA.userId).get(docKey(accountA)).data.items.map(item => [item.key, item.v, item.at]), [['age', 'kr', EPOCH], ['curve', 0, EPOCH]]);
+  assert.equal(record(shared.local).held, undefined);
+  const i = ipad.base.forAccount(accountA); await engine(i, server).syncNow();
+  assert.equal(ipad.local.getItem(MA), '0'); assert.equal(ipad.local.getItem(AGE), 'kr');
+  // The same scene with a real value of the account already there (another device): that value wins.
+  const server2 = fakeServer(), mac = device(), other = device({ [MA]: '0' });
+  t.after(() => { mac.base.close(); other.base.close(); });
+  const m = mac.base.forAccount(accountA); await m.saveTimelineDisplay({ curve: 60 }); await engine(m, server2).syncNow();
+  await other.base.forAccount(accountB).writeAccountDocCursor(0); await other.base.forAccount(accountA).writeAccountDocCursor(0);
+  const o = other.base.forAccount(accountA); await engine(o, server2).syncNow();
+  assert.deepEqual(serverItems(server2), { curve: 60 }, 'the real value wins');
+  assert.equal(other.local.getItem(MA), '60');
+  const kept = await o.listAccountDocRecoveries(docKey());
+  assert.equal(kept.filter(row => JSON.stringify(row.value).includes('"v":0')).length, 1, 'the copy value is kept as one recovery copy');
+  assert.equal(record(other.local).held, undefined);
+});
+
+// Review 2 m2 (2026-11-16): a 설정 choice that could not be written to the copy at once goes through the pass; when
+// another writer changed the copy during that pass ('retry'), the copy does not hold the choice: localSaved is false.
+test('a choice that the pass could not write back because the copy changed reports localSaved false', async t => {
+  const local = device(); t.after(() => local.base.close());
+  await local.base.forAccount(accountB).writeAccountDocCursor(0); await local.base.forAccount(accountA).writeAccountDocCursor(0);
+  timelineEditor(local.local).curve(60); // A timed value without an owner: the choice takes the pass path (first-account check).
+  const a = local.base.forAccount(accountA), editor = timelineEditor(local.local), realGet = local.local.getItem;
+  let reads = 0;
+  local.local.getItem = key => { const value = realGet(key); if (key === RECORD && ++reads === 2) Promise.resolve().then(() => editor.curve(0)); return value; };
+  const result = await a.saveTimelineDisplay({ age: 'kr' });
+  local.local.getItem = realGet;
+  assert.equal(reads >= 2, true);
+  assert.equal(result.status, 'retry'); assert.equal(result.accountSaved, true);
+  assert.equal(result.localSaved, false, 'the copy does not hold the choice yet');
+  assert.equal(local.local.getItem(AGE), null);
+  assert.deepEqual((await a.readTimelineDisplay()).items.find(item => item.key === 'age').v, 'kr', 'the account document holds it');
+  await a.absorbTimelineDisplay();
+  assert.equal(local.local.getItem(AGE), 'kr', 'the next pass writes it');
 });
 
 // Review m2 (2026-11-16): three accounts on one browser. A and B left unsent values; C signs in and chooses.
