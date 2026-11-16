@@ -352,6 +352,23 @@ async function main() {
       assert.equal(await page.evaluate(() => actualOpened), await page.evaluate(() => actualSavedId));
       assert.equal(await page.locator('#actualEditorHost #photoTitle').count(), 0);
       assert.match(await page.locator('#actualEditorHost').innerText(), /글이 바뀌었습니다/);
+      // The list read and the post read may settle in either order. With the per-post list rows (2026-11-16)
+      // the list settled after the post read every time, and the arriving list cleared the error mount had
+      // just shown (photo-post-ui render). Both orders, set here, keep the error.
+      for (const listFirst of [true, false]) {
+        const text = await page.evaluate(async listFirst => {
+          const life = HaedoLife, storage = life.Shell.storage, ws = await storage.getActive();
+          let readDone, listDone; const read = new Promise(resolve => { readDone = resolve; }), list = new Promise(resolve => { listDone = resolve; });
+          const ordered = { ...storage,
+            listPhotoPosts: async (...args) => { if (!listFirst) await read; try { return await storage.listPhotoPosts(...args); } finally { listDone(); } },
+            readPhotoPost: async (...args) => { if (listFirst) await list; try { return await storage.readPhotoPost(...args); } finally { readDone(); } } };
+          const host = document.createElement('section'); document.querySelector('#lifeApp').append(host);
+          await life.PhotoPostUI.create({ storage: ordered, workspaceId: ws, isCurrent: () => true }).mount(host, { postId: actualSavedId, expectedRevision: 99 });
+          await Promise.all([read, list]); await new Promise(resolve => setTimeout(resolve, 50));
+          const shown = host.innerText; host.remove(); return shown;
+        }, listFirst);
+        assert.match(text, /글이 바뀌었습니다/, listFirst ? 'the list settles first' : 'the post read settles first');
+      }
       await page.evaluate(async () => {
         const s = HaedoLife.Shell.storage, ws = await s.getActive(), doc = await s.readPhotoPost(ws, actualSavedId);
         await actualEditor.mount(document.querySelector('#actualEditorHost'), { postId: doc.id, expectedRevision: doc.revision });
