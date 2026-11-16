@@ -273,6 +273,8 @@ async function main() {
       // Reading in the middle with recent scroll intent (a wheel turn): dragging reflows the column and the module
       // scrolls to keep the line; that program scroll must not be saved as the reading position.
       await page.locator('#lifeMain > .haedo-split-handle').focus(); await page.keyboard.press('End'); state = await split(page, '#lifeMain'); assert.equal(state.now, state.max); assert(state.max - 400 >= 280, 'room for the 400px drag: ' + state.max);
+      const wideContent = await page.evaluate(() => { const main = document.querySelector('#lifeMain'), css = getComputedStyle(main); return main.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight); });
+      assert.equal(state.max, Math.floor(wideContent - 44 - 420), '1920: the maximum leaves the reader 420px');
       await page.evaluate(() => scrollTo({ top: 2400, behavior: 'instant' })); await frames(page);
       const position = () => page.evaluate(async () => JSON.stringify(await HaedoLife.Shell.storage.readReadingPosition(await HaedoLife.Shell.storage.getActive())));
       await page.waitForTimeout(600); const before = await position();

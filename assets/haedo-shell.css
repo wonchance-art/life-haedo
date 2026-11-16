@@ -67,10 +67,12 @@ body.haedo-shell::before{display:none}
 .haedo-nav-compose>.haedo-nav-text{font-weight:inherit}
 .haedo-nav-compose>.haedo-tooltip{display:none}
 .haedo-icon-button.haedo-heading-compose{display:none}
-.haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-selected);color:var(--haedo-accent-hover)}
+.haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-hover);color:var(--haedo-accent-hover)}
 .haedo-shell a.haedo-nav-compose:active{background:var(--haedo-selected);color:var(--haedo-accent-active)}
 /* While writing a new post, 글쓰기 is the current screen (decision 15). */
-.haedo-shell a.haedo-nav-compose[aria-current=page]{background:var(--haedo-selected);color:var(--haedo-accent)}
+/* 글쓰기 is teal and 600 whether or not it is open, so its current state adds a 2px teal line on the left edge
+   (the selected surface alone is 1.11:1 on the menu panel: never the only cue). */
+.haedo-shell a.haedo-nav-compose[aria-current=page]{background:var(--haedo-selected);color:var(--haedo-accent);box-shadow:inset 2px 0 0 var(--haedo-accent)}
 .haedo-brand-mark{display:none;width:28px;height:28px;flex:none}
 .haedo-shell a.haedo-brand{color:var(--haedo-ink)}
 .haedo-icon-button{
@@ -98,7 +100,8 @@ body.haedo-shell::before{display:none}
 .haedo-nav .haedo-tooltip{top:50%;left:calc(100% + 8px);right:auto;transform:translateY(-50%)}
 .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
 @media(hover:hover) and (pointer:fine){
- .haedo-shell .haedo-icon-button:hover{background:var(--haedo-selected);color:var(--haedo-ink)}
+ /* Hover is lighter than the current item's surface, so the two never read alike; the current item keeps its own. */
+ .haedo-shell .haedo-icon-button:hover:not([aria-current=page],[aria-expanded=true]){background:var(--haedo-hover);color:var(--haedo-ink)}
  .haedo-icon-button:hover>.haedo-tooltip{display:block}
  .haedo-brand:hover{opacity:.72}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
@@ -169,6 +172,8 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-shell .life-search-bar{background:var(--haedo-paper);box-shadow:inset 0 0 0 1px var(--field-line);border-radius:var(--haedo-control-radius)}
 .haedo-shell :is(.life-selection-bar,.life-import-methods,.wb-share-confirm){background:var(--haedo-soft)}
 .haedo-shell .home-post-media{background:var(--haedo-soft)}
+/* blog-manager.css (read-only 공개 이름·소개 fields) and collection.css (candidate card) also filled with the canvas. */
+.haedo-shell :is(.blog-manager-profile-editor input[readonly],.blog-manager-profile-editor textarea[readonly],.cl-candidate){background:var(--haedo-soft)}
 .haedo-shell :is(.home-post-media,.home-draft-open,.home-resume):hover:not(:disabled),.haedo-shell .home-tabs>.home-tab:hover:not(:disabled){background:var(--haedo-hover)}
 /* A search match is not a selection: it keeps its own highlight colour. */
 .haedo-shell .life-search-context mark{background:var(--haedo-mark)}
@@ -194,9 +199,9 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-nav-compose>.haedo-compose-wide,.haedo-nav-compose>.haedo-nav-text{display:none}
  .haedo-nav-compose>.haedo-compose-narrow{display:block}
  .haedo-shell a.haedo-nav-compose{color:var(--haedo-accent)}
- .haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-selected);color:var(--haedo-accent-hover)}
+ .haedo-shell a.haedo-nav-compose:hover{background:var(--haedo-hover);color:var(--haedo-accent-hover)}
  .haedo-shell a.haedo-nav-compose:active{background:var(--haedo-selected)}
- .haedo-shell a.haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent)}
+ .haedo-shell a.haedo-nav-compose[aria-current=page]{background:transparent;color:var(--haedo-accent);box-shadow:none}
  .haedo-nav-compose:focus-visible>.haedo-tooltip{display:block;top:calc(100% + 4px);right:0;left:auto;transform:none}
  /* Screens with their own top bar hide the pencil; the source reader shows it again in assets/life/ui.css (#223). */
  body.haedo-shell:has(.life-toolbar[hidden]) .haedo-nav-compose{display:none}
@@ -227,7 +232,7 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 @media(forced-colors:active){
  body.haedo-shell,.haedo-nav,.haedo-account-panel{background:Canvas;color:CanvasText}
  .haedo-account-panel{border-color:CanvasText}.haedo-shell .haedo-icon-button{color:ButtonText}
- .haedo-shell .haedo-nav-link[aria-current=page]{color:Highlight;outline:2px solid Highlight;outline-offset:-2px}
+ .haedo-shell :is(.haedo-nav-link,a.haedo-nav-compose)[aria-current=page]{color:Highlight;outline:2px solid Highlight;outline-offset:-2px}
  .haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline-color:Highlight}
  .haedo-tooltip{background:CanvasText;color:Canvas;border:1px solid CanvasText}
 }
