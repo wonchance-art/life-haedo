@@ -10,6 +10,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(node => node.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; }, add: name => { if (!names().includes(name)) node.className = [...names(), name].join(' '); }, remove: name => { node.className = names().filter(value => value !== name).join(' '); } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }

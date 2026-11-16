@@ -10,6 +10,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(node => node.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; }, add: name => { if (!names().includes(name)) node.className = [...names(), name].join(' '); }, remove: name => { node.className = names().filter(value => value !== name).join(' '); } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }
@@ -131,6 +132,8 @@ test('late output availability preserves the draft-stored notice while newer IME
   assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '초안 보관 중 이어 쓴 한글');
   await title.emit('compositionend'); await f.ui.flush();
   assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+  // 2026-11-16 owner: said to screen readers, not shown.
+  assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
   await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
 });
 
@@ -291,10 +294,12 @@ test('save line states the actual store: account-synced preparations never claim
     await t.test(accountScoped ? 'account' : 'local only', async t => {
       const f = await fixture(t, { accountScoped }), gate = deferred();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
       f.setBeforeSave(() => gate.promise); await f.input('#mwTitle', '저장 위치 확인'); const flushing = f.ui.flush(); await settle();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '저장 중…' : '이 브라우저에 저장 중…');
       gate.resolve(); await flushing; await settle();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
       if (accountScoped) assert(!/브라우저/.test(f.host.textContent), 'no browser-only storage wording while the account syncs');
     });
   }
