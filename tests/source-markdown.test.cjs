@@ -224,3 +224,24 @@ test('missing browser YAML capability keeps the header literal and still formats
   assert.equal(plan.formatted, true); assert.equal(plan.frontmatter.kind, 'raw'); assert.equal(plan.frontmatter.reason, 'unavailable');
   assert.equal(literalHeader(plan), raw.slice(0, plan.frontmatter.end)); assert.match(plan.html, /<h1 data-source-block="1">합성 본문/);
 });
+
+// 2026-11-16 owner decision 12: a passage picked in the formatted view becomes a locator only inside a plain paragraph,
+// where the rendered text is exactly a slice of the original. Anything whose text on screen differs from the source is not one.
+test('plain paragraphs: one source line whose parser text equals the source slice; everything else is not plain', () => {
+  const plain = raw => { const plan = M.prepare(raw); assert(plan.formatted, raw); return plan.blocks.filter(block => block.plain).map(block => raw.slice(block.plain.start, block.plain.end)); };
+  assert.deepEqual(plain('평범한 한국어 문단이다. 😀'), ['평범한 한국어 문단이다. 😀']);
+  // A BOM, CRLF and indentation are outside the plain span; the span is exact UTF-16 offsets of the original.
+  const raw = '﻿첫 문단\r\n\r\n   들여 쓴 문단   \r\n\r\n# 제목\r\n';
+  const spans = M.prepare(raw).blocks.map(block => block.plain || null);
+  assert.deepEqual(spans, [{ start: 1, end: 5 }, { start: 12, end: 19 }, null]);
+  assert.deepEqual(spans.slice(0, 2).map(span => raw.slice(span.start, span.end)), ['첫 문단', '들여 쓴 문단']);
+  // Characters Markdown does not change stay plain (literal markup with html:false, a lone *, a backslash before a letter).
+  for (const text of ['x<y>z', '<b>html</b>', 'a * b', 'a\\b', '끝 역슬래시\\', 'https://example.org 주소']) assert.deepEqual(plain(text), [text], text);
+  // Not plain: escapes, entities, emphasis, links, code, line breaks, collapsed whitespace, NUL, and every other block.
+  for (const text of ['별\\*표', 'A &amp; B', '가&#45;나', '**강조** 문단', '_밑줄_', '~~취소~~', '[링크](https://example.org) 문단', '<https://example.org>',
+    '`코드` 문단', '줄 하나\n줄 둘', '줄 끝 공백  \n다음 줄', '두  칸', '탭\t문단', 'x\u0000y', '# 제목', '- 목록', '> 인용', '```\n코드\n```', '    들여 쓴 코드', '| a |\n|---|\n| b |', '첫 줄\n===', '[x]: https://example.org'])
+    assert.deepEqual(plain(text), [], JSON.stringify(text));
+  // A property header before a plain paragraph keeps its offsets.
+  const withProperties = withHeader('title: 합성', '\n평범한 본문 문단\n'), body = M.prepare(withProperties).blocks.find(block => block.plain);
+  assert.equal(withProperties.slice(body.plain.start, body.plain.end), '평범한 본문 문단');
+});
