@@ -54,7 +54,10 @@ async function main() {
             async readPhotoPost() { return structuredClone(doc); }, async readPageDrafts() { return { posts: [] }; }, async listStages() { return []; },
           };
           const blogSync = { async getState() { return { status: 'synced', remoteRevision: 1, publication: null }; },
-            async statuses() { return { [doc.id]: 'synced' }; }, async publish() { fixture.publishCalls++; throw new Error('This test must not publish'); } };
+            async statuses() { return { [doc.id]: 'synced' }; },
+            // 2026-11-16 (owner decision 7): the review reads the saved public name first and previews nothing without it.
+            async publicProfile() { return { author: { name: '', intro: '' }, saved: true, blogToken: null, posts: 0, visible: false }; },
+            async publish() { fixture.publishCalls++; throw new Error('This test must not publish'); } };
           window.manager = life.BlogManager.create({ storage, workspaceId: 'fixture-space', blogSync });
           await manager.mount(document.querySelector('#manager'), { postId: doc.id, expectedRevision: 1 });
         }, format);
