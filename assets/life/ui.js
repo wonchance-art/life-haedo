@@ -227,6 +227,11 @@
     // without a date in the address, dates reached in the app and entries recorded as today (scheduleToday) follow
     // today as before. null, or the same date as state.scheduleDate.
     let schedulePin = null;
+    // A screen opened over a pinned calendar screen (통합 검색, a post, an original) keeps the pin in its origin, and its
+    // in-app return pins the date again, as Back to that entry does (review 11-16 R2). Other sections still let it go.
+    const schedulePinOrigin = () => calendarModes.has(state.mode) && schedulePin && scheduleDate() === schedulePin ? { scheduleDate: schedulePin, schedulePinned: true } : {};
+    const pinnedReturn = origin => origin?.schedulePinned === true && calendarModes.has(origin.mode) && global.HaedoLife.ScheduleData?.valid(origin.scheduleDate)
+      ? { scheduleDate: origin.scheduleDate, schedulePinned: true } : {};
     const scheduleDate = () => {
       const sd = global.HaedoLife.ScheduleData;
       if (!sd) return null;
@@ -504,7 +509,7 @@
         if (item.kind === 'photo') return openPostInWorkspace(item.workspaceId, { photoPostId: item.id }, { focusKey });
         if (item.kind === 'plain') return navigate('page', { blogContext: true, pagePreview: false, searchTarget: { postId: item.id }, originFocusKey: focusKey });
         return navigate('source', { sourceId: item.kind === 'excerpt' ? item.sourceId : item.id, sourceVersionId: item.versionId, locator: item.locator || null,
-          returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey } });
+          returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey, ...schedulePinOrigin() } });
       },
       links: {
         plan: () => planDestinations(),
@@ -1565,7 +1570,7 @@
         focusKey: typeof options.originFocusKey === 'string' ? options.originFocusKey : control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
         ...(options.featureNavigation === true ? { featureNavigation: true, parentOrigin: viewOrigins.get(from) || null } : {}),
-        ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
+        ...(from === 'home' ? { homeState: home?.captureState() } : {}), ...schedulePinOrigin() } :
         from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } :
         from === 'source' && mode === 'page' && options.materialWritingSeed && state.returnContext?.workspaceId === state.bundle?.workspaceId
           ? (state.returnContext.mode === 'page' ? viewOrigins.get('page') : { ...state.returnContext }) : null;
@@ -2487,7 +2492,7 @@
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
       // A post saved here is shown in the list (below); otherwise 글쓰기 from another page returns to that page.
       if (state.mode === 'page' && blogPageTask && !blogCommitted && returnPagePattern.test(origin.returnPage || '')) return returnToPage(origin);
-      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget,
+      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back', restoresFocus: !anchor && !origin.postTarget, ...pinnedReturn(origin),
         ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
         ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
           blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
@@ -3745,7 +3750,7 @@
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
       if (context.mode === 'sources' && typeof context.folderFilter === 'string') state.folderFilter = context.folderFilter;
-      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null, blogPostId: context.mode === 'blog' ? context.blogPostId : null }) === false) return;
+      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', ...pinnedReturn(context), sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null, blogPostId: context.mode === 'blog' ? context.blogPostId : null }) === false) return;
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;

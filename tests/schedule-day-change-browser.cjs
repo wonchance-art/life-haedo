@@ -257,10 +257,11 @@ async function main() {
     });
 
     // Review 11-16 M1: the pin belongs to the screen the address opened. Leaving the calendar (menu 자료, then 일정 and D
-    // again) lets it go, so an app left open over midnight moves to today again (the 11-11 daily entry). The timeline's
-    // 일정에서 고치기 opens today's D through the same kind of address (the helper is read from assets/app.js).
+    // again) lets it go, so an app left open over midnight moves to today again (the 11-11 daily entry). The second round
+    // opens the address the timeline's 일정에서 고치기 makes (scheduleDayHref, read from assets/app.js) and checks that it is
+    // the same address as the first round; the timeline screen's own click is not driven here.
     const scheduleDayHref = new Function('return ' + /const scheduleDayHref=(d=>[^;]+);/.exec(readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'))[1])();
-    for (const start of ['address', 'timeline link']) {
+    for (const start of ['address', 'the address the timeline link makes (same as the address round)']) {
       await check('a pinned date is let go when the calendar is left (' + start + '): menu 자료 → 일정 → D, and the next day opens today; Back to the pinned entry pins it again', async ({ page }) => {
         await at(page, '2026-11-11T23:40:00+09:00');
         const href = start === 'address' ? '/index.html?section=schedule&view=day&date=2026-11-11' : '/' + scheduleDayHref('2026-11-11');
@@ -279,6 +280,34 @@ async function main() {
         assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
       });
     }
+
+    // Review 11-16 R2: a screen opened over the pinned screen (통합 검색, a post read from the day) returns to it in the app
+    // with the pin, as Back does; leaving for another section (M1 above) still lets it go.
+    await check('a pinned date is kept through 통합 검색 and 일정으로 돌아가기, and through a post read from the day and closed in the app', async ({ page }) => {
+      await at(page, '2026-11-11T23:40:00+09:00');
+      await page.goto(base + '/index.html?section=schedule&view=day&date=2026-11-11'); await ready(page); await shown(page, 'day');
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+        const doc = m.create(c.id, new Date('2026-11-11T21:00:00+09:00').toISOString()); doc.title = '저녁 산책 메모'; doc.status = 'saved';
+        doc.ops = [{ insert: '퇴근길에 천변을 따라 걸었다.\n' }]; await s.savePhotoPost(ws, doc, 0);
+      });
+      await page.reload(); await ready(page); await shown(page, 'day');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false });
+      // 통합 검색 and back with its own return.
+      await page.locator('#lifeFindOpen').click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'find');
+      await page.locator('#lifeSubviewReturn').click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false }, 'returned pinned');
+      await countDraws(page);
+      await overnight(page, '2026-11-12T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined }, 'the pinned date stays after 통합 검색');
+      // A post of that day, read and closed in the app.
+      await page.locator('#lifeSchedule [data-schedule-item^="photo:"]').first().click(); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'page');
+      await page.locator('#lifeSubviewReturn').click(); await shown(page, 'day'); await titled(page, '11월 11일 수요일');
+      assert.deepEqual(await recorded(page), { date: '2026-11-11', pinned: true, today: false }, 'returned pinned from the post');
+      await countDraws(page);
+      await overnight(page, '2026-11-13T07:30:00+09:00'); await redrawn(page);
+      assert.deepEqual({ ...(await snap(page)), today: undefined }, { title: '11월 11일 수요일', date: '2026-11-11', today: undefined }, 'the pinned date stays after reading the post');
+    });
 
     await check('a pinned day whose 행복도 choice failed is not held: the screen stays on its day, with its warning and input', async ({ page }) => {
       await at(page, '2026-11-11T23:50:00+09:00');
