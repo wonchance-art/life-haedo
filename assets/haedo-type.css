@@ -12,6 +12,10 @@
      12 badge · 13 meta · 15 control/list title · 17 reading · 24 title · 28 phone large title; inputs 16. */
   --haedo-text-badge: 12px; --haedo-text-meta: 13px; --haedo-text-control: 15px; --haedo-text-input: 16px;
   --haedo-text-body: 17px; --haedo-text-title: 24px; --haedo-text-title-large: 28px;
+  /* 2026-11-16 노션 방향: the desktop page title (1101px and wider) sits at the top of the content. */
+  --haedo-text-page-title: 34px;
+  /* Weights: 400 body, 500 labels, 600 titles of rows and the current item, 700 page and post titles only. */
+  --haedo-weight-regular: 400; --haedo-weight-medium: 500; --haedo-weight-semibold: 600; --haedo-weight-bold: 700;
   /* Spacing is a multiple of 4. */
   --haedo-space-1: 4px; --haedo-space-2: 8px; --haedo-space-3: 12px; --haedo-space-4: 16px;
   --haedo-space-5: 20px; --haedo-space-6: 24px; --haedo-space-8: 32px; --haedo-space-12: 48px;

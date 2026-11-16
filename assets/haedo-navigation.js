@@ -5,11 +5,11 @@
   // 2026-11-16 (notes-menu.md): 뉴스·일정·노트·자료·설정. 노트 holds my posts (the former 일정 목록);
   // 일정 is the Y·Q·M·W·D calendar only. The former IDs stay as aliases so old links and saved
   // addresses keep opening: home (the former list) is 노트, tools (Y) is 일정.
-  // 노트 shows the existing `edit` glyph until the design lead's `note` glyph lands (W1).
+  // 노트 uses the `note` glyph (Lucide file-text, W1 2026-11-16; notion-visual-contract.md 노트 아이콘).
   const sections = [
     { id: 'news', label: '뉴스', glyph: 'news', href: 'index.html?section=news' },
     { id: 'schedule', label: '일정', glyph: 'calendar', href: 'index.html?section=schedule&view=month' },
-    { id: 'notes', label: '노트', glyph: 'edit', href: 'index.html?section=notes' },
+    { id: 'notes', label: '노트', glyph: 'note', href: 'index.html?section=notes' },
     { id: 'records', label: '자료', glyph: 'book', href: 'index.html?section=records' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];

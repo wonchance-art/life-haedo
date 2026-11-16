@@ -209,6 +209,10 @@
       {
         "path": "icons/type.svg",
         "sha256": "4c6bb8c99f9eab5db6c3682ebd34d83ec201a2334cbcff3ed74c9276c231f751"
+      },
+      {
+        "path": "icons/file-text.svg",
+        "sha256": "aa6b6d77f35a0cb22a412fcdf8a3a317850ff6aa58810c91eab2b42a2311150d"
       }
     ]
   }

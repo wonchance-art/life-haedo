@@ -18,10 +18,12 @@
 body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=quarter],[data-mode=month],[data-mode=week],[data-mode=day])) :is(.life-toolbar,.life-main,.life-status,.life-error) { max-width: none; }
 body.haedo-shell:has(#lifeMain[data-mode=home]) :is(.life-main,.life-status,.life-error) { max-width: 720px; margin-left: 0; }
 body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=quarter],[data-mode=month],[data-mode=week],[data-mode=day])) .life-app { max-width: none; }
+/* The wide frame starts where the 768px app frame starts (goals·habits·연표 put ‹ and the title there),
+ * whatever the label menu's width (노션 방향 W1 2026-11-16: 216 → 240px). */
 @media (min-width: 1101px) {
   body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=quarter],[data-mode=month],[data-mode=week],[data-mode=day])) .life-app {
     width: auto; max-width: 1200px;
-    margin-left: calc(max(16px, (100vw - 1000px) / 2) + 224px - var(--haedo-nav-width)); margin-right: 24px;
+    margin-left: max(16px, calc((100% - 768px) / 2)); margin-right: 24px;
   }
 }
 /* iPad portrait (761–1100px, 2026-11-08 S2): two rows. The title row holds the title alone (never wrapped);

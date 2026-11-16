@@ -9,10 +9,12 @@ body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-planning-navigation
 /* ‹ and the title sit at the x of goals·habits·연표, whose shell icon button pulls its 12px inner
  * space out of the heading (haedo-shell.css .haedo-heading-title>.haedo-icon-button). */
 body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-toolbar > .haedo-heading-title > .life-icon-button:first-child { margin-left: -12px; }
+/* The wide frame starts where the 768px app frame starts (goals·habits·연표 put ‹ and the title there),
+ * whatever the label menu's width (노션 방향 W1 2026-11-16: 216 → 240px). */
 @media (min-width: 1101px) {
   body.haedo-shell:has(#lifeMain[data-mode=annual-plan]) .life-app {
     width: auto; max-width: 1200px;
-    margin-left: calc(max(16px, (100vw - 1000px) / 2) + 224px - var(--haedo-nav-width)); margin-right: 24px;
+    margin-left: max(16px, calc((100% - 768px) / 2)); margin-right: 24px;
   }
 }
 .annual-plan { --ap-ink: var(--ink); --ap-muted: var(--ink-soft); --ap-line: var(--line); color: var(--ap-ink); min-width: 0; }
