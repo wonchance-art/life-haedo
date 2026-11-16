@@ -5,8 +5,12 @@
   const labels = { not_enabled: '계정에 올리기 대기', pending: '계정에 올리는 중', synced: '계정에 올림',
     paused: '계정에 올리기 대기', conflict: '다른 기기 변경 확인 중', error: '계정에 올리지 못함', closed: '기록으로 저장한 초안' };
   const NOTICE = '다른 기기 변경을 반영했고 이전 내용은 복구 목록에 있습니다.';
+  // 2026-11-16 owner: uploading, uploaded, done and a draft not synced yet (not_enabled: no sync record
+  // yet, the ordinary state of a new draft) are said to screen readers only. paused, a conflict and a
+  // failure are shown.
+  const QUIET = new Set(['not_enabled', 'pending', 'synced', 'closed']);
   const el = (tag, text, cls) => { const value = document.createElement(tag); if (text != null) value.textContent = text; if (cls) value.className = cls; return value; };
-  function create({ host, manager, storage, workspaceId: ws, draftId: id, beforeAction, onOpen, isCurrent }) {
+  function create({ host, manager, storage, sourceSync = null, workspaceId: ws, draftId: id, beforeAction, onOpen, isCurrent }) {
     let disposed = false, busy = false, actionId = 0, refreshId = 0, state = null, error = '';
     host.id = 'lifeWritingSync'; host.dataset.draftId = id; host.classList.add('life-writing-sync');
     const summary = el('summary', '초안 동기화'); host.append(summary);
@@ -30,9 +34,17 @@
       const focus = content.contains(document.activeElement) ? document.activeElement.id : '';
       status.dataset.state = state?.status || 'error'; status.textContent = labels[state?.status] || '동기화 확인 필요';
       errorBox.textContent = error || state?.error?.message || ''; errorBox.hidden = !errorBox.textContent;
-      const short = errorBox.textContent ? '확인 필요' : state?.notice ? '변경 반영됨' :
-        ({ pending: '보내는 중', synced: '동기화됨', closed: '완료' })[state?.status];
-      summary.textContent = '초안 동기화' + (short ? ' · ' + short : '');
+      // not_enabled waits for the automatic loop to switch the draft on. It will not by itself (review n5,
+      // R2) when the server lacks the draft feature or refuses it (availability 'unavailable': schema_missing
+      // or permission_denied, retried with back-off), or when this workspace's originals' sync is in error
+      // or paused (the loop runs only for workspaces whose originals are connected): then the wait shows.
+      const stopped = state?.status === 'not_enabled' && (manager.availability?.()?.status === 'unavailable' || sourceStopped);
+      status.classList.toggle('life-save-quiet', !errorBox.textContent && QUIET.has(state?.status) && !stopped);
+      const problem = errorBox.textContent ? '확인 필요' : state?.notice ? '변경 반영됨' : '',
+        settled = problem ? '' : ({ pending: '보내는 중', synced: '동기화됨', closed: '완료' })[state?.status] || '';
+      // The summary's own words for a state that went well stay in its name only (screen readers).
+      summary.replaceChildren('초안 동기화' + (problem ? ' · ' + problem : ''));
+      if (settled) summary.append(el('span', ' · ' + settled, 'life-sr-only'));
       host.setAttribute('aria-busy', 'false'); content.replaceChildren();
       if (!state) content.append(button('다시 확인', 'writingSyncRetry', async () => {}));
       else {
@@ -53,11 +65,15 @@
       }
       if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
     }
+    let sourceStopped = false;
     async function refresh() {
       if (!alive() || busy) return; const token = ++refreshId;
       try {
         const next = await manager.getState(ws, id);
+        // Only for a draft not switched on yet; a failed read says nothing.
+        const source = next?.status === 'not_enabled' && sourceSync?.getState ? await sourceSync.getState(ws, { light: true }).catch(() => null) : null;
         if (!alive() || busy || token !== refreshId) return;
+        sourceStopped = ['error', 'paused'].includes(source?.status);
         state = next; draw();
       }
       catch (cause) { if (alive() && !busy && token === refreshId) { error = cause.message; state = null; draw(); } }

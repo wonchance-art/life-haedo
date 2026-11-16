@@ -37,7 +37,13 @@
       if (!alive()) return;
       status.dataset.state = selected ? state?.status || 'error' : 'empty';
       status.textContent = !selected ? '작성 준비를 고르면 동기화 상태를 표시합니다.' : labels[state?.status] || '동기화 확인 필요';
-      summary.textContent = '준비 동기화' + (state?.notice ? ' · 변경 반영됨' : state?.status === 'error' || failure ? ' · 확인 필요' : state?.status === 'synced' ? ' · 동기화됨' : '');
+      // 2026-11-16 owner: 다른 기기로 보내는 중, 모든 기기에 동기화됨 and a preparation not synced yet
+      // (not_enabled: no sync record yet) are said to screen readers only; paused, a conflict and a
+      // failure are shown. The summary's 동기화됨 stays in its name only.
+      status.classList.toggle('life-save-quiet', !!selected && !failure && ['not_enabled', 'pending', 'synced'].includes(state?.status));
+      const problem = state?.notice ? ' · 변경 반영됨' : state?.status === 'error' || failure ? ' · 확인 필요' : '';
+      summary.replaceChildren('준비 동기화' + problem);
+      if (!problem && state?.status === 'synced') summary.append(el('span', ' · 동기화됨', 'life-sr-only'));
       detail.replaceChildren(); if (!selected || !state) return;
       if (state.notice) {
         detail.append(el('p', NOTICE, 'life-help mc-notice'));

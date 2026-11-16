@@ -222,7 +222,7 @@ H.run(__filename, {
       await change();
       const stored = await H.stored(page, list => list.some(row => row.status === 'draft'), kind + ' 고친 수정본이 보관된다');
       assert.equal(await H.bodyText(page), text, kind + ': the body text itself is the same as the saved post\'s');
-      await H.until(() => H.status(page), value => value.text === '자동 저장됨', kind + ' stored');
+      await H.until(() => H.status(page), value => value.text === '자동 저장됨' && value.shown === '', kind + ' stored (said, not shown)');
       await close(page);
       const rows = await H.records(page);
       assert.equal(rows.length, 2, kind + ' 고친 수정본은 닫아도 남는다: ' + JSON.stringify(rows.map(row => [row.status, row.title])));

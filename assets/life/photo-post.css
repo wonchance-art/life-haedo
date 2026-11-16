@@ -17,6 +17,9 @@
    remains announced without inserting a second row above the title. */
 .photo-posts[data-mode="read"] { display: flex; flex-direction: column; margin-top: 0; }
 .photo-posts[data-mode="read"] > .photo-status[data-state="success"] { order: 1; margin: 0 auto 20px; }
+/* 2026-11-16: a quiet save state (.life-save-quiet, ui.css) keeps its slot in the editor's command row;
+   the reader has no such slot, so its 비공개 글을 저장했어요 leaves the layout too (screen readers only). */
+.photo-posts[data-mode="read"] > .photo-status.life-save-quiet { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; white-space: nowrap; }
 .photo-posts[data-mode="read"] > .photo-article { width: 100%; margin-top: 0; }
 .photo-status {
   position: relative;

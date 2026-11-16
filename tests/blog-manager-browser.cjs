@@ -4,6 +4,7 @@
  */
 'use strict';
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4196';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
@@ -56,7 +57,8 @@ async function main() {
           async statuses() { return Object.fromEntries([...docs.keys()].map(id => [id, testData.syncFail ? 'error' : state.status])); },
           async syncNow(options) { testData.syncRuns = (testData.syncRuns || 0) + 1; testData.syncOptions = structuredClone(options || null); if (!testData.syncFail) state.status = 'synced'; return { state: state.status }; },
           async deletePost(ws, id, options) { if (testData.deleteFail) throw Object.assign(Error('공개 중인 글입니다. 공개를 철회한 뒤 삭제해 주세요.'), { code: 'blog_post_published' }); if (docs.get(id)?.revision !== options.expectedRevision) throw Object.assign(Error('바뀐 글'), { code: 'photo_post_conflict' }); docs.delete(id); testData.deleted = [...(testData.deleted || []), id]; },
-          subscribe() { return () => {}; },
+          subscribe(fn) { (window.__syncListeners ||= new Set()).add(fn); return () => window.__syncListeners.delete(fn); },
+          getStatus() { return { lastError: testData.lastError || null, running: false }; },
           // 2026-11-16 (decision 7): the owner-only read and explicit save of the public name and intro.
           async publicProfile() { testData.profileReads++; if (testData.profileReadFail) throw Object.assign(Error('익명 읽기 실패'), { code: 'network_error' }); return { ...structuredClone(testData.profile), visible: testData.profile.posts > 0 }; },
           async savePublicProfile(ws, author) { if (testData.profileSaveFail) throw Object.assign(Error('익명 저장 실패'), { code: 'network_error' }); testData.profileSaves.push(structuredClone(author)); testData.profile = { ...testData.profile, author: structuredClone(author), saved: true }; return { ...structuredClone(testData.profile), visible: testData.profile.posts > 0 }; },
@@ -78,6 +80,14 @@ async function main() {
       assert.equal(await page.locator('.blog-manager-server').count(), 0, 'no per-device server panel remains');
       assert.equal(await draftRow.locator('[data-sync-post="draft-photo"]').innerText(), '계정에 올리기 대기', 'drafts sync to every device too');
       assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]').innerText(), '계정에 올리기 대기');
+      // 2026-11-16: a wait that is simply due is said, not shown; once a pass could not reach the account it shows (review n4).
+      const syncLine = page.locator('.blog-post[data-post-id="saved-photo"] [data-sync-post="saved-photo"]');
+      assert.deepEqual(await saveStatus(syncLine), { said: '계정에 올리기 대기', shown: '' }, 'an upload simply due is quiet');
+      await page.evaluate(() => { testData.lastError = 'network_error'; for (const fn of window.__syncListeners || []) fn({ type: 'status', status: { running: false, lastError: 'network_error' } }); });
+      await page.waitForFunction(() => !document.querySelector('[data-sync-post="saved-photo"]')?.classList.contains('life-sr-only'));
+      assert.deepEqual(await saveStatus(syncLine), { said: '계정에 올리기 대기', shown: '계정에 올리기 대기' }, 'a stalled wait is shown');
+      await page.evaluate(() => { testData.lastError = null; for (const fn of window.__syncListeners || []) fn({ type: 'status', status: { running: false } }); });
+      await page.waitForFunction(() => document.querySelector('[data-sync-post="saved-photo"]')?.classList.contains('life-sr-only'));
       for (const label of ['이 글 서버에 보관', '서버와 변경 확인', '이 글 서버 연결 중지', '이 브라우저에서 글 찾기', '별도 사본 만들기']) assert.equal(await page.getByText(label, { exact: true }).count(), 0, label);
       assert.equal(await page.getByRole('button', { name: '보관해 둔 여행', exact: true }).count(), 0);
       assert.equal(await page.getByText('가져오기 검토 제외', { exact: true }).count(), 0);
@@ -273,12 +283,16 @@ async function main() {
       await page.evaluate(() => { testData.profileSaveFail = true; });
       await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
       assert.equal(await name.inputValue(), '바꾼 익명 이름', 'a failed save keeps the input');
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), false, 'a failed save stays on screen');
       assert.deepEqual(await page.evaluate(() => testData.profileSaves), []);
       await page.evaluate(() => { testData.profileSaveFail = false; });
       await editor.getByRole('button', { name: '저장', exact: true }).click(); await idle();
       await page.waitForFunction(() => /공개 이름과 소개를 저장했습니다/.test(document.querySelector('.blog-manager > [role="status"]')?.textContent || ''));
       assert.deepEqual(await page.evaluate(() => testData.profileSaves), [{ name: '바꾼 익명 이름', intro: '익명 공개 소개' }]);
       assert.equal(await page.evaluate(() => manager.dirty()), false);
+      // 2026-11-16 owner: the settled save is said to screen readers only; the editor keeps its plain state line.
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), true, 'the save success is not on-screen text');
+      assert.equal(await editor.locator('.blog-manager-profile-state').innerText(), '현재 저장된 값입니다.');
       // The open review now shows the saved byline; its choices stay, and the preview made with the earlier byline ends.
       assert.match(await panel.locator('.blog-manager-profile-values').innerText(), /바꾼 익명 이름/);
       assert.equal(await photo.isChecked(), true, 'the chosen photo stays chosen');
@@ -309,6 +323,7 @@ async function main() {
       await page.locator('.blog-manager-profile[data-state="failed"]').waitFor();
       await page.getByRole('button', { name: '공개 미리보기 갱신', exact: true }).click(); await idle();
       assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /읽지 못해 미리보기를 만들지 않았습니다/);
+      assert.equal(await page.locator('.blog-manager > [role="status"]').evaluate(n => n.classList.contains('life-sr-only')), false, 'a message after a quiet save is shown again');
       await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); await idle();
       assert.equal(await page.evaluate(() => testData.publishCalls.length), 0, 'nothing published without the saved values');

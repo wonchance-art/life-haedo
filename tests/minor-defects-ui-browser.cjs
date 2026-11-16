@@ -7,6 +7,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { playwright, makeContext, ready, shellReady, settle, importExcerpt } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 const out = path.resolve(process.env.E_UI_OUTPUT || '.local/minor-defects-ui');
 const selected = process.env.E_UI_CASE;
 const report = { scope: 'Synthetic Auth and real IndexedDB, Linux Chromium at 1440/390; no Apple-device or deployment claim', checks: [], geometry: [], errors: [], consoleErrors: [], external: [] };
@@ -230,7 +231,9 @@ async function sourceStatus(page, width) {
   await page.goto(base + '/index.html?section=records'); await ready(page);
   const raw = '첫 합성 원문. 저장된 문장도 그대로 보존합니다. 마지막 줄.';
   await importExcerpt(page, '원문 저장 상태 합성 검사', raw, '저장된 문장도 그대로 보존합니다.');
-  const expect = async text => { try { await page.waitForFunction(text => document.querySelector('#lifeSaveStatus')?.textContent === text, text); } catch(error) { assert.equal(await page.locator('#lifeSaveStatus').textContent(),text,error.message); } };
+  const expect = async text => { try { await page.waitForFunction(text => document.querySelector('#lifeSaveStatus')?.textContent === text, text); } catch(error) { assert.equal(await page.locator('#lifeSaveStatus').textContent(),text,error.message); }
+    // 2026-11-16 owner: a save that went well or is about to be uploaded is said to screen readers only.
+    assert.deepEqual(await saveStatus(page.locator('#lifeSaveStatus')), { said: text, shown: '' }, text); };
   const set = value => page.evaluate(value => sourceStatusSync.set(value), value);
   await expect('모음에 반영됨 · 저장됨 · 계정에 올리기 대기');
   const before = await page.evaluate(async () => {
@@ -242,6 +245,7 @@ async function sourceStatus(page, width) {
   await set('error');
   await page.waitForFunction(() => document.querySelector('#lifeSaveStatus')?.dataset.saveState==='error');
   assert.match(await page.locator('#lifeSaveStatus').textContent(), /계정에 올리지 못함/);
+  assert.match((await saveStatus(page.locator('#lifeSaveStatus'))).shown, /계정에 올리지 못함/, 'a failure is shown');
   await page.locator('#lifeSaveStatus').getByRole('button', { name:'다시 시도',exact:true }).click();
   await expect('모음에 반영됨 · 저장됨 · 계정에 올림');
   await page.evaluate(() => {sourceStatusSync.hold('releaseSourceStatus');sourceStatusSync.set('synced');});

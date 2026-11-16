@@ -10,6 +10,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(node => node.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; }, add: name => { if (!names().includes(name)) node.className = [...names(), name].join(' '); }, remove: name => { node.className = names().filter(value => value !== name).join(' '); } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }
@@ -64,6 +65,38 @@ async function fixture(t, options = {}) {
     setBundle: value => { bundle = clone(value); }, setBeforeSources: value => { beforeSources = value; },
     setBeforeSave: value => { beforeSave = value; }, setBeforeCreate: value => { beforeCreate = value; }, setFailRead: value => { failRead = value; }, setFailOpen: value => { failOpen = value; }, setScope: value => { scope = value; }, creates: () => creates };
 }
+
+function recordStatus(node) {
+  const seen = []; let className = node.className;
+  Object.defineProperty(node, 'className', { configurable: true, get: () => className, set: value => { className = value; seen.push({ text: node.textContent, quiet: String(value).split(' ').includes('life-save-quiet') }); } });
+  return seen;
+}
+// 2026-11-16 review N2: typing (plain and Korean composition) shows no words from the first keystroke until
+// the autosave stored it; the words stay for screen readers.
+test('typing shows no status words until the autosave stored it', async t => {
+  const f = await fixture(t), seen = recordStatus(f.get('.mw-status')), title = f.get('#mwTitle');
+  await f.input('#mwTitle', '자동 저장을 기다리는 제목');
+  await title.emit('compositionstart'); title.value = '자동 저장을 기다리는 제목 한글'; await title.emit('input'); await title.emit('compositionend');
+  await new Promise(resolve => setTimeout(resolve, 700)); await f.ui.flush();
+  assert.ok(seen.length > 2, 'the line was rewritten while typing');
+  assert.deepEqual(seen.filter(value => !value.quiet), [], 'nothing shown while typing and storing');
+  assert.equal(f.db().plans[0]?.title ?? f.get('#mwTitle').value, '자동 저장을 기다리는 제목 한글');
+  assert.match(f.get('.mw-status').textContent, /저장됨/);
+});
+
+// 2026-11-16 review R1: the autosave skips while the source panel loads; input typed meanwhile is stored once
+// the panel loaded (its quiet unsaved state never stays unsaved).
+test('input typed while the sources load is stored after they loaded', async t => {
+  const f = await fixture(t), hold = deferred(); f.setBeforeSources(() => hold.promise);
+  const mounting = f.ui.mount(f.host); await settle();
+  await f.input('#mwTitle', '자료를 불러오는 동안 쓴 제목');
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.notEqual(f.db().plans[0].title, '자료를 불러오는 동안 쓴 제목', 'held while the sources load');
+  hold.resolve(); await mounting; await settle();
+  await new Promise(resolve => setTimeout(resolve, 700)); await settle();
+  assert.equal(f.db().plans[0].title, '자료를 불러오는 동안 쓴 제목', 'stored once the sources loaded');
+  assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+});
 
 test('ordered blocks and adopted quotes preview in full; private question and source notes require explicit paragraph copying', async t => {
   const f = await fixture(t), title = await f.input('#mwTitle', '글 제목'), question = await f.input('#mwQuestion', 'PRIVATE_QUESTION');
@@ -131,6 +164,8 @@ test('late output availability preserves the draft-stored notice while newer IME
   assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '초안 보관 중 이어 쓴 한글');
   await title.emit('compositionend'); await f.ui.flush();
   assert.equal(f.get('.mw-status').textContent, '이 브라우저에 비공개로 저장됨');
+  // 2026-11-16 owner: said to screen readers, not shown.
+  assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
   await f.click('#mwContinue'); assert.equal(f.creates(), 1); assert.equal(f.opens.length, 1);
 });
 
@@ -291,10 +326,12 @@ test('save line states the actual store: account-synced preparations never claim
     await t.test(accountScoped ? 'account' : 'local only', async t => {
       const f = await fixture(t, { accountScoped }), gate = deferred();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
       f.setBeforeSave(() => gate.promise); await f.input('#mwTitle', '저장 위치 확인'); const flushing = f.ui.flush(); await settle();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '저장 중…' : '이 브라우저에 저장 중…');
       gate.resolve(); await flushing; await settle();
       assert.equal(f.get('.mw-status').textContent, accountScoped ? '비공개로 저장됨' : '이 브라우저에 비공개로 저장됨');
+      assert.equal(f.get('.mw-status').classList.contains('life-save-quiet'), true);
       if (accountScoped) assert(!/브라우저/.test(f.host.textContent), 'no browser-only storage wording while the account syncs');
     });
   }

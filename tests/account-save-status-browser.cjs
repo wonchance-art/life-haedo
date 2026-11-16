@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, ready, makeContext } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 const out = path.resolve('.local/account-save-status');
 async function main() {
   await fs.mkdir(out, { recursive: true });
@@ -19,7 +20,7 @@ async function main() {
       const listeners=new Set();let phase='pending',held=null,failRead=false;
       managers[domain]={
         getState:async id=>{if(failRead)throw Error('status unavailable');const saved=domain==='composition'?await options.storage.readWorkbench(id):(await options.storage.readLibraryMetaSnapshot(id)).metadata;
-          const result={workspaceId:id,binding:{...options.storage.account,remoteId:id},enabled:true,status:phase==='error'?'error':phase==='pending'?'pending':'synced',remoteRevision:1,syncedLocalRevision:saved.revision-(phase==='stale'?1:0),outbox:null,error:phase==='error'?{code:'network_error'}:null,conflict:null};
+          const result={workspaceId:id,binding:{...options.storage.account,remoteId:id},enabled:phase!=='paused',status:phase==='error'?'error':phase==='paused'?'paused':phase==='pending'?'pending':'synced',remoteRevision:1,syncedLocalRevision:saved.revision-(phase==='stale'?1:0),outbox:null,error:phase==='error'?{code:'network_error'}:null,conflict:null};
           if(held){const release=held;held=null;await new Promise(resolve=>window[release]=resolve);}return result;},
         subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);},syncNow:async()=>{phase='synced';for(const fn of listeners)fn({});},
         set:value=>{phase=value;for(const fn of listeners)fn({});},hold:key=>held=key,fail:value=>{failRead=value;for(const fn of listeners)fn({});}
@@ -31,7 +32,13 @@ async function main() {
   const page = await context.newPage(); page.setDefaultTimeout(12000);
   page.on('pageerror', e => report.errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
   const check = async (name, fn) => { await fn(); report.checks.push(name); console.log('PASS ' + name); };
-  const expect = async (selector, text) => { await page.waitForFunction(([selector, text]) => document.querySelector(selector)?.textContent === text, [selector, text]); };
+  // 2026-11-16 owner: a save that went well or is about to be uploaded is said to screen readers only
+  // (the live region keeps the words, nothing shows); a failure, a stopped sync and an unsaved change show.
+  const QUIET = /^저장됨(?: · 계정에 올림| · 계정에 올리기 대기)?$/;
+  const expect = async (selector, text, shown = !QUIET.test(text)) => {
+    await page.waitForFunction(([selector, text]) => document.querySelector(selector)?.textContent === text, [selector, text]);
+    assert.deepEqual(await saveStatus(page.locator(selector)), { said: text, shown: shown ? text : '' }, selector + ': ' + text);
+  };
   const set = (domain, phase) => page.evaluate(([domain, phase]) => testSync[domain].set(phase), [domain, phase]);
   try {
     await page.goto(base + '/index.html?section=records&view=page'); await ready(page); await page.locator('#wbPageNine').waitFor();
@@ -43,6 +50,9 @@ async function main() {
       await page.locator('#wbSyncRetry').click(); await expect('#wbStatus', '저장됨 · 계정에 올림');
       await page.evaluate(()=>testSync.composition.fail(true)); await expect('#wbStatus', '저장됨 · 계정에 올리지 못함 · 다시 시도');
       await page.evaluate(()=>testSync.composition.fail(false)); await expect('#wbStatus', '저장됨 · 계정에 올림');
+      // A paused sync does not end by itself: its wait is shown.
+      await set('composition', 'paused'); await expect('#wbStatus', '저장됨 · 계정에 올리기 대기', true);
+      await set('composition', 'synced'); await expect('#wbStatus', '저장됨 · 계정에 올림');
     });
     await page.locator('#wbPageNine').click(); await page.getByRole('button', { name: '새 9칸 구성', exact: true }).click();
     await page.locator('#nbTitle').fill('계정 저장 상태를 확인하는 구성'); await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
@@ -62,10 +72,21 @@ async function main() {
       await page.waitForFunction(()=>!!window.releaseOldAck);await set('library','error');await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도');
       await page.evaluate(()=>releaseOldAck());await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도');
       await page.locator('#nbTitle').dispatchEvent('compositionstart');await page.locator('#nbTitle').fill('한글 조합 중 새 입력');
-      await set('library','synced');await expect('.nb-status','저장 전 변경 있음');
+      // 2026-11-16 review M2: a change the autosave will store (here once Korean input ends) is said only.
+      await set('library','synced');await expect('.nb-status','저장 전 변경 있음',false);
       assert(await page.locator('#nbTitle').evaluate(e=>e===window.savedTitle));assert.equal(await page.locator('#nbTitle').inputValue(),'한글 조합 중 새 입력');
       await page.locator('#nbTitle').dispatchEvent('compositionend');await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved');
       await set('library','synced');await expect('.nb-status','저장됨 · 계정에 올림');
+    });
+    await check('Typing in the nine-board editor shows no words from the keystroke until the autosave stored it', async () => {
+      await set('library','synced'); await expect('.nb-status','저장됨 · 계정에 올림');
+      await page.evaluate((selector=>{const s=document.querySelector(selector);window.__shownWords=[];window.__watching=true;const look=()=>{const st=getComputedStyle(s);if(!s.hidden&&st.display!=='none'&&!/inset\(50%\)/.test(st.clipPath)&&s.getClientRects().length&&s.textContent)window.__shownWords.push(s.textContent);if(window.__watching)requestAnimationFrame(look);};look();}),'.nb-status');
+      await page.locator('#nbTitle').pressSequentially(' 더함',{delay:40});
+      await page.waitForFunction(()=>document.querySelector('.nb-status')?.dataset.state==='saved'&&document.querySelector('.nb-status').textContent==='저장됨 · 계정에 올림');
+      assert.deepEqual(await page.evaluate(()=>{window.__watching=false;return [...new Set(window.__shownWords)];}),[],'no words shown while typing and storing');
+      // A stopped (paused) library sync is shown.
+      await set('library','paused'); await expect('.nb-status','저장됨 · 계정에 올리기 대기',true);
+      await set('library','synced'); await expect('.nb-status','저장됨 · 계정에 올림');
     });
     for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1000 }); await set('library','error'); await expect('.nb-status','저장됨 · 계정에 올리지 못함 · 다시 시도'); await page.screenshot({path:path.join(out,`status-${width}.png`),fullPage:true}); assert(await page.locator('.nb-sync-retry').isVisible()); assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)); }
     await check('Leaving the nine-board editor ignores its late status response and restores the page composition status', async () => {

@@ -9,6 +9,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 
 const output = path.resolve(process.env.SCHEDULE_ENTRIES_OUTPUT || '.local/schedule-entries-browser');
 // Finds and measures in one evaluation. locator.evaluateAll() resolves the nodes in one round trip and runs the
@@ -114,6 +115,8 @@ async function main() {
       await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
       await statusOf(page).filter({ hasText: '계정에 올리기 대기' }).waitFor();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
+      // 2026-11-16 owner: both steps are said to screen readers only; nothing shows.
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '' }, 'a save that went well is not shown');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
       // Reopening shows the saved check.
       await page.reload(); await ready(page); await shown(page, 'day'); await entries(page);
@@ -195,6 +198,7 @@ async function main() {
       page.__expectFailure = true; tables.fail = 'haedo_items';
       await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
       await statusOf(page).filter({ hasText: '계정에 올리지 못함 · 다시 시도' }).waitFor({ timeout: 10000 });
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '계정에 올리지 못함 · 다시 시도', shown: '계정에 올리지 못함 · 다시 시도' }, 'a failure is shown');
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isChecked(), true, 'the check stays');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, []);
       tables.fail = null;
@@ -213,6 +217,10 @@ async function main() {
       tables.hold = null; release();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('schedule-entry-status')), true, 'focus stays on the status line');
+      // The focused line shows while it has keyboard focus (never focus on something invisible), then goes quiet.
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '저장됨 · 계정에 올림' }, 'the focused result shows');
+      await page.evaluate(() => document.activeElement.blur());
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '' }, 'once focus leaves it is said only');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
     });
 
