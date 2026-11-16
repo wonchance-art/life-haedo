@@ -44,6 +44,8 @@
 
 ## 허용 목록 (서버 `validateInput`, 기기 `requestBody` 같은 규칙)
 
+2026-11-16 뉴스 `news_pick` 작업이 같은 함수에 더해졌다. 별도 허용 목록(`validatePickInput`)·하한·응답 정리는 [뉴스 AI 추천](news-pick.md)에 있고, 아래 글쓰기 작업의 규칙은 바뀌지 않았다.
+
 요청 본문의 키는 정확히 `requestId, task, selection?, guidance?, instruction?, sources?` 중에서만 온다. **다른 키가 하나라도 있으면 값과 관계없이 거절한다.** 사용자·작업공간·글 ID, 이메일, 사진, ops, 제목, 모델, max_tokens 같은 키가 여기에 해당한다. 이 검사는 Auth·DB·공급자 호출보다 먼저 한다.
 
 | 필드 | 규칙 |

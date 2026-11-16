@@ -33,6 +33,9 @@
     let privateAborter = null, privateEpoch = 0;
     let wideClient = null, wideAborter = null, wideEpoch = 0, wideClearing = null, wideUnlisten = null;
     const wideModel = () => root.HaedoLife.DiscoveryWideRemote;
+    // AI 추천 (docs/design-review/news-pick.md): the request goes through the same account-guarded client as 넓게 찾기.
+    let pickAborter = null, pickEpoch = 0, pickCount = null;
+    const pickModel = () => root.HaedoLife.DiscoveryPick;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => scope() && token === generation;
     const model = () => root.HaedoLife.DiscoveryProfile;
@@ -155,6 +158,8 @@
     function rank() {
       if (!current?.catalog?.feed || !current.profile || !current.feedback || !current.settings || !current.languageSettings) return null;
       const feed = settingsModel().filterFeed(current.catalog.feed, desiredSettings()), options = rankOptions();
+      // AI 추천 orders the latest list (picked rows move to the front in draw, see pickModel().order).
+      if (current.mode === 'pick') return client.rank(feed, { ...options, mode: 'latest' });
       if (current.mode !== 'personal' || current.personalBlocked || !current.actions?.personalizationEnabled) return client.rank(feed, { ...options, mode: current.mode === 'personal' ? current.baselineMode : current.mode });
       if (!current.personalResult) return client.rank(feed, { ...options, mode: current.baselineMode });
       const allowed = new Set(feed.articles.filter(article => engine().languageAllowed(article.language, options.contentLanguages)).map(article => article.canonicalUrl));
@@ -169,7 +174,9 @@
       } else current.personalResult = null;
       current.personalPending = true;
     }
-    function blockPersonal() { current.personalBlocked = true; current.personalStopLatched = true; current.mode = current.baselineMode; dropPersonal(); }
+    // Leaving 개인 추천 returns to its baseline; AI 추천 and the other orders are not 개인 추천 and stay.
+    function leavePersonal() { if (current.mode === 'personal') current.mode = current.baselineMode; }
+    function blockPersonal() { current.personalBlocked = true; current.personalStopLatched = true; leavePersonal(); dropPersonal(); }
     function applyPersonal() {
       if (!scope() || !current.catalog?.feed || languageWrite || languageDirty() || current.languageConflict || current.personalBlocked || !current.actions?.personalizationEnabled) return;
       capture(); current.collection = 'discover'; current.collectionUrls = null; resetList();
@@ -266,9 +273,10 @@
       else { surface.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
     }
     function setMode(mode) {
-      if (!['latest', 'related', 'personal'].includes(mode) || mode === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked)) return;
-      capture(); current.collection = 'discover'; current.collectionUrls = null;
+      if (!['latest', 'related', 'personal', 'pick'].includes(mode) || mode === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked) || mode === 'pick' && !pickSaved()) return;
+      capture(); current.collection = 'discover'; current.collectionUrls = null; current.modeChosen = true;
       if (mode === 'personal') applyPersonal();
+      else if (mode === 'pick') { current.mode = 'pick'; current.memory = null; resetList(); applyPendingPick(); draw(); refreshPick().catch(error => report(error)); }
       else { current.mode = mode; current.baselineMode = mode; current.memory = null; resetList(); draw(); }
     }
     function startAction(intent) {
@@ -349,7 +357,8 @@
     function reactionMore(article, moreBody) {
       const entry = entryFor(article);
       if (entry) {
-        const exclusion = isWide(article) ? null : button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); if (exclusion) { exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(exclusion); }
+        // A found link's 담기 is not a recommendation signal; its 좋아요 is (결정 6, 2026-11-16), and stays on the device and account.
+        const exclusion = isWide(article) && !entry.liked ? null : button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); if (exclusion) { exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(exclusion); }
         if (current.collection !== 'discover') {
           const forget = button('목록 정보 완전히 지우기', null, () => { current.confirmForget = entry.canonicalUrl; draw(); }, 'discovery-quiet'); forget.dataset.discoveryForget = ''; forget.disabled = !!actionWrite || !!current.actionIntent; moreBody.append(forget);
           if (current.confirmForget === entry.canonicalUrl) moreBody.append(node('p', '좋아요·담기와 복구 정보를 모두 지웁니다. 자료 원문은 유지합니다.', 'life-meta'), button('이 글의 반응 완전히 지우기', 'discoveryForgetConfirm', () => startAction({ type: 'forget', canonicalUrl: entry.canonicalUrl })), button('지우기 취소', 'discoveryForgetCancel', () => { current.confirmForget = null; draw(); }, 'discovery-quiet'));
@@ -370,7 +379,7 @@
       progress.append(icon('refresh', 16), node('span'));
       const failed = button(null, 'discoveryFailedSources', () => { current.optionsOpen = true; showSettings(true); if (current.options) current.options.open = true; }, 'discovery-failed');
       failed.title = '출처·갱신 설정 열기'; failed.append(icon('info', 16), node('span'));
-      const refresh = button('지금 갱신', 'discoveryRefreshNow', () => { capture(null, 'refresh-now'); filter.open = false; refreshWide({ force: true }).catch(error => report(error)); return loadCatalog(); }, 'discovery-quiet discovery-refresh-now');
+      const refresh = button('지금 갱신', 'discoveryRefreshNow', () => { capture(null, 'refresh-now'); filter.open = false; refreshWide({ force: true }).catch(error => report(error)); return refreshAll(); }, 'discovery-quiet discovery-refresh-now');
       refresh.dataset.focusKey = 'refresh-now'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(icon('refresh', 16));
       statusRow.append(progress, failed);
       const toolbar = node('div', null, 'discovery-news-toolbar'), scroller = node('div', null, 'discovery-tab-scroller');
@@ -398,7 +407,7 @@
       const filterBody = node('div', null, 'discovery-filter-body');
       const sortLabel = node('label', '정렬', 'discovery-filter-label'); sortLabel.htmlFor = 'discoverySort';
       const sort = node('select', null, 'discovery-sort'); sort.id = 'discoverySort'; sort.setAttribute('aria-label', '글 정렬');
-      for (const [value, label] of [['latest', '최신순'], ['related', '관심순'], ['personal', '개인 추천']]) { const option = node('option', label); option.value = value; sort.append(option); }
+      for (const [value, label] of [['latest', '최신순'], ['related', '관심순'], ['personal', '개인 추천'], ['pick', 'AI 추천']]) { const option = node('option', label); option.value = value; sort.append(option); }
       // A chosen order closes the filter and keeps keyboard focus on its icon.
       sort.addEventListener('change', () => { if (scope()) { setMode(sort.value); filter.open = false; filterSummary.focus({ preventScroll: true }); } });
       const topicsLink = button('관심 주제', 'discoveryFilterTopics', () => { filter.open = false; current.topicsOpen = true; showSettings(true); if (current.editor) current.editor.open = true; }, 'discovery-quiet');
@@ -443,7 +452,7 @@
       }
       for (const option of sort.options) {
         option.selected = current.mode === option.value;
-        option.disabled = option.value === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked);
+        option.disabled = option.value === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked) || option.value === 'pick' && !pickSaved();
       }
       if (sort.value !== current.mode && [...sort.options].some(option => option.value === current.mode)) sort.value = current.mode;
       sort.hidden = current.collection !== 'discover'; settings.setAttribute('aria-expanded', String(!!current.settingsScreen));
@@ -493,7 +502,7 @@
       current.translationBlocked = true;
       surface?.querySelectorAll('[data-discovery-translate]').forEach(link => link.remove());
     }
-    function invalidateLanguageResults() { dropPersonal(); current.mode = current.baselineMode; }
+    function invalidateLanguageResults() { dropPersonal(); leavePersonal(); }
     function confirmedTranslationTarget() {
       if (!current?.languageSettings || current.translationBlocked || Object.hasOwn(current.languagePatch, 'translationTarget')) return 'original';
       return current.languageSettings.translationTarget;
@@ -530,7 +539,7 @@
         }
         current.languageSettings = result.settings;
         for (const key of Object.keys(patch)) if (JSON.stringify(current.languagePatch[key]) === JSON.stringify(patch[key])) delete current.languagePatch[key];
-        refreshWide().catch(error => report(error));
+        refreshWide().catch(error => report(error)); refreshPick().catch(error => report(error));
         current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
         message('언어 설정을 계정에 자동 저장했습니다.');
       } catch (_) { if (valid(token)) current.languageError = '언어 설정을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
@@ -666,7 +675,7 @@
     }
     // The option choices not saved yet (기사 이미지 보기, 넓게 찾기 and its pending erase mark).
     // wideRefused: the refusal keys of 넓게 찾기 topics the server refused (kept so a new opening does not ask again).
-    function optionPatch(patch) { return Object.fromEntries(['showImages', 'wideSearch', 'wideClear', 'wideRefused'].filter(name => patch[name] !== undefined).map(name => [name, patch[name]])); }
+    function optionPatch(patch) { return Object.fromEntries(['showImages', 'wideSearch', 'wideClear', 'wideRefused', 'newsPick'].filter(name => patch[name] !== undefined).map(name => [name, patch[name]])); }
     function settingsDirty() { const p = current?.settingChanges; return !!p && (p.autoRefresh !== undefined || Object.keys(optionPatch(p)).length > 0 || Object.keys(p.interests).length > 0 || Object.keys(p.sources).length > 0); }
     // A new tab, order, filter or refresh starts the list again: 20 cards and a newly computed order.
     // A list computed again has not been used yet: answers that arrive before the person scrolls, presses or moves the
@@ -735,7 +744,7 @@
         if (!suspended && root.document.getElementById('lifeApp')?.hidden === false) syncTransientControls();
       } else scheduleAuto();
     }
-    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); cancelPrivateRead(); wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; } }
+    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); cancelPrivateRead(); wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; } stopPick(); }
     function pageReady() {
       // The shell emits this only after revalidating the account and revealing it.
       suspended = false;
@@ -766,7 +775,7 @@
       } catch (error) {
         if (valid(token) && epoch === fetchEpoch && error?.name !== 'AbortError') current.error = current.catalog?.feed ? '목록을 다시 받지 못해 이전 목록을 보여 줍니다.' : '공개 글 목록을 불러오지 못했습니다. 목록 다시 불러오기를 눌러 주세요.';
       } finally {
-        if (valid(token) && epoch === fetchEpoch) { current.loading = false; aborter = null; draw(); restore(); scheduleAuto(); }
+        if (valid(token) && epoch === fetchEpoch) { current.loading = false; aborter = null; draw(); restore(); scheduleAuto(); resumePick(); }
       }
     }
     async function persistSettings() {
@@ -781,7 +790,7 @@
         if (result.status !== 'stored') { current.settingsConflict = true; current.autoBlocked = true; stopTimer(); cancelFetch(); current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인한 뒤 남겨 둔 선택을 다시 저장해 주세요.'; return; }
         const wasAuto = current.settings.autoRefresh; current.settings = result.settings;
         if (current.settingChanges.autoRefresh === changes.autoRefresh) delete current.settingChanges.autoRefresh;
-        for (const name of ['showImages', 'wideSearch', 'wideClear', 'wideRefused']) if (JSON.stringify(current.settingChanges[name]) === JSON.stringify(changes[name])) delete current.settingChanges[name];
+        for (const name of ['showImages', 'wideSearch', 'wideClear', 'wideRefused', 'newsPick']) if (JSON.stringify(current.settingChanges[name]) === JSON.stringify(changes[name])) delete current.settingChanges[name];
         for (const group of ['interests', 'sources']) for (const [id, value] of Object.entries(changes[group])) if (current.settingChanges[group][id] === value) delete current.settingChanges[group][id];
         current.autoBlocked = !desiredSettings().autoRefresh;
         if (!wasAuto && result.settings.autoRefresh) current.nextDue = Date.now() + INTERVAL;
@@ -792,7 +801,7 @@
         if (valid(token)) {
           draw(); scheduleAuto();
           // Only a saved choice sends anything: after the save, ask (on, or a changed topic) or erase (off).
-          if (!current.settingsError && !settingsDirty()) { keepWideRefusals(); refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
+          if (!current.settingsError && !settingsDirty()) { keepWideRefusals(); refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); pickSettingSaved(); }
           if (!current.settingsError && settingsDirty()) persistSettings().catch(error => report(error));
           else if (!current.settingsError && !current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));
         }
@@ -809,6 +818,11 @@
         current.wide.notEnabled = false; current.wide.clearError = false; current.wide.clearTried = false; current.wide.refused.clear(); if (!enabled) dropWide();
         if (settingsModel().wideRefused(current.settings).length) current.settingChanges.wideRefused = [];
       }
+      else if (group === 'newsPick') {
+        // Off takes the picks off the screen at once; on switches the list to AI 추천 once the choice is saved.
+        current.settingChanges.newsPick = enabled; current.pick.notAllowed = false; current.pick.activate = enabled;
+        if (!enabled) { dropPick(); if (current.mode === 'pick') { current.mode = current.baselineMode; resetList(); } }
+      }
       else { current.settingChanges[group][id] = enabled; dropPersonal(true); resetList(); }
       current.settingsError = ''; draw(); persistSettings().catch(error => report(error));
     }
@@ -817,7 +831,10 @@
       if (!valid(token)) return;
       if (current.settings && current.settings.revision !== result.revision) dropPersonal(true);
       current.settings = result; current.settingsConflict = false; current.settingsError = ''; current.order = null;
-      current.autoBlocked = !desiredSettings().autoRefresh; if (current.autoBlocked) { stopTimer(); cancelFetch(); } draw(); scheduleAuto();
+      current.autoBlocked = !desiredSettings().autoRefresh; if (current.autoBlocked) { stopTimer(); cancelFetch(); }
+      // Turned off on another device: the picks leave this screen too.
+      if (!pickSaved()) { dropPick(); if (current.mode === 'pick') { current.mode = current.baselineMode; resetList(); } }
+      draw(); scheduleAuto();
       refreshWide().catch(error => report(error));
     }
     function focusTopicControl() {
@@ -841,7 +858,7 @@
       try {
         const result = await topicWrite; if (!valid(token)) return;
         if (result.status !== 'stored') { current.topicConflict = true; current.topicError = '다른 탭에서 주제가 바뀌었습니다. 최신 주제를 확인한 뒤 입력을 다시 저장해 주세요.'; return; }
-        current.profile = result.profile; current.order = null; dropPersonal(true); refreshWide().catch(error => report(error));
+        current.profile = result.profile; current.order = null; dropPersonal(true); refreshWide().catch(error => report(error)); refreshPick().catch(error => report(error));
         if (current.topicText === submitted) { current.topicText = ''; current.topicInput.value = ''; }
         current.topicError = ''; current.topicSaved = true; current.status = '주제를 계정에 자동 저장했습니다.';
       } catch (_) { if (valid(token)) current.topicError = '주제를 저장하지 못했습니다. 입력은 남아 있습니다. 다시 저장하거나 입력을 지워 주세요.'; }
@@ -849,7 +866,7 @@
     }
     async function reloadTopics() {
       const token = generation, profile = await storage.readInterestProfile(workspaceId);
-      if (valid(token)) { current.profile = profile; current.topicConflict = false; current.topicError = current.topicText.trim() ? '최신 주제를 확인했습니다. 남겨 둔 입력을 다시 저장해 주세요.' : ''; draw(); refreshWide().catch(error => report(error)); }
+      if (valid(token)) { current.profile = profile; current.topicConflict = false; current.topicError = current.topicText.trim() ? '최신 주제를 확인했습니다. 남겨 둔 입력을 다시 저장해 주세요.' : ''; draw(); refreshWide().catch(error => report(error)); refreshPick().catch(error => report(error)); }
     }
     function checkbox(text, id, checked, action, data, value) {
       const label = node('label', null, 'discovery-check'), input = node('input'); input.type = 'checkbox'; input.id = id; input.checked = checked;
@@ -874,7 +891,7 @@
       if (!current.profile?.manual?.length) choices.append(node('p', '주제를 하나씩 추가해 주세요. 저장하기 전에는 목록에 사용하지 않습니다.', 'life-meta'));
       const edit = button('관심 주제 편집', 'discoveryOpenInterests', () => navigate(onOpenInterests, null, 'interests'), 'discovery-quiet'); edit.dataset.focusKey = 'interests'; choices.append(edit);
       current.choiceHost.replaceChildren(choices);
-      current.wideHost.replaceChildren(wideSettings()); topicWideNote();
+      current.wideHost.replaceChildren(wideSettings(), pickSettings()); topicWideNote();
       const recovery = node('div', null, 'discovery-topic-recovery');
       if (current.topicError) { const error = node('p', current.topicError, 'life-error'); error.id = 'discoveryTopicError'; error.setAttribute('role', 'alert'); recovery.append(error); recovery.append(button(current.topicConflict ? '최신 주제 확인' : '주제 다시 저장', current.topicConflict ? 'discoveryTopicReload' : 'discoveryTopicRetry', current.topicConflict ? reloadTopics : saveTopic)); }
       current.topicRecovery.replaceChildren(recovery);
@@ -925,7 +942,7 @@
       for (const example of ['AI', '전시', '신간', '언어학', '언어 학습', '언어 교육']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
       const choiceHost = node('div'), topicRecovery = node('div'), options = node('details', null, 'discovery-options'); options.id = 'discoveryOptions'; options.open = current.optionsOpen;
       options.append(node('summary', '출처·갱신')); const optionsBody = node('div'), catalogControls = node('div', null, 'discovery-controls'), catalogStatus = node('div');
-      const refresh = button('목록 새로고침', 'discoveryRefresh', () => { capture(null, 'refresh'); refreshWide({ force: true }).catch(error => report(error)); return loadCatalog(); }, 'discovery-quiet'); refresh.dataset.focusKey = 'refresh'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(root.HaedoLife.Icons.create('refresh')); catalogControls.append(refresh);
+      const refresh = button('목록 새로고침', 'discoveryRefresh', () => { capture(null, 'refresh'); refreshWide({ force: true }).catch(error => report(error)); return refreshAll(); }, 'discovery-quiet'); refresh.dataset.focusKey = 'refresh'; refresh.title = '공개 글 목록 다시 확인'; refresh.prepend(root.HaedoLife.Icons.create('refresh')); catalogControls.append(refresh);
       options.append(optionsBody, catalogControls, catalogStatus); options.addEventListener('toggle', () => { if (scope()) current.optionsOpen = options.open; });
       const topicNextHost = node('div');
       const wideHost = node('div', null, 'discovery-wide-host');
@@ -972,7 +989,7 @@
         // Signing out or changing the account takes the found links out of memory at once.
         if (wideClient) wideUnlisten ||= root.HaedoAuth?.onAccountChange?.(() => {
           const account = root.HaedoAuth.getAccount?.(), owner = storage.account;
-          if (current?.wide && (account?.userId !== owner?.userId || account?.projectUrl !== owner?.projectUrl)) dropWide();
+          if (current?.wide && (account?.userId !== owner?.userId || account?.projectUrl !== owner?.projectUrl)) { dropWide(); dropPick(); }
         }) || null;
       }
       return wideClient;
@@ -1075,6 +1092,8 @@
             // A refused topic left the plan: it is kept in news settings, and a typed topic beyond the first eight may now be sent.
             if (current.wide.refused.size > refusedBefore) keepWideRefusals();
             if (current.wide.refused.size > refusedBefore && current.wide.status === 'ready') refreshWide().catch(error => report(error));
+            // An AI 추천 that waited for these links (they are candidates too) is asked now.
+            pickAfterWide();
           }
         }
       }
@@ -1111,6 +1130,106 @@
       return '';
     }
     // 넓게 찾기 in news settings: the switch, what it sends and where, and each typed topic's state.
+    // --- AI 추천 (news_pick, docs/design-review/news-pick.md). Asked when news opens in this order, on 지금 갱신 and
+    // 목록 새로고침, when the order is chosen, and when the typed topics or the content languages are saved. The 15-minute
+    // refresh never asks. What is sent is DiscoveryPick.prepare's body only; the answer lives in this screen's memory.
+    function emptyPick() { return { status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0, triedKey: null, triedAt: 0, applied: null, next: null, notAllowed: false, waiting: null, activate: false }; }
+    // The saved choice only: an unsaved or conflicting toggle sends nothing.
+    function pickSaved() { return !!current?.settings && !!pickModel() && settingsModel().newsPick(current.settings) && current.settingChanges.newsPick === undefined && !current.settingsConflict; }
+    function stopPick() {
+      pickEpoch++; pickAborter?.abort(); pickAborter = null;
+      if (current?.pick) { if (current.pick.status === 'loading') { current.pick.status = current.pick.applied ? 'ready' : 'idle'; current.pick.triedKey = null; } current.pick.pendingKey = null; current.pick.waiting = null; }
+    }
+    function dropPick() { stopPick(); if (current) current.pick = emptyPick(); }
+    function pickCounter() { return pickCount ||= pickModel().counter(); }
+    function pickPlan() {
+      if (!pickModel() || !current?.profile || !current.settings || !current.languageSettings) return null;
+      const manual = settingsModel().effectiveProfile(current.profile, current.settings).manual.map(({ id, label }) => ({ id, label }));
+      const topics = pickModel().topics(manual), language = pickModel().language(current.languageSettings.contentLanguages);
+      return { topics, language, key: pickModel().requestKey(topics, language) };
+    }
+    // The candidates are the rows the latest list holds now (fixed sources and, when on, the found links), less the
+    // articles already liked or saved: nothing kept, read or judged is sent (read and judged ones are already out).
+    function pickRows() {
+      const feed = settingsModel().filterFeed(current.catalog.feed, desiredSettings()), fixed = client.rank(feed, { ...rankOptions(), mode: 'latest' }).items;
+      const kept = new Set((current.actions?.entries || []).filter(entry => entry.liked || entry.bookmarked).map(entry => entry.canonicalUrl));
+      return [...fixed, ...wideRows(fixed)].filter(row => !kept.has(row.article.canonicalUrl));
+    }
+    function pickOrder(items) { return current.mode === 'pick' && current.pick.applied && pickModel() ? pickModel().order(items, current.pick.applied) : items; }
+    // An answer that came while the list was in use waits behind `AI 추천 n건 보기`; choosing the order shows it.
+    function applyPendingPick() { if (current.pick.next) { current.pick.applied = current.pick.next; current.pick.next = null; } }
+    // A pick that waited for the catalog or for 넓게 찾기 (its links are candidates too).
+    function resumePick() { const waiting = current?.pick?.waiting; if (!waiting) return; current.pick.waiting = null; refreshPick(waiting).catch(error => report(error)); }
+    function pickAfterWide() { resumePick(); }
+    async function refreshAll() { await loadCatalog(); if (scope()) refreshPick({ force: true }).catch(error => report(error)); }
+    function pickSettingSaved() {
+      if (!current?.pick) return;
+      if (current.pick.activate && pickSaved()) { current.pick.activate = false; if (current.mode !== 'pick') { setMode('pick'); return; } }
+      refreshPick().catch(error => report(error));
+    }
+    async function refreshPick({ force = false, retry = false } = {}) {
+      if (!scope() || suspended || !current?.pick || current.mode !== 'pick' || !pickSaved() || current.pick.notAllowed) return;
+      const wait = () => { current.pick.waiting = { force: force || !!current.pick.waiting?.force, retry: retry || !!current.pick.waiting?.retry }; };
+      if (current.loading || !current.catalog?.feed) { if (current.loading) wait(); return; }
+      if (wideSaved() && current.wide.status === 'loading') { wait(); return; }
+      const remote = wideRemote(), plan = pickPlan(); if (!remote || !plan || !current.feedback || !current.actions) return;
+      if (!force && current.pick.status === 'loading' && current.pick.pendingKey === plan.key) return; // one request at a time
+      // The same topics and language: the last answer (or attempt) stands for a while, except a refresh asked for and,
+      // after a failure, opening news again.
+      if (!force && current.pick.triedKey === plan.key && Date.now() - current.pick.triedAt < pickModel().REUSE_MS && !(retry && current.pick.status === 'error')) return;
+      const list = pickModel().candidates(pickRows(), { isWide, publisherOf: article => isWide(article) ? article.sourceName : sourceName(article) });
+      if (!list.length) return;
+      let prepared;
+      try { prepared = pickModel().prepare({ requestId: root.crypto.randomUUID(), topics: plan.topics, language: plan.language, candidates: list }); } catch (_) { return; }
+      if (!pickCounter().take()) {
+        // No request today any more. The picks shown stay only when they were made for these topics and language.
+        if (current.pick.key !== plan.key) { current.pick.applied = null; current.pick.next = null; }
+        Object.assign(current.pick, { status: 'error', error: 'pick_daily', triedKey: plan.key, triedAt: Date.now() }); draw(); return;
+      }
+      stopPick();
+      const epoch = pickEpoch, token = generation, controller = new AbortController(); pickAborter = controller;
+      Object.assign(current.pick, { status: 'loading', pendingKey: plan.key, error: null, triedKey: plan.key, triedAt: Date.now() }); capture(); draw(); restore();
+      try {
+        const answer = await remote.pick({ body: prepared.body, read: raw => pickModel().read(raw, prepared), workspaceId, signal: controller.signal });
+        if (!valid(token) || epoch !== pickEpoch) return;
+        if (!pickSaved()) { dropPick(); return; }
+        // A list in use keeps its cards: the answer waits behind a button. Otherwise it takes its place now.
+        if (current.mode === 'pick' && current.listTouched && !current.settingsScreen) current.pick.next = answer;
+        else { current.pick.applied = answer; current.pick.next = null; }
+        Object.assign(current.pick, { status: 'ready', error: null, key: plan.key, loadedAt: Date.now() });
+      } catch (error) {
+        if (!valid(token) || epoch !== pickEpoch) return;
+        if (error?.code === 'wide_cancelled') { current.pick.status = current.pick.applied ? 'ready' : 'idle'; current.pick.triedKey = null; }
+        else if (error?.code === 'pick_not_allowed') Object.assign(current.pick, { status: 'idle', error: null, notAllowed: true, applied: null, next: null });
+        // The latest order stands: picks made for other topics or an older list are not left in front.
+        else Object.assign(current.pick, { status: 'error', error: error?.code === 'pick_limit' ? 'pick_limit' : 'pick_failed', applied: null, next: null, key: null });
+      } finally {
+        if (epoch === pickEpoch) { pickAborter = null; if (valid(token)) { current.pick.pendingKey = null; capture(); draw(); restore(); } }
+      }
+    }
+    function pickNotice() {
+      const pick = current.pick; if (current.collection !== 'discover' || current.mode !== 'pick') return '';
+      if (pick.notAllowed) return '이 계정에서는 AI 추천을 쓸 수 없어요 · 최신순으로 보여 줘요';
+      if (pick.status === 'loading') return pick.applied ? 'AI 추천을 새로 고르는 중' : 'AI 추천을 고르는 중 · 그동안 최신순으로 보여 줘요';
+      if (pick.status === 'error') {
+        if (pick.error === 'pick_daily') return pick.applied ? '' : '오늘 받을 수 있는 AI 추천을 다 받았어요 · 최신순으로 보여 줘요';
+        return pick.error === 'pick_limit' ? '이번 달 AI 추천에 쓸 금액을 다 썼어요 · 최신순으로 보여 줘요' : '추천을 가져오지 못했어요 · 최신순으로 보여 줘요';
+      }
+      return '';
+    }
+    function pickSettings() {
+      const box = node('div', null, 'discovery-pick-settings'), available = !!wideRemote() && !!pickModel(), desired = desiredSettings();
+      const on = !!desired && settingsModel().newsPick(desired);
+      const toggle = checkbox('AI 추천', 'discoveryNewsPick', on, enabled => changeSetting('newsPick', null, enabled));
+      const limit = pickModel()?.DAILY_LIMIT || 12, most = pickModel()?.LIMITS.candidates || 150;
+      const help = node('p', '켜면 뉴스를 열 때, 지금 갱신을 누를 때, 관심 주제나 언어를 바꿀 때 위에 직접 적어 켜 둔 관심 주제(위에서부터 8개), 콘텐츠 언어, 지금 목록에 있는 글의 제목·매체 이름·발행 시각(최대 ' + most + '건)을 Anthropic에 보내 먼저 읽을 글을 고릅니다. 좋아요·담은 글·읽은 글과 계정 정보는 보내지 않습니다. 입력은 30일 안에 삭제됩니다(정책 위반 표시 시 더 길게 보관). 학습에는 쓰지 않습니다. 고른 결과는 이 화면에만 두고 저장하지 않습니다. 15분 자동 갱신 때는 묻지 않고, 하루 ' + limit + '번까지 묻습니다.', 'life-meta');
+      help.id = 'discoveryPickHelp'; toggle.querySelector('input').setAttribute('aria-describedby', help.id); toggle.querySelector('input').disabled = !current.settings || !available;
+      box.append(toggle, help);
+      if (!available) box.append(node('p', '로그인한 계정에서만 쓸 수 있습니다.', 'life-meta'));
+      else if (on) { const left = node('p', '오늘 남은 횟수 ' + pickCounter().remaining() + '번', 'life-meta'); left.id = 'discoveryPickRemaining'; box.append(left); }
+      if (current.pick.notAllowed) { const refused = node('p', '이 계정에서는 AI 추천을 쓸 수 없어요.', 'life-error'); refused.id = 'discoveryPickNotAllowed'; refused.setAttribute('role', 'alert'); box.append(refused); }
+      return box;
+    }
     function wideSettings() {
       const box = node('div', null, 'discovery-wide-settings'), available = !!wideRemote(), desired = desiredSettings();
       const on = !!desired && settingsModel().wideSearch(desired);
@@ -1254,7 +1373,16 @@
       const excluded = current.feedback?.feedback?.some(entry => entry.canonicalUrl === article.canonicalUrl);
       read.disabled = irrelevant.disabled = !!current.pending || busy() || !!excluded || !currentFeedArticle(article);
       const information = articleInformation(article, received, prefix + 'info');
-      moreBody.append(review, read, irrelevant); reactionMore(article, moreBody); moreBody.append(information);
+      moreBody.append(review, read, irrelevant);
+      // A found link opens in a new tab, never the reader, so its 좋아요 is here (owner decision 6, 2026-11-16). Like every
+      // reaction it is kept in the account's private reactions and goes to no server for searching or picking.
+      if (isWide(article)) {
+        const liked = !!entryFor(article)?.liked, key = prefix + 'like:' + article.canonicalUrl;
+        const like = button(liked ? '좋아요 취소' : '좋아요', null, () => react(article, 'liked', !liked, key), 'discovery-quiet');
+        like.dataset.discoveryLike = ''; like.dataset.focusKey = key; like.setAttribute('aria-pressed', String(liked)); like.disabled = !current.actions || !!actionWrite || !!current.actionIntent;
+        moreBody.append(like);
+      }
+      reactionMore(article, moreBody); moreBody.append(information);
       return { moreBody, review, information };
     }
     // A card's ⋯. Its choices are built when it opens, so a closed menu adds no hidden controls to the list.
@@ -1288,7 +1416,7 @@
       meta.id = 'discoveryMeta-' + article.id; open.setAttribute('aria-describedby', meta.id);
       const label = (item.reasons || []).find(reason => reason.interestLabel)?.interestLabel;
       if (label) { const topic = node('span', label, 'discovery-topic-badge'); topic.title = '관심 주제 ' + label; meta.append(topic); }
-      if (entryFor(article)?.liked) { const liked = icon('heart', 16); liked.setAttribute('role', 'img'); liked.setAttribute('aria-label', '좋아요한 글'); liked.removeAttribute('aria-hidden'); liked.classList.add('discovery-liked-mark'); meta.append(liked); }
+      pickMark(item, meta); likedMark(article, meta);
       if (current.selected?.canonicalUrl === article.canonicalUrl) { open.setAttribute('aria-current', 'true'); card.dataset.selected = 'true'; }
       open.addEventListener('click', () => { if (scope()) select(article); });
       // The rest of the card (its meta line) opens the same article for a pointer; 담기 and ⋯ keep their own press.
@@ -1316,9 +1444,19 @@
       const mark = node('span', '넓게', 'discovery-wide-mark'); mark.title = '넓게 찾기로 받은 글'; meta.append(mark);
       const label = (item.reasons || []).find(reason => reason.interestLabel)?.interestLabel;
       if (label) { const topic = node('span', label, 'discovery-topic-badge'); topic.title = '관심 주제 ' + label; meta.append(topic); }
+      pickMark(item, meta); likedMark(article, meta);
       foot.append(meta, reactionButton(article, 'bookmarked'), cardMenu(article));
       card.append(open, foot);
       return card;
+    }
+    // A picked card says so in text (not colour); the reason is under 기사 정보.
+    function pickMark(item, meta) {
+      if (!item.pick) return;
+      const mark = node('span', 'AI 추천', 'discovery-pick-mark'); mark.title = item.pick.reason ? 'AI 추천 · ' + item.pick.reason : 'AI 추천'; meta.append(mark);
+    }
+    function likedMark(article, meta) {
+      if (!entryFor(article)?.liked) return;
+      const liked = icon('heart', 16); liked.setAttribute('role', 'img'); liked.setAttribute('aria-label', '좋아요한 글'); liked.removeAttribute('aria-hidden'); liked.classList.add('discovery-liked-mark'); meta.append(liked);
     }
     function excludedCard(entry, available) {
       const card = node('article', null, 'discovery-article discovery-card discovery-excluded-article'); card.dataset.discoveryUrl = entry.canonicalUrl; if (available) card.dataset.discoveryId = available.id;
@@ -1541,6 +1679,8 @@
       if (!date(article.publishedAt)) information.append(node('p', '발행일 미확인', 'life-meta'));
       else information.append(node('p', '발행 ' + date(article.publishedAt, true), 'life-meta'));
       if (article.dateBasis === 'updated' && date(article.updatedAt)) information.append(node('p', '수정 ' + date(article.updatedAt), 'life-meta'));
+      const picked = current.mode === 'pick' && current.collection === 'discover' ? current.pick.applied?.picks.find(pick => pick.canonicalUrl === article.canonicalUrl) : null;
+      if (picked) information.append(node('p', 'AI 추천' + (picked.reason ? ' · ' + picked.reason : '') + ' · 제목·매체 이름·발행 시각만 보고 고른 것입니다.', 'discovery-reason'));
       const item = rank()?.items.find(value => value.article.canonicalUrl === article.canonicalUrl), reasons = item?.reasons || [];
       if ((current.mode === 'related' || current.mode === 'personal' && !item?.personal && current.baselineMode === 'related') && reasons.length) {
         const reason = reasons[0], field = { title: '제목', summary: '공개 요약', bodyText: '허용된 본문', tags: '출처 태그' }[reason.field] || '공개 글';
@@ -1589,7 +1729,7 @@
       const readerOpen = !current.settingsScreen && !!selectedArticle(), readerNotes = node('div');
       const body = node('div'), recoveryHost = current.settingsScreen ? current.recoveryBody : readerOpen ? readerNotes : body;
       const feed = current.catalog?.feed, result = rank();
-      const discover = result ? discoverItems(result) : null;
+      const discover = result ? pickOrder(discoverItems(result)) : null;
       const tabCounts = { discover: discover?.length, bookmarked: current.actions?.entries.filter(entry => entry.bookmarked).length, liked: current.actions?.entries.filter(entry => entry.liked).length, excluded: current.feedback?.feedback?.length };
       const header = actionsHeader(tabCounts, readerOpen ? readerNotes : null); if (current.reactionHost.firstChild !== header || current.reactionHost.childNodes.length !== 1) current.reactionHost.replaceChildren(header);
       const languages = languageControls(); if (languages.parentNode !== current.languageHost) current.languageHost.replaceChildren(languages);
@@ -1650,6 +1790,13 @@
       } else if (result) {
         const items = discover, notice = wideNotice();
         if (notice) { const line = node('p', notice, 'discovery-wide-notice'); line.id = 'discoveryWideNotice'; line.setAttribute('role', 'status'); body.append(line); }
+        const picked = current.mode === 'pick' ? items.filter(item => item.pick).length : 0, pickLine = pickNotice() || (picked ? 'AI 추천 ' + picked + '건 · 그 뒤는 최신순' : '');
+        if (pickLine) { const line = node('p', pickLine, 'discovery-wide-notice discovery-pick-notice'); line.id = 'discoveryPickNotice'; line.setAttribute('role', 'status'); body.append(line); }
+        if (current.mode === 'pick' && current.pick.next) {
+          // An answer that came while the list was in use: pressing shows it from the top, like 새 글 n건.
+          const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          show.append(icon('up', 16), node('span', 'AI 추천 ' + current.pick.next.picks.length + '건 보기')); body.append(show);
+        }
         if (!items.length) {
           const contentLanguages = desiredLanguages()?.contentLanguages, availableFeed = settingsModel().filterFeed(feed, desiredSettings());
           const languageUnavailable = Array.isArray(contentLanguages) && contentLanguages.length > 0 && !current.loading && !current.error &&
@@ -1723,10 +1870,11 @@
       leave(); if (disposed) return;
       // Opening the tab: scrolls until render() ends are the shell's and this screen's (see placing() below).
       opening = true; active = true; const next = getBundle()?.workspaceId;
-      if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; }
+      if (next !== workspaceId) { current = null; client?.dispose(); client = null; wideEpoch++; wideAborter?.abort(); wideAborter = null; pickEpoch++; pickAborter?.abort(); pickAborter = null; }
       workspaceId = next; const token = generation;
       if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'latest', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'latest', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, selected: null, toast: null, newUrls: null, newDismissed: false, reader: null, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false, topicsOpen: false, topicSaved: false, visible: PAGE, order: null, listTouched: false, imageByUrl: null, imageNodes: new Map(), failedImages: new Set(),
-        wide: { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0, notEnabled: false, clearError: false, clearTried: false, refused: new Set(), listSeen: true } };
+        wide: { items: [], topics: [], fetchedAt: null, stale: false, status: 'idle', error: null, key: null, pendingKey: null, loadedAt: 0, notEnabled: false, clearError: false, clearTried: false, refused: new Set(), listSeen: true },
+        modeChosen: false, pick: emptyPick() };
       current.selected = null; current.toast = null; current.readerPushed = false; current.wide.clearTried = false;
       const reopen = typeof options.articleId === 'string' ? options.articleId : null;
       const retainedPersonal = { result: current.personalResult, mode: current.mode, blocked: current.personalBlocked, pending: current.personalPending, actions: current.actions?.revision, settings: current.settings?.revision, profile: current.profile?.revision, feedback: current.feedback?.revision, language: current.languageSettings?.revision };
@@ -1745,7 +1893,7 @@
           if (event.type === 'discovery_actions_changed' && current.actions && event.revision > current.actions.revision) {
             if (actionWrite && event.local) return;
             if (!event.local) current.remoteActionRevision = Math.max(current.remoteActionRevision, event.revision);
-            current.personalBlocked = true; current.mode = current.baselineMode; dropPersonal();
+            current.personalBlocked = true; leavePersonal(); dropPersonal();
             if (actionWrite) { draw(); return; }
             if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭이나 기기에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
             else { draw(); reloadActions().catch(error => report(error)); }
@@ -1764,7 +1912,7 @@
           }
           if (event.type === 'interest_profile_changed' && current.profile && event.revision > current.profile.revision && !topicWrite) {
             capture();
-            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; current.order = null; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); refreshWide().catch(error => report(error)); } }).catch(error => report(error));
+            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; current.order = null; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); refreshWide().catch(error => report(error)); refreshPick().catch(error => report(error)); } }).catch(error => report(error));
           }
         });
       try {
@@ -1778,6 +1926,9 @@
         current.actions = actions; current.personalBlocked = current.personalStopLatched || !actions.personalizationEnabled; current.profile = profile; current.feedback = feedbackProfile; current.settings = settings; current.autoBlocked = !desiredSettings().autoRefresh; current.loading = false;
         if (sameInputs && retainedPersonal.mode === 'personal' && !retainedPersonal.blocked && !current.personalBlocked) { current.personalResult = retainedPersonal.result; current.mode = retainedPersonal.mode; current.personalPending = retainedPersonal.pending; }
         else if (!sameInputs) dropPersonal();
+        // With AI 추천 on, news opens in that order until another order is chosen; turned off, the order leaves it.
+        if (pickSaved() && !current.modeChosen && current.mode === 'latest') current.mode = 'pick';
+        else if (!pickSaved() && current.mode === 'pick') { dropPick(); current.mode = current.baselineMode; }
         draw();
         if (root.HaedoLife.DiscoveryReadingUI) {
           readingUI ||= root.HaedoLife.DiscoveryReadingUI.create({ container: readingHost, storage, getInput: readingInput, isCurrent: scope });
@@ -1786,7 +1937,7 @@
         }
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
         // Opening the news tab with 넓게 찾기 on asks once; a pending erase from an earlier switch-off is tried again.
-        if (valid(token)) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); }
+        if (valid(token)) { refreshWide().catch(error => report(error)); clearWide().catch(error => report(error)); refreshPick({ retry: true }).catch(error => report(error)); }
         // The shell puts the page back where news was once this render is done, and restore() follows a frame later:
         // neither is a use of the list.
         if (valid(token)) { opening = false; placing(); }
@@ -1818,6 +1969,7 @@
       disposeSplit();
       readingUI?.leave(); cancelPrivateRead(); disposeReaderView();
       wideEpoch++; wideAborter?.abort(); wideAborter = null; if (current?.wide?.status === 'loading') { current.wide.status = current.wide.key ? 'ready' : 'idle'; current.wide.pendingKey = null; }
+      stopPick();
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
       // Coming back puts news where news itself was, also when the page had already moved on before this capture.
       if (current?.memory && Number.isFinite(current.newsY)) current.memory.scrollY = current.newsY;

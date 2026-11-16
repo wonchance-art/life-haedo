@@ -13,6 +13,9 @@
   // 넓게 찾기: the interest topics typed in news settings go to the external news search only when this is on.
   // Off until chosen (owner approval 2026-11-11 covers "only when turned on in settings").
   const DEFAULT_WIDE_SEARCH = false;
+  // AI 추천: typed topics and the candidates' public titles, publishers and times go to Anthropic only when this is on.
+  // Off until chosen (owner approval 2026-11-16, docs/design-review/news-pick.md).
+  const DEFAULT_NEWS_PICK = false;
   // Options added after the first settings format are stored as reserved entries of disabledSourceIds, not as new
   // fields. The validator shipped before them refuses unknown fields but accepts unknown ids in that list and keeps
   // them when it saves its own change, so a device still on the older shell reads these settings and cannot drop an
@@ -22,7 +25,8 @@
     wideSearch: Object.freeze({ on: 'option-wide-on', off: 'option-wide-off', initial: DEFAULT_WIDE_SEARCH }),
     // Set when 넓게 찾기 is turned off and taken away once the server copy of its results is confirmed erased,
     // so any device of the account can finish an erase that failed.
-    wideClear: Object.freeze({ on: 'option-wide-clear', off: null, initial: false })
+    wideClear: Object.freeze({ on: 'option-wide-clear', off: null, initial: false }),
+    newsPick: Object.freeze({ on: 'option-pick-on', off: 'option-pick-off', initial: DEFAULT_NEWS_PICK })
   });
   const OPTION_IDS = Object.freeze(Object.values(OPTIONS).flatMap(option => [option.on, option.off]).filter(Boolean));
   // 넓게 찾기 topics the server refused although the screen's copy of its rule took them (a safety net: the two
@@ -111,10 +115,11 @@
   const showImages = settings => option(settings, 'showImages');
   const wideSearch = settings => option(settings, 'wideSearch');
   const wideClear = settings => option(settings, 'wideClear');
+  const newsPick = settings => option(settings, 'newsPick');
   // The refusal keys kept for 넓게 찾기 (see WIDE_REFUSED_PREFIX).
   const wideRefused = settings => (Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : []).filter(wideRefusedEntry).map(value => value.slice(WIDE_REFUSED_PREFIX.length)).filter(key => /^[0-9a-f]{16}$/.test(key));
   // The sources actually turned off, without the reserved option entries.
   const disabledSources = settings => (Array.isArray(settings?.disabledSourceIds) ? settings.disabledSourceIds : []).filter(value => !isOption(value));
-  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, DEFAULT_WIDE_SEARCH, OPTION_IDS, WIDE_REFUSED_MAX, showImages, wideSearch, wideClear, wideRefused, disabledSources,
+  return Object.freeze({ MAX_BYTES, MAX_INTERESTS, MAX_SOURCES, DEFAULT_SHOW_IMAGES, DEFAULT_WIDE_SEARCH, DEFAULT_NEWS_PICK, OPTION_IDS, WIDE_REFUSED_MAX, showImages, wideSearch, wideClear, newsPick, wideRefused, disabledSources,
     empty, validate, update, clear, effectiveProfile, filterFeed });
 });
