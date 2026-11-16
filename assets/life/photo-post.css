@@ -17,6 +17,9 @@
    remains announced without inserting a second row above the title. */
 .photo-posts[data-mode="read"] { display: flex; flex-direction: column; margin-top: 0; }
 .photo-posts[data-mode="read"] > .photo-status[data-state="success"] { order: 1; margin: 0 auto 20px; }
+/* 2026-11-16: a quiet save state (.life-save-quiet, ui.css) keeps its slot in the editor's command row;
+   the reader has no such slot, so its 비공개 글을 저장했어요 leaves the layout too (screen readers only). */
+.photo-posts[data-mode="read"] > .photo-status.life-save-quiet { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; white-space: nowrap; }
 .photo-posts[data-mode="read"] > .photo-article { width: 100%; margin-top: 0; }
 .photo-status {
   position: relative;
@@ -910,6 +913,9 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-info-line { display: inline-flex; align-items: center; gap: 6px; }
 .photo-info-line > svg { flex: none; width: 16px; height: 16px; }
 .photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
+/* 2026-11-16: a quiet save state (screen readers only) that a finished retry hands focus to shows while
+   it has that focus. */
+.photo-info-value.life-sr-only:focus { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; white-space: normal; }
 .photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
 .photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
 .photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }

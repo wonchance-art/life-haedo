@@ -78,6 +78,9 @@
       const labels = { stored: '기록으로 저장됨', error: '저장하지 못함 · 입력 유지', saving: session.recordSaving ? '기록으로 저장 중…' : '초안 보관 중…',
         dirty: session.composing.size ? '작성 중' : '초안 보관 대기', draft: '초안 보관됨', empty: '새 글' };
       status.dataset.state = key; status.textContent = labels[key];
+      // 2026-11-16 owner: a save that went well or is running is said to screen readers only; a failure
+      // and 새 글 stay shown.
+      status.classList.toggle('life-save-quiet', !['error', 'empty'].includes(key));
       if (saveButton) saveButton.disabled = session.stage.state === 'applied' || !!session.recordSaving || !!session.composing.size || !session.stage.text.trim();
       for (const input of [titleInput, bodyInput]) if (input) input.disabled = !!session.recordSaving || session.stage.state === 'applied';
       surface.querySelectorAll('#lifeWritingNew,.life-writing-draft,#lifeWritingRescue,#lifeWritingSaveCopy').forEach(control => {

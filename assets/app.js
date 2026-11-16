@@ -2097,6 +2097,7 @@ function openPopTrip(t,ax,ay){
   q('[data-f="note"]').onchange=e=>{t.note=e.target.value.trim();commit();};
   q('[data-a="savepts"]').onclick=async()=>{ /* 좌표는 새 장소만 검색 (Nominatim 1req/s) */
     const st=q('[data-s="geo"]'),docId=curDocId;
+    st.classList.remove('sr-only'); /* 2026-11-16: only the 저장됨 below is for screen readers only */
     const lines=q('[data-f="pts"]').value.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){st.textContent='장소가 2곳 이상 필요';return;}
     const old=t.points||[]; const pts=[];
@@ -2112,7 +2113,7 @@ function openPopTrip(t,ax,ay){
       await new Promise(r=>setTimeout(r,1100));
     }
     if(curDocId!==docId||!st.isConnected||!DATA.trips.includes(t))return;
-    t.points=pts; st.textContent='저장됨';
+    t.points=pts; st.textContent='저장됨'; st.classList.add('sr-only');
     commit();
   };
   q('[data-a="del"]').onclick=()=>{

@@ -10,6 +10,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { PlatformTables } = require('./schedule-entries-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 
 const output = path.resolve(process.env.HAPPINESS_DAYS_OUTPUT || '.local/happiness-days-browser');
 const TODAY = '2026-11-03T12:00:00+09:00';
@@ -85,6 +86,8 @@ async function main() {
       assert.equal(await page.locator('.schedule-happiness').getByRole('radio').count(), 11);
       await page.getByRole('radio', { name: '행복도 7' }).check();
       await statusText(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 15000 });
+      // 2026-11-16 owner: said to screen readers only.
+      assert.deepEqual(await saveStatus(statusText(page)), { said: '저장됨 · 계정에 올림', shown: '' });
       await until(() => entryOn(server, '2026-11-03')?.v === 0.4, 'stored 7 → 0.4');
       // Keyboard: arrows move within the 0–10 group and store the new value.
       await page.getByRole('radio', { name: '행복도 7' }).focus(); await page.keyboard.press('ArrowRight');
