@@ -2,6 +2,80 @@
 
 매주 월요일 09:37 KST에 총괄 세션이 공식 출처를 확인하고, 이 앱(빌드 없는 GitHub Pages, Mac·iPad·iPhone) 기준으로 "적용 필요 / 관찰 / 무관"을 판정해 회차별로 기록한다. 적용 필요 항목은 작업 지시서 → 독립 검수 → CI → 병합·배포 관문을 따른다. 새 기능·외부 전송·삭제·권한 완화는 소유자 승인 뒤에만 한다.
 
+**보안 권고 확인 절차(3회차 추가):** OSV 일괄 조회 0건은 안전 근거가 아니다. 3회차에 DOMPurify GHSA-qm7q·fast-xml-parser GHSA-7cfw가 OSV에 아직 없었고 각 저장소 Security 탭에만 있었다. 동봉·Edge 의존성마다 **GitHub 저장소 Security 탭(advisories)** 을 함께 읽는다.
+
+## 주간 기술 동향 점검 — 2026-11-16 (3회차)
+
+기준: 저장소 `main` bb49a46(`haedo-v220`). 조사는 읽기 전용(확인일 모두 2026-11-16), 11-09 이후 새로 생기거나 바뀐 것만 적는다.
+
+**도구 제약:** `gh api /advisories`는 이번에도 막혔다(세션이 지정 저장소에 묶임) → 각 저장소 Security 탭·권고 페이지를 읽었다. OSV 77개 일괄 조회는 quill·lodash-es 기존 3건만 돌려줬다(아래 두 새 권고 없음). developer.apple.com은 공개 JSON으로 읽었고 `api.deno.land`는 proxy 502.
+
+### 1. 동봉 라이브러리·Edge 의존성
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| fast-xml-parser 5.12.0(`haedo-rss/vendor`, `haedo-news-wide` 공유) | 5.12.1(11-13). **GHSA-7cfw-w2rf-f3jc**(Moderate): `XMLValidator.validate`의 속성 스캐너가 이름 없는 `=` 앞 공백을 다시 훑어 제곱 시간. 기본 옵션에서 해당 | `haedo-rss/feed.mjs:88`, `haedo-news-wide/xml.mjs:51`이 외부 XML에 `validate`를 부른다. 앞단 검사가 `<a      =>`를 막지 못함. 재현: 공백 80k에서 5.12.0 15.3 s, 5.12.1 9 ms. 실제 위험은 낮다(`haedo-rss` `ALLOWED_HOSTS` 빈 배열, `haedo-news-wide`는 `news.google.com`만이고 미배포, 피해는 소유자 요청 실패뿐) | **적용 필요**(news-wide 배포 전) | https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-7cfw-w2rf-f3jc |
+| fast-xml-parser 다른 권고 2건(GHSA-474x-hrwr-fgx4, fast-xml-builder GHSA-g62r-xqpr-7fwx) | 비기본 `stopNodes`·`XMLBuilder` 필요 | 사용 0건 | 무관 | 같은 저장소 Security 탭 |
+| DOMPurify 3.4.17 | 3.4.18(11-14). GHSA-qm7q-q8h9-jg8q(Moderate) `SAFE_FOR_TEMPLATES` 우회, hook 허용 목록 잔존·clobbering 검사 수정 | 유일한 호출(`assets/life/source-markdown.js:173-176`)은 `SAFE_FOR_TEMPLATES`·hook·`USE_PROFILES` 미사용, `form`·`svg`·`template`·`id`·`name` 금지, 입력은 markdown-it `html:false` 출력 | 관찰(다음 vendor 갱신 때) | https://github.com/cure53/DOMPurify/releases/tag/3.4.18 |
+| @tiptap/* 3.32.2, prosemirror-* | tiptap 3.33.1·3.34.0(mark 잔존, undo, 캐럿), inputrules 1.6.0. 보안·IME 수정 없음 | 편집기 번들이 아직 화면에 연결되지 않음 | 관찰(B2 연결 때 함께) | https://github.com/ueberdosis/tiptap/releases , https://prosemirror.net/docs/changelog/ |
+| undici 7.30.1(deno.lock 2개) | 새 권고·판 없음 | 2회차 판정 유지(cheerio `/slim`만, undici 사용 0건) | 관찰(다음 Edge 배포 때 lock 7.30.2) | https://github.com/nodejs/undici/security |
+| supabase-js 2.117.2, idb 8.0.3 | 새 판·권고 없음(최신 2.119.0·8.0.4 그대로) | — | 관찰(유지) | GitHub releases, npm registry |
+| lucide 1.51.0, daisyUI 5.7.16, Quill 2.0.3, markdown-it, js-yaml, fflate, Pretendard, cheerio | 아이콘·테마 추가판만, 보안 판 없음(Quill GHSA-v3m3 패치 판 여전히 없음) | — | 무관 | npm registry, OSV |
+
+### 2. Safari·WebKit·Apple
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| iOS/iPadOS/macOS 27.2.1(11-09) | 보안 수정 9건(AirPlay·Bluetooth·Messages·brotli 등), WebKit·Safari 항목 없음 | 웹 앱 동작 무관 | 관찰(소유자 기기 업데이트) | https://support.apple.com/en-us/149715 |
+| Safari 27.3 | 여전히 beta 1. Adaptive Dark Mode·`interactive-widget`·IME 수정 그대로 | 2회차 판정 유지 | 관찰(정식 출시 대기) | https://developer.apple.com/documentation/safari-release-notes/safari-27_3-release-notes |
+
+### 3. Chromium
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Chrome 157.0.8103.50(11-09)·.78/.79(11-11) | 보안 수정, **CVE-2026-125350(XML use-after-free) 실제 악용 확인** | 앱 코드 무관. Mac Chrome 사용 시 157.0.8103.50 이상 필요. iPad·iPhone Chrome은 WebKit이라 해당 없음 | 관찰(소유자 Mac Chrome 업데이트 확인) | https://chromereleases.googleblog.com/2026/11/ |
+| Chrome 158 early stable, 159 beta | Sanitizer `javascriptURLs`, scroll snap, SW static routing 메시지 | 사용 0건 | 무관 | https://chromestatus.com/api/v0/features?milestone=159 |
+
+### 4. Supabase
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Storage·Auth·PostgREST·supabase-js 권고 | 11-09 이후 새 권고 없음 | 2회차 판정 유지(S3 프로토콜 상태는 여전히 미확인) | 관찰(유지) | https://github.com/supabase/storage/security |
+| Changelog | 계정 백업 로그인·MFA 복구 코드(11-13), Correlated Logs | 대시보드 계정 보안. 앱 코드 무관 | 관찰(소유자 선택) | https://supabase.com/changelog |
+| 레거시 키 일정, Edge Runtime 1.78~1.79.1 | 일정 변동 없음("by the end of 2026"), 런타임은 지표·TLS 견고성 | — | 변동 없음/무관 | https://supabase.com/docs/guides/api/api-keys , https://github.com/supabase/edge-runtime/releases |
+
+### 5. Anthropic API
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| 새 모델 Fable 5.2·Mythos 5.2(11-09), self-hosted Managed Agents(11-12) | 5.2 전용 규칙 | 앱은 `claude-haiku-5-5`·`claude-sonnet-5-5`만(`supabase/functions/haedo-ai/handler.mjs:42`) | 무관 | https://platform.claude.com/docs/en/release-notes/overview |
+| 요금·수명·보존 | 변동 없음(단가는 `20261104090000_life_ai_usage.sql` 표와 일치, 퇴역 공지 없음, 보존 30일) | — | 무관 | https://platform.claude.com/docs/en/about-claude/pricing , https://platform.claude.com/docs/en/about-claude/model-deprecations |
+
+### 6. 접근성·보안 표준
+
+- WAI 뉴스는 11-10 "authoring tools" 글 하나, Web App Manifest WD 11-11 개정. WCAG·CSP3·Trusted Types·Service Workers·IndexedDB 3.0·Permissions Policy는 11-09 이후 갱신 없음. OWASP 새 발표 없음. 분류: 무관/관찰. 출처: https://www.w3.org/WAI/news/ , https://www.w3.org/TR/
+
+### 2회차 관찰 항목 현황
+
+- undici lock 7.30.2: 미반영(두 함수 11-09 이후 변경·배포 없음), 다음 Edge 배포 때.
+- prosemirror-model 1.25.13: 미반영, B2 때 tiptap 3.34.0과 함께.
+- `interactive-widget`·Adaptive Dark Mode: Safari 27.3 beta 1 그대로, 대기.
+- Storage S3 프로토콜: 미확인(이 세션 도구로 설정을 읽을 수 없음).
+- supabase-js 2.119.0·idb 8.0.4: 보안 사유 없음, 유지.
+
+### 총괄 판정 (2026-11-16)
+
+- **적용 필요:** fast-xml-parser 5.12.1 번들 교체(작업자 → 독립 검수 → CI → 병합). `haedo-news-wide` 소유자 CLI 배포는 이 병합 뒤에. `haedo-rss`는 RSS 운영 활성화 때 함께 재배포.
+- **관찰:** DOMPurify 3.4.18(쓰는 옵션과 무관, 다음 vendor 갱신 때), tiptap·prosemirror(B2 때), 나머지 2회차 관찰 유지.
+- **소유자 확인·승인:** Mac Chrome 157.0.8103.50 이상과 Apple 기기 27.2.1 업데이트 확인, Vault `sb_secret_` 교체·레거시 키 끄기(1회차부터 대기), 원하면 Supabase 계정 백업 로그인.
+
+### 자가개선 (지난 주 작업)
+
+- **유실 경로를 연 총괄 지시:** 11-12 W1 2차 검수의 q5("두 기기가 지운 글을 각자 고침 → 글 둘")를 규칙대로 하나로 합치려고 총괄이 결정적 식별자를 지시했고, 3차 검수가 그것이 같은 식별자 재생성을 다시 열어 판 2 이상에서 사본 없이 덮는 BLOCKER를 재현했다. 무작위 식별자로 되돌리고 q5를 한계로 남긴 뒤, 근본 해결은 서버 기록(`retired_posts`, #256)으로 했다. → 수정 회차마다 새 유실 경로가 나오면 총괄 지시도 가설로 보고 되돌린다(AGENTS.md에 추가).
+- **저장소 전체 상태를 단언한 검사:** `run-news-wide-postgres`가 "이 마이그레이션이 마지막"을 단언해 무관한 새 마이그레이션(#256)이 CI를 멈췄다. 재현(종료 1) → 앞선 마이그레이션만 재생하도록 수정(종료 0). → 검사는 자기가 기대는 것과의 관계만 단언한다(AGENTS.md에 추가).
+- **배포 단계에서만 나는 실패:** v219 배포가 공개 피드 갱신(외부 공급원 상태 의존)에서 멈췄다. 원인은 수집기 정리 함수의 비멱등(#253). PR CI는 외부 공급원 실패 조합을 만들지 않아 못 잡았다 → 같은 조합을 고정본 검사로 추가했다(#253). 시험 작업이 모두 녹색이어도 배포 실행 결과까지 확인한 것이 실패를 놓치지 않게 했다.
+- **검사 경합 2건**(`publish-recovery`의 smooth scroll과 Playwright 클릭, `account-wide-home`의 폭 변경 직후 한 프레임): 모두 재현 장치로 결정적으로 만든 뒤 검사만 고쳤다(제품 결함 아님 근거 기록).
+
 ## 주간 기술 동향 점검 — 2026-11-09 (2회차)
 
 기준: 저장소 `main` 078159e(`haedo-v217`), 작업 브랜치 dfbf377. 읽기 전용 조사(편집·운영 DB 조회 없음), 확인일은 모두 2026-11-09. 11-04 이후 새로 생기거나 바뀐 것만 적는다.
