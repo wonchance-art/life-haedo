@@ -93,6 +93,20 @@ test('relocated library and publishing destinations survive login with legacy li
   assert.equal(safeNext('//evil.invalid/index.html?section=home&view=public-pages'), 'index.html');
 });
 
+test('노트 and dated 일정 addresses survive login as the screen they name (2026-11-16 notes-menu)', () => {
+  assert.equal(safeNext('index.html?section=notes&code=discarded#token'), 'index.html?section=notes');
+  assert.equal(safeNext('index.html?section=notes&view=find'), 'index.html?section=notes&view=find');
+  // A date without a unit opens that day's month (not 노트), so the date is kept.
+  assert.equal(safeNext('index.html?section=schedule&date=2026-10-28&access_token=hidden'), 'index.html?section=schedule&date=2026-10-28');
+  assert.equal(safeNext('index.html?section=home&date=2026-10-28'), 'index.html?section=home&date=2026-10-28');
+  // Y named `year` keeps its unit and date.
+  assert.equal(safeNext('index.html?section=schedule&view=year&date=2025-05-01'), 'index.html?section=schedule&view=year&date=2025-05-01');
+  // Without a valid date, or with a view that is not a calendar unit, no date is kept.
+  assert.equal(safeNext('index.html?section=schedule&date=2026-13-40'), 'index.html?section=schedule');
+  assert.equal(safeNext('index.html?section=notes&date=2026-10-28'), 'index.html?section=notes');
+  assert.equal(safeNext('index.html?section=schedule&view=find&date=2026-10-28'), 'index.html?section=schedule&view=find');
+});
+
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');

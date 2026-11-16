@@ -163,6 +163,10 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
  .haedo-welcome-post{max-width:460px}
 }
+/* A short rail (phone landscape, 2026-11-16: five tabs since 노트) scrolls instead of leaving its last tab below the screen. */
+@media(max-width:1100px) and (min-width:761px) and (max-height:560px){
+ .haedo-nav{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+}
 @media(max-width:760px){
  :root{--haedo-nav-width:0px;--haedo-dock-clearance:calc(84px + env(safe-area-inset-bottom,0px));--haedo-header-height:60px}
  html:has(> body[data-writing-focus]){--haedo-dock-clearance:calc(16px + env(safe-area-inset-bottom,0px))}

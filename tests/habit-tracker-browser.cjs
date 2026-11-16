@@ -398,9 +398,10 @@ async function main() {
       }));
       for (const row of rows) {
         assert.deepEqual([row.tall, row.inside, row.nameWhole, row.ordered], [true, true, true, true], width + ': rows are 44px, the 30 dots stay inside in day order, the name is whole');
-        // Phone: the name has its own line and the dots are under it.
-        if (width <= 1100) assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
-        else assert.equal(row.nameAbove, false, width + ': name and dots share the row');
+        // The name has its own line and the dots are under it: up to 1100px (review 2 m3), and from 1101px too since the
+        // table sits in M's 280px side column (rule change 2026-11-16 notes-menu; until then the wide table put the name
+        // and the dots on one row under the calendar).
+        assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
       }
       // Each row ends in a › (drawn only), at its right end beside the dots.
       const go = await page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => {

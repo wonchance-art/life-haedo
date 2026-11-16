@@ -137,7 +137,8 @@ async function main() {
       const cases = [
         ['tools', 'records', 'discover'], ['tools', 'records', 'reflection'], ['tools', 'records', 'books'],
         ['manage', 'records', 'obsidian-update'], ['manage', 'records', 'source-trash'],
-        ['tools', 'news', 'interests'], ['manage', 'schedule', 'blog'], ['home', 'schedule', 'blog'],
+        // 2026-11-16 (notes-menu): 글 공개·보관 (blog) is 노트's, the former 일정 list's (until then 일정).
+        ['tools', 'news', 'interests'], ['manage', 'notes', 'blog'], ['home', 'notes', 'blog'],
         // 2026-11-02: public cover/pages are 설정 views; the old home links still open them.
         ['home', 'manage', 'public-cover'], ['home', 'manage', 'public-pages'], ['tools', 'schedule', 'annual-plan']
       ];
@@ -146,7 +147,7 @@ async function main() {
           await page.goto(base + '/' + file + '?section=' + section + '&view=' + view); await ready(page); await mode(page, view);
           assert.equal(await page.locator('[data-haedo-section="' + canonical + '"][aria-current="page"]').count(), 1, file + ':' + section + ':' + view);
           assert.equal(new URL(page.url()).searchParams.get('view'), view);
-          assert.equal(new URL(page.url()).searchParams.get('section'), canonical === 'schedule' && view !== 'annual-plan' && file === 'index.html' ? null : canonical);
+          assert.equal(new URL(page.url()).searchParams.get('section'), ['schedule', 'notes'].includes(canonical) && view !== 'annual-plan' && file === 'index.html' ? null : canonical);
         }
       }
     });

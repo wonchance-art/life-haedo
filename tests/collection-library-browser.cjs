@@ -114,7 +114,7 @@ async function main() {
       await click(page,'컬렉션'); await page.waitForFunction(()=>window.__clReadEntered);
       await page.getByText('컬렉션을 불러오는 중…',{exact:true}).waitFor();
       for(const width of [1440,820,390]) { await page.setViewportSize({width,height:900}); await page.screenshot({path:path.join(out,`loading-${width}.png`)}); }
-      await page.locator('[data-haedo-section=schedule]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='home');
+      /* 2026-11-16: the list is 노트's (일정 opens its calendar) */ await page.locator('[data-haedo-section=notes]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='home');
       await page.evaluate(()=>window.__clReleaseRead()); assert.equal(await page.locator('.life-collection').count(),0);
       await page.locator('[data-haedo-section=records]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='collection');
       await page.locator('#clGrid').waitFor(); await click(page,'자료로 돌아가기');
