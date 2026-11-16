@@ -476,10 +476,10 @@ async function main() {
             return { sorted, inSlot: [...slot.querySelectorAll('h3')].map(n => n.textContent), part: slot.closest('.schedule-side')?.querySelector(':scope > h2')?.textContent, slotH2: slot.querySelectorAll('h2').length, goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
           });
           assert.deepEqual(order, { sorted: ['records', 'check'], inSlot: ['습관', '행복도'], part: '습관 · 행복도', slotH2: 0, goals: 0 }, 'the day shows its records, then its checks beside them, and no goal');
-          // An empty day says so at body size.
-          const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize,
-            body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));
-          assert.deepEqual([empty.text, empty.size], ['이 날 기록이 없어요.', empty.body], 'the empty day at body size');
+          // An empty day says so in one line. Rule change 2026-11-16 노션 방향 (contract 빈 상태): 14px in the meta grey
+          // (until then body size).
+          const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize, color: getComputedStyle(n).color }));
+          assert.deepEqual([empty.text, empty.size, empty.color], ['이 날 기록이 없어요.', '14px', 'rgb(111, 110, 105)'], 'the empty day, one 14px meta line');
           // 행복도 0–10: two rows (0–5, 6–10) on a phone and, since 2026-11-16 (notes-menu), in D's 280px side column from
           // 1101px too (review 3 m2's rule: one row only where each choice gets 44px; until then the wide D slot had one row).
           // Each choice is 44 × 44.
