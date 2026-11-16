@@ -226,6 +226,9 @@ jobs:
       - name: Verify writing input survives pasted HTML, long text, strict validation and failed saves
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-input-browser.cjs
+      - name: Verify AI news picks send only typed topics and candidate metadata, keep picked numbers only and fall back to the latest list
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-pick-browser.cjs
       - name: Verify editing a stored post keeps one edit buffer, cancel and draft delete, and moved ids
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-revision-browser.cjs
