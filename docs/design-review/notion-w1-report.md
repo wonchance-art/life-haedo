@@ -1,9 +1,9 @@
 # 노션 방향 W1 바탕·토큰 — 구현 보고 (2026-11-16, Designer)
 
 - **지시:** 총괄의 11-16 작업 지시(소유자 11-16 "권장대로 계속 진행"). [구현 계약](notion-visual-contract.md)의 W1이다.
-- **기준:** 통합 브랜치 `claude/confident-ramanujan-kc31xs` `0a42b6f`. 계약 문서가 든 #248 head `f919e5f`를 합쳤다.
+- **기준:** 통합 브랜치 `claude/confident-ramanujan-kc31xs` 최신 head `fb3694b`(= main, v221 배포판, #248 `f919e5f` 포함). 처음에는 `0a42b6f`에서 만들었고, 통합 브랜치가 움직여 W1 커밋을 그 위로 옮겼다(충돌 없음).
 - **범위:** 앱 화면(`body.haedo-shell`)의 바탕·색·굵기·모서리 토큰, 메뉴 면, 하단 탭, 회색 채움 이전, 노트 아이콘, `DESIGN.md`·`.impeccable/design.json`.
-- **하지 않은 것:** 화면 본문(노트·일정·글 읽기·자료의 행·머리 구조)은 W2–W4 담당이라 손대지 않았다. `ui.css`·`home.css`·`workbench.css` 파일 자체도 고치지 않았다. 공개 페이지가 같은 파일을 읽기 때문에, 바뀌는 규칙은 모두 `haedo-shell.css` 안 `.haedo-shell` 범위에 두었다. 곧 들어올 F(`ui.css` `.life-save-quiet`)와 충돌하지 않는다. `sw.js` CACHE는 올리지 않았다(총괄이 배포 때).
+- **하지 않은 것:** 화면 본문(노트·일정·글 읽기·자료의 행·머리 구조)은 W2–W4 담당이라 손대지 않았다. `ui.css`·`home.css`·`workbench.css` 파일 자체도 고치지 않았다. 공개 페이지가 같은 파일을 읽기 때문에, 바뀌는 규칙은 `haedo-shell.css` 안 `.haedo-shell` 범위에 두었다. 예외는 앱(`index.html`·`life.html`)만 읽는 `schedule.css`·`annual-plan.css`·`records.css`의 틀 시작선 한 줄씩이다. 곧 들어올 F(`ui.css` `.life-save-quiet`)와 충돌하지 않는다. `sw.js` CACHE는 올리지 않았다(총괄이 배포 때).
 
 ## 바꾼 것
 
@@ -13,7 +13,8 @@
 | `assets/haedo-type.css` | `--haedo-text-page-title: 34px`(W2–W4가 쓴다), 굵기 토큰 400/500/600/700 |
 | `assets/life/icons.js`, `vendor/lucide/` | 노트 아이콘 `note` = Lucide 1.51.0 `file-text`(아래 출처) |
 | `DESIGN.md`, `.impeccable/design.json` | 색·모서리·메뉴 규칙과 설명을 새 기준으로 |
-| `tests/` 4개 | 바뀐 규칙을 단언하던 곳(아래). 규칙 변경이며 단언 약화가 아니다 |
+| `assets/life/schedule.css`, `assets/life/annual-plan.css`, `assets/life/records.css` | 메뉴 폭이 216 → 240px로 바뀌며 어긋난 틀 시작선 두 곳(아래 "메뉴 폭에 맞춘 틀 시작선"). 각 한 줄이며 W2·W4가 이어받는다 |
+| `tests/` 5개 | 바뀐 규칙을 단언하던 곳(아래). 규칙 변경이며 단언 약화가 아니다 |
 
 ### 토큰과 실제 표면 대비
 
@@ -100,8 +101,17 @@
 | `app-motion-browser.cjs:160` | 현재 탭 750·틸 | 600·먹색 | 탐색의 틸은 글쓰기 하나 |
 | `habit-tracker-browser.cjs:135`·`:298` | 완료 채움 `rgb(24, 37, 34)` | `rgb(55, 53, 47)` | 먹색 토큰 변경 |
 | `sns-blog-experience-browser.cjs:105` | 메뉴 예약 216px | 240px | 메뉴 폭 토큰 변경 |
+| `records-split-resize-browser.cjs:275`·`:283` | 1920px에서 `End` = 700px, 끌기 뒤 300px | `End` = 구분선 `aria-valuemax`, 끌기 뒤 최대값 − 400px(최대값 − 400 ≥ 280도 단언) | 700은 메뉴 216px일 때 1920px 화면의 최대값이었다. 최대값 식(`내용 폭 − 44 − 420`)은 같은 검사의 1440px 단계가 따로 단언한다 |
 
 `habit-tracker-browser.cjs:118`(오늘 표시 750·틸)은 W1에서 바뀌지 않는다. 계약대로 W2가 고친다.
+
+## 메뉴 폭에 맞춘 틀 시작선
+
+메뉴 면을 216 → 240px로 넓히자 브라우저 검사 두 개가 실제 어긋남을 잡았다. 둘 다 고쳤고 기준판에서는 통과하던 검사다.
+
+- **일정·연간 계획 1101px 이상** (`planning-frame-browser`): 일정·연간 계획의 넓은 틀은 메뉴 216px를 전제한 식(`max(16px, (100vw − 1000px)/2) + 224px − 메뉴 폭`)으로 시작선을 맞췄다. 메뉴가 넓어지면 목표·습관·연표의 `‹`·제목보다 12px 왼쪽에 놓였다(1440px에서 456 대 468). 이제 다른 화면의 768px 틀과 같은 식 `max(16px, (100% − 768px)/2)`을 쓴다. 메뉴 216px에서는 이전 식과 값이 같다.
+- **자료 나눔 1101px** (`records-split-resize-browser`): 원문을 열면 목록 280 + 구분선 44 + 읽기 칸 420이 들어가야 한다. 메뉴 240px에서 1101px 화면의 내용 폭이 742.5px라 읽기 칸이 418.5px로 줄었다. 1101–1103px에서만 틀 시작선을 최대 1.5px 당겨 792px(744 + 틀 안쪽 여백 48)를 남긴다. 1104px 이상은 시작선이 다른 화면과 같다.
+- 두 파일은 계약상 W2(`schedule.css`)·W4(`records.css`) 담당이다. 메뉴 폭을 바꾼 단위가 같은 커밋에서 맞춰야 CI가 녹색이라 W1에서 한 줄씩 고쳤다. 이후 시각 변경은 각 단위가 한다.
 
 ## 노트 아이콘 출처
 
@@ -114,7 +124,7 @@
 결과는 실제 종료 코드로만 판정했다.
 
 - `npm run check`: 0 (22 HTML, 202 JS, 803 로컬 참조)
-- `npm test`: 0 (2849/2849)
+- `npm test`: 0 (2860/2860)
 - `node scripts/check-markdown-links.cjs`: 허용 목록 밖 0
 - 브라우저 검사(`pages.yml` 묶음 1–7과 시작 성능): 결과는 아래 표
 - 공개 검사 4개(로컬 PostgreSQL 16 UTF8, 소켓 전용): 결과는 아래 표
