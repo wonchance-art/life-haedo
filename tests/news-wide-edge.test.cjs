@@ -319,7 +319,7 @@ test('merging and the cache read-back: one link once, every topic represented un
 
 test('no new dependency: the function reuses the pinned haedo-rss parser bundle and imports only its own files', () => {
   const bundle = fs.readFileSync(path.join(DIR, '../haedo-rss/vendor/fast-xml-parser.mjs'));
-  assert.equal(crypto.createHash('sha256').update(bundle).digest('hex'), '438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55', 'the bundle named in haedo-rss/README.md');
+  assert.equal(crypto.createHash('sha256').update(bundle).digest('hex'), 'e26d0aed2252e8a9c9c1226229a90f2dec4d3d29e4d8a7f1c1fcf976aa1e5e10', 'the bundle named in haedo-rss/README.md');
   const files = fs.readdirSync(DIR, { recursive: true }).map(String).filter(name => fs.statSync(path.join(DIR, name)).isFile()).sort();
   assert.deepEqual(files, ['README.md', 'handler.mjs', 'index.ts', 'items.mjs', 'suppliers/google-news.mjs', 'topics.mjs', 'upstream.mjs', 'xml.mjs']);
   const allowed = { 'index.ts': ['./handler.mjs', '../haedo-rss/vendor/fast-xml-parser.mjs'],

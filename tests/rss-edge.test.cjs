@@ -35,9 +35,20 @@ function fixture(options={}) {
 }
 test('vendored parser is the same locked grammar in Node and Edge, no remote runtime import', async()=>{
   const raw=fs.readFileSync(path.join(dir,'vendor/fast-xml-parser.mjs'));
-  assert.equal(crypto.createHash('sha256').update(raw).digest('hex'),'438ed6e4997ab8a22fb76957c5a12b5956f95965d105cb0ac8cbc75bec627f55');
+  assert.equal(crypto.createHash('sha256').update(raw).digest('hex'),'e26d0aed2252e8a9c9c1226229a90f2dec4d3d29e4d8a7f1c1fcf976aa1e5e10');
   assert.match(fs.readFileSync(path.join(dir,'index.ts'),'utf8'),/\.\/vendor\/fast-xml-parser\.mjs/);
   assert.doesNotMatch(raw.toString(),/\bfetch\(/);
+});
+test('GHSA-7cfw-w2rf-f3jc: a nameless "=" after a long space run is validated in linear time', async()=>{
+  // fast-xml-parser <=5.12.0 rescanned the spaces before each nameless "=" (about 15 s for 80,000 spaces).
+  const [,,xml]=await modules,parse=await parser(),spaces=' '.repeat(80000);
+  let started=performance.now();
+  assert.equal(xml.XMLValidator.validate('<rss><a '+spaces+'=></a></rss>'),true);
+  assert.ok(performance.now()-started<1000,'validator stays linear');
+  started=performance.now();
+  const result=await parse(rss(entry('001','<x'+spaces+'=></x>')),url);
+  assert.ok(performance.now()-started<1000,'feed path stays linear');
+  assert.equal(result.items.length,1);assert.equal(result.items[0].identity,'guid:001');
 });
 test('RSS preserves opaque guid, exact decoded body/hash and URL parameters; never renders HTML', async()=>{
   const parse=await parser(),result=await parse(rss(),url),item=result.items[0];
